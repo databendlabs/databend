@@ -83,6 +83,16 @@ fn test_calc_compact_block_num() {
 }
 
 #[test]
+fn test_recluster_bytes_follow_table_threshold() {
+    let mib = 1024 * 1024;
+    let thresholds = BlockThresholds::new(10_000_000, 512 * mib, 64 * mib, 1000);
+    let total_bytes = 900 * mib;
+    let (_, bytes_per_block) = thresholds.calc_rows_for_recluster(9_000_000, total_bytes, 1);
+
+    assert_eq!(bytes_per_block, total_bytes);
+}
+
+#[test]
 fn test_threshold_arithmetic_at_usize_limit() {
     for value in [0, 1, 4, 5, 6, 1000, usize::MAX / 2, usize::MAX] {
         let expected = ((value as u128 * 4).div_ceil(5)) as usize;

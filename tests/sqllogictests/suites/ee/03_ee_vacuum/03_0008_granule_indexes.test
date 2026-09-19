@@ -1,0 +1,78 @@
+# Unified VACUUM/PURGE must remove granule sidecars and Bloom payloads before
+# obsolete blocks, while keeping the current snapshot's indexes readable.
+statement ok
+create or replace database vacuum_granule_indexes
+
+statement ok
+use vacuum_granule_indexes
+
+statement ok
+set data_retention_time_in_days = 0
+
+statement ok
+set enable_experimental_table_ref = 1
+
+statement ok
+create table t(k int, v int) 'fs:///tmp/vacuum_granule_indexes/' cluster by(k) index_granularity = 2
+
+statement ok
+create bloom index idx on t(v)
+
+statement ok
+create or replace stage granule_gc_stage url = 'fs:///tmp/vacuum_granule_indexes/'
+
+statement ok
+insert into t values (1, 10), (2, 20), (3, 30)
+
+statement ok
+insert into t values (4, 40), (5, 50), (6, 60)
+
+statement ok
+vacuum table t
+
+query II
+select count(), sum(v) from t where k >= 2 and v = 20
+----
+1 20
+
+statement ok
+alter table t create tag keep_indexes
+
+statement ok
+truncate table t
+
+statement ok
+vacuum table t
+
+query I
+select count() > 0 from list_stage(location => '@granule_gc_stage') where name like '%/_i_p/%' or name like '%/_i_gb/%'
+----
+1
+
+statement ok
+alter table t drop tag keep_indexes
+
+statement ok
+optimize table t purge
+
+query I
+select count() from list_stage(location => '@granule_gc_stage') where name like '%/_i_p/%' or name like '%/_i_gb/%' or name like '%/_b/%'
+----
+0
+
+query I
+select count() from t
+----
+0
+
+statement ok
+drop stage granule_gc_stage
+
+statement ok
+drop database vacuum_granule_indexes
+
+statement ok
+set enable_experimental_table_ref = 0
+
+statement ok
+set data_retention_time_in_days = 1

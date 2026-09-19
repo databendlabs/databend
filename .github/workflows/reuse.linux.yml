@@ -157,7 +157,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/test_compat_fuse
-        timeout-minutes: 20
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
+        timeout-minutes: 60
 
   test_compat_meta_meta:
     needs: [build, check]

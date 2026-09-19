@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -22,6 +23,7 @@ use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -33,11 +35,13 @@ use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_generate_milliseconds;
+use databend_storages_common_blocks::BlockingWrite;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
 use databend_storages_common_index::InvertedIndexBundleFooter;
 use databend_storages_common_index::MANAGED_JSON_PATH;
 use databend_storages_common_index::META_JSON_PATH;
 use databend_storages_common_index::collect_index_open_slices;
+use databend_storages_common_io::OpenDalBlockingWrite;
 use databend_storages_common_table_meta::meta::Location;
 use jsonb::RawJsonb;
 use jsonb::from_raw_jsonb;
@@ -50,7 +54,6 @@ use lindera_analysis::token_filter::japanese_base_form::JapaneseBaseFormTokenFil
 use lindera_analysis::token_filter::japanese_stop_tags::JapaneseStopTagsTokenFilter;
 use lindera_tantivy::tokenizer::LinderaTokenizer;
 use log::debug;
-use log::info;
 use opendal::Buffer;
 use tantivy::Directory;
 use tantivy::IndexBuilder;
@@ -76,6 +79,18 @@ use tantivy::tokenizer::TokenizerManager;
 use tantivy_jieba::JiebaTokenizer;
 
 use crate::io::TableMetaLocationGenerator;
+use crate::io::write::block_index::BlockIndexLowLevelColumnWriter;
+use crate::io::write::block_index::BlockIndexLowLevelWriteContext;
+use crate::io::write::block_index::BlockIndexLowLevelWriter;
+use crate::io::write::block_index::BlockIndexSpec;
+use crate::io::write::block_index::BlockIndexWriteContext;
+use crate::io::write::block_index::BlockIndexWriter;
+use crate::io::write::block_index::PendingBlockIndexOutput;
+use crate::io::write::block_index::PendingIndexFile;
+use crate::io::write::block_index::PendingInvertedIndex;
+use crate::io::write::block_index::WrittenBlockIndexOutput;
+use crate::io::write::block_index::WrittenIndexFile;
+use crate::io::write::block_index::WrittenInvertedIndex;
 
 static JAPANESE_DICTIONARY: LazyLock<Dictionary> = LazyLock::new(|| {
     load_dictionary("embedded://ipadic").expect("the embedded IPADIC dictionary must be available")
@@ -95,6 +110,206 @@ impl InvertedIndexBuilder {
         location_generator: &TableMetaLocationGenerator,
     ) -> String {
         location_generator.gen_inverted_index_v2_location(&self.version)
+    }
+
+    /// Binds this index definition to a freshly generated immutable object location.
+    ///
+    /// Inverted index object keys are independent from the block key, so the location is
+    /// resolved once per block write and carried by the spec, matching the other index specs.
+    pub(crate) fn into_write_spec(
+        self,
+        location_generator: &TableMetaLocationGenerator,
+    ) -> InvertedIndexWriteSpec {
+        let location = (
+            self.gen_inverted_index_location(location_generator),
+            INVERTED_INDEX_FILE_FORMAT_VERSION,
+        );
+        InvertedIndexWriteSpec {
+            builder: self,
+            location,
+        }
+    }
+}
+
+pub(crate) struct InvertedIndexWriteSpec {
+    builder: InvertedIndexBuilder,
+    location: Location,
+}
+
+impl BlockIndexSpec for InvertedIndexWriteSpec {
+    fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
+        Ok(Box::new(InvertedIndexBlockWriter {
+            index_name: self.builder.name.clone(),
+            index_version: self.builder.version.clone(),
+            location: self.location.clone(),
+            source_schema: context.physical_schema,
+            writer: InvertedIndexWriter::try_create(
+                Arc::new(self.builder.schema.clone()),
+                &self.builder.options,
+            )?,
+        }))
+    }
+
+    fn new_low_level_writer(
+        &self,
+        context: BlockIndexLowLevelWriteContext,
+    ) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
+        let location = self.location.clone();
+        let write = context.create_write(&location);
+        let field_indexes = self
+            .builder
+            .schema
+            .fields()
+            .iter()
+            .map(|field| context.physical_schema.index_of(field.name()))
+            .collect::<Result<Vec<_>>>()?;
+        let num_fields = context.physical_schema.num_fields();
+        Ok(Box::new(InvertedIndexLowLevelWriter {
+            index_name: self.builder.name.clone(),
+            index_version: self.builder.version.clone(),
+            location,
+            field_indexes,
+            columns: vec![None; num_fields],
+            writer: Some(InvertedIndexWriter::try_create(
+                Arc::new(self.builder.schema.clone()),
+                &self.builder.options,
+            )?),
+            write: Some(write),
+            next_field: 0,
+            num_fields,
+        }))
+    }
+}
+
+struct InvertedIndexBlockWriter {
+    index_name: String,
+    index_version: String,
+    location: Location,
+    source_schema: TableSchemaRef,
+    writer: InvertedIndexWriter,
+}
+
+impl BlockIndexWriter for InvertedIndexBlockWriter {
+    fn write(&mut self, block: &DataBlock) -> Result<()> {
+        self.writer.add_block(&self.source_schema, block)
+    }
+
+    fn finish(self: Box<Self>) -> Result<PendingBlockIndexOutput> {
+        // Documents are buffered until here; `finalize` runs the Tantivy indexing pass.
+        let start = Instant::now();
+        let data = self.writer.finalize()?;
+        metrics_inc_block_inverted_index_generate_milliseconds(start.elapsed().as_millis() as u64);
+        Ok(PendingBlockIndexOutput {
+            inverted: vec![PendingInvertedIndex {
+                index_name: self.index_name,
+                index_version: self.index_version,
+                file: PendingIndexFile {
+                    location: self.location,
+                    data,
+                },
+            }],
+            ..Default::default()
+        })
+    }
+}
+
+struct InvertedIndexLowLevelWriter {
+    index_name: String,
+    index_version: String,
+    location: Location,
+    field_indexes: Vec<usize>,
+    columns: Vec<Option<Vec<Column>>>,
+    writer: Option<InvertedIndexWriter>,
+    write: Option<OpenDalBlockingWrite>,
+    next_field: usize,
+    num_fields: usize,
+}
+
+impl BlockIndexLowLevelWriter for InvertedIndexLowLevelWriter {
+    fn next_column(mut self: Box<Self>) -> Result<Box<dyn BlockIndexLowLevelColumnWriter>> {
+        if self.next_field >= self.num_fields {
+            return Err(ErrorCode::Internal(
+                "inverted index low-level writer has no remaining columns",
+            ));
+        }
+        let field_index = self.next_field;
+        self.next_field += 1;
+        let fragments = self
+            .field_indexes
+            .contains(&field_index)
+            .then(Vec::<Column>::new);
+        Ok(Box::new(InvertedIndexLowLevelColumnWriter {
+            parent: Some(self),
+            field_index,
+            fragments,
+        }))
+    }
+
+    fn finish(mut self: Box<Self>) -> Result<WrittenBlockIndexOutput> {
+        if self.next_field != self.num_fields {
+            return Err(ErrorCode::Internal(format!(
+                "inverted index low-level writer consumed {} of {} columns",
+                self.next_field, self.num_fields
+            )));
+        }
+        let mut columns = Vec::with_capacity(self.field_indexes.len());
+        for field_index in self.field_indexes {
+            let fragments = self.columns[field_index]
+                .take()
+                .ok_or_else(|| ErrorCode::Internal("missing inverted index column"))?;
+            columns.push(if fragments.len() == 1 {
+                fragments.into_iter().next().unwrap()
+            } else {
+                Column::concat_columns(fragments.into_iter())?
+            });
+        }
+        let mut writer = self
+            .writer
+            .take()
+            .ok_or_else(|| ErrorCode::Internal("inverted index writer was consumed"))?;
+        writer.add_columns(&columns)?;
+        let write = self
+            .write
+            .take()
+            .ok_or_else(|| ErrorCode::Internal("inverted index blocking output was consumed"))?;
+        let start = Instant::now();
+        let size = writer.finalize_to_writer(write)?;
+        metrics_inc_block_inverted_index_generate_milliseconds(start.elapsed().as_millis() as u64);
+        Ok(WrittenBlockIndexOutput {
+            inverted: vec![WrittenInvertedIndex {
+                index_name: self.index_name,
+                index_version: self.index_version,
+                file: WrittenIndexFile {
+                    location: self.location,
+                    size,
+                },
+            }],
+            ..Default::default()
+        })
+    }
+}
+
+struct InvertedIndexLowLevelColumnWriter {
+    parent: Option<Box<InvertedIndexLowLevelWriter>>,
+    field_index: usize,
+    fragments: Option<Vec<Column>>,
+}
+
+impl BlockIndexLowLevelColumnWriter for InvertedIndexLowLevelColumnWriter {
+    fn write(&mut self, column: &Column) -> Result<()> {
+        if let Some(fragments) = self.fragments.as_mut() {
+            fragments.push(column.clone());
+        }
+        Ok(())
+    }
+
+    fn finish(mut self: Box<Self>) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
+        let mut parent = self
+            .parent
+            .take()
+            .ok_or_else(|| ErrorCode::Internal("inverted index column writer has no parent"))?;
+        parent.columns[self.field_index] = self.fragments.take();
+        Ok(parent)
     }
 }
 
@@ -137,75 +352,6 @@ pub fn create_inverted_index_builders(table_meta: &TableMeta) -> Vec<InvertedInd
     inverted_index_builders
 }
 
-#[derive(Debug)]
-pub struct InvertedIndexState {
-    pub(crate) data: Buffer,
-    pub(crate) size: u64,
-    pub(crate) location: Location,
-    pub(crate) index_name: String,
-    pub(crate) index_version: String,
-}
-
-impl InvertedIndexState {
-    pub fn try_create(
-        data: Buffer,
-        location: String,
-        index_name: String,
-        index_version: String,
-    ) -> Result<Self> {
-        let size = data.len() as u64;
-        Ok(Self {
-            data,
-            size,
-            location: (location, INVERTED_INDEX_FILE_FORMAT_VERSION),
-            index_name,
-            index_version,
-        })
-    }
-
-    pub fn from_data_block(
-        source_schema: &TableSchemaRef,
-        block: &DataBlock,
-        location_generator: &TableMetaLocationGenerator,
-        inverted_index_builder: &InvertedIndexBuilder,
-    ) -> Result<Self> {
-        let start = Instant::now();
-
-        let inverted_index_location =
-            inverted_index_builder.gen_inverted_index_location(location_generator);
-
-        info!(
-            "Start build inverted index for location: {}",
-            inverted_index_location
-        );
-
-        let mut writer = InvertedIndexWriter::try_create(
-            Arc::new(inverted_index_builder.schema.clone()),
-            &inverted_index_builder.options,
-        )?;
-        writer.add_block(source_schema, block)?;
-        let data = writer.finalize()?;
-
-        // Perf.
-        let size = data.len();
-        let elapsed_ms = start.elapsed().as_millis() as u64;
-        {
-            metrics_inc_block_inverted_index_generate_milliseconds(elapsed_ms);
-        }
-        info!(
-            "Finish build inverted index: location={}, size={} bytes in {} ms",
-            inverted_index_location, size, elapsed_ms
-        );
-
-        Self::try_create(
-            data,
-            inverted_index_location,
-            inverted_index_builder.name.clone(),
-            inverted_index_builder.version.clone(),
-        )
-    }
-}
-
 pub struct InvertedIndexWriter {
     schema: DataSchemaRef,
     directory: RamDirectory,
@@ -245,19 +391,43 @@ impl InvertedIndexWriter {
     }
 
     pub fn add_block(&mut self, source_schema: &TableSchemaRef, block: &DataBlock) -> Result<()> {
-        let mut field_indexes = Vec::with_capacity(self.schema.num_fields());
-        for field in self.schema.fields() {
-            let ty = field.data_type().remove_nullable();
-            let field_index = source_schema.index_of(field.name().as_str())?;
-            field_indexes.push((field_index, ty))
+        let columns = self
+            .schema
+            .fields()
+            .iter()
+            .map(|field| {
+                let field_index = source_schema.index_of(field.name().as_str())?;
+                Ok(block.get_by_offset(field_index).to_column())
+            })
+            .collect::<Result<Vec<_>>>()?;
+        self.add_columns(&columns)
+    }
+
+    /// Add the indexed columns in this writer's schema order.
+    pub fn add_columns(&mut self, columns: &[databend_common_expression::Column]) -> Result<()> {
+        if columns.len() != self.schema.num_fields() {
+            return Err(ErrorCode::BadArguments(format!(
+                "inverted index column count {} != expected {}",
+                columns.len(),
+                self.schema.num_fields()
+            )));
+        }
+        let rows = columns
+            .first()
+            .map_or(0, databend_common_expression::Column::len);
+        if columns.iter().any(|column| column.len() != rows) {
+            return Err(ErrorCode::BadArguments(
+                "inverted index columns have different row counts",
+            ));
         }
 
-        for i in 0..block.num_rows() {
+        for row in 0..rows {
             let mut doc = TantivyDocument::new();
-            for (j, (field_index, ty)) in field_indexes.iter().enumerate() {
-                let field = Field::from_field_id(j as u32);
-                let column = block.get_by_offset(*field_index);
-                match unsafe { column.index_unchecked(i) } {
+            for (index, (field_def, column)) in self.schema.fields().iter().zip(columns).enumerate()
+            {
+                let field = Field::from_field_id(index as u32);
+                let ty = field_def.data_type().remove_nullable();
+                match unsafe { column.index_unchecked(row) } {
                     ScalarRef::String(text) => doc.add_text(field, text),
                     ScalarRef::Variant(jsonb_val) => {
                         let raw_jsonb = RawJsonb::new(jsonb_val);
@@ -266,30 +436,38 @@ impl InvertedIndexWriter {
                                 let owned_value = OwnedValue::from(value);
                                 doc.add_field_value(field, &owned_value);
                             } else {
-                                // tantivy only support object JSON,
-                                // convert other JSON to object with an empty key.
+                                // Tantivy only supports object JSON. Wrap other JSON values with an
+                                // empty key to preserve the existing index representation.
                                 let owned_value = OwnedValue::from(value);
-                                let mut wrap_owned_value = BTreeMap::new();
-                                wrap_owned_value.insert("".to_string(), owned_value);
-                                doc.add_object(field, wrap_owned_value);
+                                let mut wrapped = BTreeMap::new();
+                                wrapped.insert("".to_string(), owned_value);
+                                doc.add_object(field, wrapped);
                             }
                         } else {
                             doc.add_object(field, BTreeMap::new());
                         }
                     }
-                    _ => {
-                        if ty == &DataType::Variant {
-                            doc.add_object(field, BTreeMap::new());
-                        } else {
-                            doc.add_text(field, "");
-                        }
-                    }
+                    _ if ty == DataType::Variant => doc.add_object(field, BTreeMap::new()),
+                    _ => doc.add_text(field, ""),
                 }
             }
             self.operations.push(UserOperation::Add(doc));
         }
-
         Ok(())
+    }
+
+    /// Streams the finished index bundle through a lazily opened blocking upload.
+    ///
+    /// The bundle footer must observe the whole raw region before it can be built, so the
+    /// bundle is assembled in memory first and then handed to `write` in chunks.
+    #[async_backtrace::framed]
+    pub fn finalize_to_writer(self, mut write: OpenDalBlockingWrite) -> Result<u64> {
+        let bundle = self.finalize()?;
+        for chunk in bundle {
+            write.write_all(&chunk)?;
+        }
+        write.close()?;
+        Ok(write.bytes_written())
     }
 
     #[async_backtrace::framed]

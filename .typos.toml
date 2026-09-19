@@ -39,6 +39,7 @@ extend-exclude = [
     "**/Cargo.toml",
     "benchmark/",
     "tests/sqllogictests",
+    "tests/compat_fuse/compat-logictest",
     "tests/nox/java_client/testng.xml",
     "tests/data/ddl",
 ]

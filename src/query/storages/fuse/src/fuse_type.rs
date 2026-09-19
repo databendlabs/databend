@@ -43,7 +43,7 @@ impl FuseTableType {
 
 /// Fuse engine table format.
 /// This is used to distinguish different table formats.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FuseStorageFormat {
     Parquet,
     /// Tombstone for storage formats that are no longer supported (e.g. the

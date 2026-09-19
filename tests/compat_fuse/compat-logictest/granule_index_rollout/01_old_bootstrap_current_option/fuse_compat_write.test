@@ -1,0 +1,39 @@
+statement ok
+DROP DATABASE IF EXISTS compat_granule_rollout
+
+statement ok
+CREATE DATABASE compat_granule_rollout
+
+statement ok
+USE compat_granule_rollout
+
+statement ok
+CREATE TABLE rollout_t(k int, payload bigint, source string) CLUSTER BY(k) row_per_block=16 block_per_segment=2
+
+statement ok
+INSERT INTO rollout_t SELECT 7-number,1000+number,'old-before-low-a' FROM numbers(8)
+
+statement ok
+INSERT INTO rollout_t SELECT 7-number,2000+number,'old-before-low-b' FROM numbers(8)
+
+statement ok
+INSERT INTO rollout_t SELECT 107-number,3000+number,'old-before-mid-a' FROM numbers(8)
+
+statement ok
+INSERT INTO rollout_t SELECT 107-number,4000+number,'old-before-mid-b' FROM numbers(8)
+
+statement ok
+INSERT INTO rollout_t SELECT 207-number,5000+number,'old-before-high-a' FROM numbers(8)
+
+statement ok
+INSERT INTO rollout_t SELECT 207-number,6000+number,'old-before-high-b' FROM numbers(8)
+
+query III
+SELECT count(),sum(payload),count(DISTINCT k) FROM rollout_t
+----
+48 168168 24
+
+query III
+SELECT count_if(k=0),count_if(k=103),count_if(k=207) FROM rollout_t
+----
+2 2 2

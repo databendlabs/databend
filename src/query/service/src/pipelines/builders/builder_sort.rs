@@ -87,9 +87,13 @@ impl SortPipelineBuilder {
         self
     }
 
-    // The expected output block size, the actual output block size will be equal to or less than the given value.
     pub fn with_block_size_hit(mut self, block_size: usize) -> Self {
         self.block_size = self.block_size.min(block_size);
+        self
+    }
+
+    pub fn with_block_size(mut self, block_size: usize) -> Self {
+        self.block_size = block_size;
         self
     }
 

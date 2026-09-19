@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_builder;
+mod block_writer;
+mod cluster_statistics;
 mod column_ndv_estimator;
 mod column_statistics_builder;
 mod column_statistics_state;
 
-pub(crate) use block_builder::StreamBlockBuilder;
-pub(crate) use block_builder::StreamBlockProperties;
+pub use block_writer::FuseBlockWriteOptions;
+pub use block_writer::FuseBlockWriter;
 pub(crate) use column_ndv_estimator::ColumnNDVEstimator;
 pub(crate) use column_ndv_estimator::ColumnNDVEstimatorOps;
 pub(crate) use column_ndv_estimator::create_column_ndv_estimator;

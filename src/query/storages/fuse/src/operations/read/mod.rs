@@ -15,6 +15,7 @@
 mod block_format;
 mod fuse_rows_fetcher;
 pub mod fuse_source;
+pub(crate) mod granule_group;
 mod parquet_data_source;
 mod parquet_data_source_deserializer;
 mod parquet_rows_fetcher;

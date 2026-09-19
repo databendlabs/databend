@@ -42,7 +42,6 @@ pub struct BlockReader {
     pub(crate) projection: Projection,
     pub(crate) projected_schema: TableSchemaRef,
     pub(crate) project_indices: Arc<BTreeMap<FieldIndex, (ColumnId, Field, DataType)>>,
-    pub(crate) project_column_nodes: Arc<Vec<ColumnNode>>,
     pub(crate) default_vals: Vec<Scalar>,
     pub(crate) all_field_default_vals: Vec<Scalar>,
     pub put_cache: bool,
@@ -141,7 +140,6 @@ impl BlockReader {
             .map(|c| (*c).clone())
             .collect();
         let project_indices = Arc::new(Self::build_projection_indices(&project_column_nodes));
-        let project_column_nodes = Arc::new(project_column_nodes);
 
         Ok(Arc::new(BlockReader {
             ctx,
@@ -149,7 +147,6 @@ impl BlockReader {
             projection,
             projected_schema,
             project_indices,
-            project_column_nodes,
             default_vals,
             all_field_default_vals,
             put_cache,
@@ -251,6 +248,16 @@ impl BlockReadContext {
 
     pub(crate) fn put_cache(&self) -> bool {
         self.put_cache
+    }
+
+    pub(crate) fn storage_fetch_part_num(&self) -> Result<usize> {
+        Ok(self.ctx.get_settings().get_storage_fetch_part_num()? as usize)
+    }
+
+    pub(crate) fn storage_io_merge_equivalent_bytes(&self) -> Result<u64> {
+        self.ctx
+            .get_settings()
+            .get_storage_io_merge_equivalent_bytes()
     }
 
     pub(crate) fn report_cache_metrics<'a>(

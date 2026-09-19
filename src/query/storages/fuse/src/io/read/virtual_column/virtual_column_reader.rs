@@ -104,7 +104,7 @@ impl VirtualColumnReader {
         })
     }
 
-    pub(super) fn generate_ignore_column_ids(
+    pub(crate) fn generate_ignore_column_ids(
         &self,
         ignored_source_column_ids: &HashSet<ColumnId>,
     ) -> Option<HashSet<ColumnId>> {

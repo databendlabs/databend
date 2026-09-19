@@ -45,6 +45,9 @@ use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_index::VirtualColumnSharedDataType;
 use databend_storages_common_io::MergeIOReadResult;
 use databend_storages_common_io::MergeIOReader;
@@ -62,7 +65,8 @@ use parquet::arrow::arrow_reader::RowSelection;
 
 use super::VirtualColumnReader;
 use crate::BlockReadResult;
-use crate::io::read::block::parquet::column_chunks_to_record_batch;
+use crate::io::read::block::parquet::ArrayCacheContext;
+use crate::io::read::block::parquet::deserialize_column_chunks;
 
 pub struct VirtualBlockReadResult {
     pub virtual_block_location: String,
@@ -101,6 +105,49 @@ impl VirtualBlockReadResult {
 }
 
 impl VirtualColumnReader {
+    /// Physical read schema of the sidecar: one field per read slot, keyed by slot id.
+    ///
+    /// A shared key slot becomes a `Map<UInt32, T>` whose value slot is folded in as the map
+    /// value, so the value slot itself contributes no top-level field. Returns `None` when a slot
+    /// type has no parquet representation; callers fall back to the source column.
+    pub(crate) fn read_schema(
+        virtual_block_meta: &VirtualBlockMetaIndex,
+    ) -> Option<TableSchemaRef> {
+        let mut schema = TableSchema::empty();
+        let mut shared_slots = HashMap::new();
+        for plan in virtual_block_meta.fields.values() {
+            collect_shared_slots(plan, &mut shared_slots);
+        }
+        let shared_value_slots: HashSet<_> = shared_slots.values().copied().collect();
+
+        for (slot_index, slot) in virtual_block_meta.read_slots.iter().enumerate() {
+            let slot_id = VirtualReadSlotId(slot_index as u32);
+            if shared_value_slots.contains(&slot_id) {
+                continue;
+            }
+            if let Some(value_slot_id) = shared_slots.get(&slot_id) {
+                let value_slot = virtual_block_meta
+                    .read_slots
+                    .get(value_slot_id.as_usize())?;
+                let data_type = TableDataType::Map(Box::new(TableDataType::Tuple {
+                    fields_name: vec!["key".to_string(), "value".to_string()],
+                    fields_type: vec![
+                        TableDataType::Number(NumberDataType::UInt32),
+                        infer_schema_type(&value_slot.data_type.remove_nullable()).ok()?,
+                    ],
+                }));
+                schema.add_internal_field(&slot_id.0.to_string(), data_type, slot_id.0);
+            } else {
+                schema.add_internal_field(
+                    &slot_id.0.to_string(),
+                    infer_schema_type(&slot.data_type).ok()?,
+                    slot_id.0,
+                );
+            }
+        }
+        Some(Arc::new(schema))
+    }
+
     pub async fn read_parquet_data_by_merge_io(
         &self,
         read_settings: &ReadSettings,
@@ -131,38 +178,38 @@ impl VirtualColumnReader {
             return None;
         }
 
-        let mut schema = TableSchema::empty();
+        let schema = Self::read_schema(virtual_block_meta)?;
+        // Only scalar top-level fields are admitted to the decoded-array cache; nested map
+        // slots are always decoded from raw bytes.
+        let cache = CacheManager::instance().get_table_data_array_cache();
+        let scalar_types: HashMap<ColumnId, String> = schema
+            .fields()
+            .iter()
+            .filter(|field| !field.is_nested())
+            .map(|field| {
+                let data_type = DataType::from(field.data_type()).to_string();
+                (field.column_id, data_type)
+            })
+            .collect();
+        let mut cached_arrays = Vec::new();
+        let mut column_ranges = HashMap::new();
         let mut ranges = Vec::with_capacity(virtual_block_meta.read_slots.len());
-        let mut shared_slots = HashMap::new();
-        for plan in virtual_block_meta.fields.values() {
-            collect_shared_slots(plan, &mut shared_slots);
-        }
-        let shared_value_slots: HashSet<_> = shared_slots.values().copied().collect();
-
         for (slot_index, slot) in virtual_block_meta.read_slots.iter().enumerate() {
-            let slot_id = VirtualReadSlotId(slot_index as u32);
-            ranges.push((slot_id.0, slot.offset..(slot.offset + slot.len)));
-            if shared_value_slots.contains(&slot_id) {
-                continue;
-            }
-            if let Some(value_slot_id) = shared_slots.get(&slot_id) {
-                let value_slot = virtual_block_meta
-                    .read_slots
-                    .get(value_slot_id.as_usize())?;
-                let data_type = TableDataType::Map(Box::new(TableDataType::Tuple {
-                    fields_name: vec!["key".to_string(), "value".to_string()],
-                    fields_type: vec![
-                        TableDataType::Number(NumberDataType::UInt32),
-                        infer_schema_type(&value_slot.data_type.remove_nullable()).ok()?,
-                    ],
-                }));
-                schema.add_internal_field(&slot_id.0.to_string(), data_type, slot_id.0);
-            } else {
-                schema.add_internal_field(
-                    &slot_id.0.to_string(),
-                    infer_schema_type(&slot.data_type).ok()?,
-                    slot_id.0,
-                );
+            let slot_id = slot_index as ColumnId;
+            let range = slot.offset..(slot.offset + slot.len);
+            let cached = scalar_types.get(&slot_id).and_then(|data_type| {
+                let key =
+                    TableDataCacheKey::new(virtual_loc, slot_id, slot.offset, slot.len, data_type);
+                cache
+                    .get_sized(&key, slot.len)
+                    .filter(|array| array.0.len() == num_rows)
+            });
+            match cached {
+                Some(array) => cached_arrays.push((slot_id, array)),
+                None => {
+                    column_ranges.insert(slot_id, range.clone());
+                    ranges.push((slot_id, range));
+                }
             }
         }
 
@@ -194,7 +241,12 @@ impl VirtualColumnReader {
             }
         };
 
-        let block_read_res = BlockReadResult::create(merge_io_result, vec![], vec![]);
+        let block_read_res = BlockReadResult::create_with_row_range(
+            merge_io_result,
+            cached_arrays,
+            column_ranges,
+            0..num_rows,
+        );
         let ignore_column_ids =
             self.generate_ignore_column_ids(&virtual_block_meta.ignored_source_column_ids);
 
@@ -203,7 +255,7 @@ impl VirtualColumnReader {
             num_rows,
             self.compression.into(),
             block_read_res,
-            Arc::new(schema),
+            schema,
             virtual_block_meta.fields.clone(),
             virtual_block_meta.read_slots.clone(),
             ignore_column_ids,
@@ -232,12 +284,20 @@ impl VirtualColumnReader {
             .filter(|virtual_data| !virtual_data.schema.fields().is_empty())
             .map(|virtual_data| {
                 let columns_chunks = virtual_data.data.columns_chunks()?;
-                column_chunks_to_record_batch(
+                let cache = CacheManager::instance().get_table_data_array_cache();
+                let column_metas = HashMap::new();
+                deserialize_column_chunks(
                     &virtual_data.schema,
                     virtual_data.num_rows,
                     &columns_chunks,
                     &virtual_data.compression,
                     row_selection,
+                    cache.as_ref().map(|cache| ArrayCacheContext {
+                        cache,
+                        location: virtual_data.data.location(),
+                        column_metas: &column_metas,
+                        complete_column_chunks: false,
+                    }),
                 )
             })
             .transpose()?;

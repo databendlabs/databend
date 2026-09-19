@@ -1,0 +1,49 @@
+statement ok
+USE compat_granule_mixed
+
+query I
+SELECT count() FROM gi_empty
+----
+0
+
+query III
+SELECT count(),sum(payload),count_if(k IS NULL) FROM gi_t
+----
+307 317250 1
+
+query III
+SELECT count_if(k BETWEEN 0 AND 98),count_if(k BETWEEN 99 AND 101),count_if(k=500) FROM gi_t
+----
+99 4 0
+
+query III
+SELECT count_if(k BETWEEN 1000 AND 1099),count_if(k BETWEEN 2000 AND 2100),count_if(k=2101) FROM gi_t
+----
+100 101 0
+
+query I
+SELECT count_if(previous_k > k) FROM (SELECT k,lag(k) OVER (PARTITION BY _block_name ORDER BY _row_id) AS previous_k FROM gi_sort_merge)
+----
+0
+
+query IT rowsort
+SELECT k,payload FROM gi_sort_merge
+----
+1 c1
+2 c2
+3 c3
+4 c4
+5 c5
+6 c6
+7 c7
+8 c8
+
+query III
+SELECT count(),count_if(k=99),count_if(k=201) FROM gi_bloom WHERE tag IN ('c99','missing') OR k=201
+----
+1 1 0
+
+query I
+SELECT count() FROM gi_s
+----
+0

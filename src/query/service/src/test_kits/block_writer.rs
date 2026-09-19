@@ -159,7 +159,9 @@ impl<'a> BlockWriter<'a> {
             let index_block = bloom_index.serialize_to_data_block()?;
             let filter_schema = bloom_index.filter_schema;
             let index_block_schema = &filter_schema;
-            let SerializedParquet { payload, metadata } = blocks_to_parquet(
+            let SerializedParquet {
+                payload, metadata, ..
+            } = blocks_to_parquet(
                 index_block_schema,
                 vec![index_block],
                 TableCompression::None,

@@ -1,0 +1,32 @@
+statement ok
+USE compat_recluster_mixed
+
+query II
+SELECT count(),sum(value) FROM mixed_t
+----
+10 550
+
+statement ok
+SET recluster_method = 'vertical'
+
+statement ok
+ALTER TABLE mixed_t RECLUSTER FINAL
+
+query IIT
+SELECT id,value,source FROM mixed_t ORDER BY id, value
+----
+1 10 initial
+2 20 initial
+3 30 initial
+4 40 initial
+5 50 initial
+6 60 initial
+7 70 old-write-1
+8 80 old-write-2
+9 90 old-write-1
+10 100 old-write-2
+
+query TBI rowsort
+SELECT change$action,change$is_update,count() FROM mixed_s GROUP BY change$action,change$is_update
+----
+INSERT 0 4
