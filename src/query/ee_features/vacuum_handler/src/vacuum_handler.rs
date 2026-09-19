@@ -21,6 +21,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::TableInfo;
 // (TableName, file, file size)
 pub type VacuumDropFileInfo = (String, String, u64);
 
@@ -39,7 +40,7 @@ pub trait VacuumHandler: Sync + Send {
     async fn do_vacuum_drop_tables(
         &self,
         threads_nums: usize,
-        tables: Vec<Arc<dyn Table>>,
+        tables: Vec<TableInfo>,
         dry_run_limit: Option<usize>,
     ) -> VacuumDropTablesResult;
 
@@ -84,7 +85,7 @@ impl VacuumHandlerWrapper {
     pub async fn do_vacuum_drop_tables(
         &self,
         threads_nums: usize,
-        tables: Vec<Arc<dyn Table>>,
+        tables: Vec<TableInfo>,
         dry_run_limit: Option<usize>,
     ) -> VacuumDropTablesResult {
         self.handler

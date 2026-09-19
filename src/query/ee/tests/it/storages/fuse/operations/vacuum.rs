@@ -32,6 +32,7 @@ use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::MVDefinitionIdent;
 use databend_common_meta_app::schema::SourceTableMV;
 use databend_common_meta_app::schema::SourceTableMVIdent;
+use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::storage::StorageParams;
@@ -54,6 +55,8 @@ use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use opendal::EntryMode;
 use opendal::Metadata;
 use opendal::OperatorBuilder;
@@ -103,7 +106,12 @@ async fn test_fuse_do_vacuum_drop_tables() -> anyhow::Result<()> {
 
     // verify dry run never delete files
     {
-        vacuum_drop_tables(threads_nums, vec![table.clone()], Some(100)).await?;
+        vacuum_drop_tables(
+            threads_nums,
+            vec![table.get_table_info().clone()],
+            Some(100),
+        )
+        .await?;
         check_data_dir(
             &fixture,
             "test_fuse_do_vacuum_drop_table: verify generate files",
@@ -120,7 +128,7 @@ async fn test_fuse_do_vacuum_drop_tables() -> anyhow::Result<()> {
     }
 
     {
-        vacuum_drop_tables(threads_nums, vec![table], None).await?;
+        vacuum_drop_tables(threads_nums, vec![table.get_table_info().clone()], None).await?;
 
         // after vacuum drop tables, verify the files number
         check_data_dir(
@@ -1176,6 +1184,187 @@ async fn test_vacuum_drop_create_or_replace_impl(vacuum_stmts: &[&str]) -> anyho
             .await
             .is_err()
     );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_dropped_tables_with_invalid_options() -> anyhow::Result<()> {
+    let meta = new_local_meta().await;
+    let mut ee_setup = EESetup::new();
+    ee_setup.config_mut().meta.endpoints = meta.inner().endpoints.clone();
+    let fixture = TestFixture::setup_with_custom(ee_setup).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+
+    let db_name = "test_vacuum_invalid_options";
+    fixture
+        .execute_command(&format!("create database {db_name}"))
+        .await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let tenant = ctx.get_tenant();
+    let catalog = ctx.get_default_catalog()?;
+    let mut dropped_tables = Vec::new();
+    for (option, value) in [
+        (OPT_KEY_TABLE_COMPRESSION, "ztsd"),
+        (OPT_KEY_SEGMENT_FORMAT, "invalid"),
+    ] {
+        fixture
+            .execute_command(&format!("create table {db_name}.{option} as select 1 as a"))
+            .await?;
+        let table = catalog.get_table(&tenant, db_name, option).await?;
+        let operator = FuseTable::try_from_table(table.as_ref())?.get_operator();
+        let prefix = format!(
+            "{}/",
+            FuseTable::parse_storage_prefix_from_table_info(table.get_table_info())?
+        );
+        assert!(
+            !operator
+                .list_with(&prefix)
+                .recursive(true)
+                .await?
+                .is_empty()
+        );
+
+        fixture
+            .execute_command(&format!(
+                "create or replace table {db_name}.{option} as select 2 as a"
+            ))
+            .await?;
+
+        // Current DDL rejects these options. Inject legacy metadata left behind
+        // by CREATE OR REPLACE after an older version accepted an invalid option.
+        let key = TableId::new(table.get_id());
+        let mut seq_meta = meta.get_pb(&key).await?.unwrap();
+        seq_meta.options.insert(option.to_owned(), value.to_owned());
+        let mut txn = TxnRequest::default();
+        txn_replace_exact(&mut txn, &key, seq_meta.seq, &seq_meta.data)?;
+        assert!(send_txn(&meta, txn).await?.0);
+        dropped_tables.push((key, operator, prefix));
+    }
+
+    fixture
+        .execute_command(&format!("vacuum dropped objects from {db_name}"))
+        .await?;
+    for (key, operator, prefix) in dropped_tables {
+        assert!(meta.get_pb(&key).await?.is_none());
+        assert!(
+            operator
+                .list_with(&prefix)
+                .recursive(true)
+                .await?
+                .is_empty()
+        );
+    }
+    for option in [OPT_KEY_TABLE_COMPRESSION, OPT_KEY_SEGMENT_FORMAT] {
+        fixture
+            .execute_command(&format!("select * from {db_name}.{option}"))
+            .await?;
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_dropped_tables_isolates_initialization_failures() -> anyhow::Result<()> {
+    let meta = new_local_meta().await;
+    let mut ee_setup = EESetup::new();
+    ee_setup.config_mut().meta.endpoints = meta.inner().endpoints.clone();
+    let fixture = TestFixture::setup_with_custom(ee_setup).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+
+    let db_name = "test_vacuum_initialization_failures";
+    fixture
+        .execute_command(&format!("create database {db_name}"))
+        .await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let tenant = ctx.get_tenant();
+    let catalog = ctx.get_default_catalog()?;
+    let db_id = catalog
+        .get_database(&tenant, db_name)
+        .await?
+        .get_db_info()
+        .database_id;
+    let mut tables = Vec::new();
+    for name in [
+        "missing_database_id",
+        "legacy_part_prefix",
+        "unknown_engine",
+        "healthy",
+    ] {
+        let sql = if name == "healthy" {
+            format!(
+                "create dynamic table {db_name}.{name} as select a from {db_name}.missing_database_id"
+            )
+        } else {
+            format!("create table {db_name}.{name} (a int)")
+        };
+        fixture.execute_command(&sql).await?;
+        let table = catalog.get_table(&tenant, db_name, name).await?;
+        let operator = FuseTable::try_from_table(table.as_ref())?.get_operator();
+        let path = format!(
+            "{}/vacuum-test-data",
+            FuseTable::parse_storage_prefix_from_table_info(table.get_table_info())?
+        );
+        operator.write(&path, vec![1, 2]).await?;
+        tables.push((table.get_table_info().clone(), operator, path));
+    }
+    fixture
+        .execute_command(&format!("drop database {db_name}"))
+        .await?;
+
+    for (info, _, _) in &tables {
+        let key = TableId::new(info.ident.table_id);
+        let mut seq_meta = meta.get_pb(&key).await?.unwrap();
+        match info.name.as_str() {
+            "missing_database_id" => {
+                seq_meta.options.remove(OPT_KEY_DATABASE_ID);
+            }
+            "legacy_part_prefix" => seq_meta.part_prefix = "legacy".to_owned(),
+            "unknown_engine" => seq_meta.engine = "UNKNOWN_ENGINE".to_owned(),
+            _ => continue,
+        }
+        let mut txn = TxnRequest::default();
+        txn_replace_exact(&mut txn, &key, seq_meta.seq, &seq_meta.data)?;
+        assert!(send_txn(&meta, txn).await?.0);
+    }
+
+    execute_command(ctx.clone(), "vacuum dropped objects").await?;
+    let warnings = ctx.pop_warnings().join("\n");
+    assert!(meta.get_pb(&db_id).await?.is_some());
+    for (info, operator, path) in &tables {
+        let key = TableId::new(info.ident.table_id);
+        if info.name == "healthy" {
+            assert!(meta.get_pb(&key).await?.is_none());
+            assert!(!operator.exists(path).await?);
+            continue;
+        }
+        let mut seq_meta = meta.get_pb(&key).await?.unwrap();
+        assert!(operator.exists(path).await?);
+        assert!(warnings.contains(&info.ident.table_id.to_string()));
+
+        // Repair the failed objects, retaining the current GC/drop state.
+        seq_meta.options.clone_from(&info.meta.options);
+        seq_meta.part_prefix.clone_from(&info.meta.part_prefix);
+        seq_meta.engine.clone_from(&info.meta.engine);
+        let mut txn = TxnRequest::default();
+        txn_replace_exact(&mut txn, &key, seq_meta.seq, &seq_meta.data)?;
+        assert!(send_txn(&meta, txn).await?.0);
+    }
+
+    fixture.execute_command("vacuum dropped objects").await?;
+    assert!(meta.get_pb(&db_id).await?.is_none());
+    for (info, operator, path) in tables {
+        assert!(
+            meta.get_pb(&TableId::new(info.ident.table_id))
+                .await?
+                .is_none()
+        );
+        assert!(!operator.exists(&path).await?);
+    }
     Ok(())
 }
 
