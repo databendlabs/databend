@@ -1,3 +1,5 @@
+# run-with-settings: enable_experimental_new_join=0
+
 # INNER JOIN
 statement ok
 use default

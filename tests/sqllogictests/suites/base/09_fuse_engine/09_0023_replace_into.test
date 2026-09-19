@@ -1,3 +1,5 @@
+# run-with-settings: enable_block_stream_write=0
+
 statement ok
 DROP DATABASE IF EXISTS db_09_0023
 

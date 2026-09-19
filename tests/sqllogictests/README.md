@@ -95,3 +95,31 @@ For more information about arguments, such as <type_string>, <sort_mode>, <label
 ### Aditional features
 
 - sql with regexp pattern `\$RAND_(\d+)_(\d+)` will be replaced by a random number from the range.
+
+### Run a file again with non-default settings
+
+Many bugs only show up on a setting-gated execution path (or on its legacy fallback) and
+surface the day the default is flipped. To give such a path the same coverage as the default
+path without duplicating the file, add a directive comment anywhere in the test file:
+
+```
+# run-with-settings: enable_fixed_rows_sort=0
+# run-with-settings: enable_experimental_new_join=0, join_spilling_memory_ratio=0
+```
+
+Every directive line adds one extra pass over the whole file. The runner always executes the
+file once with default settings, then once more per directive, applying `SET key = value` to
+every new connection of that pass (after the sandbox is initialised, before the first record).
+A `SET` inside the file still wins over the directive; an `UNSET` inside the file falls back to
+the server default, not to the directive value.
+
+Only use it for settings that switch the implementation path without changing the observable
+result, otherwise the expected output can not be shared between passes. A malformed directive
+fails the run instead of silently dropping the pass. Failures are reported with the pass name,
+e.g. `foo.test [settings: enable_fixed_rows_sort=0]`.
+
+Files still run in parallel, but the passes of one file run sequentially, each in its own
+sandbox tenant. Sequential execution matters because not all state is tenant-scoped (e.g. the
+storage path of an internal stage is `stage/internal/<name>`), so concurrent passes of the same
+file could otherwise pollute each other. For the same reason a file that writes to an internal
+stage should drop it at the end, so the next pass starts clean.

@@ -1,3 +1,5 @@
+# run-with-settings: enable_experimental_new_join=0
+
 # RIGHT OUTER JOIN
 statement ok
 drop table if exists t1_null

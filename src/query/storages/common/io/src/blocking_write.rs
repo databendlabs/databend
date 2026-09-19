@@ -22,7 +22,7 @@ use bytes::BytesMut;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_storages_common_blocks::BlockingWrite;
+pub use databend_storages_common_blocks::BlockingWrite;
 use opendal::Operator;
 
 pub const BLOCKING_WRITE_CHUNK_SIZE: usize = 4 * 1024 * 1024;
