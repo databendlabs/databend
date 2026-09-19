@@ -48,7 +48,6 @@ use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_blocks::blocks_to_parquet_with_stats;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_table_meta::meta::BlockHLLState;
-use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -66,13 +65,18 @@ use crate::io::BlockStatsBuilder;
 use crate::io::BloomIndexState;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::write::InvertedIndexBuilder;
-use crate::io::write::InvertedIndexState;
 use crate::io::write::JsonPathStatisticsBuilder;
 use crate::io::write::SpatialIndexBuilder;
 use crate::io::write::SpatialIndexState;
 use crate::io::write::VectorIndexBuilder;
 use crate::io::write::VectorIndexState;
 use crate::io::write::WriteSettings;
+use crate::io::write::block_index::BlockIndexSpec;
+use crate::io::write::block_index::BlockIndexWriteContext;
+use crate::io::write::block_index::PendingBlockIndexOutput;
+use crate::io::write::block_index::PendingInvertedIndex;
+use crate::io::write::block_index::collect_inverted_index_metas;
+use crate::io::write::bloom_index_writer::BloomIndexWriteSpec;
 use crate::io::write::virtual_column_builder::VirtualColumnBuilder;
 use crate::io::write::virtual_column_builder::VirtualColumnState;
 use crate::operations::column_parquet_metas;
@@ -131,12 +135,9 @@ pub async fn write_data(
 pub struct BlockSerialization {
     pub block_raw_data: Buffer,
     pub block_meta: BlockMeta,
-    pub bloom_index_state: Option<BloomIndexState>,
-    pub inverted_index_states: Vec<InvertedIndexState>,
+    pub block_indexes: PendingBlockIndexOutput,
     pub virtual_column_state: Option<VirtualColumnState>,
     pub path_statistics: Option<HashMap<ColumnId, DraftVirtualColumnPathStatistics>>,
-    pub vector_index_state: Option<VectorIndexState>,
-    pub spatial_index_state: Option<SpatialIndexState>,
     pub column_hlls: Option<BlockHLLState>,
     pub column_top_n: Option<BlockTopN>,
 }
@@ -184,16 +185,45 @@ impl BlockBuilder {
             .meta_locations
             .gen_block_location(self.table_meta_timestamps);
 
+        let index_context = BlockIndexWriteContext {
+            func_ctx: self.ctx.get_function_context()?,
+            physical_schema: self.source_schema.clone(),
+            write_settings: self.write_settings.clone(),
+        };
         let bloom_index_location = self.meta_locations.block_bloom_index_location(&block_id);
-        let bloom_index_state = BloomIndexState::from_data_block(
-            self.ctx.clone(),
-            &data_block,
-            bloom_index_location,
-            self.write_settings.bloom_index_type,
-            self.bloom_columns_map.clone(),
-            &self.ngram_args,
-        )?;
-        let mut column_distinct_count = bloom_index_state
+        let mut index_writers = vec![
+            BloomIndexWriteSpec::new(
+                self.bloom_columns_map.clone(),
+                self.ngram_args.clone(),
+                bloom_index_location,
+            )
+            .new_writer(index_context.clone())?,
+        ];
+        for inverted_index_builder in &self.inverted_index_builders {
+            let spec = inverted_index_builder
+                .clone()
+                .into_write_spec(&self.meta_locations);
+            index_writers.push(spec.new_writer(index_context.clone())?);
+        }
+        if let Some(vector_index_builder) = self.vector_index_builder.clone() {
+            let spec = vector_index_builder
+                .into_write_spec(self.meta_locations.block_vector_index_location());
+            index_writers.push(spec.new_writer(index_context.clone())?);
+        }
+        if let Some(spatial_index_builder) = self.spatial_index_builder.clone() {
+            let spec = spatial_index_builder
+                .into_write_spec(self.meta_locations.block_spatial_index_location());
+            index_writers.push(spec.new_writer(index_context)?);
+        }
+
+        let mut block_indexes = PendingBlockIndexOutput::default();
+        for mut index_writer in index_writers {
+            index_writer.write(&data_block)?;
+            block_indexes.merge(index_writer.finish()?)?;
+        }
+
+        let mut column_distinct_count = block_indexes
+            .bloom
             .as_ref()
             .map(|i| i.column_distinct_count.clone())
             .unwrap_or_default();
@@ -221,41 +251,14 @@ impl BlockBuilder {
             }
         }
 
-        let mut inverted_index_states = Vec::with_capacity(self.inverted_index_builders.len());
-        for inverted_index_builder in &self.inverted_index_builders {
-            let inverted_index_state = InvertedIndexState::from_data_block(
-                &self.source_schema,
-                &data_block,
-                &self.meta_locations,
-                inverted_index_builder,
-            )?;
-            inverted_index_states.push(inverted_index_state);
-        }
-        let (vector_index_state, vector_stats) = if let Some(ref vector_index_builder) =
-            self.vector_index_builder
-        {
-            let vector_index_location = self.meta_locations.block_vector_index_location();
-            let mut vector_index_builder = vector_index_builder.clone();
-            vector_index_builder.add_block(&data_block)?;
-            let vector_index_state = vector_index_builder.finalize_block(&vector_index_location)?;
-            (
-                vector_index_state.index_state,
-                vector_index_state.vector_stats,
-            )
-        } else {
-            (None, None)
-        };
-
-        let (spatial_index_state, spatial_stats) =
-            if let Some(ref spatial_index_builder) = self.spatial_index_builder {
-                let spatial_index_location = self.meta_locations.block_spatial_index_location();
-                let mut spatial_index_builder = spatial_index_builder.clone();
-                spatial_index_builder.add_block(&data_block)?;
-                let spatial_result = spatial_index_builder.finalize(&spatial_index_location)?;
-                (spatial_result.index_state, spatial_result.spatial_stats)
-            } else {
-                (None, None)
-            };
+        let vector_stats = block_indexes
+            .vector
+            .as_mut()
+            .and_then(|vector| vector.statistics.take());
+        let spatial_stats = block_indexes
+            .spatial
+            .as_mut()
+            .and_then(|spatial| spatial.statistics.take());
 
         let virtual_column_state =
             if let Some(ref virtual_column_builder) = self.virtual_column_builder {
@@ -296,22 +299,18 @@ impl BlockBuilder {
             data_block,
         )?;
         let file_size = buffer.len() as u64;
-        let inverted_index_size = if !inverted_index_states.is_empty() {
-            let size = inverted_index_states.iter().map(|v| v.size).sum();
+        let inverted_index_size = if !block_indexes.inverted.is_empty() {
+            let size = block_indexes.inverted.iter().map(|v| v.file.size()).sum();
             Some(size)
         } else {
             None
         };
-        let mut inverted_index_metas = inverted_index_states
-            .iter()
-            .map(|state| BlockIndexMeta {
-                index_name: state.index_name.clone(),
-                location: state.location.clone(),
-                size: state.size,
-                index_version: state.index_version.clone(),
-            })
-            .collect::<Vec<_>>();
-        inverted_index_metas.sort_unstable_by(|left, right| left.index_name.cmp(&right.index_name));
+        let inverted_index_metas = collect_inverted_index_metas(
+            block_indexes
+                .inverted
+                .iter()
+                .map(PendingInvertedIndex::to_block_index_meta),
+        );
         let block_meta = BlockMeta {
             row_count,
             block_size,
@@ -321,19 +320,36 @@ impl BlockBuilder {
             cluster_stats,
             partition_stats,
             location: block_location,
-            bloom_filter_index_location: bloom_index_state.as_ref().map(|v| v.location.clone()),
-            bloom_filter_index_size: bloom_index_state
+            bloom_filter_index_location: block_indexes
+                .bloom
                 .as_ref()
-                .map(|v| v.size)
-                .unwrap_or_default(),
-            ngram_filter_index_size: bloom_index_state
+                .map(|v| v.file.location.clone()),
+            bloom_filter_index_size: block_indexes
+                .bloom
                 .as_ref()
-                .map(|v| v.ngram_size)
+                .map(|v| v.file.size())
                 .unwrap_or_default(),
-            vector_index_size: vector_index_state.as_ref().map(|v| v.size),
-            vector_index_location: vector_index_state.as_ref().map(|v| v.location.clone()),
-            spatial_index_size: spatial_index_state.as_ref().map(|v| v.size),
-            spatial_index_location: spatial_index_state.as_ref().map(|v| v.location.clone()),
+            ngram_filter_index_size: block_indexes.bloom.as_ref().and_then(|v| v.ngram_size),
+            vector_index_size: block_indexes
+                .vector
+                .as_ref()
+                .and_then(|v| v.file.as_ref())
+                .map(|file| file.size()),
+            vector_index_location: block_indexes
+                .vector
+                .as_ref()
+                .and_then(|v| v.file.as_ref())
+                .map(|file| file.location.clone()),
+            spatial_index_size: block_indexes
+                .spatial
+                .as_ref()
+                .and_then(|v| v.file.as_ref())
+                .map(|file| file.size()),
+            spatial_index_location: block_indexes
+                .spatial
+                .as_ref()
+                .and_then(|v| v.file.as_ref())
+                .map(|file| file.location.clone()),
             spatial_stats,
             vector_stats,
             compression: self.write_settings.table_compression.into(),
@@ -356,12 +372,9 @@ impl BlockBuilder {
         let serialized = BlockSerialization {
             block_raw_data: buffer,
             block_meta,
-            bloom_index_state,
-            inverted_index_states,
+            block_indexes,
             virtual_column_state,
             path_statistics,
-            vector_index_state,
-            spatial_index_state,
             column_hlls,
             column_top_n,
         };
@@ -402,13 +415,45 @@ impl BlockWriter {
         };
 
         Self::write_down_data_block(dal, serialized.block_raw_data, &block_location).await?;
-        Self::write_down_bloom_index_state(dal, serialized.bloom_index_state).await?;
-        Self::write_down_vector_index_state(dal, serialized.vector_index_state).await?;
-        Self::write_down_spatial_index_state(dal, serialized.spatial_index_state).await?;
-        Self::write_down_inverted_index_state(dal, serialized.inverted_index_states).await?;
+        Self::write_down_block_indexes(dal, serialized.block_indexes).await?;
         Self::write_down_virtual_column_state(dal, serialized.virtual_column_state).await?;
 
         Ok(extended_block_meta)
+    }
+
+    pub async fn write_down_block_indexes(
+        dal: &Operator,
+        block_indexes: PendingBlockIndexOutput,
+    ) -> Result<()> {
+        if let Some(bloom) = block_indexes.bloom {
+            let start = Instant::now();
+            let size = bloom.file.write(dal).await?;
+            metrics_inc_block_index_write_nums(1);
+            metrics_inc_block_index_write_nums(size);
+            metrics_inc_block_index_write_milliseconds(start.elapsed().as_millis() as u64);
+        }
+        if let Some(file) = block_indexes.vector.and_then(|vector| vector.file) {
+            let start = Instant::now();
+            let size = file.write(dal).await?;
+            metrics_inc_block_vector_index_write_nums(1);
+            metrics_inc_block_vector_index_write_bytes(size);
+            metrics_inc_block_vector_index_write_milliseconds(start.elapsed().as_millis() as u64);
+        }
+        if let Some(file) = block_indexes.spatial.and_then(|spatial| spatial.file) {
+            let start = Instant::now();
+            let size = file.write(dal).await?;
+            metrics_inc_block_spatial_index_write_nums(1);
+            metrics_inc_block_spatial_index_write_bytes(size);
+            metrics_inc_block_spatial_index_write_milliseconds(start.elapsed().as_millis() as u64);
+        }
+        for inverted in block_indexes.inverted {
+            let start = Instant::now();
+            let size = inverted.file.write(dal).await?;
+            metrics_inc_block_inverted_index_write_nums(1);
+            metrics_inc_block_inverted_index_write_bytes(size);
+            metrics_inc_block_inverted_index_write_milliseconds(start.elapsed().as_millis() as u64);
+        }
+        Ok(())
     }
 
     pub async fn write_down_data_block(
@@ -477,23 +522,6 @@ impl BlockWriter {
             metrics_inc_block_spatial_index_write_nums(1);
             metrics_inc_block_spatial_index_write_bytes(index_size);
             metrics_inc_block_spatial_index_write_milliseconds(start.elapsed().as_millis() as u64);
-        }
-        Ok(())
-    }
-
-    pub async fn write_down_inverted_index_state(
-        dal: &Operator,
-        inverted_index_states: Vec<InvertedIndexState>,
-    ) -> Result<()> {
-        for inverted_index_state in inverted_index_states {
-            let start = Instant::now();
-
-            let location = &inverted_index_state.location.0;
-            let index_size = inverted_index_state.size;
-            write_data(inverted_index_state.data, dal, location).await?;
-            metrics_inc_block_inverted_index_write_nums(1);
-            metrics_inc_block_inverted_index_write_bytes(index_size);
-            metrics_inc_block_inverted_index_write_milliseconds(start.elapsed().as_millis() as u64);
         }
         Ok(())
     }

@@ -76,6 +76,12 @@ use tantivy::tokenizer::TokenizerManager;
 use tantivy_jieba::JiebaTokenizer;
 
 use crate::io::TableMetaLocationGenerator;
+use crate::io::write::block_index::BlockIndexSpec;
+use crate::io::write::block_index::BlockIndexWriteContext;
+use crate::io::write::block_index::BlockIndexWriter;
+use crate::io::write::block_index::PendingBlockIndexOutput;
+use crate::io::write::block_index::PendingIndexFile;
+use crate::io::write::block_index::PendingInvertedIndex;
 
 static JAPANESE_DICTIONARY: LazyLock<Dictionary> = LazyLock::new(|| {
     load_dictionary("embedded://ipadic").expect("the embedded IPADIC dictionary must be available")
@@ -95,6 +101,87 @@ impl InvertedIndexBuilder {
         location_generator: &TableMetaLocationGenerator,
     ) -> String {
         location_generator.gen_inverted_index_v2_location(&self.version)
+    }
+
+    /// Binds this index definition to a freshly generated immutable object location.
+    ///
+    /// Inverted index object keys are independent from the block key, so the location is
+    /// resolved once per block write and carried by the spec, matching the other index specs.
+    pub(crate) fn into_write_spec(
+        self,
+        location_generator: &TableMetaLocationGenerator,
+    ) -> InvertedIndexWriteSpec {
+        let location = (
+            self.gen_inverted_index_location(location_generator),
+            INVERTED_INDEX_FILE_FORMAT_VERSION,
+        );
+        InvertedIndexWriteSpec {
+            builder: self,
+            location,
+        }
+    }
+}
+
+pub(crate) struct InvertedIndexWriteSpec {
+    builder: InvertedIndexBuilder,
+    location: Location,
+}
+
+impl BlockIndexSpec for InvertedIndexWriteSpec {
+    fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
+        Ok(Box::new(InvertedIndexBlockWriter {
+            index_name: self.builder.name.clone(),
+            index_version: self.builder.version.clone(),
+            location: self.location.clone(),
+            source_schema: context.physical_schema,
+            writer: InvertedIndexWriter::try_create(
+                Arc::new(self.builder.schema.clone()),
+                &self.builder.options,
+            )?,
+        }))
+    }
+}
+
+struct InvertedIndexBlockWriter {
+    index_name: String,
+    index_version: String,
+    location: Location,
+    source_schema: TableSchemaRef,
+    writer: InvertedIndexWriter,
+}
+
+impl BlockIndexWriter for InvertedIndexBlockWriter {
+    fn write(&mut self, block: &DataBlock) -> Result<()> {
+        self.writer.add_block(&self.source_schema, block)
+    }
+
+    fn finish(self: Box<Self>) -> Result<PendingBlockIndexOutput> {
+        // Documents are buffered until here; `finalize` runs the Tantivy indexing pass.
+        let start = Instant::now();
+        info!(
+            "Start build inverted index for location: {}",
+            self.location.0
+        );
+        let data = self.writer.finalize()?;
+        let elapsed_ms = start.elapsed().as_millis() as u64;
+        metrics_inc_block_inverted_index_generate_milliseconds(elapsed_ms);
+        info!(
+            "Finish build inverted index: location={}, size={} bytes in {} ms",
+            self.location.0,
+            data.len(),
+            elapsed_ms
+        );
+        Ok(PendingBlockIndexOutput {
+            inverted: vec![PendingInvertedIndex {
+                index_name: self.index_name,
+                index_version: self.index_version,
+                file: PendingIndexFile {
+                    location: self.location,
+                    data,
+                },
+            }],
+            ..Default::default()
+        })
     }
 }
 
@@ -163,46 +250,15 @@ impl InvertedIndexState {
         })
     }
 
-    pub fn from_data_block(
-        source_schema: &TableSchemaRef,
-        block: &DataBlock,
-        location_generator: &TableMetaLocationGenerator,
-        inverted_index_builder: &InvertedIndexBuilder,
-    ) -> Result<Self> {
-        let start = Instant::now();
-
-        let inverted_index_location =
-            inverted_index_builder.gen_inverted_index_location(location_generator);
-
-        info!(
-            "Start build inverted index for location: {}",
-            inverted_index_location
-        );
-
-        let mut writer = InvertedIndexWriter::try_create(
-            Arc::new(inverted_index_builder.schema.clone()),
-            &inverted_index_builder.options,
-        )?;
-        writer.add_block(source_schema, block)?;
-        let data = writer.finalize()?;
-
-        // Perf.
-        let size = data.len();
-        let elapsed_ms = start.elapsed().as_millis() as u64;
-        {
-            metrics_inc_block_inverted_index_generate_milliseconds(elapsed_ms);
+    pub(crate) fn into_pending(self) -> PendingInvertedIndex {
+        PendingInvertedIndex {
+            index_name: self.index_name,
+            index_version: self.index_version,
+            file: PendingIndexFile {
+                location: self.location,
+                data: self.data,
+            },
         }
-        info!(
-            "Finish build inverted index: location={}, size={} bytes in {} ms",
-            inverted_index_location, size, elapsed_ms
-        );
-
-        Self::try_create(
-            data,
-            inverted_index_location,
-            inverted_index_builder.name.clone(),
-            inverted_index_builder.version.clone(),
-        )
     }
 }
 

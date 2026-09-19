@@ -40,6 +40,12 @@ use opendal::Operator;
 
 use crate::FuseStorageFormat;
 use crate::io::BlockReader;
+use crate::io::write::block_index::BlockIndexSpec;
+use crate::io::write::block_index::BlockIndexWriteContext;
+use crate::io::write::block_index::BlockIndexWriter;
+use crate::io::write::block_index::PendingBlockIndexOutput;
+use crate::io::write::block_index::PendingBloomIndex;
+use crate::io::write::block_index::PendingIndexFile;
 
 #[derive(Debug)]
 pub struct BloomIndexState {
@@ -90,30 +96,6 @@ impl BloomIndexState {
         })
     }
 
-    pub fn from_data_block(
-        ctx: Arc<dyn TableContext>,
-        block: &DataBlock,
-        location: Location,
-        bloom_index_type: BloomIndexType,
-        bloom_columns_map: BTreeMap<FieldIndex, TableField>,
-        ngram_args: &[NgramArgs],
-    ) -> Result<Option<Self>> {
-        // write index
-        let mut builder = BloomIndexBuilder::create(
-            ctx.get_function_context()?,
-            bloom_index_type,
-            bloom_columns_map,
-            ngram_args,
-        )?;
-        builder.add_block(block)?;
-        let maybe_bloom_index = builder.finalize()?;
-        if let Some(bloom_index) = maybe_bloom_index {
-            Ok(Some(Self::from_bloom_index(&bloom_index, location)?))
-        } else {
-            Ok(None)
-        }
-    }
-
     pub fn size(&self) -> u64 {
         self.size
     }
@@ -124,6 +106,73 @@ impl BloomIndexState {
 
     pub fn ngram_size(&self) -> Option<u64> {
         self.ngram_size
+    }
+
+    pub(crate) fn into_pending(self) -> PendingBloomIndex {
+        PendingBloomIndex {
+            file: PendingIndexFile {
+                location: self.location,
+                data: self.data,
+            },
+            ngram_size: self.ngram_size,
+            column_distinct_count: self.column_distinct_count,
+        }
+    }
+}
+
+pub struct BloomIndexWriteSpec {
+    bloom_columns_map: BTreeMap<FieldIndex, TableField>,
+    ngram_args: Vec<NgramArgs>,
+    location: Location,
+}
+
+impl BloomIndexWriteSpec {
+    pub fn new(
+        bloom_columns_map: BTreeMap<FieldIndex, TableField>,
+        ngram_args: Vec<NgramArgs>,
+        location: Location,
+    ) -> Self {
+        Self {
+            bloom_columns_map,
+            ngram_args,
+            location,
+        }
+    }
+}
+
+impl BlockIndexSpec for BloomIndexWriteSpec {
+    fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
+        Ok(Box::new(BloomIndexBlockWriter {
+            builder: BloomIndexBuilder::create(
+                context.func_ctx,
+                context.write_settings.bloom_index_type,
+                self.bloom_columns_map.clone(),
+                &self.ngram_args,
+            )?,
+            location: self.location.clone(),
+        }))
+    }
+}
+
+struct BloomIndexBlockWriter {
+    builder: BloomIndexBuilder,
+    location: Location,
+}
+
+impl BlockIndexWriter for BloomIndexBlockWriter {
+    fn write(&mut self, block: &DataBlock) -> Result<()> {
+        self.builder.add_block(block)
+    }
+
+    fn finish(self: Box<Self>) -> Result<PendingBlockIndexOutput> {
+        let Some(bloom_index) = self.builder.finalize()? else {
+            return Ok(PendingBlockIndexOutput::default());
+        };
+        let state = BloomIndexState::from_bloom_index(&bloom_index, self.location)?;
+        Ok(PendingBlockIndexOutput {
+            bloom: Some(state.into_pending()),
+            ..Default::default()
+        })
     }
 }
 

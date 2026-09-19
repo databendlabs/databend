@@ -50,6 +50,12 @@ use opendal::Operator;
 use parquet::file::metadata::KeyValue;
 
 use crate::io::read::load_vector_index_files;
+use crate::io::write::block_index::BlockIndexSpec;
+use crate::io::write::block_index::BlockIndexWriteContext;
+use crate::io::write::block_index::BlockIndexWriter;
+use crate::io::write::block_index::PendingBlockIndexOutput;
+use crate::io::write::block_index::PendingIndexFile;
+use crate::io::write::block_index::PendingVectorIndex;
 
 const DEFAULT_M: usize = 16;
 const DEFAULT_EF_CONSTRUCT: usize = 100;
@@ -82,12 +88,58 @@ pub struct VectorIndexBuilder {
     columns: BTreeMap<usize, Vec<Column>>,
 }
 
+pub(crate) struct VectorIndexWriteSpec {
+    builder: VectorIndexBuilder,
+    location: Location,
+}
+
+impl BlockIndexSpec for VectorIndexWriteSpec {
+    fn new_writer(&self, _context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
+        Ok(Box::new(VectorIndexBlockWriter {
+            builder: self.builder.clone(),
+            location: self.location.clone(),
+        }))
+    }
+}
+
+struct VectorIndexBlockWriter {
+    builder: VectorIndexBuilder,
+    location: Location,
+}
+
+impl BlockIndexWriter for VectorIndexBlockWriter {
+    fn write(&mut self, block: &DataBlock) -> Result<()> {
+        self.builder.add_block(block)
+    }
+
+    fn finish(mut self: Box<Self>) -> Result<PendingBlockIndexOutput> {
+        let state = self.builder.finalize_block(&self.location)?;
+        Ok(PendingBlockIndexOutput {
+            vector: Some(PendingVectorIndex {
+                file: state.index_state.map(|index_state| PendingIndexFile {
+                    location: index_state.location,
+                    data: index_state.data,
+                }),
+                statistics: state.vector_stats,
+            }),
+            ..Default::default()
+        })
+    }
+}
+
 pub(crate) struct VectorIndexBuildState {
     pub(crate) index_state: Option<VectorIndexState>,
     pub(crate) vector_stats: Option<StatisticsOfVectorColumns>,
 }
 
 impl VectorIndexBuilder {
+    pub(crate) fn into_write_spec(self, location: Location) -> VectorIndexWriteSpec {
+        VectorIndexWriteSpec {
+            builder: self,
+            location,
+        }
+    }
+
     pub fn try_create(
         table_indexes: &BTreeMap<String, TableIndex>,
         schema: TableSchemaRef,

@@ -65,6 +65,10 @@ use crate::io::WriteSettings;
 use crate::io::create_inverted_index_builders;
 use crate::io::write::BlockStatsBuilder;
 use crate::io::write::InvertedIndexState;
+use crate::io::write::block_index::PendingBlockIndexOutput;
+use crate::io::write::block_index::PendingIndexFile;
+use crate::io::write::block_index::PendingSpatialIndex;
+use crate::io::write::block_index::PendingVectorIndex;
 use crate::io::write::stream::ColumnStatisticsState;
 use crate::io::write::stream::block_builder::ArrowParquetWriter::Initialized;
 use crate::operations::column_parquet_metas;
@@ -460,15 +464,35 @@ impl StreamBlockBuilder {
             virtual_path_statistics: None,
             virtual_block_meta: None,
         };
+        // Vector/spatial statistics already live in the block meta above; the pending output
+        // only carries payloads awaiting upload.
+        let block_indexes = PendingBlockIndexOutput {
+            bloom: bloom_index_state.map(BloomIndexState::into_pending),
+            inverted: inverted_index_states
+                .into_iter()
+                .map(InvertedIndexState::into_pending)
+                .collect(),
+            vector: vector_index_state.map(|state| PendingVectorIndex {
+                file: Some(PendingIndexFile {
+                    location: state.location,
+                    data: state.data,
+                }),
+                statistics: None,
+            }),
+            spatial: spatial_index_state.map(|state| PendingSpatialIndex {
+                file: Some(PendingIndexFile {
+                    location: state.location,
+                    data: state.data,
+                }),
+                statistics: None,
+            }),
+        };
         let serialized = BlockSerialization {
             block_raw_data,
             block_meta,
-            bloom_index_state,
-            inverted_index_states,
+            block_indexes,
             virtual_column_state,
             path_statistics,
-            vector_index_state,
-            spatial_index_state,
             column_hlls: column_hlls.map(BlockHLLState::Deserialized),
             column_top_n,
         };
