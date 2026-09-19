@@ -18,7 +18,7 @@ Exchange
         ├── estimated rows: 33333.33
         └── Exchange
             ├── output columns: [numbers_mt.number (#0)]
-            ├── exchange type: Hash(numbers_mt.number (#0))
+            ├── exchange type: NodeToNodeHash(numbers_mt.number (#0))
             └── TableScan
                 ├── table: default.system.numbers_mt
                 ├── scan id: 0
@@ -47,7 +47,7 @@ Exchange
     ├── estimated rows: 33333.33
     └── Exchange
         ├── output columns: [numbers_mt.number (#0)]
-        ├── exchange type: Hash(0)
+        ├── exchange type: NodeToNodeHash(0)
         └── AggregatePartial
             ├── group by: [number]
             ├── aggregate functions: []
