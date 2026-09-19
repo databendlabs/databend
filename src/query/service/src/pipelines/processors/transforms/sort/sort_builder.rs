@@ -39,7 +39,7 @@ use databend_common_pipeline_transforms::sorts::core::Rows;
 use databend_common_pipeline_transforms::sorts::core::RowsTypeVisitor;
 use databend_common_pipeline_transforms::sorts::core::SortKeyDescription;
 use databend_common_pipeline_transforms::sorts::core::algorithm::HeapSort;
-use databend_common_pipeline_transforms::sorts::core::algorithm::LoserTreeSort;
+use databend_common_pipeline_transforms::sorts::core::algorithm::LoserTreeTop2Sort;
 use databend_common_pipeline_transforms::sorts::core::algorithm::SortAlgorithm;
 use databend_common_pipeline_transforms::sorts::core::select_row_type;
 use databend_common_pipeline_transforms::traits::SortSpiller;
@@ -220,6 +220,7 @@ impl<S: SortSpiller> TransformSortBuilder<S> {
             sort_row_offset: self.key_desc.sort_row_offset(),
             spiller: self.spiller.clone().unwrap(),
             limit: self.limit,
+            enable_loser_tree: self.enable_loser_tree,
         }
     }
 
@@ -278,20 +279,20 @@ struct Build<'a, S: SortSpiller> {
 }
 
 impl<S: SortSpiller> Build<'_, S> {
-    fn build_sort<A>(
+    fn build_sort<R>(
         &mut self,
         sort_limit: bool,
         input: Arc<InputPort>,
     ) -> Result<Box<dyn Processor>>
     where
-        A: SortAlgorithm + 'static,
-        <A::Rows as Rows>::Converter: Send + 'static,
+        R: Rows + 'static,
+        R::Converter: Send + 'static,
     {
         let key_desc = self.params.key_desc.clone();
         let uses_source_sort_col = key_desc.uses_source_sort_col();
         let sort_row_offset = key_desc.sort_row_offset();
-        let row_converter = <A::Rows as Rows>::Converter::new(key_desc)?;
-        Ok(Box::new(TransformSort::<A, S>::new(
+        let row_converter = R::Converter::new(key_desc)?;
+        Ok(Box::new(TransformSort::<R, S>::new(
             input,
             self.output.clone(),
             sort_row_offset,
@@ -303,24 +304,25 @@ impl<S: SortSpiller> Build<'_, S> {
             // and cannot be dropped by a trailing `pop_columns(1)`.
             !self.params.keep_order_col && !uses_source_sort_col,
             self.params.input_has_order_col || uses_source_sort_col,
+            self.params.enable_loser_tree,
             self.params.enable_restore_prefetch,
             self.params.enable_sort_spill_stream_regroup,
         )?))
     }
 
-    fn build_sort_collect<A>(
+    fn build_sort_collect<R>(
         &mut self,
         input: Arc<InputPort>,
         sort_limit: bool,
         default_num_merge: usize,
     ) -> Result<Box<dyn Processor>>
     where
-        A: SortAlgorithm + 'static,
-        <A::Rows as Rows>::Converter: Send + 'static,
+        R: Rows + 'static,
+        R::Converter: Send + 'static,
     {
         assert!(!self.params.input_has_order_col);
-        let row_converter = <A::Rows as Rows>::Converter::new(self.params.key_desc.clone())?;
-        Ok(Box::new(TransformSortCollect::<A, S>::new(
+        let row_converter = R::Converter::new(self.params.key_desc.clone())?;
+        Ok(Box::new(TransformSortCollect::<R, S>::new(
             input,
             self.output.clone(),
             self.params.new_base(),
@@ -337,9 +339,9 @@ impl<S: SortSpiller> Build<'_, S> {
         )?))
     }
 
-    fn build_sort_restore<A>(&mut self, input: Arc<InputPort>) -> Result<Box<dyn Processor>>
-    where A: SortAlgorithm + 'static {
-        Ok(Box::new(TransformSortRestore::<A, S>::new(
+    fn build_sort_restore<R>(&mut self, input: Arc<InputPort>) -> Result<Box<dyn Processor>>
+    where R: Rows + 'static {
+        Ok(Box::new(TransformSortRestore::<R, S>::new(
             input,
             self.output.clone(),
             self.params.new_base(),
@@ -392,34 +394,19 @@ impl<S: SortSpiller> RowsTypeVisitor for Build<'_, S> {
     {
         let sort_limit = self.params.should_use_sort_limit();
         match self.typ.take().unwrap() {
-            SortType::Sort(input) => match self.params.enable_loser_tree {
-                true => self.build_sort::<LoserTreeSort<R>>(sort_limit, input),
-                false => self.build_sort::<HeapSort<R>>(sort_limit, input),
-            },
+            SortType::Sort(input) => self.build_sort::<R>(sort_limit, input),
 
             SortType::Collect {
                 input,
                 default_num_merge,
-            } => match self.params.enable_loser_tree {
-                true => self.build_sort_collect::<LoserTreeSort<R>>(
-                    input,
-                    sort_limit,
-                    default_num_merge,
-                ),
-                false => {
-                    self.build_sort_collect::<HeapSort<R>>(input, sort_limit, default_num_merge)
-                }
-            },
+            } => self.build_sort_collect::<R>(input, sort_limit, default_num_merge),
             SortType::BoundBroadcast { input, state } => {
                 self.build_bound_broadcast::<R, _>(input, state)
             }
-            SortType::Restore(input) => match self.params.enable_loser_tree {
-                true => self.build_sort_restore::<LoserTreeSort<R>>(input),
-                false => self.build_sort_restore::<HeapSort<R>>(input),
-            },
+            SortType::Restore(input) => self.build_sort_restore::<R>(input),
 
             SortType::BoundedMergeSort(inputs) => match self.params.enable_loser_tree {
-                true => self.build_bounded_merge_sort::<LoserTreeSort<R>>(inputs),
+                true => self.build_bounded_merge_sort::<LoserTreeTop2Sort<R>>(inputs),
                 false => self.build_bounded_merge_sort::<HeapSort<R>>(inputs),
             },
         }

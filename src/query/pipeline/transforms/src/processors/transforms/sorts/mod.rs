@@ -57,6 +57,7 @@ pub struct Base<S: Send + Clone> {
     pub spiller: S,
     pub sort_row_offset: usize,
     pub limit: Option<usize>,
+    pub enable_loser_tree: bool,
 }
 
 #[derive(Debug)]
