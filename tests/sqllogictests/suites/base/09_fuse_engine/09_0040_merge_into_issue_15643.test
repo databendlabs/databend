@@ -1,3 +1,5 @@
+# run-with-settings: enable_block_stream_write=0
+
 statement ok
 create or replace database m_test;
 

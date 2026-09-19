@@ -1,3 +1,6 @@
+# run-with-settings: enable_fixed_rows_sort=0
+# run-with-settings: enable_loser_tree_merge_sort=0
+
 statement ok
 CREATE DATABASE IF NOT EXISTS test_window_range
 
