@@ -19,11 +19,8 @@ use arrow_ipc::writer::IpcWriteOptions;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
-use databend_common_expression::FromData;
-use databend_common_expression::types::BinaryType;
-use databend_common_expression::types::Int64Type;
-use databend_common_expression::types::StringType;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
@@ -31,22 +28,19 @@ use databend_common_pipeline_transforms::UnknownMode;
 use databend_common_pipeline_transforms::processors::BlockMetaTransform;
 use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
 use databend_common_settings::FlightCompression;
-use databend_common_storages_parquet::serialize_row_group_meta_to_bytes;
 
+use crate::pipelines::processors::transforms::aggregator::AggregateExchangeDataCodec;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::PartitionItem;
-use crate::pipelines::processors::transforms::aggregator::PartitionedData;
-use crate::pipelines::processors::transforms::aggregator::SerializeAggregateStream;
 use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::servers::flight::v1::exchange::serde::serialize_block;
+use crate::servers::flight::v1::network::ExchangeDataCodec;
 
 pub struct TransformExchangeAggregateSerializer {
     local_pos: usize,
     options: IpcWriteOptions,
 
-    params: Arc<AggregatorParams>,
+    codec: Arc<AggregateExchangeDataCodec>,
 }
 
 impl TransformExchangeAggregateSerializer {
@@ -71,7 +65,7 @@ impl TransformExchangeAggregateSerializer {
             input,
             output,
             TransformExchangeAggregateSerializer {
-                params,
+                codec: AggregateExchangeDataCodec::create(params),
                 local_pos,
                 options: IpcWriteOptions::default()
                     .try_with_compression(compression)
@@ -93,110 +87,85 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                 continue;
             }
 
-            match block.take_meta().and_then(AggregateMeta::downcast_from) {
-                Some(AggregateMeta::AggregatePayload(p)) => {
-                    let block_number = p.exchange_block_number();
-
-                    if index == self.local_pos {
-                        serialized_blocks.push(
-                            block.add_meta(Some(Box::new(AggregateMeta::AggregatePayload(p))))?,
-                        );
-                        continue;
+            let (block_number, meta): (isize, BlockMetaInfoPtr) =
+                match block.take_meta().and_then(AggregateMeta::downcast_from) {
+                    Some(AggregateMeta::AggregatePayload(payload)) => (
+                        payload.exchange_block_number(),
+                        Box::new(AggregateMeta::AggregatePayload(payload)),
+                    ),
+                    Some(AggregateMeta::Partitioned { data, .. }) => {
+                        (-1, AggregateMeta::create_partitioned(None, data))
                     }
-
-                    let stream = SerializeAggregateStream::create(&self.params, p);
-                    let mut stream_blocks = stream.into_iter().collect::<Result<Vec<_>>>()?;
-                    debug_assert!(!stream_blocks.is_empty());
-                    let mut c = DataBlock::concat(&stream_blocks)?;
-                    if let Some(meta) = stream_blocks[0].take_meta() {
-                        c.replace_meta(meta);
+                    _ => {
+                        return Err(ErrorCode::Internal(
+                            "Unexpected aggregate exchange metadata",
+                        ));
                     }
-                    let c = serialize_block(block_number, c, &self.options)?;
-                    serialized_blocks.push(c);
-                }
-                Some(AggregateMeta::Partitioned { data, .. }) => {
-                    if index == self.local_pos {
-                        serialized_blocks.push(
-                            block.add_meta(Some(AggregateMeta::create_partitioned(None, data)))?,
-                        );
-                        continue;
-                    }
-                    let data_block = match data {
-                        PartitionedData::Empty => DataBlock::empty(),
-                        PartitionedData::Serialized(data) if data.is_empty() => DataBlock::empty(),
-                        PartitionedData::AggregatePayload(data) if data.is_empty() => {
-                            DataBlock::empty()
-                        }
-                        PartitionedData::BucketSpilled(data) if data.is_empty() => {
-                            DataBlock::empty()
-                        }
-                        PartitionedData::AggregatePayload(data) => {
-                            let mut buckets = Vec::with_capacity(data.len());
-                            let mut payload_row_counts = Vec::with_capacity(data.len());
-                            let mut payload_blocks = Vec::with_capacity(data.len());
-
-                            for payload in data {
-                                let block = payload.payload.aggregate_flush_all()?;
-                                if block.num_rows() == 0 {
-                                    continue;
-                                }
-                                buckets.push(payload.bucket);
-                                payload_row_counts.push(block.num_rows());
-                                payload_blocks.push(block);
-                            }
-
-                            // Only create empty block when ALL payloads are empty
-                            if payload_blocks.is_empty() {
-                                DataBlock::empty()
-                            } else {
-                                let merged_block = DataBlock::concat(&payload_blocks)?;
-                                merged_block.add_meta(Some(
-                                    AggregateSerdeMeta::create_partitioned_payload(
-                                        buckets,
-                                        payload_row_counts,
-                                        false,
-                                    ),
-                                ))?
-                            }
-                        }
-                        PartitionedData::BucketSpilled(data) => {
-                            let bucket_num = data.len();
-                            let mut bucket_column = Vec::with_capacity(bucket_num);
-                            let mut row_group_column = Vec::with_capacity(bucket_num);
-                            let mut location_column = Vec::with_capacity(bucket_num);
-
-                            for payload in data {
-                                bucket_column.push(payload.bucket as i64);
-                                location_column.push(payload.location);
-                                row_group_column
-                                    .push(serialize_row_group_meta_to_bytes(&payload.row_group)?);
-                            }
-                            let data_block = DataBlock::new_from_columns(vec![
-                                Int64Type::from_data(bucket_column),
-                                StringType::from_data(location_column),
-                                BinaryType::from_data(row_group_column),
-                            ]);
-
-                            data_block.add_meta(Some(AggregateSerdeMeta::create_spilled(
-                                bucket_num as isize,
-                            )))?
-                        }
-                        PartitionedData::Mixed(data) => PartitionItem::serialize_mixed(data)?,
-                        data => {
-                            return Err(ErrorCode::Internal(format!(
-                                "Partitioned meta cannot be serialized from this payload batch: {data:?}"
-                            )));
-                        }
-                    };
-                    let serialized = serialize_block(-1, data_block, &self.options)?;
-                    serialized_blocks.push(serialized);
-                }
-                _ => unreachable!("unexpected aggregate meta"),
-            };
+                };
+            block.replace_meta(meta);
+            if index == self.local_pos {
+                serialized_blocks.push(block);
+                continue;
+            }
+            let transport = self.codec.encode(block)?.unwrap_or_else(DataBlock::empty);
+            serialized_blocks.push(serialize_block(block_number, transport, &self.options)?);
         }
 
         Ok(vec![DataBlock::empty_with_meta(
             ExchangeShuffleMeta::create(serialized_blocks),
         )])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pipelines::processors::transforms::aggregator::PartitionedData;
+    use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_codec::tests::params;
+    use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_codec::tests::payload_block;
+    use crate::servers::flight::v1::exchange::serde::ExchangeSerializeMeta;
+
+    #[test]
+    fn test_shuffle_codec_preserves_local_payload_and_remote_routing() -> Result<()> {
+        let mut serializer = TransformExchangeAggregateSerializer {
+            local_pos: 0,
+            options: IpcWriteOptions::default(),
+            codec: AggregateExchangeDataCodec::create(params()),
+        };
+        let mut result = serializer.transform(ExchangeShuffleMeta {
+            blocks: vec![
+                payload_block(vec![11, 22]),
+                payload_block(vec![33, 44]),
+                DataBlock::empty_with_meta(AggregateMeta::create_partitioned(
+                    Some(2),
+                    PartitionedData::Empty,
+                )),
+            ],
+        })?;
+        let result = result[0]
+            .take_meta()
+            .and_then(ExchangeShuffleMeta::downcast_from)
+            .unwrap();
+        assert_eq!(result.blocks.len(), 3);
+        let Some(AggregateMeta::AggregatePayload(local)) = result.blocks[0]
+            .get_meta()
+            .and_then(AggregateMeta::downcast_ref_from)
+        else {
+            panic!("local payload was serialized")
+        };
+        assert_eq!(local.payload.len(), 2);
+        let remote = result.blocks[1]
+            .get_meta()
+            .and_then(ExchangeSerializeMeta::downcast_ref_from)
+            .unwrap();
+        assert_eq!(remote.block_number, 8007);
+        assert!(!remote.packet.is_empty());
+        let empty = result.blocks[2]
+            .get_meta()
+            .and_then(ExchangeSerializeMeta::downcast_ref_from)
+            .unwrap();
+        assert_eq!(empty.block_number, -1);
+        assert!(empty.packet.is_empty());
+        Ok(())
     }
 }

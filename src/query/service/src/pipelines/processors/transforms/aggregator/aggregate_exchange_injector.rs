@@ -21,6 +21,7 @@ use databend_common_settings::FlightCompression;
 
 use crate::physical_plans::AggregateShuffleMode;
 use crate::pipelines::processors::transforms::aggregator::AggregateBucketScatter;
+use crate::pipelines::processors::transforms::aggregator::AggregateExchangeDataCodec;
 use crate::pipelines::processors::transforms::aggregator::AggregateRowScatter;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
@@ -130,7 +131,12 @@ impl ExchangeInjector for AggregateInjector {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
-            TransformAggregateDeserializer::try_create(input, output, &params.schema)
+            TransformAggregateDeserializer::try_create(
+                input,
+                output,
+                &params.schema,
+                AggregateExchangeDataCodec::create(self.aggregator_params.clone()),
+            )
         })
     }
 
@@ -140,7 +146,12 @@ impl ExchangeInjector for AggregateInjector {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
-            TransformAggregateDeserializer::try_create(input, output, &params.schema)
+            TransformAggregateDeserializer::try_create(
+                input,
+                output,
+                &params.schema,
+                AggregateExchangeDataCodec::create(self.aggregator_params.clone()),
+            )
         })?;
         Ok(())
     }

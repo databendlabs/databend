@@ -20,10 +20,6 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::types::AccessType;
-use databend_common_expression::types::BinaryType;
-use databend_common_expression::types::NumberType;
-use databend_common_expression::types::StringType;
 use databend_common_io::prelude::BinaryRead;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_pipeline::core::InputPort;
@@ -31,25 +27,18 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
-use databend_common_storages_parquet::deserialize_row_group_meta_from_bytes;
 
-use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
-use crate::pipelines::processors::transforms::aggregator::BUCKET_TYPE;
-use crate::pipelines::processors::transforms::aggregator::PARTITIONED_AGGREGATE_TYPE;
-use crate::pipelines::processors::transforms::aggregator::PartitionedData;
-use crate::pipelines::processors::transforms::aggregator::SPILLED_TYPE;
-use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
-use crate::pipelines::processors::transforms::aggregator::SpilledPayload;
-use crate::pipelines::processors::transforms::aggregator::exchange_defines;
 use crate::servers::flight::v1::exchange::serde::ExchangeDeserializeMeta;
 use crate::servers::flight::v1::exchange::serde::deserialize_block;
+use crate::servers::flight::v1::network::ExchangeDataCodec;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::FragmentData;
 
 pub struct TransformDeserializer {
     schema: DataSchemaRef,
     arrow_schema: Arc<ArrowSchema>,
+    codec: Arc<dyn ExchangeDataCodec>,
 }
 
 impl TransformDeserializer {
@@ -57,6 +46,7 @@ impl TransformDeserializer {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         schema: &DataSchemaRef,
+        codec: Arc<dyn ExchangeDataCodec>,
     ) -> Result<ProcessorPtr> {
         let arrow_schema = ArrowSchema::from(schema.as_ref());
 
@@ -66,6 +56,7 @@ impl TransformDeserializer {
             TransformDeserializer {
                 arrow_schema: Arc::new(arrow_schema),
                 schema: schema.clone(),
+                codec,
             },
         )))
     }
@@ -87,137 +78,33 @@ impl TransformDeserializer {
             return Ok(vec![DataBlock::new_with_meta(vec![], 0, meta)]);
         }
 
-        let Some(meta) = meta
+        let is_aggregate = meta
             .as_ref()
             .and_then(AggregateSerdeMeta::downcast_ref_from)
-        else {
-            let data_block =
-                deserialize_block(dict, fragment_data, &self.schema, self.arrow_schema.clone())?;
-            return match data_block.num_columns() == 0 {
-                true => Ok(vec![DataBlock::new_with_meta(
-                    vec![],
-                    row_count as usize,
-                    meta,
-                )]),
-                false => Ok(vec![data_block.add_meta(meta)?]),
-            };
+            .is_some();
+        let dynamic_schema = if is_aggregate {
+            meta.as_ref().and_then(|meta| meta.override_block_schema())
+        } else {
+            None
+        };
+        let (schema, arrow_schema) = match dynamic_schema {
+            Some(schema) => {
+                let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
+                (schema, arrow_schema)
+            }
+            None => (self.schema.clone(), self.arrow_schema.clone()),
+        };
+        let block = deserialize_block(dict, fragment_data, &schema, arrow_schema)?;
+        let block = if block.num_columns() == 0 {
+            DataBlock::new_with_meta(vec![], row_count as usize, meta)
+        } else {
+            block.add_meta(meta)?
         };
 
-        match meta.typ {
-            BUCKET_TYPE => {
-                let mut block = deserialize_block(
-                    dict,
-                    fragment_data,
-                    &self.schema,
-                    self.arrow_schema.clone(),
-                )?;
-
-                if meta.is_empty {
-                    block = block.slice(0..0);
-                }
-
-                Ok(vec![DataBlock::empty_with_meta(
-                    AggregateMeta::create_serialized(meta.bucket, block, meta.max_partition_count),
-                )])
-            }
-            PARTITIONED_AGGREGATE_TYPE => {
-                let data_block = deserialize_block(
-                    dict,
-                    fragment_data,
-                    &self.schema,
-                    self.arrow_schema.clone(),
-                )?;
-
-                if meta.is_empty {
-                    return Ok(vec![]);
-                }
-
-                if meta.buckets.len() != meta.payload_row_counts.len() {
-                    return Err(ErrorCode::Internal(
-                        "Invalid partitioned aggregate serde meta".to_string(),
-                    ));
-                }
-
-                let mut offset = 0;
-                let mut metas = Vec::with_capacity(meta.buckets.len());
-                for (bucket, rows) in meta.buckets.iter().zip(meta.payload_row_counts.iter()) {
-                    let rows = *rows;
-                    let start = offset;
-                    offset += rows;
-                    if offset > data_block.num_rows() {
-                        return Err(ErrorCode::Internal(
-                            "Partitioned aggregate payload rows exceed block rows".to_string(),
-                        ));
-                    }
-
-                    let payload_block = if rows == 0 {
-                        DataBlock::empty()
-                    } else {
-                        data_block.slice(start..offset)
-                    };
-
-                    metas.push(SerializedPayload {
-                        bucket: *bucket,
-                        data_block: payload_block,
-                        max_partition_count: 0,
-                    });
-                }
-
-                if offset != data_block.num_rows() {
-                    return Err(ErrorCode::Internal(
-                        "Partitioned aggregate payload rows do not match block rows".to_string(),
-                    ));
-                }
-                Ok(vec![DataBlock::empty_with_meta(
-                    AggregateMeta::create_partitioned(None, PartitionedData::Serialized(metas)),
-                )])
-            }
-            SPILLED_TYPE => {
-                let data_schema = Arc::new(exchange_defines::spilled_schema());
-                let arrow_schema = Arc::new(exchange_defines::spilled_arrow_schema());
-                let data_block =
-                    deserialize_block(dict, fragment_data, &data_schema, arrow_schema.clone())?;
-
-                let columns = data_block
-                    .columns()
-                    .iter()
-                    .map(|c| c.as_column().unwrap().clone())
-                    .collect::<Vec<_>>();
-
-                let buckets = NumberType::<i64>::try_downcast_column(&columns[0]).unwrap();
-                let locations = StringType::try_downcast_column(&columns[1]).unwrap();
-                let row_groups = BinaryType::try_downcast_column(&columns[2]).unwrap();
-
-                let mut spilled_payloads = Vec::with_capacity(data_block.num_rows());
-                for index in 0..data_block.num_rows() {
-                    unsafe {
-                        let bucket = *buckets.get_unchecked(index) as isize;
-                        let location = locations.value_unchecked(index).to_string();
-                        let row_group_bytes = row_groups.index_unchecked(index);
-                        let row_group = deserialize_row_group_meta_from_bytes(row_group_bytes)?;
-
-                        spilled_payloads.push(SpilledPayload {
-                            bucket,
-                            location,
-                            row_group,
-                        });
-                    }
-                }
-
-                let shuffle_bucket = meta.shuffle_bucket;
-                if shuffle_bucket == -1 {
-                    todo!()
-                } else {
-                    let partitioned = AggregateMeta::create_partitioned(
-                        None,
-                        PartitionedData::BucketSpilled(spilled_payloads),
-                    );
-                    return Ok(vec![DataBlock::empty_with_meta(partitioned)]);
-                }
-            }
-            other => Err(ErrorCode::Internal(format!(
-                "Unknown aggregate serde meta type {other}"
-            ))),
+        if is_aggregate {
+            Ok(self.codec.decode(block)?.into_iter().collect())
+        } else {
+            Ok(vec![block])
         }
     }
 }
@@ -259,3 +146,138 @@ impl AccumulatingTransform for TransformDeserializer {
 }
 
 pub type TransformAggregateDeserializer = TransformDeserializer;
+
+#[cfg(test)]
+mod tests {
+    use arrow_flight::FlightData;
+    use arrow_ipc::writer::IpcWriteOptions;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::Int64Type;
+    use parquet::file::metadata::RowGroupMetaData;
+    use parquet::schema::types::SchemaDescriptor;
+    use parquet::schema::types::Type;
+
+    use super::*;
+    use crate::pipelines::processors::transforms::aggregator::AggregateExchangeDataCodec;
+    use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
+    use crate::pipelines::processors::transforms::aggregator::PartitionedData;
+    use crate::pipelines::processors::transforms::aggregator::SpilledPayload;
+    use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_codec::tests::params;
+    use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_codec::tests::payload_block;
+    use crate::servers::flight::v1::exchange::serde::ExchangeSerializeMeta;
+    use crate::servers::flight::v1::exchange::serde::serialize_block;
+
+    fn decoder() -> TransformDeserializer {
+        let params = params();
+        let schema = params.spill_schema();
+        TransformDeserializer {
+            arrow_schema: Arc::new(ArrowSchema::from(schema.as_ref())),
+            schema,
+            codec: AggregateExchangeDataCodec::create(params),
+        }
+    }
+
+    fn packet_round_trip(block: DataBlock) -> Result<Vec<DataBlock>> {
+        let mut serialized = serialize_block(0, block, &IpcWriteOptions::default())?;
+        let meta = serialized
+            .take_meta()
+            .and_then(ExchangeSerializeMeta::downcast_from)
+            .unwrap();
+        // The Flight envelope appends the packet tag consumed by get_meta().
+        let packets = meta
+            .packet
+            .into_iter()
+            .map(|packet| DataPacket::try_from(FlightData::try_from(packet)?))
+            .collect::<Result<Vec<_>>>()?;
+        decoder().transform(DataBlock::empty_with_meta(ExchangeDeserializeMeta::create(
+            packets,
+        )))
+    }
+
+    #[test]
+    fn test_legacy_packets_decode_aggregate_and_ordinary_blocks() -> Result<()> {
+        let transport = AggregateExchangeDataCodec::create(params())
+            .encode(payload_block(vec![11, 22]))?
+            .unwrap();
+        let mut restored = packet_round_trip(transport)?;
+        let Some(AggregateMeta::Serialized(payload)) = restored[0]
+            .take_meta()
+            .and_then(AggregateMeta::downcast_from)
+        else {
+            panic!("payload was not decoded")
+        };
+        assert_eq!((payload.bucket, payload.max_partition_count), (7, 8));
+        assert_eq!(
+            payload.data_block.columns(),
+            DataBlock::new_from_columns(vec![Int64Type::from_data(vec![11, 22])]).columns()
+        );
+
+        let ordinary = DataBlock::new_from_columns(vec![Int64Type::from_data(vec![3, 4])]);
+        let restored = packet_round_trip(ordinary.clone())?;
+        assert_eq!(restored[0].columns(), ordinary.columns());
+        let local = decoder().transform(payload_block(vec![5]))?;
+        assert!(matches!(
+            local[0]
+                .get_meta()
+                .and_then(AggregateMeta::downcast_ref_from),
+            Some(AggregateMeta::AggregatePayload(_))
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn test_legacy_packets_preserve_zero_row_partition_and_spill_schema() -> Result<()> {
+        let transport = DataBlock::new_from_columns(vec![Int64Type::from_data(vec![10, 20])])
+            .add_meta(Some(AggregateSerdeMeta::create_partitioned_payload(
+                vec![4, 9],
+                vec![0, 2],
+                false,
+            )))?;
+        let mut restored = packet_round_trip(transport)?;
+        let Some(AggregateMeta::Partitioned {
+            data: PartitionedData::Serialized(payloads),
+            ..
+        }) = restored[0]
+            .take_meta()
+            .and_then(AggregateMeta::downcast_from)
+        else {
+            panic!("partitioned payload was not decoded")
+        };
+        assert_eq!(payloads.len(), 2);
+        assert_eq!(payloads[0].bucket, 4);
+        assert_eq!(payloads[0].data_block.num_columns(), 0);
+        assert_eq!(payloads[1].data_block.num_rows(), 2);
+
+        let schema = Type::group_type_builder("schema").build().unwrap();
+        let row_group =
+            RowGroupMetaData::builder(Arc::new(SchemaDescriptor::new(Arc::new(schema))))
+                .set_num_rows(17)
+                .build()
+                .unwrap();
+        let block = DataBlock::empty_with_meta(AggregateMeta::create_partitioned(
+            None,
+            PartitionedData::BucketSpilled(vec![SpilledPayload {
+                bucket: 6,
+                location: "memory://spill".to_string(),
+                row_group,
+            }]),
+        ));
+        let transport = AggregateExchangeDataCodec::create(params())
+            .encode(block)?
+            .unwrap();
+        let mut restored = packet_round_trip(transport)?;
+        let Some(AggregateMeta::Partitioned {
+            data: PartitionedData::BucketSpilled(payloads),
+            ..
+        }) = restored[0]
+            .take_meta()
+            .and_then(AggregateMeta::downcast_from)
+        else {
+            panic!("spill reference was not decoded")
+        };
+        assert_eq!(payloads[0].bucket, 6);
+        assert_eq!(payloads[0].location, "memory://spill");
+        assert_eq!(payloads[0].row_group.num_rows(), 17);
+        Ok(())
+    }
+}

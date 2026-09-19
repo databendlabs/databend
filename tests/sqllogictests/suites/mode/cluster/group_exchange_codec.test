@@ -1,0 +1,61 @@
+# Exercise aggregate state transport with nullable keys and values.
+statement ok
+set group_by_shuffle_mode = 'before_merge';
+
+statement ok
+set force_aggregate_shuffle_mode = 'row';
+
+query IIII
+SELECT count(*), sum(c), sum(n), sum(s)
+FROM (
+    SELECT k, count(*) AS c, count(v) AS n, sum(v) AS s
+    FROM (
+        SELECT if(number % 3 = 0, NULL, number % 3) AS k,
+               if(number % 5 = 0, NULL, number) AS v
+        FROM numbers_mt(12000)
+    )
+    GROUP BY k
+);
+----
+3 12000 9600 57600000
+
+statement ok
+set force_aggregate_shuffle_mode = 'bucket';
+
+query IIII
+SELECT count(*), sum(c), sum(n), sum(s)
+FROM (
+    SELECT k, count(*) AS c, count(v) AS n, sum(v) AS s
+    FROM (
+        SELECT if(number % 3 = 0, NULL, number % 3) AS k,
+               if(number % 5 = 0, NULL, number) AS v
+        FROM numbers_mt(12000)
+    )
+    GROUP BY k
+);
+----
+3 12000 9600 57600000
+
+# Spill references use a different transport schema than aggregate states.
+statement ok
+set force_aggregate_data_spill = 1;
+
+query IIII
+SELECT count(*), sum(c), sum(n), sum(s)
+FROM (
+    SELECT k, count(*) AS c, count(v) AS n, sum(v) AS s
+    FROM (
+        SELECT if(number % 3 = 0, NULL, number % 3) AS k,
+               if(number % 5 = 0, NULL, number) AS v
+        FROM numbers_mt(12000)
+    )
+    GROUP BY k
+);
+----
+3 12000 9600 57600000
+
+statement ok
+set force_aggregate_data_spill = 0;
+
+statement ok
+set force_aggregate_shuffle_mode = 'auto';
