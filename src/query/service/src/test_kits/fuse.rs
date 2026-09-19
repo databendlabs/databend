@@ -25,6 +25,7 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::types::NumberScalar;
@@ -198,11 +199,14 @@ async fn generate_blocks(
     let dal = fuse_table.get_operator_ref();
     let schema = fuse_table.schema();
     let location_generator = fuse_table.meta_location_generator();
+    // Test fixture blocks only hold sample integers; their bloom digests do not depend on
+    // any session setting.
     let block_writer = BlockWriter::new(
         dal,
         location_generator,
         table_meta_timestamps,
         is_greater_than_v5,
+        FunctionContext::context_independent_placeholder(),
     );
     let mut block_metas = vec![];
     let mut hlls = vec![];

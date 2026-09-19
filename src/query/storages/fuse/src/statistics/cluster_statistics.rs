@@ -127,7 +127,7 @@ pub fn vector_cluster_info_from_column(
 }
 
 /// Generates cluster statistics and temporary sort-key columns for block writes.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct ClusterStatsGenerator {
     cluster_key_id: u32,
 
@@ -168,6 +168,23 @@ impl ClusterStatsGenerator {
             eval_operators,
             layout,
             out_fields,
+            func_ctx,
+        }
+    }
+
+    /// Generator for a table without cluster or partition keys: it evaluates nothing and
+    /// produces no cluster statistics.
+    pub fn disabled(func_ctx: FunctionContext) -> Self {
+        Self {
+            cluster_key_id: 0,
+            level: 0,
+            block_thresholds: BlockThresholds::default(),
+            stats_keys: Vec::new(),
+            layout: ClusterStatsLayout::default(),
+            extra_key_num: 0,
+            partition_key_index: Vec::new(),
+            eval_operators: Vec::new(),
+            out_fields: Vec::new(),
             func_ctx,
         }
     }
@@ -697,7 +714,6 @@ pub(crate) fn get_min_max_stats(
         return (v.min().clone(), v.max().clone());
     }
 
-    let func_ctx = FunctionContext::default();
     let mut mins = Vec::with_capacity(prepared_exprs.len());
     let mut maxs = Vec::with_capacity(prepared_exprs.len());
     for prepared_expr in prepared_exprs {
@@ -714,10 +730,12 @@ pub(crate) fn get_min_max_stats(
             })
             .collect();
 
-        let (_, domain_opt) = ConstantFolder::fold_with_domain(
+        // No statement context is available here (stats are rebuilt from persisted column
+        // stats), so a context-dependent key expression (e.g. time zone based) is not
+        // evaluated and conservatively falls back to the full domain below.
+        let (_, domain_opt) = ConstantFolder::fold_with_domain_context_independent(
             Cow::Borrowed(&prepared_expr.expr),
             &input_domains,
-            &func_ctx,
             &BUILTIN_FUNCTIONS,
         );
         let domain = domain_opt.unwrap_or_else(|| Domain::full(&prepared_expr.data_type));

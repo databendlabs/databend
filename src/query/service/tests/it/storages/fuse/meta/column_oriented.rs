@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -104,6 +105,7 @@ async fn generate_column_oriented_segment()
             &loc_generator,
             TestFixture::default_table_meta_timestamps(),
             true,
+            FunctionContext::default(),
         );
         let (block_meta, _index_meta, _) = block_writer
             .write(

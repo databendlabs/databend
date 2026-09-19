@@ -658,6 +658,7 @@ async fn test_accumulator() -> anyhow::Result<()> {
             &loc_generator,
             TestFixture::default_table_meta_timestamps(),
             true,
+            FunctionContext::default(),
         );
         let (block_meta, _index_meta, _) = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)

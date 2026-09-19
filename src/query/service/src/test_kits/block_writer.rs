@@ -51,6 +51,7 @@ pub struct BlockWriter<'a> {
     data_accessor: &'a Operator,
     table_meta_timestamps: TableMetaTimestamps,
     is_greater_than_v5: bool,
+    func_ctx: FunctionContext,
 }
 
 impl<'a> BlockWriter<'a> {
@@ -59,12 +60,14 @@ impl<'a> BlockWriter<'a> {
         location_generator: &'a TableMetaLocationGenerator,
         table_meta_timestamps: TableMetaTimestamps,
         is_greater_than_v5: bool,
+        func_ctx: FunctionContext,
     ) -> Self {
         Self {
             location_generator,
             data_accessor,
             table_meta_timestamps,
             is_greater_than_v5,
+            func_ctx,
         }
     }
 
@@ -148,7 +151,7 @@ impl<'a> BlockWriter<'a> {
         let bloom_columns_map =
             bloom_index_cols.bloom_index_fields(schema.clone(), BloomIndex::supported_type)?;
         let mut builder = BloomIndexBuilder::create(
-            FunctionContext::default(),
+            self.func_ctx.clone(),
             BloomIndexType::default(),
             bloom_columns_map,
             &[],

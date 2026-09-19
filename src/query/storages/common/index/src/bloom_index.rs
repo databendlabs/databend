@@ -708,11 +708,13 @@ impl BloomIndex {
 
     /// Find all columns that can be use for index in the expression.
     pub fn filter_index_field(
+        func_ctx: &FunctionContext,
         expr: &Expr<String>,
         bloom_fields: Vec<TableField>,
         ngram_fields: Vec<TableField>,
     ) -> Result<BloomIndexResult> {
         let mut visitor = Visitor(ShortListVisitor {
+            func_ctx,
             bloom_fields,
             ngram_fields,
             bloom_founds: Vec::new(),
@@ -1125,29 +1127,24 @@ fn eq_bloom_scalar_for_column(
     // that are not the canonical cast output, such as "0123" = 123.
     match (scalar_type.remove_nullable(), column_type.remove_nullable()) {
         (DataType::String, DataType::Number(num_ty)) if num_ty.is_integer() => {
-            if !string_scalar_parses_as_integer_type(scalar, &num_ty) {
-                return None;
-            }
-
-            let scalar = cast_const(&FunctionContext::default(), column_type.clone(), Constant {
-                span: None,
-                scalar: scalar.clone(),
-                data_type: scalar_type.clone(),
-            })?;
-            (!scalar.is_null()).then_some(scalar)
+            parse_string_scalar_as_integer(scalar, &num_ty)
         }
         _ => None,
     }
 }
 
-fn string_scalar_parses_as_integer_type(scalar: &Scalar, num_ty: &NumberDataType) -> bool {
-    let Some(value) = scalar.as_string() else {
-        return false;
-    };
+/// Parse a string constant as the column's integer type. Parsing directly (instead of a
+/// `CAST`) keeps this rewrite independent of the session `FunctionContext`, and only strings
+/// in canonical integer form are accepted.
+fn parse_string_scalar_as_integer(scalar: &Scalar, num_ty: &NumberDataType) -> Option<Scalar> {
+    let value = scalar.as_string()?;
 
     with_integer_mapped_type!(|NUM_TYPE| match num_ty {
-        NumberDataType::NUM_TYPE => value.parse::<NUM_TYPE>().is_ok(),
-        _ => false,
+        NumberDataType::NUM_TYPE => value
+            .parse::<NUM_TYPE>()
+            .ok()
+            .map(|v| Scalar::Number(NUM_TYPE::upcast_scalar(v))),
+        _ => None,
     })
 }
 
@@ -1560,7 +1557,7 @@ impl EqVisitor for RewriteVisitor<'_> {
         if ConstantFolder::<String>::fold_with_domain(
             Cow::Borrowed(cast),
             self.domains,
-            &FunctionContext::default(),
+            &self.index.func_ctx,
             &BUILTIN_FUNCTIONS,
         )
         .1
@@ -1569,11 +1566,8 @@ impl EqVisitor for RewriteVisitor<'_> {
             return Ok(ControlFlow::Break(None));
         }
 
-        let Some(s) = cast_const(
-            &FunctionContext::default(),
-            src_type.to_owned(),
-            constant.clone(),
-        ) else {
+        let Some(s) = cast_const(&self.index.func_ctx, src_type.to_owned(), constant.clone())
+        else {
             return Ok(ControlFlow::Break(None));
         };
         if s.is_null() {
@@ -1595,7 +1589,8 @@ impl EqVisitor for RewriteVisitor<'_> {
     }
 }
 
-struct ShortListVisitor {
+struct ShortListVisitor<'a> {
+    func_ctx: &'a FunctionContext,
     bloom_fields: Vec<TableField>,
     ngram_fields: Vec<TableField>,
     bloom_founds: Vec<TableField>,
@@ -1604,7 +1599,7 @@ struct ShortListVisitor {
     ngram_scalars: Vec<(usize, Scalar)>,
 }
 
-impl ShortListVisitor {
+impl ShortListVisitor<'_> {
     fn found_field<'a>(fields: &'a [TableField], name: &str) -> Option<(usize, &'a TableField)> {
         fields
             .iter()
@@ -1613,7 +1608,7 @@ impl ShortListVisitor {
     }
 }
 
-impl EqVisitor for ShortListVisitor {
+impl EqVisitor for ShortListVisitor<'_> {
     fn enter_target(
         &mut self,
         _: Span,
@@ -1668,11 +1663,7 @@ impl EqVisitor for ShortListVisitor {
                 return Ok(ControlFlow::Break(None));
             };
 
-            let Some(s) = cast_const(
-                &FunctionContext::default(),
-                src_type.to_owned(),
-                constant.clone(),
-            ) else {
+            let Some(s) = cast_const(self.func_ctx, src_type.to_owned(), constant.clone()) else {
                 return Ok(ControlFlow::Break(None));
             };
 
@@ -1690,11 +1681,7 @@ impl EqVisitor for ShortListVisitor {
                 return Ok(ControlFlow::Break(None));
             }
 
-            let Some(s) = cast_const(
-                &FunctionContext::default(),
-                src_type.to_owned(),
-                constant.clone(),
-            ) else {
+            let Some(s) = cast_const(self.func_ctx, src_type.to_owned(), constant.clone()) else {
                 return Ok(ControlFlow::Break(None));
             };
 

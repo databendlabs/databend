@@ -14,6 +14,7 @@
 
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
@@ -39,13 +40,19 @@ async fn write_optimized_case(file: &mut impl std::io::Write, case: &SqlTestCase
     writeln!(
         file,
         "{}",
-        raw_plan.format_indent(Default::default(), &StatContext::default())?
+        raw_plan.format_indent(
+            Default::default(),
+            &StatContext::new(FunctionContext::default())
+        )?
     )?;
     writeln!(file, "optimized_plan:")?;
     writeln!(
         file,
         "{}",
-        optimized_plan.format_indent(Default::default(), &StatContext::default())?
+        optimized_plan.format_indent(
+            Default::default(),
+            &StatContext::new(FunctionContext::default())
+        )?
     )?;
     writeln!(file)?;
 

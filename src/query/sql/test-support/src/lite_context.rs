@@ -95,6 +95,7 @@ use databend_common_sql::Planner;
 use databend_common_sql::normalize_identifier;
 use databend_common_sql::optimize;
 use databend_common_sql::optimizer::OptimizerContext;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Plan;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
@@ -767,6 +768,12 @@ pub struct LiteTableContext {
 }
 
 impl LiteTableContext {
+    /// Statistics context matching [`TableContextSettings::get_function_context`]: planner
+    /// tests and replays run against a fixed context so that plan output stays stable.
+    pub fn stat_context() -> StatContext {
+        StatContext::new(FunctionContext::context_independent_placeholder())
+    }
+
     async fn init_user_api_provider(tenant: &Tenant) -> Result<Arc<UserApiProvider>> {
         if let Some(user_api_provider) = THREAD_USER_API_PROVIDER.with(|cell| cell.get().cloned()) {
             return Ok(user_api_provider);
@@ -1539,7 +1546,8 @@ impl TableContextSession for LiteTableContext {
 
 impl TableContextSettings for LiteTableContext {
     fn get_function_context(&self) -> Result<FunctionContext> {
-        Ok(FunctionContext::default())
+        // Planner tests run against a fixed context (UTC, epoch `now`), so plans stay stable.
+        Ok(FunctionContext::context_independent_placeholder())
     }
 
     fn get_settings(&self) -> Arc<Settings> {
@@ -2132,7 +2140,6 @@ impl TableContextVariables for LiteTableContext {
 mod tests {
     use databend_common_expression::types::DataType;
     use databend_common_sql::FormatOptions;
-    use databend_common_sql::optimizer::ir::StatContext;
 
     use super::*;
 
@@ -2319,8 +2326,8 @@ $$
 
         let raw_plan = ctx.bind_sql("SELECT a FROM t").await?;
         let optimized_plan = ctx.optimize_plan(raw_plan).await?;
-        let formatted =
-            optimized_plan.format_indent(FormatOptions::default(), &StatContext::default())?;
+        let formatted = optimized_plan
+            .format_indent(FormatOptions::default(), &LiteTableContext::stat_context())?;
         assert!(
             formatted.contains("ROW ACCESS POLICY APPLIED"),
             "formatted plan:\n{formatted}"
@@ -2363,15 +2370,15 @@ $$
         "#;
         let raw_plan = ctx.bind_sql(sql).await?;
         let raw_formatted =
-            raw_plan.format_indent(FormatOptions::default(), &StatContext::default())?;
+            raw_plan.format_indent(FormatOptions::default(), &LiteTableContext::stat_context())?;
         assert!(
             raw_formatted.contains("MaterializedCTE"),
             "formatted plan:\n{raw_formatted}"
         );
 
         let optimized_plan = ctx.optimize_plan(raw_plan).await?;
-        let optimized =
-            optimized_plan.format_indent(FormatOptions::default(), &StatContext::default())?;
+        let optimized = optimized_plan
+            .format_indent(FormatOptions::default(), &LiteTableContext::stat_context())?;
         assert!(
             optimized.contains("Scan") && optimized.contains("default.t"),
             "formatted plan:\n{optimized}"

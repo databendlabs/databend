@@ -31,7 +31,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FromData;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableDataType;
@@ -251,7 +250,7 @@ impl<'a> FuseEncodingImpl<'a> {
 
         let data_block = self.to_block(&rows).await?;
         let result = if let Some(filter) = self.filters.as_ref().map(|f| &f.filter) {
-            let func_ctx = FunctionContext::default();
+            let func_ctx = self.ctx.get_function_context()?;
             let evaluator = Evaluator::new(&data_block, &func_ctx, &BUILTIN_FUNCTIONS);
             let filter = evaluator
                 .run(&as_expr(

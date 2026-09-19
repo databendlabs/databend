@@ -68,6 +68,13 @@ tonic = { workspace = true }
 typetag = { workspace = true }
 unicode-segmentation = { workspace = true }
 
+[features]
+default = []
+# Test-only conveniences such as `impl Default for FunctionContext`.
+# Only enable it from `[dev-dependencies]`; a normal dependency would leak it into
+# production builds through feature unification.
+testing = []
+
 [dev-dependencies]
 anyhow = { workspace = true }
 databend-common-expression-test-support = { workspace = true }

@@ -137,7 +137,9 @@ pub fn cast_scalar(
     };
     let expr = crate::type_check::check(&raw_expr, fn_registry)?;
     let block = DataBlock::empty();
-    let func_ctx = &FunctionContext::default();
+    // TODO: thread the statement context through `type_check` so that literal coercion of
+    // context-dependent casts (e.g. string -> timestamp) follows the session settings.
+    let func_ctx = &FunctionContext::context_independent_placeholder();
     let evaluator = Evaluator::new(&block, func_ctx, fn_registry);
     Ok(evaluator.run(&expr)?.into_scalar().unwrap())
 }

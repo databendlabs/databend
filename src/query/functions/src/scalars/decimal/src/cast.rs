@@ -1166,7 +1166,8 @@ fn strict_decimal_data_type_value(value: Value<AnyType>) -> Result<Value<AnyType
     let mut ctx = EvalContext {
         generics: &[],
         num_rows: value.len(),
-        func_ctx: &FunctionContext::default(),
+        // Strict re-validation of an already-evaluated value; nothing here reads the context.
+        func_ctx: &FunctionContext::context_independent_placeholder(),
         validity: None,
         errors: None,
         suppress_error: false,

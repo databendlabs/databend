@@ -70,9 +70,10 @@ impl NumbersTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let args = table_args.expect_all_positioned(table_func_name, Some(1))?;
+        // Numeric literal argument: the cast does not depend on the session context.
         let total = check_number::<_, usize>(
             None,
-            &FunctionContext::default(),
+            &FunctionContext::context_independent_placeholder(),
             Expr::constant(args.into_iter().next().unwrap(), None),
             &BUILTIN_FUNCTIONS,
         )?;

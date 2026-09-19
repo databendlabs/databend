@@ -21,6 +21,7 @@ use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_sql::FormatOptions;
@@ -220,8 +221,10 @@ async fn write_statistics_trace_case(
     case: &StatisticsTraceGoldenCase,
 ) -> Result<()> {
     let (sql, optimized_plan) = replay_statistics_trace_case(case).await?;
-    let optimized =
-        optimized_plan.format_indent(FormatOptions::default(), &StatContext::default())?;
+    let optimized = optimized_plan.format_indent(
+        FormatOptions::default(),
+        &StatContext::new(FunctionContext::default()),
+    )?;
 
     write_case_title(file, case.name, case.description)?;
     writeln!(file, "trace: {}", case.trace_file)?;
@@ -443,7 +446,10 @@ async fn test_subquery_project_set_keeps_lambda_udf_argument_columns() -> Result
         )
         .await?;
     let plan = ctx.optimize_plan(plan).await?;
-    let plan = plan.format_indent(Default::default(), &StatContext::default())?;
+    let plan = plan.format_indent(
+        Default::default(),
+        &StatContext::new(FunctionContext::default()),
+    )?;
     assert!(
         plan.contains("split(documents.s"),
         "ProjectSet should keep the lambda UDF body bound to documents.s:\n{plan}"

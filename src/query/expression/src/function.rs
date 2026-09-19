@@ -156,8 +156,15 @@ pub struct FunctionContext {
     pub date_format_style: String,
 }
 
-impl Default for FunctionContext {
-    fn default() -> Self {
+impl FunctionContext {
+    /// A fixed placeholder context: UTC, `now` at the UNIX epoch, default settings.
+    ///
+    /// It is only valid where no context-dependent function can observe it: under
+    /// `FoldMode::ContextIndependent`, or when casting a numeric literal parameter whose
+    /// conversion does not depend on the session. Statement paths must obtain the context
+    /// from the session (`TableContext::get_function_context`); evaluating a statement
+    /// expression against this placeholder silently disagrees with `SELECT` (see #20290).
+    pub fn context_independent_placeholder() -> Self {
         FunctionContext {
             tz: Tz::UTC,
             now: DateTime::UNIX_EPOCH,
@@ -176,6 +183,15 @@ impl Default for FunctionContext {
             week_start: 0,
             date_format_style: "oracle".to_string(),
         }
+    }
+}
+
+/// `Default` is a test convenience only. Production code has no default function context:
+/// enable the `testing` feature (via a dev-dependency) to use it in tests of other crates.
+#[cfg(any(test, feature = "testing"))]
+impl Default for FunctionContext {
+    fn default() -> Self {
+        Self::context_independent_placeholder()
     }
 }
 

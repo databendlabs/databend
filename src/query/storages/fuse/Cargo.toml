@@ -84,6 +84,7 @@ typetag = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+databend-common-expression = { workspace = true, features = ["testing"] }
 divan = { workspace = true }
 
 [[bench]]

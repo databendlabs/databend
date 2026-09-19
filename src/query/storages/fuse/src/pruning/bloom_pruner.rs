@@ -83,7 +83,7 @@ pub(crate) async fn should_prune_runtime_inlist_by_bloom_index(
         .filter(|field| BloomIndex::supported_type(field.data_type()))
         .cloned()
         .collect::<Vec<_>>();
-    let result = BloomIndex::filter_index_field(expr, bloom_fields, vec![])?;
+    let result = BloomIndex::filter_index_field(func_ctx, expr, bloom_fields, vec![])?;
     if result.bloom_fields.is_empty() {
         return Ok(false);
     }
@@ -182,8 +182,12 @@ impl BloomPrunerCreator {
         let bloom_column_fields = bloom_columns_map.values().cloned().collect::<Vec<_>>();
         let ngram_column_fields: Vec<TableField> =
             ngram_args.iter().map(|arg| arg.field().clone()).collect();
-        let mut result =
-            BloomIndex::filter_index_field(expr, bloom_column_fields, ngram_column_fields)?;
+        let mut result = BloomIndex::filter_index_field(
+            &func_ctx,
+            expr,
+            bloom_column_fields,
+            ngram_column_fields,
+        )?;
 
         if result.bloom_fields.is_empty() && result.ngram_fields.is_empty() {
             return Ok(None);

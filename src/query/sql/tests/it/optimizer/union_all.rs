@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_catalog::BasicColumnStatistics;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::FormatOptions;
 use databend_common_sql::Metadata;
@@ -202,7 +203,10 @@ fn format_node(metadata: &MetadataRef, expr: &SExpr) -> Result<String> {
         formatted_ast: None,
         ignore_result: false,
     }
-    .format_indent(FormatOptions::default(), &StatContext::default())
+    .format_indent(
+        FormatOptions::default(),
+        &StatContext::new(FunctionContext::default()),
+    )
 }
 
 fn write_derived_stats(
@@ -240,7 +244,8 @@ fn write_derived_stats(
     writeln!(file, "path: {:?}", target.path)?;
     writeln!(file, "node:")?;
     writeln!(file, "{}", format_node(metadata, expr)?)?;
-    let stat_info = RelExpr::with_s_expr(expr).derive_cardinality(&StatContext::default())?;
+    let stat_info = RelExpr::with_s_expr(expr)
+        .derive_cardinality(&StatContext::new(FunctionContext::default()))?;
     write_stat_info(file, &metadata.read(), &stat_info)?;
     Ok(())
 }

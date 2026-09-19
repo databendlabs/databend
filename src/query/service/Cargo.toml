@@ -187,6 +187,7 @@ walkdir = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+databend-common-expression = { workspace = true, features = ["testing"] }
 databend-common-sql-test-support = { workspace = true }
 databend-enterprise-query = { workspace = true }
 databend-storages-common-pruner = { workspace = true }

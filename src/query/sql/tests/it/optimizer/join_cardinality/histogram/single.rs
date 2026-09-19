@@ -16,6 +16,7 @@ use std::io::Write;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::StatContext;
@@ -102,12 +103,13 @@ async fn write_optimizer_commuted_right_single(
         None => {
             let left_single = find_join(&s_expr, JoinType::LeftSingle)
                 .ok_or_else(|| ErrorCode::Internal("optimizer did not derive SINGLE from SQL"))?;
-            RuleCommuteJoin::new(StatContext::default()).apply(left_single, &mut state)?;
+            RuleCommuteJoin::new(StatContext::new(FunctionContext::default()))
+                .apply(left_single, &mut state)?;
             let left_cardinality = RelExpr::with_s_expr(left_single.child(0)?)
-                .derive_cardinality(&StatContext::default())?
+                .derive_cardinality(&StatContext::new(FunctionContext::default()))?
                 .cardinality;
             let right_cardinality = RelExpr::with_s_expr(left_single.child(1)?)
-                .derive_cardinality(&StatContext::default())?
+                .derive_cardinality(&StatContext::new(FunctionContext::default()))?
                 .cardinality;
             let right_single = state
                 .results()

@@ -124,9 +124,3 @@ impl Rule for RuleFoldCountAggregate {
         &self.matchers
     }
 }
-
-impl Default for RuleFoldCountAggregate {
-    fn default() -> Self {
-        Self::new(StatContext::default())
-    }
-}

@@ -21,6 +21,7 @@ use chrono::Utc;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -415,6 +416,7 @@ async fn setup() -> databend_common_exception::Result<ParquetMetaData> {
         &loc_generator,
         TestFixture::default_table_meta_timestamps(),
         true,
+        FunctionContext::default(),
     );
     let (_block_meta, thrift_file_meta, _) = block_writer
         .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)

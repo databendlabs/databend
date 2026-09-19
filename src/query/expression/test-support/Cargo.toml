@@ -9,7 +9,7 @@ edition = { workspace = true }
 [dependencies]
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
-databend-common-expression = { workspace = true }
+databend-common-expression = { workspace = true, features = ["testing"] }
 
 log = { workspace = true }
 match-template = { workspace = true }

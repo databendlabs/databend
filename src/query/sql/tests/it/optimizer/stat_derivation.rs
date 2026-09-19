@@ -20,6 +20,7 @@ use databend_common_catalog::TableStatistics;
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::Metadata;
 use databend_common_sql::Symbol;
@@ -182,7 +183,8 @@ async fn write_case(file: &mut impl Write, case: &StatsCase) -> Result<()> {
     let target = find_operator(&s_expr, case.operator.clone()).ok_or_else(|| {
         ErrorCode::Internal(format!("cannot find {:?} in optimized plan", case.operator))
     })?;
-    let stats = RelExpr::with_s_expr(target).derive_cardinality(&StatContext::default())?;
+    let stats = RelExpr::with_s_expr(target)
+        .derive_cardinality(&StatContext::new(FunctionContext::default()))?;
 
     write_case_title(file, case.name, case.description)?;
     writeln!(file, "sql: {}", case.sql)?;

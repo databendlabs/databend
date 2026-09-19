@@ -222,9 +222,10 @@ struct RangeSource<const INCLUSIVE: bool> {
 }
 
 fn get_i64_number(scalar: Scalar) -> Result<i64> {
+    // Numeric literal argument: the cast does not depend on the session context.
     check_number::<i64, usize>(
         None,
-        &FunctionContext::default(),
+        &FunctionContext::context_independent_placeholder(),
         Expr::constant(scalar, None),
         &BUILTIN_FUNCTIONS,
     )

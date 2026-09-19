@@ -315,7 +315,7 @@ impl FuseTable {
             .map(|keys| parse_cluster_keys(ctx.clone(), table_meta, keys))
             .transpose()?;
         if partition_keys.is_empty() && parsed_cluster_keys.is_none() {
-            return Ok(ClusterStatsGenerator::default());
+            return Ok(ClusterStatsGenerator::disabled(ctx.get_function_context()?));
         }
 
         let table_schema = self.schema();

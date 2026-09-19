@@ -136,9 +136,3 @@ impl Rule for RuleCommuteJoin {
         &self.matchers
     }
 }
-
-impl Default for RuleCommuteJoin {
-    fn default() -> Self {
-        Self::new(StatContext::default())
-    }
-}

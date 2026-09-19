@@ -36,7 +36,6 @@ use databend_common_sql::MetadataRef;
 use databend_common_sql::Symbol;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::SExprVisitor;
-use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::ir::VisitAction;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
@@ -47,6 +46,8 @@ use databend_common_statistics::HistogramBucket;
 use goldenfile::Mint;
 use serde::Deserialize;
 use serde::Serialize;
+
+use crate::LiteTableContext;
 
 mod replay;
 
@@ -622,7 +623,7 @@ where
     )?;
     let raw = raw_plan.format_indent(
         databend_common_sql::FormatOptions { verbose: false },
-        &StatContext::default(),
+        &LiteTableContext::stat_context(),
     )?;
     write_result(mint, &format!("{}_raw.txt", case.stem), |f| {
         writeln!(f, "{}", raw).map_err(|e| ErrorCode::Internal(format!("Failed to write: {}", e)))
@@ -631,7 +632,7 @@ where
     let optimized_plan = runner.optimize_plan(raw_plan).await?;
     let optimized = optimized_plan.format_indent(
         databend_common_sql::FormatOptions::default(),
-        &StatContext::default(),
+        &LiteTableContext::stat_context(),
     )?;
     write_result(mint, &format!("{}_optimized.txt", case.stem), |f| {
         writeln!(f, "{}", optimized)

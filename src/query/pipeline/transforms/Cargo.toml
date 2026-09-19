@@ -41,6 +41,7 @@ arrow-array = { workspace = true }
 arrow-ord = { workspace = true }
 arrow-schema = { workspace = true }
 databend-base = { workspace = true }
+databend-common-expression = { workspace = true, features = ["testing"] }
 itertools = { workspace = true }
 proptest = { workspace = true }
 

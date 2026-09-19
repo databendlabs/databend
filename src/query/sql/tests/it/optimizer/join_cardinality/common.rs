@@ -15,6 +15,7 @@
 use std::io::Write;
 
 use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::stat_distribution::StatCount;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::Metadata;
@@ -156,7 +157,8 @@ pub(super) fn collect_join_cardinalities(
             join.join_type, expected_join_type,
             "unexpected join type for {case_name}"
         );
-        let stat_info = RelExpr::with_s_expr(expr).derive_cardinality(&StatContext::default())?;
+        let stat_info = RelExpr::with_s_expr(expr)
+            .derive_cardinality(&StatContext::new(FunctionContext::default()))?;
         writeln!(
             file,
             "join          : {:<11} cardinality={:.3}",

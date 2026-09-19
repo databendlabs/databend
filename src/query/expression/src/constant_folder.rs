@@ -416,7 +416,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         let input_domains = Self::full_input_domains(expr.as_ref());
         // Context-dependent overloads are rejected before domain or value evaluation, so this
         // placeholder is observed only by functions registered as context independent.
-        let context_placeholder = FunctionContext::default();
+        let context_placeholder = FunctionContext::context_independent_placeholder();
         let folder = ConstantFolder {
             input_domains: &input_domains,
             func_ctx: &context_placeholder,
@@ -445,6 +445,27 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             func_ctx,
             fn_registry,
             mode: FoldMode::Full,
+        };
+
+        folder.fold_to_stable(expr)
+    }
+
+    /// Like [`Self::fold_with_domain`], but without evaluating non-deterministic or
+    /// `FunctionContext`-dependent operations. Use it when no statement context is available
+    /// (e.g. reconstructing persisted statistics): a context-dependent sub-expression yields no
+    /// domain instead of a domain computed against a made-up context.
+    pub fn fold_with_domain_context_independent<'e>(
+        expr: Cow<'e, Expr<Index>>,
+        input_domains: &'a HashMap<Index, Domain>,
+        fn_registry: &'a FunctionRegistry,
+    ) -> (Cow<'e, Expr<Index>>, Option<Domain>) {
+        // See `fold_context_independent`: only context-independent functions observe this.
+        let context_placeholder = FunctionContext::context_independent_placeholder();
+        let folder = ConstantFolder {
+            input_domains,
+            func_ctx: &context_placeholder,
+            fn_registry,
+            mode: FoldMode::ContextIndependent,
         };
 
         folder.fold_to_stable(expr)

@@ -65,9 +65,10 @@ pub fn eval_aggr(
 }
 
 pub(super) fn extract_number_param<T: Number>(param: Scalar) -> Result<T> {
+    // Numeric literal parameter: the cast does not depend on the session context.
     check_number::<T, usize>(
         None,
-        &FunctionContext::default(),
+        &FunctionContext::context_independent_placeholder(),
         Constant {
             span: None,
             data_type: param.as_ref().infer_data_type(),

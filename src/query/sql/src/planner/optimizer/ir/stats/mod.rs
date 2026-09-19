@@ -29,7 +29,7 @@ pub(crate) use selectivity::Selectivity;
 pub use selectivity::SelectivityEstimator;
 pub(crate) use selectivity::SelectivityVisitor;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct StatContext {
     pub function_context: FunctionContext,
 }
@@ -37,5 +37,14 @@ pub struct StatContext {
 impl StatContext {
     pub fn new(function_context: FunctionContext) -> Self {
         Self { function_context }
+    }
+}
+
+/// Test convenience only: statistics derived from a placeholder context would silently
+/// disagree with execution, so production code always builds it from the session context.
+#[cfg(test)]
+impl Default for StatContext {
+    fn default() -> Self {
+        Self::new(FunctionContext::default())
     }
 }

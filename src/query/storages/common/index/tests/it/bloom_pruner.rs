@@ -82,7 +82,13 @@ fn test_bloom_filter_casts_string_literal_to_integer_column_type() {
     let field = TableField::new("x", TableDataType::Number(NumberDataType::Int32));
     let expr = eq_expr_with_string_constant(column_type.clone(), "20240604");
 
-    let result = BloomIndex::filter_index_field(&expr, vec![field.clone()], vec![]).unwrap();
+    let result = BloomIndex::filter_index_field(
+        &FunctionContext::default(),
+        &expr,
+        vec![field.clone()],
+        vec![],
+    )
+    .unwrap();
 
     assert_eq!(result.bloom_fields, vec![field]);
     assert_eq!(result.bloom_scalars, vec![(
@@ -117,7 +123,9 @@ fn test_bloom_filter_does_not_cast_number_literal_to_string_column_type() {
     )
     .unwrap();
 
-    let result = BloomIndex::filter_index_field(&expr, vec![field], vec![]).unwrap();
+    let result =
+        BloomIndex::filter_index_field(&FunctionContext::default(), &expr, vec![field], vec![])
+            .unwrap();
 
     assert!(result.bloom_fields.is_empty());
     assert!(result.bloom_scalars.is_empty());
@@ -129,7 +137,9 @@ fn test_bloom_filter_does_not_cast_string_literal_to_float_column_type() {
     let field = TableField::new("x", TableDataType::Number(NumberDataType::Float64));
     let expr = eq_expr_with_string_constant(column_type, "0");
 
-    let result = BloomIndex::filter_index_field(&expr, vec![field], vec![]).unwrap();
+    let result =
+        BloomIndex::filter_index_field(&FunctionContext::default(), &expr, vec![field], vec![])
+            .unwrap();
 
     assert!(result.bloom_fields.is_empty());
     assert!(result.bloom_scalars.is_empty());
@@ -145,9 +155,13 @@ fn test_bloom_filter_rewrites_string_literal_integer_comparison() {
     let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2])]);
     let expr = eq_expr_with_string_constant(column_type, "20240604");
 
-    let result =
-        BloomIndex::filter_index_field(&expr, bloom_columns.values().cloned().collect(), vec![])
-            .unwrap();
+    let result = BloomIndex::filter_index_field(
+        &FunctionContext::default(),
+        &expr,
+        bloom_columns.values().cloned().collect(),
+        vec![],
+    )
+    .unwrap();
     let mut eq_scalar_map = HashMap::<Scalar, u64>::new();
     for (_, scalar, ty) in result.bloom_scalars.into_iter() {
         eq_scalar_map.entry(scalar).or_insert_with_key(|scalar| {
@@ -700,7 +714,13 @@ fn eval_index_expr(
         .iter()
         .map(|arg| arg.field().clone())
         .collect::<Vec<_>>();
-    let result = BloomIndex::filter_index_field(&expr, bloom_fields, ngram_fields).unwrap();
+    let result = BloomIndex::filter_index_field(
+        &FunctionContext::default(),
+        &expr,
+        bloom_fields,
+        ngram_fields,
+    )
+    .unwrap();
 
     let mut eq_scalar_map = HashMap::<Scalar, u64>::new();
     for (_, scalar, ty) in result.bloom_scalars.into_iter() {
