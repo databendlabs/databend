@@ -158,3 +158,63 @@ DROP TASK mytask
 
 statement ok
 DROP TASK sessionTask
+
+# Task validation must tolerate missing objects and runtime script variables,
+# without executing statements during CREATE or ALTER.
+statement ok
+DROP TABLE IF EXISTS task_validation_deferred_table
+
+statement ok
+DROP TASK IF EXISTS task_validation_deferred
+
+statement ok
+CREATE TASK task_validation_deferred WAREHOUSE = 'mywh'
+AS SELECT * FROM task_validation_deferred_table
+
+statement ok
+ALTER TASK task_validation_deferred MODIFY AS EXECUTE IMMEDIATE $$
+BEGIN
+    CREATE TABLE task_validation_deferred_table (a INT);
+    INSERT INTO task_validation_deferred_table VALUES (1);
+END;
+$$
+
+query I
+SELECT count(*) FROM system.tables WHERE database = current_database() AND name = 'task_validation_deferred_table'
+----
+0
+
+statement ok
+ALTER TASK task_validation_deferred MODIFY AS EXECUTE IMMEDIATE $$
+DECLARE x := 1;
+BEGIN
+    SELECT :x + 1;
+    RETURN x;
+END;
+$$
+
+statement ok
+ALTER TASK task_validation_deferred MODIFY AS EXECUTE IMMEDIATE $$
+DECLARE t := 'task_validation_deferred_table';
+BEGIN
+    SELECT * FROM IDENTIFIER(:t);
+END;
+$$
+
+statement ok
+ALTER TASK task_validation_deferred MODIFY AS EXECUTE IMMEDIATE $$
+BEGIN
+    FOR i IN 1 TO 2 DO
+        SELECT :i;
+    END FOR;
+END;
+$$
+
+# A UDF that does not exist yet resolves as a builtin lookup and reports an unknown
+# function, so a forward reference to it must not reject the task definition.
+statement ok
+ALTER TASK task_validation_deferred MODIFY
+AS SELECT task_validation_udf_not_created_yet(1)
+
+statement ok
+DROP TASK task_validation_deferred
