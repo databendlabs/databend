@@ -16,6 +16,7 @@ mod buffer_reader;
 mod files;
 mod merge_io_reader;
 mod merge_io_result;
+mod range_read;
 mod read_settings;
 
 pub use buffer_reader::BufferReader;
@@ -24,4 +25,22 @@ pub use files::dedup_file_locations;
 pub use merge_io_reader::MergeIOReader;
 pub use merge_io_result::MergeIOReadResult;
 pub use merge_io_result::OwnerMemory;
+pub use range_read::ChunkGrid;
+pub use range_read::ChunkedRangeReader;
+pub use range_read::OperatorRangeReader;
+pub use range_read::RangeReader;
 pub use read_settings::ReadSettings;
+
+#[cfg(test)]
+pub(crate) fn init_test_runtime() {
+    use std::sync::Once;
+
+    use databend_common_base::base::GlobalInstance;
+    use databend_common_base::runtime::GlobalIORuntime;
+
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        GlobalInstance::init_production();
+        GlobalIORuntime::init(2).unwrap();
+    });
+}

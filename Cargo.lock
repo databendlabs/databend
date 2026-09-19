@@ -6420,6 +6420,7 @@ name = "databend-storages-common-io"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
+ "async-channel",
  "bytes",
  "databend-common-base",
  "databend-common-catalog",
