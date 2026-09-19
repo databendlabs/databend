@@ -1,0 +1,121 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+# Materialized views reuse Fuse table-index metadata and synchronous file construction. ASYNC
+# indexes and index read paths are intentionally out of scope.
+
+statement ok
+drop database if exists test_materialized_view_index
+
+statement ok
+create database test_materialized_view_index
+
+statement ok
+use test_materialized_view_index
+
+statement ok
+create table source (
+    id int,
+    content string,
+    tags string,
+    embedding vector(4)
+) row_per_block = 2
+
+statement ok
+insert into source values
+    (1, 'alpha beta',  'one',   [1.0, 0.0, 0.0, 0.0]),
+    (2, 'gamma',       'two',   [0.0, 1.0, 0.0, 0.0]),
+    (3, 'alpha delta', 'three', [0.9, 0.1, 0.0, 0.0]),
+    (4, 'epsilon',     'four',  [0.0, 0.0, 1.0, 0.0])
+
+statement ok
+create materialized view mv_idx row_per_block = 2 as
+select id, content, tags, embedding from source where 1 = 1
+
+# CREATE reuses the table-index metadata API. The first MV refresh builds index files while it
+# writes the initial MV blocks.
+statement ok
+create inverted index mv_inv on mv_idx(content)
+
+# ASYNC indexes require an explicit MV refresh-index lifecycle for backfill and repair.
+statement error 1601
+create async inverted index mv_tags on mv_idx(tags)
+
+statement ok
+create vector index mv_vec on mv_idx(embedding)
+    m = 10 ef_construct = 40 distance = 'cosine'
+
+query TT rowsort
+select name, type
+from system.indexes
+where database = 'test_materialized_view_index'
+  and name in ('mv_inv', 'mv_tags', 'mv_vec')
+----
+mv_inv INVERTED
+mv_vec VECTOR
+
+# Physical refresh columns are internal implementation details, not MV index targets.
+statement error 1601
+create inverted index hidden_idx on mv_idx(_mv_source_row_id)
+
+# MV refresh writes the initial blocks and builds synchronous index files in the write pipeline.
+statement ok
+refresh materialized view mv_idx
+
+query BB
+select count(*) > 0,
+       count_if(inverted_index_size > 0 and vector_index_size > 0) = count(*)
+from fuse_block('test_materialized_view_index', 'mv_idx')
+----
+1 1
+
+statement ok
+insert into source values (5, 'alpha zeta', 'fresh_tag', [0.8, 0.2, 0.0, 0.0])
+
+# Incremental MV refresh also builds both synchronous indexes for newly written blocks.
+statement ok
+refresh materialized view mv_idx
+
+query BB
+select count(*) > 0,
+       count_if(inverted_index_size > 0 and vector_index_size > 0) = count(*)
+from fuse_block('test_materialized_view_index', 'mv_idx')
+----
+1 1
+
+statement ok
+drop inverted index mv_inv on mv_idx
+
+statement ok
+drop vector index mv_vec on mv_idx
+
+query I
+select count(*)
+from system.indexes
+where database = 'test_materialized_view_index'
+  and name in ('mv_inv', 'mv_tags', 'mv_vec')
+----
+0
+
+# Aggregating MVs persist aggregate states instead of finalized values, so their table-index
+# lifecycle remains unsupported until those index semantics are defined.
+statement ok
+create materialized view mv_agg (content, row_count) as
+select content, count(*) from source where 1 = 1 group by content
+
+statement error 1601
+create inverted index aggregate_idx on mv_agg(content)
+
+statement ok
+drop database test_materialized_view_index
