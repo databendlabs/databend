@@ -18,10 +18,13 @@ mod debug_proxy;
 mod directory;
 mod search_pin;
 
+pub use bundle::BundleExternalFiles;
 pub use bundle::BundleFileRanges;
 pub use bundle::BundleOpenSlice;
+pub use bundle::ExternalFile;
 pub use bundle::INVERTED_INDEX_BUNDLE_INITIAL_FOOTER_READ_SIZE;
 pub use bundle::INVERTED_INDEX_BUNDLE_MAX_FOOTER_SIZE;
+pub use bundle::INVERTED_INDEX_BUNDLE_OBJECT_SUFFIX;
 pub use bundle::INVERTED_INDEX_BUNDLE_TRAILER_LEN;
 pub use bundle::INVERTED_INDEX_FILE_FORMAT_VERSION;
 pub use bundle::InvertedIndexBundleFooter;

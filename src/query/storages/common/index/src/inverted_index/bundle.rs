@@ -53,7 +53,7 @@ pub const INVERTED_INDEX_BUNDLE_TRAILER_LEN: usize = size_of::<u64>() + size_of:
 /// still only cache the needed 64 KiB payload pages.
 pub const INVERTED_INDEX_BUNDLE_INITIAL_FOOTER_READ_SIZE: usize = 1024 * 1024;
 
-/// Maximum persisted footer size accepted by V1 readers and writers.
+/// Maximum persisted footer size accepted by readers and writers.
 ///
 /// This is a defensive wire-format limit, not the size of the normal first footer read.
 pub const INVERTED_INDEX_BUNDLE_MAX_FOOTER_SIZE: usize = 4 * 1024 * 1024;
@@ -63,9 +63,93 @@ const INVERTED_INDEX_BUNDLE_DECODE_LIMIT: usize = 16 * 1024 * 1024;
 #[derive(Clone, Copy, Default, Debug, Eq, PartialEq)]
 #[repr(u32)]
 pub enum InvertedIndexBundleVersion {
-    /// First version of the raw-Tantivy-file bundle design.
+    /// Raw Tantivy files inline in the bundle body, with large components optionally stored as
+    /// sibling objects referenced by suffix.
     #[default]
     V1 = 1,
+}
+
+/// Bundle objects end with this; sibling objects append their own suffix after it.
+pub const INVERTED_INDEX_BUNDLE_OBJECT_SUFFIX: &str = ".index";
+
+/// A segment file stored as a sibling object `<bundle location><suffix>` instead of inline.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ExternalFile {
+    pub suffix: String,
+    pub len: u64,
+}
+
+impl ExternalFile {
+    /// Maps any object under the inverted-index prefix back to the bundle it belongs to:
+    /// `.../h<uuid>.index` is a bundle, `.../h<uuid>.index.idx` is one of its sibling objects.
+    /// Returns `None` for paths that follow neither naming.
+    pub fn bundle_location(object_path: &str) -> Option<&str> {
+        let position = object_path.rfind(INVERTED_INDEX_BUNDLE_OBJECT_SUFFIX)?;
+        let end = position + INVERTED_INDEX_BUNDLE_OBJECT_SUFFIX.len();
+        match &object_path[end..] {
+            "" => Some(&object_path[..end]),
+            suffix if suffix.starts_with('.') && !suffix.contains('/') => Some(&object_path[..end]),
+            _ => None,
+        }
+    }
+}
+
+/// Segment files that live outside the bundle body.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct BundleExternalFiles {
+    pub files: BTreeMap<PathBuf, ExternalFile>,
+}
+
+impl BundleExternalFiles {
+    pub fn get(&self, path: &Path) -> Option<&ExternalFile> {
+        self.files.get(path)
+    }
+
+    pub fn contains(&self, path: &Path) -> bool {
+        self.files.contains_key(path)
+    }
+
+    /// External files must not shadow inline files or index-level files, and every suffix must
+    /// be a plain file-name suffix so the sibling object shares the bundle's directory.
+    pub fn validate(&self, inline: &BundleFileRanges) -> io::Result<()> {
+        let mut suffixes = std::collections::HashSet::new();
+        for (path, file) in &self.files {
+            let invalid = |message: String| io::Error::new(io::ErrorKind::InvalidData, message);
+            if path == Path::new(MANAGED_JSON_PATH) || path == Path::new(META_JSON_PATH) {
+                return Err(invalid(format!(
+                    "index-level file {} must be stored in the footer",
+                    path.display()
+                )));
+            }
+            if inline.contains(path) {
+                return Err(invalid(format!(
+                    "file {} is both inline and external",
+                    path.display()
+                )));
+            }
+            if file.suffix.is_empty() || file.suffix.contains('/') || !file.suffix.starts_with('.')
+            {
+                return Err(invalid(format!(
+                    "invalid external object suffix {:?} for {}",
+                    file.suffix,
+                    path.display()
+                )));
+            }
+            if !suffixes.insert(file.suffix.as_str()) {
+                return Err(invalid(format!(
+                    "duplicate external object suffix {:?}",
+                    file.suffix
+                )));
+            }
+            usize::try_from(file.len).map_err(|_| {
+                invalid(format!(
+                    "external file {} is too large for this platform",
+                    path.display()
+                ))
+            })?;
+        }
+        Ok(())
+    }
 }
 
 /// Maps logical Tantivy segment paths to raw byte ranges in the bundle body.
@@ -158,18 +242,27 @@ where D: serde::Deserializer<'de> {
     Vec::<u8>::deserialize(deserializer).map(Arc::from)
 }
 
-/// Complete V1 footer payload.
+/// Complete footer payload.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-struct BundleFooterV1 {
+struct BundleFooter {
     file_ranges: BundleFileRanges,
+    external_files: BundleExternalFiles,
     open_slices: BTreeMap<PathBuf, Vec<BundleOpenSlice>>,
     managed_json: Vec<u8>,
     meta_json: Vec<u8>,
 }
 
-impl BundleFooterV1 {
+impl BundleFooter {
+    fn file_len(&self, path: &Path) -> Option<u64> {
+        if let Some(range) = self.file_ranges.get(path) {
+            return Some(range.end - range.start);
+        }
+        self.external_files.get(path).map(|file| file.len)
+    }
+
     fn validate(&self, footer_start: u64) -> io::Result<()> {
         self.file_ranges.validate(footer_start)?;
+        self.external_files.validate(&self.file_ranges)?;
         if self.managed_json.is_empty() || self.meta_json.is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -177,13 +270,12 @@ impl BundleFooterV1 {
             ));
         }
         for (path, slices) in &self.open_slices {
-            let file_range = self.file_ranges.get(path).ok_or_else(|| {
+            let file_len = self.file_len(path).ok_or_else(|| {
                 io::Error::new(
                     io::ErrorKind::InvalidData,
                     format!("open slices reference unknown file {}", path.display()),
                 )
             })?;
-            let file_len = file_range.end - file_range.start;
             let mut previous_end = 0u64;
             for slice in slices {
                 let slice_len =
@@ -218,7 +310,7 @@ impl InvertedIndexBundleVersion {
         (version == 1).then_some(Self::V1)
     }
 
-    fn encode_footer(footer: &BundleFooterV1) -> io::Result<Vec<u8>> {
+    fn encode_footer(footer: &BundleFooter) -> io::Result<Vec<u8>> {
         let mut output = Vec::new();
         output.extend_from_slice(&BUNDLE_FOOTER_MAGIC.to_le_bytes());
         output.extend_from_slice(&(Self::V1 as u32).to_le_bytes());
@@ -229,7 +321,7 @@ impl InvertedIndexBundleVersion {
         Ok(output)
     }
 
-    fn decode_footer(bytes: &[u8]) -> io::Result<BundleFooterV1> {
+    fn decode_footer(bytes: &[u8]) -> io::Result<BundleFooter> {
         const FOOTER_HEADER_LEN: usize = size_of::<u32>() * 2;
         if bytes.len() < FOOTER_HEADER_LEN {
             return Err(io::ErrorKind::UnexpectedEof.into());
@@ -254,7 +346,7 @@ impl InvertedIndexBundleVersion {
         let payload = &bytes[FOOTER_HEADER_LEN..];
         let config =
             bincode::config::standard().with_limit::<{ INVERTED_INDEX_BUNDLE_DECODE_LIMIT }>();
-        let (footer, consumed): (BundleFooterV1, usize) =
+        let (footer, consumed): (BundleFooter, usize) =
             bincode::serde::decode_from_slice(payload, config).map_err(io::Error::other)?;
         if consumed != payload.len() {
             return Err(io::Error::new(
@@ -271,8 +363,11 @@ impl InvertedIndexBundleVersion {
 /// The persisted object layout is:
 ///
 /// ```text
-/// [raw segment files][DBIF + FooterV1][footer_start + version + DBIV]
+/// [inline segment files][DBIF + footer][footer_start + version + DBIV]
 /// ```
+///
+/// Large segment files may instead live in sibling objects `<location><suffix>`; the footer
+/// records their lengths so readers can open them without another metadata request.
 #[derive(Clone, Debug)]
 pub struct InvertedIndexBundleFooter {
     /// Bundle wire version read from the fixed trailer.
@@ -281,8 +376,10 @@ pub struct InvertedIndexBundleFooter {
     pub footer_start: u64,
     /// Encoded footer and fixed trailer size in bytes.
     pub footer_size: u64,
-    /// Absolute object ranges of the raw Tantivy segment files.
+    /// Absolute object ranges of the inline raw Tantivy segment files.
     pub file_ranges: BundleFileRanges,
+    /// Segment files stored as sibling objects.
+    pub external_files: BundleExternalFiles,
     /// Opaque bytes required to synchronously open the Tantivy index.
     pub open_slices: BTreeMap<PathBuf, Arc<[BundleOpenSlice]>>,
     /// Original `.managed.json` bytes.
@@ -292,9 +389,19 @@ pub struct InvertedIndexBundleFooter {
 }
 
 impl InvertedIndexBundleFooter {
-    /// Builds a bundle from raw segment files and footer-resident index-open data.
+    /// Logical length of a segment file, inline or external.
+    pub fn file_len(&self, path: &Path) -> Option<u64> {
+        if let Some(range) = self.file_ranges.get(path) {
+            return Some(range.end - range.start);
+        }
+        self.external_files.get(path).map(|file| file.len)
+    }
+
+    /// Builds a bundle from inline raw segment files, references to external segment files, and
+    /// footer-resident index-open data.
     pub fn build<I, P, B>(
         files: I,
+        external_files: BTreeMap<PathBuf, ExternalFile>,
         open_slices: BTreeMap<PathBuf, Vec<BundleOpenSlice>>,
         managed_json: Vec<u8>,
         meta_json: Vec<u8>,
@@ -334,8 +441,11 @@ impl InvertedIndexBundleFooter {
 
         let footer_start = u64::try_from(output.len())
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "bundle is too large"))?;
-        let footer = BundleFooterV1 {
+        let footer = BundleFooter {
             file_ranges: BundleFileRanges { files: file_ranges },
+            external_files: BundleExternalFiles {
+                files: external_files,
+            },
             open_slices,
             managed_json,
             meta_json,
@@ -560,6 +670,7 @@ impl InvertedIndexBundleFooter {
             footer_start,
             footer_size: u64::try_from(bytes.len()).map_err(io::Error::other)?,
             file_ranges: wire.file_ranges,
+            external_files: wire.external_files,
             open_slices: wire
                 .open_slices
                 .into_iter()
@@ -608,6 +719,7 @@ mod tests {
     fn build_bundle() -> Vec<u8> {
         InvertedIndexBundleFooter::build(
             [("segment.idx", b"postings".as_slice())],
+            BTreeMap::new(),
             BTreeMap::from([(PathBuf::from("segment.idx"), vec![BundleOpenSlice {
                 range: 0..4,
                 bytes: Arc::from(b"post".as_slice()),
@@ -616,6 +728,117 @@ mod tests {
             b"meta".to_vec(),
         )
         .unwrap()
+    }
+
+    fn external(suffix: &str, len: u64) -> ExternalFile {
+        ExternalFile {
+            suffix: suffix.to_string(),
+            len,
+        }
+    }
+
+    #[test]
+    fn test_external_files_round_trip() {
+        let bytes = InvertedIndexBundleFooter::build(
+            [("segment.term", b"terms".as_slice())],
+            BTreeMap::from([
+                (PathBuf::from("segment.idx"), external(".idx", 4096)),
+                (PathBuf::from("segment.pos"), external(".pos", 65536)),
+            ]),
+            BTreeMap::from([(PathBuf::from("segment.idx"), vec![BundleOpenSlice {
+                range: 4090..4096,
+                bytes: Arc::from(b"footer".as_slice()),
+            }])]),
+            b"managed".to_vec(),
+            b"meta".to_vec(),
+        )
+        .unwrap();
+        let footer = InvertedIndexBundleFooter::open(&bytes).unwrap();
+        assert_eq!(
+            footer.file_ranges.get(Path::new("segment.term")),
+            Some(0..5)
+        );
+        assert_eq!(
+            footer.external_files.get(Path::new("segment.idx")),
+            Some(&external(".idx", 4096))
+        );
+        assert_eq!(footer.file_len(Path::new("segment.pos")), Some(65536));
+        assert_eq!(footer.file_len(Path::new("segment.term")), Some(5));
+        assert_eq!(footer.file_len(Path::new("segment.none")), None);
+        assert_eq!(
+            footer.open_slices[Path::new("segment.idx")][0].range,
+            4090..4096
+        );
+    }
+
+    #[test]
+    fn test_bundle_location_of_sibling_objects() {
+        let bundle = "1/2/_i_i_v2/gen/h0123.index";
+        assert_eq!(ExternalFile::bundle_location(bundle), Some(bundle));
+        assert_eq!(
+            ExternalFile::bundle_location("1/2/_i_i_v2/gen/h0123.index.idx"),
+            Some(bundle)
+        );
+        assert_eq!(
+            ExternalFile::bundle_location("1/2/_i_i_v2/gen/h0123.index.pos"),
+            Some(bundle)
+        );
+        assert_eq!(
+            ExternalFile::bundle_location("1/2/_i_i_v2/gen/h0123.index/x"),
+            None
+        );
+        assert_eq!(
+            ExternalFile::bundle_location("1/2/_i_i_v2/gen/h0123.indexidx"),
+            None
+        );
+        assert_eq!(ExternalFile::bundle_location("1/2/_b/h0123.parquet"), None);
+    }
+
+    #[test]
+    fn test_external_files_are_validated() {
+        let build = |external_files, open_slices| {
+            InvertedIndexBundleFooter::build(
+                [("segment.term", b"terms".as_slice())],
+                external_files,
+                open_slices,
+                b"managed".to_vec(),
+                b"meta".to_vec(),
+            )
+        };
+        let ok =
+            |suffix: &str| BTreeMap::from([(PathBuf::from("segment.idx"), external(suffix, 8))]);
+        assert!(build(ok(".idx"), BTreeMap::new()).is_ok());
+        assert!(build(ok(""), BTreeMap::new()).is_err(), "empty suffix");
+        assert!(
+            build(ok("idx"), BTreeMap::new()).is_err(),
+            "suffix without dot"
+        );
+        assert!(
+            build(ok("./idx"), BTreeMap::new()).is_err(),
+            "suffix with separator"
+        );
+        let shadowing = BTreeMap::from([(PathBuf::from("segment.term"), external(".term", 5))]);
+        assert!(
+            build(shadowing, BTreeMap::new()).is_err(),
+            "inline and external"
+        );
+        let duplicate_suffix = BTreeMap::from([
+            (PathBuf::from("segment.idx"), external(".idx", 8)),
+            (PathBuf::from("segment.pos"), external(".idx", 8)),
+        ]);
+        assert!(
+            build(duplicate_suffix, BTreeMap::new()).is_err(),
+            "duplicate suffix"
+        );
+        let slice_past_end =
+            BTreeMap::from([(PathBuf::from("segment.idx"), vec![BundleOpenSlice {
+                range: 6..10,
+                bytes: Arc::from(b"abcd".as_slice()),
+            }])]);
+        assert!(
+            build(ok(".idx"), slice_past_end).is_err(),
+            "open slice beyond external len"
+        );
     }
 
     #[test]
@@ -634,52 +857,6 @@ mod tests {
             range: 3..7,
             bytes: Arc::from(b"data".as_slice()),
         };
-        assert_eq!(
-            bincode::serde::encode_to_vec(legacy, bincode::config::standard()).unwrap(),
-            bincode::serde::encode_to_vec(current, bincode::config::standard()).unwrap()
-        );
-    }
-
-    #[test]
-    fn test_footer_v1_wire_layout_is_unchanged() {
-        #[derive(Serialize)]
-        struct LegacyBundleOpenSlice {
-            range: Range<u64>,
-            bytes: Vec<u8>,
-        }
-
-        #[derive(Serialize)]
-        struct LegacyBundleFooterV1 {
-            file_ranges: BundleFileRanges,
-            open_slices: BTreeMap<PathBuf, Vec<LegacyBundleOpenSlice>>,
-            managed_json: Vec<u8>,
-            meta_json: Vec<u8>,
-        }
-
-        let file_ranges = BundleFileRanges {
-            files: BTreeMap::from([(PathBuf::from("segment.idx"), 0..8)]),
-        };
-        let legacy = LegacyBundleFooterV1 {
-            file_ranges: file_ranges.clone(),
-            open_slices: BTreeMap::from([(PathBuf::from("segment.idx"), vec![
-                LegacyBundleOpenSlice {
-                    range: 0..4,
-                    bytes: b"post".to_vec(),
-                },
-            ])]),
-            managed_json: b"managed".to_vec(),
-            meta_json: b"meta".to_vec(),
-        };
-        let current = BundleFooterV1 {
-            file_ranges,
-            open_slices: BTreeMap::from([(PathBuf::from("segment.idx"), vec![BundleOpenSlice {
-                range: 0..4,
-                bytes: Arc::from(b"post".as_slice()),
-            }])]),
-            managed_json: b"managed".to_vec(),
-            meta_json: b"meta".to_vec(),
-        };
-
         assert_eq!(
             bincode::serde::encode_to_vec(legacy, bincode::config::standard()).unwrap(),
             bincode::serde::encode_to_vec(current, bincode::config::standard()).unwrap()
@@ -715,6 +892,7 @@ mod tests {
     fn test_footer_start_from_tail_does_not_require_complete_footer() {
         let bytes = InvertedIndexBundleFooter::build(
             [("segment.idx", b"postings".as_slice())],
+            BTreeMap::new(),
             BTreeMap::new(),
             vec![b'm'; INVERTED_INDEX_BUNDLE_INITIAL_FOOTER_READ_SIZE + 128],
             b"meta".to_vec(),
@@ -863,6 +1041,7 @@ mod tests {
         let error = InvertedIndexBundleFooter::build(
             std::iter::empty::<(&str, &[u8])>(),
             BTreeMap::new(),
+            BTreeMap::new(),
             vec![0; INVERTED_INDEX_BUNDLE_MAX_FOOTER_SIZE],
             b"meta".to_vec(),
         )
@@ -872,7 +1051,8 @@ mod tests {
 
     #[test]
     fn test_footer_accepts_zero_length_segment_files() {
-        let footer = BundleFooterV1 {
+        let footer = BundleFooter {
+            external_files: BundleExternalFiles::default(),
             file_ranges: BundleFileRanges {
                 files: BTreeMap::from([
                     (PathBuf::from("segment.empty"), 0..0),
@@ -890,7 +1070,8 @@ mod tests {
 
     #[test]
     fn test_footer_rejects_non_contiguous_raw_ranges() {
-        let footer = BundleFooterV1 {
+        let footer = BundleFooter {
+            external_files: BundleExternalFiles::default(),
             file_ranges: BundleFileRanges {
                 files: BTreeMap::from([
                     (PathBuf::from("segment.idx"), 0..4),
@@ -907,7 +1088,8 @@ mod tests {
 
     #[test]
     fn test_footer_rejects_mismatched_open_slice_length() {
-        let footer = BundleFooterV1 {
+        let footer = BundleFooter {
+            external_files: BundleExternalFiles::default(),
             file_ranges: BundleFileRanges {
                 files: BTreeMap::from([(PathBuf::from("segment.idx"), 0..8)]),
             },
