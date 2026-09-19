@@ -1390,6 +1390,8 @@ pub enum TokenKind {
     TRY_CAST,
     #[token("TSV", ignore(ascii_case))]
     TSV,
+    #[token("TTL", ignore(ascii_case))]
+    TTL,
     #[token("TUESDAY", ignore(ascii_case))]
     TUESDAY,
     #[token("TUPLE", ignore(ascii_case))]

@@ -33,6 +33,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::common::cluster_key_referenced_columns;
+use crate::interpreters::common::ttl_referenced_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -112,6 +113,16 @@ impl Interpreter for DropTableColumnInterpreter {
                     return Err(ErrorCode::AlterTableError(format!(
                         "Cannot drop column '{}' because it is referenced by partition key {}",
                         self.plan.column, partition_key
+                    )));
+                }
+            }
+
+            if let Some(ttl) = &table_info.meta.ttl {
+                let referenced = ttl_referenced_columns(ttl)?;
+                if referenced.contains(self.plan.column.as_str()) {
+                    return Err(ErrorCode::AlterTableError(format!(
+                        "Cannot drop column '{}' because it is referenced by TTL {}",
+                        self.plan.column, ttl
                     )));
                 }
             }

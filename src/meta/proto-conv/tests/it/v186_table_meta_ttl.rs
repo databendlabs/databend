@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2026 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,13 +34,14 @@ use crate::common;
 //
 // The message bytes are built from the output of `test_pb_from_to()`
 #[test]
-fn test_decode_v165_cluster_key_id() -> anyhow::Result<()> {
-    let table_meta_v165 = vec![
-        10, 7, 160, 6, 165, 1, 168, 6, 24, 64, 3, 74, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41,
-        162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32,
-        85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58,
-        49, 48, 32, 85, 84, 67, 186, 1, 7, 160, 6, 165, 1, 168, 6, 24, 226, 1, 1, 1, 176, 2, 2,
-        160, 6, 165, 1, 168, 6, 24,
+fn test_decode_v186_table_meta_ttl() -> anyhow::Result<()> {
+    // Run test_pb_from_to first to get these bytes
+    let table_meta_v186: Vec<u8> = vec![
+        10, 7, 160, 6, 186, 1, 168, 6, 24, 64, 0, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
+        56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49,
+        49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 186, 1, 7, 160, 6, 186,
+        1, 168, 6, 24, 194, 2, 28, 101, 118, 101, 110, 116, 95, 116, 105, 109, 101, 32, 43, 32, 73,
+        78, 84, 69, 82, 86, 65, 76, 32, 51, 48, 32, 68, 65, 89, 160, 6, 186, 1, 168, 6, 24,
     ];
 
     let want = || mt::TableMeta {
@@ -51,9 +52,9 @@ fn test_decode_v165_cluster_key_id() -> anyhow::Result<()> {
         engine_options: btreemap! {},
         options: btreemap! {},
         cluster_key: None,
-        cluster_key_v2: Some((2, "(a + 2, b)".to_string())),
-        cluster_key_seq: 3,
-        ttl: None,
+        cluster_key_v2: None,
+        cluster_key_seq: 0,
+        ttl: Some(s("event_time + INTERVAL 30 DAY")),
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
         comment: s(""),
@@ -71,7 +72,7 @@ fn test_decode_v165_cluster_key_id() -> anyhow::Result<()> {
     };
     common::test_pb_from_to(func_name!(), want())?;
 
-    common::test_load_old(func_name!(), table_meta_v165.as_slice(), 165, want())?;
+    common::test_load_old(func_name!(), table_meta_v186.as_slice(), 186, want())?;
 
     Ok(())
 }

@@ -1899,6 +1899,7 @@ mod tests {
             field_comments: vec![],
             field_stats_truncate_len: vec![],
             cluster_key: None,
+            ttl: None,
             as_select: as_select.map(Box::new),
             table_indexes: None,
             table_constraints: None,
