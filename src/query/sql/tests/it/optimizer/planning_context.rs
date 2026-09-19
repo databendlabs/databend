@@ -69,6 +69,18 @@ LEFT JOIN planning_right_rows AS r ON l.id = r.id
 WHERE r.id > 0",
         },
         SqlTestCase {
+            name: "typed_constant_filter_inference_does_not_panic",
+            description: "A folded scalar-subquery constant used by outer-join filter inference must remain addressable in the expression index.",
+            setup_sqls: &[
+                "CREATE TABLE infer_filter_left(a BIGINT NOT NULL)",
+                "CREATE TABLE infer_filter_right(a BIGINT NOT NULL)",
+            ],
+            sql: "SELECT *
+FROM infer_filter_left AS l
+LEFT JOIN infer_filter_right AS r ON l.a = r.a
+WHERE l.a + (SELECT 1) > 5",
+        },
+        SqlTestCase {
             name: "erroring_outer_join_predicate_does_not_panic",
             description: "An expression error encountered while checking an outer-join predicate must not panic the optimizer.",
             setup_sqls: &[BOOLEAN_ROWS_TABLE],

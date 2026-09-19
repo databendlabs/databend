@@ -1856,6 +1856,8 @@ impl<'a> Visitor<'a> for IndexPredicateChecker {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use databend_common_expression::types::number::NumberDataType;
 
     use super::*;
@@ -1916,6 +1918,21 @@ mod tests {
             expr.data_type().as_ref(),
             expr.as_expr().unwrap().data_type()
         );
+    }
+
+    #[test]
+    fn test_typed_constant_expr_hash_map_lookup() {
+        let expr = ScalarExpr::TypedConstantExpr(
+            ConstantExpr {
+                span: None,
+                value: Scalar::Number(NumberScalar::Int64(1)),
+            },
+            DataType::Number(NumberDataType::Int64),
+        );
+        let mut expr_index = HashMap::new();
+        expr_index.insert(expr.clone(), 0);
+
+        assert_eq!(expr_index.get(&expr), Some(&0));
     }
 
     #[test]
