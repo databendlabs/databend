@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub(crate) mod block_index;
 mod block_statistics_writer;
 mod block_writer;
 mod bloom_index_writer;

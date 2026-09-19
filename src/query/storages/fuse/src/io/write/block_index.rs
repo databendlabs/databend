@@ -1,0 +1,223 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Write protocol for block-level indexes produced with a FUSE data block.
+//!
+//! A spec is immutable configuration. `new_writer` creates a writer that consumes complete
+//! `DataBlock`s and retains serialized payloads in memory; the payloads are uploaded later in
+//! the asynchronous write-down phase. `new_writer` implementations must not perform IO: that
+//! contract is expressed by the `PendingBlockIndexOutput` return type of the writer.
+
+use std::collections::HashMap;
+
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::TableSchemaRef;
+use databend_storages_common_table_meta::meta::BlockIndexMeta;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::StatisticsOfSpatialColumns;
+use databend_storages_common_table_meta::meta::StatisticsOfVectorColumns;
+use opendal::Buffer;
+use opendal::Operator;
+
+use super::WriteSettings;
+
+/// Shared construction context for block-index writers.
+#[derive(Clone)]
+pub struct BlockIndexWriteContext {
+    pub func_ctx: FunctionContext,
+    pub physical_schema: TableSchemaRef,
+    pub write_settings: WriteSettings,
+}
+
+#[derive(Debug)]
+pub struct PendingIndexFile {
+    /// Final object location; the payload is not uploaded until the asynchronous write-down phase.
+    pub location: Location,
+    /// Serialized in-memory payload owned exclusively by the writer.
+    pub data: Buffer,
+}
+
+impl PendingIndexFile {
+    pub fn size(&self) -> u64 {
+        self.data.len() as u64
+    }
+
+    pub async fn write(self, operator: &Operator) -> Result<u64> {
+        let size = self.size();
+        operator.write(&self.location.0, self.data).await?;
+        Ok(size)
+    }
+}
+
+#[derive(Debug)]
+pub struct PendingBloomIndex {
+    pub file: PendingIndexFile,
+    pub ngram_size: Option<u64>,
+    pub column_distinct_count: HashMap<ColumnId, usize>,
+}
+
+#[derive(Debug)]
+pub struct PendingInvertedIndex {
+    pub index_name: String,
+    pub index_version: String,
+    pub file: PendingIndexFile,
+}
+
+impl PendingInvertedIndex {
+    pub fn to_block_index_meta(&self) -> BlockIndexMeta {
+        BlockIndexMeta {
+            index_name: self.index_name.clone(),
+            location: self.file.location.clone(),
+            size: self.file.size(),
+            index_version: self.index_version.clone(),
+        }
+    }
+}
+
+/// Builds the per-block inverted index metas in the deterministic order `BlockMeta` expects.
+pub fn collect_inverted_index_metas(
+    metas: impl IntoIterator<Item = BlockIndexMeta>,
+) -> Vec<BlockIndexMeta> {
+    let mut metas = metas.into_iter().collect::<Vec<_>>();
+    metas.sort_unstable_by(|left, right| left.index_name.cmp(&right.index_name));
+    metas
+}
+
+#[derive(Debug)]
+pub struct PendingVectorIndex {
+    pub file: Option<PendingIndexFile>,
+    pub statistics: Option<StatisticsOfVectorColumns>,
+}
+
+#[derive(Debug)]
+pub struct PendingSpatialIndex {
+    pub file: Option<PendingIndexFile>,
+    pub statistics: Option<StatisticsOfSpatialColumns>,
+}
+
+/// Union-all pending output produced by writers that consume complete `DataBlock`s.
+#[derive(Debug, Default)]
+pub struct PendingBlockIndexOutput {
+    pub bloom: Option<PendingBloomIndex>,
+    pub inverted: Vec<PendingInvertedIndex>,
+    pub vector: Option<PendingVectorIndex>,
+    pub spatial: Option<PendingSpatialIndex>,
+}
+
+impl PendingBlockIndexOutput {
+    pub fn merge(&mut self, other: Self) -> Result<()> {
+        merge_singleton(&mut self.bloom, other.bloom, "pending bloom index")?;
+        for output in other.inverted {
+            if self
+                .inverted
+                .iter()
+                .any(|existing| existing.index_name == output.index_name)
+            {
+                return Err(ErrorCode::Internal(format!(
+                    "duplicate pending inverted index output {}",
+                    output.index_name
+                )));
+            }
+            self.inverted.push(output);
+        }
+        merge_singleton(&mut self.vector, other.vector, "pending vector index")?;
+        merge_singleton(&mut self.spatial, other.spatial, "pending spatial index")?;
+        Ok(())
+    }
+}
+
+fn merge_singleton<T>(target: &mut Option<T>, source: Option<T>, name: &str) -> Result<()> {
+    if let Some(source) = source {
+        if target.replace(source).is_some() {
+            return Err(ErrorCode::Internal(format!("duplicate {name} output")));
+        }
+    }
+    Ok(())
+}
+
+pub trait BlockIndexSpec: Send + Sync {
+    fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>>;
+}
+
+pub trait BlockIndexWriter: Send {
+    fn write(&mut self, block: &DataBlock) -> Result<()>;
+
+    fn finish(self: Box<Self>) -> Result<PendingBlockIndexOutput>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_outputs_reject_duplicate_inverted_names() {
+        let pending = |location: &str| PendingInvertedIndex {
+            index_name: "duplicate".to_string(),
+            index_version: "v1".to_string(),
+            file: PendingIndexFile {
+                location: (location.to_string(), 0),
+                data: Buffer::new(),
+            },
+        };
+        let mut output = PendingBlockIndexOutput {
+            inverted: vec![pending("first")],
+            ..Default::default()
+        };
+        let error = output
+            .merge(PendingBlockIndexOutput {
+                inverted: vec![pending("second")],
+                ..Default::default()
+            })
+            .unwrap_err();
+        assert!(error.message().contains("duplicate pending inverted index"));
+    }
+
+    #[test]
+    fn test_outputs_reject_duplicate_singletons() {
+        let vector = || PendingVectorIndex {
+            file: Some(PendingIndexFile {
+                location: ("location".to_string(), 0),
+                data: Buffer::from("payload"),
+            }),
+            statistics: None,
+        };
+        let mut output = PendingBlockIndexOutput {
+            vector: Some(vector()),
+            ..Default::default()
+        };
+        assert_eq!(
+            output
+                .vector
+                .as_ref()
+                .unwrap()
+                .file
+                .as_ref()
+                .unwrap()
+                .size(),
+            7
+        );
+        assert!(
+            output
+                .merge(PendingBlockIndexOutput {
+                    vector: Some(vector()),
+                    ..Default::default()
+                })
+                .is_err()
+        );
+    }
+}
