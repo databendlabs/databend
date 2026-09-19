@@ -5147,6 +5147,7 @@ dependencies = [
  "databend-meta-runtime",
  "databend-query",
  "databend-storages-common-cache",
+ "databend-storages-common-index",
  "databend-storages-common-io",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",

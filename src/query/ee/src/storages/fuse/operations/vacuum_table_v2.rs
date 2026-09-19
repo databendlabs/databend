@@ -30,6 +30,7 @@ use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::is_gc_candidate_segment_block;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
+use databend_storages_common_index::ExternalFile;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
@@ -347,10 +348,22 @@ async fn purge_inverted_index_v2_objects(
                 "aborted while scanning inverted-index V2 objects under {prefix}"
             )));
         }
-        if entry.metadata().is_dir() || protected_locations.contains(entry.path()) {
+        if entry.metadata().is_dir() {
             continue;
         }
-        let object_timestamp = match try_extract_uuid_v7_timestamp_from_path(entry.path()) {
+        // Sibling objects (`<bundle>.idx`, `<bundle>.pos`) share the bundle's protection and the
+        // bundle's UUID; unrecognised names are left alone.
+        let Some(bundle_location) = ExternalFile::bundle_location(entry.path()) else {
+            warn!(
+                "skip object with unrecognised inverted-index naming during vacuum: path={}",
+                entry.path()
+            );
+            continue;
+        };
+        if protected_locations.contains(bundle_location) {
+            continue;
+        }
+        let object_timestamp = match try_extract_uuid_v7_timestamp_from_path(bundle_location) {
             Ok(Some(timestamp)) => timestamp,
             Ok(None) => continue,
             Err(error) => {
@@ -694,11 +707,18 @@ mod tests {
             let after_cutoff = format!("{PREFIX}generation/h{}.index", after_cutoff_uuid.simple());
             let stray = format!("{PREFIX}generation/not-a-uuid.index");
             let outside = "1/2/_b/outside.parquet".to_string();
+            // Sibling objects follow their bundle: protected stays, orphaned goes.
+            let protected_idx = format!("{protected}.idx");
+            let protected_pos = format!("{protected}.pos");
+            let orphan_idx = format!("{orphan}.idx");
             dal.write(&protected, vec![1]).await?;
             dal.write(&orphan, vec![2]).await?;
             dal.write(&after_cutoff, vec![3]).await?;
             dal.write(&stray, vec![4]).await?;
             dal.write(&outside, vec![5]).await?;
+            dal.write(&protected_idx, vec![6]).await?;
+            dal.write(&protected_pos, vec![7]).await?;
+            dal.write(&orphan_idx, vec![8]).await?;
 
             let protected_locations = HashSet::from([protected.clone()]);
             let removed = purge_inverted_index_v2_objects(
@@ -711,9 +731,12 @@ mod tests {
             )
             .await?;
 
-            assert_eq!(removed, 1);
+            assert_eq!(removed, 2);
             assert!(dal.exists(&protected).await?);
+            assert!(dal.exists(&protected_idx).await?);
+            assert!(dal.exists(&protected_pos).await?);
             assert!(!dal.exists(&orphan).await?);
+            assert!(!dal.exists(&orphan_idx).await?);
             assert!(dal.exists(&after_cutoff).await?);
             assert!(dal.exists(&stray).await?);
             assert!(dal.exists(&outside).await?);
