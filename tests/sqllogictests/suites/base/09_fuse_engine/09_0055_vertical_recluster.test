@@ -153,8 +153,9 @@ select info:average_depth from clustering_information('db_vertical_recluster', '
 ----
 1.0
 
-# Vertical MergeBlocks keeps fresh level-0 appends separate from mature blocks.
-# Horizontal rewriting may consolidate them; compare rows after explicit compaction.
+# Both methods keep fresh level-0 appends separate from the mature block: the first FINAL
+# rewrote the single unordered block as its own SortBlocks task (level 1), and Aggressive
+# grouping never merges level 0 with level 1..3. Compare rows after explicit compaction.
 statement ok
 create table t_horizontal_final(k int, payload string) row_per_block=16 block_per_segment=2
 
@@ -210,7 +211,7 @@ alter table t_vertical_final recluster final
 query II
 select count(), count(distinct _block_name) from t_horizontal_final
 ----
-16 1
+16 2
 
 query II
 select count(), count(distinct _block_name) from t_vertical_final
