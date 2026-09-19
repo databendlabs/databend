@@ -394,6 +394,7 @@ pub struct AggregateFeatures {
     pub supports_state: bool,
     pub sort_policy: SortPolicy,
     pub distinct_policy: DistinctPolicy,
+    pub hide_doc: bool,
     pub category: &'static str,
     pub description: &'static str,
     pub definition: &'static str,
