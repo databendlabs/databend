@@ -123,6 +123,7 @@ impl AttachTableHandler for RealAttachTableHandler {
             table_meta,
             source_table_option: None,
             as_dropped: false,
+            clone: None,
             materialized_view: None,
             table_properties: None,
             table_partition: None,

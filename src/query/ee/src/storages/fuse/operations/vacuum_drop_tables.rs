@@ -20,6 +20,7 @@ use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::parse_clone_group_id;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropFileInfo;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropTablesResult;
@@ -200,16 +201,24 @@ pub async fn vacuum_drop_tables_by_table_info(
     Ok(result)
 }
 
+/// Vacuum dropped table directories, allowing a clone-group member only when the caller has
+/// verified that no existing group member directly depends on it.
+///
+/// Callers must compute `safe_clone_table_ids` from the current clone lineage. Passing an empty
+/// set is safe but defers every clone-group member indefinitely, so it must be a deliberate
+/// choice rather than a default.
 #[async_backtrace::framed]
 pub async fn vacuum_drop_tables(
     threads_nums: usize,
     tables: Vec<Arc<dyn Table>>,
     dry_run_limit: Option<usize>,
+    safe_clone_table_ids: HashSet<u64>,
 ) -> VacuumDropTablesResult {
     let num_tables = tables.len();
     info!("vacuum_drop_tables {} tables", num_tables);
 
     let mut table_infos = Vec::with_capacity(num_tables);
+    let mut deferred_tables = HashSet::new();
     for table in tables {
         let (table_info, operator) =
             if let Ok(fuse_table) = FuseTable::try_from_table(table.as_ref()) {
@@ -223,8 +232,30 @@ pub async fn vacuum_drop_tables(
                 continue;
             };
 
+        match parse_clone_group_id(&table_info.meta.options) {
+            Err(error) => {
+                error!(
+                    "defer vacuum of table {} with invalid clone_group_id: {}",
+                    table_info.ident.table_id, error
+                );
+                deferred_tables.insert(table_info.ident.table_id);
+                continue;
+            }
+            Ok(Some(_)) if !safe_clone_table_ids.contains(&table_info.ident.table_id) => {
+                info!(
+                    "defer vacuum of clone-group table {} until it has no existing clone child",
+                    table_info.ident.table_id
+                );
+                deferred_tables.insert(table_info.ident.table_id);
+                continue;
+            }
+            Ok(_) => {}
+        }
         table_infos.push((table_info.clone(), operator));
     }
 
-    vacuum_drop_tables_by_table_info(threads_nums, table_infos, dry_run_limit).await
+    let (files, mut failed_tables) =
+        vacuum_drop_tables_by_table_info(threads_nums, table_infos, dry_run_limit).await?;
+    failed_tables.extend(deferred_tables);
+    Ok((files, failed_tables))
 }

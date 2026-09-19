@@ -233,6 +233,10 @@ impl Settings {
         self.try_set_u64("max_threads", val)
     }
 
+    pub fn get_enable_experimental_clone_table(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_clone_table")? != 0)
+    }
+
     pub fn get_max_vacuum_threads(&self) -> Result<u64> {
         self.try_get_u64("max_vacuum_threads")
     }

@@ -40,6 +40,7 @@ mod segment_claim;
 mod sequence;
 mod stage;
 mod table;
+mod table_clone;
 mod tag;
 mod task;
 mod tenant_quota;

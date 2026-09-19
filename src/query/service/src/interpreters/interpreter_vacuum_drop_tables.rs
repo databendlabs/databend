@@ -26,8 +26,10 @@ use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
+use databend_common_meta_app::schema::parse_clone_group_id;
 use databend_common_sql::plans::VacuumDropTablePlan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use log::info;
@@ -181,7 +183,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
 
             // map: table id to its belonging db id
             let mut containing_db = BTreeMap::new();
-            for drop_id in drop_ids.iter() {
+            for drop_id in &drop_ids {
                 if let DroppedId::Table { name, id } = drop_id {
                     containing_db.insert(id.table_id, name.db_id);
                 }
@@ -232,17 +234,57 @@ impl Interpreter for VacuumDropTablesInterpreter {
 
             let tables_count = tables.len();
 
+            // Clone members can reference ancestor-owned files. Only current lineage leaves are
+            // authorized for physical directory removal; stale bindings conservatively block it.
+            let mut candidate_clone_groups = BTreeMap::<u64, Vec<u64>>::new();
+            for table in &tables {
+                if let Some(group_id) = parse_clone_group_id(&table.get_table_info().meta.options)
+                    .ok()
+                    .flatten()
+                {
+                    candidate_clone_groups
+                        .entry(group_id)
+                        .or_default()
+                        .push(table.get_id());
+                }
+            }
+            let mut safe_clone_table_ids = HashSet::new();
+            for (group_id, candidate_ids) in candidate_clone_groups {
+                let bindings = catalog.list_clone_group_bindings(group_id).await?;
+                let members = match FuseTable::clone_descendant_ids(group_id, group_id, &bindings) {
+                    Ok(members) => members,
+                    Err(error) => {
+                        info!(
+                            "defer vacuum of clone group {} with invalid lineage: {}",
+                            group_id, error
+                        );
+                        continue;
+                    }
+                };
+                let direct_sources = bindings
+                    .into_iter()
+                    .map(|(_, source_id)| source_id)
+                    .collect::<HashSet<_>>();
+                safe_clone_table_ids.extend(candidate_ids.into_iter().filter(|table_id| {
+                    (*table_id == group_id || members.contains(table_id))
+                        && !direct_sources.contains(table_id)
+                }));
+            }
+
             let handler = get_vacuum_handler();
             let threads_nums = self.ctx.get_settings().get_max_vacuum_threads()? as usize;
             let (_, failed_tables) = handler
-                .do_vacuum_drop_tables(threads_nums, tables, None)
+                .do_vacuum_drop_tables(threads_nums, tables, None, safe_clone_table_ids)
                 .await?;
 
             let failed_db_ids = failed_tables
                 .iter()
-                // Safe unwrap: the map is built from drop_ids
-                .map(|id| *containing_db.get(id).unwrap())
-                .collect::<HashSet<_>>();
+                .map(|id| {
+                    containing_db.get(id).copied().ok_or_else(|| {
+                        ErrorCode::Internal(format!("failed table {id} has no containing database"))
+                    })
+                })
+                .collect::<Result<HashSet<_>>>()?;
 
             let mut success_dropped_ids = vec![];
             // Since drop_ids contains view IDs, any views (if present) will be added to

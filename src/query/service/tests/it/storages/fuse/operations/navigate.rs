@@ -130,6 +130,42 @@ async fn test_fuse_navigate() -> anyhow::Result<()> {
         assert_eq!(e.code(), ErrorCode::ABORTED_QUERY);
     }
 
+    // Run fresh queries only after the abort check above: creating another query context
+    // replaces the session's current query. FLASHBACK reuses the selected snapshot and ID;
+    // repeating it exercises the same-head shortcut without allocating a snapshot.
+    let flashback = format!(
+        "ALTER TABLE {}.{} FLASHBACK TO (SNAPSHOT => '{}')",
+        db,
+        fixture.default_table_name(),
+        first_insertion.snapshot_id.simple()
+    );
+    for _ in 0..2 {
+        fixture.execute_command(&flashback).await?;
+        let reverted = fixture.latest_default_table().await?;
+        assert_eq!(reverted.get_id(), table.get_id());
+        assert_eq!(
+            FuseTable::try_from_table(reverted.as_ref())?.snapshot_loc(),
+            Some(first_snapshot.clone())
+        );
+    }
+
+    // FLASHBACK clears bloom/HLL options that reference columns absent from the snapshot.
+    fixture
+        .execute_command(&format!(
+            "ALTER TABLE {}.{} ADD COLUMN extra INT",
+            db,
+            fixture.default_table_name()
+        ))
+        .await?;
+    fixture.execute_command(&format!(
+        "ALTER TABLE {}.{} SET OPTIONS(bloom_index_columns = 'extra', approx_distinct_columns = 'extra')",
+        db, fixture.default_table_name()
+    )).await?;
+    fixture.execute_command(&flashback).await?;
+    let reverted = fixture.latest_default_table().await?;
+    assert!(!reverted.options().contains_key("bloom_index_columns"));
+    assert!(!reverted.options().contains_key("approx_distinct_columns"));
+
     Ok(())
 }
 

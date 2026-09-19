@@ -22,12 +22,18 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::LeastVisibleTime;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::operations::VacuumConcurrency;
 use databend_common_storages_fuse::operations::is_gc_candidate_segment_block;
+use databend_common_storages_fuse::operations::slice_summary;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_io::Files;
@@ -35,6 +41,8 @@ use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::try_extract_uuid_v7_timestamp_from_path;
 use futures_util::TryStreamExt;
+use futures_util::future::Either;
+use futures_util::future::select;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -152,9 +160,13 @@ pub async fn do_vacuum2(
     ));
 
     let start = std::time::Instant::now();
+    let target_segment_prefix = fuse_table
+        .meta_location_generator()
+        .segment_location_prefix();
     let protected_seg_paths = protected_segments
         .iter()
-        .map(|(p, _)| p)
+        .map(|(path, _)| path)
+        .filter(|path| path.starts_with(target_segment_prefix))
         .collect::<HashSet<_>>();
     let segments_to_gc: Vec<String> = segments_before_gc_root
         .into_iter()
@@ -176,12 +188,16 @@ pub async fn do_vacuum2(
     let segments_io =
         SegmentsIO::create(ctx.clone(), fuse_table.get_operator(), fuse_table.schema());
 
-    // Collect blocks from main gc_root. Read protected segments in chunks to avoid
-    // retaining all CompactSegmentInfo objects in memory at once.
+    // Read all protection roots in chunks, but retain only block and index objects owned by the
+    // target table. Clone descendants can reference segments stored under an ancestor's prefix.
     let protected_segments = protected_segments.into_iter().collect::<Vec<_>>();
     let total_chunks = protected_segments
         .len()
         .div_ceil(VACUUM2_SEGMENT_READ_CHUNK_SIZE);
+    let target_block_prefix = fuse_table.meta_location_generator().block_location_prefix();
+    let target_inverted_index_prefix = fuse_table
+        .meta_location_generator()
+        .inverted_index_v2_location_prefix();
     let mut gc_root_blocks = HashSet::new();
     let mut protected_inverted_index_locations = HashSet::new();
     for (chunk_idx, segment_chunk) in protected_segments
@@ -203,13 +219,16 @@ pub async fn do_vacuum2(
         for segment in segments {
             let blocks = segment?.block_metas()?;
             for block in &blocks {
-                gc_root_blocks.insert(block_path_hash(&block.location.0));
+                if block.location.0.starts_with(target_block_prefix) {
+                    gc_root_blocks.insert(block_path_hash(&block.location.0));
+                }
                 protected_inverted_index_locations.extend(
                     block
                         .inverted_index_metas
                         .as_deref()
                         .unwrap_or_default()
                         .iter()
+                        .filter(|meta| meta.location.0.starts_with(target_inverted_index_prefix))
                         .map(|meta| meta.location.0.clone()),
                 );
             }
@@ -236,9 +255,7 @@ pub async fn do_vacuum2(
     let removed_inverted_index_v2 = purge_inverted_index_v2_objects(
         fuse_table.get_operator_ref(),
         &ctx,
-        fuse_table
-            .meta_location_generator()
-            .inverted_index_v2_location_prefix(),
+        target_inverted_index_prefix,
         &protected_inverted_index_locations,
         gc_root_timestamp,
         gc_root_meta_ts,
@@ -589,22 +606,95 @@ async fn vacuum_base_snapshot_phase(
     ctx: &Arc<dyn TableContext>,
     respect_flash_back: bool,
 ) -> Result<Option<GcRootSnapshotCtx>> {
-    let Some(mut selection) = fuse_table
-        .prepare_snapshot_gc_selection(ctx, respect_flash_back)
-        .await?
-    else {
-        return Ok(None);
-    };
-
     let catalog = ctx
         .get_catalog(fuse_table.get_table_info().catalog())
         .await?;
-    let mut protected_segments = selection
-        .gc_root
-        .segments
-        .iter()
-        .cloned()
-        .collect::<HashSet<_>>();
+    let owner_lvt = catalog
+        .get_table_lvt(&LeastVisibleTimeIdent::new(
+            ctx.get_tenant(),
+            fuse_table.get_id(),
+        ))
+        .await?;
+    let owner_seq = owner_lvt.as_ref().map_or(0, |v| v.seq);
+    let refreshed = fuse_table.refresh(ctx.as_ref()).await?;
+    let fuse_table = FuseTable::try_from_table(refreshed.as_ref())?;
+    let owner_bound = owner_lvt
+        .map(|v| v.data)
+        .unwrap_or_else(LeastVisibleTime::unbounded);
+    let concurrency = VacuumConcurrency::new(ctx.get_settings().get_max_vacuum_threads()? as usize);
+    let mut protected_segments = HashSet::new();
+    // Owner selection and descendant marks share one budget, including metadata reads.
+    // Neither future publishes metadata. Drop the other future on error or a no-op owner GC.
+    let prepared = {
+        let owner = concurrency.run(fuse_table.prepare_snapshot_gc_selection(
+            ctx,
+            respect_flash_back,
+            &owner_bound,
+        ));
+        // Existing bindings always use the retention-bounded clone-aware protocol. This is a
+        // storage safety rule, not a user-selectable mode: disabling CREATE TABLE CLONE must not
+        // make VACUUM unsafe for clone groups that already exist.
+        let descendants = fuse_table.mark_clone_descendants(
+            ctx.clone(),
+            &catalog,
+            &mut protected_segments,
+            &concurrency,
+            |status| ctx.set_status_info(&status),
+        );
+        futures_util::pin_mut!(owner, descendants);
+        async {
+            match select(owner, descendants).await {
+                Either::Left((selection, descendants)) => {
+                    let Some(selection) = selection? else {
+                        return Ok(None);
+                    };
+                    Ok(Some((selection, descendants.await?)))
+                }
+                Either::Right((marks, owner)) => {
+                    let marks = marks?;
+                    Ok::<_, ErrorCode>(owner.await?.map(|selection| (selection, marks)))
+                }
+            }
+        }
+        .await
+    };
+    let Some((mut selection, mark)) = (match prepared {
+        Ok(result) => result,
+        Err(err) if err.code() == ErrorCode::STORAGE_NOT_FOUND => {
+            info!("defer vacuum: incomplete history during mark: {}", err);
+            return Ok(None);
+        }
+        Err(err) => return Err(err),
+    }) else {
+        return Ok(None);
+    };
+    protected_segments.extend(selection.gc_root.segments.iter().cloned());
+    let observed_descendants = mark.descendant_ids;
+    let mut updates = mark.lvt_updates;
+    let tag_sources = mark.tag_sources;
+    // Validate the owner's original fence too: FLASHBACK can change its head while descendants
+    // are being marked. Existing clone bindings always use this one LVT publication protocol.
+    updates.push((fuse_table.get_id(), owner_seq, selection.lvt.clone()));
+    if !catalog.set_table_lvts(&ctx.get_tenant(), &updates).await? {
+        info!("defer vacuum: LVT fence changed after mark");
+        return Ok(None);
+    }
+    if fuse_table
+        .has_new_clone_descendants(&catalog, &observed_descendants)
+        .await?
+    {
+        info!(
+            "stop vacuum after a new clone descendant appeared for table {}",
+            fuse_table.get_id()
+        );
+        return Ok(None);
+    }
+    FuseTable::extend_clone_descendant_tag_segments(
+        &catalog,
+        &tag_sources,
+        &mut protected_segments,
+    )
+    .await?;
     fuse_table
         .protect_table_tag_references(
             &catalog,
@@ -615,26 +705,11 @@ async fn vacuum_base_snapshot_phase(
         .await?;
 
     Ok(Some(GcRootSnapshotCtx {
-        gc_root_timestamp: selection.gc_root.timestamp.unwrap(),
+        gc_root_timestamp: selection.lvt.time,
         gc_root_meta_ts: selection.gc_root_meta_ts,
         protected_segments,
         snapshots_to_gc: selection.snapshots_to_gc,
     }))
-}
-
-fn slice_summary<T: std::fmt::Debug>(s: &[T]) -> String {
-    if s.len() > 10 {
-        let first_five = &s[..5];
-        let last_five = &s[s.len() - 5..];
-        format!(
-            "First five: {:?}, Last five: {:?},Len: {}",
-            first_five,
-            last_five,
-            s.len()
-        )
-    } else {
-        format!("{:?}", s)
-    }
 }
 
 #[cfg(test)]
