@@ -393,8 +393,13 @@ impl InvertedIndexWriter {
             }
         }
 
-        let bundle_bytes =
-            InvertedIndexBundleFooter::build(files, open_slices, managed_json, meta_json)?;
+        let bundle_bytes = InvertedIndexBundleFooter::build(
+            files,
+            BTreeMap::new(),
+            open_slices,
+            managed_json,
+            meta_json,
+        )?;
         Ok(Buffer::from(bundle_bytes))
     }
 }
