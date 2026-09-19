@@ -95,7 +95,7 @@ impl CountBuilder {
             CountBuilder::COUNT_DISTINCT_METADATA,
             NullInput::Native,
         )
-        .then(PlainRoute::new(Self::create_distinct))
+        .then(PlainRoute::new(Self::create_distinct).hidden())
         .register(registry);
     }
 }

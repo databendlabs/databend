@@ -75,6 +75,10 @@ pub(crate) struct DirectRouteContext<'request, 'route> {
 }
 
 pub(crate) trait RouteNode: Send + Sync {
+    fn hidden(&self) -> bool {
+        self.suffix().is_some()
+    }
+
     fn suffix(&self) -> Option<&'static str> {
         None
     }
@@ -373,6 +377,7 @@ impl RouteNode for MergeRoute {
 
 pub(crate) struct PlainRoute {
     validate: Option<DirectRouteValidateFn>,
+    hidden: bool,
     build: RouteBuild<PlainCombinator>,
 }
 
@@ -380,6 +385,7 @@ impl PlainRoute {
     pub(crate) fn new(build: DirectBuildFn<PlainCombinator>) -> Self {
         Self {
             validate: None,
+            hidden: false,
             build: RouteBuild::Direct(build),
         }
     }
@@ -387,6 +393,7 @@ impl PlainRoute {
     pub(crate) fn unary(build: UnaryBuildFn<PlainCombinator>) -> Self {
         Self {
             validate: None,
+            hidden: false,
             build: RouteBuild::Unary(build),
         }
     }
@@ -394,6 +401,7 @@ impl PlainRoute {
     pub(crate) fn multi_arg(build: MultiArgBuildFn<PlainCombinator>) -> Self {
         Self {
             validate: None,
+            hidden: false,
             build: RouteBuild::MultiArg(build),
         }
     }
@@ -402,9 +410,19 @@ impl PlainRoute {
         self.validate = Some(validate);
         self
     }
+
+    /// Withholds this node's names from the published function listing.
+    pub(crate) fn hidden(mut self) -> Self {
+        self.hidden = true;
+        self
+    }
 }
 
 impl RouteNode for PlainRoute {
+    fn hidden(&self) -> bool {
+        self.hidden
+    }
+
     fn try_build(&self, context: &DirectRouteContext<'_, '_>) -> Result<Option<AggregateCallRef>> {
         if context.matching_name_index(None).is_none() {
             return Ok(None);

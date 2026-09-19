@@ -105,6 +105,7 @@ impl NameRoute {
                 let mut features = node.metadata(&route.metadata).into_features();
                 features.supports_filter = suffix.is_none() && supports_filter;
                 features.supports_state = suffix.is_none() && supports_state;
+                features.hide_doc = node.hidden();
                 if suffix.is_none() {
                     features.distinct_policy = distinct_policy.clone();
                 }
@@ -330,6 +331,7 @@ mod tests {
         );
         assert!(descriptors[0].features().supports_filter);
         assert!(!descriptors[0].features().supports_state);
+        assert!(!descriptors[0].features().hide_doc);
         assert_eq!(descriptors[1].name, "test_if");
         assert_eq!(descriptors[1].aliases, ["test_alias_if"]);
         assert_eq!(descriptors[1].arguments(), &if_arguments);
@@ -338,6 +340,7 @@ mod tests {
             EagerAggregation::Sum
         );
         assert!(!descriptors[1].features().supports_filter);
+        assert!(descriptors[1].features().hide_doc);
     }
 
     #[test]
@@ -376,24 +379,16 @@ mod tests {
         assert!(registry.contains("test_alias_state"));
         assert!(!registry.contains("test_distinct"));
         for name in ["test", "test_alias"] {
-            assert!(registry.descriptor(name).unwrap().features().supports_state);
-            assert!(
-                registry
-                    .descriptor(name)
-                    .unwrap()
-                    .features()
-                    .supports_filter
-            );
+            let features = registry.descriptor(name).unwrap().features();
+            assert!(!features.hide_doc);
+            assert!(features.supports_state);
+            assert!(features.supports_filter);
         }
         for name in ["test_if", "test_alias_if", "test_state", "test_alias_state"] {
-            assert!(!registry.descriptor(name).unwrap().features().supports_state);
-            assert!(
-                !registry
-                    .descriptor(name)
-                    .unwrap()
-                    .features()
-                    .supports_filter
-            );
+            let features = registry.descriptor(name).unwrap().features();
+            assert!(features.hide_doc);
+            assert!(!features.supports_state);
+            assert!(!features.supports_filter);
         }
     }
 
@@ -441,7 +436,7 @@ mod tests {
     fn test_descriptor_override_does_not_reconfigure_internal_route() -> Result<()> {
         let intrinsic = AggregateMetadata {
             eager_aggregation: EagerAggregation::Sum,
-            documentation: super::super::super::AggregateDocumentation {
+            documentation: AggregateDocumentation {
                 description: "intrinsic aggregate",
                 ..Default::default()
             },

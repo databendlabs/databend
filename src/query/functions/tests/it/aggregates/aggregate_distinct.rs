@@ -455,6 +455,22 @@ fn test_eager_aggregation_strategies() -> Result<()> {
 }
 
 #[test]
+fn test_aggregate_route_documentation_visibility() {
+    for name in ["count", "sum"] {
+        assert!(
+            !AGGR_REGISTRY.descriptor(name).unwrap().features().hide_doc,
+            "{name}"
+        );
+    }
+    for name in ["count_distinct", "sum_distinct", "count_if", "sum_state"] {
+        assert!(
+            AGGR_REGISTRY.descriptor(name).unwrap().features().hide_doc,
+            "{name}"
+        );
+    }
+}
+
+#[test]
 fn test_distinct_float_equality() -> Result<()> {
     let values = Float64Type::from_data(vec![
         -0.0f64,

@@ -53,6 +53,7 @@ impl AggregateMetadata {
             example: self.documentation.example,
             supports_filter: false,
             supports_state: false,
+            hide_doc: false,
             distinct_policy: DistinctPolicy::Unsupported,
         }
     }

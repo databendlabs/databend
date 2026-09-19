@@ -154,7 +154,7 @@ impl SumBuilder {
             Self::SUM_DISTINCT_METADATA,
             NullInput::Filter,
         )
-        .then(PlainRoute::unary(Self::create_distinct))
+        .then(PlainRoute::unary(Self::create_distinct).hidden())
     }
 
     fn validate_sum0_plain(request: &RawAggregateCall<'_>) -> Result<()> {
