@@ -13,9 +13,11 @@
 // limitations under the License.
 
 mod bundle;
+mod bundle_builder;
 mod cache;
 mod debug_proxy;
 mod directory;
+mod output_directory;
 mod search_pin;
 
 pub use bundle::BundleExternalFiles;
@@ -31,12 +33,16 @@ pub use bundle::InvertedIndexBundleFooter;
 pub use bundle::InvertedIndexBundleVersion;
 pub use bundle::MANAGED_JSON_PATH;
 pub use bundle::META_JSON_PATH;
+pub use bundle_builder::BundleSizes;
+pub use bundle_builder::InvertedIndexBundleBuilder;
 pub use cache::InvertedIndexLookupBytes;
 pub use cache::InvertedIndexMeta;
 pub use cache::InvertedIndexPayloadBytes;
 pub use cache::inverted_index_meta_cache_key;
 pub use directory::FooterDirectory;
 pub use directory::collect_index_open_slices;
+pub use output_directory::INVERTED_INDEX_STREAM_THRESHOLD;
+pub use output_directory::InvertedIndexOutputDirectory;
 pub use search_pin::SearchPinDirectory;
 
 macro_rules! read_only_directory {

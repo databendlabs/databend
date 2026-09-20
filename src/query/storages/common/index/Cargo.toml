@@ -19,6 +19,7 @@ databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-vector = { workspace = true }
+databend-storages-common-io = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 
 anyerror = { workspace = true }
@@ -40,6 +41,7 @@ log = { workspace = true }
 match-template = { workspace = true }
 num-traits = { workspace = true }
 num_cpus = { workspace = true }
+opendal = { workspace = true }
 ordered-float = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
