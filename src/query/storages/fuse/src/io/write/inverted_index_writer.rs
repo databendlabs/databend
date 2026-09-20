@@ -687,3 +687,233 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod merge_tests {
+    use std::ops::Bound;
+    use std::ops::Range;
+
+    use databend_common_expression::FromData;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
+    use databend_common_expression::types::StringType;
+    use databend_common_expression::types::VariantType;
+    use databend_storages_common_index::BundleSizes;
+    use databend_storages_common_index::InvertedIndexMerger;
+    use databend_storages_common_index::MergeOutput;
+    use databend_storages_common_index::MergeSource;
+    use databend_storages_common_index::SourceRows;
+    use opendal::services::Memory;
+    use tantivy::Term;
+    use tantivy::query::Query;
+    use tantivy::query::RangeQuery;
+    use tantivy::query::TermQuery;
+
+    use super::*;
+    use crate::io::read::InvertedIndexReader;
+    use crate::io::read::InvertedIndexWarmupInfo;
+    use crate::test_utils::init_test_globals;
+
+    const WORDS: [&str; 4] = ["alpha", "bravo", "charlie", "delta"];
+
+    fn index_options() -> BTreeMap<String, String> {
+        BTreeMap::from([("tokenizer".to_string(), "english".to_string())])
+    }
+
+    fn schemas() -> (DataSchemaRef, TableSchemaRef) {
+        let data_schema = Arc::new(DataSchema::new(vec![
+            DataField::new("body", DataType::String),
+            DataField::new("meta", DataType::Variant),
+        ]));
+        let source_schema = Arc::new(TableSchema::new(vec![
+            TableField::new("body", TableDataType::String),
+            TableField::new("meta", TableDataType::Variant),
+        ]));
+        (data_schema, source_schema)
+    }
+
+    /// Row `id` of the data set: `body` mentions `WORDS[id % 4]`, `meta.n` is `id`.
+    fn block(ids: Range<u32>) -> DataBlock {
+        let mut bodies = Vec::new();
+        let mut metas = Vec::new();
+        for id in ids {
+            bodies.push(format!("row {id} mentions {}", WORDS[id as usize % 4]));
+            let json = format!(r#"{{"n":{id},"tag":"t{}"}}"#, id % 3);
+            metas.push(jsonb::parse_value(json.as_bytes()).unwrap().to_vec());
+        }
+        DataBlock::new_from_columns(vec![
+            StringType::from_data(bodies),
+            VariantType::from_data(metas),
+        ])
+    }
+
+    fn write_source(operator: &Operator, location: &str, ids: Range<u32>) -> MergeSource {
+        let (data_schema, source_schema) = schemas();
+        let mut writer = InvertedIndexWriter::try_create_with_stream_threshold(
+            data_schema,
+            &index_options(),
+            operator.clone(),
+            location.to_string(),
+            4096,
+        )
+        .unwrap();
+        writer
+            .add_block(&source_schema, &block(ids.clone()))
+            .unwrap();
+        let sizes = writer.finalize().unwrap();
+        MergeSource {
+            location: location.to_string(),
+            bundle_size: sizes.bundle,
+            num_rows: ids.len() as u32,
+        }
+    }
+
+    async fn filter(
+        operator: &Operator,
+        location: &str,
+        bundle_size: u64,
+        rows: u32,
+        query: Box<dyn Query>,
+        fields: &[Field],
+    ) -> Vec<usize> {
+        let warmup = InvertedIndexWarmupInfo::try_create(query.as_ref(), fields).unwrap();
+        let reader = InvertedIndexReader::create(
+            operator.clone(),
+            false,
+            create_tokenizer_manager(&index_options()),
+            warmup,
+        );
+        let result = reader
+            .do_filter(
+                query,
+                location,
+                INVERTED_INDEX_FILE_FORMAT_VERSION,
+                bundle_size,
+                rows as u64,
+            )
+            .await
+            .unwrap();
+        let (mut matched, _) = result.unwrap_or_default();
+        matched.sort_unstable();
+        matched
+    }
+
+    fn term_query(word: &str) -> Box<dyn Query> {
+        Box::new(TermQuery::new(
+            Term::from_field_text(Field::from_field_id(0), word),
+            IndexRecordOption::Basic,
+        ))
+    }
+
+    fn range_query(low: i64, high: i64) -> Box<dyn Query> {
+        let bound = |value: i64| {
+            let mut term = Term::from_field_json_path(Field::from_field_id(1), "n", false);
+            term.append_type_and_fast_value(value);
+            term
+        };
+        Box::new(RangeQuery::new(
+            Bound::Included(bound(low)),
+            Bound::Excluded(bound(high)),
+        ))
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_merged_outputs_answer_term_and_range_queries() {
+        init_test_globals().unwrap();
+        let operator = Operator::new(Memory::default()).unwrap().finish();
+        let sources = vec![
+            write_source(&operator, "s/a.index", 0..1500),
+            write_source(&operator, "s/b.index", 1500..2600),
+            write_source(&operator, "s/c.index", 2600..3000),
+        ];
+        // Two outputs, each interleaving rows of every source, as a k-way merge would.
+        let outputs = vec![
+            MergeOutput {
+                location: "o/0.index".to_string(),
+                rows: vec![
+                    SourceRows {
+                        source: 0,
+                        rows: 0..700,
+                    },
+                    SourceRows {
+                        source: 1,
+                        rows: 0..500,
+                    },
+                    SourceRows {
+                        source: 2,
+                        rows: 0..100,
+                    },
+                ],
+            },
+            MergeOutput {
+                location: "o/1.index".to_string(),
+                rows: vec![
+                    SourceRows {
+                        source: 0,
+                        rows: 700..1500,
+                    },
+                    SourceRows {
+                        source: 1,
+                        rows: 500..1100,
+                    },
+                    SourceRows {
+                        source: 2,
+                        rows: 100..400,
+                    },
+                ],
+            },
+        ];
+        let sizes: Vec<BundleSizes> = InvertedIndexMerger::try_create_with_stream_threshold(
+            operator.clone(),
+            sources,
+            outputs,
+            4096,
+        )
+        .unwrap()
+        .finish()
+        .unwrap();
+
+        // Output rows in order, as data set ids.
+        let ids_0: Vec<u32> = (0..700).chain(1500..2000).chain(2600..2700).collect();
+        let ids_1: Vec<u32> = (700..1500).chain(2000..2600).chain(2700..3000).collect();
+        for (output, ids, location) in [(0, &ids_0, "o/0.index"), (1, &ids_1, "o/1.index")] {
+            assert!(sizes[output].siblings > 0, "output {output}");
+            let rows = ids.len() as u32;
+            for word in WORDS {
+                let mut expected = Vec::new();
+                for (row, id) in ids.iter().enumerate() {
+                    if WORDS[*id as usize % 4] == word {
+                        expected.push(row);
+                    }
+                }
+                let matched = filter(
+                    &operator,
+                    location,
+                    sizes[output].bundle,
+                    rows,
+                    term_query(word),
+                    &[Field::from_field_id(0)],
+                )
+                .await;
+                assert_eq!(matched, expected, "output {output} {word}");
+            }
+            let mut expected = Vec::new();
+            for (row, id) in ids.iter().enumerate() {
+                if (1000..2100).contains(id) {
+                    expected.push(row);
+                }
+            }
+            let matched = filter(
+                &operator,
+                location,
+                sizes[output].bundle,
+                rows,
+                range_query(1000, 2100),
+                &[Field::from_field_id(1)],
+            )
+            .await;
+            assert_eq!(matched, expected, "output {output} range");
+        }
+    }
+}
