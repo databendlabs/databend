@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod bundle;
+mod bundle_builder;
 mod cache;
 mod debug_proxy;
 mod directory;
@@ -32,6 +33,8 @@ pub use bundle::InvertedIndexBundleFooter;
 pub use bundle::InvertedIndexBundleVersion;
 pub use bundle::MANAGED_JSON_PATH;
 pub use bundle::META_JSON_PATH;
+pub use bundle_builder::BundleSizes;
+pub use bundle_builder::InvertedIndexBundleBuilder;
 pub use cache::InvertedIndexLookupBytes;
 pub use cache::InvertedIndexMeta;
 pub use cache::InvertedIndexPayloadBytes;
