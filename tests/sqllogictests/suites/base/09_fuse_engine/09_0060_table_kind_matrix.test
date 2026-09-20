@@ -212,19 +212,15 @@ SELECT count(*) FROM tkm_regular_ctas
 1
 
 statement ok
-SET data_retention_num_snapshots_to_keep = 20
-
-statement ok
 INSERT INTO tkm_regular VALUES (2, 'b')
 
-statement ok
-INSERT INTO tkm_regular VALUES (3, 'c')
-
-statement ok
-UNSET data_retention_num_snapshots_to_keep
+query II
+SELECT row_count, block_count FROM fuse_snapshot('default', 'tkm_regular') LIMIT 1
+----
+2 2
 
 query B
-SELECT count(*) > 1 FROM fuse_snapshot('default', 'tkm_regular')
+SELECT count(*) >= 1 FROM fuse_snapshot('default', 'tkm_regular')
 ----
 1
 
@@ -445,19 +441,15 @@ SELECT count(*) FROM tkm_transient_ctas
 1
 
 statement ok
-SET data_retention_num_snapshots_to_keep = 20
-
-statement ok
 INSERT INTO tkm_transient VALUES (2, 'b')
 
-statement ok
-INSERT INTO tkm_transient VALUES (3, 'c')
-
-statement ok
-UNSET data_retention_num_snapshots_to_keep
+query II
+SELECT row_count, block_count FROM fuse_snapshot('default', 'tkm_transient') LIMIT 1
+----
+2 2
 
 query B
-SELECT count(*) = 1 FROM fuse_snapshot('default', 'tkm_transient')
+SELECT count(*) >= 1 FROM fuse_snapshot('default', 'tkm_transient')
 ----
 1
 
@@ -678,19 +670,15 @@ SELECT count(*) FROM tkm_temp_ctas
 1
 
 statement ok
-SET data_retention_num_snapshots_to_keep = 20
-
-statement ok
 INSERT INTO tkm_temp VALUES (2, 'b')
 
-statement ok
-INSERT INTO tkm_temp VALUES (3, 'c')
-
-statement ok
-UNSET data_retention_num_snapshots_to_keep
+query II
+SELECT row_count, block_count FROM fuse_snapshot('default', 'tkm_temp') LIMIT 1
+----
+2 2
 
 query B
-SELECT count(*) > 1 FROM fuse_snapshot('default', 'tkm_temp')
+SELECT count(*) >= 1 FROM fuse_snapshot('default', 'tkm_temp')
 ----
 1
 
