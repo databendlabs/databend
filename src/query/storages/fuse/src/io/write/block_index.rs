@@ -41,6 +41,7 @@ use super::WriteSettings;
 pub struct BlockIndexWriteContext {
     pub func_ctx: FunctionContext,
     pub physical_schema: TableSchemaRef,
+    pub operator: Operator,
     pub write_settings: WriteSettings,
 }
 
@@ -72,18 +73,22 @@ pub struct PendingBloomIndex {
 }
 
 #[derive(Debug)]
-pub struct PendingInvertedIndex {
+pub struct WrittenInvertedIndex {
     pub index_name: String,
     pub index_version: String,
-    pub file: PendingIndexFile,
+    pub location: Location,
+    /// Bundle object only; readers size their tail read from it.
+    pub bundle_size: u64,
+    /// Bundle plus sibling objects.
+    pub total_size: u64,
 }
 
-impl PendingInvertedIndex {
+impl WrittenInvertedIndex {
     pub fn to_block_index_meta(&self) -> BlockIndexMeta {
         BlockIndexMeta {
             index_name: self.index_name.clone(),
-            location: self.file.location.clone(),
-            size: self.file.size(),
+            location: self.location.clone(),
+            size: self.bundle_size,
             index_version: self.index_version.clone(),
         }
     }
@@ -114,7 +119,7 @@ pub struct PendingSpatialIndex {
 #[derive(Debug, Default)]
 pub struct PendingBlockIndexOutput {
     pub bloom: Option<PendingBloomIndex>,
-    pub inverted: Vec<PendingInvertedIndex>,
+    pub inverted: Vec<WrittenInvertedIndex>,
     pub vector: Option<PendingVectorIndex>,
     pub spatial: Option<PendingSpatialIndex>,
 }
@@ -166,13 +171,12 @@ mod tests {
 
     #[test]
     fn test_outputs_reject_duplicate_inverted_names() {
-        let pending = |location: &str| PendingInvertedIndex {
+        let pending = |location: &str| WrittenInvertedIndex {
             index_name: "duplicate".to_string(),
             index_version: "v1".to_string(),
-            file: PendingIndexFile {
-                location: (location.to_string(), 0),
-                data: Buffer::new(),
-            },
+            location: (location.to_string(), 0),
+            bundle_size: 0,
+            total_size: 0,
         };
         let mut output = PendingBlockIndexOutput {
             inverted: vec![pending("first")],

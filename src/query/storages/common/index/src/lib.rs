@@ -60,6 +60,7 @@ pub use index_common::IndexMeta;
 pub use inverted_index::BundleExternalFiles;
 pub use inverted_index::BundleFileRanges;
 pub use inverted_index::BundleOpenSlice;
+pub use inverted_index::BundleSizes;
 pub use inverted_index::ExternalFile;
 pub use inverted_index::FooterDirectory;
 pub use inverted_index::INVERTED_INDEX_BUNDLE_INITIAL_FOOTER_READ_SIZE;
@@ -67,10 +68,13 @@ pub use inverted_index::INVERTED_INDEX_BUNDLE_MAX_FOOTER_SIZE;
 pub use inverted_index::INVERTED_INDEX_BUNDLE_OBJECT_SUFFIX;
 pub use inverted_index::INVERTED_INDEX_BUNDLE_TRAILER_LEN;
 pub use inverted_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
+pub use inverted_index::INVERTED_INDEX_STREAM_THRESHOLD;
+pub use inverted_index::InvertedIndexBundleBuilder;
 pub use inverted_index::InvertedIndexBundleFooter;
 pub use inverted_index::InvertedIndexBundleVersion;
 pub use inverted_index::InvertedIndexLookupBytes;
 pub use inverted_index::InvertedIndexMeta;
+pub use inverted_index::InvertedIndexOutputDirectory;
 pub use inverted_index::InvertedIndexPayloadBytes;
 pub use inverted_index::MANAGED_JSON_PATH;
 pub use inverted_index::META_JSON_PATH;
@@ -112,3 +116,17 @@ pub use virtual_column::VirtualColumnStatsOfNames;
 pub use virtual_column::encode_compact_virtual_column_nodes;
 pub use virtual_column::encode_compact_virtual_column_shared_ids;
 pub use virtual_column::encode_compact_virtual_column_string_table;
+
+#[cfg(test)]
+pub(crate) fn init_test_runtime() {
+    use std::sync::Once;
+
+    use databend_common_base::base::GlobalInstance;
+    use databend_common_base::runtime::GlobalIORuntime;
+
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        GlobalInstance::init_production();
+        GlobalIORuntime::init(2).unwrap();
+    });
+}

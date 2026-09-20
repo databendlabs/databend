@@ -14,8 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
-use std::path::Path;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::LazyLock;
 use std::time::Instant;
@@ -32,11 +30,16 @@ use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_generate_milliseconds;
+use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_bytes;
+use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_milliseconds;
+use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_nums;
+use databend_storages_common_index::BundleSizes;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
-use databend_storages_common_index::InvertedIndexBundleFooter;
-use databend_storages_common_index::MANAGED_JSON_PATH;
-use databend_storages_common_index::META_JSON_PATH;
-use databend_storages_common_index::collect_index_open_slices;
+use databend_storages_common_index::InvertedIndexBundleBuilder;
+use databend_storages_common_index::InvertedIndexOutputDirectory;
+use databend_storages_common_io::BLOCKING_WRITE_MAX_CHUNKS;
+use databend_storages_common_io::BlockingWrite;
+use databend_storages_common_io::create_blocking_write;
 use databend_storages_common_table_meta::meta::Location;
 use jsonb::RawJsonb;
 use jsonb::from_raw_jsonb;
@@ -50,12 +53,10 @@ use lindera_analysis::token_filter::japanese_stop_tags::JapaneseStopTagsTokenFil
 use lindera_tantivy::tokenizer::LinderaTokenizer;
 use log::debug;
 use log::info;
-use opendal::Buffer;
-use tantivy::Directory;
+use opendal::Operator;
 use tantivy::IndexBuilder;
 use tantivy::IndexSettings;
 use tantivy::SingleSegmentIndexWriter;
-use tantivy::directory::RamDirectory;
 use tantivy::schema::Field;
 use tantivy::schema::IndexRecordOption;
 use tantivy::schema::JsonObjectOptions;
@@ -78,8 +79,7 @@ use crate::io::write::block_index::BlockIndexSpec;
 use crate::io::write::block_index::BlockIndexWriteContext;
 use crate::io::write::block_index::BlockIndexWriter;
 use crate::io::write::block_index::PendingBlockIndexOutput;
-use crate::io::write::block_index::PendingIndexFile;
-use crate::io::write::block_index::PendingInvertedIndex;
+use crate::io::write::block_index::WrittenInvertedIndex;
 
 static JAPANESE_DICTIONARY: LazyLock<Dictionary> = LazyLock::new(|| {
     load_dictionary("embedded://ipadic").expect("the embedded IPADIC dictionary must be available")
@@ -135,6 +135,8 @@ impl BlockIndexSpec for InvertedIndexWriteSpec {
             writer: InvertedIndexWriter::try_create(
                 Arc::new(self.builder.schema.clone()),
                 &self.builder.options,
+                context.operator,
+                self.location.0.clone(),
             )?,
         }))
     }
@@ -154,29 +156,29 @@ impl BlockIndexWriter for InvertedIndexBlockWriter {
     }
 
     fn finish(self: Box<Self>) -> Result<PendingBlockIndexOutput> {
-        // Documents are buffered until here; `finalize` runs the Tantivy indexing pass.
         let start = Instant::now();
         info!(
             "Start build inverted index for location: {}",
             self.location.0
         );
-        let data = self.writer.finalize()?;
+        let sizes = self.writer.finalize()?;
         let elapsed_ms = start.elapsed().as_millis() as u64;
+        let total_size = sizes.bundle + sizes.siblings;
         metrics_inc_block_inverted_index_generate_milliseconds(elapsed_ms);
+        metrics_inc_block_inverted_index_write_nums(1);
+        metrics_inc_block_inverted_index_write_bytes(total_size);
+        metrics_inc_block_inverted_index_write_milliseconds(elapsed_ms);
         info!(
-            "Finish build inverted index: location={}, size={} bytes in {} ms",
-            self.location.0,
-            data.len(),
-            elapsed_ms
+            "Finish build inverted index: location={}, bundle={} bytes, siblings={} bytes in {} ms",
+            self.location.0, sizes.bundle, sizes.siblings, elapsed_ms
         );
         Ok(PendingBlockIndexOutput {
-            inverted: vec![PendingInvertedIndex {
+            inverted: vec![WrittenInvertedIndex {
                 index_name: self.index_name,
                 index_version: self.index_version,
-                file: PendingIndexFile {
-                    location: self.location,
-                    data,
-                },
+                location: self.location,
+                bundle_size: sizes.bundle,
+                total_size,
             }],
             ..Default::default()
         })
@@ -222,44 +224,6 @@ pub fn create_inverted_index_builders(table_meta: &TableMeta) -> Vec<InvertedInd
     inverted_index_builders
 }
 
-#[derive(Debug)]
-pub struct InvertedIndexState {
-    pub(crate) data: Buffer,
-    pub(crate) size: u64,
-    pub(crate) location: Location,
-    pub(crate) index_name: String,
-    pub(crate) index_version: String,
-}
-
-impl InvertedIndexState {
-    pub fn try_create(
-        data: Buffer,
-        location: String,
-        index_name: String,
-        index_version: String,
-    ) -> Result<Self> {
-        let size = data.len() as u64;
-        Ok(Self {
-            data,
-            size,
-            location: (location, INVERTED_INDEX_FILE_FORMAT_VERSION),
-            index_name,
-            index_version,
-        })
-    }
-
-    pub(crate) fn into_pending(self) -> PendingInvertedIndex {
-        PendingInvertedIndex {
-            index_name: self.index_name,
-            index_version: self.index_version,
-            file: PendingIndexFile {
-                location: self.location,
-                data: self.data,
-            },
-        }
-    }
-}
-
 /// `SingleSegmentIndexWriter` uses its budget only to size the initial term hash table, capped at
 /// 2^19 entries (4 MiB); anything above ~12 MiB reaches that cap. The arena itself grows on demand.
 const INDEX_WRITER_TABLE_SIZING_HINT: usize = 16 * 1024 * 1024;
@@ -268,7 +232,9 @@ pub struct InvertedIndexWriter {
     schema: DataSchemaRef,
     /// Tantivy fields in `schema` order, as assigned by `create_index_schema`.
     index_fields: Vec<Field>,
-    directory: RamDirectory,
+    operator: Operator,
+    location: String,
+    directory: InvertedIndexOutputDirectory,
     /// Indexes on the calling thread into exactly one segment: no worker or merge threads, and
     /// no memory-triggered segment split, which matters because Databend reads Tantivy doc ids
     /// as block row numbers.
@@ -279,6 +245,35 @@ impl InvertedIndexWriter {
     pub fn try_create(
         schema: DataSchemaRef,
         index_options: &BTreeMap<String, String>,
+        operator: Operator,
+        location: String,
+    ) -> Result<InvertedIndexWriter> {
+        let directory = InvertedIndexOutputDirectory::new(operator.clone(), location.clone());
+        Self::try_create_into(schema, index_options, operator, location, directory)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn try_create_with_stream_threshold(
+        schema: DataSchemaRef,
+        index_options: &BTreeMap<String, String>,
+        operator: Operator,
+        location: String,
+        stream_threshold: usize,
+    ) -> Result<InvertedIndexWriter> {
+        let directory = InvertedIndexOutputDirectory::with_stream_threshold(
+            operator.clone(),
+            location.clone(),
+            stream_threshold,
+        );
+        Self::try_create_into(schema, index_options, operator, location, directory)
+    }
+
+    fn try_create_into(
+        schema: DataSchemaRef,
+        index_options: &BTreeMap<String, String>,
+        operator: Operator,
+        location: String,
+        directory: InvertedIndexOutputDirectory,
     ) -> Result<InvertedIndexWriter> {
         let (index_schema, index_fields) = create_index_schema(schema.clone(), index_options)?;
 
@@ -296,13 +291,14 @@ impl InvertedIndexWriter {
             .schema(index_schema.clone())
             .tokenizers(tokenizer_manager.clone());
 
-        let directory = RamDirectory::default();
         let index = index_builder.open_or_create(directory.clone())?;
         let index_writer = SingleSegmentIndexWriter::new(index, INDEX_WRITER_TABLE_SIZING_HINT)?;
 
         Ok(Self {
             schema,
             index_fields,
+            operator,
+            location,
             directory,
             index_writer,
         })
@@ -356,75 +352,15 @@ impl InvertedIndexWriter {
     }
 
     #[async_backtrace::framed]
-    pub fn finalize(self) -> Result<Buffer> {
+    pub fn finalize(self) -> Result<BundleSizes> {
         let index = self.index_writer.finalize()?;
-        let raw_directory = self.directory.clone();
-        let index_meta = index.load_metas()?;
-        if index_meta.segments.len() != 1 {
-            return Err(ErrorCode::StorageOther(format!(
-                "inverted index bundle expects one Tantivy segment, got {}",
-                index_meta.segments.len()
-            )));
-        }
-
-        // Observe the opaque segment ranges Tantivy reads while synchronously opening the index.
-        // Databend stores these bytes in the footer without interpreting component internals.
-        let open_slices = collect_index_open_slices(raw_directory.clone())?;
-
-        let managed_json = raw_directory.atomic_read(Path::new(MANAGED_JSON_PATH))?;
-        let meta_json = raw_directory.atomic_read(Path::new(META_JSON_PATH))?;
-
-        // Preserve every managed segment/plugin file byte-for-byte in the raw region. The two
-        // frequently read index-level JSON files live in the footer instead. ManagedDirectory can
-        // briefly retain stale paths, so only include files that still exist after the commit.
-        let mut paths: Vec<PathBuf> = index
-            .directory()
-            .list_managed_files()
-            .into_iter()
-            .filter(|path| {
-                path != Path::new(MANAGED_JSON_PATH) && path != Path::new(META_JSON_PATH)
-            })
-            .collect();
-        // Keep small, high-reuse lookup components next to the footer so the normal 1 MiB tail
-        // read can populate them without another object request. Preserve deterministic ordering
-        // within each component priority.
-        sort_bundle_paths(&mut paths);
-
-        let mut files = Vec::with_capacity(paths.len());
-        for path in paths {
-            if raw_directory.exists(&path)? {
-                let bytes = raw_directory.atomic_read(&path)?;
-                files.push((path, bytes));
-            }
-        }
-
-        let bundle_bytes = InvertedIndexBundleFooter::build(
-            files,
-            BTreeMap::new(),
-            open_slices,
-            managed_json,
-            meta_json,
-        )?;
-        Ok(Buffer::from(bundle_bytes))
+        let builder = InvertedIndexBundleBuilder::try_create(self.directory, index)?;
+        let mut sink =
+            create_blocking_write(self.operator, self.location, BLOCKING_WRITE_MAX_CHUNKS);
+        let sizes = builder.write_to(&mut sink)?;
+        sink.close()?;
+        Ok(sizes)
     }
-}
-
-fn bundle_path_priority(path: &Path) -> u8 {
-    match path.extension().and_then(|extension| extension.to_str()) {
-        Some("store") => 1,
-        Some("fast") => 2,
-        Some("fieldnorm") => 3,
-        Some("term") => 4,
-        _ => 0,
-    }
-}
-
-fn sort_bundle_paths(paths: &mut [PathBuf]) {
-    paths.sort_unstable_by(|left, right| {
-        bundle_path_priority(left)
-            .cmp(&bundle_path_priority(right))
-            .then_with(|| left.cmp(right))
-    });
 }
 
 // Create tokenizers for English, Chinese, and Japanese.
@@ -607,32 +543,148 @@ pub(crate) fn create_index_schema(
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use databend_common_expression::FromData;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
+    use databend_common_expression::types::StringType;
+    use databend_storages_common_index::BundleSizes;
+    use opendal::services::Memory;
+    use tantivy::Term;
+    use tantivy::query::Query;
+    use tantivy::query::TermQuery;
 
-    use super::sort_bundle_paths;
+    use super::*;
+    use crate::io::read::InvertedIndexReader;
+    use crate::io::read::InvertedIndexWarmupInfo;
+    use crate::test_utils::init_test_globals;
 
-    #[test]
-    fn test_sort_bundle_paths_places_lookup_components_near_footer() {
-        let mut paths = vec![
-            PathBuf::from("segment.term"),
-            PathBuf::from("segment.pos"),
-            PathBuf::from("segment.store"),
-            PathBuf::from("segment.idx"),
-            PathBuf::from("segment.fieldnorm"),
-            PathBuf::from("segment.custom"),
-            PathBuf::from("segment.fast"),
-        ];
+    const ROWS: usize = 4000;
+    const WORDS: [&str; 5] = ["alpha", "bravo", "charlie", "delta", "echo"];
 
-        sort_bundle_paths(&mut paths);
+    /// Row `i` mentions `WORDS[i % 5]` and `WORDS[i % 3]`.
+    fn body(i: usize) -> String {
+        format!("row {i} talks about {} and {}", WORDS[i % 5], WORDS[i % 3])
+    }
 
-        assert_eq!(paths, vec![
-            PathBuf::from("segment.custom"),
-            PathBuf::from("segment.idx"),
-            PathBuf::from("segment.pos"),
-            PathBuf::from("segment.store"),
-            PathBuf::from("segment.fast"),
-            PathBuf::from("segment.fieldnorm"),
-            PathBuf::from("segment.term"),
-        ]);
+    fn expected_rows(word: &str) -> Vec<usize> {
+        let mut rows = Vec::new();
+        for i in 0..ROWS {
+            if WORDS[i % 5] == word || WORDS[i % 3] == word {
+                rows.push(i);
+            }
+        }
+        rows
+    }
+
+    fn index_options() -> BTreeMap<String, String> {
+        BTreeMap::from([("tokenizer".to_string(), "english".to_string())])
+    }
+
+    fn build_index(operator: &Operator, location: &str, stream_threshold: usize) -> BundleSizes {
+        let data_schema = Arc::new(DataSchema::new(vec![DataField::new(
+            "body",
+            DataType::String,
+        )]));
+        let source_schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "body",
+            TableDataType::String,
+        )]));
+        let mut writer = InvertedIndexWriter::try_create_with_stream_threshold(
+            data_schema,
+            &index_options(),
+            operator.clone(),
+            location.to_string(),
+            stream_threshold,
+        )
+        .unwrap();
+        let mut texts = Vec::with_capacity(ROWS);
+        for i in 0..ROWS {
+            texts.push(body(i));
+        }
+        let block = DataBlock::new_from_columns(vec![StringType::from_data(texts)]);
+        writer.add_block(&source_schema, &block).unwrap();
+        writer.finalize().unwrap()
+    }
+
+    async fn search(
+        operator: &Operator,
+        location: &str,
+        bundle_size: u64,
+        word: &str,
+    ) -> Vec<usize> {
+        let field = Field::from_field_id(0);
+        let query: Box<dyn Query> = Box::new(TermQuery::new(
+            Term::from_field_text(field, word),
+            IndexRecordOption::Basic,
+        ));
+        let warmup = InvertedIndexWarmupInfo::try_create(query.as_ref(), &[field]).unwrap();
+        let reader = InvertedIndexReader::create(
+            operator.clone(),
+            false,
+            create_tokenizer_manager(&index_options()),
+            warmup,
+        );
+        let result = reader
+            .do_filter(
+                query,
+                location,
+                INVERTED_INDEX_FILE_FORMAT_VERSION,
+                bundle_size,
+                ROWS as u64,
+            )
+            .await
+            .unwrap();
+        let (mut rows, _) = result.unwrap_or_default();
+        rows.sort_unstable();
+        rows
+    }
+
+    async fn exists(operator: &Operator, path: &str) -> bool {
+        operator.exists(path).await.unwrap()
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_streamed_and_inline_bundles_answer_the_same_queries() {
+        init_test_globals().unwrap();
+        let operator = Operator::new(Memory::default()).unwrap().finish();
+
+        let streamed = build_index(&operator, "t/streamed.index", 256);
+        let inline = build_index(&operator, "t/inline.index", usize::MAX);
+
+        assert!(exists(&operator, "t/streamed.index.idx").await);
+        assert!(exists(&operator, "t/streamed.index.pos").await);
+        assert!(streamed.siblings > 0);
+        assert!(!exists(&operator, "t/inline.index.idx").await);
+        assert!(!exists(&operator, "t/inline.index.pos").await);
+        assert_eq!(inline.siblings, 0);
+        assert!(streamed.bundle < inline.bundle);
+        assert_eq!(
+            operator
+                .stat("t/streamed.index")
+                .await
+                .unwrap()
+                .content_length(),
+            streamed.bundle
+        );
+
+        for word in WORDS {
+            let expected = expected_rows(word);
+            assert_eq!(
+                search(&operator, "t/streamed.index", streamed.bundle, word).await,
+                expected,
+                "streamed {word}"
+            );
+            assert_eq!(
+                search(&operator, "t/inline.index", inline.bundle, word).await,
+                expected,
+                "inline {word}"
+            );
+        }
+        assert!(
+            search(&operator, "t/streamed.index", streamed.bundle, "zulu")
+                .await
+                .is_empty()
+        );
     }
 }
