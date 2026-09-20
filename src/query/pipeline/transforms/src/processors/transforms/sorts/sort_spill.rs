@@ -20,10 +20,7 @@ use std::fmt::Formatter;
 use std::marker::PhantomData;
 use std::mem;
 
-use databend_common_base::runtime::JoinHandle;
-use databend_common_base::runtime::spawn;
 use databend_common_column::bitmap::MutableBitmap;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -38,7 +35,6 @@ use super::Base;
 use super::RowsStat;
 use super::SortCollectedMeta;
 use super::SortSpillParams;
-use super::core::AsyncSortedStream;
 use super::core::Bounds;
 use super::core::Merger;
 use super::core::Rows;
@@ -47,8 +43,8 @@ use super::core::algorithm::SortAlgorithm;
 use super::sort_spill_regroup::IntervalGroupingPayload;
 use super::sort_spill_regroup::regroup_min_interval_groups;
 use crate::MemorySettings;
-use crate::traits::Location;
 use crate::traits::SortSpiller;
+use crate::traits::SpillReader;
 
 pub struct SortSpill<A: SortAlgorithm, S: SortSpiller> {
     base: Base<S>,
@@ -60,7 +56,7 @@ enum Step<A: SortAlgorithm, S: SortSpiller> {
     Sort(StepSort<A, S>),
 }
 
-struct StepCollect<A: SortAlgorithm, S> {
+struct StepCollect<A: SortAlgorithm, S: SortSpiller> {
     params: SortSpillParams,
     sampler: FixedRateSampler<StdRng>,
     streams: Vec<BoundBlockStream<A::Rows, S>>,
@@ -130,17 +126,11 @@ where
         }
     }
 
-    pub async fn sort_input_data(
-        &mut self,
-        input_data: Vec<DataBlock>,
-        need_spill: bool,
-    ) -> Result<()> {
+    pub fn sort_input_data(&mut self, input_data: Vec<DataBlock>, need_spill: bool) -> Result<()> {
         let Step::Collect(collect) = &mut self.step else {
             unreachable!()
         };
-        collect
-            .sort_input_data(&self.base, input_data, need_spill)
-            .await
+        collect.sort_input_data(&self.base, input_data, need_spill)
     }
 
     pub fn collect_total_rows(&self) -> usize {
@@ -150,7 +140,7 @@ where
         }
     }
 
-    pub async fn on_restore(&mut self, memory_settings: &MemorySettings) -> Result<OutputData> {
+    pub fn on_restore(&mut self, memory_settings: &MemorySettings) -> Result<OutputData> {
         match &mut self.step {
             Step::Collect(collect) => self.step = Step::Sort(collect.next_step(&self.base)?),
             Step::Sort(_) => (),
@@ -161,7 +151,7 @@ where
         };
 
         if sort.output_merger.is_some() {
-            return sort.restore_and_output(&self.base).await;
+            return sort.restore_and_output(&self.base);
         }
 
         while sort.current.is_empty() {
@@ -174,7 +164,7 @@ where
             log::debug!(before, current_len = sort.current.len(); "compact streams by domain");
         }
 
-        let num_merge = sort.prepare_merge(memory_settings).await?;
+        let num_merge = sort.prepare_merge(memory_settings)?;
         assert!(num_merge >= 2);
         log::debug!(
             current_len = sort.current.len(),
@@ -183,9 +173,9 @@ where
             batch_rows = sort.params.batch_rows;
         "restore params");
         if sort.current.len() <= num_merge {
-            sort.restore_and_output(&self.base).await
+            sort.restore_and_output(&self.base)
         } else {
-            sort.merge_current(&self.base, num_merge).await?;
+            sort.merge_current(&self.base, num_merge)?;
             Ok(OutputData {
                 block: None,
                 bound: (u32::MAX, None),
@@ -239,7 +229,7 @@ where
 
 impl<A: SortAlgorithm, S: SortSpiller> StepCollect<A, S> {
     #[fastrace::trace(name = "StepCollect::sort_input_data")]
-    async fn sort_input_data(
+    fn sort_input_data(
         &mut self,
         base: &Base<S>,
         mut input_data: Vec<DataBlock>,
@@ -256,7 +246,7 @@ impl<A: SortAlgorithm, S: SortSpiller> StepCollect<A, S> {
             let data = input_data.pop().unwrap();
             let mut block = base.new_block(data);
             if need_spill {
-                block.spill(&base.spiller).await?;
+                block.spill(&base.spiller)?;
             }
             vec![block].into()
         } else {
@@ -269,7 +259,7 @@ impl<A: SortAlgorithm, S: SortSpiller> StepCollect<A, S> {
 
                 let mut block = base.new_block(data);
                 if need_spill {
-                    block.spill(&base.spiller).await?;
+                    block.spill(&base.spiller)?;
                 }
                 sorted.push_back(block);
             }
@@ -315,7 +305,7 @@ impl<A: SortAlgorithm, S: SortSpiller> StepSort<A, S> {
     }
 
     #[fastrace::trace(name = "StepSort::merge_current")]
-    async fn merge_current(&mut self, base: &Base<S>, num_merge: usize) -> Result<()> {
+    fn merge_current(&mut self, base: &Base<S>, num_merge: usize) -> Result<()> {
         self.current.sort_by_key(|s| s.first_has_data());
         for s in &mut self.current {
             s.set_prefetch(0);
@@ -328,10 +318,12 @@ impl<A: SortAlgorithm, S: SortSpiller> StepSort<A, S> {
         let mut merger = Merger::<A, _>::new(streams, self.params.batch_rows, None);
 
         let mut sorted = VecDeque::new();
-        while let Some(data) = merger.async_next_block().await? {
+        while let Some(data) = merger.next_block()? {
+            check_interrupt()?;
+
             let mut block = base.new_block(data);
             if !sorted.is_empty() {
-                block.spill(&base.spiller).await?;
+                block.spill(&base.spiller)?;
             }
             sorted.push_back(block);
         }
@@ -345,7 +337,7 @@ impl<A: SortAlgorithm, S: SortSpiller> StepSort<A, S> {
     }
 
     #[fastrace::trace(name = "StepSort::restore_and_output")]
-    async fn restore_and_output(&mut self, base: &Base<S>) -> Result<OutputData> {
+    fn restore_and_output(&mut self, base: &Base<S>) -> Result<OutputData> {
         let merger = match self.output_merger.as_mut() {
             Some(merger) => merger,
             None => {
@@ -357,7 +349,7 @@ impl<A: SortAlgorithm, S: SortSpiller> StepSort<A, S> {
                 }
                 if self.current.len() == 1 {
                     let mut s = self.current.pop().unwrap();
-                    s.restore_first().await?;
+                    s.restore_first()?;
                     let block = Some(s.take_next_bounded_block());
                     assert!(self.bound_index >= 0);
                     let bound = (self.bound_index as _, s.bound.clone());
@@ -387,7 +379,7 @@ impl<A: SortAlgorithm, S: SortSpiller> StepSort<A, S> {
             }
         };
 
-        let Some(data) = merger.async_next_block().await? else {
+        let Some(data) = merger.next_block()? else {
             debug_assert!(merger.is_finished());
             let streams = self.output_merger.take().unwrap().streams();
             self.subsequent
@@ -417,9 +409,11 @@ impl<A: SortAlgorithm, S: SortSpiller> StepSort<A, S> {
             (None, (u32::MAX, None))
         };
 
-        while let Some(data) = merger.async_next_block().await? {
+        while let Some(data) = merger.next_block()? {
+            check_interrupt()?;
+
             let mut block = base.new_block(data);
-            block.spill(&base.spiller).await?;
+            block.spill(&base.spiller)?;
             sorted.blocks.push_back(block);
         }
         debug_assert!(merger.is_finished());
@@ -467,7 +461,7 @@ impl<A: SortAlgorithm, S: SortSpiller> StepSort<A, S> {
     }
 
     #[fastrace::trace(name = "StepSort::prepare_merge")]
-    async fn prepare_merge(&mut self, memory_settings: &MemorySettings) -> Result<usize> {
+    fn prepare_merge(&mut self, memory_settings: &MemorySettings) -> Result<usize> {
         let batch_rows = self.params.batch_rows;
         let mem = MemCheck {
             memory_settings,
@@ -483,7 +477,7 @@ impl<A: SortAlgorithm, S: SortSpiller> StepSort<A, S> {
         let need = (unready.len() * batch_rows) as isize;
         let remain = if remain < need {
             for s in &mut self.subsequent {
-                s.spill_skip(0).await?;
+                s.spill_skip(0)?;
             }
             mem.remain_rows().unwrap()
         } else {
@@ -492,7 +486,7 @@ impl<A: SortAlgorithm, S: SortSpiller> StepSort<A, S> {
 
         let remain = if remain < need {
             for s in unready.iter_mut() {
-                s.spill_skip(1).await?;
+                s.spill_skip(1)?;
             }
             mem.remain_rows().unwrap()
         } else {
@@ -501,7 +495,7 @@ impl<A: SortAlgorithm, S: SortSpiller> StepSort<A, S> {
 
         let mut remain = if remain < need {
             for s in ready.iter_mut() {
-                s.spill_skip(1).await?;
+                s.spill_skip(1)?;
             }
             mem.remain_rows().unwrap()
         } else {
@@ -512,15 +506,17 @@ impl<A: SortAlgorithm, S: SortSpiller> StepSort<A, S> {
             while !unready.is_empty()
                 && (remain > self.params.batch_rows as isize || ready.len() < 2)
             {
+                check_interrupt()?;
+
                 let s = unready.pop().unwrap();
-                s.restore_first().await?;
+                s.restore_first()?;
                 ready.push(s);
                 remain = mem.remain_rows().unwrap();
             }
         } else {
             while ready.len() > 2 && remain < -(self.params.batch_rows as isize) {
                 let s = ready.pop().unwrap();
-                s.spill_skip(0).await?;
+                s.spill_skip(0)?;
                 unready.push(s);
                 remain = mem.remain_rows().unwrap();
             }
@@ -585,7 +581,7 @@ impl<S: SortSpiller> Base<S> {
         }
     }
 
-    pub async fn scatter_stream<R: Rows>(
+    pub fn scatter_stream<R: Rows>(
         &self,
         mut blocks: VecDeque<SpillableBlock>,
         mut bounds: Bounds,
@@ -596,7 +592,7 @@ impl<S: SortSpiller> Base<S> {
             let mut stream = self.new_stream::<R>(blocks, bound);
 
             let mut part = Vec::new();
-            while let Some(block) = stream.take_next_bounded_spillable().await? {
+            while let Some(block) = stream.take_next_bounded_spillable()? {
                 part.push(block);
             }
 
@@ -651,7 +647,7 @@ impl<A: SortAlgorithm, S: SortSpiller> fmt::Debug for FmtMemoryUsage<'_, A, S> {
 pub struct SpillableBlock {
     data: Option<DataBlock>,
     rows: usize,
-    location: Option<Location>,
+    location: Option<String>,
     pub(super) domain: Column,
     processed: usize,
 }
@@ -686,10 +682,10 @@ impl SpillableBlock {
         R::from_column(&self.domain).unwrap()
     }
 
-    async fn spill(&mut self, spiller: &impl SortSpiller) -> Result<()> {
+    fn spill(&mut self, spiller: &impl SortSpiller) -> Result<()> {
         let data = self.data.take().unwrap();
         if self.location.is_none() {
-            let location = spiller.spill(data).await?;
+            let location = spiller.spill(data)?;
             self.location = Some(location);
         }
         Ok(())
@@ -738,17 +734,17 @@ impl<R: Rows> From<BlockGroupingPayload<R>> for SpillableBlock {
 }
 
 /// BoundBlockStream is a stream of blocks that are cutoff less or equal than bound.
-struct BoundBlockStream<R: Rows, S> {
+struct BoundBlockStream<R: Rows, S: SortSpiller> {
     blocks: VecDeque<SpillableBlock>,
     bound: Option<Scalar>,
     sort_row_offset: usize,
     spiller: S,
     prefetch: usize,
-    fetch: HashMap<Location, JoinHandle<Result<DataBlock>>>,
+    fetch: HashMap<String, S::Reader>,
     _r: PhantomData<R>,
 }
 
-impl<R: Rows, S> Debug for BoundBlockStream<R, S> {
+impl<R: Rows, S: SortSpiller> Debug for BoundBlockStream<R, S> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("BoundBlockStream")
             .field("blocks", &self.blocks)
@@ -759,11 +755,10 @@ impl<R: Rows, S> Debug for BoundBlockStream<R, S> {
     }
 }
 
-#[async_trait::async_trait]
-impl<R: Rows, S: SortSpiller> AsyncSortedStream for BoundBlockStream<R, S> {
-    async fn async_next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
+impl<R: Rows, S: SortSpiller> SortedStream for BoundBlockStream<R, S> {
+    fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
         if self.should_include_first() {
-            self.restore_first().await?;
+            self.restore_first()?;
             let data = self.take_next_block();
             let col = sort_column(&data, self.sort_row_offset);
             Ok((Some((data, col)), false))
@@ -793,7 +788,7 @@ impl<R: Rows, S: SortSpiller> BoundBlockStream<R, S> {
         );
         debug_assert!(
             streams.iter().all(|s| s.fetch.is_empty()),
-            "compact path assumes no pending fetch tasks"
+            "compact path assumes no pending reads"
         );
 
         let mut items = Vec::with_capacity(streams.iter().map(|s| s.blocks.len()).sum());
@@ -874,11 +869,7 @@ impl<R: Rows, S: SortSpiller> BoundBlockStream<R, S> {
 
     fn take_next_block(&mut self) -> DataBlock {
         let mut block = self.blocks.pop_front().unwrap();
-        let data = block.data.take().unwrap();
-        if let Some(Location::Local(local)) = block.location.as_ref() {
-            self.spiller.remove_local_file(local);
-        }
-        data
+        block.data.take().unwrap()
     }
 
     fn set_prefetch(&mut self, prefetch: usize) {
@@ -904,13 +895,13 @@ impl<R: Rows, S: SortSpiller> BoundBlockStream<R, S> {
             .sum()
     }
 
-    async fn restore_first(&mut self) -> Result<()> {
-        self.fetch_spilled_blocks();
-        self.join_front_block().await?;
+    fn restore_first(&mut self) -> Result<()> {
+        self.fetch_spilled_blocks()?;
+        self.read_front_block()?;
         Ok(())
     }
 
-    fn fetch_spilled_blocks(&mut self) {
+    fn fetch_spilled_blocks(&mut self) -> Result<()> {
         for block in self.blocks.iter().take(self.prefetch + 1) {
             if block.data.is_some() || !self.should_include(block) {
                 continue;
@@ -920,14 +911,13 @@ impl<R: Rows, S: SortSpiller> BoundBlockStream<R, S> {
                 continue;
             }
 
-            let spiller = self.spiller.clone();
-            let loc = location.clone();
-            let handle = spawn(async move { spiller.restore(&loc).await });
-            self.fetch.insert(location.clone(), handle);
+            self.fetch
+                .insert(location.clone(), self.spiller.reader(location)?);
         }
+        Ok(())
     }
 
-    async fn join_front_block(&mut self) -> Result<()> {
+    fn read_front_block(&mut self) -> Result<()> {
         let Some(block) = self.blocks.front_mut() else {
             return Ok(());
         };
@@ -943,8 +933,7 @@ impl<R: Rows, S: SortSpiller> BoundBlockStream<R, S> {
             .fetch
             .remove(location)
             .expect("fetch state not found for spilled block location")
-            .await
-            .map_err(|err| ErrorCode::Internal(format!("fetch task failed: {err}")))??;
+            .read()?;
         block.data = Some(if block.processed != 0 {
             debug_assert_eq!(block.rows + block.processed, data.num_rows());
             data.slice(block.processed..data.num_rows())
@@ -964,19 +953,21 @@ impl<R: Rows, S: SortSpiller> BoundBlockStream<R, S> {
         Ok(())
     }
 
-    async fn spill_skip(&mut self, skip: usize) -> Result<()> {
+    fn spill_skip(&mut self, skip: usize) -> Result<()> {
         for b in &mut self.blocks.iter_mut().skip(skip) {
             if let Some(loc) = &b.location {
                 self.fetch.remove(loc);
             }
             if b.data.is_some() {
-                b.spill(&self.spiller).await?;
+                check_interrupt()?;
+
+                b.spill(&self.spiller)?;
             }
         }
         Ok(())
     }
 
-    async fn take_next_bounded_spillable(&mut self) -> Result<Option<SpillableBlock>> {
+    fn take_next_bounded_spillable(&mut self) -> Result<Option<SpillableBlock>> {
         let Some(bound) = &self.bound else {
             return Ok(self.blocks.pop_front());
         };
@@ -993,7 +984,7 @@ impl<R: Rows, S: SortSpiller> BoundBlockStream<R, S> {
                 return Ok(self.blocks.pop_front());
             }
         }
-        self.restore_first().await?;
+        self.restore_first()?;
 
         let block = self.blocks.front_mut().unwrap();
         if let Some(pos) = block_split_off_position::<R>(
@@ -1112,7 +1103,6 @@ mod tests {
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
     use databend_common_expression::types::StringType;
-    use databend_storages_common_cache::TempPath;
 
     use super::*;
     use crate::sorts::core::SimpleRowsAsc;
@@ -1134,7 +1124,7 @@ mod tests {
         (schema, block)
     }
 
-    async fn run_bound_block_stream<R: Rows>(
+    fn run_bound_block_stream<R: Rows>(
         spiller: impl SortSpiller,
         sort_desc: &[SortColumnDescription],
         bound: Scalar,
@@ -1176,8 +1166,8 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_bound_block_stream() -> Result<()> {
+    #[test]
+    fn test_bound_block_stream() -> Result<()> {
         let spiller = MockSpiller {
             map: Arc::new(Mutex::new(HashMap::new())),
             memory_settings: MemorySettings::builder().build(),
@@ -1196,8 +1186,7 @@ mod tests {
                 Scalar::Number(NumberScalar::Int32(5)),
                 4,
                 Int32Type::from_data(vec![3, 5]),
-            )
-            .await?;
+            )?;
 
             run_bound_block_stream::<SimpleRowsAsc<Int32Type>>(
                 spiller.clone(),
@@ -1205,8 +1194,7 @@ mod tests {
                 Scalar::Number(NumberScalar::Int32(8)),
                 4,
                 Int32Type::from_data(vec![3, 5, 7, 7]),
-            )
-            .await?;
+            )?;
         }
 
         {
@@ -1222,8 +1210,7 @@ mod tests {
                 Scalar::String("f".to_string()),
                 4,
                 StringType::from_data(vec!["w", "h", "g", "f"]),
-            )
-            .await?;
+            )?;
         }
 
         Ok(())
@@ -1242,7 +1229,7 @@ mod tests {
         SpillableBlock::new(sliced_block, sort_row_offset)
     }
 
-    async fn prepare_test_blocks(
+    fn prepare_test_blocks(
         spiller: &impl SortSpiller,
         sort_desc: &[SortColumnDescription],
         with_spilled: bool,
@@ -1276,7 +1263,7 @@ mod tests {
         // Spill some blocks if requested
         if with_spilled {
             // Spill the second block
-            blocks[1].spill(spiller).await?;
+            blocks[1].spill(spiller)?;
         }
 
         if !with_sliced {
@@ -1293,11 +1280,11 @@ mod tests {
             let mut spillable_block =
                 create_spillable_block(&block, 5..8, &schema, sort_desc, sort_row_offset);
 
-            spillable_block.spill(spiller).await?;
+            spillable_block.spill(spiller)?;
             spillable_block.data = Some(
                 spiller
-                    .restore(spillable_block.location.as_ref().unwrap())
-                    .await?,
+                    .reader(spillable_block.location.as_ref().unwrap())?
+                    .read()?,
             );
 
             let sliced_data = spillable_block.slice(1, sort_row_offset);
@@ -1311,16 +1298,16 @@ mod tests {
         Ok((schema, blocks, sort_row_offset))
     }
 
-    async fn collect_and_verify_blocks<R: Rows>(
+    fn collect_and_verify_blocks<R: Rows>(
         stream: &mut BoundBlockStream<R, impl SortSpiller>,
         spiller: &impl SortSpiller,
         expected_blocks: &[Column],
     ) -> Result<()> {
         let mut result_blocks = Vec::new();
-        while let Some(mut block) = stream.take_next_bounded_spillable().await? {
+        while let Some(mut block) = stream.take_next_bounded_spillable()? {
             // If the block data is None (spilled), restore it first
             if block.data.is_none() {
-                block.data = Some(spiller.restore(block.location.as_ref().unwrap()).await?);
+                block.data = Some(spiller.reader(block.location.as_ref().unwrap())?.read()?);
             }
 
             let data = block.data.unwrap();
@@ -1340,7 +1327,7 @@ mod tests {
         Ok(())
     }
 
-    async fn run_take_next_bounded_spillable<R: Rows>(
+    fn run_take_next_bounded_spillable<R: Rows>(
         spiller: impl SortSpiller,
         sort_desc: &[SortColumnDescription],
         bound: Option<Scalar>,
@@ -1349,7 +1336,7 @@ mod tests {
         with_sliced: bool,
     ) -> Result<()> {
         let (_, blocks, sort_row_offset) =
-            prepare_test_blocks(&spiller, sort_desc, with_spilled, with_sliced).await?;
+            prepare_test_blocks(&spiller, sort_desc, with_spilled, with_sliced)?;
 
         let mut stream = BoundBlockStream::<R, _> {
             blocks,
@@ -1361,11 +1348,11 @@ mod tests {
             _r: Default::default(),
         };
 
-        collect_and_verify_blocks(&mut stream, &spiller, &expected_blocks).await
+        collect_and_verify_blocks(&mut stream, &spiller, &expected_blocks)
     }
 
-    #[tokio::test]
-    async fn test_take_next_bounded_spillable() -> Result<()> {
+    #[test]
+    fn test_take_next_bounded_spillable() -> Result<()> {
         let spiller = MockSpiller {
             map: Arc::new(Mutex::new(HashMap::new())),
             memory_settings: MemorySettings::builder().build(),
@@ -1388,8 +1375,7 @@ mod tests {
                 vec![Int32Type::from_data(vec![3, 5])],
                 false,
                 false,
-            )
-            .await?;
+            )?;
 
             // Test 2: With spilled blocks, bound = 8 (should return blocks with values <= 8)
             run_take_next_bounded_spillable::<SimpleRowsAsc<Int32Type>>(
@@ -1402,8 +1388,7 @@ mod tests {
                 ],
                 true,
                 false,
-            )
-            .await?;
+            )?;
 
             // Test 3: With sliced blocks, bound = 7 (should return blocks with values <= 7)
             run_take_next_bounded_spillable::<SimpleRowsAsc<Int32Type>>(
@@ -1416,8 +1401,7 @@ mod tests {
                 ],
                 false,
                 true,
-            )
-            .await?;
+            )?;
 
             // Test 4: With both spilled and sliced blocks, bound = 10
             run_take_next_bounded_spillable::<SimpleRowsAsc<Int32Type>>(
@@ -1431,8 +1415,7 @@ mod tests {
                 ],
                 true,
                 true,
-            )
-            .await?;
+            )?;
 
             // Test 5: With bound = 2 (should return no blocks as all values > 2)
             run_take_next_bounded_spillable::<SimpleRowsAsc<Int32Type>>(
@@ -1442,8 +1425,7 @@ mod tests {
                 vec![],
                 true,
                 true,
-            )
-            .await?;
+            )?;
 
             // Test 6: With bound = 12 (should return all blocks as all values <= 12)
             run_take_next_bounded_spillable::<SimpleRowsAsc<Int32Type>>(
@@ -1457,8 +1439,7 @@ mod tests {
                 ],
                 true,
                 false,
-            )
-            .await?;
+            )?;
 
             // Test 7: With no bound (should return all blocks)
             run_take_next_bounded_spillable::<SimpleRowsAsc<Int32Type>>(
@@ -1472,8 +1453,7 @@ mod tests {
                 ],
                 true,
                 false,
-            )
-            .await?;
+            )?;
         }
 
         // Test with descending String type
@@ -1495,8 +1475,7 @@ mod tests {
                 ],
                 false,
                 false,
-            )
-            .await?;
+            )?;
 
             // Test 9: With spilled blocks, bound = "e" (should return blocks with values >= "e")
             run_take_next_bounded_spillable::<SimpleRowsDesc<StringType>>(
@@ -1510,8 +1489,7 @@ mod tests {
                 ],
                 true,
                 false,
-            )
-            .await?;
+            )?;
 
             // Test 10: With sliced blocks, bound = "d" (should return blocks with values >= "d")
             run_take_next_bounded_spillable::<SimpleRowsDesc<StringType>>(
@@ -1526,8 +1504,7 @@ mod tests {
                 ],
                 false,
                 true,
-            )
-            .await?;
+            )?;
 
             // Test 11: With both spilled and sliced blocks, bound = "c" (should return all blocks)
             run_take_next_bounded_spillable::<SimpleRowsDesc<StringType>>(
@@ -1542,8 +1519,7 @@ mod tests {
                 ],
                 true,
                 true,
-            )
-            .await?;
+            )?;
 
             // Test 12: With bound = "z" (should return no blocks as all values < "z")
             run_take_next_bounded_spillable::<SimpleRowsDesc<StringType>>(
@@ -1553,14 +1529,13 @@ mod tests {
                 vec![],
                 true,
                 true,
-            )
-            .await?;
+            )?;
         }
 
         Ok(())
     }
 
-    async fn create_int_stream_asc(
+    fn create_int_stream_asc(
         spiller: MockSpiller,
         parts: Vec<Vec<i32>>,
         bound: Option<Scalar>,
@@ -1574,7 +1549,7 @@ mod tests {
 
             let mut block = SpillableBlock::new(data, 1);
             if spill {
-                block.spill(&spiller).await?;
+                block.spill(&spiller)?;
             }
             blocks.push_back(block);
         }
@@ -1590,7 +1565,7 @@ mod tests {
         })
     }
 
-    async fn create_int_stream_desc(
+    fn create_int_stream_desc(
         spiller: MockSpiller,
         parts: Vec<Vec<i32>>,
         bound: Option<Scalar>,
@@ -1614,8 +1589,8 @@ mod tests {
         })
     }
 
-    #[tokio::test]
-    async fn test_compact_streams_by_domain() -> Result<()> {
+    #[test]
+    fn test_compact_streams_by_domain() -> Result<()> {
         let spiller = MockSpiller {
             map: Arc::new(Mutex::new(HashMap::new())),
             memory_settings: MemorySettings::builder().build(),
@@ -1626,15 +1601,13 @@ mod tests {
             vec![vec![1, 2], vec![3]],
             Some(Scalar::Number(NumberScalar::Int32(10))),
             true,
-        )
-        .await?;
+        )?;
         let stream_2 = create_int_stream_asc(
             spiller.clone(),
             vec![vec![4], vec![5, 6]],
             Some(Scalar::Number(NumberScalar::Int32(10))),
             true,
-        )
-        .await?;
+        )?;
         let mut stream_1 = stream_1;
         let mut stream_2 = stream_2;
         stream_1.prefetch = 3;
@@ -1647,10 +1620,8 @@ mod tests {
         assert_eq!(streams[0].prefetch, 0);
         assert!(streams[0].blocks.iter().all(|b| b.data.is_none()));
 
-        let overlap_1 =
-            create_int_stream_asc(spiller.clone(), vec![vec![1, 4]], None, true).await?;
-        let overlap_2 =
-            create_int_stream_asc(spiller.clone(), vec![vec![3, 5]], None, true).await?;
+        let overlap_1 = create_int_stream_asc(spiller.clone(), vec![vec![1, 4]], None, true)?;
+        let overlap_2 = create_int_stream_asc(spiller.clone(), vec![vec![3, 5]], None, true)?;
         let mut streams = vec![overlap_1, overlap_2];
         BoundBlockStream::<SimpleRowsAsc<Int32Type>, _>::compact_streams_by_domain(&mut streams);
         assert_eq!(streams.len(), 2);
@@ -1662,12 +1633,9 @@ mod tests {
 
         // This layout would produce 3 groups with append-to-last greedy strategy.
         // Optimal interval grouping should compact it to 2 streams.
-        let min_group_1 =
-            create_int_stream_asc(spiller.clone(), vec![vec![1, 4]], None, true).await?;
-        let min_group_2 =
-            create_int_stream_asc(spiller.clone(), vec![vec![2, 6]], None, true).await?;
-        let min_group_3 =
-            create_int_stream_asc(spiller.clone(), vec![vec![5, 7]], None, true).await?;
+        let min_group_1 = create_int_stream_asc(spiller.clone(), vec![vec![1, 4]], None, true)?;
+        let min_group_2 = create_int_stream_asc(spiller.clone(), vec![vec![2, 6]], None, true)?;
+        let min_group_3 = create_int_stream_asc(spiller.clone(), vec![vec![5, 7]], None, true)?;
         let mut streams = vec![min_group_1, min_group_2, min_group_3];
         BoundBlockStream::<SimpleRowsAsc<Int32Type>, _>::compact_streams_by_domain(&mut streams);
         assert_eq!(streams.len(), 2);
@@ -1679,8 +1647,8 @@ mod tests {
         );
 
         let mut streams = vec![
-            create_int_stream_desc(spiller.clone(), vec![vec![9, 8]], None).await?,
-            create_int_stream_desc(spiller.clone(), vec![vec![7, 6]], None).await?,
+            create_int_stream_desc(spiller.clone(), vec![vec![9, 8]], None)?,
+            create_int_stream_desc(spiller.clone(), vec![vec![7, 6]], None)?,
         ];
         BoundBlockStream::<SimpleRowsDesc<Int32Type>, _>::compact_streams_by_domain(&mut streams);
         assert_eq!(streams.len(), 1);
@@ -1689,19 +1657,18 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_choice_streams_by_bound_split_tail_to_subsequent() -> Result<()> {
+    #[test]
+    fn test_choice_streams_by_bound_split_tail_to_subsequent() -> Result<()> {
         let spiller = MockSpiller {
             map: Arc::new(Mutex::new(HashMap::new())),
             memory_settings: MemorySettings::builder().build(),
         };
 
         let stream_1 =
-            create_int_stream_asc(spiller.clone(), vec![vec![1, 2], vec![7, 8]], None, true)
-                .await?;
-        let stream_2 = create_int_stream_asc(spiller.clone(), vec![vec![3, 4]], None, true).await?;
+            create_int_stream_asc(spiller.clone(), vec![vec![1, 2], vec![7, 8]], None, true)?;
+        let stream_2 = create_int_stream_asc(spiller.clone(), vec![vec![3, 4]], None, true)?;
         let existed_subsequent =
-            create_int_stream_asc(spiller.clone(), vec![vec![10, 11]], None, true).await?;
+            create_int_stream_asc(spiller.clone(), vec![vec![10, 11]], None, true)?;
 
         let mut sort = StepSort::<HeapSort<SimpleRowsAsc<Int32Type>>, _> {
             params: SortSpillParams {
@@ -1752,22 +1719,24 @@ mod tests {
         memory_settings: MemorySettings,
     }
 
-    #[async_trait::async_trait]
+    impl SpillReader for DataBlock {
+        fn read(self) -> Result<DataBlock> {
+            Ok(self)
+        }
+    }
+
     impl SortSpiller for MockSpiller {
-        async fn spill(&self, data_block: DataBlock) -> Result<Location> {
+        type Reader = DataBlock;
+
+        fn spill(&self, data_block: DataBlock) -> Result<String> {
             let name = GlobalUniq::unique();
             self.map.lock().unwrap().insert(name.clone(), data_block);
-            Ok(Location::Remote(name))
+            Ok(name)
         }
 
-        async fn restore(&self, location: &Location) -> Result<DataBlock> {
-            match location {
-                Location::Remote(name) => Ok(self.map.lock().unwrap().get(name).unwrap().clone()),
-                _ => unreachable!(),
-            }
+        fn reader(&self, location: &str) -> Result<Self::Reader> {
+            Ok(self.map.lock().unwrap().get(location).unwrap().clone())
         }
-
-        fn remove_local_file(&self, _: &TempPath) {}
 
         fn memory_settings(&self) -> &MemorySettings {
             &self.memory_settings
