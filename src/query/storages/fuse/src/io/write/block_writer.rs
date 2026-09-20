@@ -30,9 +30,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::local_block_meta_serde;
 use databend_common_metrics::storage::metrics_inc_block_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_index_write_nums;
-use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_bytes;
-use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_milliseconds;
-use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_write_nums;
@@ -74,7 +71,6 @@ use crate::io::write::WriteSettings;
 use crate::io::write::block_index::BlockIndexSpec;
 use crate::io::write::block_index::BlockIndexWriteContext;
 use crate::io::write::block_index::PendingBlockIndexOutput;
-use crate::io::write::block_index::PendingInvertedIndex;
 use crate::io::write::block_index::collect_inverted_index_metas;
 use crate::io::write::bloom_index_writer::BloomIndexWriteSpec;
 use crate::io::write::virtual_column_builder::VirtualColumnBuilder;
@@ -301,18 +297,13 @@ impl BlockBuilder {
             data_block,
         )?;
         let file_size = buffer.len() as u64;
-        let inverted_index_size = if !block_indexes.inverted.is_empty() {
-            let size = block_indexes.inverted.iter().map(|v| v.file.size()).sum();
-            Some(size)
-        } else {
-            None
-        };
-        let inverted_index_metas = collect_inverted_index_metas(
-            block_indexes
-                .inverted
-                .iter()
-                .map(PendingInvertedIndex::to_block_index_meta),
-        );
+        let mut inverted_index_size = None;
+        let mut inverted_index_metas = Vec::with_capacity(block_indexes.inverted.len());
+        for inverted in &block_indexes.inverted {
+            inverted_index_size = Some(inverted_index_size.unwrap_or(0) + inverted.total_size);
+            inverted_index_metas.push(inverted.to_block_index_meta());
+        }
+        let inverted_index_metas = collect_inverted_index_metas(inverted_index_metas);
         let block_meta = BlockMeta {
             row_count,
             block_size,
@@ -447,13 +438,6 @@ impl BlockWriter {
             metrics_inc_block_spatial_index_write_nums(1);
             metrics_inc_block_spatial_index_write_bytes(size);
             metrics_inc_block_spatial_index_write_milliseconds(start.elapsed().as_millis() as u64);
-        }
-        for inverted in block_indexes.inverted {
-            let start = Instant::now();
-            let size = inverted.file.write(dal).await?;
-            metrics_inc_block_inverted_index_write_nums(1);
-            metrics_inc_block_inverted_index_write_bytes(size);
-            metrics_inc_block_inverted_index_write_milliseconds(start.elapsed().as_millis() as u64);
         }
         Ok(())
     }
