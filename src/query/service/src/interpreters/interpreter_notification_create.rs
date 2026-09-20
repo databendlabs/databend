@@ -67,6 +67,7 @@ impl CreateNotificationInterpreter {
                 .as_ref()
                 .map(|x| x.authorization_header.clone())
                 .unwrap_or_default(),
+            webhook_body_template: plan.webhook_body_template,
         }
     }
 }

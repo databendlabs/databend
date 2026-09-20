@@ -31880,6 +31880,7 @@ CreateNotification(
                 ),
             },
         ),
+        webhook_body_template: None,
         comments: None,
     },
 )
@@ -31905,6 +31906,7 @@ CreateNotification(
                 authorization_header: None,
             },
         ),
+        webhook_body_template: None,
         comments: Some(
             "notify",
         ),
@@ -31927,6 +31929,7 @@ AlterNotification(
                     true,
                 ),
                 webhook_opts: None,
+                webhook_body_template: None,
                 comments: None,
             },
         ),
@@ -31955,6 +31958,7 @@ AlterNotification(
                         authorization_header: None,
                     },
                 ),
+                webhook_body_template: None,
                 comments: None,
             },
         ),
@@ -31975,9 +31979,106 @@ AlterNotification(
             AlterNotificationSetOptions {
                 enabled: None,
                 webhook_opts: None,
+                webhook_body_template: None,
                 comments: Some(
                     "1",
                 ),
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+CREATE NOTIFICATION INTEGRATION SampleNotification type = webhook enabled = true webhook = (url = 'https://example.com', method = 'POST') webhook_body_template = '{"msg_type":"text","content":{"text":"DATABEND_WEBHOOK_MESSAGE"}}' COMMENT = 'notify'
+---------- Output ---------
+CREATE NOTIFICATION INTEGRATION SampleNotification TYPE = webhook ENABLED = true WEBHOOK = ( URL = 'https://example.com' METHOD = 'POST' ) WEBHOOK_BODY_TEMPLATE = '{"msg_type":"text","content":{"text":"DATABEND_WEBHOOK_MESSAGE"}}' COMMENTS = 'notify'
+---------- AST ------------
+CreateNotification(
+    CreateNotificationStmt {
+        if_not_exists: false,
+        name: "SampleNotification",
+        notification_type: "webhook",
+        enabled: true,
+        webhook_opts: Some(
+            NotificationWebhookOptions {
+                url: Some(
+                    "https://example.com",
+                ),
+                method: Some(
+                    "POST",
+                ),
+                authorization_header: None,
+            },
+        ),
+        webhook_body_template: Some(
+            "{\"msg_type\":\"text\",\"content\":{\"text\":\"DATABEND_WEBHOOK_MESSAGE\"}}",
+        ),
+        comments: Some(
+            "notify",
+        ),
+    },
+)
+
+
+---------- Input ----------
+ALTER NOTIFICATION INTEGRATION SampleNotification SET WEBHOOK_BODY_TEMPLATE = '{"text":"DATABEND_WEBHOOK_MESSAGE"}'
+---------- Output ---------
+ALTER NOTIFICATION INTEGRATION SampleNotification SET WEBHOOK_BODY_TEMPLATE = '{"text":"DATABEND_WEBHOOK_MESSAGE"}'
+---------- AST ------------
+AlterNotification(
+    AlterNotificationStmt {
+        if_exists: false,
+        name: "SampleNotification",
+        options: Set(
+            AlterNotificationSetOptions {
+                enabled: None,
+                webhook_opts: None,
+                webhook_body_template: Some(
+                    "{\"text\":\"DATABEND_WEBHOOK_MESSAGE\"}",
+                ),
+                comments: None,
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+ALTER NOTIFICATION INTEGRATION SampleNotification SET WEBHOOK_BODY_TEMPLATE = '{"text":"it\'s DATABEND_WEBHOOK_MESSAGE","path":"C:\\tmp"}'
+---------- Output ---------
+ALTER NOTIFICATION INTEGRATION SampleNotification SET WEBHOOK_BODY_TEMPLATE = '{"text":"it\'s DATABEND_WEBHOOK_MESSAGE","path":"C:\\tmp"}'
+---------- AST ------------
+AlterNotification(
+    AlterNotificationStmt {
+        if_exists: false,
+        name: "SampleNotification",
+        options: Set(
+            AlterNotificationSetOptions {
+                enabled: None,
+                webhook_opts: None,
+                webhook_body_template: Some(
+                    "{\"text\":\"it's DATABEND_WEBHOOK_MESSAGE\",\"path\":\"C:\\tmp\"}",
+                ),
+                comments: None,
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+ALTER NOTIFICATION INTEGRATION SampleNotification UNSET WEBHOOK_BODY_TEMPLATE
+---------- Output ---------
+ALTER NOTIFICATION INTEGRATION SampleNotification UNSET WEBHOOK_BODY_TEMPLATE
+---------- AST ------------
+AlterNotification(
+    AlterNotificationStmt {
+        if_exists: false,
+        name: "SampleNotification",
+        options: Unset(
+            AlterNotificationUnsetOptions {
+                webhook_body_template: true,
             },
         ),
     },
