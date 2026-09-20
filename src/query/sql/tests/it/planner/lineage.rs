@@ -111,6 +111,56 @@ async fn test_query_lineage_scalar_subquery_from_sql() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_query_lineage_in_subquery_projection_is_captured_before_optimization() -> Result<()> {
+    let ctx = lineage_test_context().await?;
+    ctx.register_setup_sql("CREATE TABLE l(id INT, a INT)")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE r(id INT, b INT)")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE dst(x BOOLEAN)")
+        .await?;
+
+    // Decorrelation turns the projected IN subquery into a mark join whose marker column has
+    // no scalar definition, so lineage extracted from the optimized plan would be empty.
+    let sql = "INSERT INTO dst SELECT a IN (SELECT b FROM r) FROM l";
+    let lineage = query_lineage_from_sql(&ctx, sql).await?;
+    assert_lineage_sources(&lineage, QueryLineageKind::Dml, "dst", "x", &["l.a", "r.b"]);
+    assert_eq!(lineage, query_lineage_from_bound_sql(&ctx, sql).await?);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_query_lineage_false_filter_is_captured_before_optimization() -> Result<()> {
+    let ctx = lineage_test_context().await?;
+    ctx.register_setup_sql("CREATE TABLE src(a INT)").await?;
+    ctx.register_setup_sql("CREATE TABLE dst(x INT)").await?;
+
+    // The optimizer folds a `WHERE false` scan into an empty constant scan; the statement
+    // still reads from `src` logically.
+    let sql = "INSERT INTO dst SELECT a FROM src WHERE false";
+    let lineage = query_lineage_from_sql(&ctx, sql).await?;
+    assert_lineage_sources(&lineage, QueryLineageKind::Dml, "dst", "x", &["src.a"]);
+    assert_eq!(lineage, query_lineage_from_bound_sql(&ctx, sql).await?);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_query_lineage_folded_aggregates_are_captured_before_optimization() -> Result<()> {
+    let ctx = lineage_test_context().await?;
+    ctx.register_setup_sql("CREATE TABLE src(a INT)").await?;
+    ctx.register_setup_sql("CREATE TABLE dst(m INT, c BIGINT)")
+        .await?;
+
+    // `max`/`count(*)` over a bare table may be answered from table statistics and replaced
+    // with constants; lineage must still attribute them to `src`.
+    let sql = "INSERT INTO dst SELECT max(a), count(*) FROM src";
+    let lineage = query_lineage_from_sql(&ctx, sql).await?;
+    assert_lineage_sources(&lineage, QueryLineageKind::Dml, "dst", "m", &["src.a"]);
+    assert_eq!(lineage, query_lineage_from_bound_sql(&ctx, sql).await?);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_insert_lineage_does_not_pin_target_table_info() -> Result<()> {
     let ctx = lineage_test_context().await?;
     ctx.register_setup_sql("CREATE TABLE src(a INT)").await?;
