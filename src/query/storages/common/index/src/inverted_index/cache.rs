@@ -178,6 +178,7 @@ mod tests {
     fn metadata_fixture() -> InvertedIndexMeta {
         let object = InvertedIndexBundleFooter::build(
             [("segment.idx", b"postings".as_slice())],
+            BTreeMap::new(),
             BTreeMap::from([(PathBuf::from("segment.idx"), vec![BundleOpenSlice {
                 range: 0..4,
                 bytes: Arc::from(b"post".as_slice()),

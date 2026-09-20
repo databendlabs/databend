@@ -29,7 +29,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
-use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_generate_milliseconds;
@@ -55,9 +54,8 @@ use opendal::Buffer;
 use tantivy::Directory;
 use tantivy::IndexBuilder;
 use tantivy::IndexSettings;
-use tantivy::IndexWriter;
+use tantivy::SingleSegmentIndexWriter;
 use tantivy::directory::RamDirectory;
-use tantivy::indexer::UserOperation;
 use tantivy::schema::Field;
 use tantivy::schema::IndexRecordOption;
 use tantivy::schema::JsonObjectOptions;
@@ -262,11 +260,17 @@ impl InvertedIndexState {
     }
 }
 
+/// `SingleSegmentIndexWriter` uses its budget only to size the initial term hash table, capped at
+/// 2^19 entries (4 MiB); anything above ~12 MiB reaches that cap. The arena itself grows on demand.
+const INDEX_WRITER_TABLE_SIZING_HINT: usize = 16 * 1024 * 1024;
+
 pub struct InvertedIndexWriter {
     schema: DataSchemaRef,
     directory: RamDirectory,
-    index_writer: IndexWriter,
-    operations: Vec<UserOperation>,
+    /// Indexes on the calling thread into exactly one segment: no worker or merge threads, and
+    /// no memory-triggered segment split, which matters because Databend reads Tantivy doc ids
+    /// as block row numbers.
+    index_writer: SingleSegmentIndexWriter,
 }
 
 impl InvertedIndexWriter {
@@ -276,7 +280,10 @@ impl InvertedIndexWriter {
     ) -> Result<InvertedIndexWriter> {
         let (index_schema, _) = create_index_schema(schema.clone(), index_options)?;
 
+        // No field is stored, so the doc store only holds empty documents; compressing them
+        // inline is negligible and avoids one compression thread per block index.
         let index_settings = IndexSettings {
+            docstore_compress_dedicated_thread: false,
             ..Default::default()
         };
 
@@ -289,14 +296,12 @@ impl InvertedIndexWriter {
 
         let directory = RamDirectory::default();
         let index = index_builder.open_or_create(directory.clone())?;
-        let index_writer = index.writer(DEFAULT_BLOCK_BUFFER_SIZE)?;
-        let operations = Vec::new();
+        let index_writer = SingleSegmentIndexWriter::new(index, INDEX_WRITER_TABLE_SIZING_HINT)?;
 
         Ok(Self {
             schema,
             directory,
             index_writer,
-            operations,
         })
     }
 
@@ -342,18 +347,15 @@ impl InvertedIndexWriter {
                     }
                 }
             }
-            self.operations.push(UserOperation::Add(doc));
+            self.index_writer.add_document(doc)?;
         }
-
         Ok(())
     }
 
     #[async_backtrace::framed]
-    pub fn finalize(mut self) -> Result<Buffer> {
-        self.index_writer.run(self.operations)?;
-        self.index_writer.commit()?;
+    pub fn finalize(self) -> Result<Buffer> {
+        let index = self.index_writer.finalize()?;
         let raw_directory = self.directory.clone();
-        let index = self.index_writer.index();
         let index_meta = index.load_metas()?;
         if index_meta.segments.len() != 1 {
             return Err(ErrorCode::StorageOther(format!(
@@ -393,8 +395,13 @@ impl InvertedIndexWriter {
             }
         }
 
-        let bundle_bytes =
-            InvertedIndexBundleFooter::build(files, open_slices, managed_json, meta_json)?;
+        let bundle_bytes = InvertedIndexBundleFooter::build(
+            files,
+            BTreeMap::new(),
+            open_slices,
+            managed_json,
+            meta_json,
+        )?;
         Ok(Buffer::from(bundle_bytes))
     }
 }
