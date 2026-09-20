@@ -229,20 +229,6 @@ SELECT count(*) > 1 FROM fuse_snapshot('default', 'tkm_regular')
 1
 
 statement ok
-CREATE OR REPLACE STREAM tkm_regular_stream ON TABLE tkm_regular
-
-statement ok
-INSERT INTO tkm_regular VALUES (4, 'd')
-
-query I
-SELECT count(*) FROM tkm_regular_stream
-----
-1
-
-statement ok
-DROP STREAM tkm_regular_stream
-
-statement ok
 DROP TABLE tkm_regular_ctas
 
 statement ok
@@ -474,9 +460,6 @@ query B
 SELECT count(*) = 1 FROM fuse_snapshot('default', 'tkm_transient')
 ----
 1
-
-statement error 2733
-CREATE OR REPLACE STREAM tkm_transient_stream ON TABLE tkm_transient
 
 statement ok
 DROP TABLE tkm_transient_ctas
@@ -710,9 +693,6 @@ query B
 SELECT count(*) > 1 FROM fuse_snapshot('default', 'tkm_temp')
 ----
 1
-
-statement error 2733
-CREATE OR REPLACE STREAM tkm_temp_stream ON TABLE tkm_temp
 
 statement ok
 DROP TABLE tkm_temp_ctas

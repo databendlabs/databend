@@ -57,14 +57,12 @@ class Kind:
     # Whether snapshot history is kept. A TRANSIENT table purges everything but the
     # current snapshot on every commit, regardless of the session retention settings.
     keeps_history: bool
-    # Whether change tracking streams may be created on it.
-    supports_stream: bool
 
 
 KINDS = [
-    Kind("regular", "", keeps_history=True, supports_stream=True),
-    Kind("transient", "TRANSIENT", keeps_history=False, supports_stream=False),
-    Kind("temp", "TEMP", keeps_history=True, supports_stream=False),
+    Kind("regular", "", keeps_history=True),
+    Kind("transient", "TRANSIENT", keeps_history=False),
+    Kind("temp", "TEMP", keeps_history=True),
 ]
 
 
@@ -185,14 +183,8 @@ def gen_kind(out: list[str], kind: Kind):
         f"SELECT count(*) {'>' if kind.keeps_history else '='} 1 FROM fuse_snapshot('default', '{t}')",
         "1",
     )
-    # Streams: only a regular table can be the base of a change tracking stream.
-    if kind.supports_stream:
-        ok(f"CREATE OR REPLACE STREAM {t}_stream ON TABLE {t}")
-        ok(f"INSERT INTO {t} VALUES (4, 'd')")
-        query("I", f"SELECT count(*) FROM {t}_stream", "1")
-        ok(f"DROP STREAM {t}_stream")
-    else:
-        error("2733", f"CREATE OR REPLACE STREAM {t}_stream ON TABLE {t}")
+    # Streams (only a regular table can carry one) need an enterprise license and are
+    # covered by the `ee` suite, so they are not part of this matrix.
 
     ok(f"DROP TABLE {t}_ctas")
     ok(f"DROP TABLE {t}")
