@@ -150,6 +150,7 @@ impl BlockMetaInfo for BlockSerialization {}
 #[derive(Clone)]
 pub struct BlockBuilder {
     pub ctx: Arc<dyn TableContext>,
+    pub operator: Operator,
     pub meta_locations: TableMetaLocationGenerator,
     pub source_schema: TableSchemaRef,
     pub write_settings: WriteSettings,
@@ -188,6 +189,7 @@ impl BlockBuilder {
         let index_context = BlockIndexWriteContext {
             func_ctx: self.ctx.get_function_context()?,
             physical_schema: self.source_schema.clone(),
+            operator: self.operator.clone(),
             write_settings: self.write_settings.clone(),
         };
         let bloom_index_location = self.meta_locations.block_bloom_index_location(&block_id);

@@ -49,6 +49,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Buffer;
+use opendal::Operator;
 
 use crate::FuseStorageFormat;
 use crate::FuseTable;
@@ -502,6 +503,7 @@ impl StreamBlockBuilder {
 
 pub struct StreamBlockProperties {
     pub(crate) ctx: Arc<dyn TableContext>,
+    pub(crate) operator: Operator,
     pub(crate) write_settings: WriteSettings,
     pub(crate) block_thresholds: BlockThresholds,
 
@@ -614,6 +616,7 @@ impl StreamBlockProperties {
         let table_indexes = table.table_info.meta.indexes.clone();
         Ok(Arc::new(StreamBlockProperties {
             ctx,
+            operator: table.get_operator(),
             meta_locations: table.meta_location_generator().clone(),
             block_thresholds: table.get_block_thresholds(),
             source_schema,

@@ -41,6 +41,7 @@ use super::WriteSettings;
 pub struct BlockIndexWriteContext {
     pub func_ctx: FunctionContext,
     pub physical_schema: TableSchemaRef,
+    pub operator: Operator,
     pub write_settings: WriteSettings,
 }
 
