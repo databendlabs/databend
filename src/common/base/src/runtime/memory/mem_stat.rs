@@ -171,7 +171,7 @@ impl MemStat {
     /// checked when the limit is installed.
     pub fn set_hard_limit(&self, size: i64) -> Result<(), OutOfLimit> {
         if size != 0 {
-            let _ = self.memory_limit.hard_limit.fetch_update(
+            let _ = self.memory_limit.hard_limit.try_update(
                 Ordering::Relaxed,
                 Ordering::Relaxed,
                 |old| Some(if old == 0 { size } else { old.min(size) }),
