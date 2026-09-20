@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import dataclasses
 import os
 import socket
 import subprocess
@@ -11,15 +12,25 @@ BUILD_PROFILE = os.environ.get("BUILD_PROFILE", "debug")
 SCRIPT_PATH = Path(__file__).parent.absolute()
 REPO_PATH = SCRIPT_PATH.parent.parent
 META_BINARY = REPO_PATH / "target" / BUILD_PROFILE / "databend-meta"
+METACTL_BINARY = REPO_PATH / "target" / BUILD_PROFILE / "databend-metactl"
+
+CERTS_DIR = REPO_PATH / "tests" / "certs"
+TEST_SERVER_CERT = CERTS_DIR / "server.pem"
+TEST_SERVER_KEY = CERTS_DIR / "server.key"
+TEST_CA_CERT = CERTS_DIR / "ca.pem"
+# server.pem lists localhost and 127.0.0.1 as subject alternative names.
+TEST_TLS_DOMAIN = "localhost"
 
 sys.path.insert(0, str(REPO_PATH / "scripts" / "databend_test_helper" / "src"))
 from databend_test_helper import (  # noqa: E402
     LocalMetaCluster,
     LocalMetaNode,
-    MetaGrpcCredential as MetaGrpcCredential,
+    MetaClientProfile as MetaClientProfile,
+    MetaGrpcCredential,
     MetaNodePorts,
     MetaSecurityProfile,
     render_meta_config,
+    write_password_file as write_password_file,
 )
 
 
@@ -59,6 +70,25 @@ def meta_cluster(work_dir, nodes, start_timeout=10) -> LocalMetaCluster:
         cleanup_work_dir_on_success=True,
         start_timeout=start_timeout,
     )
+
+
+CURRENT_CREDENTIAL = MetaGrpcCredential("meta-current", "current-password")
+NEXT_CREDENTIAL = MetaGrpcCredential("meta-next", "next-password")
+
+# Strict gRPC authentication over plaintext gRPC. Two credentials, so a test
+# can rotate from CURRENT_CREDENTIAL to NEXT_CREDENTIAL without a restart.
+STRICT_AUTH = MetaSecurityProfile(
+    grpc_auth_strict=True,
+    grpc_credentials=(CURRENT_CREDENTIAL, NEXT_CREDENTIAL),
+)
+
+# STRICT_AUTH over gRPC TLS with the certificate under tests/certs. Extend it
+# with dataclasses.replace() for Raft TLS and a strict Raft secret.
+STRICT_AUTH_TLS = dataclasses.replace(
+    STRICT_AUTH,
+    grpc_tls_server_cert=TEST_SERVER_CERT,
+    grpc_tls_server_key=TEST_SERVER_KEY,
+)
 
 
 def run_command_result(cmd, shell=False):

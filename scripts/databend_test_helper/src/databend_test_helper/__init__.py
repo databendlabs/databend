@@ -25,6 +25,8 @@ _EXPORTS = {
     "MetaNodePorts": ".local_meta_cluster",
     "MetaGrpcCredential": ".meta_config",
     "MetaSecurityProfile": ".meta_config",
+    "MetaClientProfile": ".meta_config",
+    "write_password_file": ".meta_config",
     "render_meta_config": ".meta_config",
     "MetaArgs": ".args",
     "QueryArgs": ".args",

@@ -126,6 +126,51 @@ class MetaSecurityProfile:
         return _toml_lines(keys)
 
 
+def write_password_file(path: Path, password: str) -> Path:
+    """Write `password` and a newline to `path`, creating its directory."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(password + "\n")
+    return path
+
+
+@dataclass(frozen=True)
+class MetaClientProfile:
+    """What a client presents to a Meta gRPC endpoint: credentials and TLS trust.
+
+    `cli_args()` renders the global options shared by metactl, metabench, and
+    metaverifier. Nothing is validated here: a test builds a wrong or
+    incomplete profile on purpose, with dataclasses.replace(), to check how
+    the client rejects it.
+    """
+
+    username: str | None = None
+    password_file: Path | None = None
+    grpc_tls_ca_cert: Path | None = None
+    grpc_tls_domain_name: str | None = None
+
+    @classmethod
+    def for_credential(
+        cls, credential: MetaGrpcCredential, secrets_dir: Path
+    ) -> "MetaClientProfile":
+        """A plaintext profile for `credential`; its password goes through a file."""
+        password_path = secrets_dir / f"{credential.username}.password"
+        password_file = write_password_file(password_path, credential.password)
+        return cls(credential.username, password_file)
+
+    def cli_args(self) -> list[str]:
+        """The global command-line options that carry this profile."""
+        args = []
+        if self.username is not None:
+            args += ["--user", self.username]
+        if self.password_file is not None:
+            args += ["--password-file", str(self.password_file)]
+        if self.grpc_tls_ca_cert is not None:
+            args += ["--grpc-tls-ca-cert", str(self.grpc_tls_ca_cert)]
+        if self.grpc_tls_domain_name is not None:
+            args += ["--grpc-tls-domain-name", self.grpc_tls_domain_name]
+        return args
+
+
 def render_meta_config(
     node_id: int,
     ports: MetaNodePorts,
