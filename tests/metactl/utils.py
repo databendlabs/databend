@@ -3,11 +3,62 @@
 import os
 import socket
 import subprocess
+import sys
 import time
 from pathlib import Path
 
 BUILD_PROFILE = os.environ.get("BUILD_PROFILE", "debug")
 SCRIPT_PATH = Path(__file__).parent.absolute()
+REPO_PATH = SCRIPT_PATH.parent.parent
+META_BINARY = REPO_PATH / "target" / BUILD_PROFILE / "databend-meta"
+
+sys.path.insert(0, str(REPO_PATH / "scripts" / "databend_test_helper" / "src"))
+from databend_test_helper import (  # noqa: E402
+    LocalMetaCluster,
+    LocalMetaNode,
+    MetaGrpcCredential as MetaGrpcCredential,
+    MetaNodePorts,
+    MetaSecurityProfile,
+    render_meta_config,
+)
+
+
+def build_meta_node(
+    node_id: int,
+    ports: MetaNodePorts,
+    security: MetaSecurityProfile = MetaSecurityProfile(),
+    join_addresses: tuple[str, ...] = (),
+    meta_bin: Path = META_BINARY,
+) -> LocalMetaNode:
+    """Describe one test node; its files live under `node-{node_id}/` in the work dir."""
+    node_dir = Path(f"node-{node_id}")
+    config_text = render_meta_config(
+        node_id,
+        ports,
+        raft_dir=node_dir / "raft",
+        log_dir=node_dir / "logs",
+        security=security,
+        join_addresses=join_addresses,
+    )
+    return LocalMetaNode(
+        node_id=node_id,
+        meta_bin=meta_bin,
+        ports=ports,
+        config_path=node_dir / "databend-meta.toml",
+        config_text=config_text,
+        stdout_path=node_dir / "stdout.log",
+    )
+
+
+def meta_cluster(work_dir, nodes, start_timeout=10) -> LocalMetaCluster:
+    """A cluster of test nodes in a fresh work dir, kept only when the `with` block fails."""
+    return LocalMetaCluster(
+        list(nodes),
+        Path(work_dir),
+        reset_work_dir=True,
+        cleanup_work_dir_on_success=True,
+        start_timeout=start_timeout,
+    )
 
 
 def run_command_result(cmd, shell=False):
