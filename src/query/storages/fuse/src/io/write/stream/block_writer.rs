@@ -76,7 +76,6 @@ use crate::io::write::block_index::BlockIndexWriteContext;
 use crate::io::write::block_index::BlockIndexWriter;
 use crate::io::write::block_index::PendingBlockIndexOutput;
 use crate::io::write::block_index::PendingIndexFile;
-use crate::io::write::block_index::PendingInvertedIndex;
 use crate::io::write::block_index::collect_inverted_index_metas;
 use crate::io::write::stream::ColumnStatisticsState;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsBuilder;
@@ -408,18 +407,14 @@ impl FuseBlockWriter {
             },
         };
         let file_size = block_raw_data.len();
-        let inverted_index_size = block_indexes
-            .inverted
-            .iter()
-            .map(|index| index.file.size())
-            .sum::<u64>();
+        let mut inverted_index_size = 0;
+        let mut inverted_index_metas = Vec::with_capacity(block_indexes.inverted.len());
+        for index in &block_indexes.inverted {
+            inverted_index_size += index.total_size;
+            inverted_index_metas.push(index.to_block_index_meta());
+        }
         let inverted_index_size = (inverted_index_size > 0).then_some(inverted_index_size);
-        let inverted_index_metas = collect_inverted_index_metas(
-            block_indexes
-                .inverted
-                .iter()
-                .map(PendingInvertedIndex::to_block_index_meta),
-        );
+        let inverted_index_metas = collect_inverted_index_metas(inverted_index_metas);
         let perfect = self.properties.block_thresholds.check_perfect_block(
             self.row_count,
             self.block_size,

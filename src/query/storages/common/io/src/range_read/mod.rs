@@ -19,7 +19,6 @@
 
 mod chunk_grid;
 mod chunked;
-mod disk_cache;
 mod operator;
 
 use std::ops::Range;
@@ -29,7 +28,6 @@ use opendal::Buffer;
 
 pub use self::chunk_grid::ChunkGrid;
 pub use self::chunked::ChunkedRangeReader;
-pub use self::disk_cache::DiskCacheRangeReader;
 pub use self::operator::OperatorRangeReader;
 
 /// One link in the ranged-read chain.

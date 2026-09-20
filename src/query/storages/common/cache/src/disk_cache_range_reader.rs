@@ -39,12 +39,12 @@ use std::sync::Arc;
 use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_storages_common_cache::CacheLockStats;
-use databend_storages_common_cache::LruDiskCacheHolder;
+use databend_storages_common_io::ChunkGrid;
+use databend_storages_common_io::RangeReader;
 use opendal::Buffer;
 
-use crate::range_read::ChunkGrid;
-use crate::range_read::RangeReader;
+use crate::CacheLockStats;
+use crate::LruDiskCacheHolder;
 
 /// Read-through chunk cache over the next chain link.
 ///
@@ -444,16 +444,87 @@ mod tests {
     use std::time::Duration;
     use std::time::Instant;
 
+    use databend_common_base::base::GlobalInstance;
+    use databend_common_base::runtime::GlobalIORuntime;
     use databend_common_config::DiskCacheKeyReloadPolicy;
-    use databend_storages_common_cache::CacheAccessor;
-    use databend_storages_common_cache::DiskCacheBuilder;
-    use databend_storages_common_cache::LruDiskCacheBuilder;
+    use databend_storages_common_io::ChunkedRangeReader;
+    use databend_storages_common_io::OperatorRangeReader;
+    use opendal::Operator;
+    use opendal::OperatorBuilder;
+    use opendal::raw::Access;
+    use opendal::raw::AccessorInfo;
+    use opendal::raw::OpRead;
+    use opendal::raw::RpRead;
     use tempfile::TempDir;
 
     use super::*;
-    use crate::init_test_runtime;
-    use crate::range_read::OperatorRangeReader;
-    use crate::range_read::test_util::*;
+    use crate::CacheAccessor;
+    use crate::DiskCacheBuilder;
+    use crate::LruDiskCacheBuilder;
+
+    /// Per-thread globals, like the other tests of this crate, so tests do not share state.
+    fn init_test_runtime() {
+        let thread = std::thread::current();
+        GlobalInstance::init_testing(thread.name().unwrap());
+        GlobalIORuntime::init(2).unwrap();
+    }
+
+    /// Records every ranged read; optionally returns one byte short to simulate a truncated
+    /// response.
+    #[derive(Debug)]
+    struct RecordingReadAccessor {
+        content: Bytes,
+        read_ranges: Mutex<Vec<Range<u64>>>,
+        short_response: bool,
+    }
+
+    impl RecordingReadAccessor {
+        fn new(content: &'static [u8], short_response: bool) -> Arc<Self> {
+            Arc::new(Self {
+                content: Bytes::from_static(content),
+                read_ranges: Mutex::new(Vec::new()),
+                short_response,
+            })
+        }
+
+        fn read_ranges(&self) -> Vec<Range<u64>> {
+            self.read_ranges.lock().unwrap().clone()
+        }
+    }
+
+    impl Access for RecordingReadAccessor {
+        type Reader = Buffer;
+        type Writer = ();
+        type Lister = ();
+        type Deleter = ();
+
+        fn info(&self) -> Arc<AccessorInfo> {
+            let info = AccessorInfo::default();
+            info.set_native_capability(opendal::Capability {
+                read: true,
+                ..Default::default()
+            });
+            info.into()
+        }
+
+        async fn read(&self, _path: &str, args: OpRead) -> opendal::Result<(RpRead, Self::Reader)> {
+            let range = args.range();
+            let start = range.offset();
+            let requested = range.size().unwrap_or(self.content.len() as u64 - start);
+            let end = start + requested;
+            self.read_ranges.lock().unwrap().push(start..end);
+            let mut actual_end = end.min(self.content.len() as u64);
+            if self.short_response && actual_end > start {
+                actual_end -= 1;
+            }
+            let data = self.content.slice(start as usize..actual_end as usize);
+            Ok((RpRead::new(), Buffer::from(data)))
+        }
+    }
+
+    fn recording_operator(accessor: Arc<RecordingReadAccessor>) -> Operator {
+        OperatorBuilder::new(accessor).finish()
+    }
 
     const CONTENT: &[u8] = b"abcdefghijklmnop";
 
@@ -1053,8 +1124,6 @@ mod tests {
     #[test]
     fn test_full_chain_facade_cache_operator() {
         use std::io::Read;
-
-        use crate::range_read::ChunkedRangeReader;
 
         init_test_runtime();
         let (_dir, cache) = new_cache();

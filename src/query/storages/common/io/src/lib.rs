@@ -34,7 +34,6 @@ pub use merge_io_result::MergeIOReadResult;
 pub use merge_io_result::OwnerMemory;
 pub use range_read::ChunkGrid;
 pub use range_read::ChunkedRangeReader;
-pub use range_read::DiskCacheRangeReader;
 pub use range_read::OperatorRangeReader;
 pub use range_read::RangeReader;
 pub use read_settings::ReadSettings;

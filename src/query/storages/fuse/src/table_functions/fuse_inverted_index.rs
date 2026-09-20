@@ -322,10 +322,22 @@ fn footer_to_jsonb(footer: InvertedIndexBundleFooter) -> Vec<u8> {
         footer_start,
         footer_size,
         file_ranges,
+        external_files,
         open_slices,
         managed_json,
         meta_json,
     } = footer;
+    let mut external_entries = Vec::with_capacity(external_files.files.len());
+    for (path, file) in &external_files.files {
+        let mut item = JsonbObject::new();
+        item.insert(
+            "path".to_string(),
+            path.to_string_lossy().into_owned().into(),
+        );
+        item.insert("suffix".to_string(), file.suffix.clone().into());
+        item.insert("length".to_string(), file.len.into());
+        external_entries.push(JsonbValue::Object(item));
+    }
     let raw_file_count = file_ranges.files.len();
     let raw_files = file_ranges
         .files
@@ -383,6 +395,14 @@ fn footer_to_jsonb(footer: InvertedIndexBundleFooter) -> Vec<u8> {
     object.insert("footer_size".to_string(), footer_size.into());
     object.insert("raw_files".to_string(), JsonbValue::Array(raw_files));
     object.insert("raw_file_count".to_string(), raw_file_count.into());
+    object.insert(
+        "external_file_count".to_string(),
+        external_entries.len().into(),
+    );
+    object.insert(
+        "external_files".to_string(),
+        JsonbValue::Array(external_entries),
+    );
     object.insert("open_slices".to_string(), JsonbValue::Array(open_slices));
     object.insert("open_slice_count".to_string(), open_slice_count.into());
     object.insert("open_slice_bytes".to_string(), open_slice_bytes.into());

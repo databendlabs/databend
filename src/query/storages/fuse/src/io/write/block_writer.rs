@@ -29,9 +29,6 @@ use databend_common_expression::local_block_meta_serde;
 use databend_common_metrics::storage::metrics_inc_block_index_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_index_write_nums;
-use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_bytes;
-use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_milliseconds;
-use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_write_nums;
@@ -305,13 +302,7 @@ impl BlockWriter {
             metrics_inc_block_index_write_bytes(size);
             metrics_inc_block_index_write_milliseconds(start.elapsed().as_millis() as u64);
         }
-        for index in output.inverted {
-            let start = Instant::now();
-            let size = index.file.write(dal).await?;
-            metrics_inc_block_inverted_index_write_nums(1);
-            metrics_inc_block_inverted_index_write_bytes(size);
-            metrics_inc_block_inverted_index_write_milliseconds(start.elapsed().as_millis() as u64);
-        }
+        // Inverted indexes were written while the block was built.
         if let Some(index) = output.vector
             && let Some(file) = index.file
         {

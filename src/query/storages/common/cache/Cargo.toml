@@ -16,11 +16,13 @@ databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-storages-common-index = { workspace = true }
+databend-storages-common-io = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
+opendal = { workspace = true }
 crc32fast = { workspace = true }
 crossbeam-channel = { workspace = true }
 hex = { workspace = true }

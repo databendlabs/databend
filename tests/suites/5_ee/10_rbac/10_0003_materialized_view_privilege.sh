@@ -17,23 +17,27 @@ create role mv_priv_role;
 create user 'mv-priv-user' identified by 'password' with default_role = 'mv_priv_role';
 grant role mv_priv_role to 'mv-priv-user';
 create database mv_rbac_db_0020;
-create table mv_rbac_db_0020.source(c int) change_tracking = true;
+create table mv_rbac_db_0020.source(c int, content string) change_tracking = true;
 "
 
 echo "=== CREATE MV requires CREATE on the database and SELECT on the source ==="
-echo "create materialized view mv_rbac_db_0020.mv as select c from mv_rbac_db_0020.source where 1 = 1" | $MV_PRIV_USER_CONNECT
+echo "create materialized view mv_rbac_db_0020.mv as select c, content from mv_rbac_db_0020.source where 1 = 1" | $MV_PRIV_USER_CONNECT
 run_root_sql "grant create on mv_rbac_db_0020.* to role mv_priv_role;"
-echo "create materialized view mv_rbac_db_0020.mv as select c from mv_rbac_db_0020.source where 1 = 1" | $MV_PRIV_USER_CONNECT
+echo "create materialized view mv_rbac_db_0020.mv as select c, content from mv_rbac_db_0020.source where 1 = 1" | $MV_PRIV_USER_CONNECT
 run_root_sql "grant select on mv_rbac_db_0020.source to role mv_priv_role;"
-echo "create materialized view mv_rbac_db_0020.mv as select c from mv_rbac_db_0020.source where 1 = 1" | $MV_PRIV_USER_CONNECT
+echo "create materialized view mv_rbac_db_0020.mv as select c, content from mv_rbac_db_0020.source where 1 = 1" | $MV_PRIV_USER_CONNECT
 
 # Materialized-view access is authorized through the source table.
 run_root_sql "revoke select on mv_rbac_db_0020.source from role mv_priv_role;"
 
-echo "=== SELECT, REFRESH, and SHOW CREATE MATERIALIZED VIEW require only SELECT on the source ==="
+echo "=== SELECT, REFRESH, SHOW CREATE, and INDEX DDL require only SELECT on the source ==="
 echo "select * from mv_rbac_db_0020.mv" | $MV_PRIV_USER_CONNECT
 echo "refresh materialized view mv_rbac_db_0020.mv" | $MV_PRIV_USER_CONNECT
 echo "show create materialized view mv_rbac_db_0020.mv" | $MV_PRIV_USER_CONNECT
+echo "create inverted index mv_rbac_idx_0020 on mv_rbac_db_0020.mv(content)" | $MV_PRIV_USER_CONNECT
+run_root_sql "create inverted index mv_rbac_idx_0020 on mv_rbac_db_0020.mv(content);"
+echo "drop inverted index mv_rbac_idx_0020 on mv_rbac_db_0020.mv" | $MV_PRIV_USER_CONNECT
+run_root_sql "drop inverted index mv_rbac_idx_0020 on mv_rbac_db_0020.mv;"
 
 echo "=== system.materialized_views visibility follows the source privileges ==="
 run_root_sql "
@@ -80,6 +84,8 @@ grant select on mv_rbac_db_0020.source to role mv_priv_role;
 echo "select * from mv_rbac_db_0020.mv" | $MV_PRIV_USER_CONNECT >/dev/null
 echo "refresh materialized view mv_rbac_db_0020.mv" | $MV_PRIV_USER_CONNECT >/dev/null
 echo "show create materialized view mv_rbac_db_0020.mv" | $MV_PRIV_USER_CONNECT >/dev/null
+echo "create inverted index mv_rbac_idx_0020 on mv_rbac_db_0020.mv(content)" | $MV_PRIV_USER_CONNECT >/dev/null
+echo "drop inverted index mv_rbac_idx_0020 on mv_rbac_db_0020.mv" | $MV_PRIV_USER_CONNECT >/dev/null
 
 echo "=== DROP MV requires DROP on the database ==="
 echo "drop materialized view mv_rbac_db_0020.mv" | $MV_PRIV_USER_CONNECT

@@ -41,9 +41,6 @@ use databend_common_expression::types::DataType;
 use databend_common_metrics::storage::metrics_inc_block_index_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_index_write_nums;
-use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_bytes;
-use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_milliseconds;
-use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_nums;
@@ -955,14 +952,10 @@ impl FuseLowLevelDataWriter {
             None => None,
         };
 
+        // Inverted indexes record their own write metrics when they finish.
         let mut inverted_index_size = 0;
         for index in &block_indexes.inverted {
-            metrics_inc_block_inverted_index_write_nums(1);
-            metrics_inc_block_inverted_index_write_bytes(index.file.size);
-            metrics_inc_block_inverted_index_write_milliseconds(
-                self.write_started.elapsed().as_millis() as u64,
-            );
-            inverted_index_size += index.file.size;
+            inverted_index_size += index.total_size;
         }
         let inverted_index_size = (inverted_index_size > 0).then_some(inverted_index_size);
         let inverted_index_metas = collect_inverted_index_metas(

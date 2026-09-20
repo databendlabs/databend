@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_storages_common_cache::CacheLockStats;
 use databend_storages_common_cache::CacheManager;
-use databend_storages_common_io::DiskCacheRangeReader;
+use databend_storages_common_cache::DiskCacheRangeReader;
 use databend_storages_common_io::OperatorRangeReader;
 use databend_storages_common_io::RangeReader;
 use opendal::Operator;

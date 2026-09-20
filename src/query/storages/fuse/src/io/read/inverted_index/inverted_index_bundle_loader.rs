@@ -35,6 +35,7 @@ use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::InvertedIndexLookupCache;
 use databend_storages_common_cache::InvertedIndexMetaCache;
 use databend_storages_common_cache::InvertedIndexPayloadCache;
+use databend_storages_common_index::BundleExternalFiles;
 use databend_storages_common_index::BundleFileRanges;
 use databend_storages_common_index::FooterDirectory;
 use databend_storages_common_index::INVERTED_INDEX_BUNDLE_INITIAL_FOOTER_READ_SIZE;
@@ -151,8 +152,31 @@ struct RemoteBundleDirectory {
     operator: Operator,
     location: Arc<str>,
     file_ranges: BundleFileRanges,
+    external_files: BundleExternalFiles,
     lookup_cache: Option<InvertedIndexLookupCache>,
     payload_cache: Option<InvertedIndexPayloadCache>,
+}
+
+impl RemoteBundleDirectory {
+    /// Object holding `path`, its byte range inside that object, and a bundle-wide file id used
+    /// by cache keys and fetch locks (inline files first, then external files).
+    fn locate(&self, path: &Path) -> Option<(Arc<str>, Range<u64>, usize)> {
+        let mut file_id = 0;
+        for (candidate, range) in &self.file_ranges.files {
+            if candidate == path {
+                return Some((self.location.clone(), range.clone(), file_id));
+            }
+            file_id += 1;
+        }
+        for (candidate, external) in &self.external_files.files {
+            if candidate == path {
+                let object = Arc::from(format!("{}{}", self.location, external.suffix));
+                return Some((object, 0..external.len, file_id));
+            }
+            file_id += 1;
+        }
+        None
+    }
 }
 
 impl fmt::Debug for RemoteBundleDirectory {
@@ -167,7 +191,10 @@ impl fmt::Debug for RemoteBundleDirectory {
 
 struct RemoteBundleFileHandle {
     operator: Operator,
+    /// Bundle location; cache keys and fetch locks are scoped by it.
     location: Arc<str>,
+    /// Object actually read: the bundle itself or a sibling object for an external file.
+    object: Arc<str>,
     file_range: Range<u64>,
     file_len: usize,
     file_id: usize,
@@ -293,7 +320,7 @@ impl RemoteBundleFileHandle {
         let start = Instant::now();
         let data = self
             .operator
-            .read_with(self.location.as_ref())
+            .read_with(self.object.as_ref())
             .range(absolute_start..absolute_end)
             .await
             .map_err(io::Error::other)?
@@ -560,23 +587,17 @@ impl Directory for RemoteBundleDirectory {
         &self,
         path: &Path,
     ) -> std::result::Result<Arc<dyn FileHandle>, OpenReadError> {
-        let file_range = self
-            .file_ranges
-            .get(path)
+        let (object, file_range, file_id) = self
+            .locate(path)
             .ok_or_else(|| OpenReadError::FileDoesNotExist(path.to_path_buf()))?;
         let file_len_u64 = file_range.end - file_range.start;
         let file_len = usize::try_from(file_len_u64).map_err(|error| {
             OpenReadError::wrap_io_error(io::Error::other(error), path.to_path_buf())
         })?;
-        let file_id = self
-            .file_ranges
-            .files
-            .keys()
-            .position(|candidate| candidate == path)
-            .ok_or_else(|| OpenReadError::FileDoesNotExist(path.to_path_buf()))?;
         Ok(Arc::new(RemoteBundleFileHandle {
             operator: self.operator.clone(),
             location: self.location.clone(),
+            object,
             file_range,
             file_len,
             file_id,
@@ -598,7 +619,7 @@ impl Directory for RemoteBundleDirectory {
     }
 
     fn exists(&self, path: &Path) -> std::result::Result<bool, OpenReadError> {
-        Ok(self.file_ranges.contains(path))
+        Ok(self.file_ranges.contains(path) || self.external_files.contains(path))
     }
 
     fn delete(&self, path: &Path) -> std::result::Result<(), DeleteError> {
@@ -830,6 +851,7 @@ pub(crate) async fn load_bundle_search_directory(
         operator: operator.clone(),
         location: Arc::from(location),
         file_ranges: footer.file_ranges.clone(),
+        external_files: footer.external_files.clone(),
         lookup_cache,
         payload_cache: cache_manager.get_inverted_index_payload_cache(),
     };
@@ -943,6 +965,7 @@ mod tests {
             RemoteBundleFileHandle {
                 operator,
                 location: Arc::from(location),
+                object: Arc::from(location),
                 file_range: 0..u64::try_from(data.len()).unwrap(),
                 file_len: data.len(),
                 file_id: 0,
@@ -958,6 +981,7 @@ mod tests {
     fn footer_fixture() -> (Vec<u8>, u64, InvertedIndexBundleFooter) {
         let object = InvertedIndexBundleFooter::build(
             [("segment.idx", b"postings".as_slice())],
+            BTreeMap::new(),
             BTreeMap::from([(PathBuf::from("segment.idx"), vec![BundleOpenSlice {
                 range: 0..4,
                 bytes: Arc::from(b"post".as_slice()),
@@ -1128,6 +1152,7 @@ mod tests {
                 ("segment.term", term_bytes.as_ref()),
             ],
             BTreeMap::new(),
+            BTreeMap::new(),
             b"managed".to_vec(),
             b"meta".to_vec(),
         )
@@ -1175,6 +1200,7 @@ mod tests {
                 ("segment.term", term_bytes.as_ref()),
             ],
             BTreeMap::new(),
+            BTreeMap::new(),
             b"managed".to_vec(),
             b"meta".to_vec(),
         )?;
@@ -1203,6 +1229,7 @@ mod tests {
         let object = InvertedIndexBundleFooter::build(
             [("segment.idx", b"postings".as_slice())],
             BTreeMap::new(),
+            BTreeMap::new(),
             managed_json.clone(),
             b"meta".to_vec(),
         )?;
@@ -1223,6 +1250,57 @@ mod tests {
             metadata.footer_bytes.len(),
             usize::try_from(object_size - footer.footer_start).unwrap()
         );
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_external_files_are_read_from_sibling_objects() -> Result<()> {
+        let postings = (0..3 * CACHE_PAGE_SIZE)
+            .map(|i| i as u8)
+            .collect::<Vec<_>>();
+        let object = InvertedIndexBundleFooter::build(
+            [("segment.term", b"terms".as_slice())],
+            BTreeMap::from([(
+                PathBuf::from("segment.idx"),
+                databend_storages_common_index::ExternalFile {
+                    suffix: ".idx".to_string(),
+                    len: postings.len() as u64,
+                },
+            )]),
+            BTreeMap::new(),
+            b"managed".to_vec(),
+            b"meta".to_vec(),
+        )?;
+        let layer = RecordingLayer::default();
+        let ranges = layer.ranges.clone();
+        let operator = Operator::new(Memory::default())?.layer(layer).finish();
+        operator.write("index", object.clone()).await?;
+        operator.write("index.idx", postings.clone()).await?;
+        let footer = InvertedIndexBundleFooter::open(&object)?;
+        let remote = RemoteBundleDirectory {
+            operator,
+            location: Arc::from("index"),
+            file_ranges: footer.file_ranges.clone(),
+            external_files: footer.external_files.clone(),
+            lookup_cache: None,
+            payload_cache: payload_cache(postings.len() * 2),
+        };
+
+        assert!(remote.exists(Path::new("segment.idx"))?);
+        assert!(remote.exists(Path::new("segment.term"))?);
+        let idx = remote.get_file_handle(Path::new("segment.idx"))?;
+        assert_eq!(idx.len(), postings.len());
+        let middle = CACHE_PAGE_SIZE + 10..2 * CACHE_PAGE_SIZE - 10;
+        assert_eq!(
+            idx.read_bytes_async(middle.clone()).await?.as_ref(),
+            &postings[middle]
+        );
+        // The range is read from `index.idx` at its own offsets, not from the bundle object.
+        assert_eq!(*ranges.lock().unwrap(), vec![
+            CACHE_PAGE_SIZE as u64..(2 * CACHE_PAGE_SIZE) as u64
+        ]);
+        let term = remote.get_file_handle(Path::new("segment.term"))?;
+        assert_eq!(term.read_bytes_async(0..5).await?.as_ref(), b"terms");
         Ok(())
     }
 

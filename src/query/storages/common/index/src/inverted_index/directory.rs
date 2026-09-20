@@ -247,13 +247,14 @@ impl Directory for FooterDirectory {
         if let Some(bytes) = self.inline_file(path) {
             return Ok(Arc::new(bytes));
         }
-        let range = self
+        // Inline and external files both resolve through the underlying directory by path;
+        // only the logical length comes from the footer.
+        let file_len = self
             .inner
             .footer
-            .file_ranges
-            .get(path)
+            .file_len(path)
             .ok_or_else(|| OpenReadError::FileDoesNotExist(path.to_path_buf()))?;
-        let len = usize::try_from(range.end - range.start).map_err(|error| {
+        let len = usize::try_from(file_len).map_err(|error| {
             OpenReadError::wrap_io_error(io::Error::other(error), path.to_path_buf())
         })?;
         let underlying =
@@ -284,7 +285,7 @@ impl Directory for FooterDirectory {
     fn exists(&self, path: &Path) -> Result<bool, OpenReadError> {
         Ok(path == Path::new(MANAGED_JSON_PATH)
             || path == Path::new(META_JSON_PATH)
-            || self.inner.footer.file_ranges.contains(path))
+            || self.inner.footer.file_len(path).is_some())
     }
 
     read_only_directory!();
@@ -376,6 +377,7 @@ mod tests {
         let search_pin = SearchPinDirectory::new(Arc::new(underlying));
         let bundle_bytes = InvertedIndexBundleFooter::build(
             [("segment.term", b"abcdef".as_slice())],
+            BTreeMap::new(),
             BTreeMap::from([(PathBuf::from("segment.term"), vec![BundleOpenSlice {
                 range: 1..5,
                 bytes: Arc::from(b"bcde".as_slice()),
@@ -443,6 +445,7 @@ mod tests {
             .unwrap();
         let bundle_bytes = super::super::bundle::InvertedIndexBundleFooter::build(
             files,
+            BTreeMap::new(),
             open_slices,
             managed_json,
             meta_json,

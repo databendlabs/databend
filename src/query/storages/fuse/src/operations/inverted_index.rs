@@ -37,7 +37,7 @@ use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_num
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
-use databend_common_pipeline_transforms::processors::AsyncTransform;
+use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_cache::LoadParams;
@@ -59,7 +59,6 @@ use crate::io::InvertedIndexWriter;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::read::read_segment_stats;
-use crate::io::write_data;
 use crate::operations::BlockMetaIndex;
 use crate::operations::CommitSink;
 use crate::operations::MutationGenerator;
@@ -197,7 +196,7 @@ impl FuseTable {
         let max_threads = std::cmp::min(block_nums, max_threads);
         pipeline.try_resize(max_threads)?;
         let meta_location_generator = self.meta_location_generator.clone();
-        pipeline.add_async_transformer(|| {
+        pipeline.add_transformer(|| {
             InvertedIndexTransform::new(
                 index_name.clone(),
                 index_version.clone(),
@@ -355,12 +354,12 @@ impl InvertedIndexTransform {
     }
 }
 
-#[async_trait::async_trait]
-impl AsyncTransform for InvertedIndexTransform {
+// Tokenizing and the blocking bundle write belong on an executor thread: on the IO runtime,
+// waiting for the upload worker would block the very threads that run it.
+impl Transform for InvertedIndexTransform {
     const NAME: &'static str = "InvertedIndexTransform";
 
-    #[async_backtrace::framed]
-    async fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
+    fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
         let refresh_meta = data_block
             .get_meta()
             .and_then(RefreshInvertedIndexMeta::downcast_ref_from)
@@ -372,23 +371,20 @@ impl AsyncTransform for InvertedIndexTransform {
             .gen_inverted_index_v2_location(&self.index_version);
 
         let generate_start = Instant::now();
-        let mut writer =
-            InvertedIndexWriter::try_create(self.data_schema.clone(), &self.index_options)?;
+        let mut writer = InvertedIndexWriter::try_create(
+            self.data_schema.clone(),
+            &self.index_options,
+            self.operator.clone(),
+            index_location.clone(),
+        )?;
         writer.add_block(&self.source_schema, &data_block)?;
 
-        let data = writer.finalize()?;
-        metrics_inc_block_inverted_index_generate_milliseconds(
-            generate_start.elapsed().as_millis() as u64,
-        );
-        let index_size = data.len() as u64;
-        let write_start = Instant::now();
-        write_data(data, &self.operator, &index_location).await?;
-
+        let sizes = writer.finalize()?;
+        let elapsed_ms = generate_start.elapsed().as_millis() as u64;
+        metrics_inc_block_inverted_index_generate_milliseconds(elapsed_ms);
         metrics_inc_block_inverted_index_write_nums(1);
-        metrics_inc_block_inverted_index_write_bytes(index_size);
-        metrics_inc_block_inverted_index_write_milliseconds(
-            write_start.elapsed().as_millis() as u64
-        );
+        metrics_inc_block_inverted_index_write_bytes(sizes.bundle + sizes.siblings);
+        metrics_inc_block_inverted_index_write_milliseconds(elapsed_ms);
 
         let mut new_block_meta = Arc::unwrap_or_clone(block_meta.clone());
         let mut index_metas = new_block_meta
@@ -398,14 +394,19 @@ impl AsyncTransform for InvertedIndexTransform {
         let new_meta = BlockIndexMeta {
             index_name: self.index_name.clone(),
             location: (index_location, INVERTED_INDEX_FILE_FORMAT_VERSION),
-            size: index_size,
+            size: sizes.bundle,
             index_version: self.index_version.clone(),
         };
         match index_metas.binary_search_by(|meta| meta.index_name.as_str().cmp(&self.index_name)) {
             Ok(index) => index_metas[index] = new_meta,
             Err(index) => index_metas.insert(index, new_meta),
         }
-        new_block_meta.inverted_index_size = Some(index_metas.iter().map(|meta| meta.size).sum());
+        // BlockIndexMeta.size is the bundle only; sibling sizes of the other indexes are unknown here.
+        let mut inverted_index_size = sizes.siblings;
+        for meta in &index_metas {
+            inverted_index_size += meta.size;
+        }
+        new_block_meta.inverted_index_size = Some(inverted_index_size);
         new_block_meta.inverted_index_metas = Some(index_metas);
 
         let extended_block_meta = ExtendedBlockMeta {

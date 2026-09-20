@@ -112,36 +112,22 @@ pub struct WrittenBloomIndex {
 }
 
 #[derive(Debug)]
-pub struct PendingInvertedIndex {
-    pub index_name: String,
-    pub index_version: String,
-    pub file: PendingIndexFile,
-}
-
-impl PendingInvertedIndex {
-    pub fn to_block_index_meta(&self) -> BlockIndexMeta {
-        BlockIndexMeta {
-            index_name: self.index_name.clone(),
-            location: self.file.location.clone(),
-            size: self.file.size(),
-            index_version: self.index_version.clone(),
-        }
-    }
-}
-
-#[derive(Debug)]
 pub struct WrittenInvertedIndex {
     pub index_name: String,
     pub index_version: String,
-    pub file: WrittenIndexFile,
+    pub location: Location,
+    /// Bundle object only; readers size their tail read from it.
+    pub bundle_size: u64,
+    /// Bundle plus sibling objects.
+    pub total_size: u64,
 }
 
 impl WrittenInvertedIndex {
     pub fn to_block_index_meta(&self) -> BlockIndexMeta {
         BlockIndexMeta {
             index_name: self.index_name.clone(),
-            location: self.file.location.clone(),
-            size: self.file.size,
+            location: self.location.clone(),
+            size: self.bundle_size,
             index_version: self.index_version.clone(),
         }
     }
@@ -184,7 +170,7 @@ pub struct WrittenSpatialIndex {
 #[derive(Debug, Default)]
 pub struct PendingBlockIndexOutput {
     pub bloom: Option<PendingBloomIndex>,
-    pub inverted: Vec<PendingInvertedIndex>,
+    pub inverted: Vec<WrittenInvertedIndex>,
     pub vector: Option<PendingVectorIndex>,
     pub spatial: Option<PendingSpatialIndex>,
 }
@@ -239,12 +225,6 @@ trait InvertedIndexOutput {
     fn index_name(&self) -> &str;
 }
 
-impl InvertedIndexOutput for PendingInvertedIndex {
-    fn index_name(&self) -> &str {
-        &self.index_name
-    }
-}
-
 impl InvertedIndexOutput for WrittenInvertedIndex {
     fn index_name(&self) -> &str {
         &self.index_name
@@ -296,13 +276,12 @@ mod tests {
 
     #[test]
     fn test_outputs_reject_duplicate_inverted_names() {
-        let pending = |location: &str| PendingInvertedIndex {
+        let pending = |location: &str| WrittenInvertedIndex {
             index_name: "duplicate".to_string(),
             index_version: "v1".to_string(),
-            file: PendingIndexFile {
-                location: (location.to_string(), 0),
-                data: Buffer::new(),
-            },
+            location: (location.to_string(), 0),
+            bundle_size: 0,
+            total_size: 0,
         };
         let mut output = PendingBlockIndexOutput {
             inverted: vec![pending("first")],

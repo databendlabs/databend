@@ -46,6 +46,7 @@ databend-meta-client = { workspace = true }
 databend-meta-runtime = { workspace = true }
 databend-query = { workspace = true }
 databend-storages-common-cache = { workspace = true }
+databend-storages-common-index = { workspace = true }
 databend-storages-common-io = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 fastrace = { workspace = true }

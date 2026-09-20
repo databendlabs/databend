@@ -16,8 +16,21 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_sql::plans::MaintenanceTarget;
+
+use crate::sessions::QueryContext;
+use crate::sessions::TableContextLicense;
+
+pub fn check_materialized_view_license(ctx: &QueryContext, engine: &str) -> Result<()> {
+    if is_materialized_view_engine(engine) {
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(ctx.get_license_key(), Feature::MaterializedView)?;
+    }
+    Ok(())
+}
 
 pub fn check_maintenance_target(table: &dyn Table, target: &MaintenanceTarget) -> Result<()> {
     match target {
