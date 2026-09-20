@@ -209,6 +209,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("query_memory_hard_limit", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Hard limit in bytes for tracked query memory on each node, independent of spilling and memory borrowing. 0 disables this additional limit; nonzero values must be at least 256 MiB. This is not an RSS limit; accounting is buffered.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=i64::MAX as u64)),
+                }),
                 ("query_out_of_memory_behavior", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("spilling")),
                     desc: "If the query memory limit is exceeded, the system will enforce predefined actions (e.g., throw or spilling).",
@@ -1830,6 +1837,9 @@ impl DefaultSettings {
                     SettingRange::Numeric(_) => {
                         let u64_val = Self::parse_to_u64(&v)?;
                         range.is_within_numeric_range(u64_val)?;
+                        if k == "query_memory_hard_limit" {
+                            Self::validate_query_memory_hard_limit(u64_val)?;
+                        }
 
                         Ok((k, UserSettingValue::UInt64(u64_val)))
                     }
@@ -1842,6 +1852,15 @@ impl DefaultSettings {
                 }
             }
         }
+    }
+
+    pub(crate) fn validate_query_memory_hard_limit(value: u64) -> Result<()> {
+        if value != 0 && !(256 * 1024 * 1024..=i64::MAX as u64).contains(&value) {
+            return Err(ErrorCode::WrongValueForVariable(
+                "query_memory_hard_limit must be 0 or between 268435456 and 9223372036854775807 bytes",
+            ));
+        }
+        Ok(())
     }
 
     /// Parses a string value to u64.

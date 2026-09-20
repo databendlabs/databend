@@ -1,0 +1,49 @@
+# Reject invalid budgets instead of silently rounding them up to 256 MiB.
+statement error query_memory_hard_limit must be 0 or between
+SETTINGS (query_memory_hard_limit = 1024) SELECT 1;
+
+statement error not within the range
+SETTINGS (query_memory_hard_limit = 9223372036854775808) SELECT 1;
+
+# Statement settings must install a hard limit even in spilling mode, with
+# borrowing enabled. A single oversized string cannot be saved by spilling.
+statement error query_memory_hard_limit: memory usage
+SETTINGS (
+    query_memory_hard_limit = 268435456,
+    query_out_of_memory_behavior = 'spilling',
+    allow_query_exceeded_limit = 1,
+    max_threads = 1,
+    max_block_size = 1
+)
+SELECT length(repeat(repeat('x', 1024), 307200 + number)) FROM numbers(1);
+
+# The failed statement must not change the session setting.
+query T
+SELECT value FROM system.settings WHERE name = 'query_memory_hard_limit';
+----
+0
+
+# The same session can complete a query whose allocation exceeded the last budget.
+query I
+SETTINGS (max_threads = 1, max_block_size = 1)
+SELECT length(repeat(repeat('x', 1024), 307200 + number)) FROM numbers(1);
+----
+314572800
+
+# Keep automatic query spilling enabled below the independent hard limit.
+query II
+SETTINGS (
+    query_memory_hard_limit = 536870912,
+    max_query_memory_usage = 1048576,
+    max_memory_usage = 0,
+    query_out_of_memory_behavior = 'spilling',
+    max_threads = 1,
+    max_block_size = 1024
+)
+SELECT count(*), sum(c) FROM (
+    SELECT number::STRING AS k, count(*) AS c
+    FROM numbers(100000)
+    GROUP BY k
+);
+----
+100000 100000

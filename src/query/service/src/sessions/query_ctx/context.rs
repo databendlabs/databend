@@ -351,6 +351,18 @@ impl TableContextSettings for QueryContext {
         self.shared.get_settings()
     }
 
+    fn apply_query_memory_limit(&self) -> Result<()> {
+        let limit = self.get_settings().get_query_memory_hard_limit()?;
+        if let Some(mem_stat) = self.get_query_memory_tracking() {
+            // Constructing the error must remain possible after lowering the limit.
+            let _guard = databend_common_base::runtime::LimitMemGuard::enter_unlimited();
+            mem_stat
+                .set_hard_limit(limit as i64)
+                .map_err(|cause| ErrorCode::MemoryExceedsLimit(format!("{cause:?}")))?;
+        }
+        Ok(())
+    }
+
     fn get_shared_settings(&self) -> Arc<Settings> {
         self.shared.query_settings.clone()
     }

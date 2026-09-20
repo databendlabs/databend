@@ -38,6 +38,7 @@ const MINIMUM_MEMORY_LIMIT: i64 = 256 * 1024 * 1024;
 #[derive(Default, Debug)]
 struct MemoryLimit {
     limit: AtomicI64,
+    hard_limit: AtomicI64,
     set_limit: AtomicI64,
     water_height: AtomicI64,
 }
@@ -46,6 +47,7 @@ impl MemoryLimit {
     pub const fn new() -> MemoryLimit {
         MemoryLimit {
             limit: AtomicI64::new(0),
+            hard_limit: AtomicI64::new(0),
             set_limit: AtomicI64::new(0),
             water_height: AtomicI64::new(0),
         }
@@ -163,6 +165,31 @@ impl MemStat {
         }
     }
 
+    /// Set an additional limit that cannot borrow memory from the parent.
+    /// Zero adds no limit. Shared query contexts can tighten, but not relax, it.
+    /// Unlike `set_limit`, the value is not rounded up. Existing allocations are
+    /// checked when the limit is installed.
+    pub fn set_hard_limit(&self, size: i64) -> Result<(), OutOfLimit> {
+        if size != 0 {
+            let _ = self.memory_limit.hard_limit.fetch_update(
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+                |old| Some(if old == 0 { size } else { old.min(size) }),
+            );
+        }
+        self.check_hard_limit(self.used.load(Ordering::Relaxed))
+    }
+
+    fn check_hard_limit(&self, used: i64) -> Result<(), OutOfLimit> {
+        let limit = self.memory_limit.hard_limit.load(Ordering::Relaxed);
+        if limit != 0 && used > limit {
+            let mut cause = OutOfLimit::new(used, limit);
+            cause.is_hard_limit = true;
+            return Err(cause);
+        }
+        Ok(())
+    }
+
     pub fn get_limit(&self) -> i64 {
         self.memory_limit.limit.load(Ordering::Relaxed)
     }
@@ -268,6 +295,11 @@ impl MemStat {
             return Ok(());
         }
 
+        // A query hard limit must not wait for, or evict, other queries.
+        if oom.is_hard_limit {
+            return Err(oom);
+        }
+
         let _guard = LimitMemGuard::enter_unlimited();
 
         if id.is_some() {
@@ -340,6 +372,7 @@ impl MemStat {
     /// Check if used memory is out of the limit.
     #[inline]
     fn check_limit(&self, used: i64) -> Result<(), OutOfLimit> {
+        self.check_hard_limit(used)?;
         let limit = self.memory_limit.limit.load(Ordering::Relaxed);
         let water_height = self.memory_limit.water_height.load(Ordering::Relaxed);
 
@@ -394,6 +427,7 @@ pub struct OutOfLimit<V = i64> {
     pub limit: V,
     pub export_error: bool,
     pub allow_exceeded_limit: bool,
+    pub is_hard_limit: bool,
 }
 
 impl<V> OutOfLimit<V> {
@@ -404,12 +438,16 @@ impl<V> OutOfLimit<V> {
             limit,
             export_error: false,
             allow_exceeded_limit: false,
+            is_hard_limit: false,
         }
     }
 }
 
 impl Debug for OutOfLimit<i64> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        if self.is_hard_limit {
+            write!(f, "query_memory_hard_limit: ")?;
+        }
         write!(
             f,
             "memory usage {}({}) exceeds limit {}({})",
@@ -437,6 +475,62 @@ mod tests {
     use crate::runtime::MemStat;
     use crate::runtime::memory::mem_stat::MINIMUM_MEMORY_LIMIT;
     use crate::runtime::memory::mem_stat::ParentMemStat;
+
+    #[test]
+    fn test_hard_limit_with_borrowing_and_child_allocations() {
+        let parent = MemStat::create_child(Some("parent".into()), 0, ParentMemStat::Root);
+        parent.set_limit(MINIMUM_MEMORY_LIMIT * 4, false);
+        let query = MemStat::create_child(
+            Some("hard-limit-query".into()),
+            0,
+            ParentMemStat::Normal(parent.clone()),
+        );
+        query.set_limit(MINIMUM_MEMORY_LIMIT, true);
+        query.set_hard_limit(MINIMUM_MEMORY_LIMIT * 2).unwrap();
+        let child = MemStat::create_child(None, 0, ParentMemStat::Normal(query.clone()));
+
+        // Borrowing may raise the soft limit, but not the additional hard limit.
+        let bytes = MINIMUM_MEMORY_LIMIT * 2;
+        child.record_memory::<true>(bytes, bytes).unwrap();
+        assert_eq!(query.get_limit(), parent.get_limit());
+        let cause = child.record_memory::<true>(1, 1).unwrap_err();
+        assert!(cause.is_hard_limit);
+        assert!(!cause.allow_exceeded_limit);
+        assert_eq!(cause.limit, bytes);
+        assert_eq!(child.get_memory_usage(), bytes as usize);
+        assert_eq!(query.get_memory_usage(), bytes as usize);
+        assert_eq!(parent.get_memory_usage(), bytes as usize);
+        child.record_memory::<false>(-bytes, 0).unwrap();
+    }
+
+    #[test]
+    fn test_hard_limit_checks_existing_memory_and_cannot_be_relaxed() {
+        let query = MemStat::create_child(Some("query".into()), 0, ParentMemStat::Root);
+        query.record_memory::<true>(100, 100).unwrap();
+        let cause = query.set_hard_limit(99).unwrap_err();
+        assert_eq!(cause.limit, 99);
+        assert_eq!(cause.value, 100);
+        query.record_memory::<false>(-100, 0).unwrap();
+
+        query.set_hard_limit(0).unwrap();
+        query.set_hard_limit(200).unwrap();
+        assert!(query.record_memory::<true>(100, 100).is_err());
+        assert_eq!(query.get_memory_usage(), 0);
+        query.record_memory::<true>(99, 99).unwrap();
+        query.record_memory::<false>(-99, 0).unwrap();
+    }
+
+    #[test]
+    fn test_hard_limit_preserves_stricter_soft_limit() {
+        let query = MemStat::create_child(Some("query".into()), 0, ParentMemStat::Root);
+        query.set_limit(MINIMUM_MEMORY_LIMIT, false);
+        query.set_hard_limit(MINIMUM_MEMORY_LIMIT * 2).unwrap();
+        let bytes = MINIMUM_MEMORY_LIMIT + 1;
+        let cause = query.record_memory::<true>(bytes, bytes).unwrap_err();
+        assert!(!cause.is_hard_limit);
+        assert_eq!(cause.limit, MINIMUM_MEMORY_LIMIT);
+        assert_eq!(query.get_memory_usage(), 0);
+    }
 
     #[test]
     fn test_single_level_mem_stat() -> Result<()> {

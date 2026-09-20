@@ -1128,6 +1128,12 @@ impl Settings {
         self.try_set_u64("max_query_memory_usage", max_memory_usage)
     }
 
+    pub fn get_query_memory_hard_limit(&self) -> Result<u64> {
+        let limit = self.try_get_u64("query_memory_hard_limit")?;
+        DefaultSettings::validate_query_memory_hard_limit(limit)?;
+        Ok(limit)
+    }
+
     pub fn get_allow_query_exceeded_limit(&self) -> Result<bool> {
         Ok(self.try_get_u64("allow_query_exceeded_limit")? == 1)
     }
