@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod column_scope_validator;
 mod extract;
 mod m_expr;
 mod s_expr;
