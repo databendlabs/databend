@@ -16,3 +16,57 @@ SELECT timezone()
 ----
 UTC
 
+
+# current_tenant_id() returns the tenant of the authenticated session
+# (CI deploys databend-query with tenant_id = "test_tenant").
+query T
+SELECT current_tenant_id()
+----
+test_tenant
+
+query T
+SELECT CURRENT_TENANT_ID()
+----
+test_tenant
+
+# It takes no arguments and cannot be used to look up other tenants.
+statement error 1065
+SELECT current_tenant_id('other_tenant')
+
+# The tenant id is a share identifier, not a display name: it must round-trip
+# through identifier quoting so it can be used in
+# `CREATE DATABASE ... FROM SHARE <tenant>.<share>` and `ALTER SHARE ... ADD ACCOUNTS`.
+query T
+SELECT concat('`', current_tenant_id(), '`.`my_share`')
+----
+`test_tenant`.`my_share`
+
+# Switching role or database must not change the session tenant.
+statement ok
+CREATE ROLE IF NOT EXISTS tenant_fn_role
+
+statement ok
+CREATE DATABASE IF NOT EXISTS tenant_fn_db
+
+statement ok
+SET ROLE tenant_fn_role
+
+statement ok
+USE tenant_fn_db
+
+query T
+SELECT current_tenant_id()
+----
+test_tenant
+
+statement ok
+USE default
+
+statement ok
+SET ROLE public
+
+statement ok
+DROP DATABASE IF EXISTS tenant_fn_db
+
+statement ok
+DROP ROLE IF EXISTS tenant_fn_role

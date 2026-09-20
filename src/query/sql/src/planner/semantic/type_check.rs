@@ -261,6 +261,7 @@ pub enum AuthFunction {
     CurrentRole,
     CurrentSecondaryRoles,
     CurrentAvailableRoles,
+    CurrentTenantId,
 }
 
 pub struct TypeCheckSubqueryPlan {
