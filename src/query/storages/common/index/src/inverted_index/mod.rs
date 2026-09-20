@@ -16,6 +16,7 @@ mod bundle;
 mod cache;
 mod debug_proxy;
 mod directory;
+mod output_directory;
 mod search_pin;
 
 pub use bundle::BundleExternalFiles;
@@ -37,6 +38,8 @@ pub use cache::InvertedIndexPayloadBytes;
 pub use cache::inverted_index_meta_cache_key;
 pub use directory::FooterDirectory;
 pub use directory::collect_index_open_slices;
+pub use output_directory::INVERTED_INDEX_STREAM_THRESHOLD;
+pub use output_directory::InvertedIndexOutputDirectory;
 pub use search_pin::SearchPinDirectory;
 
 macro_rules! read_only_directory {
