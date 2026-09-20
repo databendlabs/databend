@@ -29,7 +29,6 @@ use tantivy::Index;
 use tantivy::directory::FileHandle;
 use tantivy::directory::OwnedBytes;
 use tantivy::directory::error::OpenReadError;
-use tantivy::schema::FieldType;
 use tantivy::schema::IndexRecordOption;
 use tantivy::schema::Type;
 use tantivy_common::json_path_writer::JSON_END_OF_PATH;
@@ -201,15 +200,12 @@ impl Directory for MergeSourceDirectory {
     read_only_directory!();
 }
 
-/// What the posting list behind a term dictionary key actually encodes. The schema alone
-/// cannot tell: JSON number terms carry neither frequencies nor positions even when the field
-/// records both, and `TermInfo` does not say either. `key` is the dictionary key, i.e. the
-/// term without field id and type tag.
-pub fn term_record_option(field_type: &FieldType, key: &[u8]) -> IndexRecordOption {
-    let field_option = field_type
-        .get_index_record_option()
-        .unwrap_or(IndexRecordOption::Basic);
-    if !field_option.has_freq() || !matches!(field_type, FieldType::JsonObject(_)) {
+/// What the posting list behind a JSON field dictionary key actually encodes. The field option
+/// alone cannot tell: JSON number, bool and date terms carry neither frequencies nor positions
+/// even when the field records both. `key` is the dictionary key, i.e. the term without field
+/// id and type tag.
+pub fn json_term_record_option(field_option: IndexRecordOption, key: &[u8]) -> IndexRecordOption {
+    if !field_option.has_freq() {
         return field_option;
     }
     // JSON key: path, JSON_END_OF_PATH, value type code, value.
@@ -265,13 +261,10 @@ fn read_footer(
 mod tests {
     use databend_common_base::runtime::GlobalIORuntime;
     use opendal::services::Memory;
-    use tantivy::DocSet;
     use tantivy::IndexSettings;
     use tantivy::SingleSegmentIndexWriter;
-    use tantivy::TERMINATED;
     use tantivy::directory::RamDirectory;
     use tantivy::index::SegmentComponent;
-    use tantivy::postings::Postings;
     use tantivy::schema::IndexRecordOption;
     use tantivy::schema::JsonObjectOptions;
     use tantivy::schema::OwnedValue;
@@ -284,6 +277,7 @@ mod tests {
     use crate::init_test_runtime;
     use crate::inverted_index::InvertedIndexBundleBuilder;
     use crate::inverted_index::InvertedIndexOutputDirectory;
+    use crate::inverted_index::merge::test_util::walk;
 
     const ROWS: usize = 3000;
 
@@ -336,7 +330,12 @@ mod tests {
             threshold,
         );
         let index = add_documents(Index::create(directory.clone(), schema(), settings()).unwrap());
-        let builder = InvertedIndexBundleBuilder::try_create(directory, index).unwrap();
+        let builder = InvertedIndexBundleBuilder::try_create(
+            directory.clone(),
+            index,
+            directory.external_files(),
+        )
+        .unwrap();
         let mut bundle = Vec::new();
         let sizes = builder.write_to(&mut bundle).unwrap();
         let writer = operator.clone();
@@ -344,43 +343,6 @@ mod tests {
             .block_on(async move { Ok(writer.write("t/h1.index", bundle).await?) })
             .unwrap();
         (operator, sizes.bundle)
-    }
-
-    type Posting = (u32, u32, Vec<u32>);
-
-    /// Everything a merge reads, in the order it reads it: for each field, each term in order
-    /// with its postings.
-    fn walk(index: &Index) -> Vec<(Vec<u8>, Vec<Posting>)> {
-        let searcher = index.reader().unwrap().searcher();
-        let segment = searcher.segment_reader(0);
-        let mut terms = Vec::new();
-        for (field, entry) in index.schema().fields() {
-            let inverted = segment.inverted_index(field).unwrap();
-            let mut stream = inverted.terms().stream().unwrap();
-            while stream.advance() {
-                let term_info = stream.value().clone();
-                let option = term_record_option(entry.field_type(), stream.key());
-                let mut postings = inverted
-                    .read_postings_from_terminfo(&term_info, option)
-                    .unwrap();
-                let mut docs = Vec::new();
-                let mut positions = Vec::new();
-                while postings.doc() != TERMINATED {
-                    let freq = match option {
-                        IndexRecordOption::Basic => 1,
-                        _ => postings.term_freq(),
-                    };
-                    positions.clear();
-                    if option == IndexRecordOption::WithFreqsAndPositions {
-                        postings.positions(&mut positions);
-                    }
-                    docs.push((postings.doc(), freq, positions.clone()));
-                    postings.advance();
-                }
-                terms.push((stream.key().to_vec(), docs));
-            }
-        }
-        terms
     }
 
     #[test]
@@ -458,14 +420,10 @@ mod tests {
 #[cfg(test)]
 mod record_option_tests {
     use tantivy::schema::IndexRecordOption;
-    use tantivy::schema::JsonObjectOptions;
-    use tantivy::schema::Schema;
-    use tantivy::schema::TextFieldIndexing;
-    use tantivy::schema::TextOptions;
     use tantivy::schema::Type;
     use tantivy_common::json_path_writer::JSON_END_OF_PATH;
 
-    use super::term_record_option;
+    use super::json_term_record_option;
 
     fn json_key(path: &str, value_type: Type) -> Vec<u8> {
         let mut key = path.as_bytes().to_vec();
@@ -476,40 +434,25 @@ mod record_option_tests {
     }
 
     #[test]
-    fn test_term_record_option_follows_field_and_json_value_type() {
+    fn test_json_term_record_option_follows_the_value_type() {
         for option in [
             IndexRecordOption::Basic,
             IndexRecordOption::WithFreqs,
             IndexRecordOption::WithFreqsAndPositions,
         ] {
-            let indexing = TextFieldIndexing::default().set_index_option(option);
-            let mut builder = Schema::builder();
-            let text = builder.add_text_field(
-                "t",
-                TextOptions::default().set_indexing_options(indexing.clone()),
-            );
-            let json = builder.add_json_field(
-                "j",
-                JsonObjectOptions::default().set_indexing_options(indexing),
-            );
-            let schema = builder.build();
-            let text_type = schema.get_field_entry(text).field_type();
-            let json_type = schema.get_field_entry(json).field_type();
-
-            assert_eq!(term_record_option(text_type, b"alpha"), option);
             assert_eq!(
-                term_record_option(json_type, &json_key("tag", Type::Str)),
+                json_term_record_option(option, &json_key("tag", Type::Str)),
                 option
             );
             for value_type in [Type::I64, Type::U64, Type::F64, Type::Bool, Type::Date] {
                 assert_eq!(
-                    term_record_option(json_type, &json_key("n", value_type)),
+                    json_term_record_option(option, &json_key("n", value_type)),
                     IndexRecordOption::Basic,
                     "{option:?} {value_type:?}"
                 );
             }
             assert_eq!(
-                term_record_option(json_type, b"no-end-of-path"),
+                json_term_record_option(option, b"no-end-of-path"),
                 IndexRecordOption::Basic
             );
         }

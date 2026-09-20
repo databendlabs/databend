@@ -351,7 +351,9 @@ impl InvertedIndexWriter {
     #[async_backtrace::framed]
     pub fn finalize(self) -> Result<BundleSizes> {
         let index = self.index_writer.finalize()?;
-        let builder = InvertedIndexBundleBuilder::try_create(self.directory, index)?;
+        let external_files = self.directory.external_files();
+        let builder =
+            InvertedIndexBundleBuilder::try_create(self.directory, index, external_files)?;
         let mut sink =
             create_blocking_write(self.operator, self.location, BLOCKING_WRITE_MAX_CHUNKS);
         let sizes = builder.write_to(&mut sink)?;
