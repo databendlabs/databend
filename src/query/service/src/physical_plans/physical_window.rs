@@ -27,7 +27,6 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Expr;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::type_check;
@@ -365,6 +364,7 @@ fn apply_window_transform(
                 partition_by.clone(),
                 order_by.clone(),
                 (start_bound, end_bound),
+                builder.func_ctx.clone(),
             )?) as Box<dyn Processor>
         } else {
             let start_bound = FrameBound::try_from(&window.window_frame.start_bound)?;
@@ -376,6 +376,7 @@ fn apply_window_transform(
                 partition_by.clone(),
                 order_by.clone(),
                 (start_bound, end_bound),
+                builder.func_ctx.clone(),
             )?) as Box<dyn Processor>
         };
         Ok(ProcessorPtr::create(transform))
@@ -720,6 +721,9 @@ impl PhysicalPlanBuilder {
                 }
                 *order_by = wrap_cast(order_by, &common_ty);
 
+                // Frame offsets are folded with the statement's context, so casts that
+                // depend on session settings (e.g. rounding mode) behave like `SELECT`.
+                let func_ctx = self.ctx.get_function_context()?;
                 for scalar in start.iter_mut().chain(end.iter_mut()) {
                     let raw_expr = RawExpr::<usize>::Cast {
                         span: w.span,
@@ -732,11 +736,8 @@ impl PhysicalPlanBuilder {
                         dest_type: common_ty.clone(),
                     };
                     let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-                    let (expr, _) = ConstantFolder::fold(
-                        Cow::Owned(expr),
-                        &FunctionContext::default(),
-                        &BUILTIN_FUNCTIONS,
-                    );
+                    let (expr, _) =
+                        ConstantFolder::fold(Cow::Owned(expr), &func_ctx, &BUILTIN_FUNCTIONS);
                     let expr = expr.into_owned();
                     if let Expr::Constant(Constant {
                         scalar: new_scalar, ..
