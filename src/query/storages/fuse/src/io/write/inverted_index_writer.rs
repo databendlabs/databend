@@ -246,6 +246,33 @@ impl InvertedIndexWriter {
         operator: Operator,
         location: String,
     ) -> Result<InvertedIndexWriter> {
+        let directory = InvertedIndexOutputDirectory::new(operator.clone(), location.clone());
+        Self::try_create_into(schema, index_options, operator, location, directory)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn try_create_with_stream_threshold(
+        schema: DataSchemaRef,
+        index_options: &BTreeMap<String, String>,
+        operator: Operator,
+        location: String,
+        stream_threshold: usize,
+    ) -> Result<InvertedIndexWriter> {
+        let directory = InvertedIndexOutputDirectory::with_stream_threshold(
+            operator.clone(),
+            location.clone(),
+            stream_threshold,
+        );
+        Self::try_create_into(schema, index_options, operator, location, directory)
+    }
+
+    fn try_create_into(
+        schema: DataSchemaRef,
+        index_options: &BTreeMap<String, String>,
+        operator: Operator,
+        location: String,
+        directory: InvertedIndexOutputDirectory,
+    ) -> Result<InvertedIndexWriter> {
         let (index_schema, _) = create_index_schema(schema.clone(), index_options)?;
 
         // No field is stored, so the doc store only holds empty documents; compressing them
@@ -262,7 +289,6 @@ impl InvertedIndexWriter {
             .schema(index_schema.clone())
             .tokenizers(tokenizer_manager.clone());
 
-        let directory = InvertedIndexOutputDirectory::new(operator.clone(), location.clone());
         let index = index_builder.open_or_create(directory.clone())?;
         let index_writer = SingleSegmentIndexWriter::new(index, INDEX_WRITER_TABLE_SIZING_HINT)?;
 
@@ -510,4 +536,152 @@ pub(crate) fn create_index_schema(
     let index_schema = schema_builder.build();
 
     Ok((index_schema, index_fields))
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::FromData;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
+    use databend_common_expression::types::StringType;
+    use databend_storages_common_index::BundleSizes;
+    use opendal::services::Memory;
+    use tantivy::Term;
+    use tantivy::query::Query;
+    use tantivy::query::TermQuery;
+
+    use super::*;
+    use crate::io::read::InvertedIndexReader;
+    use crate::io::read::InvertedIndexWarmupInfo;
+    use crate::test_utils::init_test_globals;
+
+    const ROWS: usize = 4000;
+    const WORDS: [&str; 5] = ["alpha", "bravo", "charlie", "delta", "echo"];
+
+    /// Row `i` mentions `WORDS[i % 5]` and `WORDS[i % 3]`.
+    fn body(i: usize) -> String {
+        format!("row {i} talks about {} and {}", WORDS[i % 5], WORDS[i % 3])
+    }
+
+    fn expected_rows(word: &str) -> Vec<usize> {
+        let mut rows = Vec::new();
+        for i in 0..ROWS {
+            if WORDS[i % 5] == word || WORDS[i % 3] == word {
+                rows.push(i);
+            }
+        }
+        rows
+    }
+
+    fn index_options() -> BTreeMap<String, String> {
+        BTreeMap::from([("tokenizer".to_string(), "english".to_string())])
+    }
+
+    fn build_index(operator: &Operator, location: &str, stream_threshold: usize) -> BundleSizes {
+        let data_schema = Arc::new(DataSchema::new(vec![DataField::new(
+            "body",
+            DataType::String,
+        )]));
+        let source_schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "body",
+            TableDataType::String,
+        )]));
+        let mut writer = InvertedIndexWriter::try_create_with_stream_threshold(
+            data_schema,
+            &index_options(),
+            operator.clone(),
+            location.to_string(),
+            stream_threshold,
+        )
+        .unwrap();
+        let mut texts = Vec::with_capacity(ROWS);
+        for i in 0..ROWS {
+            texts.push(body(i));
+        }
+        let block = DataBlock::new_from_columns(vec![StringType::from_data(texts)]);
+        writer.add_block(&source_schema, &block).unwrap();
+        writer.finalize().unwrap()
+    }
+
+    async fn search(
+        operator: &Operator,
+        location: &str,
+        bundle_size: u64,
+        word: &str,
+    ) -> Vec<usize> {
+        let field = Field::from_field_id(0);
+        let query: Box<dyn Query> = Box::new(TermQuery::new(
+            Term::from_field_text(field, word),
+            IndexRecordOption::Basic,
+        ));
+        let warmup = InvertedIndexWarmupInfo::try_create(query.as_ref(), &[field]).unwrap();
+        let reader = InvertedIndexReader::create(
+            operator.clone(),
+            false,
+            create_tokenizer_manager(&index_options()),
+            warmup,
+        );
+        let result = reader
+            .do_filter(
+                query,
+                location,
+                INVERTED_INDEX_FILE_FORMAT_VERSION,
+                bundle_size,
+                ROWS as u64,
+            )
+            .await
+            .unwrap();
+        let (mut rows, _) = result.unwrap_or_default();
+        rows.sort_unstable();
+        rows
+    }
+
+    async fn exists(operator: &Operator, path: &str) -> bool {
+        operator.exists(path).await.unwrap()
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_streamed_and_inline_bundles_answer_the_same_queries() {
+        init_test_globals().unwrap();
+        let operator = Operator::new(Memory::default()).unwrap().finish();
+
+        let streamed = build_index(&operator, "t/streamed.index", 256);
+        let inline = build_index(&operator, "t/inline.index", usize::MAX);
+
+        assert!(exists(&operator, "t/streamed.index.idx").await);
+        assert!(exists(&operator, "t/streamed.index.pos").await);
+        assert!(streamed.siblings > 0);
+        assert!(!exists(&operator, "t/inline.index.idx").await);
+        assert!(!exists(&operator, "t/inline.index.pos").await);
+        assert_eq!(inline.siblings, 0);
+        assert!(streamed.bundle < inline.bundle);
+        assert_eq!(
+            operator
+                .stat("t/streamed.index")
+                .await
+                .unwrap()
+                .content_length(),
+            streamed.bundle
+        );
+
+        for word in WORDS {
+            let expected = expected_rows(word);
+            assert_eq!(
+                search(&operator, "t/streamed.index", streamed.bundle, word).await,
+                expected,
+                "streamed {word}"
+            );
+            assert_eq!(
+                search(&operator, "t/inline.index", inline.bundle, word).await,
+                expected,
+                "inline {word}"
+            );
+        }
+        assert!(
+            search(&operator, "t/streamed.index", streamed.bundle, "zulu")
+                .await
+                .is_empty()
+        );
+    }
 }
