@@ -27,7 +27,6 @@ use databend_common_sql::binder::validate_constraints_by_schema;
 use databend_meta_client::types::MatchSeq;
 
 use crate::FuseTable;
-use crate::io::SnapshotsIO;
 use crate::operations::SnapshotHintWriter;
 
 impl FuseTable {
@@ -102,7 +101,8 @@ impl FuseTable {
             ));
         };
         let (snapshot, format_version) =
-            SnapshotsIO::read_snapshot(snapshot_loc, self.get_operator(), true).await?;
+            Self::read_navigation_snapshot(snapshot_loc, self.get_operator(), "revert point")
+                .await?;
 
         let mut table_info = self.table_info.clone();
         let snapshot_loc = self
