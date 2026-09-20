@@ -86,7 +86,25 @@ impl MergeSourceDirectory {
         bundle_size: u64,
         window_size: u64,
     ) -> tantivy::Result<Self> {
-        let footer = read_footer(&operator, &location, bundle_size)
+        Self::open_with(
+            operator,
+            location,
+            bundle_size,
+            window_size,
+            INVERTED_INDEX_BUNDLE_INITIAL_FOOTER_READ_SIZE as u64,
+        )
+    }
+
+    fn open_with(
+        operator: Operator,
+        location: String,
+        bundle_size: u64,
+        window_size: u64,
+        initial_tail: u64,
+    ) -> tantivy::Result<Self> {
+        let (footer, tail) = read_footer(&operator, &location, bundle_size, initial_tail)
+            .map_err(|error| tantivy::TantivyError::IoError(Arc::new(error)))?;
+        let handles = read_whole_files(&operator, &location, &footer, &tail)
             .map_err(|error| tantivy::TantivyError::IoError(Arc::new(error)))?;
         Ok(Self {
             inner: Arc::new(MergeSourceInner {
@@ -94,7 +112,7 @@ impl MergeSourceDirectory {
                 location,
                 footer,
                 window_size,
-                handles: Mutex::new(HashMap::new()),
+                handles: Mutex::new(handles),
                 sequential_stats: Mutex::new(HashMap::new()),
             }),
         })
@@ -147,6 +165,8 @@ impl MergeSourceDirectory {
         None
     }
 
+    /// Inline whole-read files are all in `handles` since `open`; only sequential files and
+    /// (unexpected) external whole-read files are opened here.
     fn open_handle(&self, path: &Path) -> Result<Arc<dyn FileHandle>, OpenReadError> {
         let (object, range) = self
             .locate(path)
@@ -169,6 +189,64 @@ impl MergeSourceDirectory {
             .map_err(|error| OpenReadError::wrap_io_error(error, path.to_path_buf()))?;
         Ok(Arc::new(OwnedBytes::new(bytes)))
     }
+}
+
+/// Bytes of one object range already in memory.
+struct ObjectTail {
+    start: u64,
+    bytes: Vec<u8>,
+}
+
+impl ObjectTail {
+    fn slice(&self, range: &Range<u64>) -> Option<&[u8]> {
+        if range.start < self.start || range.end > self.start + self.bytes.len() as u64 {
+            return None;
+        }
+        let start = (range.start - self.start) as usize;
+        Some(&self.bytes[start..start + (range.end - range.start) as usize])
+    }
+}
+
+/// Handles for every inline file that is read whole. The bundle stores them next to each
+/// other ahead of `.term` and the footer, so whatever the tail read did not already cover is
+/// fetched with one request instead of one per file.
+fn read_whole_files(
+    operator: &Operator,
+    location: &str,
+    footer: &InvertedIndexBundleFooter,
+    tail: &ObjectTail,
+) -> io::Result<HashMap<PathBuf, Arc<dyn FileHandle>>> {
+    let mut handles: HashMap<PathBuf, Arc<dyn FileHandle>> = HashMap::new();
+    let mut missing: Vec<(&PathBuf, Range<u64>)> = Vec::new();
+    let mut union: Option<Range<u64>> = None;
+    for (path, range) in &footer.file_ranges.files {
+        if MergeSourceDirectory::is_sequential(path) {
+            continue;
+        }
+        if let Some(bytes) = tail.slice(range) {
+            handles.insert(path.clone(), Arc::new(OwnedBytes::new(bytes.to_vec())));
+            continue;
+        }
+        union = Some(match union {
+            None => range.clone(),
+            Some(union) => union.start.min(range.start)..union.end.max(range.end),
+        });
+        missing.push((path, range.clone()));
+    }
+    let Some(union) = union else {
+        return Ok(handles);
+    };
+    let fetched = ObjectTail {
+        start: union.start,
+        bytes: read_range(operator, location, union)?,
+    };
+    for (path, range) in missing {
+        let bytes = fetched.slice(&range).ok_or_else(|| {
+            io::Error::other(format!("{} outside the fetched range", path.display()))
+        })?;
+        handles.insert(path.clone(), Arc::new(OwnedBytes::new(bytes.to_vec())));
+    }
+    Ok(handles)
 }
 
 impl Directory for MergeSourceDirectory {
@@ -221,11 +299,19 @@ pub fn json_term_record_option(field_option: IndexRecordOption, key: &[u8]) -> I
     }
 }
 
+// Requests issued by `read_range` on this thread, so tests can pin how many an open needs.
+#[cfg(test)]
+thread_local! {
+    pub(crate) static WHOLE_READS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
 /// Reads `range` of `object` on the calling thread.
 fn read_range(operator: &Operator, object: &str, range: Range<u64>) -> io::Result<Vec<u8>> {
     if range.is_empty() {
         return Ok(Vec::new());
     }
+    #[cfg(test)]
+    WHOLE_READS.with(|reads| reads.set(reads.get() + 1));
     let mut reader = OperatorRangeReader::new(operator.clone(), object.to_string(), 1);
     let data = RangeReader::read(&mut reader, range.clone())
         .map_err(|error| io::Error::other(error.to_string()))?;
@@ -239,26 +325,37 @@ fn read_range(operator: &Operator, object: &str, range: Range<u64>) -> io::Resul
 }
 
 /// Footer of the bundle at `location`: one bounded tail read, plus an exact read when the
-/// footer is larger than the initial tail.
+/// footer is larger than the initial tail. Returns the tail bytes too; they often already hold
+/// the small components stored ahead of the footer.
 fn read_footer(
     operator: &Operator,
     location: &str,
     bundle_size: u64,
-) -> io::Result<InvertedIndexBundleFooter> {
-    let initial = INVERTED_INDEX_BUNDLE_INITIAL_FOOTER_READ_SIZE as u64;
-    let tail_start = bundle_size.saturating_sub(initial);
+    initial_tail: u64,
+) -> io::Result<(InvertedIndexBundleFooter, ObjectTail)> {
+    let tail_start = bundle_size.saturating_sub(initial_tail);
     let tail = read_range(operator, location, tail_start..bundle_size)?;
     let footer_start =
         InvertedIndexBundleFooter::footer_start_from_tail(&tail, bundle_size, tail_start)?;
     if footer_start >= tail_start {
-        return InvertedIndexBundleFooter::parse_footer_from_tail(&tail, bundle_size, tail_start);
+        let footer =
+            InvertedIndexBundleFooter::parse_footer_from_tail(&tail, bundle_size, tail_start)?;
+        return Ok((footer, ObjectTail {
+            start: tail_start,
+            bytes: tail,
+        }));
     }
     let tail = read_range(operator, location, footer_start..bundle_size)?;
-    InvertedIndexBundleFooter::parse_footer_from_tail(&tail, bundle_size, footer_start)
+    let footer =
+        InvertedIndexBundleFooter::parse_footer_from_tail(&tail, bundle_size, footer_start)?;
+    Ok((footer, ObjectTail {
+        start: footer_start,
+        bytes: tail,
+    }))
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use databend_common_base::runtime::GlobalIORuntime;
     use opendal::services::Memory;
     use tantivy::IndexSettings;
@@ -300,11 +397,15 @@ mod tests {
     }
 
     fn add_documents(index: Index) -> Index {
+        add_rows(index, ROWS)
+    }
+
+    fn add_rows(index: Index, rows: usize) -> Index {
         let schema = index.schema();
         let title = schema.get_field("title").unwrap();
         let meta = schema.get_field("meta").unwrap();
         let mut writer = SingleSegmentIndexWriter::new(index, 16 * 1024 * 1024).unwrap();
-        for i in 0..ROWS {
+        for i in 0..rows {
             let mut doc = TantivyDocument::new();
             doc.add_text(title, format!("alpha beta w{} delta w{}", i % 97, i));
             let json = serde_json::json!({ "tag": format!("t{}", i % 5), "n": i });
@@ -322,6 +423,10 @@ mod tests {
     }
 
     fn write_bundle(threshold: usize) -> (Operator, u64) {
+        write_bundle_with_rows(threshold, ROWS)
+    }
+
+    pub(super) fn write_bundle_with_rows(threshold: usize, rows: usize) -> (Operator, u64) {
         init_test_runtime();
         let operator = Operator::new(Memory::default()).unwrap().finish();
         let directory = InvertedIndexOutputDirectory::with_stream_threshold(
@@ -329,7 +434,10 @@ mod tests {
             "t/h1.index".into(),
             threshold,
         );
-        let index = add_documents(Index::create(directory.clone(), schema(), settings()).unwrap());
+        let index = add_rows(
+            Index::create(directory.clone(), schema(), settings()).unwrap(),
+            rows,
+        );
         let builder = InvertedIndexBundleBuilder::try_create(
             directory.clone(),
             index,
@@ -456,5 +564,66 @@ mod record_option_tests {
                 IndexRecordOption::Basic
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod open_request_tests {
+    use super::tests::write_bundle_with_rows;
+    use super::*;
+
+    fn requests<T>(work: impl FnOnce() -> T) -> (T, u64) {
+        let before = WHOLE_READS.with(|reads| reads.get());
+        let value = work();
+        (value, WHOLE_READS.with(|reads| reads.get()) - before)
+    }
+
+    #[test]
+    fn test_small_bundle_opens_with_the_tail_read_only() {
+        let (operator, bundle_size) = write_bundle_with_rows(usize::MAX, 200);
+        assert!(bundle_size < INVERTED_INDEX_BUNDLE_INITIAL_FOOTER_READ_SIZE as u64);
+        let (source, requests) = requests(|| {
+            MergeSourceDirectory::open(operator, "t/h1.index".into(), bundle_size).unwrap()
+        });
+        assert_eq!(
+            requests, 1,
+            "footer and every whole-read file come from the tail"
+        );
+        let handles = source.inner.handles.lock().unwrap();
+        assert_eq!(
+            handles.len(),
+            3,
+            "store, fast and fieldnorm: {:?}",
+            handles.keys()
+        );
+    }
+
+    #[test]
+    fn test_files_outside_the_tail_are_fetched_in_one_request() {
+        // A 4 KiB initial tail: the footer needs an exact second read, and every whole-read
+        // file lies before it.
+        let (operator, bundle_size) = write_bundle_with_rows(usize::MAX, 3000);
+        let (source, requests) = requests(|| {
+            MergeSourceDirectory::open_with(operator, "t/h1.index".into(), bundle_size, 4096, 4096)
+                .unwrap()
+        });
+        let footer = source.footer();
+        for (path, range) in &footer.file_ranges.files {
+            if !MergeSourceDirectory::is_sequential(path) {
+                assert!(range.end <= footer.footer_start, "{path:?}");
+            }
+        }
+        let tail_start = bundle_size - 4096;
+        let footer_reads = if footer.footer_start >= tail_start {
+            1
+        } else {
+            2
+        };
+        assert_eq!(
+            requests,
+            footer_reads + 1,
+            "footer reads plus one for the rest"
+        );
+        assert_eq!(source.inner.handles.lock().unwrap().len(), 3);
     }
 }
