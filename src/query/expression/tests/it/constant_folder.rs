@@ -212,6 +212,45 @@ fn run_fold_case(
 }
 
 #[test]
+fn test_fold_uses_supplied_context() {
+    let mut registry = FunctionRegistry::empty();
+    // Assert context forwarding in both callbacks without making the identity
+    // function's result or domain depend on the context.
+    registry.register_passthrough_nullable_1_arg::<UInt64Type, UInt64Type, _>(
+        "identity",
+        |ctx, _| {
+            assert_eq!(ctx.week_start, 1);
+            FunctionDomain::Full
+        },
+        |value, ctx| {
+            assert_eq!(ctx.func_ctx.week_start, 1);
+            value
+        },
+    );
+    let expr = databend_common_expression::type_check::check_function(
+        None,
+        "identity",
+        &[],
+        &[Expr::<usize>::Constant(Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::UInt64(42)),
+            data_type: DataType::Number(NumberDataType::UInt64),
+        })],
+        &registry,
+    )
+    .unwrap();
+    let context = FunctionContext {
+        week_start: 1,
+        ..Default::default()
+    };
+    let (folded, _) = ConstantFolder::fold(Cow::Owned(expr), &context, &registry);
+    assert_eq!(
+        folded.as_constant().unwrap().scalar,
+        Scalar::Number(NumberScalar::UInt64(42))
+    );
+}
+
+#[test]
 fn test_constant_folder_golden() {
     let mut mint = Mint::new("tests/it/testdata");
     let mut file = mint.new_goldenfile("constant_folder.txt").unwrap();

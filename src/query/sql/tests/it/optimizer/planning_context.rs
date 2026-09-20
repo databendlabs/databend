@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
 use databend_common_sql::optimizer::ir::StatContext;
 
 use crate::framework::golden::SqlTestCase;
@@ -25,18 +26,27 @@ async fn write_optimized_case(file: &mut impl std::io::Write, case: &SqlTestCase
     let raw_plan = ctx.bind_sql(case.sql).await?;
     let optimized_plan = ctx.optimize_plan(raw_plan.clone()).await?;
 
+    let stat_ctx = StatContext {
+        function_context: FunctionContext {
+            now: chrono::DateTime::parse_from_rfc3339("2020-01-01T16:39:57Z")
+                .unwrap()
+                .to_utc(),
+            ..Default::default()
+        },
+    };
+
     write_case_header(file, case)?;
     writeln!(file, "raw_plan:")?;
     writeln!(
         file,
         "{}",
-        raw_plan.format_indent(Default::default(), &StatContext::default())?
+        raw_plan.format_indent(Default::default(), &stat_ctx)?
     )?;
     writeln!(file, "optimized_plan:")?;
     writeln!(
         file,
         "{}",
-        optimized_plan.format_indent(Default::default(), &StatContext::default())?
+        optimized_plan.format_indent(Default::default(), &stat_ctx)?
     )?;
     writeln!(file)?;
 
@@ -49,14 +59,25 @@ async fn test_planning_context_optimizer_outcomes() -> Result<()> {
     let setup_sqls = &[LEFT_ROWS_TABLE, RIGHT_ROWS_TABLE];
     let cases = [
         SqlTestCase {
-            name: "issue_reproduction_keeps_left_join",
-            description: "The statement-dependent OR predicate must keep null-extended rows and the left join.",
+            name: "statement_time_rejects_null_rows",
+            description: "The supplied test context uses the Unix epoch, so now() > 2020 is false and permits an inner join.",
             setup_sqls: &[],
             sql: "SELECT l.id
 FROM (SELECT 1 AS id UNION ALL SELECT 2 AS id) AS l
 LEFT JOIN (SELECT 1 AS id) AS r ON l.id = r.id
 WHERE r.id = 1
    OR now() > TIMESTAMP '2020-01-01 00:00:00'
+ORDER BY l.id",
+        },
+        SqlTestCase {
+            name: "statement_time_preserves_null_rows",
+            description: "The supplied test context uses the Unix epoch, so now() > 1960 is true and must preserve the left join.",
+            setup_sqls: &[],
+            sql: "SELECT l.id
+FROM (SELECT 1 AS id UNION ALL SELECT 2 AS id) AS l
+LEFT JOIN (SELECT 1 AS id) AS r ON l.id = r.id
+WHERE r.id = 1
+   OR now() > TIMESTAMP '1960-01-01 00:00:00'
 ORDER BY l.id",
         },
         SqlTestCase {
