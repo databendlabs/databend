@@ -23,6 +23,7 @@ use databend_common_ast::ast::DropTableIndexStmt;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::RefreshTableIndexStmt;
 use databend_common_ast::ast::TableIndexType as AstTableIndexType;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -31,15 +32,32 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_SOURCE_ROW_ID_COLUMN;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::is_materialized_view_engine;
+use databend_common_users::UserApiProvider;
 use databend_enterprise_materialized_view::get_materialized_view_handler;
+use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_FILTERS;
+use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_INDEX_RECORD;
+use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_MODE;
+use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_TOKENIZER;
+use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_USER_DICTIONARY;
+use databend_storages_common_table_meta::table::NGRAM_INDEX_OPT_BLOOM_SIZE;
+use databend_storages_common_table_meta::table::NGRAM_INDEX_OPT_FALSE_POSITIVE_RATE;
+use databend_storages_common_table_meta::table::NGRAM_INDEX_OPT_GRAM_SIZE;
+use databend_storages_common_table_meta::table::NGRAM_INDEX_OPT_HASH_ALGORITHM;
+use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_DISTANCE;
+use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_EF_CONSTRUCT;
+use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_M;
+use databend_storages_common_table_meta::table::is_internal_table_index_option;
 use itertools::Itertools;
 
 use crate::BindContext;
 use crate::binder::Binder;
+use crate::binder::StagePathAccess;
+use crate::binder::StageResolver;
 use crate::parse_materialized_view_query;
 use crate::planner::semantic::MaterializedViewChecker;
 use crate::plans::CreateTableIndexPlan;
 use crate::plans::DropTableIndexPlan;
+use crate::plans::IndexUserDictionary;
 use crate::plans::Plan;
 use crate::plans::RefreshTableIndexPlan;
 
@@ -52,6 +70,7 @@ static INDEX_TOKENIZER_VALUES: LazyLock<HashSet<&'static str>> = LazyLock::new(|
     r.insert("english");
     r.insert("chinese");
     r.insert("japanese");
+    r.insert("whitespace");
     r
 });
 
@@ -75,6 +94,13 @@ static INDEX_RECORD_VALUES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     r
 });
 
+static INDEX_MODE_VALUES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut r = HashSet::new();
+    r.insert("normal");
+    r.insert("decompose");
+    r
+});
+
 fn is_valid_tokenizer_values<S: AsRef<str>>(opt_val: S) -> bool {
     INDEX_TOKENIZER_VALUES.contains(opt_val.as_ref())
 }
@@ -85,6 +111,10 @@ fn is_valid_filter_values<S: AsRef<str>>(opt_val: S) -> bool {
 
 fn is_valid_index_record_values<S: AsRef<str>>(opt_val: S) -> bool {
     INDEX_RECORD_VALUES.contains(opt_val.as_ref())
+}
+
+fn is_valid_index_mode_values<S: AsRef<str>>(opt_val: S) -> bool {
+    INDEX_MODE_VALUES.contains(opt_val.as_ref())
 }
 
 // valid values for vector index distance
@@ -193,11 +223,26 @@ impl Binder {
         let table_id = table.get_id();
         let index_name = self.normalize_object_identifier(index_name);
 
+        let mut user_dictionary = None;
         let (column_ids, index_options, meta_index_type) = match index_type {
             AstTableIndexType::Inverted => {
                 let column_ids =
                     self.validate_inverted_index_columns(table_schema.clone(), columns)?;
                 let index_options = self.validate_inverted_index_options(index_options)?;
+                if let Some(location) = index_options.get(INVERTED_INDEX_OPT_USER_DICTIONARY) {
+                    let (stage_info, path) = StageResolver::from_table_context(
+                        self.ctx.clone(),
+                        UserApiProvider::instance(),
+                        GlobalConfig::instance().storage.allow_insecure,
+                    )?
+                    .resolve_stage_location(location, StagePathAccess::Read)
+                    .await?;
+                    user_dictionary = Some(IndexUserDictionary {
+                        stage_info,
+                        path,
+                        location: location.to_string(),
+                    });
+                }
                 (column_ids, index_options, TableIndexType::Inverted)
             }
             AstTableIndexType::Ngram => {
@@ -271,6 +316,7 @@ impl Binder {
             table_id,
             sync_creation: *sync_creation,
             index_options,
+            user_dictionary,
         };
         Ok(Plan::CreateTableIndex(Box::new(plan)))
     }
@@ -318,7 +364,7 @@ impl Binder {
             let key = opt.to_lowercase();
             let value = val.to_lowercase();
             match key.as_str() {
-                "gram_size" => {
+                NGRAM_INDEX_OPT_GRAM_SIZE => {
                     match value.parse::<usize>() {
                         Ok(num) => {
                             if num == 0 {
@@ -333,9 +379,9 @@ impl Binder {
                             )));
                         }
                     }
-                    options.insert("gram_size".to_string(), value);
+                    options.insert(NGRAM_INDEX_OPT_GRAM_SIZE.to_string(), value);
                 }
-                "bloom_size" => {
+                NGRAM_INDEX_OPT_BLOOM_SIZE => {
                     match value.parse::<u64>() {
                         Ok(num) => {
                             if num == 0 {
@@ -360,9 +406,9 @@ impl Binder {
                             )));
                         }
                     }
-                    options.insert("bloom_size".to_string(), value);
+                    options.insert(NGRAM_INDEX_OPT_BLOOM_SIZE.to_string(), value);
                 }
-                "false_positive_rate" => {
+                NGRAM_INDEX_OPT_FALSE_POSITIVE_RATE => {
                     match value.parse::<f64>() {
                         Ok(num) if num.is_finite() && num > 0.0 && num < 1.0 => {}
                         Ok(_) => {
@@ -376,15 +422,15 @@ impl Binder {
                             )));
                         }
                     }
-                    options.insert("false_positive_rate".to_string(), value);
+                    options.insert(NGRAM_INDEX_OPT_FALSE_POSITIVE_RATE.to_string(), value);
                 }
-                "hash_algorithm" => {
+                NGRAM_INDEX_OPT_HASH_ALGORITHM => {
                     if !matches!(value.as_str(), "city64_v0" | "rolling_v1") {
                         return Err(ErrorCode::IndexOptionInvalid(format!(
                             "invalid NGRAM hash algorithm `{value}`, must be one of: city64_v0, rolling_v1"
                         )));
                     }
-                    options.insert("hash_algorithm".to_string(), value);
+                    options.insert(NGRAM_INDEX_OPT_HASH_ALGORITHM.to_string(), value);
                 }
                 _ => {
                     return Err(ErrorCode::IndexOptionInvalid(format!(
@@ -441,15 +487,15 @@ impl Binder {
             let key = opt.to_lowercase();
             let value = val.to_lowercase();
             match key.as_str() {
-                "tokenizer" => {
+                INVERTED_INDEX_OPT_TOKENIZER => {
                     if !is_valid_tokenizer_values(&value) {
                         return Err(ErrorCode::IndexOptionInvalid(format!(
                             "value `{value}` is invalid index tokenizer",
                         )));
                     }
-                    options.insert("tokenizer".to_string(), value.to_string());
+                    options.insert(INVERTED_INDEX_OPT_TOKENIZER.to_string(), value.to_string());
                 }
-                "filters" => {
+                INVERTED_INDEX_OPT_FILTERS => {
                     let raw_filters: Vec<&str> = value.split(',').collect();
                     let mut filters = Vec::with_capacity(raw_filters.len());
                     for raw_filter in raw_filters {
@@ -461,9 +507,12 @@ impl Binder {
                         }
                         filters.push(filter);
                     }
-                    options.insert("filters".to_string(), filters.join(",").to_string());
+                    options.insert(
+                        INVERTED_INDEX_OPT_FILTERS.to_string(),
+                        filters.join(",").to_string(),
+                    );
                 }
-                "index_record" => {
+                INVERTED_INDEX_OPT_INDEX_RECORD => {
                     if !is_valid_index_record_values(&value) {
                         return Err(ErrorCode::IndexOptionInvalid(format!(
                             "value `{value}` is invalid index record option",
@@ -471,11 +520,54 @@ impl Binder {
                     }
                     // convert to a JSON string, for `IndexRecordOption` deserialize
                     let index_record_val = format!("\"{}\"", value);
-                    options.insert("index_record".to_string(), index_record_val);
+                    options.insert(
+                        INVERTED_INDEX_OPT_INDEX_RECORD.to_string(),
+                        index_record_val,
+                    );
+                }
+                INVERTED_INDEX_OPT_MODE => {
+                    if !is_valid_index_mode_values(&value) {
+                        return Err(ErrorCode::IndexOptionInvalid(format!(
+                            "value `{value}` is invalid index mode option, must be one of: normal, decompose",
+                        )));
+                    }
+                    options.insert(INVERTED_INDEX_OPT_MODE.to_string(), value.to_string());
+                }
+                INVERTED_INDEX_OPT_USER_DICTIONARY => {
+                    // A stage location: case must be preserved.
+                    let location = val.trim();
+                    if !location.starts_with('@') {
+                        return Err(ErrorCode::IndexOptionInvalid(format!(
+                            "value `{val}` is invalid for index option `{key}`, expected a stage file location like '@stage/path/dict.csv'",
+                        )));
+                    }
+                    options.insert(
+                        INVERTED_INDEX_OPT_USER_DICTIONARY.to_string(),
+                        location.to_string(),
+                    );
                 }
                 _ => {
+                    if is_internal_table_index_option(&key) {
+                        return Err(ErrorCode::IndexOptionInvalid(format!(
+                            "index option `{key}` is reserved and cannot be set",
+                        )));
+                    }
                     return Err(ErrorCode::IndexOptionInvalid(format!(
                         "index option `{key}` is invalid key for create inverted index statement",
+                    )));
+                }
+            }
+        }
+        // currently, user dictionary and mode only support japanese.
+        if options
+            .get(INVERTED_INDEX_OPT_TOKENIZER)
+            .map(String::as_str)
+            != Some("japanese")
+        {
+            for japanese_only in [INVERTED_INDEX_OPT_USER_DICTIONARY, INVERTED_INDEX_OPT_MODE] {
+                if options.contains_key(japanese_only) {
+                    return Err(ErrorCode::IndexOptionInvalid(format!(
+                        "index option `{japanese_only}` requires tokenizer = 'japanese'",
                     )));
                 }
             }
@@ -526,7 +618,7 @@ impl Binder {
             let key = opt.to_lowercase();
             let value = val.to_lowercase();
             match key.as_str() {
-                "m" => {
+                VECTOR_INDEX_OPT_M => {
                     match value.parse::<usize>() {
                         Ok(num) => {
                             if num == 0 {
@@ -539,9 +631,9 @@ impl Binder {
                             )));
                         }
                     }
-                    options.insert("m".to_string(), value);
+                    options.insert(VECTOR_INDEX_OPT_M.to_string(), value);
                 }
-                "ef_construct" => {
+                VECTOR_INDEX_OPT_EF_CONSTRUCT => {
                     match value.parse::<usize>() {
                         Ok(num) => {
                             if num < 4 {
@@ -556,9 +648,9 @@ impl Binder {
                             )));
                         }
                     }
-                    options.insert("ef_construct".to_string(), value);
+                    options.insert(VECTOR_INDEX_OPT_EF_CONSTRUCT.to_string(), value);
                 }
-                "distance" => {
+                VECTOR_INDEX_OPT_DISTANCE => {
                     let raw_distances: Vec<&str> = value.split(',').collect();
                     let mut distances = BTreeSet::new();
                     for raw_distance in raw_distances {
@@ -571,7 +663,7 @@ impl Binder {
                         distances.insert(distance);
                     }
                     options.insert(
-                        "distance".to_string(),
+                        VECTOR_INDEX_OPT_DISTANCE.to_string(),
                         distances.into_iter().join(",").to_string(),
                     );
                 }
@@ -582,7 +674,7 @@ impl Binder {
                 }
             }
         }
-        if !options.contains_key("distance") {
+        if !options.contains_key(VECTOR_INDEX_OPT_DISTANCE) {
             return Err(ErrorCode::IndexOptionInvalid(
                 "must specify `distance` option, valid values are: `cosine`, `l1` and `l2`"
                     .to_string(),

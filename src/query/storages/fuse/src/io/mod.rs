@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod inverted_index_user_dictionary;
 mod locations;
 pub mod read;
 mod segments;
 mod snapshots;
 mod write;
 
+pub use inverted_index_user_dictionary::InvertedIndexUserDictionary;
+pub use inverted_index_user_dictionary::resolve_inverted_index_user_dictionary;
+pub use inverted_index_user_dictionary::resolve_inverted_index_user_dictionary_blocking;
 pub use locations::TableMetaLocationGenerator;
 pub use read::BlockReadContext;
 pub use read::BlockReadResult;

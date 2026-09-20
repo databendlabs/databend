@@ -43,6 +43,9 @@ use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfVectorColumns;
 use databend_storages_common_table_meta::meta::VectorColumnStatistics;
 use databend_storages_common_table_meta::table::TableCompression;
+use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_DISTANCE;
+use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_EF_CONSTRUCT;
+use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_M;
 use log::debug;
 use log::info;
 use opendal::Buffer;
@@ -176,18 +179,18 @@ impl VectorIndexBuilder {
             }
 
             // Parse index parameters
-            let m = match index.options.get("m") {
+            let m = match index.options.get(VECTOR_INDEX_OPT_M) {
                 Some(value) => value.parse::<usize>().unwrap_or(DEFAULT_M),
                 None => DEFAULT_M,
             };
 
-            let ef_construct = match index.options.get("ef_construct") {
+            let ef_construct = match index.options.get(VECTOR_INDEX_OPT_EF_CONSTRUCT) {
                 Some(value) => value.parse::<usize>().unwrap_or(DEFAULT_EF_CONSTRUCT),
                 None => DEFAULT_EF_CONSTRUCT,
             };
 
             let mut distances = Vec::new();
-            match index.options.get("distance") {
+            match index.options.get(VECTOR_INDEX_OPT_DISTANCE) {
                 Some(value) => {
                     let distance_types: Vec<&str> = value.split(',').collect();
                     for distance_type in distance_types {

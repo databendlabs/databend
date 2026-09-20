@@ -59,6 +59,8 @@ pub const FUSE_TBL_AGG_INDEX_PREFIX: &str = "_i_a";
 pub const FUSE_TBL_INVERTED_INDEX_PREFIX: &str = "_i_i";
 /// Raw Tantivy bundle prefix.
 pub const FUSE_TBL_INVERTED_INDEX_PREFIX_V2: &str = "_i_i_v2";
+/// Content-addressed user dictionaries referenced by inverted index options.
+pub const FUSE_TBL_INVERTED_INDEX_DICT_PREFIX: &str = "_i_i_d";
 pub const FUSE_TBL_VECTOR_INDEX_PREFIX: &str = "_i_v";
 pub const FUSE_TBL_SPATIAL_INDEX_PREFIX: &str = "_i_s";
 pub const LEGACY_FUSE_TBL_REF_PREFIX: &str = "_ref";

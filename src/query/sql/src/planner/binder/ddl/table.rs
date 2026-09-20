@@ -104,6 +104,7 @@ use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
+use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_USER_DICTIONARY;
 use databend_storages_common_table_meta::table::OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -115,6 +116,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_WRITE_DISTRIBUTION_MODE;
 use databend_storages_common_table_meta::table::TableCompression;
+use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_DISTANCE;
 use databend_storages_common_table_meta::table::WriteDistributionMode;
 use databend_storages_common_table_meta::table::is_reserved_opt_key;
 use derive_visitor::Drive;
@@ -132,6 +134,7 @@ use crate::SelectBuilder;
 use crate::StoredKeyNormalizer;
 use crate::binder::Binder;
 use crate::binder::ConstraintExprBinder;
+use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::util::legacy_table_ref_removed_error;
@@ -159,6 +162,7 @@ use crate::plans::DropTablePlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
 use crate::plans::DropTableTagPlan;
 use crate::plans::ExistsTablePlan;
+use crate::plans::IndexUserDictionary;
 use crate::plans::MaintenanceTarget;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
@@ -216,6 +220,9 @@ pub(in crate::planner::binder) struct AnalyzeCreateTableResult {
     pub(in crate::planner::binder) field_stats_truncate_len: Vec<Option<u64>>,
     pub(in crate::planner::binder) table_indexes: Option<BTreeMap<String, TableIndex>>,
     pub(in crate::planner::binder) table_constraints: Option<BTreeMap<String, Constraint>>,
+    /// `user_dictionary` options of inline inverted indexes, keyed by index name.
+    pub(in crate::planner::binder) index_user_dictionaries:
+        Option<BTreeMap<String, IndexUserDictionary>>,
 }
 
 impl Binder {
@@ -811,6 +818,7 @@ impl Binder {
                 field_stats_truncate_len,
                 table_indexes,
                 table_constraints,
+                index_user_dictionaries,
             },
             as_query_plan,
         ) = match (&source, &as_query) {
@@ -843,6 +851,7 @@ impl Binder {
                         field_stats_truncate_len: vec![],
                         table_indexes: None,
                         table_constraints: None,
+                        index_user_dictionaries: None,
                     },
                     Some(Box::new(as_query_plan)),
                 )
@@ -1037,6 +1046,7 @@ impl Binder {
             table_indexes,
             table_constraints,
             attached_columns: None,
+            index_user_dictionaries,
         };
         Ok(Plan::CreateTable(Box::new(plan)))
     }
@@ -1112,6 +1122,7 @@ impl Binder {
             table_indexes: None,
             table_constraints: None,
             attached_columns: stmt.columns_opt.clone(),
+            index_user_dictionaries: None,
         })))
     }
 
@@ -2261,13 +2272,19 @@ impl Binder {
         Ok(constraints)
     }
 
+    /// Returns the index definitions plus, for inverted indexes declaring `user_dictionary`, the
+    /// resolved stage location the interpreter must snapshot once the table storage exists.
     #[async_backtrace::framed]
     async fn analyze_table_indexes(
         &self,
         table_schema: TableSchemaRef,
         table_index_defs: &[TableIndexDefinition],
-    ) -> Result<BTreeMap<String, TableIndex>> {
+    ) -> Result<(
+        BTreeMap<String, TableIndex>,
+        Option<BTreeMap<String, IndexUserDictionary>>,
+    )> {
         let mut table_indexes = BTreeMap::new();
+        let mut index_user_dictionaries: Option<BTreeMap<String, IndexUserDictionary>> = None;
         for table_index_def in table_index_defs {
             let name = self.normalize_object_identifier(&table_index_def.index_name);
             if table_indexes.contains_key(&name) {
@@ -2284,6 +2301,22 @@ impl Binder {
                     )?;
                     let options =
                         self.validate_inverted_index_options(&table_index_def.index_options)?;
+                    if let Some(location) = options.get(INVERTED_INDEX_OPT_USER_DICTIONARY) {
+                        let (stage_info, path) = StageResolver::from_table_context(
+                            self.ctx.clone(),
+                            UserApiProvider::instance(),
+                            GlobalConfig::instance().storage.allow_insecure,
+                        )?
+                        .resolve_stage_location(location, StagePathAccess::Read)
+                        .await?;
+                        index_user_dictionaries
+                            .get_or_insert_with(BTreeMap::new)
+                            .insert(name.clone(), IndexUserDictionary {
+                                stage_info,
+                                path,
+                                location: location.clone(),
+                            });
+                    }
                     (TableIndexType::Inverted, column_ids, options)
                 }
                 AstTableIndexType::Ngram => {
@@ -2325,7 +2358,7 @@ impl Binder {
             };
             table_indexes.insert(name, table_index);
         }
-        Ok(table_indexes)
+        Ok((table_indexes, index_user_dictionaries))
     }
 
     #[async_backtrace::framed]
@@ -2343,14 +2376,15 @@ impl Binder {
             } => {
                 let (schema, comments, stats_truncate_len) =
                     self.analyze_create_table_schema_by_columns(columns).await?;
-                let table_indexes = if let Some(table_index_defs) = opt_table_indexes {
-                    let table_indexes = self
-                        .analyze_table_indexes(schema.clone(), table_index_defs)
-                        .await?;
-                    Some(table_indexes)
-                } else {
-                    None
-                };
+                let (table_indexes, index_user_dictionaries) =
+                    if let Some(table_index_defs) = opt_table_indexes {
+                        let (table_indexes, index_user_dictionaries) = self
+                            .analyze_table_indexes(schema.clone(), table_index_defs)
+                            .await?;
+                        (Some(table_indexes), index_user_dictionaries)
+                    } else {
+                        (None, None)
+                    };
 
                 let constraints = match (opt_column_constraints, opt_table_constraints) {
                     (Some(column_constraints), Some(table_constraints)) => Some(Box::new(
@@ -2376,6 +2410,7 @@ impl Binder {
                     field_stats_truncate_len: stats_truncate_len,
                     table_indexes,
                     table_constraints,
+                    index_user_dictionaries,
                 })
             }
             CreateTableSource::Like {
@@ -2397,6 +2432,7 @@ impl Binder {
                             field_stats_truncate_len: vec![],
                             table_indexes: None,
                             table_constraints: None,
+                            index_user_dictionaries: None,
                         })
                     } else {
                         Err(ErrorCode::Internal(
@@ -2410,6 +2446,7 @@ impl Binder {
                         field_stats_truncate_len: vec![],
                         table_indexes: None,
                         table_constraints: None,
+                        index_user_dictionaries: None,
                     })
                 }
             }
@@ -2610,7 +2647,12 @@ impl Binder {
                         index.index_type == TableIndexType::Vector
                             && index.column_ids.contains(&field.column_id())
                     })
-                    .map(|index| index.options.get("distance").map(String::as_str));
+                    .map(|index| {
+                        index
+                            .options
+                            .get(VECTOR_INDEX_OPT_DISTANCE)
+                            .map(String::as_str)
+                    });
                 VectorDistanceType::from_index_options(field.name(), distances)?;
             }
 

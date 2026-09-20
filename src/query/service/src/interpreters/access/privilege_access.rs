@@ -1963,6 +1963,10 @@ impl AccessChecker for PrivilegeAccess {
                 if let Some(query) = &plan.as_select {
                     self.check(ctx, query).await?;
                 }
+                for dictionary in plan.index_user_dictionaries.iter().flatten().map(|(_, d)| d) {
+                    self.validate_stage_access(&dictionary.stage_info, UserPrivilegeType::Read)
+                        .await?;
+                }
             }
             Plan::CreateMaterializedView(plan) => {
                 self.validate_db_access(
@@ -2568,6 +2572,10 @@ impl AccessChecker for PrivilegeAccess {
             Plan::CreateTableIndex(plan) => {
                 self.validate_table_index_access(&plan.catalog, &plan.database, &plan.table)
                     .await?;
+                if let Some(dictionary) = &plan.user_dictionary {
+                    self.validate_stage_access(&dictionary.stage_info, UserPrivilegeType::Read)
+                        .await?;
+                }
             }
             Plan::CreateDatamaskPolicy(_) => {
                 self

@@ -131,6 +131,7 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         attached_columns: None,
         table_partition: None,
         table_properties: None,
+        index_user_dictionaries: None,
     };
 
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;

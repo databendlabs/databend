@@ -30,6 +30,7 @@ use uuid::Uuid;
 use uuid::Version;
 
 use crate::FUSE_TBL_AGG_INDEX_PREFIX;
+use crate::FUSE_TBL_INVERTED_INDEX_DICT_PREFIX;
 use crate::FUSE_TBL_INVERTED_INDEX_PREFIX;
 use crate::FUSE_TBL_INVERTED_INDEX_PREFIX_V2;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT_V2;
@@ -73,6 +74,7 @@ pub struct TableMetaLocationGenerator {
     agg_index_location_prefix: String,
     inverted_index_location_prefix: String,
     inverted_index_v2_location_prefix: String,
+    inverted_index_dict_location_prefix: String,
     vector_index_location_prefix: String,
     spatial_index_location_prefix: String,
     segment_statistics_location_prefix: String,
@@ -92,6 +94,8 @@ impl TableMetaLocationGenerator {
             format!("{}/{}/", prefix, FUSE_TBL_INVERTED_INDEX_PREFIX);
         let inverted_index_v2_location_prefix =
             format!("{}/{}/", prefix, FUSE_TBL_INVERTED_INDEX_PREFIX_V2);
+        let inverted_index_dict_location_prefix =
+            format!("{}/{}/", prefix, FUSE_TBL_INVERTED_INDEX_DICT_PREFIX);
         let vector_index_location_prefix = format!("{}/{}/", prefix, FUSE_TBL_VECTOR_INDEX_PREFIX);
         let spatial_index_location_prefix =
             format!("{}/{}/", prefix, FUSE_TBL_SPATIAL_INDEX_PREFIX);
@@ -107,6 +111,7 @@ impl TableMetaLocationGenerator {
             agg_index_location_prefix,
             inverted_index_location_prefix,
             inverted_index_v2_location_prefix,
+            inverted_index_dict_location_prefix,
             vector_index_location_prefix,
             spatial_index_location_prefix,
             segment_statistics_location_prefix,
@@ -338,6 +343,15 @@ impl TableMetaLocationGenerator {
             index_name,
             short_ver,
         )
+    }
+
+    pub fn inverted_index_dict_location_prefix(&self) -> &str {
+        &self.inverted_index_dict_location_prefix
+    }
+
+    /// Location of a content-addressed inverted index user dictionary object.
+    pub fn gen_inverted_index_dict_location(&self, digest: &str) -> String {
+        format!("{}{}.csv", self.inverted_index_dict_location_prefix, digest)
     }
 
     pub fn gen_specific_inverted_index_v2_prefix(&self, index_version: &str) -> String {

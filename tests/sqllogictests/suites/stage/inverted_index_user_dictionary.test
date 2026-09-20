@@ -1,0 +1,177 @@
+# Japanese inverted index with a Lindera user dictionary loaded from a stage file.
+# The dictionary is snapshotted into the table storage at CREATE INVERTED INDEX time,
+# so index-time and query-time tokenization always agree.
+
+statement ok
+DROP DATABASE IF EXISTS test_ii_userdict
+
+statement ok
+CREATE DATABASE test_ii_userdict
+
+statement ok
+USE test_ii_userdict
+
+statement ok
+CREATE TABLE news (id INT, content STRING)
+
+statement ok
+INSERT INTO news VALUES
+(1, 'OpenAI が新しいモデルを発表した'),
+(2, 'AI 技術の進歩は速い'),
+(3, 'ChatGPTを業務で使う'),
+(4, 'Databend Cloud は MySQL 互換のデータベースだ'),
+(5, 'Cloud ストレージにバックアップを置く')
+
+# Baseline: IPADIC treats a run of ASCII letters as one unknown word.
+statement ok
+CREATE INVERTED INDEX idx ON news(content) tokenizer = 'japanese' filters = 'japanese_stop,japanese_stemmer'
+
+statement ok
+REFRESH INVERTED INDEX idx ON news
+
+query I
+SELECT id FROM news WHERE match(content, 'AI') ORDER BY id
+----
+2
+
+query I
+SELECT id FROM news WHERE match(content, 'GPT') ORDER BY id
+----
+
+query I
+SELECT id FROM news WHERE match(content, 'Cloud') ORDER BY id
+----
+4
+5
+
+# Option validation.
+statement error 1603
+CREATE OR REPLACE INVERTED INDEX idx ON news(content) tokenizer = 'english' user_dictionary = '@data/csv/japanese/userdict.csv'
+
+statement error 1603
+CREATE OR REPLACE INVERTED INDEX idx ON news(content) tokenizer = 'japanese' user_dictionary = 'data/csv/japanese/userdict.csv'
+
+statement ok
+CREATE OR REPLACE INVERTED INDEX idx ON news(content) tokenizer = 'japanese' filters = 'japanese_stop,japanese_stemmer' user_dictionary = '@data/csv/japanese/userdict.csv'
+
+# The user-facing option is shown, the internal snapshot location is not.
+query TT
+SHOW CREATE TABLE news
+----
+news CREATE TABLE news ( id INT NULL, content VARCHAR NULL, SYNC INVERTED INDEX idx (content) filters = 'japanese_stop,japanese_stemmer', tokenizer = 'japanese', user_dictionary = '@data/csv/japanese/userdict.csv' ) ENGINE=FUSE
+
+statement ok
+REFRESH INVERTED INDEX idx ON news
+
+query I
+SELECT id FROM news WHERE match(content, 'AI') ORDER BY id
+----
+1
+2
+
+query I
+SELECT id FROM news WHERE match(content, 'GPT') ORDER BY id
+----
+3
+
+query I
+SELECT id FROM news WHERE match(content, 'ChatGPT') ORDER BY id
+----
+3
+
+# `Databend Cloud` is one dictionary token in the index. The query grammar splits an unquoted
+# query on whitespace before the analyzer runs, so 'Databend Cloud' becomes `databend OR cloud` and
+# only row 5 (a standalone `Cloud`) matches. Quoting hands the whole string to the analyzer,
+# which resolves it through the dictionary to the same single token and matches row 4.
+query I
+SELECT id FROM news WHERE match(content, 'Databend Cloud') ORDER BY id
+----
+5
+
+query I
+SELECT id FROM news WHERE match(content, '"Databend Cloud"') ORDER BY id
+----
+4
+
+# The generic `Cloud` no longer matches row 4 for the same reason.
+query I
+SELECT id FROM news WHERE match(content, 'Cloud') ORDER BY id
+----
+5
+
+# Newly inserted rows are indexed with the same dictionary.
+statement ok
+INSERT INTO news VALUES (6, 'GPT を使った新しい AI サービス')
+
+query I
+SELECT id FROM news WHERE match(content, 'GPT') ORDER BY id
+----
+3
+6
+
+# Switching to a different dictionary takes effect after REFRESH. The small dictionary only
+# has `AI`: without an `Open` entry there is no path that splits the unknown-word run
+# `OpenAI`, so row 1 drops out while the standalone `AI` in rows 2 and 6 still matches.
+statement ok
+CREATE OR REPLACE INVERTED INDEX idx ON news(content) tokenizer = 'japanese' filters = 'japanese_stop,japanese_stemmer' user_dictionary = '@data/csv/japanese/userdict_small.csv'
+
+statement ok
+REFRESH INVERTED INDEX idx ON news
+
+query I
+SELECT id FROM news WHERE match(content, 'AI') ORDER BY id
+----
+2
+6
+
+# Likewise `ChatGPT` in row 3 is no longer split, while the standalone `GPT` in row 6 never
+# needed the dictionary.
+query I
+SELECT id FROM news WHERE match(content, 'GPT') ORDER BY id
+----
+6
+
+# The dictionary can also be declared inline in CREATE TABLE; it is snapshotted once the
+# table storage exists and applies to every subsequent write.
+statement ok
+CREATE TABLE news_inline (
+    id INT,
+    content STRING,
+    INVERTED INDEX idx (content) tokenizer = 'japanese' filters = 'japanese_stop,japanese_stemmer' user_dictionary = '@data/csv/japanese/userdict.csv'
+)
+
+query TT
+SHOW CREATE TABLE news_inline
+----
+news_inline CREATE TABLE news_inline ( id INT NULL, content VARCHAR NULL, SYNC INVERTED INDEX idx (content) filters = 'japanese_stop,japanese_stemmer', tokenizer = 'japanese', user_dictionary = '@data/csv/japanese/userdict.csv' ) ENGINE=FUSE
+
+statement ok
+INSERT INTO news_inline SELECT id, content FROM news WHERE id <= 5
+
+query I
+SELECT id FROM news_inline WHERE match(content, 'GPT') ORDER BY id
+----
+3
+
+query I
+SELECT id FROM news_inline WHERE match(content, 'Cloud') ORDER BY id
+----
+5
+
+# CREATE TABLE ... AS SELECT with an inline dictionary.
+statement ok
+CREATE TABLE news_ctas (
+    id INT,
+    content STRING,
+    INVERTED INDEX idx (content) tokenizer = 'japanese' user_dictionary = '@data/csv/japanese/userdict.csv'
+) AS SELECT id, content FROM news WHERE id <= 5
+
+query I
+SELECT id FROM news_ctas WHERE match(content, 'AI') ORDER BY id
+----
+1
+2
+
+statement ok
+DROP DATABASE test_ii_userdict
+

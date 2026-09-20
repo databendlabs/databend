@@ -18,6 +18,7 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_ast::ast::Engine;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -30,9 +31,12 @@ use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
@@ -49,6 +53,8 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FuseSegmentFormat;
 use databend_common_storages_fuse::FuseStorageFormat;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::InvertedIndexUserDictionary;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -59,6 +65,7 @@ use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::abort_staged_temp_table;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
@@ -243,6 +250,7 @@ impl CreateTableInterpreter {
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
         let mut req = self.build_request(None)?;
+        let dictionary_indexes = self.take_dictionary_indexes(&mut req.table_meta).await?;
 
         // create a dropped table first.
         req.as_dropped = true;
@@ -296,12 +304,21 @@ impl CreateTableInterpreter {
         // For the situation above, we implicitly cast the data type when inserting data.
         // The casting and schema checking is in interpreter_insert.rs, function check_schema_cast.
 
-        let table_info = TableInfo::new(
+        let mut table_info = TableInfo::new(
             &self.plan.database,
             &self.plan.table,
             TableIdent::new(table_id, table_id_seq),
             table_meta,
         );
+
+        // The staged table is not visible yet, so the dictionary-backed indexes are in place
+        // strictly before any data is written through `table_info`.
+        if let Some(table_meta) = self
+            .register_dictionary_indexes(catalog.as_ref(), &table_info, dictionary_indexes)
+            .await?
+        {
+            table_info.meta = table_meta;
+        }
 
         let insert_plan = Insert {
             catalog: self.plan.catalog.clone(),
@@ -475,11 +492,12 @@ impl CreateTableInterpreter {
                 });
             }
         }
-        let req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {
+        let mut req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {
             self.build_attach_request(storage_prefix).await
         } else {
             self.build_request(stat)
         }?;
+        let dictionary_indexes = self.take_dictionary_indexes(&mut req.table_meta).await?;
 
         if !catalog.support_partition()
             && (req.table_properties.is_some() || req.table_partition.is_some())
@@ -495,6 +513,47 @@ impl CreateTableInterpreter {
             self.register_temp_table(prefix).await?;
         }
 
+        // `new_table == false` means an existing table was kept (IF NOT EXISTS); its own
+        // indexes are untouched.
+        if reply.new_table && !dictionary_indexes.is_empty() {
+            let table_info = TableInfo::new(
+                &self.plan.database,
+                &self.plan.table,
+                TableIdent::new(reply.table_id, reply.table_id_seq.unwrap_or_default()),
+                req.table_meta.clone(),
+            );
+            if let Err(e) = self
+                .register_dictionary_indexes(catalog.as_ref(), &table_info, dictionary_indexes)
+                .await
+            {
+                // Keep CREATE TABLE all-or-nothing: the table was created moments ago by this
+                // statement, so drop it instead of leaving one behind without its indexes.
+                let dropped = catalog
+                    .drop_table_by_id(DropTableByIdReq {
+                        if_exists: true,
+                        tenant: self.ctx.get_tenant(),
+                        tb_id: reply.table_id,
+                        table_name: self.plan.table.clone(),
+                        db_id: reply.db_id,
+                        db_name: self.plan.database.clone(),
+                        engine: req.table_meta.engine.clone(),
+                        temp_prefix: req
+                            .table_meta
+                            .options
+                            .get(OPT_KEY_TEMP_PREFIX)
+                            .cloned()
+                            .unwrap_or_default(),
+                    })
+                    .await;
+                return Err(match dropped {
+                    Ok(_) => e,
+                    Err(drop_err) => e.add_message_back(format!(
+                        "; rolling back the new table also failed: {drop_err}"
+                    )),
+                });
+            }
+        }
+
         // iceberg table do not need to generate ownership.
         if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) && !catalog.is_external() {
             let tenant = self.ctx.get_tenant();
@@ -502,6 +561,76 @@ impl CreateTableInterpreter {
         }
 
         Ok(PipelineBuildResult::create())
+    }
+
+    /// Takes the inline indexes that declare a `user_dictionary` out of `table_meta`, together
+    /// with their dictionary read from the stage. They are registered after `create_table`,
+    /// once the table storage prefix that the dictionary location depends on exists.
+    async fn take_dictionary_indexes(
+        &self,
+        table_meta: &mut TableMeta,
+    ) -> Result<Vec<(String, TableIndex, InvertedIndexUserDictionary)>> {
+        let mut indexes = Vec::new();
+        for (name, user_dictionary) in self.plan.index_user_dictionaries.iter().flatten() {
+            let Some(index) = table_meta.indexes.remove(name) else {
+                continue;
+            };
+            let content = user_dictionary.read().await?;
+            indexes.push((
+                name.clone(),
+                index,
+                InvertedIndexUserDictionary::try_new(content)?,
+            ));
+        }
+        Ok(indexes)
+    }
+
+    /// Uploads each dictionary into the table storage and registers its index with the
+    /// resulting location. Returns the refreshed table meta, or `None` if there was nothing to
+    /// register.
+    async fn register_dictionary_indexes(
+        &self,
+        catalog: &dyn Catalog,
+        table_info: &TableInfo,
+        indexes: Vec<(String, TableIndex, InvertedIndexUserDictionary)>,
+    ) -> Result<Option<TableMeta>> {
+        if indexes.is_empty() {
+            return Ok(None);
+        }
+        let table = catalog.get_table_by_info(table_info)?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+
+        let tenant = self.ctx.get_tenant();
+        for (name, mut index, dictionary) in indexes {
+            let location = dictionary.upload(fuse_table).await?;
+            index.options.insert(
+                INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION.to_string(),
+                location,
+            );
+            catalog
+                .create_table_index(CreateTableIndexReq {
+                    create_option: CreateOption::Create,
+                    index_type: index.index_type,
+                    tenant: tenant.clone(),
+                    table_id: table_info.ident.table_id,
+                    name,
+                    column_ids: index.column_ids,
+                    sync_creation: index.sync_creation,
+                    options: index.options,
+                })
+                .await?;
+        }
+        let table_meta = catalog
+            .get_table_meta_by_id(table_info.ident.table_id)
+            .await?
+            .map(|meta| meta.data)
+            .ok_or_else(|| {
+                ErrorCode::UnknownTable(format!(
+                    "table `{}` disappeared while registering its inverted indexes",
+                    table_info.desc
+                ))
+            })?;
+        Ok(Some(table_meta))
     }
 
     /// Build CreateTableReq from CreateTablePlanV2.
