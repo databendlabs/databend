@@ -24,6 +24,7 @@ pub use blocking_write::BLOCKING_WRITE_CHUNK_SIZE;
 pub use blocking_write::BLOCKING_WRITE_MAX_CHUNKS;
 pub use blocking_write::BlockingWrite;
 pub use blocking_write::OpenDalBlockingWrite;
+pub use blocking_write::blocking_write_chunk_size;
 pub use blocking_write::blocking_write_retained_bytes;
 pub use blocking_write::create_blocking_write;
 pub use buffer_reader::BufferReader;
