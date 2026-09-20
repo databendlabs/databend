@@ -1,5 +1,5 @@
-=== issue_reproduction_keeps_left_join ===
-description: The statement-dependent OR predicate must keep null-extended rows and the left join.
+=== statement_time_rejects_null_rows ===
+description: The supplied test context uses the Unix epoch, so now() > 2020 is false and permits an inner join.
 sql: SELECT l.id
 FROM (SELECT 1 AS id UNION ALL SELECT 2 AS id) AS l
 LEFT JOIN (SELECT 1 AS id) AS r ON l.id = r.id
@@ -42,8 +42,79 @@ Sort
 ├── limit: [NONE]
 └── EvalScalar
     ├── scalars: [id (#2) AS (#2), id (#4) AS (#5)]
+    └── Join(Inner)
+        ├── build keys: [id (#4)]
+        ├── probe keys: [id (#2)]
+        ├── other filters: []
+        ├── EvalScalar
+        │   ├── scalars: [1 AS (#3), CAST(1 AS UInt8 NULL) AS (#4)]
+        │   └── Filter
+        │       ├── filters: [or_filters(eq(CAST(1 AS UInt8 NULL), 1), gt(now(), '2020-01-01 00:00:00.000000'))]
+        │       └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+        └── UnionAll
+            ├── output: [id (#2)]
+            ├── left: [id (#0)]
+            ├── right: [id (#1)]
+            ├── cte_scan_names: []
+            ├── logical_recursive_cte_id: None
+            ├── EvalScalar
+            │   ├── scalars: [1 AS (#0)]
+            │   └── Filter
+            │       ├── filters: [or_filters(eq(1, 1), gt(now(), '2020-01-01 00:00:00.000000'))]
+            │       └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+            └── EvalScalar
+                ├── scalars: [2 AS (#1)]
+                └── Filter
+                    ├── filters: [or_filters(eq(2, 1), gt(now(), '2020-01-01 00:00:00.000000'))]
+                    └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+
+
+=== statement_time_preserves_null_rows ===
+description: The supplied test context uses the Unix epoch, so now() > 1960 is true and must preserve the left join.
+sql: SELECT l.id
+FROM (SELECT 1 AS id UNION ALL SELECT 2 AS id) AS l
+LEFT JOIN (SELECT 1 AS id) AS r ON l.id = r.id
+WHERE r.id = 1
+   OR now() > TIMESTAMP '1960-01-01 00:00:00'
+ORDER BY l.id
+raw_plan:
+Sort
+├── sort keys: [id (#2) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [id (#2) AS (#2)]
     └── Filter
-        ├── filters: [or_filters(eq(id (#4), 1), gt(now(), '2020-01-01 00:00:00.000000'))]
+        ├── filters: [or(eq(id (#4), 1), gt(now(), '1960-01-01 00:00:00.000000'))]
+        └── Join(Left)
+            ├── build keys: [id (#4)]
+            ├── probe keys: [id (#2)]
+            ├── other filters: []
+            ├── EvalScalar
+            │   ├── scalars: [CAST(id (#3) AS UInt8 NULL) AS (#4)]
+            │   └── EvalScalar
+            │       ├── scalars: [1 AS (#3)]
+            │       └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+            └── UnionAll
+                ├── output: [id (#2)]
+                ├── left: [id (#0)]
+                ├── right: [id (#1)]
+                ├── cte_scan_names: []
+                ├── logical_recursive_cte_id: None
+                ├── EvalScalar
+                │   ├── scalars: [1 AS (#0)]
+                │   └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+                └── EvalScalar
+                    ├── scalars: [2 AS (#1)]
+                    └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+
+optimized_plan:
+Sort
+├── sort keys: [id (#2) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [id (#2) AS (#2), id (#4) AS (#5)]
+    └── Filter
+        ├── filters: [or_filters(eq(id (#4), 1), gt(now(), '1960-01-01 00:00:00.000000'))]
         └── Join(Left)
             ├── build keys: [id (#4)]
             ├── probe keys: [id (#2)]

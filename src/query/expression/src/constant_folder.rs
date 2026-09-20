@@ -47,19 +47,10 @@ mod range_constraint;
 
 pub use range_constraint::RangeConstraint;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum FoldMode {
-    /// Fold using the `FunctionContext` supplied by the caller.
-    Full,
-    /// Do not evaluate non-deterministic or `FunctionContext`-dependent operations.
-    ContextIndependent,
-}
-
 pub struct ConstantFolder<'a, Index: ColumnIndex> {
     input_domains: &'a HashMap<Index, Domain>,
     func_ctx: &'a FunctionContext,
     fn_registry: &'a FunctionRegistry,
-    mode: FoldMode,
 }
 
 enum FoldResult<'e, Index: ColumnIndex> {
@@ -402,26 +393,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             input_domains: &input_domains,
             func_ctx,
             fn_registry,
-            mode: FoldMode::Full,
-        };
-
-        folder.fold_to_stable(expr)
-    }
-
-    /// Fold without evaluating non-deterministic or `FunctionContext`-dependent operations.
-    pub fn fold_context_independent<'e>(
-        expr: Cow<'e, Expr<Index>>,
-        fn_registry: &FunctionRegistry,
-    ) -> (Cow<'e, Expr<Index>>, Option<Domain>) {
-        let input_domains = Self::full_input_domains(expr.as_ref());
-        // Context-dependent overloads are rejected before domain or value evaluation, so this
-        // placeholder is observed only by functions registered as context independent.
-        let context_placeholder = FunctionContext::default();
-        let folder = ConstantFolder {
-            input_domains: &input_domains,
-            func_ctx: &context_placeholder,
-            fn_registry,
-            mode: FoldMode::ContextIndependent,
         };
 
         folder.fold_to_stable(expr)
@@ -444,7 +415,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             input_domains,
             func_ctx,
             fn_registry,
-            mode: FoldMode::Full,
         };
 
         folder.fold_to_stable(expr)
@@ -519,11 +489,8 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 let src_type = expr.data_type().clone();
                 let (inner_result, inner_domain) = self.fold_once(expr);
                 let inner_changed = inner_result.is_changed();
-                let can_evaluate = self.can_evaluate_cast(is_try, &src_type, dest_type);
 
-                let new_domain = if !can_evaluate {
-                    None
-                } else if is_try {
+                let new_domain = if is_try {
                     inner_domain.and_then(|inner_domain| {
                         self.calculate_try_cast(span, &src_type, dest_type, &inner_domain)
                     })
@@ -534,7 +501,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 };
 
                 let inner_is_constant = inner_result.as_ref().as_constant().is_some();
-                if can_evaluate && inner_is_constant {
+                if inner_is_constant {
                     if !inner_changed && let Some(cast_expr) = node.borrowed_expr() {
                         let (cast_expr, folded) =
                             self.try_fold_constant_expr(Cow::Borrowed(cast_expr));
@@ -870,11 +837,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     }
                 }
 
-                if !self.can_evaluate_function(&call.id) {
-                    let result = node.finish_fold(args_expr, changed);
-                    return (result, None);
-                }
-
                 let (calc_domain, eval) = match &call.function.eval {
                     FunctionEval::Scalar {
                         calc_domain, eval, ..
@@ -970,11 +932,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     .iter()
                     .all(|arg| arg.as_ref().as_constant().is_some());
 
-                if self.mode == FoldMode::ContextIndependent {
-                    let result = node.finish_fold(args_expr, changed);
-                    return (result, None);
-                }
-
                 if all_args_is_scalar {
                     if !changed && let Some(func_expr) = node.borrowed_expr() {
                         let (func_expr, folded) =
@@ -1036,98 +993,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             })),
             true,
         )
-    }
-
-    fn can_evaluate_function(&self, id: &crate::FunctionID) -> bool {
-        self.mode == FoldMode::Full
-            || (self
-                .fn_registry
-                .get_property(id.name().as_ref())
-                .is_some_and(|property| !property.non_deterministic)
-                && !self.fn_registry.is_context_dependent(id))
-    }
-
-    fn can_evaluate_cast(&self, is_try: bool, src_type: &DataType, dest_type: &DataType) -> bool {
-        self.mode == FoldMode::Full || self.context_independent_cast(is_try, src_type, dest_type)
-    }
-
-    fn context_independent_cast(
-        &self,
-        is_try: bool,
-        src_type: &DataType,
-        dest_type: &DataType,
-    ) -> bool {
-        if src_type == dest_type {
-            return true;
-        }
-
-        let simple_dest_type = if is_try {
-            let Some(dest_type) = dest_type.as_nullable() else {
-                return false;
-            };
-            dest_type
-        } else {
-            dest_type
-        };
-
-        if matches!(src_type, DataType::Null) {
-            return true;
-        }
-
-        // Composite casts are evaluated recursively. Check their inner casts before resolving a
-        // nullable function overload so type-specific context-independent rules still apply.
-        match (src_type, simple_dest_type) {
-            (DataType::Nullable(inner_src), DataType::Nullable(inner_dest)) if !is_try => {
-                return self.context_independent_cast(false, inner_src, inner_dest);
-            }
-            (DataType::Nullable(inner_src), inner_dest) if is_try => {
-                return self.context_independent_cast(
-                    true,
-                    inner_src,
-                    &inner_dest.clone().wrap_nullable(),
-                );
-            }
-            (src, DataType::Nullable(inner_dest)) if !is_try => {
-                return self.context_independent_cast(false, src, inner_dest);
-            }
-            (DataType::EmptyArray, DataType::Array(_)) => return true,
-            (DataType::Array(inner_src), DataType::Array(inner_dest)) => {
-                return self.context_independent_cast(false, inner_src, inner_dest);
-            }
-            (DataType::Tuple(src_fields), DataType::Tuple(dest_fields))
-                if src_fields.len() == dest_fields.len() =>
-            {
-                return src_fields
-                    .iter()
-                    .zip(dest_fields)
-                    .all(|(src, dest)| self.context_independent_cast(false, src, dest));
-            }
-            _ => {}
-        }
-
-        if let (DataType::Decimal(src_size), DataType::Decimal(dest_size)) =
-            (src_type, simple_dest_type)
-        {
-            // Decimal casts only consult the session rounding mode when reducing scale.
-            // Keeping exact widening casts foldable preserves useful constant bounds.
-            return dest_size.scale() >= src_size.scale();
-        }
-
-        if let (DataType::Number(src_type), DataType::Decimal(_)) = (src_type, simple_dest_type)
-            && src_type.is_integer()
-        {
-            // Integer-to-Decimal conversion does not round. Its value or overflow is independent
-            // of the session rounding mode.
-            return true;
-        }
-
-        if let Some(call) =
-            resolve_cast_function(None, is_try, src_type, dest_type, self.fn_registry)
-        {
-            return self.can_evaluate_function(&call.id);
-        }
-
-        false
     }
 
     fn calculate_cast(
@@ -1299,9 +1164,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         let cast_expr = Expr::FunctionCall(call);
 
         let input_domains = [(0, domain.clone())].into_iter().collect();
-        // The caller has already checked `can_evaluate_cast` for this source and destination type.
-        // Some cast factories serve both context-independent and context-dependent type pairs, so
-        // the resolved factory ID alone is too coarse to make this nested domain calculation.
         let (_, output_domain) = ConstantFolder::fold_with_domain(
             Cow::Owned(cast_expr),
             &input_domains,
@@ -1322,7 +1184,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             input_domains,
             func_ctx,
             fn_registry,
-            mode: FoldMode::Full,
         }
     }
 }
