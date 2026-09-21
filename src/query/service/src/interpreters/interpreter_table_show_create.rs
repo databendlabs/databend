@@ -14,12 +14,17 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::ast::quote::display_ident;
+use databend_common_ast::ast::quote::ident_opt_quote;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_cluster_key_exprs;
+use databend_common_ast::parser::parse_expr;
+use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
@@ -33,7 +38,6 @@ use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_sql::ClusterKeyNormalizer;
 use databend_common_sql::plans::ShowCreateTablePlan;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
@@ -51,6 +55,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table::StreamMode;
 use databend_storages_common_table_meta::table::is_internal_opt_key;
 use derive_visitor::DriveMut;
+use derive_visitor::VisitorMut;
 use itertools::Itertools;
 
 use crate::interpreters::Interpreter;
@@ -209,7 +214,6 @@ impl ShowCreateTableInterpreter {
         let options = table_info.options();
         let sql_dialect = settings.sql_dialect;
         let force_quoted_ident = settings.force_quoted_ident;
-        let unquoted_ident_case_sensitive = settings.unquoted_ident_case_sensitive;
         let quoted_ident_case_sensitive = settings.quoted_ident_case_sensitive;
         let hide_options_in_show_create_table = settings.hide_options_in_show_create_table;
 
@@ -341,16 +345,12 @@ impl ShowCreateTableInterpreter {
             table_create_sql.push_str(&format!(" ENGINE={engine}"));
         }
 
+        let mut key_formatter =
+            StoredKeyFormatter::new(force_quoted_ident, quoted_ident_case_sensitive, sql_dialect);
         if let Some(partition_keys_str) = table_info.options().get(OPT_KEY_PARTITION_BY) {
             let mut exprs = parse_cluster_key_exprs(partition_keys_str)?;
-            let mut normalizer = ClusterKeyNormalizer {
-                force_quoted_ident,
-                unquoted_ident_case_sensitive,
-                quoted_ident_case_sensitive,
-                sql_dialect,
-            };
             for expr in exprs.iter_mut() {
-                expr.drive_mut(&mut normalizer);
+                expr.drive_mut(&mut key_formatter);
             }
             let partition_keys_str = exprs.into_iter().map(|e| format!("{e:#}")).join(", ");
             table_create_sql.push_str(format!(" PARTITION BY ({partition_keys_str})").as_str());
@@ -358,14 +358,8 @@ impl ShowCreateTableInterpreter {
 
         if let Some(cluster_keys_str) = table_info.meta.cluster_key_str() {
             let mut exprs = parse_cluster_key_exprs(cluster_keys_str)?;
-            let mut normalizer = ClusterKeyNormalizer {
-                force_quoted_ident,
-                unquoted_ident_case_sensitive,
-                quoted_ident_case_sensitive,
-                sql_dialect,
-            };
             for expr in exprs.iter_mut() {
-                expr.drive_mut(&mut normalizer);
+                expr.drive_mut(&mut key_formatter);
             }
             let cluster_keys_str = format!(
                 "({})",
@@ -387,6 +381,12 @@ impl ShowCreateTableInterpreter {
                     .as_str(),
                 );
             }
+        }
+
+        if let Some(ttl_str) = &table_info.meta.ttl {
+            let mut expr = parse_expr(&tokenize_sql(ttl_str)?, Dialect::default())?;
+            expr.drive_mut(&mut key_formatter);
+            table_create_sql.push_str(format!(" TTL {expr:#}").as_str());
         }
 
         if !hide_options_in_show_create_table || engine == "ICEBERG" || engine == "DELTA" {
@@ -568,5 +568,40 @@ impl ShowCreateTableInterpreter {
             table.name(),
             table_data_location,
         )
+    }
+}
+
+/// Re-quote already-resolved identifiers for SHOW CREATE. Does not fold case.
+#[derive(VisitorMut)]
+#[visitor(ColumnRef(enter))]
+struct StoredKeyFormatter {
+    force_quoted_ident: bool,
+    quoted_ident_case_sensitive: bool,
+    sql_dialect: Dialect,
+}
+
+impl StoredKeyFormatter {
+    fn new(
+        force_quoted_ident: bool,
+        quoted_ident_case_sensitive: bool,
+        sql_dialect: Dialect,
+    ) -> Self {
+        Self {
+            force_quoted_ident,
+            quoted_ident_case_sensitive,
+            sql_dialect,
+        }
+    }
+
+    fn enter_column_ref(&mut self, column: &mut ColumnRef) {
+        let ColumnID::Name(ident) = &mut column.column else {
+            return;
+        };
+        ident.quote = ident_opt_quote(
+            &ident.name,
+            self.force_quoted_ident,
+            self.quoted_ident_case_sensitive,
+            self.sql_dialect,
+        );
     }
 }

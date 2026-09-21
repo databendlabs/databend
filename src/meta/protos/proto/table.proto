@@ -154,6 +154,13 @@ message TableMeta {
 
   // Per-column string stats truncation length, keyed by ColumnId.
   map<uint32, uint64> field_stats_truncate_len = 39;
+
+  // Row-level TTL expression, e.g. `event_time + INTERVAL 30 DAY`.
+  //
+  // Only the definition text is persisted; everything derived from it
+  // (referenced columns, result type) is recomputed when the metadata is
+  // loaded, the same way `cluster_key` is handled.
+  optional string ttl = 40;
 }
 
 message RowAccessPolicyColumnMap {

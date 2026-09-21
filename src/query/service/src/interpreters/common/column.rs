@@ -20,10 +20,10 @@ use databend_common_ast::ast::quote::ident_opt_quote;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_cluster_key_exprs;
 use databend_common_ast::parser::parse_comma_separated_idents;
+use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_sql::IdentifierNormalizer;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::normalize_identifier;
 use derive_visitor::DriveMut;
@@ -58,6 +58,19 @@ pub fn cluster_key_referenced_columns(cluster_key: &str) -> Result<HashSet<Strin
     Ok(collector.columns)
 }
 
+/// Columns referenced by a row-level TTL expression.
+///
+/// Unlike a cluster key, a TTL is a single expression rather than a comma
+/// separated list, so it must not go through the tuple-unwrapping done by
+/// `parse_cluster_key_exprs`: `TTL (a, b)` is not valid TTL and should not be
+/// silently split into two expressions.
+pub fn ttl_referenced_columns(ttl: &str) -> Result<HashSet<String>> {
+    let mut expr = parse_expr(&tokenize_sql(ttl)?, Dialect::default())?;
+    let mut collector = ColumnRefCollector::new();
+    expr.drive_mut(&mut collector);
+    Ok(collector.columns)
+}
+
 #[derive(VisitorMut)]
 #[visitor(ColumnRef(enter))]
 struct ColumnRenamer<'a> {
@@ -81,7 +94,6 @@ impl<'a> ColumnRenamer<'a> {
 }
 
 pub fn rename_column_in_cluster_key(
-    ctx: &dyn TableContext,
     cluster_key: &str,
     old_column: &str,
     new_column: &str,
@@ -89,13 +101,9 @@ pub fn rename_column_in_cluster_key(
     // `cluster_key` is persisted in table metadata and may have been stored with different
     // quoting rules than the current session dialect. Use a dialect that accepts both.
     let sql_dialect = Dialect::default();
-    let name_resolution_ctx = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
-    let new_quote = ident_opt_quote(
-        new_column,
-        false,
-        name_resolution_ctx.quoted_ident_case_sensitive,
-        sql_dialect,
-    );
+    // new_column is already resolved by the binder. Quote it under fixed rules,
+    // not according to the session that happens to perform the rename.
+    let new_quote = ident_opt_quote(new_column, false, true, sql_dialect);
 
     let mut exprs = parse_cluster_key_exprs(cluster_key)?;
     let mut renamer = ColumnRenamer {
@@ -113,15 +121,39 @@ pub fn rename_column_in_cluster_key(
         return Ok(None);
     }
 
-    let mut normalizer = IdentifierNormalizer::new(&name_resolution_ctx);
-    let cluster_keys = exprs
-        .iter_mut()
-        .map(|e| {
-            e.drive_mut(&mut normalizer);
-            format!("{:#}", e)
-        })
-        .collect::<Vec<_>>();
+    // Only the renamed column needs rewriting. Re-normalizing the entire stored
+    // expression using this session's settings can alter unrelated column names.
+    let cluster_keys = exprs.iter().map(|e| format!("{:#}", e)).collect::<Vec<_>>();
     Ok(Some(format!("({})", cluster_keys.join(", "))))
+}
+
+/// Rewrite a row-level TTL expression after `RENAME COLUMN`.
+///
+/// Returns `None` when the TTL does not reference the renamed column, so the
+/// caller can skip writing an unchanged value.
+pub fn rename_column_in_ttl(
+    ttl: &str,
+    old_column: &str,
+    new_column: &str,
+) -> Result<Option<String>> {
+    let mut expr = parse_expr(&tokenize_sql(ttl)?, Dialect::default())?;
+    let mut renamer = ColumnRenamer {
+        old: old_column,
+        new: new_column,
+        // new_column is already resolved by the binder. Quote it for default
+        // rules, not according to the session that happens to perform the rename.
+        new_quote: ident_opt_quote(new_column, false, true, Dialect::default()),
+        changed: false,
+    };
+    expr.drive_mut(&mut renamer);
+
+    if !renamer.changed {
+        return Ok(None);
+    }
+
+    // Only the renamed column needs rewriting. Re-normalizing the entire stored
+    // expression using this session's settings can alter unrelated column names.
+    Ok(Some(format!("{expr:#}")))
 }
 
 pub fn rename_column_in_comma_separated_ident(
@@ -140,12 +172,9 @@ pub fn rename_column_in_comma_separated_ident(
     let mut idents = parse_comma_separated_idents(&tokens, sql_dialect)?;
 
     let name_resolution_ctx = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
-    let new_quote = ident_opt_quote(
-        new_column,
-        false,
-        name_resolution_ctx.quoted_ident_case_sensitive,
-        sql_dialect,
-    );
+    // new_column is already resolved by the binder. Quote it under fixed rules,
+    // not according to the session that happens to perform the rename.
+    let new_quote = ident_opt_quote(new_column, false, true, sql_dialect);
 
     let mut changed = false;
     for ident in idents.iter_mut() {
@@ -175,23 +204,22 @@ mod tests {
 
     use super::rename_column_in_cluster_key;
     use super::rename_column_in_comma_separated_ident;
-    use crate::sessions::TableContextSettings;
     use crate::test_kits::TestFixture;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_rename_column_in_cluster_key_preserve_quote() -> Result<()> {
-        let fixture = TestFixture::setup().await?;
-        let ctx = fixture.new_query_ctx().await?;
-
-        // Match the default behavior described in the bug report.
-        let settings = ctx.get_settings();
-        settings.set_setting("quoted_ident_case_sensitive".to_string(), "1".to_string())?;
-
-        let updated = rename_column_in_cluster_key(ctx.as_ref(), "(col2)", "col2", "NewCol")?;
+        // The quoting of the new name is fixed, not session dependent: the stored
+        // text must parse back to the same column in any session.
+        let updated = rename_column_in_cluster_key("(col2)", "col2", "NewCol")?;
         assert_eq!(updated, Some("(\"NewCol\")".to_string()));
 
-        let updated = rename_column_in_cluster_key(ctx.as_ref(), "(col2)", "col2", "newcol")?;
+        let updated = rename_column_in_cluster_key("(col2)", "col2", "newcol")?;
         assert_eq!(updated, Some("(newcol)".to_string()));
+
+        // An unrelated mixed-case column keeps its stored form instead of being
+        // re-normalized with this session's settings.
+        let updated = rename_column_in_cluster_key("(\"EventTime\", col2)", "col2", "newcol")?;
+        assert_eq!(updated, Some("(\"EventTime\", newcol)".to_string()));
 
         Ok(())
     }
