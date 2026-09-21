@@ -181,6 +181,59 @@ EvalScalar
         └── limit: NONE
 
 
+=== typed_constant_filter_inference_does_not_panic ===
+description: A folded scalar-subquery constant used by outer-join filter inference must remain addressable in the expression index.
+sql: SELECT *
+FROM infer_filter_left AS l
+LEFT JOIN infer_filter_right AS r ON l.a = r.a
+WHERE l.a + (SELECT 1) > 5
+raw_plan:
+EvalScalar
+├── scalars: [infer_filter_left.a (#0) AS (#0), a (#2) AS (#2)]
+└── Filter
+    ├── filters: [gt(plus(infer_filter_left.a (#0), SUBQUERY AS (#3)), 5)]
+    ├── subquerys
+    │   └── Subquery (Scalar)
+    │       ├── output_column: 1 (#3)
+    │       └── EvalScalar
+    │           ├── scalars: [1 AS (#3)]
+    │           └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+    └── Join(Left)
+        ├── build keys: [a (#2)]
+        ├── probe keys: [infer_filter_left.a (#0)]
+        ├── other filters: []
+        ├── EvalScalar
+        │   ├── scalars: [CAST(infer_filter_right.a (#1) AS Int64 NULL) AS (#2)]
+        │   └── Scan
+        │       ├── table: default.infer_filter_right (#1)
+        │       ├── filters: []
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Scan
+            ├── table: default.infer_filter_left (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+Join(Left)
+├── build keys: [a (#2)]
+├── probe keys: [infer_filter_left.a (#0)]
+├── other filters: []
+├── EvalScalar
+│   ├── scalars: [CAST(infer_filter_right.a (#1) AS Int64 NULL) AS (#2)]
+│   └── Scan
+│       ├── table: default.infer_filter_right (#1)
+│       ├── filters: []
+│       ├── order by: []
+│       └── limit: NONE
+└── Scan
+    ├── table: default.infer_filter_left (#0)
+    ├── filters: [gt(plus(infer_filter_left.a (#0), 1), 5)]
+    ├── order by: []
+    └── limit: NONE
+
+
 === erroring_outer_join_predicate_does_not_panic ===
 description: An expression error encountered while checking an outer-join predicate must not panic the optimizer.
 sql: SELECT b.c0boolean
