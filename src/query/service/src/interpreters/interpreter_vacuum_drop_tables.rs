@@ -27,16 +27,18 @@ use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_sql::plans::VacuumDropTablePlan;
-use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
+use databend_storages_common_table_meta::table::is_fuse_backed_engine;
 use log::info;
+use log::warn;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::log_lineage_object_deletion;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextQueryState;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 
@@ -193,48 +195,47 @@ impl Interpreter for VacuumDropTablesInterpreter {
                 tables.len(),
                 tables
                     .iter()
-                    .map(|t| format!(
-                        "{}(id:{})",
-                        t.get_table_info().name,
-                        t.get_table_info().ident.table_id
-                    ))
+                    .map(|t| format!("{}(id:{})", t.name, t.ident.table_id))
                     .collect::<Vec<_>>()
                     .join(", "),
                 drop_ids
             );
 
-            // Shared and attached tables do not own their physical data. Owned materialized
-            // views and dynamic tables reject user DML but remain eligible for physical GC.
-            // Note: The drop_ids list still includes view IDs
-            let (views, tables): (Vec<_>, Vec<_>) = tables
-                .into_iter()
-                .filter(|tbl| !tbl.is_read_only_for_maintenance())
-                .partition(|tbl| tbl.get_table_info().meta.engine == VIEW_ENGINE);
-
-            {
-                let view_ids = views.into_iter().map(|v| v.get_id()).collect::<Vec<_>>();
-                info!("view ids excluded from purging data: {:?}", view_ids);
-            }
-
-            info!(
-                "after filter read-only tables: {} tables remain: [{}]",
-                tables.len(),
-                tables
-                    .iter()
-                    .map(|t| format!(
-                        "{}(id:{})",
-                        t.get_table_info().name,
-                        t.get_table_info().ident.table_id
-                    ))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            );
-
             let tables_count = tables.len();
+            let mut failed_tables = HashSet::new();
+            let mut fuse_tables = Vec::new();
+            for table_info in tables {
+                if is_fuse_backed_engine(table_info.engine()) {
+                    // Physical GC needs storage parameters, not a fully initialized
+                    // reader/writer that can reject old or invalid table options.
+                    fuse_tables.push(table_info);
+                } else if let Err(err) = catalog.get_table_by_info(&table_info) {
+                    // Known non-Fuse engines only need metadata GC. Do not silently
+                    // remove metadata for an unknown or uninitializable engine.
+                    let msg = format!(
+                        "Failed to initialize dropped table {} (id:{}): {}",
+                        table_info.desc, table_info.ident.table_id, err
+                    );
+                    warn!("{}", msg);
+                    ctx.push_warning(msg);
+                    failed_tables.insert(table_info.ident.table_id);
+                }
+            }
 
             let handler = get_vacuum_handler();
             let threads_nums = self.ctx.get_settings().get_max_vacuum_threads()? as usize;
-            let failed_tables = handler.do_vacuum_drop_tables(threads_nums, tables).await?;
+            let failed = handler
+                .do_vacuum_drop_tables(threads_nums, fuse_tables)
+                .await?;
+            if !failed.is_empty() {
+                let mut ids = failed.iter().copied().collect::<Vec<_>>();
+                ids.sort_unstable();
+                ctx.push_warning(format!(
+                    "Failed to vacuum dropped tables {:?}; their metadata is retained. See server logs for details.",
+                    ids
+                ));
+            }
+            failed_tables.extend(failed);
 
             let failed_db_ids = failed_tables
                 .iter()

@@ -137,6 +137,7 @@ mod tests {
 
     use databend_common_base::base::GlobalInstance;
     use databend_common_catalog::table_context::AbortChecker;
+    use databend_common_meta_app::schema::TableInfo;
     use databend_enterprise_vacuum_handler::VacuumHandler;
     use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
     use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropTablesResult;
@@ -178,7 +179,7 @@ mod tests {
         async fn do_vacuum_drop_tables(
             &self,
             _threads_nums: usize,
-            _tables: Vec<Arc<dyn Table>>,
+            _tables: Vec<TableInfo>,
         ) -> VacuumDropTablesResult {
             unreachable!("batch vacuum must not vacuum dropped tables")
         }

@@ -221,68 +221,16 @@ impl FuseTable {
         disable_refresh: bool,
     ) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix_from_table_info(&table_info)?;
-        if table_info.is_shared() && table_info.meta.storage_params.is_none() {
-            return Err(ErrorCode::Internal(
-                "Shared table requires resolved provider storage parameters",
-            ));
-        }
-        let (mut operator, table_type) = match table_info.db_type.clone() {
-            DatabaseType::NormalDB | DatabaseType::SharedDB => {
-                let storage_params = table_info.meta.storage_params.clone();
-                match storage_params {
-                    // External or attached table.
-                    Some(sp) => {
-                        let sp = apply_storage_class(&table_info, sp, storage_class_specs);
-                        // Special handling for history tables. Since history
-                        // table storage params are fully generated from server
-                        // config, we both allow the credential chain and treat
-                        // the operator as trusted (skipping the request-time
-                        // endpoint egress policy).
-                        let is_system_history = is_system_history_table(&table_info);
-                        let sp = if is_system_history {
-                            allow_credential_chain_for_s3(sp)
-                        } else {
-                            sp
-                        };
-                        let operator = if is_system_history {
-                            init_operator(&sp)?
-                        } else {
-                            init_operator_with_policy_scope(&sp, EndpointPolicyScope::External)?
-                        };
-
-                        let table_meta_options = &table_info.meta.options;
-                        let table_type = if Self::is_table_attached(table_meta_options) {
-                            if !disable_refresh {
-                                Self::refresh_table_info(
-                                    &mut table_info,
-                                    &operator,
-                                    &storage_prefix,
-                                )?;
-                            }
-                            FuseTableType::Attached
-                        } else {
-                            FuseTableType::External
-                        };
-
-                        (operator, table_type)
-                    }
-                    // Normal table.
-                    None => {
-                        let storage_params = {
-                            // Storage parameter is not specified, using the default one of config
-                            let default_storage_params =
-                                GlobalConfig::instance().storage.params.clone();
-                            apply_storage_class(
-                                &table_info,
-                                default_storage_params,
-                                storage_class_specs,
-                            )
-                        };
-                        let operator = init_operator(&storage_params)?;
-                        (operator, FuseTableType::Standard)
-                    }
-                }
+        let mut operator = Self::create_storage_operator(&table_info, storage_class_specs)?;
+        let table_type = if table_info.meta.storage_params.is_none() {
+            FuseTableType::Standard
+        } else if Self::is_table_attached(table_info.options()) {
+            if !disable_refresh {
+                Self::refresh_table_info(&mut table_info, &operator, &storage_prefix)?;
             }
+            FuseTableType::Attached
+        } else {
+            FuseTableType::External
         };
 
         let data_metrics = Arc::new(StorageMetrics::default());
@@ -324,11 +272,6 @@ impl FuseTable {
             .unwrap_or(ApproxDistinctColumns::All);
 
         let meta_location_generator = TableMetaLocationGenerator::new(storage_prefix);
-        if !table_info.meta.part_prefix.is_empty() {
-            return Err(ErrorCode::StorageOther(
-                "[FUSE-TABLE] Location_prefix no longer supported. Last supported version: https://github.com/databendlabs/databend/releases/tag/v1.2.653-nightly",
-            ));
-        }
 
         Ok(Box::new(FuseTable {
             table_info,
@@ -345,6 +288,68 @@ impl FuseTable {
             changes_desc: None,
             pruned_result_receiver: Arc::new(Mutex::new(None)),
         }))
+    }
+
+    /// Initialize storage without interpreting data formats, so dropped tables
+    /// with invalid read/write options can still have their files reclaimed.
+    pub fn create_storage_operator(
+        table_info: &TableInfo,
+        storage_class_specs: Option<S3StorageClass>,
+    ) -> Result<Operator> {
+        if table_info.is_shared() && table_info.meta.storage_params.is_none() {
+            return Err(ErrorCode::Internal(
+                "Shared table requires resolved provider storage parameters",
+            ));
+        }
+        if !table_info.meta.part_prefix.is_empty() {
+            return Err(ErrorCode::StorageOther(
+                "[FUSE-TABLE] Location_prefix no longer supported. Last supported version: https://github.com/databendlabs/databend/releases/tag/v1.2.653-nightly",
+            ));
+        }
+        match table_info.db_type {
+            DatabaseType::NormalDB | DatabaseType::SharedDB => {
+                let storage_params = table_info.meta.storage_params.clone();
+                match storage_params {
+                    // External or attached table.
+                    Some(sp) => {
+                        let sp = apply_storage_class(table_info, sp, storage_class_specs);
+                        // Special handling for history tables. Since history
+                        // table storage params are fully generated from server
+                        // config, we both allow the credential chain and treat
+                        // the operator as trusted (skipping the request-time
+                        // endpoint egress policy).
+                        let is_system_history = is_system_history_table(table_info);
+                        let sp = if is_system_history {
+                            allow_credential_chain_for_s3(sp)
+                        } else {
+                            sp
+                        };
+                        if is_system_history {
+                            Ok(init_operator(&sp)?)
+                        } else {
+                            Ok(init_operator_with_policy_scope(
+                                &sp,
+                                EndpointPolicyScope::External,
+                            )?)
+                        }
+                    }
+                    // Normal table.
+                    None => {
+                        let storage_params = {
+                            // Storage parameter is not specified, using the default one of config
+                            let default_storage_params =
+                                GlobalConfig::instance().storage.params.clone();
+                            apply_storage_class(
+                                table_info,
+                                default_storage_params,
+                                storage_class_specs,
+                            )
+                        };
+                        Ok(init_operator(&storage_params)?)
+                    }
+                }
+            }
+        }
     }
 
     pub fn from_table_meta(
