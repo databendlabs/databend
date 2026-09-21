@@ -1,23 +1,17 @@
 statement ok
-drop table if exists t1;
-
-statement ok
-drop table if exists t2;
-
-statement ok
-create table t1(a int null);
+create or replace table t1(a int null);
 
 statement ok
 insert into t1 values(0), (1), (NULL), (2);
 
 statement ok
-create table t2(b int null);
+create or replace table t2(b int null);
 
 statement ok
 insert into t2 values(1), (NULL), (3);
 
 query II
-select * from t1 join t2 on t1.a < t2.b order by t1.a;
+select * from t1 join t2 on t1.a < t2.b order by t1.a, b;
 ----
 0 1
 0 3

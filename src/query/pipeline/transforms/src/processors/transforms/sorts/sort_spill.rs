@@ -42,31 +42,31 @@ use super::core::AsyncSortedStream;
 use super::core::Bounds;
 use super::core::Merger;
 use super::core::Rows;
+use super::core::SelectedMerger;
 use super::core::SortedStream;
-use super::core::algorithm::SortAlgorithm;
 use super::sort_spill_regroup::IntervalGroupingPayload;
 use super::sort_spill_regroup::regroup_min_interval_groups;
 use crate::MemorySettings;
 use crate::traits::Location;
 use crate::traits::SortSpiller;
 
-pub struct SortSpill<A: SortAlgorithm, S: SortSpiller> {
+pub struct SortSpill<R: Rows, S: SortSpiller> {
     base: Base<S>,
-    step: Step<A, S>,
+    step: Step<R, S>,
 }
 
-enum Step<A: SortAlgorithm, S: SortSpiller> {
-    Collect(StepCollect<A, S>),
-    Sort(StepSort<A, S>),
+enum Step<R: Rows, S: SortSpiller> {
+    Collect(StepCollect<R, S>),
+    Sort(StepSort<R, S>),
 }
 
-struct StepCollect<A: SortAlgorithm, S> {
+struct StepCollect<R: Rows, S> {
     params: SortSpillParams,
     sampler: FixedRateSampler<StdRng>,
-    streams: Vec<BoundBlockStream<A::Rows, S>>,
+    streams: Vec<BoundBlockStream<R, S>>,
 }
 
-struct StepSort<A: SortAlgorithm, S: SortSpiller> {
+struct StepSort<R: Rows, S: SortSpiller> {
     params: SortSpillParams,
     /// Partition boundaries for restoring and sorting blocks.
     /// Each boundary represents a cutoff point where data less than or equal to it belongs to one partition.
@@ -74,15 +74,15 @@ struct StepSort<A: SortAlgorithm, S: SortSpiller> {
     cur_bound: Option<Scalar>,
     bound_index: i32,
 
-    subsequent: Vec<BoundBlockStream<A::Rows, S>>,
-    current: Vec<BoundBlockStream<A::Rows, S>>,
+    subsequent: Vec<BoundBlockStream<R, S>>,
+    current: Vec<BoundBlockStream<R, S>>,
 
-    output_merger: Option<Merger<A, BoundBlockStream<A::Rows, S>>>,
+    output_merger: Option<SelectedMerger<R, BoundBlockStream<R, S>>>,
 }
 
-impl<A, S> SortSpill<A, S>
+impl<R, S> SortSpill<R, S>
 where
-    A: SortAlgorithm,
+    R: Rows,
     S: SortSpiller,
 {
     pub fn new(base: Base<S>, params: SortSpillParams) -> Self {
@@ -201,7 +201,7 @@ where
         }
     }
 
-    pub fn format_memory_usage(&self) -> FmtMemoryUsage<'_, A, S> {
+    pub fn format_memory_usage(&self) -> FmtMemoryUsage<'_, R, S> {
         FmtMemoryUsage(self)
     }
 
@@ -237,7 +237,7 @@ where
     }
 }
 
-impl<A: SortAlgorithm, S: SortSpiller> StepCollect<A, S> {
+impl<R: Rows, S: SortSpiller> StepCollect<R, S> {
     #[fastrace::trace(name = "StepCollect::sort_input_data")]
     async fn sort_input_data(
         &mut self,
@@ -260,8 +260,13 @@ impl<A: SortAlgorithm, S: SortSpiller> StepCollect<A, S> {
             }
             vec![block].into()
         } else {
-            let mut merger =
-                create_memory_merger::<A>(input_data, base.sort_row_offset, base.limit, batch_rows);
+            let mut merger = create_memory_merger::<R>(
+                input_data,
+                base.sort_row_offset,
+                base.limit,
+                batch_rows,
+                base.enable_loser_tree,
+            );
 
             let mut sorted = VecDeque::new();
             while let Some(data) = merger.next_block()? {
@@ -282,10 +287,10 @@ impl<A: SortAlgorithm, S: SortSpiller> StepCollect<A, S> {
         Ok(())
     }
 
-    fn next_step(&mut self, base: &Base<S>) -> Result<StepSort<A, S>> {
+    fn next_step(&mut self, base: &Base<S>) -> Result<StepSort<R, S>> {
         self.sampler.compact_blocks(true);
         let sampled_rows = std::mem::take(&mut self.sampler.dense_blocks);
-        let bounds = base.determine_bounds::<A>(sampled_rows, self.params.batch_rows)?;
+        let bounds = base.determine_bounds::<R>(sampled_rows, self.params.batch_rows)?;
 
         Ok(StepSort {
             bounds,
@@ -305,7 +310,7 @@ pub struct OutputData {
     pub finish: bool,
 }
 
-impl<A: SortAlgorithm, S: SortSpiller> StepSort<A, S> {
+impl<R: Rows, S: SortSpiller> StepSort<R, S> {
     fn next_bound(&mut self) {
         match self.bounds.next_bound() {
             Some(bound) => self.cur_bound = Some(bound),
@@ -325,7 +330,12 @@ impl<A: SortAlgorithm, S: SortSpiller> StepSort<A, S> {
             .drain(self.current.len() - num_merge..)
             .collect();
 
-        let mut merger = Merger::<A, _>::new(streams, self.params.batch_rows, None);
+        let mut merger = SelectedMerger::<R, _>::new_auto(
+            streams,
+            self.params.batch_rows,
+            None,
+            base.enable_loser_tree,
+        );
 
         let mut sorted = VecDeque::new();
         while let Some(data) = merger.async_next_block().await? {
@@ -381,8 +391,12 @@ impl<A: SortAlgorithm, S: SortSpiller> StepSort<A, S> {
                     });
                 }
 
-                let merger =
-                    Merger::<A, _>::new(mem::take(&mut self.current), self.params.batch_rows, None);
+                let merger = SelectedMerger::<R, _>::new_auto(
+                    mem::take(&mut self.current),
+                    self.params.batch_rows,
+                    None,
+                    base.enable_loser_tree,
+                );
                 self.output_merger.insert(merger)
             }
         };
@@ -564,23 +578,23 @@ impl<S: SortSpiller> Base<S> {
         SpillableBlock::new(data, self.sort_row_offset)
     }
 
-    fn determine_bounds<A: SortAlgorithm>(
+    fn determine_bounds<R: Rows>(
         &self,
         sampled_rows: Vec<DataBlock>,
         batch_rows: usize,
     ) -> Result<Bounds> {
         match sampled_rows.len() {
             0 => Ok(Bounds::default()),
-            1 => Bounds::from_column::<A::Rows>(sampled_rows[0].get_last_column().clone()),
+            1 => Bounds::from_column::<R>(sampled_rows[0].get_last_column().clone()),
             _ => {
                 let ls = sampled_rows
                     .into_iter()
                     .map(|data| {
                         let col = data.get_last_column().clone();
-                        Bounds::from_column::<A::Rows>(col)
+                        Bounds::from_column::<R>(col)
                     })
                     .collect::<Result<Vec<_>>>()?;
-                Bounds::merge::<A::Rows>(ls, batch_rows)
+                Bounds::merge::<R>(ls, batch_rows)
             }
         }
     }
@@ -617,9 +631,9 @@ impl<R: Rows, S: SortSpiller> RowsStat for Vec<BoundBlockStream<R, S>> {
     }
 }
 
-pub struct FmtMemoryUsage<'a, A: SortAlgorithm, S: SortSpiller>(&'a SortSpill<A, S>);
+pub struct FmtMemoryUsage<'a, R: Rows, S: SortSpiller>(&'a SortSpill<R, S>);
 
-impl<A: SortAlgorithm, S: SortSpiller> fmt::Debug for FmtMemoryUsage<'_, A, S> {
+impl<R: Rows, S: SortSpiller> fmt::Debug for FmtMemoryUsage<'_, R, S> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let debug = &mut f.debug_struct("SortSpill");
         match &self.0.step {
@@ -1058,17 +1072,20 @@ impl DataBlockStream {
 
 pub type MemoryMerger<A> = Merger<A, DataBlockStream>;
 
-pub fn create_memory_merger<A: SortAlgorithm>(
+pub type SelectedMemoryMerger<R> = SelectedMerger<R, DataBlockStream>;
+
+pub fn create_memory_merger<R: Rows>(
     blocks: Vec<DataBlock>,
     sort_row_offset: usize,
     limit: Option<usize>,
     batch_rows: usize,
-) -> MemoryMerger<A> {
+    enable_loser_tree: bool,
+) -> SelectedMemoryMerger<R> {
     let streams = blocks
         .into_iter()
         .map(|data| DataBlockStream::new(data, sort_row_offset))
         .collect();
-    Merger::<A, _>::new(streams, batch_rows, limit)
+    SelectedMerger::new_auto(streams, batch_rows, limit, enable_loser_tree)
 }
 
 fn get_domain(entry: &BlockEntry) -> Column {
@@ -1117,7 +1134,6 @@ mod tests {
     use super::*;
     use crate::sorts::core::SimpleRowsAsc;
     use crate::sorts::core::SimpleRowsDesc;
-    use crate::sorts::core::algorithm::HeapSort;
     use crate::sorts::core::convert_rows;
 
     fn test_data() -> (DataSchemaRef, DataBlock) {
@@ -1703,7 +1719,7 @@ mod tests {
         let existed_subsequent =
             create_int_stream_asc(spiller.clone(), vec![vec![10, 11]], None, true).await?;
 
-        let mut sort = StepSort::<HeapSort<SimpleRowsAsc<Int32Type>>, _> {
+        let mut sort = StepSort::<SimpleRowsAsc<Int32Type>, _> {
             params: SortSpillParams {
                 batch_rows: 2,
                 num_merge: 2,
