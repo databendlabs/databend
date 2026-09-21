@@ -186,7 +186,7 @@ impl App {
                 client_config.tls.clone(),
                 DEFAULT_GRPC_MESSAGE_SIZE,
             )?;
-            let res = client.get_kv("foo").await;
+            let res = client.get_kv("foo").await?;
             println!("{}-th: get_kv(foo): {:?}", i, res);
             clients.push(client);
         }
