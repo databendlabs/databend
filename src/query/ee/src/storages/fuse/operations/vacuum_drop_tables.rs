@@ -38,12 +38,8 @@ pub async fn do_vacuum_drop_table(
     for (table_info, operator) in tables {
         let result =
             vacuum_drop_single_table(&table_info, operator, dry_run_limit, &mut list_files).await;
-        if let Err(err) = result {
+        if result.is_err() {
             let table_id = table_info.ident.table_id;
-            error!(
-                "failed to vacuum dropped table {} (id:{}): {}",
-                table_info.desc, table_id, err
-            );
             failed_tables.insert(table_id);
         }
     }
@@ -76,7 +72,9 @@ async fn vacuum_drop_single_table(
 
     match dry_run_limit {
         None => {
-            operator.remove_all(&dir).await?;
+            operator.remove_all(&dir).await.inspect_err(|err| {
+                error!("failed to remove all in directory {}: {}", dir, err);
+            })?;
         }
         Some(dry_run_limit) => {
             let mut ds = operator.lister_with(&dir).recursive(true).await?;
