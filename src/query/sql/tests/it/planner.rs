@@ -479,6 +479,33 @@ async fn test_execute_immediate_applies_statement_settings() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_task_validation_defers_statements_with_settings() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    ctx.get_settings()
+        .set_setting("enable_experimental_procedure".to_string(), "0".to_string())?;
+
+    for sql in [
+        "CREATE TASK task_settings_validation WAREHOUSE = 'w' AS \
+         SETTINGS (enable_experimental_procedure = 1) \
+         CALL PROCEDURE task_proc_not_created_yet()",
+        "ALTER TASK task_settings_validation MODIFY AS \
+         SETTINGS (enable_experimental_procedure = 1) \
+         CALL PROCEDURE task_proc_not_created_yet()",
+        // Nested single-statement scripts must not apply their settings either.
+        "CREATE TASK task_settings_validation WAREHOUSE = 'w' AS \
+         EXECUTE IMMEDIATE 'SETTINGS (enable_experimental_procedure = 1) \
+         CALL PROCEDURE task_proc_not_created_yet()'",
+    ] {
+        plan_sql(&ctx, sql).await?;
+        assert!(
+            !ctx.get_settings().get_enable_experimental_procedure()?,
+            "settings leaked while planning: {sql}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_time_travel_binds_session_variable_snapshot() -> Result<()> {
     let ctx = LiteTableContext::create().await?;
     ctx.register_setup_sql("CREATE TABLE t(c int)").await?;

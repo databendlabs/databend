@@ -71,6 +71,34 @@ impl Binder {
         &mut self,
         stmt: &ExecuteImmediateStmt,
     ) -> Result<Plan> {
+        let (script, ast) = self.parse_execute_immediate(stmt)?;
+
+        match ast {
+            ScriptBlockOrStmt::ScriptBlock(script_block) => {
+                Ok(Plan::ExecuteImmediate(Box::new(ExecuteImmediatePlan {
+                    script_block,
+                    script,
+                })))
+            }
+            ScriptBlockOrStmt::Statement(stmt) => {
+                apply_statement_settings(self.ctx.clone(), &stmt)?;
+                let binder = Self {
+                    name_resolution_ctx: NameResolutionContext::try_from(
+                        self.ctx.get_settings().as_ref(),
+                    )?,
+                    ..self.clone()
+                };
+                binder.bind(&stmt).await
+            }
+        }
+    }
+
+    /// Evaluate the constant script of `EXECUTE IMMEDIATE` and parse it. This performs no
+    /// binding of the script itself and does not touch session settings.
+    pub(in crate::planner::binder) fn parse_execute_immediate(
+        &mut self,
+        stmt: &ExecuteImmediateStmt,
+    ) -> Result<(String, ScriptBlockOrStmt)> {
         let ExecuteImmediateStmt { script } = stmt;
         let script = self.bind_expr(script)?;
         let script = match script {
@@ -96,24 +124,7 @@ impl Binder {
             script_block_or_stmt,
         )?;
 
-        match ast {
-            ScriptBlockOrStmt::ScriptBlock(script_block) => {
-                Ok(Plan::ExecuteImmediate(Box::new(ExecuteImmediatePlan {
-                    script_block,
-                    script,
-                })))
-            }
-            ScriptBlockOrStmt::Statement(stmt) => {
-                apply_statement_settings(self.ctx.clone(), &stmt)?;
-                let binder = Self {
-                    name_resolution_ctx: NameResolutionContext::try_from(
-                        self.ctx.get_settings().as_ref(),
-                    )?,
-                    ..self.clone()
-                };
-                binder.bind(&stmt).await
-            }
-        }
+        Ok((script, ast))
     }
 
     pub async fn bind_create_procedure(&mut self, stmt: &CreateProcedureStmt) -> Result<Plan> {

@@ -1,0 +1,105 @@
+# Invalid task SQL must fail during CREATE/ALTER binding, before task-service access
+# or execution. These cases do not require a cloud-control server.
+
+statement error 2004
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE 1
+
+statement error 1006
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS SELECT CAST(NULL AS VECTOR(0))
+
+statement error 1006
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN SELECT CAST(NULL AS VECTOR(0)); END; $$
+
+statement error 1065
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN SELECT [1, 2][true]; END; $$
+
+statement error 1065
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN SELECT plus(1, [2]); END; $$
+
+statement error 3128
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN RETURN unknown_variable; END; $$
+
+statement error 3128
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN BREAK; END; $$
+
+statement error 1006
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ DECLARE x := CAST(NULL AS VECTOR(0)); BEGIN RETURN x; END; $$
+
+statement error 1006
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN IF FALSE THEN SELECT CAST(NULL AS VECTOR(0)); END IF; END; $$
+
+statement error 1065
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN WHILE FALSE DO SELECT [1][true]; END WHILE; END; $$
+
+statement error 1006
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN EXECUTE IMMEDIATE 'BEGIN SELECT CAST(NULL AS VECTOR(0)); END;'; END; $$
+
+# Constant single-statement EXECUTE IMMEDIATE scripts are validated too.
+statement error 1065
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE 'SELECT [1][true]'
+
+# A tolerated catalog error in one statement must not suppress validation of later SQL.
+statement error 1065
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN SELECT * FROM task_table_not_created_yet; SELECT [1][true]; END; $$
+
+statement error 2004
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS BEGIN SELECT 1; EXECUTE IMMEDIATE 1; END;
+
+statement error 1005
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN SELECT FROM; END; $$
+
+# Deterministic bind failures are reported whatever their error code, not only the
+# syntax/semantic/argument families.
+statement error 1028
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS SELECT COUNT(1, 2)
+
+# Missing columns, aliases and positions are not deferred when the table resolves.
+statement ok
+CREATE OR REPLACE TABLE static_validation_t (v ARRAY(INT))
+
+statement error 1065
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS SELECT no_such_col FROM static_validation_t
+
+statement error 1065
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS SELECT b.number FROM numbers(3) AS a
+
+statement error 1065
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS SELECT v FROM static_validation_t ORDER BY 5
+
+# Session parameters change the runtime context (DATABASE, settings), which the binder
+# cannot reproduce, so only syntax is checked for such tasks. `array_length(v)` is a type
+# error in the current database (v INT) but valid in the configured one (v ARRAY(INT)).
+statement ok
+CREATE OR REPLACE DATABASE static_validation_db
+
+statement ok
+CREATE TABLE static_validation_db.static_validation_t (v INT)
+
+statement ok
+USE static_validation_db
+
+statement error 1065
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS SELECT array_length(v) FROM static_validation_t
+
+statement error 1005
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' DATABASE = 'default' AS SELECT FROM static_validation_t
+
+# Binding is skipped, so the statement reaches the task interpreter, which rejects it for
+# unrelated reasons here: cloud control is not enabled (1702), or DATABASE is only accepted
+# by private tasks (2801). A semantic check would have reported 1065 instead.
+statement error (1702|2801)
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' DATABASE = 'default' AS SELECT array_length(v) FROM static_validation_t
+
+statement ok
+USE default
+
+statement ok
+DROP DATABASE static_validation_db
+
+statement ok
+DROP TABLE static_validation_t
+
+# ALTER TASK ... MODIFY AS cannot see the stored session parameters, so it is syntax-only
+# (see suites/task/task_ddl_test.test for the accepted semantic-error case).
+statement error 1005
+ALTER TASK static_validation_task MODIFY AS SELECT FROM

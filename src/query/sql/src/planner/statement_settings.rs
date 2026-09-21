@@ -108,6 +108,14 @@ impl Visitor for StatementSettingsCollector {
     }
 }
 
+/// Whether [`apply_statement_settings`] would change session settings for this statement.
+pub(crate) fn statement_changes_settings(stmt: &Statement) -> bool {
+    let collector = StatementSettingsCollector::scan(stmt);
+    collector.has_settings_clause
+        || !collector.hints.is_empty()
+        || collector.copy_disable_variant_check
+}
+
 pub fn apply_statement_settings(ctx: Arc<dyn TableContext>, stmt: &Statement) -> Result<()> {
     let collector = StatementSettingsCollector::scan(stmt);
 
