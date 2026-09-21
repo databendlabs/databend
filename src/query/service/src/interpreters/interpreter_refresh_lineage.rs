@@ -41,6 +41,7 @@ use databend_common_sql::plans::RefreshLineageSelector;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_enterprise_materialized_view::get_materialized_view_handler;
+use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::LineageEdgeIdentity;
@@ -113,6 +114,17 @@ struct ViewEntry {
     query: Option<String>,
     /// Persisted logical output schema; only materialized views have one.
     logical_schema: Option<TableSchema>,
+    /// The source table id a materialized view is bound to. The stored query names the source,
+    /// but the binding is by id; if the two disagree the view is invalid and lineage must not be
+    /// re-pointed at whatever table currently owns the name.
+    source_table_id: Option<u64>,
+}
+
+enum ViewLineageOutcome {
+    Lineage(QueryLineage),
+    /// The object exists but its definition no longer resolves to the bound source. Existing
+    /// edges are left untouched so they keep following the binding.
+    InvalidSourceBinding(String),
 }
 
 impl ViewEntry {
@@ -214,9 +226,14 @@ impl RefreshLineageInterpreter {
                 if table_info.db_type != DatabaseType::NormalDB {
                     continue;
                 }
-                let (query, logical_schema) = match kind {
-                    ViewKind::View => (table_info.meta.options.get(QUERY).cloned(), None),
+                let (query, logical_schema, source_table_id) = match kind {
+                    ViewKind::View => (table_info.meta.options.get(QUERY).cloned(), None, None),
                     ViewKind::MaterializedView => {
+                        let source_table_id = table_info
+                            .meta
+                            .options
+                            .get(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID)
+                            .and_then(|id| id.parse::<u64>().ok());
                         match get_materialized_view_handler()
                             .get_mv_definition(catalog, &tenant, table_info.ident.table_id)
                             .await?
@@ -224,8 +241,9 @@ impl RefreshLineageInterpreter {
                             Some(definition) => (
                                 Some(definition.data.original_query),
                                 Some(definition.data.logical_schema),
+                                source_table_id,
                             ),
-                            None => (None, None),
+                            None => (None, None, source_table_id),
                         }
                     }
                 };
@@ -237,6 +255,7 @@ impl RefreshLineageInterpreter {
                     created_on: table_info.meta.created_on.timestamp_micros(),
                     query,
                     logical_schema,
+                    source_table_id,
                 });
             }
         }
@@ -250,7 +269,7 @@ impl RefreshLineageInterpreter {
         &self,
         catalog: &dyn Catalog,
         view: &ViewEntry,
-    ) -> Result<QueryLineage> {
+    ) -> Result<ViewLineageOutcome> {
         let query = view.query.as_deref().ok_or_else(|| {
             ErrorCode::Internal(format!(
                 "{} '{}.{}' has no stored query",
@@ -280,7 +299,12 @@ impl RefreshLineageInterpreter {
                         view.database, view.name
                     ))
                 })?;
-                query_plan.query_lineage_for_materialized_view(target, logical_schema)?
+                let lineage =
+                    query_plan.query_lineage_for_materialized_view(target, logical_schema)?;
+                if let Some(reason) = Self::invalid_source_binding(view, &lineage) {
+                    return Ok(ViewLineageOutcome::InvalidSourceBinding(reason));
+                }
+                lineage
             }
         };
 
@@ -298,7 +322,22 @@ impl RefreshLineageInterpreter {
             )));
         }
 
-        Ok(lineage)
+        Ok(ViewLineageOutcome::Lineage(lineage))
+    }
+
+    /// A materialized view is bound to its source by table id. When the stored query resolves to
+    /// a different table (the source was dropped and recreated under the same name), the view is
+    /// permanently invalid and its lineage must keep pointing at the original binding.
+    fn invalid_source_binding(view: &ViewEntry, lineage: &QueryLineage) -> Option<String> {
+        let bound_id = view.source_table_id?;
+        let resolves_elsewhere = lineage
+            .targets
+            .iter()
+            .flat_map(|target| target.sources.iter())
+            .filter(|source| source.relation.kind == QueryLineageRelationKind::Table)
+            .any(|source| source.relation.id != Some(bound_id));
+        resolves_elsewhere
+            .then(|| "source table was dropped or replaced; existing lineage kept".to_string())
     }
 
     fn existing_edge(kind: ViewKind, edge: &RawLineageEdge) -> Option<ExistingLineageEdge> {
@@ -503,7 +542,20 @@ impl Interpreter for RefreshLineageInterpreter {
             let mut pending_logs = Vec::new();
             for view in views {
                 match self.extract_view_lineage(catalog.as_ref(), &view).await {
-                    Ok(lineage) => {
+                    Ok(ViewLineageOutcome::InvalidSourceBinding(reason)) => {
+                        results.push(RefreshResult {
+                            object_domain: view.kind.object_type(),
+                            catalog: Some(DEFAULT_CATALOG.to_string()),
+                            database: Some(view.database),
+                            object_name: view.name,
+                            status: "SKIPPED",
+                            edge_count: 0,
+                            upsert_count: 0,
+                            delete_count: 0,
+                            error: Some(reason),
+                        })
+                    }
+                    Ok(ViewLineageOutcome::Lineage(lineage)) => {
                         let existing = existing_by_target
                             .get(&view.target_key())
                             .into_iter()

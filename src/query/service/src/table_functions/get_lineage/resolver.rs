@@ -420,9 +420,14 @@ fn matches_expected_type(table: &dyn Table, expected: LineageObjectType) -> bool
 
 fn is_lineage_table_endpoint(engine: &str, is_temporary: bool) -> bool {
     !is_temporary
-        && ![VIEW_ENGINE, MATERIALIZED_VIEW_ENGINE, STREAM_ENGINE, "MEMORY"]
-            .iter()
-            .any(|unsupported| engine.eq_ignore_ascii_case(unsupported))
+        && ![
+            VIEW_ENGINE,
+            MATERIALIZED_VIEW_ENGINE,
+            STREAM_ENGINE,
+            "MEMORY",
+        ]
+        .iter()
+        .any(|unsupported| engine.eq_ignore_ascii_case(unsupported))
 }
 
 fn object_lookup_keys(

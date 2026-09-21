@@ -1249,6 +1249,7 @@ fn query_plan(plan: &Plan) -> Result<&Plan> {
         Plan::CreateView(plan) => plan.query_plan.as_deref().ok_or_else(|| {
             ErrorCode::Internal("Create view lineage extraction expects query plan".to_string())
         }),
+        Plan::CreateMaterializedView(plan) => Ok(plan.query_plan.as_ref()),
         Plan::Insert(plan) => match &plan.source {
             InsertInputSource::SelectPlan(query) => Ok(query),
             _ => Err(ErrorCode::Internal(
