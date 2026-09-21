@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::time::Duration;
 
 use databend_common_ast::Span;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FileLocation;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
@@ -36,6 +38,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::is_builtin_function;
@@ -71,6 +74,7 @@ use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::Symbol;
 use crate::Visibility;
+use crate::binder::ExprContext;
 use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
 use crate::binder::wrap_cast;
@@ -110,6 +114,16 @@ impl<'a> CoreExprArena<'a> {
             return Ok(None);
         }
 
+        if !func.order_by.is_empty() {
+            return Err(ErrorCode::SemanticError(
+                "only aggregate functions allowed in within group syntax",
+            )
+            .set_span(span));
+        }
+
+        // Whether the name is a scalar UDF or a UDAF is only known after loading
+        // the definition, so carry the FILTER clause through and reject it during
+        // resolution rather than here.
         let args = func
             .args
             .iter()
@@ -119,12 +133,13 @@ impl<'a> CoreExprArena<'a> {
             span,
             name: &func.name,
             args,
+            filter: func.filter.as_deref(),
         })))
     }
 }
 
 // UDF server expects unsigned types in UINT* form instead of SQL unsigned names.
-fn udf_type_string(data_type: &DataType) -> String {
+fn udf_type_string(data_type: &TableDataType) -> String {
     let sql_name = data_type.sql_name();
     match sql_name.as_str() {
         "TINYINT UNSIGNED" => "UINT8".to_string(),
@@ -133,6 +148,14 @@ fn udf_type_string(data_type: &DataType) -> String {
         "BIGINT UNSIGNED" => "UINT64".to_string(),
         _ => sql_name,
     }
+}
+
+fn table_type_to_data_type(ty: &TableDataType) -> DataType {
+    DataType::from(ty)
+}
+
+fn table_types_to_data_types(tys: &[TableDataType]) -> Vec<DataType> {
+    tys.iter().map(table_type_to_data_type).collect()
 }
 
 fn build_udf_cloud_script(
@@ -264,7 +287,7 @@ fn escape_python_double_quoted(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
-fn extract_script_metadata_deps(script: &str) -> Vec<String> {
+fn extract_script_metadata_deps(script: &str) -> Result<Vec<String>> {
     let mut ss = String::new();
     let mut meta_start = false;
     for line in script.lines() {
@@ -280,19 +303,24 @@ fn extract_script_metadata_deps(script: &str) -> Vec<String> {
         }
     }
 
-    let parsed = ss.parse::<toml::Value>().unwrap();
+    let parsed = ss.parse::<toml::Value>().map_err(|err| {
+        ErrorCode::SemanticError(format!(
+            "Failed to parse UDF script metadata as TOML: {err}"
+        ))
+    })?;
 
     if parsed.get("dependencies").is_none() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
 
-    if let Some(deps) = parsed["dependencies"].as_array() {
+    let deps = if let Some(deps) = parsed["dependencies"].as_array() {
         deps.iter()
             .filter_map(|value| value.as_str().map(|item| item.to_string()))
             .collect()
     } else {
         Vec::new()
-    }
+    };
+    Ok(deps)
 }
 
 fn unique_heredoc_marker(base: &str, contents: &[&str]) -> String {
@@ -528,11 +556,9 @@ impl UdfAdapter for FullTypeCheckAdapter {
             udf_definition
                 .arg_types
                 .iter()
-                .filter(|ty| ty.remove_nullable() != DataType::StageLocation),
+                .filter(|ty| ty.remove_nullable() != TableDataType::StageLocation),
         ) {
-            if matches!(dest_type, DataType::StageLocation) {
-                continue;
-            }
+            let dest_type = table_type_to_data_type(dest_type);
             let entry = BlockEntry::new_const_column(dest_type.clone(), arg, 1);
             block_entries.push(entry);
         }
@@ -542,7 +568,7 @@ impl UdfAdapter for FullTypeCheckAdapter {
         let request_timeout = settings.get_external_server_request_timeout_secs()?;
 
         let handler = udf_definition.handler;
-        let return_type = udf_definition.return_type;
+        let return_type = table_type_to_data_type(&udf_definition.return_type);
         let endpoint = databend_common_expression::udf_client::UDFFlightClient::build_endpoint(
             &udf_definition.address,
             connect_timeout,
@@ -607,7 +633,7 @@ impl UdfAdapter for FullTypeCheckAdapter {
             ErrorCode::SemanticError(format!("Failed to parse UDF code as utf-8: {err}"))
         })?;
         let import_assets = self.build_udf_cloud_imports(&imports)?;
-        let mut merged_packages = extract_script_metadata_deps(&resolved_code);
+        let mut merged_packages = extract_script_metadata_deps(&resolved_code)?;
         merged_packages.extend_from_slice(&packages);
         let input_types = arg_types.iter().map(udf_type_string).collect::<Vec<_>>();
         let result_type = udf_type_string(&return_type);
@@ -672,6 +698,7 @@ where A: super::TypeCheckAdapter
         span: Span,
         name: &Identifier,
         args: &CoreUdfCallArgs,
+        filter: Option<&Expr>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let udf_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
         if self.adapter.forbid_udf() {
@@ -683,17 +710,44 @@ where A: super::TypeCheckAdapter
             return Err(self.unknown_function_error(span, &udf_name));
         };
 
+        // FILTER is only meaningful for aggregates. Scalar UDFs get the shared
+        // error; UDAFs get a dedicated one since FILTER execution isn't wired up
+        // yet (the parser accepts it for PostgreSQL compatibility).
+        if filter.is_some() {
+            if udf.definition.is_aggregate() {
+                return Err(ErrorCode::Unimplemented(
+                    "FILTER clause is not supported for aggregate UDFs yet",
+                )
+                .set_span(span));
+            }
+            return Err(ErrorCode::SemanticError(
+                "FILTER clause is only supported for aggregate functions",
+            )
+            .set_span(span));
+        }
+
+        let is_udaf = matches!(&udf.definition, UDFDefinition::UDAFScript(_));
+        let original_context = self.bind_context.expr_context;
+        let disallow_alias_resolution =
+            is_udaf && self.bind_context.expr_context.prefer_resolve_alias();
+        if disallow_alias_resolution {
+            self.bind_context.expr_context = ExprContext::InAggregateFunction;
+        }
         let arguments = args
             .iter()
             .map(|(display_name, arg)| {
-                let box (scalar, data_type) = self.resolve_core(arena, *arg)?;
+                let deref!((scalar, data_type)) = self.resolve_core(arena, *arg)?;
                 Ok(UdfArgument {
                     display_name: display_name.clone(),
                     scalar,
                     data_type,
                 })
             })
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<Result<Vec<_>>>();
+        if disallow_alias_resolution {
+            self.bind_context.expr_context = original_context;
+        }
+        let arguments = arguments?;
         let udf = {
             let mut udf_resolver = UdfCallResolver {
                 udf_adapter: self.adapter.udf_adapter()?,
@@ -783,7 +837,7 @@ where A: super::TypeCheckAdapter
             deny_column_reference: false,
             ..self.name_resolution_ctx.clone()
         };
-        let box (scalar, data_type) = TypeChecker::try_create_with_adapter(
+        let deref!((scalar, data_type)) = TypeChecker::try_create_with_adapter(
             &mut bind_context,
             self.adapter.clone(),
             &name_resolution_ctx,
@@ -791,6 +845,15 @@ where A: super::TypeCheckAdapter
             &[],
         )?
         .resolve(&expr)?;
+
+        // The definition body is resolved with its own `BindContext`, so any runtime
+        // rewrite requirement discovered there (script/server UDF calls, async
+        // functions) is recorded on the inner context. Propagate it to the caller,
+        // otherwise `rewrite_udf` / async function rewrite is skipped and the nested
+        // call leaks into the plan as an unresolved dummy column reference.
+        self.bind_context.have_udf_script |= bind_context.have_udf_script;
+        self.bind_context.have_udf_server |= bind_context.have_udf_server;
+        self.bind_context.have_async_func |= bind_context.have_async_func;
 
         let (scalar, data_type) = if let Some(return_type) = return_type {
             let expr = CastExpr {
@@ -895,23 +958,30 @@ where A: UdfAdapter
             .zip(udf_definition.arg_types.iter())
             .enumerate()
         {
+            let dest_type_no_nullable = dest_type.remove_nullable();
+            let is_stage_location = dest_type_no_nullable == TableDataType::StageLocation;
+            let dest_type_data = table_type_to_data_type(dest_type);
+            let dest_type_no_nullable_data = table_type_to_data_type(&dest_type_no_nullable);
+
             // TODO: support cast constant
             if !matches!(argument.scalar, ScalarExpr::ConstantExpr(_))
-                || (argument.data_type != dest_type.remove_nullable()
-                    && dest_type.remove_nullable() != DataType::StageLocation)
+                || (argument.data_type != dest_type_no_nullable_data && !is_stage_location)
             {
                 all_args_const = false;
             }
-            if dest_type.remove_nullable() == DataType::StageLocation {
+            if is_stage_location {
                 if udf_definition.arg_names.is_empty() {
                     return Err(ErrorCode::InvalidArgument(
                         "StageLocation must have a corresponding variable name",
                     ));
                 }
                 let expr = argument.scalar.as_expr()?;
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                let Ok(Some(location)) =
-                    expr.into_constant().map(|c| c.scalar.as_string().cloned())
+                let (expr, _) =
+                    ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let Ok(Some(location)) = expr
+                    .into_owned()
+                    .into_constant()
+                    .map(|c| c.scalar.as_string().cloned())
                 else {
                     return Err(ErrorCode::SemanticError(format!(
                         "invalid parameter {argument} for udf function, expected constant string",
@@ -947,8 +1017,8 @@ where A: UdfAdapter
                 });
                 continue;
             }
-            if argument.data_type != *dest_type {
-                args.push(wrap_cast(&argument.scalar, dest_type));
+            if argument.data_type != dest_type_data {
+                args.push(wrap_cast(&argument.scalar, &dest_type_data));
             } else {
                 args.push(argument.scalar.clone());
             }
@@ -978,9 +1048,10 @@ where A: UdfAdapter
                 arg_scalars,
                 udf_definition.clone(),
             )?;
+            let return_type = table_type_to_data_type(&udf_definition.return_type);
             return Ok(UdfResolveResult::Expr(Box::new((
                 ConstantExpr { span, value }.into(),
-                udf_definition.return_type.clone(),
+                return_type,
             ))));
         }
 
@@ -989,6 +1060,8 @@ where A: UdfAdapter
             .map(|arg| arg.display_name.as_str())
             .join(", ");
         let display_name = format!("{}({})", udf_definition.handler, arg_names);
+        let arg_types = table_types_to_data_types(&udf_definition.arg_types);
+        let return_type = table_type_to_data_type(&udf_definition.return_type);
 
         Ok(UdfResolveResult::RuntimeServerExpr(Box::new((
             UDFCall {
@@ -998,12 +1071,12 @@ where A: UdfAdapter
                 headers: udf_definition.headers,
                 display_name,
                 udf_type: UDFType::Server(udf_definition.address.clone()),
-                arg_types: udf_definition.arg_types,
-                return_type: Box::new(udf_definition.return_type.clone()),
+                arg_types,
+                return_type: Box::new(return_type.clone()),
                 arguments: args,
             }
             .into(),
-            udf_definition.return_type.clone(),
+            return_type,
         ))))
     }
 
@@ -1039,8 +1112,9 @@ where A: UdfAdapter
         } = udf_definition;
         let mut scalar_arguments = Vec::with_capacity(arguments.len());
         for (argument, dest_type) in arguments.iter().zip(arg_types.iter()) {
-            if argument.data_type != *dest_type {
-                scalar_arguments.push(wrap_cast(&argument.scalar, dest_type));
+            let dest_type = table_type_to_data_type(dest_type);
+            if argument.data_type != dest_type {
+                scalar_arguments.push(wrap_cast(&argument.scalar, &dest_type));
             } else {
                 scalar_arguments.push(argument.scalar.clone());
             }
@@ -1062,7 +1136,9 @@ where A: UdfAdapter
             .iter()
             .map(|arg| arg.display_name.as_str())
             .join(", ");
-        let display_name = format!("{}({})", &handler, arg_names);
+        let display_name = format!("{}({})", handler, arg_names);
+        let arg_types = table_types_to_data_types(&arg_types);
+        let return_type = table_type_to_data_type(&return_type);
 
         Ok(UdfResolveResult::RuntimeScriptExpr(Box::new((
             UDFCall {
@@ -1115,10 +1191,11 @@ where A: UdfAdapter
             .iter()
             .zip(arg_types.iter())
             .map(|(argument, dest_type)| {
-                Ok(if argument.data_type == *dest_type {
+                let dest_type = table_type_to_data_type(dest_type);
+                Ok(if argument.data_type == dest_type {
                     argument.scalar.clone()
                 } else {
-                    wrap_cast(&argument.scalar, dest_type)
+                    wrap_cast(&argument.scalar, &dest_type)
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -1127,6 +1204,8 @@ where A: UdfAdapter
             "{name}({})",
             args.iter().map(|arg| arg.display_name.as_str()).join(", ")
         );
+        let arg_types = table_types_to_data_types(&arg_types);
+        let return_type = table_type_to_data_type(&return_type);
 
         Ok(UdfResolveResult::RuntimeScriptExpr(Box::new((
             UDAFCall {
@@ -1138,7 +1217,7 @@ where A: UdfAdapter
                     .iter()
                     .map(|f| UDFField {
                         name: f.name().to_string(),
-                        data_type: f.data_type().clone(),
+                        data_type: table_type_to_data_type(f.data_type()),
                     })
                     .collect(),
                 return_type: Box::new(return_type.clone()),
@@ -1204,19 +1283,42 @@ where A: UdfAdapter
         }
         let mut parameters = Vec::with_capacity(arg_types.len());
         for ((arg_name, dest_type), argument) in arg_types.iter().zip(arguments.iter()) {
-            let arg = if argument.data_type != *dest_type {
-                wrap_cast(&argument.scalar, dest_type)
+            let dest_type = table_type_to_data_type(dest_type);
+            let arg = if argument.data_type != dest_type {
+                wrap_cast(&argument.scalar, &dest_type)
             } else {
                 argument.scalar.clone()
             };
-            parameters.push((arg_name.clone(), dest_type.clone(), arg));
+            parameters.push((arg_name.clone(), dest_type, arg));
         }
         Ok(UdfResolveResult::ScalarDefinition {
             span,
             func_name,
             definition: udf_definition.definition,
             parameters,
-            return_type: udf_definition.return_type,
+            return_type: table_type_to_data_type(&udf_definition.return_type),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_script_metadata_deps_returns_error_for_malformed_toml() {
+        let err = extract_script_metadata_deps(
+            r#"# /// script
+# dependencies = [
+# ///
+"#,
+        )
+        .expect_err("malformed UDF script metadata should return an error");
+
+        assert_eq!(err.code(), ErrorCode::SEMANTIC_ERROR);
+        assert!(
+            err.message()
+                .contains("Failed to parse UDF script metadata as TOML")
+        );
     }
 }

@@ -62,7 +62,7 @@ use crate::optimizer::optimizers::rule::RulePushDownSortFilterScan;
 use crate::optimizer::optimizers::rule::RulePushDownSortScan;
 use crate::optimizer::optimizers::rule::RuleSemiToInnerJoin;
 use crate::optimizer::optimizers::rule::RuleSplitAggregate;
-use crate::optimizer::optimizers::rule::RuleTryApplyAggIndex;
+use crate::optimizer::optimizers::rule::RuleTryApplyMaterializedView;
 
 pub struct RuleFactory;
 
@@ -71,13 +71,17 @@ impl RuleFactory {
         let metadata = ctx.get_metadata();
         match id {
             RuleID::EliminateUnion => Ok(Box::new(RuleEliminateUnion::new(metadata))),
-            RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new(metadata))),
+            RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
             RuleID::FilterNulls => Ok(Box::new(RuleFilterNulls::new(
                 ctx.get_enable_distributed_optimization(),
+                ctx.get_stat_context().clone(),
             ))),
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
             RuleID::PushDownFilterEvalScalar => Ok(Box::new(RulePushDownFilterEvalScalar::new())),
-            RuleID::PushDownFilterJoin => Ok(Box::new(RulePushDownFilterJoin::new(metadata))),
+            RuleID::PushDownFilterJoin => Ok(Box::new(RulePushDownFilterJoin::new(
+                metadata,
+                ctx.get_stat_context().clone(),
+            ))),
             RuleID::PushDownFilterScan => Ok(Box::new(RulePushDownFilterScan::new(metadata))),
             RuleID::PushDownFilterSort => Ok(Box::new(RulePushDownFilterSort::new())),
             RuleID::PushDownFilterProjectSet => Ok(Box::new(RulePushDownFilterProjectSet::new())),
@@ -95,6 +99,7 @@ impl RuleFactory {
             RuleID::PushDownLimitEvalScalar => Ok(Box::new(RulePushDownLimitEvalScalar::new())),
             RuleID::PushDownLimitSort => Ok(Box::new(RulePushDownLimitSort::new(
                 ctx.get_max_push_down_limit(),
+                ctx.get_enable_top_n(),
             ))),
             RuleID::PushDownLimitWindow => Ok(Box::new(RulePushDownLimitWindow::new(
                 ctx.get_max_push_down_limit(),
@@ -105,7 +110,7 @@ impl RuleFactory {
             RuleID::PushDownFilterAggregate => Ok(Box::new(RulePushDownFilterAggregate::new())),
             RuleID::PushDownFilterWindow => Ok(Box::new(RulePushDownFilterWindow::new())),
             RuleID::PushDownFilterWindowTopN => {
-                Ok(Box::new(RulePushDownFilterWindowTopN::new(metadata)))
+                Ok(Box::new(RulePushDownFilterWindowTopN::new(ctx)))
             }
             RuleID::EliminateFilter => Ok(Box::new(RuleEliminateFilter::new(metadata))),
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),
@@ -116,13 +121,19 @@ impl RuleFactory {
                 Ok(Box::new(RuleHierarchicalGroupingSetsToUnion::new(ctx)))
             }
             RuleID::SplitAggregate => Ok(Box::new(RuleSplitAggregate::new())),
-            RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new())),
-            RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new())),
+            RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new(
+                ctx.get_stat_context().clone(),
+            ))),
+            RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new(
+                ctx.get_stat_context().clone(),
+            ))),
             RuleID::CommuteJoinBaseTable => Ok(Box::new(RuleCommuteJoinBaseTable::new())),
             RuleID::LeftExchangeJoin => Ok(Box::new(RuleLeftExchangeJoin::new())),
             RuleID::EagerAggregation => Ok(Box::new(RuleEagerAggregation::new(metadata))),
             RuleID::PushDownPrewhere => Ok(Box::new(RulePushDownPrewhere::new(metadata))),
-            RuleID::TryApplyAggIndex => Ok(Box::new(RuleTryApplyAggIndex::new(metadata))),
+            RuleID::TryApplyMaterializedView => {
+                Ok(Box::new(RuleTryApplyMaterializedView::new(ctx)))
+            }
             RuleID::EliminateSelfJoin => Ok(Box::new(RuleEliminateSelfJoin::new(ctx))),
             RuleID::EliminateSort => Ok(Box::new(RuleEliminateSort::new())),
             RuleID::DeduplicateSort => Ok(Box::new(RuleDeduplicateSort::new())),

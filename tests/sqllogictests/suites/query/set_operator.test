@@ -23,6 +23,34 @@ select * from a except select * from b union all select * from b intersect selec
 NULL 3
 
 statement ok
+create or replace table set_null_l(k int null)
+
+statement ok
+create or replace table set_null_r(k int null)
+
+statement ok
+insert into set_null_l values (null), (null), (1), (2), (3)
+
+statement ok
+insert into set_null_r values (null), (1), (3), (3)
+
+query I
+select count(*) from (select k from set_null_l intersect select k from set_null_r)
+----
+3
+
+query I
+select count(*) from (select k from set_null_l except select k from set_null_r)
+----
+1
+
+statement ok
+drop table set_null_l
+
+statement ok
+drop table set_null_r
+
+statement ok
 create or replace table a as select null, 3 , '343', 1.2, 3.4, true, 4+5, 5-2;
 
 statement ok

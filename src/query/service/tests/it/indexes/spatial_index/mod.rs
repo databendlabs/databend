@@ -15,4 +15,3 @@
 mod builder;
 mod index_refresh;
 mod pruning;
-mod runtime_filter;

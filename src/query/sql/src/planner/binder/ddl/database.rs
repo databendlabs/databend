@@ -35,6 +35,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_storage::EndpointPolicyScope;
 use databend_common_users::UserApiProvider;
 use log::debug;
 
@@ -44,6 +45,7 @@ use crate::binder::Binder;
 use crate::binder::StageResolver;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::AlterDatabasePlan;
+use crate::plans::CreateDatabaseFromSharePlan;
 use crate::plans::CreateDatabasePlan;
 use crate::plans::DropDatabasePlan;
 use crate::plans::Plan;
@@ -331,6 +333,7 @@ impl Binder {
         let CreateDatabaseStmt {
             create_option,
             database: DatabaseRef { catalog, database },
+            from_share,
             engine,
             options,
         } = stmt;
@@ -341,6 +344,42 @@ impl Binder {
             .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = normalize_identifier(database, &self.name_resolution_ctx).name;
+
+        if let Some(from_share) = from_share {
+            let default_catalog = self.ctx.get_default_catalog()?.name();
+            if catalog != default_catalog {
+                return Err(ErrorCode::BadArguments(format!(
+                    "CREATE DATABASE ... FROM SHARE is only supported in the default catalog '{}'",
+                    default_catalog
+                )));
+            }
+            if engine.is_some() || !options.is_empty() {
+                return Err(ErrorCode::BadArguments(
+                    "CREATE DATABASE ... FROM SHARE cannot specify ENGINE or OPTIONS",
+                ));
+            }
+
+            let Some(provider_tenant) = &from_share.tenant else {
+                return Err(ErrorCode::BadArguments(
+                    "CREATE DATABASE ... FROM SHARE requires <provider_tenant>.<share>",
+                ));
+            };
+
+            return Ok(Plan::CreateDatabaseFromShare(Box::new(
+                CreateDatabaseFromSharePlan {
+                    create_option: create_option.clone().into(),
+                    tenant,
+                    catalog,
+                    database,
+                    provider_tenant: normalize_identifier(
+                        provider_tenant,
+                        &self.name_resolution_ctx,
+                    )
+                    .name,
+                    share: normalize_identifier(&from_share.share, &self.name_resolution_ctx).name,
+                },
+            )));
+        }
 
         let options = Self::normalize_db_option_name(options);
 
@@ -522,13 +561,16 @@ impl Binder {
 
             // Verify essential privileges for the external storage location
             // Similar to table creation, we test basic storage operations
-            let operator =
-                databend_common_storage::init_operator(&storage_params).map_err(|e| {
-                    ErrorCode::BadArguments(format!(
-                        "Failed to access storage location '{}': {}",
-                        path_prop.value, e
-                    ))
-                })?;
+            let operator = databend_common_storage::init_operator_with_policy_scope(
+                &storage_params,
+                EndpointPolicyScope::External,
+            )
+            .map_err(|e| {
+                ErrorCode::BadArguments(format!(
+                    "Failed to access storage location '{}': {}",
+                    path_prop.value, e
+                ))
+            })?;
 
             // Test storage accessibility with basic operations
             // Reuse the existing verify_external_location_privileges function from table.rs

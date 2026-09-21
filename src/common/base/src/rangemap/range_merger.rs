@@ -46,7 +46,26 @@ pub struct RangeMerger {
 }
 
 impl RangeMerger {
-    pub fn from_iter<I>(
+    /// Merge ranges using only the bounded gap and range-size policy.
+    pub fn from_iter<I>(iter: I, max_gap_size: u64, max_range_size: u64) -> Self
+    where I: IntoIterator<Item = Range<u64>> {
+        Self::from_iter_inner(iter, max_gap_size, max_range_size, None)
+    }
+
+    /// Read the full span when it fits `whole_read_size`; otherwise use the bounded policy.
+    pub fn from_iter_with_whole_read<I>(
+        iter: I,
+        max_gap_size: u64,
+        max_range_size: u64,
+        whole_read_size: u64,
+    ) -> Self
+    where
+        I: IntoIterator<Item = Range<u64>>,
+    {
+        Self::from_iter_inner(iter, max_gap_size, max_range_size, Some(whole_read_size))
+    }
+
+    fn from_iter_inner<I>(
         iter: I,
         max_gap_size: u64,
         max_range_size: u64,
@@ -56,7 +75,7 @@ impl RangeMerger {
         I: IntoIterator<Item = Range<u64>>,
     {
         let mut raw_ranges: Vec<_> = iter.into_iter().collect();
-        raw_ranges.sort_by(|a, b| a.start.cmp(&b.start));
+        raw_ranges.sort_by_key(|a| a.start);
 
         let mut rs = RangeMerger {
             max_gap_size,

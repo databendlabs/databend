@@ -15,6 +15,7 @@
 use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::Mutex;
+use std::sync::mpsc;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -83,6 +84,37 @@ async fn test_shutdown_long_run_runtime() -> anyhow::Result<()> {
     drop(runtime);
     assert!(instant.elapsed() < Duration::from_secs(6));
 
+    Ok(())
+}
+
+struct RuntimeOwner {
+    _runtime: Arc<Runtime>,
+}
+
+#[test]
+fn test_runtime_can_be_dropped_from_own_worker() -> anyhow::Result<()> {
+    let runtime = Arc::new(Runtime::with_worker_threads(
+        1,
+        Some("drop-runtime-from-own-worker".to_string()),
+    )?);
+    let owner = Arc::new(RuntimeOwner {
+        _runtime: runtime.clone(),
+    });
+    let owner_for_task = owner.clone();
+    let (release_tx, release_rx) = mpsc::channel();
+    let (done_tx, done_rx) = mpsc::channel();
+
+    runtime.spawn(async move {
+        release_rx.recv().unwrap();
+        drop(owner_for_task);
+        let _ = done_tx.send(());
+    });
+
+    drop(owner);
+    drop(runtime);
+    release_tx.send(())?;
+
+    done_rx.recv_timeout(Duration::from_secs(2))?;
     Ok(())
 }
 

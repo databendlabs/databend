@@ -22,6 +22,7 @@ use client::TTCClient;
 use futures_util::StreamExt;
 use futures_util::stream;
 use rand::Rng;
+use rand::distributions::Alphanumeric;
 use sqllogictest::DBOutput;
 use sqllogictest::Location;
 use sqllogictest::QueryExpect;
@@ -44,6 +45,8 @@ use crate::error::DSqlLogicTestError;
 use crate::error::Result;
 use crate::report::ErrorRecord;
 use crate::report::RunReport;
+use crate::settings_matrix::SettingsGroup;
+use crate::settings_matrix::collect_settings_passes;
 use crate::util::ColumnType;
 use crate::util::collect_files;
 use crate::util::collect_lazy_dir;
@@ -56,6 +59,7 @@ mod client;
 mod diagnostics;
 mod error;
 mod report;
+mod settings_matrix;
 mod util;
 
 const HANDLER_MYSQL: &str = "mysql";
@@ -223,9 +227,26 @@ async fn run_hybrid_client(
     Ok(())
 }
 
+// Allocate once per file execution, not per connection or derived from its path.
+// Re-running the same file in another CI job also gets an independent random name.
+fn new_sandbox_name(enabled: bool) -> Option<String> {
+    enabled.then(|| {
+        rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(16)
+            .map(char::from)
+            .collect()
+    })
+}
+
 // Create new databend with client type
 #[async_recursion::async_recursion(#[recursive::recursive])]
-async fn create_databend(client_type: &ClientType, filename: &str) -> Result<Databend> {
+async fn create_databend(
+    client_type: &ClientType,
+    filename: &str,
+    sandbox_name: Option<&str>,
+    settings: Option<&SettingsGroup>,
+) -> Result<Databend> {
     let mut client: Client;
     let args = SqlLogicTestArgs::parse();
     match client_type {
@@ -259,20 +280,35 @@ async fn create_databend(client_type: &ClientType, filename: &str) -> Result<Dat
                 acc += s;
 
                 if acc >= r {
-                    return create_databend(t.as_ref(), filename).await;
+                    return create_databend(t.as_ref(), filename, sandbox_name, settings).await;
                 }
             }
             unreachable!()
         }
     }
-    if args.enable_sandbox {
-        client.create_sandbox().await?;
+    if let Some(sandbox_name) = sandbox_name {
+        client.init_sandbox(sandbox_name).await?;
+    }
+    // Apply the `# run-with-settings:` pass before the first record so that a
+    // test file's own `SET` still wins, while `UNSET` inside the file only
+    // falls back to the server default (not to the pass setting) -- that is
+    // the accepted trade-off of a session-level override.
+    if let Some(settings) = settings {
+        for stmt in settings.set_statements() {
+            client.query(&stmt).await?;
+        }
     }
     if args.debug {
         client.enable_debug();
     }
 
-    println!("Running {} test for file: {} ...", client_type, filename);
+    match settings {
+        Some(settings) => println!(
+            "Running {} test for file: {} [settings: {}] ...",
+            client_type, filename, settings
+        ),
+        None => println!("Running {} test for file: {} ...", client_type, filename),
+    }
     Ok(Databend::create(client))
 }
 
@@ -298,10 +334,13 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
         {
             continue;
         }
-        num_of_tests += parse_file::<ColumnType>(&suit_file).unwrap().len();
+        let records_in_file = parse_file::<ColumnType>(&suit_file).unwrap().len();
+        // Each `# run-with-settings:` directive reruns the whole file once more.
+        let settings_passes = collect_settings_passes(&suit_file)?;
+        num_of_tests += records_in_file * (1 + settings_passes.len());
 
         collect_lazy_dir(&suit_file, &mut lazy_dirs)?;
-        files.push(suit_file);
+        files.push((suit_file, settings_passes));
     }
     let selected_files = files.len();
 
@@ -313,13 +352,15 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
     let _dict_container = lazy_run_dictionary_containers(&lazy_dirs).await?;
 
     if args.complete {
-        for file in files {
+        for (file, _) in files {
             let file_name = file.file_name().unwrap().to_str().unwrap().to_string();
 
             let col_separator = " ";
             let validator = default_validator;
-            let mut runner =
-                Runner::new(|| async { create_databend(&client_type, &file_name).await });
+            let sandbox_name = new_sandbox_name(args.enable_sandbox);
+            let mut runner = Runner::new(|| async {
+                create_databend(&client_type, &file_name, sandbox_name.as_deref(), None).await
+            });
             // todo: The behavior of normalizer for multi line string is incorrect
             runner
                 .update_test_file(
@@ -333,10 +374,24 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
                 .unwrap();
         }
     } else {
+        // Every file runs once with default settings, plus once per
+        // `# run-with-settings:` directive. Files run in parallel, but the
+        // passes of one file run sequentially: each pass gets its own sandbox
+        // tenant, yet some state (e.g. internal stage storage paths) is not
+        // tenant-scoped, so concurrent passes of the same file could pollute
+        // each other.
         let mut tasks = Vec::with_capacity(files.len());
-        for file in files {
+        for (file, settings_passes) in &files {
             let client_type = client_type.clone();
-            tasks.push(async move { run_file_async(&client_type, args.bench, file).await });
+            tasks.push(async move {
+                let mut error_records = vec![];
+                let passes = std::iter::once(None).chain(settings_passes.iter().map(Some));
+                for settings in passes {
+                    error_records
+                        .extend(run_file_async(&client_type, args.bench, file, settings).await?);
+                }
+                Ok(error_records)
+            });
         }
         let error_records = run_parallel_async(tasks).await;
         let report = RunReport::new(
@@ -417,15 +472,25 @@ async fn run_file_async(
     client_type: &ClientType,
     bench: bool,
     filename: impl AsRef<Path>,
+    settings: Option<&SettingsGroup>,
 ) -> std::result::Result<Vec<ErrorRecord>, ErrorRecord> {
     let start = Instant::now();
 
     let mut error_records = vec![];
-    let no_fail_fast = SqlLogicTestArgs::parse().no_fail_fast;
+    let args = SqlLogicTestArgs::parse();
+    let no_fail_fast = args.no_fail_fast;
+    let sandbox_name = new_sandbox_name(args.enable_sandbox);
     let records = parse_file(&filename).unwrap();
     let filename = filename.as_ref().to_str().unwrap();
+    // Failure reports name the pass so a settings-only failure is attributable.
+    let pass_name = match settings {
+        Some(settings) => format!("{filename} [settings: {settings}]"),
+        None => filename.to_string(),
+    };
 
-    let mut runner = Runner::new(|| async { create_databend(client_type, filename).await });
+    let mut runner = Runner::new(|| async {
+        create_databend(client_type, filename, sandbox_name.as_deref(), settings).await
+    });
     for record in records.into_iter() {
         if let Record::Halt { .. } = record {
             break;
@@ -460,7 +525,7 @@ async fn run_file_async(
 
                 let diagnostics = capture_failure_diagnostics(&mut runner).await;
                 let error_record = ErrorRecord::new(
-                    filename.to_string(),
+                    pass_name.clone(),
                     e,
                     diagnostics.query_id,
                     diagnostics.non_default_settings,
@@ -484,7 +549,7 @@ async fn run_file_async(
         println!(
             "Completed {} test for file: {} {} ({:?})",
             client_type,
-            filename,
+            pass_name,
             run_file_status,
             start.elapsed(),
         );

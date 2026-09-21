@@ -15,8 +15,8 @@
 // Logs from this module will show up as "[FUSE-VACUUM2] ...".
 databend_common_tracing::register_module_tag!("[FUSE-VACUUM2]");
 
-use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::hash::Hasher;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -24,19 +24,68 @@ use chrono::Utc;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::ListIndexesByIdReq;
-use databend_common_meta_app::schema::TableIndex;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::operations::is_gc_candidate_segment_block;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
+use databend_storages_common_index::ExternalFile;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::try_extract_uuid_v7_timestamp_from_path;
+use futures_util::TryStreamExt;
 use log::info;
+use log::warn;
+use opendal::Operator;
+use siphasher::sip128::Hasher128;
+use siphasher::sip128::SipHasher24;
 
 const VACUUM2_BLOCK_DELETE_CHUNK_SIZE: usize = 1000;
+const VACUUM2_SEGMENT_READ_CHUNK_SIZE: usize = 1000;
+
+/// Block GC progress counters used for status reporting.
+struct BlockGcStats {
+    /// Number of candidate block objects before protected-block filtering.
+    ///
+    /// This excludes directory entries and entries that are not eligible by the
+    /// vacuum2 cutoff/safety rule, but includes blocks that are later kept
+    /// because they are still referenced by the protected block set.
+    scanned_blocks: usize,
+    /// Number of data block objects successfully removed.
+    removed_blocks: usize,
+    /// Number of objects successfully removed, including data blocks and their
+    /// derived index files.
+    removed_files: usize,
+}
+
+/// Shared context for block-level GC.
+///
+/// Keep the safety-critical inputs in one place so the FS and object-store
+/// paths use the same gc-root cutoff, protected block set, and index metadata.
+struct BlockGcContext<'a> {
+    /// Operator used to list, stat, and delete block-related objects.
+    dal: &'a Operator,
+    /// Query context used for settings, abort checks, and status reporting.
+    ctx: &'a Arc<dyn TableContext>,
+    /// Table description used only in status/error messages.
+    table_desc: &'a str,
+    /// Prefix of the table block object directory, i.e. `_b/`.
+    block_location_prefix: &'a str,
+    /// Timestamp-derived vacuum2 object-key cutoff. Objects at or after this
+    /// prefix must not be vacuumed.
+    until: String,
+    /// GC-root snapshot timestamp used to build `until` and for status reporting.
+    gc_root_timestamp: DateTime<Utc>,
+    /// GC-root object metadata timestamp used by the common vacuum safety helper
+    /// for legacy object-key handling.
+    gc_root_meta_ts: DateTime<Utc>,
+    /// Hashes of data block paths still referenced by the gc root or refs.
+    gc_root_blocks: &'a HashSet<u128>,
+    /// Start time of the block GC phase, used only for status reporting.
+    start: std::time::Instant,
+}
 
 /// GC root context derived from the owner table before ref-aware cleanup starts.
 ///
@@ -55,7 +104,7 @@ pub async fn do_vacuum2(
     table: &dyn Table,
     ctx: Arc<dyn TableContext>,
     respect_flash_back: bool,
-) -> Result<Vec<String>> {
+) -> Result<()> {
     let table_info = table.get_table_info();
     {
         if ctx.txn_mgr().lock().is_active() {
@@ -63,7 +112,7 @@ pub async fn do_vacuum2(
                 "Transaction is active, skipping vacuum, target table {}",
                 table_info.desc
             );
-            return Ok(vec![]);
+            return Ok(());
         }
     }
 
@@ -76,7 +125,7 @@ pub async fn do_vacuum2(
     }) = vacuum_base_snapshot_phase(fuse_table, &ctx, respect_flash_back).await?
     else {
         info!("Table {} has no snapshot, stopping vacuum", table_info.desc);
-        return Ok(vec![]);
+        return Ok(());
     };
 
     let start = std::time::Instant::now();
@@ -128,97 +177,117 @@ pub async fn do_vacuum2(
     let segments_io =
         SegmentsIO::create(ctx.clone(), fuse_table.get_operator(), fuse_table.schema());
 
-    // Collect blocks from main gc_root
+    // Collect blocks from main gc_root. Read protected segments in chunks to avoid
+    // retaining all CompactSegmentInfo objects in memory at once.
     let protected_segments = protected_segments.into_iter().collect::<Vec<_>>();
-    let segments = segments_io
-        .read_segments::<Arc<CompactSegmentInfo>>(&protected_segments, false)
-        .await?;
+    let total_chunks = protected_segments
+        .len()
+        .div_ceil(VACUUM2_SEGMENT_READ_CHUNK_SIZE);
     let mut gc_root_blocks = HashSet::new();
-    for segment in segments {
-        gc_root_blocks.extend(segment?.block_metas()?.iter().map(|b| b.location.0.clone()));
+    let mut protected_inverted_index_locations = HashSet::new();
+    for (chunk_idx, segment_chunk) in protected_segments
+        .chunks(VACUUM2_SEGMENT_READ_CHUNK_SIZE)
+        .enumerate()
+    {
+        if let Err(err) = ctx.check_aborting() {
+            return Err(err.with_context(format!(
+                "aborted while reading protected segment chunk {}/{} for table {}",
+                chunk_idx + 1,
+                total_chunks,
+                table_info.desc
+            )));
+        }
+
+        let segments = segments_io
+            .read_segments::<Arc<CompactSegmentInfo>>(segment_chunk, false)
+            .await?;
+        for segment in segments {
+            let blocks = segment?.block_metas()?;
+            for block in &blocks {
+                gc_root_blocks.insert(block_path_hash(&block.location.0));
+                protected_inverted_index_locations.extend(
+                    block
+                        .inverted_index_metas
+                        .as_deref()
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|meta| meta.location.0.clone()),
+                );
+            }
+        }
+        ctx.set_status_info(&format!(
+            "Read protected segment chunk for table {}, elapsed: {:?}, segment chunk: {}/{}, segments in chunk: {}, total protected blocks: {}",
+            table_info.desc,
+            start.elapsed(),
+            chunk_idx + 1,
+            total_chunks,
+            segment_chunk.len(),
+            gc_root_blocks.len()
+        ));
     }
     ctx.set_status_info(&format!(
-        "Read segments for table {}, elapsed: {:?}, total protected blocks: {}",
+        "Read segments for table {}, elapsed: {:?}, total protected blocks: {}, protected inverted indexes: {}",
         table_info.desc,
         start.elapsed(),
-        gc_root_blocks.len()
+        gc_root_blocks.len(),
+        protected_inverted_index_locations.len(),
     ));
 
     let start = std::time::Instant::now();
-    let blocks_before_gc_root = fuse_table
-        .list_files_until_timestamp(
-            fuse_table.meta_location_generator().block_location_prefix(),
-            gc_root_timestamp,
-            false,
-            Some(gc_root_meta_ts),
-        )
-        .await?
-        .into_iter()
-        .map(|v| v.path().to_owned())
-        .collect::<Vec<_>>();
-
-    ctx.set_status_info(&format!(
-        "Listed blocks before gc_root for table {}, elapsed: {:?}, block_dir: {:?}, gc_root_timestamp: {:?}, blocks: {:?}",
-        table_info.desc,
-        start.elapsed(),
-        fuse_table.meta_location_generator().block_location_prefix(),
-        gc_root_timestamp,
-        slice_summary(&blocks_before_gc_root)
-    ));
-
-    let start = std::time::Instant::now();
-    let blocks_to_gc: Vec<String> = blocks_before_gc_root
-        .into_iter()
-        .filter(|b| !gc_root_blocks.contains(b))
-        .collect();
-    ctx.set_status_info(&format!(
-        "Filtered blocks_to_gc for table {}, elapsed: {:?}, blocks_to_gc: {:?}",
-        table_info.desc,
-        start.elapsed(),
-        slice_summary(&blocks_to_gc)
-    ));
-
-    let start = std::time::Instant::now();
-    let catalog = ctx.get_default_catalog()?;
-    let table_agg_index_ids = catalog
-        .list_index_ids_by_table_id(ListIndexesByIdReq::new(
-            ctx.get_tenant(),
-            fuse_table.get_id(),
-        ))
-        .await?;
-    let inverted_indexes = &table_info.meta.indexes;
-
-    let op = Files::create(ctx.clone(), fuse_table.get_operator());
-    let mut files_to_gc = Vec::with_capacity(
-        blocks_to_gc.len() * (table_agg_index_ids.len() + inverted_indexes.len() + 2)
-            + stats_to_gc.len()
-            + segments_to_gc.len()
-            + snapshots_to_gc.len(),
-    );
-
-    // order is important
-    // indexes should be removed before their blocks, because index locations to gc are generated from block locations.
-    purge_block_chunks(
-        &op,
+    let removed_inverted_index_v2 = purge_inverted_index_v2_objects(
+        fuse_table.get_operator_ref(),
         &ctx,
-        table_info.desc.as_str(),
-        &blocks_to_gc,
-        &table_agg_index_ids,
-        inverted_indexes,
-        &mut files_to_gc,
-        start,
+        fuse_table
+            .meta_location_generator()
+            .inverted_index_v2_location_prefix(),
+        &protected_inverted_index_locations,
+        gc_root_timestamp,
+        gc_root_meta_ts,
     )
     .await?;
+    ctx.set_status_info(&format!(
+        "Removed unreferenced inverted-index V2 objects for table {}, elapsed: {:?}, removed: {}",
+        table_info.desc,
+        start.elapsed(),
+        removed_inverted_index_v2,
+    ));
+
+    let start = std::time::Instant::now();
+
+    // Bloom indexes are still derived from data-block paths. Current `_i_i_v2` objects are deleted
+    // by the reference-aware scan above. Historical `_i_i` objects stay on the old block-addressed
+    // path: they are not vacuumed here.
+    let block_location_prefix = fuse_table.meta_location_generator().block_location_prefix();
+    let block_gc_ctx = BlockGcContext {
+        dal: fuse_table.get_operator_ref(),
+        ctx: &ctx,
+        table_desc: table_info.desc.as_str(),
+        block_location_prefix,
+        until: FuseTable::vacuum2_until_prefix(block_location_prefix, gc_root_timestamp),
+        gc_root_timestamp,
+        gc_root_meta_ts,
+        gc_root_blocks: &gc_root_blocks,
+        start,
+    };
+    let block_gc_stats = purge_blocks_before_gc_root(&block_gc_ctx).await?;
+    ctx.set_status_info(&format!(
+        "Filtered and removed blocks for table {}, elapsed: {:?}, blocks scanned: {}, blocks removed: {}, files removed: {}",
+        table_info.desc,
+        start.elapsed(),
+        block_gc_stats.scanned_blocks,
+        block_gc_stats.removed_blocks,
+        block_gc_stats.removed_files,
+    ));
+
+    let file_remover = Files::create(ctx.clone(), fuse_table.get_operator());
 
     // segment stats should be removed before segments.
     if !stats_to_gc.is_empty() {
-        op.remove_file_in_batch(&stats_to_gc).await?;
-        files_to_gc.extend(stats_to_gc.iter().cloned());
+        file_remover.remove_file_in_batch(&stats_to_gc).await?;
     }
 
     if !segments_to_gc.is_empty() {
-        op.remove_file_in_batch(&segments_to_gc).await?;
-        files_to_gc.extend(segments_to_gc.iter().cloned());
+        file_remover.remove_file_in_batch(&segments_to_gc).await?;
     }
 
     // Evict snapshot caches from the local node.
@@ -235,8 +304,7 @@ pub async fn do_vacuum2(
             snapshot_cache.evict(path);
         }
     }
-    op.remove_file_in_batch(&snapshots_to_gc).await?;
-    files_to_gc.extend(snapshots_to_gc.iter().cloned());
+    file_remover.remove_file_in_batch(&snapshots_to_gc).await?;
 
     // Legacy branch/tag refs were removed without compatibility guarantees.
     // Vacuum2 cleans up the old ref snapshot prefix opportunistically, and the
@@ -246,98 +314,282 @@ pub async fn do_vacuum2(
         .ref_snapshot_location_prefix();
     let _ = fuse_table.get_operator().remove_all(legacy_ref_dir).await;
 
+    let removed_files = removed_inverted_index_v2
+        + block_gc_stats.removed_files
+        + stats_to_gc.len()
+        + segments_to_gc.len()
+        + snapshots_to_gc.len();
     ctx.set_status_info(&format!(
-        "Removed files for table {}, elapsed: {:?}, files_to_gc: {:?}",
+        "Removed files for table {}, elapsed: {:?}, files removed: {}",
         table_info.desc,
         start.elapsed(),
-        slice_summary(&files_to_gc),
+        removed_files,
     ));
-
-    Ok(files_to_gc)
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn purge_block_chunks(
-    op: &Files,
-    ctx: &Arc<dyn TableContext>,
-    table_desc: &str,
-    blocks_to_gc: &[String],
-    table_agg_index_ids: &[u64],
-    inverted_indexes: &BTreeMap<String, TableIndex>,
-    files_to_gc: &mut Vec<String>,
-    start: std::time::Instant,
-) -> Result<()> {
-    if blocks_to_gc.is_empty() {
-        return Ok(());
-    }
-
-    let total_chunks = blocks_to_gc.len().div_ceil(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
-    for (chunk_idx, block_chunk) in blocks_to_gc
-        .chunks(VACUUM2_BLOCK_DELETE_CHUNK_SIZE)
-        .enumerate()
-    {
-        if let Err(err) = ctx.check_aborting() {
-            return Err(err.with_context("failed to vacuum block chunk"));
-        }
-
-        let indexes_to_gc =
-            collect_block_index_locations(block_chunk, table_agg_index_ids, inverted_indexes);
-        ctx.set_status_info(&format!(
-            "Collected indexes_to_gc for table {}, elapsed: {:?}, block chunk: {}/{}, blocks in chunk: {}, indexes_to_gc: {:?}",
-            table_desc,
-            start.elapsed(),
-            chunk_idx + 1,
-            total_chunks,
-            block_chunk.len(),
-            slice_summary(&indexes_to_gc)
-        ));
-
-        if !indexes_to_gc.is_empty() {
-            op.remove_file_in_batch(&indexes_to_gc).await?;
-            files_to_gc.extend(indexes_to_gc);
-        }
-
-        op.remove_file_in_batch(block_chunk).await?;
-        files_to_gc.extend(block_chunk.iter().cloned());
-
-        ctx.set_status_info(&format!(
-            "Removed block chunk for table {}, elapsed: {:?}, block chunk: {}/{}, blocks removed in chunk: {}",
-            table_desc,
-            start.elapsed(),
-            chunk_idx + 1,
-            total_chunks,
-            block_chunk.len(),
-        ));
-    }
 
     Ok(())
 }
 
-fn collect_block_index_locations(
-    blocks_to_gc: &[String],
-    table_agg_index_ids: &[u64],
-    inverted_indexes: &BTreeMap<String, TableIndex>,
-) -> Vec<String> {
-    let mut indexes_to_gc = Vec::with_capacity(
-        blocks_to_gc.len() * (table_agg_index_ids.len() + inverted_indexes.len() + 1),
-    );
+async fn purge_inverted_index_v2_objects(
+    operator: &Operator,
+    ctx: &Arc<dyn TableContext>,
+    prefix: &str,
+    protected_locations: &HashSet<String>,
+    gc_root_timestamp: DateTime<Utc>,
+    gc_root_meta_ts: DateTime<Utc>,
+) -> Result<usize> {
+    let file_remover = Files::create(Arc::clone(ctx), operator.clone());
+    let mut lister = operator.lister_with(prefix).recursive(true).await?;
+    let mut pending = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
+    let mut removed = 0;
+
+    while let Some(entry) = lister.try_next().await? {
+        if let Err(err) = ctx.check_aborting() {
+            return Err(err.with_context(format!(
+                "aborted while scanning inverted-index V2 objects under {prefix}"
+            )));
+        }
+        if entry.metadata().is_dir() {
+            continue;
+        }
+        // Sibling objects (`<bundle>.idx`, `<bundle>.pos`) share the bundle's protection and the
+        // bundle's UUID; unrecognised names are left alone.
+        let Some(bundle_location) = ExternalFile::bundle_location(entry.path()) else {
+            warn!(
+                "skip object with unrecognised inverted-index naming during vacuum: path={}",
+                entry.path()
+            );
+            continue;
+        };
+        if protected_locations.contains(bundle_location) {
+            continue;
+        }
+        let object_timestamp = match try_extract_uuid_v7_timestamp_from_path(bundle_location) {
+            Ok(Some(timestamp)) => timestamp,
+            Ok(None) => continue,
+            Err(error) => {
+                warn!(
+                    "skip inverted-index V2 object with unparsable UUID during vacuum: path={}, error={}",
+                    entry.path(),
+                    error
+                );
+                continue;
+            }
+        };
+        if object_timestamp >= gc_root_timestamp {
+            continue;
+        }
+        if !is_gc_candidate_segment_block(&entry, operator, gc_root_meta_ts).await? {
+            continue;
+        }
+        pending.push(entry.path().to_string());
+        if pending.len() == VACUUM2_BLOCK_DELETE_CHUNK_SIZE {
+            file_remover.remove_file_in_batch(&pending).await?;
+            removed += pending.len();
+            pending.clear();
+        }
+    }
+    if !pending.is_empty() {
+        file_remover.remove_file_in_batch(&pending).await?;
+        removed += pending.len();
+    }
+    Ok(removed)
+}
+
+/// Hash the full path, including legacy names, prefixes and format versions.
+/// Keeping only 16 bytes per path avoids retaining a String and its heap allocation
+/// for every protected block. A collision can only retain garbage, never delete a
+/// protected block.
+fn block_path_hash(path: &str) -> u128 {
+    let mut hasher = SipHasher24::new();
+    hasher.write(path.as_bytes());
+    hasher.finish128().into()
+}
+
+async fn purge_blocks_before_gc_root(block_gc: &BlockGcContext<'_>) -> Result<BlockGcStats> {
+    info!("Listing block files until prefix: {}", block_gc.until);
+
+    match block_gc.dal.info().scheme() {
+        scheme if scheme == opendal::Scheme::Fs.into_static() => {
+            purge_blocks_before_gc_root_fs(block_gc).await
+        }
+        _ => purge_blocks_before_gc_root_object_store_streaming(block_gc).await,
+    }
+}
+
+async fn purge_blocks_before_gc_root_fs(block_gc: &BlockGcContext<'_>) -> Result<BlockGcStats> {
+    let file_remover = Files::create(Arc::clone(block_gc.ctx), block_gc.dal.clone());
+    let blocks_before_gc_root = list_gc_candidate_paths_until_prefix_fs(
+        block_gc.dal,
+        block_gc.block_location_prefix,
+        &block_gc.until,
+        block_gc.gc_root_meta_ts,
+    )
+    .await?;
+    let scanned_blocks = blocks_before_gc_root.len();
+    block_gc.ctx.set_status_info(&format!(
+        "Listed block paths before gc_root for table {}, elapsed: {:?}, block_location_prefix: {:?}, gc_root_timestamp: {:?}, blocks: {:?}",
+        block_gc.table_desc,
+        block_gc.start.elapsed(),
+        block_gc.block_location_prefix,
+        block_gc.gc_root_timestamp,
+        slice_summary(&blocks_before_gc_root)
+    ));
+
+    let mut stats = BlockGcStats {
+        scanned_blocks,
+        removed_blocks: 0,
+        removed_files: 0,
+    };
+    let mut block_chunk = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
+    for block_path in blocks_before_gc_root {
+        if !block_gc
+            .gc_root_blocks
+            .contains(&block_path_hash(&block_path))
+        {
+            block_chunk.push(block_path);
+            if block_chunk.len() == VACUUM2_BLOCK_DELETE_CHUNK_SIZE {
+                purge_block_chunk(&file_remover, block_gc, &block_chunk, &mut stats).await?;
+                block_chunk.clear();
+            }
+        }
+    }
+    if !block_chunk.is_empty() {
+        purge_block_chunk(&file_remover, block_gc, &block_chunk, &mut stats).await?;
+    }
+
+    Ok(stats)
+}
+
+async fn purge_blocks_before_gc_root_object_store_streaming(
+    block_gc: &BlockGcContext<'_>,
+) -> Result<BlockGcStats> {
+    let file_remover = Files::create(Arc::clone(block_gc.ctx), block_gc.dal.clone());
+    let mut lister = block_gc.dal.lister(block_gc.block_location_prefix).await?;
+    let mut block_chunk = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
+    let mut stats = BlockGcStats {
+        scanned_blocks: 0,
+        removed_blocks: 0,
+        removed_files: 0,
+    };
+
+    block_gc.ctx.set_status_info(&format!(
+        "Streaming block paths before gc_root for table {}, block_location_prefix: {:?}, gc_root_timestamp: {:?}",
+        block_gc.table_desc, block_gc.block_location_prefix, block_gc.gc_root_timestamp
+    ));
+
+    while let Some(entry) = lister.try_next().await? {
+        if entry.metadata().is_dir() {
+            continue;
+        }
+
+        let path = entry.path();
+        if path >= block_gc.until.as_str() {
+            info!("entry path: {} >= until: {}", path, block_gc.until);
+            break;
+        }
+
+        if !is_gc_candidate_segment_block(&entry, block_gc.dal, block_gc.gc_root_meta_ts).await? {
+            continue;
+        }
+
+        stats.scanned_blocks += 1;
+        if block_gc.gc_root_blocks.contains(&block_path_hash(path)) {
+            continue;
+        }
+
+        block_chunk.push(path.to_owned());
+        if block_chunk.len() == VACUUM2_BLOCK_DELETE_CHUNK_SIZE {
+            purge_block_chunk(&file_remover, block_gc, &block_chunk, &mut stats).await?;
+            block_chunk.clear();
+        }
+    }
+
+    if !block_chunk.is_empty() {
+        purge_block_chunk(&file_remover, block_gc, &block_chunk, &mut stats).await?;
+    }
+
+    Ok(stats)
+}
+
+async fn list_gc_candidate_paths_until_prefix_fs(
+    dal: &Operator,
+    path: &str,
+    until: &str,
+    gc_root_meta_ts: DateTime<Utc>,
+) -> Result<Vec<String>> {
+    let mut lister = dal.lister(path).await?;
+    let mut entries = Vec::new();
+    while let Some(item) = lister.try_next().await? {
+        if item.metadata().is_file() {
+            entries.push(item);
+        }
+    }
+    entries.sort_by(|l, r| l.path().cmp(r.path()));
+
+    let mut res = Vec::new();
+    for entry in entries {
+        if entry.path() >= until {
+            info!("entry path: {} >= until: {}", entry.path(), until);
+            break;
+        }
+        if is_gc_candidate_segment_block(&entry, dal, gc_root_meta_ts).await? {
+            res.push(entry.path().to_owned());
+        }
+    }
+    Ok(res)
+}
+
+async fn purge_block_chunk(
+    file_remover: &Files,
+    block_gc: &BlockGcContext<'_>,
+    block_chunk: &[String],
+    stats: &mut BlockGcStats,
+) -> Result<()> {
+    if let Err(err) = block_gc.ctx.check_aborting() {
+        return Err(err.with_context(format!(
+            "aborted while removing block chunk for table {}, blocks removed: {}, current chunk size: {}",
+            block_gc.table_desc,
+            stats.removed_blocks,
+            block_chunk.len()
+        )));
+    }
+
+    let chunk_idx = stats.removed_blocks / VACUUM2_BLOCK_DELETE_CHUNK_SIZE + 1;
+    let indexes_to_gc = collect_block_index_locations(block_chunk);
+    block_gc.ctx.set_status_info(&format!(
+        "Collected indexes_to_gc for table {}, elapsed: {:?}, block chunk: {}, blocks in chunk: {}, indexes_to_gc: {:?}",
+        block_gc.table_desc,
+        block_gc.start.elapsed(),
+        chunk_idx,
+        block_chunk.len(),
+        slice_summary(&indexes_to_gc)
+    ));
+
+    if !indexes_to_gc.is_empty() {
+        file_remover.remove_file_in_batch(&indexes_to_gc).await?;
+        stats.removed_files += indexes_to_gc.len();
+    }
+
+    file_remover.remove_file_in_batch(block_chunk).await?;
+    stats.removed_blocks += block_chunk.len();
+    stats.removed_files += block_chunk.len();
+
+    block_gc.ctx.set_status_info(&format!(
+        "Removed block chunk for table {}, elapsed: {:?}, block chunk: {}, blocks scanned: {}, blocks removed in chunk: {}, total blocks removed: {}",
+        block_gc.table_desc,
+        block_gc.start.elapsed(),
+        chunk_idx,
+        stats.scanned_blocks,
+        block_chunk.len(),
+        stats.removed_blocks,
+    ));
+
+    Ok(())
+}
+
+fn collect_block_index_locations(blocks_to_gc: &[String]) -> Vec<String> {
+    let mut indexes_to_gc = Vec::with_capacity(blocks_to_gc.len());
     for loc in blocks_to_gc {
-        for index_id in table_agg_index_ids {
-            indexes_to_gc.push(
-                TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
-                    loc, *index_id,
-                ),
-            );
-        }
-        for idx in inverted_indexes.values() {
-            indexes_to_gc.push(
-                TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-                    loc,
-                    idx.name.as_str(),
-                    idx.version.as_str(),
-                ),
-            );
-        }
         indexes_to_gc
             .push(TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(loc));
     }
@@ -366,13 +618,12 @@ async fn vacuum_base_snapshot_phase(
         .iter()
         .cloned()
         .collect::<HashSet<_>>();
-    let _ = fuse_table
-        .process_tags_for_purge(
+    fuse_table
+        .protect_table_tag_references(
             &catalog,
             &selection.gc_root_path,
             &mut selection.snapshots_to_gc,
             &mut protected_segments,
-            false,
         )
         .await?;
 
@@ -401,9 +652,13 @@ fn slice_summary<T: std::fmt::Debug>(s: &[T]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_app::schema::TableIndexType;
+    use chrono::TimeZone;
+    use databend_query::test_kits::TestFixture;
+    use futures_util::StreamExt;
+    use opendal::services::Memory;
 
     use super::*;
+    use crate::test_kits::context::EESetup;
 
     #[test]
     fn test_collect_block_index_locations_keeps_per_block_order() {
@@ -411,33 +666,264 @@ mod tests {
             "1/2/_b/g0123456789abcdef0123456789abcdef_v2.parquet".to_string(),
             "1/2/_b/hfedcba9876543210fedcba9876543210_v2.parquet".to_string(),
         ];
-        let mut inverted_indexes = BTreeMap::new();
-        inverted_indexes.insert("idx".to_string(), TableIndex {
-            index_type: TableIndexType::Inverted,
-            name: "idx".to_string(),
-            column_ids: vec![0],
-            sync_creation: true,
-            version: "123456789".to_string(),
-            options: BTreeMap::new(),
-        });
-
-        let indexes = collect_block_index_locations(&blocks, &[7], &inverted_indexes);
+        let indexes = collect_block_index_locations(&blocks);
 
         assert_eq!(indexes, vec![
-            TableMetaLocationGenerator::gen_agg_index_location_from_block_location(&blocks[0], 7),
-            TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-                &blocks[0],
-                "idx",
-                "123456789",
-            ),
             TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&blocks[0]),
-            TableMetaLocationGenerator::gen_agg_index_location_from_block_location(&blocks[1], 7),
-            TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-                &blocks[1],
-                "idx",
-                "123456789",
-            ),
             TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(&blocks[1]),
         ]);
+    }
+
+    mod memory {
+        use opendal::Scheme;
+
+        use super::*;
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn inverted_index_v2_gc_keeps_protected_objects() -> anyhow::Result<()> {
+            const PREFIX: &str = "1/2/_i_i_v2/";
+
+            let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+            let query_ctx = fixture.new_query_ctx().await?;
+            let ctx: Arc<dyn TableContext> = query_ctx;
+            let dal = Operator::new(Memory::default())?.finish();
+
+            let gc_root_timestamp = Utc
+                .with_ymd_and_hms(2025, 1, 2, 0, 0, 0)
+                .single()
+                .expect("valid gc-root timestamp");
+            let old_timestamp = gc_root_timestamp - chrono::Duration::minutes(2);
+            let old_uuid =
+                databend_storages_common_table_meta::meta::uuid_from_date_time(old_timestamp);
+            let orphan_uuid = databend_storages_common_table_meta::meta::uuid_from_date_time(
+                old_timestamp + chrono::Duration::milliseconds(1),
+            );
+            let after_cutoff_uuid = databend_storages_common_table_meta::meta::uuid_from_date_time(
+                gc_root_timestamp + chrono::Duration::seconds(1),
+            );
+
+            let protected = format!("{PREFIX}generation/h{}.index", old_uuid.simple());
+            let orphan = format!("{PREFIX}generation/h{}.index", orphan_uuid.simple());
+            let after_cutoff = format!("{PREFIX}generation/h{}.index", after_cutoff_uuid.simple());
+            let stray = format!("{PREFIX}generation/not-a-uuid.index");
+            let outside = "1/2/_b/outside.parquet".to_string();
+            // Sibling objects follow their bundle: protected stays, orphaned goes.
+            let protected_idx = format!("{protected}.idx");
+            let protected_pos = format!("{protected}.pos");
+            let orphan_idx = format!("{orphan}.idx");
+            dal.write(&protected, vec![1]).await?;
+            dal.write(&orphan, vec![2]).await?;
+            dal.write(&after_cutoff, vec![3]).await?;
+            dal.write(&stray, vec![4]).await?;
+            dal.write(&outside, vec![5]).await?;
+            dal.write(&protected_idx, vec![6]).await?;
+            dal.write(&protected_pos, vec![7]).await?;
+            dal.write(&orphan_idx, vec![8]).await?;
+
+            let protected_locations = HashSet::from([protected.clone()]);
+            let removed = purge_inverted_index_v2_objects(
+                &dal,
+                &ctx,
+                PREFIX,
+                &protected_locations,
+                gc_root_timestamp,
+                Utc::now() + chrono::Duration::days(4),
+            )
+            .await?;
+
+            assert_eq!(removed, 2);
+            assert!(dal.exists(&protected).await?);
+            assert!(dal.exists(&protected_idx).await?);
+            assert!(dal.exists(&protected_pos).await?);
+            assert!(!dal.exists(&orphan).await?);
+            assert!(!dal.exists(&orphan_idx).await?);
+            assert!(dal.exists(&after_cutoff).await?);
+            assert!(dal.exists(&stray).await?);
+            assert!(dal.exists(&outside).await?);
+            Ok(())
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn streaming_block_gc_keeps_protected_and_cutoff_blocks() -> anyhow::Result<()> {
+            const CANDIDATE_BLOCKS: usize = VACUUM2_BLOCK_DELETE_CHUNK_SIZE + 2;
+            const BLOCK_PREFIX: &str = "1/2/_b/";
+
+            let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+            let query_ctx = fixture.new_query_ctx().await?;
+            let ctx: Arc<dyn TableContext> = query_ctx;
+            let dal = Operator::new(Memory::default())?.finish();
+
+            let gc_root_timestamp = Utc
+                .with_ymd_and_hms(2025, 1, 2, 0, 0, 0)
+                .single()
+                .expect("valid gc-root timestamp");
+            let old_timestamp = gc_root_timestamp - chrono::Duration::minutes(2);
+            let mut candidates = Vec::with_capacity(CANDIDATE_BLOCKS);
+            for i in 0..CANDIDATE_BLOCKS {
+                let timestamp = old_timestamp + chrono::Duration::milliseconds(i as i64);
+                let uuid =
+                    databend_storages_common_table_meta::meta::uuid_from_date_time(timestamp);
+                let path = format!("{}h{}_v2.parquet", BLOCK_PREFIX, uuid.simple());
+                dal.write(&path, vec![i as u8]).await?;
+                candidates.push(path);
+            }
+
+            let protected_block = candidates[0].clone();
+            // Keep the referenced v1 block, but delete the unreferenced v2 block
+            // with the same UUID in the same directory.
+            let protected_other_version = candidates[1].replace("_v2.parquet", "_v1.parquet");
+            dal.write(&protected_other_version, vec![1]).await?;
+            let after_cutoff_uuid = databend_storages_common_table_meta::meta::uuid_from_date_time(
+                gc_root_timestamp + chrono::Duration::seconds(1),
+            );
+            let after_cutoff_block =
+                format!("{}h{}_v2.parquet", BLOCK_PREFIX, after_cutoff_uuid.simple());
+            dal.write(&after_cutoff_block, vec![1]).await?;
+
+            let protected_blocks = HashSet::from([
+                block_path_hash(&protected_block),
+                block_path_hash(&protected_other_version),
+            ]);
+            let block_gc = BlockGcContext {
+                dal: &dal,
+                ctx: &ctx,
+                table_desc: "streaming-gc-test",
+                block_location_prefix: BLOCK_PREFIX,
+                until: FuseTable::vacuum2_until_prefix(BLOCK_PREFIX, gc_root_timestamp),
+                gc_root_timestamp,
+                gc_root_meta_ts: gc_root_timestamp,
+                gc_root_blocks: &protected_blocks,
+                start: std::time::Instant::now(),
+            };
+            assert_ne!(dal.info().scheme(), Scheme::Fs.into_static());
+
+            let stats = purge_blocks_before_gc_root(&block_gc).await?;
+
+            assert_eq!(stats.scanned_blocks, CANDIDATE_BLOCKS + 1);
+            assert_eq!(stats.removed_blocks, CANDIDATE_BLOCKS - 1);
+            // Each removed block also contributes its derived bloom-index path.
+            assert_eq!(stats.removed_files, (CANDIDATE_BLOCKS - 1) * 2);
+            assert!(dal.exists(&protected_block).await?);
+            assert!(dal.exists(&protected_other_version).await?);
+            assert!(dal.exists(&after_cutoff_block).await?);
+            for path in candidates.iter().skip(1) {
+                assert!(!dal.exists(path).await?, "garbage block survived: {path}");
+            }
+
+            Ok(())
+        }
+    }
+
+    mod real_s3 {
+        use opendal::Scheme;
+        use opendal::services::S3;
+
+        use super::*;
+
+        /// Exercises the AWS S3 continuation-token boundary while vacuum deletes the page that
+        /// was just listed. CI supplies credentials through the runner's AWS credential chain.
+        #[tokio::test(flavor = "multi_thread")]
+        #[ignore = "requires an explicitly configured real AWS S3 bucket"]
+        async fn streaming_block_gc_across_list_pages() -> anyhow::Result<()> {
+            const CANDIDATE_BLOCKS: usize = VACUUM2_BLOCK_DELETE_CHUNK_SIZE + 2;
+            const BLOCK_PREFIX: &str = "1/2/_b/";
+
+            let bucket = std::env::var("DATABEND_TEST_S3_BUCKET")?;
+            let region = std::env::var("DATABEND_TEST_S3_REGION")?;
+            let configured_root = std::env::var("DATABEND_TEST_S3_ROOT").unwrap_or_default();
+            let test_id =
+                databend_storages_common_table_meta::meta::uuid_from_date_time(Utc::now())
+                    .simple()
+                    .to_string();
+            let configured_root = configured_root.trim_matches('/');
+            let test_root = if configured_root.is_empty() {
+                format!("vacuum2/{test_id}/")
+            } else {
+                format!("{configured_root}/vacuum2/{test_id}/")
+            };
+
+            let builder = S3::default()
+                .bucket(&bucket)
+                .root(&test_root)
+                .region(&region);
+            let dal = Operator::new(builder)?.finish();
+
+            let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+            let query_ctx = fixture.new_query_ctx().await?;
+            let ctx: Arc<dyn TableContext> = query_ctx;
+
+            let test_result: anyhow::Result<()> = async {
+                let gc_root_timestamp = Utc
+                    .with_ymd_and_hms(2025, 1, 2, 0, 0, 0)
+                    .single()
+                    .expect("valid gc-root timestamp");
+                let old_timestamp = gc_root_timestamp - chrono::Duration::minutes(2);
+                let candidates = futures_util::stream::iter(0..CANDIDATE_BLOCKS)
+                    .map(|i| {
+                        let dal = dal.clone();
+                        async move {
+                            let timestamp =
+                                old_timestamp + chrono::Duration::milliseconds(i as i64);
+                            let uuid =
+                                databend_storages_common_table_meta::meta::uuid_from_date_time(
+                                    timestamp,
+                                );
+                            let path = format!("{}h{}_v2.parquet", BLOCK_PREFIX, uuid.simple());
+                            dal.write(&path, vec![i as u8]).await?;
+                            Ok::<_, opendal::Error>(path)
+                        }
+                    })
+                    .buffered(32)
+                    .try_collect::<Vec<_>>()
+                    .await?;
+
+                // AWS S3 returns at most 1000 keys per ListObjectsV2 page. Vacuum deletes those
+                // first 1000 keys before requesting the page containing this protected key.
+                let protected_block = candidates.last().unwrap().clone();
+                let after_cutoff_uuid =
+                    databend_storages_common_table_meta::meta::uuid_from_date_time(
+                        gc_root_timestamp + chrono::Duration::seconds(1),
+                    );
+                let after_cutoff_block =
+                    format!("{}h{}_v2.parquet", BLOCK_PREFIX, after_cutoff_uuid.simple());
+                dal.write(&after_cutoff_block, vec![1]).await?;
+
+                let protected_blocks = HashSet::from([block_path_hash(&protected_block)]);
+                let block_gc = BlockGcContext {
+                    dal: &dal,
+                    ctx: &ctx,
+                    table_desc: "real-s3-streaming-gc-test",
+                    block_location_prefix: BLOCK_PREFIX,
+                    until: FuseTable::vacuum2_until_prefix(BLOCK_PREFIX, gc_root_timestamp),
+                    gc_root_timestamp,
+                    gc_root_meta_ts: gc_root_timestamp,
+                    gc_root_blocks: &protected_blocks,
+                    start: std::time::Instant::now(),
+                };
+                anyhow::ensure!(
+                    dal.info().scheme() == Scheme::S3.into_static(),
+                    "expected an S3 operator"
+                );
+
+                let stats = purge_blocks_before_gc_root(&block_gc).await?;
+
+                anyhow::ensure!(stats.scanned_blocks == CANDIDATE_BLOCKS);
+                anyhow::ensure!(stats.removed_blocks == CANDIDATE_BLOCKS - 1);
+                anyhow::ensure!(stats.removed_files == (CANDIDATE_BLOCKS - 1) * 2);
+                anyhow::ensure!(dal.exists(&protected_block).await?);
+                anyhow::ensure!(dal.exists(&after_cutoff_block).await?);
+                for path in candidates.iter().take(CANDIDATE_BLOCKS - 1) {
+                    anyhow::ensure!(!dal.exists(path).await?, "garbage block survived: {path}");
+                }
+
+                Ok(())
+            }
+            .await;
+
+            let cleanup_result = dal.remove_all("").await;
+            test_result?;
+            cleanup_result?;
+            Ok(())
+        }
     }
 }

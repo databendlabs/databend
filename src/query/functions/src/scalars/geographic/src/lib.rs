@@ -19,12 +19,8 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::redundant_iter_cloned)]
 #![allow(internal_features)]
-#![feature(core_intrinsics)]
-#![feature(box_patterns)]
-#![feature(type_ascription)]
-#![feature(try_blocks)]
-#![feature(downcast_unchecked)]
-#![feature(str_internals)]
+#![allow(incomplete_features)]
+#![feature(deref_patterns)]
 
 pub mod geo;
 pub mod geo_h3;

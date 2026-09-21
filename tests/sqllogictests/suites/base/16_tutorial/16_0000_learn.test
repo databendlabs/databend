@@ -1,0 +1,33 @@
+# Cover Databend Cloud tutorial: webapi/tutorial/data/*/000-learn.sql
+
+statement ok
+CREATE DATABASE IF NOT EXISTS book_db
+
+statement ok
+DROP TABLE IF EXISTS book_db.cloud_books
+
+statement ok
+CREATE TABLE IF NOT EXISTS book_db.cloud_books
+(
+    title VARCHAR,
+    author VARCHAR,
+    date VARCHAR
+)
+
+query ?????
+COPY INTO book_db.cloud_books FROM 'https://datasets.databend.com/books.csv'
+    FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 0)
+----
+books.csv 2 0 NULL NULL
+
+query TTT
+SELECT * FROM book_db.cloud_books ORDER BY title
+----
+Readings in Database Systems Michael Stonebraker 2004
+Transaction Processing Jim Gray 1992
+
+statement ok
+DROP TABLE IF EXISTS book_db.cloud_books
+
+statement ok
+DROP DATABASE IF EXISTS book_db

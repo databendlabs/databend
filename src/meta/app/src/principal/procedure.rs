@@ -19,7 +19,7 @@ use std::ops::Deref;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_expression::types::DataType;
+use databend_common_expression::TableDataType;
 use display_more::DisplaySliceExt;
 
 use crate::KeyWithTenant;
@@ -44,7 +44,7 @@ pub struct ProcedureIdent {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProcedureMeta {
-    pub return_types: Vec<DataType>,
+    pub return_types: Vec<TableDataType>,
     pub arg_names: Vec<String>,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,

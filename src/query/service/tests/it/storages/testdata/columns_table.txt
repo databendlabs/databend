@@ -22,12 +22,14 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'avg_size'                        | 'system'             | 'statistics'              | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'bloom_index_size'                | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'bloom_index_size'                | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
+| 'bound_source_generation'         | 'system'             | 'materialized_views'      | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'byte_size'                       | 'system'             | 'clustering_history'      | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'cache_key_extras'                | 'system'             | 'query_cache'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'capacity'                        | 'system'             | 'caches'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'cardinality'                     | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'catalog'                         | 'system'             | 'databases'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'catalog'                         | 'system'             | 'databases_with_history'  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'catalog'                         | 'system'             | 'materialized_views'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'catalog'                         | 'system'             | 'streams'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'catalog'                         | 'system'             | 'streams_terse'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'catalog'                         | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -44,6 +46,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'character_set_schema'            | 'information_schema' | 'columns'                 | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'check_option'                    | 'information_schema' | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'cluster'                         | 'system'             | 'clusters'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'cluster_by'                      | 'system'             | 'materialized_views'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'cluster_by'                      | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'cluster_by'                      | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'collation'                       | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
@@ -62,6 +65,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'comment'                         | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'comment'                         | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'comment'                         | 'system'             | 'dictionaries'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'comment'                         | 'system'             | 'materialized_views'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'comment'                         | 'system'             | 'notifications'           | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'comment'                         | 'system'             | 'password_policies'       | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'comment'                         | 'system'             | 'procedures'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -91,6 +95,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'created_on'                      | 'system'             | 'dictionaries'            | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'indexes'                 | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'locks'                   | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
+| 'created_on'                      | 'system'             | 'materialized_views'      | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'notification_history'    | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'notifications'           | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                      | 'system'             | 'password_policies'       | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
@@ -110,11 +115,14 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'created_time'                    | 'system'             | 'processes'               | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'creator'                         | 'system'             | 'stages'                  | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'current_query_id'                | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'current_source_generation'       | 'system'             | 'materialized_views'      | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
+| 'data_compressed_size'            | 'system'             | 'materialized_views'      | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'data_compressed_size'            | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'data_compressed_size'            | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'data_free'                       | 'information_schema' | 'tables'                  | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'data_length'                     | 'information_schema' | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'data_read_bytes'                 | 'system'             | 'processes'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
+| 'data_size'                       | 'system'             | 'materialized_views'      | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'data_size'                       | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'data_size'                       | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'data_type'                       | 'information_schema' | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -125,6 +133,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'database'                        | 'system'             | 'constraints'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'database'                        | 'system'             | 'dictionaries'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'database'                        | 'system'             | 'indexes'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'database'                        | 'system'             | 'materialized_views'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'database'                        | 'system'             | 'processes'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'database'                        | 'system'             | 'statistics'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'database'                        | 'system'             | 'streams'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -229,6 +238,8 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'inherited_roles'                 | 'system'             | 'roles'                   | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'inherited_roles_name'            | 'system'             | 'roles'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'integration_name'                | 'system'             | 'notification_history'    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'invalid'                         | 'system'             | 'materialized_views'      | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
+| 'invalid_reason'                  | 'system'             | 'materialized_views'      | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'invalid_reason'                  | 'system'             | 'streams'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'inverted_index_size'             | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'inverted_index_size'             | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
@@ -261,6 +272,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'license'                         | 'system'             | 'credits'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'location'                        | 'system'             | 'query_cache'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'match_option'                    | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
+| 'materialized_view_id'            | 'system'             | 'materialized_views'      | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'max'                             | 'system'             | 'statistics'              | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'maxlen'                          | 'information_schema' | 'character_sets'          | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       |
 | 'memory_usage'                    | 'system'             | 'processes'               | 'Int64'               | 'BIGINT'            | ''       | ''       | 'NO'     | ''       |
@@ -288,6 +300,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'name'                            | 'system'             | 'functions'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                            | 'system'             | 'indexes'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                            | 'system'             | 'malloc_stats_totals'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'name'                            | 'system'             | 'materialized_views'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                            | 'system'             | 'notifications'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                            | 'system'             | 'password_policies'       | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                            | 'system'             | 'procedures'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -325,6 +338,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'nullable'                        | 'information_schema' | 'statistics'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'num_blocks'                      | 'system'             | 'temporary_tables'        | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'num_items'                       | 'system'             | 'caches'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
+| 'num_rows'                        | 'system'             | 'materialized_views'      | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'num_rows'                        | 'system'             | 'query_cache'             | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'num_rows'                        | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'num_rows'                        | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
@@ -395,7 +409,11 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'size'                            | 'system'             | 'caches'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'snapshot_location'               | 'system'             | 'streams'                 | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'source'                          | 'system'             | 'dictionaries'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'source_catalog'                  | 'system'             | 'materialized_views'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'source_column'                   | 'system'             | 'virtual_columns'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'source_database'                 | 'system'             | 'materialized_views'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'source_table'                    | 'system'             | 'materialized_views'      | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
+| 'source_table_id'                 | 'system'             | 'materialized_views'      | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'sql_path'                        | 'information_schema' | 'schemata'                | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'stack'                           | 'system'             | 'backtrace'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'stage_type'                      | 'system'             | 'stages'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -456,6 +474,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'table_type'                      | 'system'             | 'tables'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_type'                      | 'system'             | 'tables_with_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_version'                   | 'system'             | 'streams'                 | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
+| 'text'                            | 'system'             | 'materialized_views'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'time'                            | 'system'             | 'processes'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'timestamp'                       | 'system'             | 'query_execution'         | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'total_columns'                   | 'system'             | 'tables'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
@@ -501,7 +520,6 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'view_definition'                 | 'information_schema' | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'view_query'                      | 'system'             | 'views'                   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'view_query'                      | 'system'             | 'views_with_history'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'virtual_column_id'               | 'system'             | 'virtual_columns'         | 'UInt32'              | 'INT UNSIGNED'      | ''       | ''       | 'NO'     | ''       |
 | 'virtual_column_name'             | 'system'             | 'virtual_columns'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'virtual_column_size'             | 'system'             | 'tables'                  | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'virtual_column_size'             | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |

@@ -12,19 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
-use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
-use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
@@ -37,12 +36,17 @@ use crate::binder::JoinPredicate;
 use crate::executor::cast_expr_to_non_null_boolean;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatContext;
 use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
 
-pub fn outer_join_to_inner_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(SExpr, bool)> {
+pub fn outer_join_to_inner_join(
+    s_expr: &SExpr,
+    metadata: MetadataRef,
+    stat_context: &StatContext,
+) -> Result<(SExpr, bool)> {
     let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
     if !join.join_type.is_outer_join() {
         return Ok((s_expr.clone(), false));
@@ -65,6 +69,7 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr, metadata: MetadataRef) -> Result
                     &left_prop.output_columns,
                     &join.join_type,
                     metadata.clone(),
+                    &stat_context.function_context,
                 )? =>
             {
                 can_filter_left_null = true;
@@ -75,6 +80,7 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr, metadata: MetadataRef) -> Result
                     &right_prop.output_columns,
                     &join.join_type,
                     metadata.clone(),
+                    &stat_context.function_context,
                 )? =>
             {
                 can_filter_right_null = true;
@@ -85,6 +91,7 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr, metadata: MetadataRef) -> Result
                     &left_prop.output_columns,
                     &join.join_type,
                     metadata.clone(),
+                    &stat_context.function_context,
                 )? {
                     can_filter_left_null = true;
                 }
@@ -93,6 +100,7 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr, metadata: MetadataRef) -> Result
                     &right_prop.output_columns,
                     &join.join_type,
                     metadata.clone(),
+                    &stat_context.function_context,
                 )? {
                     can_filter_right_null = true;
                 }
@@ -157,10 +165,18 @@ pub fn can_filter_null(
     columns_can_be_replaced: &ColumnSet,
     join_type: &JoinType,
     metadata: MetadataRef,
+    func_ctx: &FunctionContext,
 ) -> Result<bool> {
+    // Single joins are outer joins for correlated scalar subqueries: the unmatched side is
+    // null-supplying, so `IS NULL` predicates must keep their original outer-join semantics.
     if !matches!(
         join_type,
-        JoinType::Left | JoinType::Right | JoinType::Full | JoinType::FullAsof
+        JoinType::Left
+            | JoinType::LeftSingle
+            | JoinType::Right
+            | JoinType::RightSingle
+            | JoinType::Full
+            | JoinType::FullAsof
     ) {
         return Ok(true);
     }
@@ -181,10 +197,18 @@ pub fn can_filter_null(
                         .columns_can_be_replaced
                         .contains(&column_ref.column.index)
                     {
-                        *expr = ScalarExpr::ConstantExpr(ConstantExpr {
+                        let null_expr = ConstantExpr {
                             span: None,
                             value: Scalar::Null,
-                        });
+                        };
+                        *expr = if column_ref.column.data_type.is_nullable_or_null() {
+                            ScalarExpr::TypedConstantExpr(
+                                null_expr,
+                                *column_ref.column.data_type.clone(),
+                            )
+                        } else {
+                            ScalarExpr::ConstantExpr(null_expr)
+                        };
                     }
                     Ok(())
                 }
@@ -225,18 +249,11 @@ pub fn can_filter_null(
     if replace.can_replace {
         let columns = null_scalar_expr.columns_and_data_types(metadata);
         let expr = convert_scalar_expr_to_expr(null_scalar_expr, columns)?;
-        let func_ctx = &FunctionContext::default();
-        let (expr, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
-        if expr.contains_column_ref() {
-            return Ok(false);
-        }
-        let data_block = DataBlock::empty();
-        let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
-        if let Value::Scalar(scalar) = evaluator.run(&expr)? {
-            // if null column can be filtered, return true.
-            if matches!(scalar, Scalar::Boolean(false) | Scalar::Null) {
-                return Ok(true);
-            }
+        let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), func_ctx, &BUILTIN_FUNCTIONS);
+        if let Expr::Constant(Constant { scalar, .. }) = expr.as_ref()
+            && matches!(scalar, Scalar::Boolean(false) | Scalar::Null)
+        {
+            return Ok(true);
         }
     }
     Ok(false)

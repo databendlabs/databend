@@ -91,8 +91,9 @@ error:
   --> SQL:1:45
   |
 1 | select number + 5 as a, cast(number as float(255))
-  | ------                                      ^ unexpected `(`, expecting `*`, `COLUMNS`, <Ident>, <LiteralString>, `IDENTIFIER`, `NULL`, `NOT`, or `)`
-  | |                                            
+  | ------                  ----                ^ unexpected `(`, expecting `)`
+  | |                       |                    
+  | |                       while parsing expression
   | while parsing `SELECT ...`
 
 
@@ -103,6 +104,6 @@ error:
   --> SQL:1:10
   |
 1 | select 1 1
-  |          ^ unexpected `1`, expecting <Ident>, <LiteralString>, `IDENTIFIER`, `AS`, `,`, `FROM`, `WHERE`, `GROUP`, `HAVING`, `WINDOW`, `QUALIFY`, `(`, `WITH`, `UNION`, `EXCEPT`, `INTERSECT`, `SELECT`, `VALUES`, `ORDER`, `LIMIT`, `OFFSET`, or `IGNORE_RESULT`
+  |          ^ unexpected `1`, expecting end of input
 
 

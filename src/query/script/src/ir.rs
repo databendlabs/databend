@@ -21,10 +21,11 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::VisitorMut;
+use databend_common_ast::visit::WalkMut;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use derive_visitor::DriveMut;
-use derive_visitor::VisitorMut;
 
 pub type VarRef = Ref<0>;
 pub type SetRef = Ref<1>;
@@ -170,34 +171,32 @@ impl StatementTemplate {
     }
 
     pub fn subst(&self, lookup_var: impl Fn(VarRef) -> Result<Expr>) -> Result<Statement> {
-        #[derive(VisitorMut)]
-        #[visitor(Expr(enter), Identifier(enter))]
         struct SubstVisitor<'a> {
             lookup_var: &'a dyn Fn(VarRef) -> Result<Expr>,
-            error: Option<ErrorCode>,
         }
 
-        impl SubstVisitor<'_> {
-            fn enter_expr(&mut self, expr: &mut Expr) {
+        impl VisitorMut for SubstVisitor<'_> {
+            type Error = ErrorCode;
+
+            fn visit_expr(
+                &mut self,
+                expr: &mut Expr,
+            ) -> std::result::Result<VisitControl, ErrorCode> {
                 if let Expr::Hole { span, name } = expr {
                     let index = name.parse::<usize>().unwrap();
-                    let value = (self.lookup_var)(VarRef::placeholder(index));
-                    match value {
-                        Ok(value) => {
-                            *expr = value;
-                        }
-                        Err(e) => {
-                            self.error = Some(e.set_span(*span));
-                        }
-                    }
+                    *expr = (self.lookup_var)(VarRef::placeholder(index))
+                        .map_err(|e| e.set_span(*span))?;
                 }
+                Ok(VisitControl::Continue)
             }
 
-            fn enter_identifier(&mut self, ident: &mut Identifier) {
+            fn visit_identifier(
+                &mut self,
+                ident: &mut Identifier,
+            ) -> std::result::Result<VisitControl, ErrorCode> {
                 if ident.is_hole() {
                     let index = ident.name.parse::<usize>().unwrap();
-                    let value = (self.lookup_var)(VarRef::placeholder(index));
-                    match value {
+                    match (self.lookup_var)(VarRef::placeholder(index)) {
                         Ok(Expr::Literal {
                             value: Literal::String(name),
                             ..
@@ -205,31 +204,25 @@ impl StatementTemplate {
                             *ident = Identifier::from_name(ident.span, name);
                         }
                         Ok(value) => {
-                            self.error = Some(
-                                ErrorCode::ScriptSemanticError(format!(
-                                    "expected string literal, got {value}"
-                                ))
-                                .set_span(ident.span),
-                            );
+                            return Err(ErrorCode::ScriptSemanticError(format!(
+                                "expected string literal, got {value}"
+                            ))
+                            .set_span(ident.span));
                         }
                         Err(e) => {
-                            self.error = Some(e.set_span(ident.span));
+                            return Err(e.set_span(ident.span));
                         }
                     }
                 }
+                Ok(VisitControl::Continue)
             }
         }
 
         let mut stmt = self.stmt.clone();
         let mut visitor = SubstVisitor {
             lookup_var: &lookup_var,
-            error: None,
         };
-        stmt.drive_mut(&mut visitor);
-
-        if let Some(e) = visitor.error {
-            return Err(e);
-        }
+        stmt.walk_mut(&mut visitor)?;
 
         Ok(stmt)
     }

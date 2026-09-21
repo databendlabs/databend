@@ -318,6 +318,7 @@ impl TestFixture {
             self.default_session.clone(),
             Cluster::create(nodes, local_id),
             &BUILD_INFO,
+            None,
         )?);
 
         dummy_query_context.get_settings().set_max_threads(8)?;
@@ -392,6 +393,7 @@ impl TestFixture {
             field_stats_truncate_len: vec![],
             as_select: None,
             cluster_key: Some("(id)".to_string()),
+            ttl: None,
             table_indexes: None,
             table_constraints: None,
             attached_columns: None,
@@ -421,6 +423,7 @@ impl TestFixture {
             field_stats_truncate_len: vec![],
             as_select: None,
             cluster_key: None,
+            ttl: None,
             table_indexes: None,
             table_constraints: None,
             attached_columns: None,
@@ -466,6 +469,7 @@ impl TestFixture {
             field_stats_truncate_len: vec![],
             as_select: None,
             cluster_key: None,
+            ttl: None,
             table_indexes: None,
             table_constraints: None,
             attached_columns: None,
@@ -506,6 +510,7 @@ impl TestFixture {
             table_partition: None,
             as_select: None,
             cluster_key: None,
+            ttl: None,
             table_indexes: None,
             table_constraints: None,
             attached_columns: None,
@@ -554,6 +559,7 @@ impl TestFixture {
             field_stats_truncate_len: vec![],
             as_select: None,
             cluster_key: None,
+            ttl: None,
             table_indexes: None,
             table_constraints: None,
             attached_columns: None,

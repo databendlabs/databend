@@ -52,33 +52,36 @@ impl Interpreter for UnassignWarehouseNodesInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
 
-        let mut cluster_selected_nodes = HashMap::with_capacity(self.plan.unassign_clusters.len());
-        for (cluster, nodes_map) in &self.plan.unassign_clusters {
-            let mut selected_nodes = Vec::with_capacity(nodes_map.len());
-            for (group, nodes) in nodes_map {
-                for _ in 0..*nodes {
-                    selected_nodes.push(SelectedNode::Random(group.clone()));
+            let mut cluster_selected_nodes =
+                HashMap::with_capacity(self.plan.unassign_clusters.len());
+            for (cluster, nodes_map) in &self.plan.unassign_clusters {
+                let mut selected_nodes = Vec::with_capacity(nodes_map.len());
+                for (group, nodes) in nodes_map {
+                    for _ in 0..*nodes {
+                        selected_nodes.push(SelectedNode::Random(group.clone()));
+                    }
                 }
+
+                cluster_selected_nodes.insert(cluster.clone(), selected_nodes);
             }
 
-            cluster_selected_nodes.insert(cluster.clone(), selected_nodes);
-        }
+            GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
+                .unassign_warehouse_nodes(self.plan.warehouse.clone(), cluster_selected_nodes)
+                .await?;
 
-        GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
-            .unassign_warehouse_nodes(self.plan.warehouse.clone(), cluster_selected_nodes)
-            .await?;
+            let user_info = self.ctx.get_current_user()?;
+            log::info!(
+                target: "databend::log::audit",
+                "{}",
+                serde_json::to_string(&AuditElement::create(&user_info, "alter_warehouse_unassign_nodes", &self.plan))?
+            );
 
-        let user_info = self.ctx.get_current_user()?;
-        log::info!(
-            target: "databend::log::audit",
-            "{}",
-            serde_json::to_string(&AuditElement::create(&user_info, "alter_warehouse_unassign_nodes", &self.plan))?
-        );
-
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

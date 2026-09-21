@@ -1,0 +1,144 @@
+use std::io::Write;
+
+use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::FromData;
+use databend_common_expression::aggregate_function::RawAggregateCall;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
+use goldenfile::Mint;
+
+use super::support::AggregationSimulator;
+use super::support::assert_v2_direct_matches_serialized;
+use super::support::eval_aggregate;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
+
+fn run_count_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    let columns = [
+        (
+            "a",
+            databend_common_expression::types::number::Int64Type::from_data(vec![4i64, 3, 2, 1])
+                .into(),
+        ),
+        (
+            "const_int",
+            databend_common_expression::BlockEntry::new_const_column_arg::<
+                databend_common_expression::types::Int32Type,
+            >(5, 4),
+        ),
+        (
+            "const_int_null",
+            databend_common_expression::BlockEntry::new_const_column_arg::<
+                databend_common_expression::types::NullableType<
+                    databend_common_expression::types::Int32Type,
+                >,
+            >(None, 4),
+        ),
+        (
+            "x_null",
+            databend_common_expression::types::number::UInt64Type::from_data_with_validity(
+                vec![1u64, 2, 3, 4],
+                vec![true, true, false, false],
+            )
+            .into(),
+        ),
+        (
+            "all_null",
+            databend_common_expression::types::number::UInt64Type::from_data_with_validity(
+                vec![1u64, 2, 3, 4],
+                vec![false, false, false, false],
+            )
+            .into(),
+        ),
+        (
+            "cond",
+            BooleanType::from_data(vec![true, true, false, true]).into(),
+        ),
+    ];
+    let columns = columns.as_slice();
+
+    write_aggregate_expr_case(file, "count(1)", columns, simulator, vec![]);
+    write_aggregate_expr_case(file, "count(const_int)", columns, simulator, vec![]);
+    write_aggregate_expr_case(file, "count(const_int_null)", columns, simulator, vec![]);
+    write_aggregate_expr_case(file, "count()", columns, simulator, vec![]);
+    write_aggregate_expr_case(file, "count(a)", columns, simulator, vec![]);
+    write_aggregate_expr_case(file, "count(x_null)", columns, simulator, vec![]);
+    write_aggregate_expr_case(file, "count_state(x_null)", columns, simulator, vec![]);
+    write_aggregate_expr_case(file, "count_state(NULL)", columns, simulator, vec![]);
+    write_aggregate_expr_case(file, "sum0(x_null)", columns, simulator, vec![]);
+    write_aggregate_expr_case(file, "count(all_null)", columns, simulator, vec![]);
+    write_aggregate_expr_case(file, "count_if(cond)", columns, simulator, vec![]);
+    write_aggregate_expr_case(file, "count_if(a, cond)", columns, simulator, vec![]);
+}
+
+#[test]
+fn test_count() {
+    let mut mint = Mint::new("tests/it/aggregates/testdata");
+    let file = &mut mint.new_goldenfile("count.txt").unwrap();
+    run_count_cases(file, eval_aggregate);
+}
+
+#[test]
+fn test_count_group_by() {
+    let mut mint = Mint::new("tests/it/aggregates/testdata");
+    let file = &mut mint.new_goldenfile("count_group_by.txt").unwrap();
+    run_count_cases(file, simulate_two_groups_group_by);
+}
+
+#[test]
+fn test_v2_count_if_suffix_names_are_case_insensitive() -> Result<()> {
+    let conditions: BlockEntry =
+        BooleanType::from_data(vec![true, false, true, true, false]).into();
+
+    assert_v2_direct_matches_serialized("COUNT_IF", std::slice::from_ref(&conditions), 5)
+}
+
+#[test]
+fn test_v2_count_reports_argument_count_mismatch() {
+    let args_type = [
+        DataType::Number(NumberDataType::UInt8),
+        DataType::Number(NumberDataType::UInt8),
+    ];
+    let error = match AGGR_REGISTRY.resolve(RawAggregateCall {
+        name: "count",
+        params: &[],
+        args_type: &args_type,
+        distinct: false,
+        order_by: &[],
+    }) {
+        Ok(_) => panic!("count with two arguments should fail"),
+        Err(error) => error,
+    };
+    assert_eq!(error.code(), 1028);
+}
+
+// count.rs: row count has one state regardless of argument type; distinguish
+// zero arguments, non-nullable input and nullable input filtering.
+#[test]
+fn test_state_baselines() {
+    use super::support::Case;
+
+    super::support::check_state_baselines(vec![
+        Case::Metadata {
+            expression: "count(x0)",
+            arguments: vec!["UInt64"],
+            result: "UInt64",
+            state: "Tuple(UInt64)",
+        },
+        Case::Metadata {
+            expression: "count()",
+            arguments: vec![],
+            result: "UInt64",
+            state: "Tuple(UInt64)",
+        },
+        Case::Metadata {
+            expression: "count(x0)",
+            arguments: vec!["Nullable(UInt64)"],
+            result: "UInt64",
+            state: "Tuple(UInt64)",
+        },
+    ]);
+}

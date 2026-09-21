@@ -34,7 +34,6 @@ use crate::planner::semantic::GroupingChecker;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
-use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Sort;
@@ -219,13 +218,10 @@ impl Binder {
                     let column_binding = match &rewrite_scalar {
                         ScalarExpr::ConstantExpr(..) => return None,
                         ScalarExpr::BoundColumnRef(col) => col.column.clone(),
-                        _ => match rewrite_scalar.data_type() {
-                            Ok(data_type) => self.create_derived_column_binding(
-                                format!("{:#}", order.expr),
-                                data_type,
-                            ),
-                            Err(err) => return Some(Err(err)),
-                        },
+                        _ => self.create_derived_column_binding(
+                            format!("{:#}", order.expr),
+                            rewrite_scalar.data_type().into_owned(),
+                        ),
                     };
 
                     let item = ScalarItem {
@@ -329,14 +325,7 @@ impl Binder {
                         )
                     })
                     .collect::<Result<Vec<_>>>()?;
-                Ok(ScalarExpr::LambdaFunction(LambdaFunc {
-                    span: lambda_func.span,
-                    func_name: lambda_func.func_name.clone(),
-                    args,
-                    lambda_expr: lambda_func.lambda_expr.clone(),
-                    lambda_display: lambda_func.lambda_display.clone(),
-                    return_type: lambda_func.return_type.clone(),
-                }))
+                Ok(ScalarExpr::LambdaFunction(lambda_func.with_args(args)?))
             }
             window @ ScalarExpr::WindowFunction(_) => {
                 if !rewrite_flags.needs_window_rewrite {
@@ -365,6 +354,7 @@ impl Binder {
                     func_name: func.func_name.clone(),
                     params: func.params.clone(),
                     arguments,
+                    return_type: func.return_type.clone(),
                 }))
             }
             ScalarExpr::CastExpr(CastExpr {

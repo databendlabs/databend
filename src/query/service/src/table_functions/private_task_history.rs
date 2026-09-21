@@ -252,7 +252,7 @@ impl PrivateTaskHistoryArgs {
         }
         if self.error_only.unwrap_or(false) {
             filters.push(
-                "(COALESCE(error_code, 0) != 0 OR error_message IS NOT NULL OR state = 'FAILED')"
+                "(state != 'SKIPPED' AND (COALESCE(error_code, 0) != 0 OR error_message IS NOT NULL OR state = 'FAILED'))"
                     .to_string(),
             );
         }

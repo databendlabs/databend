@@ -65,6 +65,8 @@ if [[ $INTERACTIVE == "true" ]]; then
 	EXTRA_ARGS="--interactive --env TERM=xterm-256color"
 fi
 
+EXTRA_ARGS="${EXTRA_ARGS} --env PROTOC=/workspace/scripts/setup/protoc_with_includes.sh"
+
 for var in ${BYPASS_ENV_VARS//,/ }; do
 	EXTRA_ARGS="${EXTRA_ARGS} --env ${var}"
 done

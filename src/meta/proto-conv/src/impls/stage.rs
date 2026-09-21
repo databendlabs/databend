@@ -46,10 +46,10 @@ impl FromToProto for mt::principal::StageParams {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::stage_info::StageParams, Incompatible> {
-        Ok(pb::stage_info::StageParams {
-            storage: Some(mt::storage::StorageParams::to_pb(&self.storage)?),
-        })
+    fn to_pb(&self) -> pb::stage_info::StageParams {
+        pb::stage_info::StageParams {
+            storage: Some(mt::storage::StorageParams::to_pb(&self.storage)),
+        }
     }
 }
 
@@ -83,17 +83,17 @@ impl FromToProto for mt::principal::OnErrorMode {
         }
     }
 
-    fn to_pb(&self) -> Result<pb::stage_info::OnErrorMode, Incompatible> {
+    fn to_pb(&self) -> pb::stage_info::OnErrorMode {
         match self {
-            mt::principal::OnErrorMode::Continue => Ok(pb::stage_info::OnErrorMode {
+            mt::principal::OnErrorMode::Continue => pb::stage_info::OnErrorMode {
                 mode: Some(pb::stage_info::on_error_mode::Mode::Continue(pb::Empty {})),
-            }),
-            mt::principal::OnErrorMode::SkipFileNum(n) => Ok(pb::stage_info::OnErrorMode {
+            },
+            mt::principal::OnErrorMode::SkipFileNum(n) => pb::stage_info::OnErrorMode {
                 mode: Some(pb::stage_info::on_error_mode::Mode::SkipFileNum(*n)),
-            }),
-            mt::principal::OnErrorMode::AbortNum(n) => Ok(pb::stage_info::OnErrorMode {
+            },
+            mt::principal::OnErrorMode::AbortNum(n) => pb::stage_info::OnErrorMode {
                 mode: Some(pb::stage_info::on_error_mode::Mode::AbortNum(*n)),
-            }),
+            },
         }
     }
 }
@@ -126,13 +126,13 @@ impl FromToProto for mt::principal::CopyOptions {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::stage_info::CopyOptions, Incompatible> {
-        let on_error = mt::principal::OnErrorMode::to_pb(&self.on_error)?;
-        let size_limit: u64 = convert_field(self.size_limit, "CopyOptions.size_limit")?;
-        let max_files: u64 = convert_field(self.max_files, "CopyOptions.max_files")?;
-        let split_size: u64 = convert_field(self.split_size, "CopyOptions.split_size")?;
-        let max_file_size: u64 = convert_field(self.max_file_size, "CopyOptions.max_file_size")?;
-        Ok(pb::stage_info::CopyOptions {
+    fn to_pb(&self) -> pb::stage_info::CopyOptions {
+        let on_error = mt::principal::OnErrorMode::to_pb(&self.on_error);
+        let size_limit = self.size_limit as u64;
+        let max_files = self.max_files as u64;
+        let split_size = self.split_size as u64;
+        let max_file_size = self.max_file_size as u64;
+        pb::stage_info::CopyOptions {
             on_error: Some(on_error),
             size_limit,
             max_files,
@@ -142,7 +142,7 @@ impl FromToProto for mt::principal::CopyOptions {
             max_file_size,
             disable_variant_check: self.disable_variant_check,
             return_failed_only: self.return_failed_only,
-        })
+        }
     }
 }
 
@@ -193,23 +193,23 @@ impl FromToProto for mt::principal::StageInfo {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::StageInfo, Incompatible> {
-        Ok(pb::StageInfo {
+    fn to_pb(&self) -> pb::StageInfo {
+        pb::StageInfo {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             stage_name: self.stage_name.clone(),
-            stage_type: mt::principal::StageType::to_pb_enum(&self.stage_type)? as i32,
-            stage_params: Some(mt::principal::StageParams::to_pb(&self.stage_params)?),
+            stage_type: mt::principal::StageType::to_pb_enum(&self.stage_type) as i32,
+            stage_params: Some(mt::principal::StageParams::to_pb(&self.stage_params)),
             file_format_params: Some(mt::principal::FileFormatParams::to_pb(
                 &self.file_format_params,
-            )?),
+            )),
             file_format_options: None,
-            copy_options: Some(mt::principal::CopyOptions::to_pb(&self.copy_options)?),
+            copy_options: Some(mt::principal::CopyOptions::to_pb(&self.copy_options)),
             comment: self.comment.clone(),
             number_of_files: self.number_of_files,
-            creator: self.creator.to_pb_opt()?,
-            created_on: Some(self.created_on.to_pb()?),
-        })
+            creator: self.creator.to_pb_opt(),
+            created_on: Some(self.created_on.to_pb()),
+        }
     }
 }
 
@@ -231,17 +231,17 @@ impl FromToProto for mt::principal::StageFile {
         })
     }
 
-    fn to_pb(&self) -> Result<pb::StageFile, Incompatible> {
-        Ok(pb::StageFile {
+    fn to_pb(&self) -> pb::StageFile {
+        pb::StageFile {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             path: self.path.clone(),
             size: self.size,
             md5: self.md5.clone(),
-            last_modified: self.last_modified.to_pb()?,
-            creator: self.creator.to_pb_opt()?,
+            last_modified: self.last_modified.to_pb(),
+            creator: self.creator.to_pb_opt(),
             etag: self.etag.clone(),
-        })
+        }
     }
 }
 
@@ -259,14 +259,12 @@ impl FromToProtoEnum for mt::principal::StageType {
         }
     }
 
-    fn to_pb_enum(&self) -> Result<pb::stage_info::StageType, Incompatible> {
+    fn to_pb_enum(&self) -> pb::stage_info::StageType {
         match *self {
-            mt::principal::StageType::LegacyInternal => {
-                Ok(pb::stage_info::StageType::LegacyInternal)
-            }
-            mt::principal::StageType::External => Ok(pb::stage_info::StageType::External),
-            mt::principal::StageType::Internal => Ok(pb::stage_info::StageType::Internal),
-            mt::principal::StageType::User => Ok(pb::stage_info::StageType::User),
+            mt::principal::StageType::LegacyInternal => pb::stage_info::StageType::LegacyInternal,
+            mt::principal::StageType::External => pb::stage_info::StageType::External,
+            mt::principal::StageType::Internal => pb::stage_info::StageType::Internal,
+            mt::principal::StageType::User => pb::stage_info::StageType::User,
         }
     }
 }

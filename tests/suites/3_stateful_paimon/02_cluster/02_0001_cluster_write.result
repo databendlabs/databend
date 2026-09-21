@@ -1,0 +1,46 @@
+===== prepare warehouse =====
+prepare_ok
+===== bucket=2 before snapshot =====
+snapshots_before=0
+===== bucket=2 insert =====
+insert_ok
+===== bucket=2 after snapshot =====
+snapshots_after=1
+snapshot_delta=1
+===== bucket=2 row counts =====
+200
+[0]	40
+[1]	40
+[2]	40
+[3]	40
+[4]	40
+===== bucket=8 before snapshot =====
+snapshots_before=0
+===== bucket=8 insert =====
+insert_ok
+===== bucket=8 after snapshot =====
+snapshots_after=1
+snapshot_delta=1
+===== bucket=8 row counts =====
+200
+[0]	40
+[1]	40
+[2]	40
+[3]	40
+[4]	40
+===== bucket=64 before snapshot =====
+snapshots_before=0
+===== bucket=64 insert =====
+insert_ok
+===== bucket=64 after snapshot =====
+snapshots_after=1
+snapshot_delta=1
+===== bucket=64 row counts =====
+200
+[0]	40
+[1]	40
+[2]	40
+[3]	40
+[4]	40
+===== route to lane functional mapping =====
+route_to_lane_functional=true

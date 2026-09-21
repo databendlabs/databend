@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -158,13 +159,13 @@ impl SpatialIndexPruner {
         }
 
         let (folded, _) = ConstantFolder::fold_with_domain(
-            &self.expr,
+            Cow::Borrowed(&self.expr),
             &domains,
             &self.func_ctx,
             &BUILTIN_FUNCTIONS,
         );
         Ok(matches!(
-            folded,
+            folded.as_ref(),
             Expr::Constant(Constant {
                 scalar: Scalar::Boolean(false),
                 ..

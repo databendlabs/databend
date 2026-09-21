@@ -117,7 +117,9 @@ impl HookOperator {
                 table_id: Some(table_id),
             },
             hook_settings: TableHookTaskSettings::create(&self.ctx),
-            lock_opt: self.lock_opt.clone(),
+            // The async hook may start from on_finished before the parent lock guard
+            // has been released, so it must acquire its own lock with retry.
+            lock_opt: LockTableOption::LockWithRetry,
             operation_name: self.mutation_kind.to_string(),
             main_operation_start: Instant::now(),
         };
@@ -164,9 +166,7 @@ impl HookOperator {
         .await;
     }
 
-    /// Execute the refresh hook operator.
-    // 1. Refresh aggregating index.
-    // 2. Refresh virtual columns.
+    /// Execute the table-index refresh hook operator.
     #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn execute_refresh(&self, pipeline: &mut Pipeline) {
@@ -175,7 +175,6 @@ impl HookOperator {
             database: self.database.to_owned(),
             table: self.table.to_owned(),
             table_id: None,
-            enable_refresh_aggregating_index_after_write: None,
         };
 
         hook_refresh(self.ctx.clone(), pipeline, refresh_desc).await;

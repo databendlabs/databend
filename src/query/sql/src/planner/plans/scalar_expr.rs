@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -19,6 +20,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::ops::Bound;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -34,12 +36,13 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::Scalar;
-use databend_common_expression::SymbolOrOffset;
 use databend_common_expression::VECTOR_SCORE_COL_NAME;
+use databend_common_expression::aggregate_function::AggregateBoundOrderByItem;
+use databend_common_expression::aggregate_function::AggregateBoundOrderBySource;
+use databend_common_expression::type_check;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
@@ -111,6 +114,9 @@ impl PartialEq for ScalarExpr {
                 l.column.index == r.column.index && l.column.table_index == r.column.table_index
             }
             (ScalarExpr::ConstantExpr(l), ScalarExpr::ConstantExpr(r)) => l.eq(r),
+            (ScalarExpr::TypedConstantExpr(l, lt), ScalarExpr::TypedConstantExpr(r, rt)) => {
+                l.eq(r) && lt.eq(rt)
+            }
             (ScalarExpr::WindowFunction(l), ScalarExpr::WindowFunction(r)) => l.eq(r),
             (ScalarExpr::AggregateFunction(l), ScalarExpr::AggregateFunction(r)) => l.eq(r),
             (ScalarExpr::LambdaFunction(l), ScalarExpr::LambdaFunction(r)) => l.eq(r),
@@ -135,7 +141,10 @@ impl Hash for ScalarExpr {
                 v.column.table_index.hash(state);
             }
             ScalarExpr::ConstantExpr(v) => v.hash(state),
-            ScalarExpr::TypedConstantExpr(v, _) => v.hash(state),
+            ScalarExpr::TypedConstantExpr(v, dt) => {
+                v.hash(state);
+                dt.hash(state);
+            }
             ScalarExpr::WindowFunction(v) => v.hash(state),
             ScalarExpr::AggregateFunction(v) => v.hash(state),
             ScalarExpr::LambdaFunction(v) => v.hash(state),
@@ -158,25 +167,64 @@ impl ScalarExpr {
         )
     }
 
-    pub fn data_type(&self) -> Result<DataType> {
-        Ok(self.as_expr()?.data_type().clone())
+    pub fn data_type(&self) -> Cow<'_, DataType> {
+        match self {
+            ScalarExpr::BoundColumnRef(column) => Cow::Borrowed(column.column.data_type.as_ref()),
+            ScalarExpr::ConstantExpr(constant) => {
+                Cow::Owned(constant.value.as_ref().infer_data_type())
+            }
+            ScalarExpr::TypedConstantExpr(_, data_type) => Cow::Borrowed(data_type),
+            ScalarExpr::WindowFunction(window) => Cow::Owned(window.func.return_type()),
+            ScalarExpr::AggregateFunction(aggregate) => {
+                Cow::Borrowed(aggregate.return_type.as_ref())
+            }
+            ScalarExpr::LambdaFunction(function) => Cow::Borrowed(function.return_type.as_ref()),
+            ScalarExpr::FunctionCall(function) => Cow::Borrowed(function.return_type.as_ref()),
+            ScalarExpr::CastExpr(cast) => Cow::Borrowed(cast.target_type.as_ref()),
+            ScalarExpr::SubqueryExpr(subquery) => Cow::Owned(subquery.output_data_type()),
+            ScalarExpr::UDFCall(udf) => Cow::Borrowed(udf.return_type.as_ref()),
+            ScalarExpr::UDAFCall(udaf) => Cow::Borrowed(udaf.return_type.as_ref()),
+            ScalarExpr::UDFLambdaCall(udf) => udf.scalar.data_type(),
+            ScalarExpr::AsyncFunctionCall(function) => Cow::Borrowed(function.return_type.as_ref()),
+        }
+    }
+
+    pub fn passthrough_nullable_type<'a>(
+        data_type: DataType,
+        arguments: impl IntoIterator<Item = &'a ScalarExpr>,
+    ) -> DataType {
+        if arguments
+            .into_iter()
+            .any(|argument| argument.data_type().is_nullable_or_null())
+        {
+            data_type.wrap_nullable()
+        } else {
+            data_type
+        }
     }
 
     pub fn used_columns(&self) -> ColumnSet {
-        struct UsedColumnsVisitor {
-            columns: ColumnSet,
+        let mut columns = ColumnSet::new();
+        self.collect_used_columns(&mut columns);
+        columns
+    }
+
+    pub fn collect_used_columns<C>(&self, columns: &mut C)
+    where C: Extend<Symbol> {
+        struct UsedColumnsVisitor<'a, C> {
+            columns: &'a mut C,
         }
 
-        impl<'a> Visitor<'a> for UsedColumnsVisitor {
+        impl<'a, C> Visitor<'a> for UsedColumnsVisitor<'_, C>
+        where C: Extend<Symbol>
+        {
             fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) -> Result<()> {
-                self.columns.insert(col.column.index);
+                self.columns.extend(std::iter::once(col.column.index));
                 Ok(())
             }
 
             fn visit_subquery(&mut self, subquery: &'a SubqueryExpr) -> Result<()> {
-                for idx in subquery.outer_columns.iter() {
-                    self.columns.insert(*idx);
-                }
+                self.columns.extend(subquery.outer_columns.iter().copied());
                 if let Some(child_expr) = subquery.child_expr.as_ref() {
                     self.visit(child_expr)?;
                 }
@@ -184,11 +232,26 @@ impl ScalarExpr {
             }
         }
 
-        let mut visitor = UsedColumnsVisitor {
-            columns: ColumnSet::new(),
-        };
+        let mut visitor = UsedColumnsVisitor { columns };
         visitor.visit(self).unwrap();
-        visitor.columns
+    }
+
+    pub fn is_deterministic(&self) -> bool {
+        match self {
+            ScalarExpr::BoundColumnRef(_)
+            | ScalarExpr::ConstantExpr(_)
+            | ScalarExpr::TypedConstantExpr(_, _) => true,
+            ScalarExpr::FunctionCall(func) => {
+                if let Some(property) = BUILTIN_FUNCTIONS.get_property(&func.func_name) {
+                    if property.kind == FunctionKind::SRF || property.non_deterministic {
+                        return false;
+                    }
+                }
+                func.arguments.iter().all(ScalarExpr::is_deterministic)
+            }
+            ScalarExpr::CastExpr(cast) => cast.argument.is_deterministic(),
+            _ => false,
+        }
     }
 
     // Get used tables in ScalarExpr
@@ -240,43 +303,43 @@ impl ScalarExpr {
 
     /// Returns true if the expression can be evaluated from a row of data.
     pub fn evaluable(&self) -> bool {
-        let mut visitor = EvaluableVisitor {
-            evaluable: true,
-            has_nextval: false,
-        };
-        visitor.visit(self).unwrap();
-        visitor.evaluable && !visitor.has_nextval
+        self.is_compile_time_evaluable() && !self.contains_nextval()
     }
 
-    /// Returns if the expression can be evaluated as default value
-    /// and whether contains `nextval` async function.
-    pub fn default_value_evaluable(&self) -> (bool, bool) {
-        let mut visitor = EvaluableVisitor {
-            evaluable: true,
-            has_nextval: false,
-        };
+    /// Returns true if the expression can be evaluated at compile time.
+    pub fn is_compile_time_evaluable(&self) -> bool {
+        let mut visitor = CompileTimeEvaluableVisitor { evaluable: true };
         visitor.visit(self).unwrap();
-        (visitor.evaluable, visitor.has_nextval)
+        visitor.evaluable
+    }
+
+    /// Returns true if the expression contains the `nextval` async function.
+    pub fn contains_nextval(&self) -> bool {
+        let mut visitor = ContainsNextvalVisitor { has_nextval: false };
+        visitor.visit(self).unwrap();
+        visitor.has_nextval
     }
 
     pub fn replace_column(&mut self, old: Symbol, new: Symbol) -> Result<()> {
-        struct ReplaceColumnVisitor {
-            old: Symbol,
-            new: Symbol,
+        self.replace_columns(|column| Ok(if column == old { new } else { column }))
+    }
+
+    pub fn replace_columns<F>(&mut self, replace: F) -> Result<()>
+    where F: FnMut(Symbol) -> Result<Symbol> {
+        struct ReplaceColumnsVisitor<F> {
+            replace: F,
         }
 
-        impl VisitorMut<'_> for ReplaceColumnVisitor {
+        impl<F> VisitorMut<'_> for ReplaceColumnsVisitor<F>
+        where F: FnMut(Symbol) -> Result<Symbol>
+        {
             fn visit_bound_column_ref(&mut self, col: &mut BoundColumnRef) -> Result<()> {
-                if col.column.index == self.old {
-                    col.column.index = self.new;
-                }
+                col.column.index = (self.replace)(col.column.index)?;
                 Ok(())
             }
         }
 
-        let mut visitor = ReplaceColumnVisitor { old, new };
-        visitor.visit(self)?;
-        Ok(())
+        ReplaceColumnsVisitor { replace }.visit(self)
     }
 
     pub fn replace_column_binding(
@@ -531,12 +594,15 @@ impl ScalarExpr {
     }
 }
 
-struct EvaluableVisitor {
+struct CompileTimeEvaluableVisitor {
     evaluable: bool,
+}
+
+struct ContainsNextvalVisitor {
     has_nextval: bool,
 }
 
-impl<'a> Visitor<'a> for EvaluableVisitor {
+impl<'a> Visitor<'a> for CompileTimeEvaluableVisitor {
     fn visit_function_call(&mut self, func: &'a FunctionCall) -> Result<()> {
         if BUILTIN_FUNCTIONS
             .get_property(&func.func_name)
@@ -576,10 +642,28 @@ impl<'a> Visitor<'a> for EvaluableVisitor {
         Ok(())
     }
     fn visit_async_function_call(&mut self, func: &'a AsyncFunctionCall) -> Result<()> {
+        if func.func_name != "nextval" {
+            self.evaluable = false;
+        }
+        Ok(())
+    }
+}
+
+impl<'a> Visitor<'a> for ContainsNextvalVisitor {
+    fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
+        if self.has_nextval {
+            return Ok(());
+        }
+        walk_expr(self, expr)
+    }
+
+    fn visit_async_function_call(&mut self, func: &'a AsyncFunctionCall) -> Result<()> {
         if func.func_name == "nextval" {
             self.has_nextval = true;
         } else {
-            self.evaluable = false;
+            for expr in &func.arguments {
+                self.visit(expr)?;
+            }
         }
         Ok(())
     }
@@ -869,6 +953,18 @@ impl ComparisonOp {
             ComparisonOp::LTE => ComparisonOp::GTE,
         }
     }
+
+    pub fn range_bounds<T>(&self, value: T) -> Option<(Bound<T>, Bound<T>)>
+    where T: Clone {
+        match self {
+            ComparisonOp::Equal => Some((Bound::Included(value.clone()), Bound::Included(value))),
+            ComparisonOp::NotEqual => None,
+            ComparisonOp::GT => Some((Bound::Excluded(value), Bound::Unbounded)),
+            ComparisonOp::LT => Some((Bound::Unbounded, Bound::Excluded(value))),
+            ComparisonOp::GTE => Some((Bound::Included(value), Bound::Unbounded)),
+            ComparisonOp::LTE => Some((Bound::Unbounded, Bound::Included(value))),
+        }
+    }
 }
 
 impl<'a> TryFrom<&'a BinaryOperator> for ComparisonOp {
@@ -918,28 +1014,28 @@ impl SubqueryComparisonOp {
         }
     }
 
-    pub fn to_func_call(&self, span: Span, left: ScalarExpr, right: ScalarExpr) -> FunctionCall {
-        if let SubqueryComparisonOp::Like(escape) = self {
-            let mut arguments = vec![left, right];
-            if let Some(escape) = escape {
-                arguments.push(ScalarExpr::ConstantExpr(ConstantExpr {
-                    span,
-                    value: Scalar::String(escape.clone()),
-                }))
-            }
-            return FunctionCall {
+    pub fn to_func_call(
+        &self,
+        span: Span,
+        left: ScalarExpr,
+        right: ScalarExpr,
+    ) -> Result<FunctionCall> {
+        let mut arguments = vec![left, right];
+        if let SubqueryComparisonOp::Like(Some(escape)) = self {
+            arguments.push(ScalarExpr::ConstantExpr(ConstantExpr {
                 span,
-                func_name: "like".to_string(),
-                params: vec![],
-                arguments,
-            };
+                value: Scalar::String(escape.clone()),
+            }))
         }
-        FunctionCall {
+        let mut function = FunctionCall {
             span,
             func_name: self.to_func_name().to_string(),
             params: vec![],
-            arguments: vec![left, right],
-        }
+            arguments,
+            return_type: Box::new(DataType::Boolean),
+        };
+        function.refresh_return_type()?;
+        Ok(function)
     }
 }
 
@@ -965,30 +1061,8 @@ impl<'a> TryFrom<&'a BinaryOperator> for SubqueryComparisonOp {
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct AggregateFunctionScalarSortDesc {
     pub expr: ScalarExpr,
-    pub is_reuse_index: bool,
     pub nulls_first: bool,
     pub asc: bool,
-}
-
-impl TryInto<AggregateFunctionSortDesc> for &AggregateFunctionScalarSortDesc {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> std::result::Result<AggregateFunctionSortDesc, Self::Error> {
-        let expr = &self.expr;
-        let ScalarExpr::BoundColumnRef(col) = expr else {
-            return Err(ErrorCode::Internal(
-                "Aggregate function sort description must be a BoundColumnRef".to_string(),
-            ));
-        };
-
-        Ok(AggregateFunctionSortDesc {
-            index: SymbolOrOffset::Symbol(col.column.index),
-            is_reuse_index: self.is_reuse_index,
-            data_type: expr.data_type()?,
-            nulls_first: self.nulls_first,
-            asc: self.asc,
-        })
-    }
 }
 
 #[derive(Clone, Debug, Educe)]
@@ -1007,6 +1081,44 @@ pub struct AggregateFunction {
 }
 
 impl AggregateFunction {
+    pub fn bound_order_by(&self) -> Result<Vec<AggregateBoundOrderByItem>> {
+        let mut input_symbols = self
+            .args
+            .iter()
+            .map(|arg| match arg {
+                ScalarExpr::BoundColumnRef(column) => Ok(column.column.index),
+                _ => Err(ErrorCode::Internal(
+                    "Aggregate function argument must be a BoundColumnRef".to_string(),
+                )),
+            })
+            .collect::<Result<Vec<_>>>()?;
+        self.sort_descs
+            .iter()
+            .map(|desc| {
+                let ScalarExpr::BoundColumnRef(sort_column) = &desc.expr else {
+                    return Err(ErrorCode::Internal(
+                        "Aggregate function sort description must be a BoundColumnRef".to_string(),
+                    ));
+                };
+                let index = sort_column.column.index;
+                let source = match input_symbols.iter().position(|i| *i == index) {
+                    Some(index) => AggregateBoundOrderBySource::Argument { index },
+                    None => {
+                        input_symbols.push(index);
+                        AggregateBoundOrderBySource::Derived
+                    }
+                };
+                Ok(AggregateBoundOrderByItem {
+                    index,
+                    source,
+                    data_type: desc.expr.data_type().into_owned(),
+                    nulls_first: desc.nulls_first,
+                    asc: desc.asc,
+                })
+            })
+            .collect()
+    }
+
     pub fn exprs(&self) -> impl Iterator<Item = &ScalarExpr> {
         self.args
             .iter()
@@ -1082,14 +1194,81 @@ pub struct LambdaFunc {
     pub return_type: Box<DataType>,
 }
 
-#[derive(Clone, Debug, Educe)]
-#[educe(PartialEq, Eq, Hash)]
+impl LambdaFunc {
+    fn sync_return_type_nullability(&mut self, is_nullable: bool) {
+        if self.return_type.is_nullable() == is_nullable {
+            return;
+        }
+
+        self.return_type = Box::new(if is_nullable {
+            self.return_type.wrap_nullable()
+        } else {
+            self.return_type.remove_nullable()
+        });
+    }
+
+    pub fn with_args(&self, args: Vec<ScalarExpr>) -> Result<Self> {
+        let mut lambda = self.clone();
+        lambda.args = args;
+        lambda.refresh_return_type()?;
+        Ok(lambda)
+    }
+
+    pub fn refresh_return_type(&mut self) -> Result<()> {
+        if self.func_name == "json_path_transform" {
+            let [json, path, ..] = self.args.as_slice() else {
+                return Err(ErrorCode::Internal(
+                    "json_path_transform requires json and path arguments",
+                ));
+            };
+            let is_nullable =
+                json.data_type().is_nullable_or_null() || path.data_type().is_nullable_or_null();
+            self.sync_return_type_nullability(is_nullable);
+            return Ok(());
+        }
+
+        // Captured columns precede the collection argument. Planner rewrites
+        // may change only the collection's outer nullability; its element, key,
+        // and value types remain those used to type-check the lambda body.
+        let collection_type = self
+            .args
+            .last()
+            .ok_or_else(|| ErrorCode::Internal("lambda function requires a collection argument"))?
+            .data_type();
+        if self.func_name != "array_reduce" {
+            self.sync_return_type_nullability(collection_type.is_nullable_or_null());
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Educe)]
+#[educe(Debug, PartialEq, Eq, Hash)]
 pub struct FunctionCall {
     #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     pub func_name: String,
     pub params: Vec<Scalar>,
     pub arguments: Vec<ScalarExpr>,
+    #[educe(Debug(ignore))]
+    pub return_type: Box<DataType>,
+}
+
+impl FunctionCall {
+    pub fn infer_return_type(&self) -> Result<DataType> {
+        type_check::infer_function_return_type(
+            self.span,
+            &self.func_name,
+            &self.params,
+            self.arguments.iter().map(ScalarExpr::data_type),
+            &BUILTIN_FUNCTIONS,
+        )
+    }
+
+    pub fn refresh_return_type(&mut self) -> Result<()> {
+        self.return_type = Box::new(self.infer_return_type()?);
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Educe)]
@@ -1273,6 +1452,7 @@ pub enum AsyncFunctionArgument {
     DictGetFunction(DictGetFunctionArgument),
     // Used by `read_file` function to read stage files.
     ReadFile(ReadFileFunctionArgument),
+    Sleep,
 }
 
 #[derive(Clone, Debug, Educe, serde::Serialize, serde::Deserialize)]
@@ -1387,6 +1567,9 @@ impl AsyncFunctionCall {
             }
             AsyncFunctionArgument::DictGetFunction(_dict_get_function_argument) => {
                 Err(ErrorCode::Internal("Cannot generate dict_get function"))
+            }
+            AsyncFunctionArgument::Sleep => {
+                Err(ErrorCode::Internal("Cannot generate sleep function"))
             }
             AsyncFunctionArgument::ReadFile(_) => {
                 Err(ErrorCode::Internal("Cannot generate read_file function"))
@@ -1667,6 +1850,180 @@ impl<'a> Visitor<'a> for IndexPredicateChecker {
             self.valid = false;
         }
 
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use databend_common_expression::types::number::NumberDataType;
+
+    use super::*;
+    use crate::ColumnBindingBuilder;
+    use crate::Visibility;
+
+    fn column_expr(index: usize) -> ScalarExpr {
+        ScalarExpr::BoundColumnRef(BoundColumnRef {
+            span: None,
+            column: ColumnBindingBuilder::new(
+                format!("c{index}"),
+                Symbol::new(index),
+                Box::new(DataType::Number(NumberDataType::Int32)),
+                Visibility::Visible,
+            )
+            .build(),
+        })
+    }
+
+    fn casted_nextval_expr() -> ScalarExpr {
+        ScalarExpr::CastExpr(CastExpr {
+            span: None,
+            is_try: false,
+            argument: Box::new(ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
+                span: None,
+                func_name: "nextval".to_string(),
+                display_name: "nextval(seq_19451)".to_string(),
+                return_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+                arguments: vec![],
+                func_arg: AsyncFunctionArgument::SequenceFunction("seq_19451".to_string()),
+            })),
+            target_type: Box::new(DataType::Number(NumberDataType::Int32)),
+        })
+    }
+
+    fn tuple_expr(number: NumberScalar) -> ScalarExpr {
+        let number_type = DataType::Number(number.data_type());
+        ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "tuple".to_string(),
+            params: vec![],
+            arguments: vec![
+                ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: None,
+                    value: Scalar::Number(number),
+                }),
+                ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: None,
+                    value: Scalar::String("value".to_string()),
+                }),
+            ],
+            return_type: Box::new(DataType::Tuple(vec![number_type, DataType::String])),
+        })
+    }
+
+    fn assert_stored_type_matches_inferred(expr: &ScalarExpr) {
+        assert_eq!(
+            expr.data_type().as_ref(),
+            expr.as_expr().unwrap().data_type()
+        );
+    }
+
+    #[test]
+    fn test_typed_constant_expr_hash_map_lookup() {
+        let expr = ScalarExpr::TypedConstantExpr(
+            ConstantExpr {
+                span: None,
+                value: Scalar::Number(NumberScalar::Int64(1)),
+            },
+            DataType::Number(NumberDataType::Int64),
+        );
+        let mut expr_index = HashMap::new();
+        expr_index.insert(expr.clone(), 0);
+
+        assert_eq!(expr_index.get(&expr), Some(&0));
+    }
+
+    #[test]
+    fn test_scalar_expr_is_deterministic_handles_async_function_call() {
+        let expr = casted_nextval_expr();
+
+        assert!(expr.is_compile_time_evaluable());
+        assert!(expr.contains_nextval());
+        assert!(
+            !expr.is_deterministic(),
+            "AsyncFunctionCall wrapped in CastExpr should stay non-deterministic at the ScalarExpr layer"
+        );
+    }
+
+    #[test]
+    fn test_function_call_return_type_survives_type_preserving_rewrite() {
+        let mut expr = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "get".to_string(),
+            params: vec![Scalar::Number(NumberScalar::Int64(2))],
+            arguments: vec![tuple_expr(NumberScalar::Int64(1))],
+            return_type: Box::new(DataType::String),
+        });
+        assert_stored_type_matches_inferred(&expr);
+
+        let ScalarExpr::FunctionCall(function) = &mut expr else {
+            unreachable!()
+        };
+        function.arguments[0] = tuple_expr(NumberScalar::UInt64(1));
+
+        assert_stored_type_matches_inferred(&expr);
+    }
+
+    #[test]
+    fn test_tuple_get_return_type_inherits_nullability() {
+        let nullable_tuple = ScalarExpr::CastExpr(CastExpr {
+            span: None,
+            is_try: false,
+            argument: Box::new(tuple_expr(NumberScalar::Int64(1))),
+            target_type: Box::new(DataType::Nullable(Box::new(DataType::Tuple(vec![
+                DataType::Number(NumberDataType::Int64),
+                DataType::String,
+            ])))),
+        });
+        let return_type =
+            ScalarExpr::passthrough_nullable_type(DataType::String, [&nullable_tuple]);
+        let expr = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "get".to_string(),
+            params: vec![Scalar::Number(NumberScalar::Int64(2))],
+            arguments: vec![nullable_tuple],
+            return_type: Box::new(return_type),
+        });
+
+        assert_stored_type_matches_inferred(&expr);
+    }
+
+    #[test]
+    fn test_replace_columns_visits_each_column_reference_once() -> Result<()> {
+        let mut expr = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "test".to_string(),
+            params: vec![],
+            arguments: vec![
+                column_expr(1),
+                ScalarExpr::CastExpr(CastExpr {
+                    span: None,
+                    is_try: false,
+                    argument: Box::new(column_expr(2)),
+                    target_type: Box::new(DataType::Number(NumberDataType::Int64)),
+                }),
+                column_expr(1),
+            ],
+            return_type: Box::new(DataType::Number(NumberDataType::Int32)),
+        });
+        let mut visited = Vec::new();
+
+        expr.replace_columns(|column| {
+            visited.push(column);
+            Ok(Symbol::new(column.as_usize() + 10))
+        })?;
+
+        assert_eq!(visited, vec![
+            Symbol::new(1),
+            Symbol::new(2),
+            Symbol::new(1)
+        ]);
+        assert_eq!(
+            expr.used_columns(),
+            [Symbol::new(11), Symbol::new(12)].into_iter().collect()
+        );
         Ok(())
     }
 }

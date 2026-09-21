@@ -1,0 +1,244 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::alloc::Layout;
+
+use databend_common_exception::Result;
+use databend_common_expression::AggrState;
+use databend_common_expression::AggrStateType;
+use databend_common_expression::ColumnView;
+use databend_common_expression::ProjectedBlock;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::UInt8Type;
+use databend_common_expression::types::UInt32Type;
+
+use super::AggregateRegistration;
+use super::adaptors::*;
+
+#[derive(Default)]
+pub struct RetentionState {
+    events: u32,
+}
+
+impl RetentionState {
+    fn add(&mut self, event: usize) {
+        self.events |= 1 << event;
+    }
+
+    fn merge(&mut self, rhs: &Self) {
+        self.events |= rhs.events;
+    }
+}
+
+pub struct RetentionEval {
+    events_size: usize,
+}
+
+struct RetentionBuilder;
+
+impl RetentionBuilder {
+    fn register(registry: &mut AggregateRegistry) {
+        NameRoute::new(
+            &["retention"],
+            Self::retention_arguments(),
+            Self::RETENTION_METADATA,
+            NullInput::Filter,
+        )
+        .then(MergeRoute::multi_arg(false, Self::create))
+        .then(MergeRoute::multi_arg(true, Self::create))
+        .then(PlainRoute::multi_arg(Self::create))
+        .then(IfRoute::multi_arg(Self::create))
+        .then(StateRoute::multi_arg(Self::create).with_metadata(Self::RETENTION_STATE_METADATA))
+        .then(DistinctAliasRoute::multi_arg(Self::create))
+        .register(registry);
+    }
+}
+
+inventory::submit! {
+    AggregateRegistration {
+        register: RetentionBuilder::register,
+    }
+}
+
+impl RetentionBuilder {
+    fn retention_arguments() -> ArgumentsPattern {
+        ArgumentsPattern::variadic(
+            vec![],
+            ArgumentPattern::exact(DataType::Boolean),
+            1,
+            Some(32),
+        )
+    }
+
+    const RETENTION_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
+        eager_aggregation: EagerAggregation::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "calculates event retention flags",
+            definition: "retention(cond1, cond2, ...)",
+            example: "select retention(event1, event2) from t",
+        },
+    };
+
+    const RETENTION_STATE_METADATA: AggregateMetadata = AggregateMetadata {
+        null_argument_result: NullArgumentResult::Null,
+        eager_aggregation: EagerAggregation::Unsupported,
+        sort_policy: SortPolicy::Unsupported,
+        documentation: AggregateDocumentation {
+            category: "Aggregate",
+            description: "returns the serialized aggregate state",
+            definition: "aggregate_state(args...)",
+            example: "select retention_state(event1, event2) from t",
+        },
+    };
+}
+
+impl RetentionEval {
+    pub fn new(events_size: usize) -> Self {
+        debug_assert!((1..=32).contains(&events_size));
+        Self { events_size }
+    }
+
+    fn state_description() -> AggregateStateDescription {
+        AggregateStateDescription::new(
+            vec![AggrStateType::Custom(Layout::new::<RetentionState>())],
+            vec![StateSerdeItem::DataType(UInt32Type::data_type())],
+        )
+    }
+
+    fn boolean_views(&self, columns: ProjectedBlock<'_>) -> Vec<ColumnView<BooleanType>> {
+        debug_assert_eq!(columns.len(), self.events_size);
+        (0..self.events_size)
+            .map(|event| columns[event].downcast::<BooleanType>().unwrap())
+            .collect()
+    }
+
+    fn accumulate_row_into_state(
+        &self,
+        state: &mut RetentionState,
+        views: &[ColumnView<BooleanType>],
+        row: usize,
+    ) {
+        for (event, view) in views.iter().enumerate() {
+            if unsafe { view.index_unchecked(row) } {
+                state.add(event);
+            }
+        }
+    }
+}
+
+impl AggregateEval for RetentionEval {
+    fn init_state(&self, state: AggrState<'_>) {
+        state.write(RetentionState::default);
+    }
+
+    fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
+        let state = input.state.get::<RetentionState>();
+        let views = self.boolean_views(input.columns);
+        for_each_selected(0..input.columns.num_rows(), input.validity, |row| {
+            self.accumulate_row_into_state(state, &views, row);
+        });
+        Ok(())
+    }
+
+    fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
+        let views = self.boolean_views(input.columns);
+        input.states.for_each_state_value::<RetentionState, _>(
+            0..input.columns.num_rows(),
+            input.validity,
+            |state, row| {
+                self.accumulate_row_into_state(state, &views, row);
+            },
+        )
+    }
+
+    fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
+        let state = input.state.get::<RetentionState>();
+        let views = self.boolean_views(input.columns);
+        self.accumulate_row_into_state(state, &views, input.row);
+        Ok(())
+    }
+
+    fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
+        input
+            .states
+            .for_each_state::<RetentionState>(None, |state| {
+                input.builders[0].push(ScalarRef::Number(NumberScalar::UInt32(state.events)));
+            })
+    }
+
+    fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
+        input.for_each_state::<RetentionState>(|state, row| {
+            let ScalarRef::Number(NumberScalar::UInt32(events)) =
+                super::serialized_scalar_at(input.state, row, 0)
+            else {
+                unreachable!()
+            };
+            state.merge(&RetentionState { events });
+        })
+    }
+
+    fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
+        let rhs = input.rhs.get::<RetentionState>();
+        input.state.get::<RetentionState>().merge(rhs);
+        Ok(())
+    }
+
+    fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
+        let state = input.state.get::<RetentionState>();
+        let builder = input.builder.as_array_mut().unwrap();
+        let inner = builder
+            .builder
+            .as_number_mut()
+            .unwrap()
+            .as_u_int8_mut()
+            .unwrap();
+
+        inner.reserve(self.events_size);
+        if state.events & 1 == 1 {
+            inner.push(1u8);
+            for event in 1..self.events_size {
+                inner.push(u8::from(state.events & (1 << event) != 0));
+            }
+        } else {
+            for _ in 0..self.events_size {
+                inner.push(0u8);
+            }
+        }
+        builder.offsets.push(builder.builder.len() as u64);
+        Ok(())
+    }
+
+    unsafe fn drop_state(&self, state: AggrState<'_>) {
+        unsafe { std::ptr::drop_in_place(state.get::<RetentionState>()) };
+    }
+}
+
+impl RetentionBuilder {
+    fn create(build: MultiArgBuildContext<'_, impl Combinator>) -> Result<AggregateCallRef> {
+        let events_size = build.args_type().len();
+        build.create_multi_arg_or_null(
+            DataType::Array(Box::new(UInt8Type::data_type())).wrap_nullable(),
+            RetentionEval::state_description(),
+            RetentionEval::new(events_size),
+        )
+    }
+}

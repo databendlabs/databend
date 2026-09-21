@@ -1,0 +1,614 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::str::FromStr;
+use std::sync::Arc;
+
+use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::VirtualColumnField;
+use databend_common_catalog::plan::VirtualColumnInfo;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::TableDataType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::VariantType;
+use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::TableContext;
+use databend_common_storages_fuse::io::VirtualColumnBuilder;
+use databend_common_storages_fuse::io::VirtualColumnLayoutPolicy;
+use databend_common_storages_fuse::io::VirtualColumnReader;
+use databend_common_storages_fuse::pruning::VirtualColumnPruner;
+use databend_query::test_kits::*;
+use databend_storages_common_io::ReadSettings;
+use databend_storages_common_pruner::ProjectedVirtualPath;
+use databend_storages_common_pruner::ProjectedVirtualSegmentSchema;
+use databend_storages_common_pruner::VirtualColumnSharedDataType;
+use databend_storages_common_pruner::VirtualFieldReadPlan;
+use databend_storages_common_pruner::VirtualReadSlot;
+use databend_storages_common_table_meta::meta::VirtualBlockMeta;
+use databend_storages_common_table_meta::meta::VirtualSegmentColumnPath;
+use databend_storages_common_table_meta::meta::VirtualSegmentPath;
+use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
+use jsonb::OwnedJsonb;
+use jsonb::keypath::OwnedKeyPath;
+use jsonb::keypath::OwnedKeyPaths;
+use jsonb::keypath::parse_key_paths;
+use parquet::arrow::arrow_reader::RowSelection;
+use parquet::arrow::arrow_reader::RowSelector;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_enable_experimental_virtual_column(1)?;
+    fixture.create_default_database().await?;
+    fixture.create_variant_table().await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let table = fixture.latest_default_table().await?;
+    let schema = table.get_table_info().meta.schema.clone();
+    let source_column_id = schema.column_id_of("v")?;
+
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let write_settings = fuse_table.get_write_settings();
+    let location = ("_b/virtual_column_pruner_reader.parquet".to_string(), 0);
+
+    let json_rows = [
+        r#"{"id":1,"create":"3/06","text":"a","user":{"id":1,"name":"alice","info":{"replies":2,"likes":25,"tags":["good","popular"]}},"sparse_bool":true,"sparse_uint":42,"sparse_int":-7,"sparse_float":1.5,"sparse_string":"rare","sparse_jsonb":[1,2],"sparse_jsonb_arr":["x"],"container":{"mixed":7,"keep":1}}"#,
+        r#"{"id":2,"create":"4/06","text":"b","user":{"id":2,"name":"bob","info":{"replies":12,"tags":["interesting"]}},"container":{"mixed":{"a":1},"keep":2}}"#,
+        r#"{"id":3,"create":"4/07","text":"c","user":{"id":3,"name":"tom","info":{"replies":4,"likes":85,"tags":["bad"]},"extra":"new"}}"#,
+        r#"{"id":4,"create":"4/08","text":"d","user":{"id":4,"name":"sam","info":{"replies":1,"likes":5,"tags":[]}}}"#,
+        r#"{"id":5,"create":"4/09","text":"e","user":{"id":5,"name":"zen","info":{"replies":7}}}"#,
+        r#"[{"k":"v"},{"k1":"v1"}]"#,
+    ];
+    let ids = vec![1, 2, 3, 4, 5, 6];
+    let variants = json_rows
+        .iter()
+        .map(|row| Some(OwnedJsonb::from_str(row).unwrap().to_vec()))
+        .collect::<Vec<_>>();
+    let block = DataBlock::new(
+        vec![
+            Int32Type::from_data(ids).into(),
+            VariantType::from_opt_data(variants).into(),
+        ],
+        json_rows.len(),
+    );
+
+    let mut builder =
+        VirtualColumnBuilder::try_create(schema.clone(), VirtualColumnLayoutPolicy {
+            // Keep common paths direct while forcing the sparse paths below into
+            // typed shared columns so this test covers both read-plan forms.
+            max_direct_columns: 10,
+            ..Default::default()
+        })?;
+    builder.add_block(&block)?;
+    let state = builder.finalize(&write_settings, &location)?;
+    assert!(!state.data.is_empty());
+
+    let dal = fuse_table.get_operator();
+    let virtual_location = state
+        .draft_virtual_block_meta
+        .virtual_columns
+        .as_ref()
+        .unwrap()
+        .virtual_location
+        .0
+        .clone();
+    dal.write(&virtual_location, state.data.clone()).await?;
+
+    let mut virtual_column_fields = Vec::new();
+    let mut column_ids = Vec::new();
+    for (column_id, key_path) in (schema.next_column_id()..).zip([
+        "{id}",
+        "{text}",
+        "{user,info}",
+        "{user,info,tags,0}",
+        "{user,extra}",
+        "{user,missing}",
+        "{sparse_bool}",
+        "{sparse_uint}",
+        "{sparse_int}",
+        "{sparse_float}",
+        "{sparse_string}",
+        "{sparse_jsonb}",
+        "{sparse_jsonb_arr,0}",
+        "{container}",
+        "{0,k}",
+    ]) {
+        let key_paths = parse_key_paths(key_path.as_bytes()).unwrap().to_owned();
+        let field = build_virtual_column_field(source_column_id, "v", column_id, key_paths);
+        virtual_column_fields.push(field);
+        column_ids.push(column_id);
+    }
+
+    let mut source_column_ids = HashSet::new();
+    source_column_ids.insert(source_column_id);
+    let virtual_column_info = VirtualColumnInfo {
+        source_column_ids,
+        virtual_column_fields,
+    };
+    let push_down = PushDownInfo {
+        virtual_column: Some(virtual_column_info.clone()),
+        ..Default::default()
+    };
+
+    let virtual_block_meta = VirtualBlockMeta {
+        virtual_column_metas: HashMap::new(),
+        virtual_column_size: state
+            .draft_virtual_block_meta
+            .virtual_columns
+            .as_ref()
+            .unwrap()
+            .virtual_column_size,
+        virtual_location: state
+            .draft_virtual_block_meta
+            .virtual_columns
+            .as_ref()
+            .unwrap()
+            .virtual_location
+            .clone(),
+        virtual_columns_complete: false,
+    };
+
+    let pruner = VirtualColumnPruner::try_create(dal.clone(), &Some(push_down.clone()))?
+        .expect("virtual column pruner");
+    let virtual_block_meta_index = pruner
+        .prune_virtual_columns(&Some(virtual_block_meta), None)
+        .await?
+        .expect("virtual block meta index");
+
+    let mut plan_kinds = HashSet::new();
+    for plan in virtual_block_meta_index.fields.values() {
+        collect_plan_kinds(plan, &mut plan_kinds);
+    }
+    assert!(plan_kinds.contains("Direct"));
+    assert!(plan_kinds.contains("FromParent"));
+    assert!(plan_kinds.contains("Shared"));
+    assert!(plan_kinds.contains("Object"));
+    assert!(plan_kinds.contains("Missing"));
+    assert!(plan_kinds.contains("Coalesce"));
+
+    let mut shared_data_types = HashSet::new();
+    for plan in virtual_block_meta_index.fields.values() {
+        collect_shared_data_types(
+            plan,
+            &virtual_block_meta_index.read_slots,
+            &mut shared_data_types,
+        );
+    }
+    for data_type in [
+        VirtualColumnSharedDataType::Boolean,
+        VirtualColumnSharedDataType::UInt64,
+        VirtualColumnSharedDataType::Int64,
+        VirtualColumnSharedDataType::String,
+        VirtualColumnSharedDataType::Jsonb,
+    ] {
+        assert!(
+            shared_data_types.contains(&data_type),
+            "missing shared data type: {data_type:?}"
+        );
+    }
+
+    let info_column_id = column_ids[2];
+    let tags0_column_id = column_ids[3];
+    let extra_column_id = column_ids[4];
+    let sparse_jsonb_arr0_column_id = column_ids[12];
+    let root_array_k_column_id = column_ids[14];
+
+    let info_plan = virtual_block_meta_index
+        .fields
+        .get(&info_column_id)
+        .expect("user.info plan");
+    assert!(matches!(info_plan, VirtualFieldReadPlan::Object { .. }));
+
+    let tags0_plan = virtual_block_meta_index
+        .fields
+        .get(&tags0_column_id)
+        .expect("tags[0] plan");
+    assert!(matches!(
+        tags0_plan,
+        VirtualFieldReadPlan::FromParent { suffix_path, .. } if suffix_path == "{0}"
+    ));
+
+    let sparse_jsonb_arr0_plan = virtual_block_meta_index
+        .fields
+        .get(&sparse_jsonb_arr0_column_id)
+        .expect("sparse_jsonb_arr[0] plan");
+    assert!(matches!(
+        sparse_jsonb_arr0_plan,
+        VirtualFieldReadPlan::FromParent { parent, suffix_path }
+            if suffix_path == "{0}"
+                && shared_plan_data_type(parent, &virtual_block_meta_index.read_slots)
+                    == Some(VirtualColumnSharedDataType::Jsonb)
+    ));
+
+    assert!(
+        !virtual_block_meta_index
+            .fields
+            .contains_key(&root_array_k_column_id)
+    );
+    assert!(
+        !virtual_block_meta_index
+            .ignored_source_column_ids
+            .contains(&source_column_id)
+    );
+
+    let extra_plan = virtual_block_meta_index
+        .fields
+        .get(&extra_column_id)
+        .expect("user.extra plan");
+    assert_eq!(
+        shared_plan_data_type(extra_plan, &virtual_block_meta_index.read_slots),
+        Some(VirtualColumnSharedDataType::String)
+    );
+
+    let plan = table
+        .read_plan(ctx.clone(), Some(push_down), None, false, true)
+        .await?;
+    let reader = VirtualColumnReader::try_create(
+        ctx.clone(),
+        dal.clone(),
+        schema.clone(),
+        &plan,
+        virtual_column_info,
+        write_settings.table_compression,
+    )?;
+
+    let table_ctx: Arc<dyn TableContext> = ctx.clone();
+    let read_settings = ReadSettings::from_ctx(&table_ctx)?;
+    let virtual_data = reader
+        .read_parquet_data_by_merge_io(
+            &read_settings,
+            &Some(&virtual_block_meta_index),
+            block.num_rows(),
+        )
+        .await
+        .expect("virtual block read result");
+    let result_block =
+        reader.deserialize_virtual_columns(block.clone(), Some(virtual_data), None)?;
+
+    assert_eq!(
+        result_block.num_columns(),
+        block.num_columns() + column_ids.len()
+    );
+
+    let expected_id = vec![Some("1"), Some("2"), Some("3"), Some("4"), Some("5"), None];
+    let expected_text = vec![
+        Some(r#""a""#),
+        Some(r#""b""#),
+        Some(r#""c""#),
+        Some(r#""d""#),
+        Some(r#""e""#),
+        None,
+    ];
+    let expected_info = vec![
+        Some(r#"{"replies":2,"likes":25,"tags":["good","popular"]}"#),
+        Some(r#"{"replies":12,"tags":["interesting"]}"#),
+        Some(r#"{"replies":4,"likes":85,"tags":["bad"]}"#),
+        Some(r#"{"replies":1,"likes":5,"tags":[]}"#),
+        Some(r#"{"replies":7}"#),
+        None,
+    ];
+    let expected_tags0 = vec![
+        Some(r#""good""#),
+        Some(r#""interesting""#),
+        Some(r#""bad""#),
+        None,
+        None,
+        None,
+    ];
+    let expected_extra = vec![None, None, Some(r#""new""#), None, None, None];
+    let expected_sparse_jsonb_arr0 = vec![Some(r#""x""#), None, None, None, None, None];
+    let expected_root_array_k = vec![None, None, None, None, None, Some(r#""v""#)];
+
+    assert_variant_column(&result_block.get_by_offset(2).to_column(), &expected_id);
+    assert_variant_column(&result_block.get_by_offset(3).to_column(), &expected_text);
+    assert_variant_column(&result_block.get_by_offset(4).to_column(), &expected_info);
+    assert_variant_column(&result_block.get_by_offset(5).to_column(), &expected_tags0);
+    assert_variant_column(&result_block.get_by_offset(6).to_column(), &expected_extra);
+    assert_variant_column(
+        &result_block.get_by_offset(14).to_column(),
+        &expected_sparse_jsonb_arr0,
+    );
+    assert_variant_column(
+        &result_block.get_by_offset(16).to_column(),
+        &expected_root_array_k,
+    );
+
+    // A prewhere predicate can reject every row of a block that survived
+    // min/max pruning. The deserializer then receives an empty data block and
+    // a row selection that keeps nothing; the virtual column reader must still
+    // produce zero-row columns instead of failing on the empty parquet batch.
+    let virtual_data = reader
+        .read_parquet_data_by_merge_io(
+            &read_settings,
+            &Some(&virtual_block_meta_index),
+            block.num_rows(),
+        )
+        .await
+        .expect("virtual block read result");
+    let empty_selection = RowSelection::from(vec![RowSelector::skip(block.num_rows())]);
+    let empty_block = reader.deserialize_virtual_columns(
+        block.slice(0..0),
+        Some(virtual_data),
+        Some(empty_selection),
+    )?;
+    assert_eq!(empty_block.num_rows(), 0);
+    assert_eq!(
+        empty_block.num_columns(),
+        block.num_columns() + column_ids.len()
+    );
+    for entry in empty_block.columns() {
+        assert_eq!(entry.to_column().len(), 0);
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    fixture.create_variant_table().await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let table = fixture.latest_default_table().await?;
+    let schema = table.get_table_info().meta.schema.clone();
+    let source_column_id = schema.column_id_of("v")?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let write_settings = fuse_table.get_write_settings();
+    let location = ("_b/virtual_column_block_meta_direct.parquet".to_string(), 0);
+    let block = DataBlock::new(
+        vec![
+            Int32Type::from_data(vec![1, 2]).into(),
+            VariantType::from_opt_data(vec![
+                Some(OwnedJsonb::from_str(r#"{"id":1}"#)?.to_vec()),
+                Some(OwnedJsonb::from_str(r#"{"id":2}"#)?.to_vec()),
+            ])
+            .into(),
+        ],
+        2,
+    );
+    let mut builder = VirtualColumnBuilder::try_create(schema.clone(), Default::default())?;
+    builder.add_block(&block)?;
+    let state = builder.finalize(&write_settings, &location)?;
+    let draft_columns = state
+        .draft_virtual_block_meta
+        .virtual_columns
+        .as_ref()
+        .unwrap();
+    let draft_meta = draft_columns
+        .virtual_column_metas
+        .iter()
+        .find(|meta| meta.name == "id")
+        .unwrap();
+    let segment_column_id = 7;
+    let virtual_block_meta = VirtualBlockMeta {
+        virtual_column_metas: HashMap::from([(segment_column_id, draft_meta.column_meta.clone())]),
+        virtual_column_size: draft_columns.virtual_column_size,
+        virtual_location: draft_columns.virtual_location.clone(),
+        virtual_columns_complete: true,
+    };
+    let segment_schema = VirtualSegmentSchema {
+        column_paths: vec![VirtualSegmentColumnPath {
+            source_column_id,
+            paths: vec![VirtualSegmentPath {
+                path: "id".to_string(),
+                column_id: segment_column_id,
+            }],
+        }],
+    };
+    let query_column_id = schema.next_column_id();
+    let field = build_virtual_column_field(
+        source_column_id,
+        "v",
+        query_column_id,
+        parse_key_paths(b"{id}")?.to_owned(),
+    );
+    let push_down = PushDownInfo {
+        virtual_column: Some(VirtualColumnInfo {
+            source_column_ids: HashSet::from([source_column_id]),
+            virtual_column_fields: vec![field.clone()],
+        }),
+        ..Default::default()
+    };
+    let projected_segment_schema = ProjectedVirtualSegmentSchema::project(&segment_schema, &[(
+        field.source_column_id,
+        ProjectedVirtualPath::new(&field.key_paths),
+    )]);
+    let dal = fuse_table.get_operator();
+    dal.write(&draft_columns.virtual_location.0, state.data)
+        .await?;
+    let pruner = VirtualColumnPruner::try_create(dal.clone(), &Some(push_down))?.unwrap();
+    let index = pruner
+        .prune_virtual_columns(&Some(virtual_block_meta), Some(&projected_segment_schema))
+        .await?
+        .unwrap();
+    let VirtualFieldReadPlan::Direct { slot } = &index.fields[&query_column_id] else {
+        panic!("expected direct block-meta read plan");
+    };
+    let read_slot = &index.read_slots[slot.as_usize()];
+    assert_eq!(read_slot.offset, draft_meta.column_meta.offset);
+    assert_eq!(read_slot.len, draft_meta.column_meta.len);
+    assert_eq!(read_slot.num_values, draft_meta.column_meta.num_values);
+    assert_eq!(
+        read_slot.data_type,
+        DataType::from(&draft_meta.column_meta.data_type())
+    );
+
+    let plan = table
+        .read_plan(ctx.clone(), None, None, false, true)
+        .await?;
+    let reader = VirtualColumnReader::try_create(
+        ctx.clone(),
+        dal,
+        schema,
+        &plan,
+        VirtualColumnInfo {
+            source_column_ids: HashSet::from([source_column_id]),
+            virtual_column_fields: vec![field],
+        },
+        write_settings.table_compression,
+    )?;
+    let table_ctx: Arc<dyn TableContext> = ctx;
+    let read_settings = ReadSettings::from_ctx(&table_ctx)?;
+    let virtual_data = reader
+        .read_parquet_data_by_merge_io(&read_settings, &Some(&index), block.num_rows())
+        .await
+        .unwrap();
+    let result = reader.deserialize_virtual_columns(block, Some(virtual_data), None)?;
+    assert_variant_column(&result.get_by_offset(2).to_column(), &[
+        Some("1"),
+        Some("2"),
+    ]);
+    Ok(())
+}
+
+fn build_virtual_column_field(
+    source_column_id: u32,
+    source_name: &str,
+    query_column_id: u32,
+    key_paths: OwnedKeyPaths,
+) -> VirtualColumnField {
+    VirtualColumnField {
+        source_column_id,
+        source_name: source_name.to_string(),
+        query_column_id,
+        name: format_virtual_column_name(source_name, &key_paths),
+        key_paths,
+        data_type: Box::new(TableDataType::Variant),
+        is_try: true,
+    }
+}
+
+fn format_virtual_column_name(source: &str, key_paths: &OwnedKeyPaths) -> String {
+    let mut name = source.to_string();
+    for path in &key_paths.paths {
+        match path {
+            OwnedKeyPath::Index(index) => name.push_str(&format!("[{index}]")),
+            OwnedKeyPath::Name(key) => name.push_str(&format!("['{key}']")),
+        }
+    }
+    name
+}
+
+fn collect_plan_kinds(plan: &VirtualFieldReadPlan, kinds: &mut HashSet<&'static str>) {
+    match plan {
+        VirtualFieldReadPlan::Direct { .. } => {
+            kinds.insert("Direct");
+        }
+        VirtualFieldReadPlan::FromParent { parent, .. } => {
+            kinds.insert("FromParent");
+            collect_plan_kinds(parent, kinds);
+        }
+        VirtualFieldReadPlan::Shared { .. } => {
+            kinds.insert("Shared");
+        }
+        VirtualFieldReadPlan::Coalesce { plans } => {
+            kinds.insert("Coalesce");
+            for child in plans {
+                collect_plan_kinds(child, kinds);
+            }
+        }
+        VirtualFieldReadPlan::Object { entries } => {
+            kinds.insert("Object");
+            for (_, child) in entries {
+                collect_plan_kinds(child, kinds);
+            }
+        }
+        VirtualFieldReadPlan::Missing => {
+            kinds.insert("Missing");
+        }
+    }
+}
+
+fn shared_plan_data_type(
+    plan: &VirtualFieldReadPlan,
+    read_slots: &[VirtualReadSlot],
+) -> Option<VirtualColumnSharedDataType> {
+    let VirtualFieldReadPlan::Shared { value_slot, .. } = plan else {
+        return None;
+    };
+    match read_slots
+        .get(value_slot.as_usize())?
+        .data_type
+        .remove_nullable()
+    {
+        DataType::Boolean => Some(VirtualColumnSharedDataType::Boolean),
+        DataType::Number(NumberDataType::UInt64) => Some(VirtualColumnSharedDataType::UInt64),
+        DataType::Number(NumberDataType::Int64) => Some(VirtualColumnSharedDataType::Int64),
+        DataType::Number(NumberDataType::Float64) => Some(VirtualColumnSharedDataType::Float64),
+        DataType::String => Some(VirtualColumnSharedDataType::String),
+        DataType::Variant => Some(VirtualColumnSharedDataType::Jsonb),
+        _ => None,
+    }
+}
+
+fn collect_shared_data_types(
+    plan: &VirtualFieldReadPlan,
+    read_slots: &[VirtualReadSlot],
+    data_types: &mut HashSet<VirtualColumnSharedDataType>,
+) {
+    match plan {
+        VirtualFieldReadPlan::Shared { .. } => {
+            if let Some(data_type) = shared_plan_data_type(plan, read_slots) {
+                data_types.insert(data_type);
+            }
+        }
+        VirtualFieldReadPlan::FromParent { parent, .. } => {
+            collect_shared_data_types(parent, read_slots, data_types);
+        }
+        VirtualFieldReadPlan::Coalesce { plans } => {
+            for child in plans {
+                collect_shared_data_types(child, read_slots, data_types);
+            }
+        }
+        VirtualFieldReadPlan::Object { entries } => {
+            for (_, child) in entries {
+                collect_shared_data_types(child, read_slots, data_types);
+            }
+        }
+        VirtualFieldReadPlan::Missing | VirtualFieldReadPlan::Direct { .. } => {}
+    }
+}
+
+fn assert_variant_column(column: &Column, expected: &[Option<&str>]) {
+    assert_eq!(column.len(), expected.len());
+    for (idx, expected_json) in expected.iter().enumerate() {
+        let scalar = column.index(idx).expect("column row exists");
+        match expected_json {
+            None => assert!(
+                matches!(scalar, ScalarRef::Null),
+                "row {idx} expected null, got {scalar:?}"
+            ),
+            Some(expected_str) => {
+                let ScalarRef::Variant(bytes) = scalar else {
+                    panic!("row {idx} expected variant, got {scalar:?}");
+                };
+                let actual = OwnedJsonb::new(bytes.to_vec());
+                let expected = OwnedJsonb::from_str(expected_str).unwrap();
+                assert_eq!(actual, expected, "row {idx} mismatch");
+            }
+        }
+    }
+}

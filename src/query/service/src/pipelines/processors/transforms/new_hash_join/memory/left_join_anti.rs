@@ -25,6 +25,7 @@ use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::with_join_hash_method;
+use databend_common_pipeline::core::check_interrupt;
 
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
@@ -107,10 +108,7 @@ impl Join for AntiLeftHashJoin {
         let probe_keys = self.desc.probe_key(&data, &self.function_ctx)?;
 
         let mut keys = DataBlock::new(probe_keys, data.num_rows());
-        let valids = match self.desc.from_correlated_subquery {
-            true => None,
-            false => self.desc.build_valids_by_keys(&keys)?,
-        };
+        let valids = self.desc.build_valids_by_keys(&keys)?;
 
         self.desc.remove_keys_nullable(&mut keys);
         let probe_block = data.project(&self.desc.probe_projection);
@@ -242,6 +240,8 @@ impl<'a> JoinStream for LeftAntiFilterHashJoinStream<'a> {
         let mut selected = vec![true; num_rows];
 
         loop {
+            check_interrupt()?;
+
             self.probed_rows.clear();
             let max_rows = self.probed_rows.matched_probe.capacity();
             self.probe_keys_stream.advance(self.probed_rows, max_rows)?;

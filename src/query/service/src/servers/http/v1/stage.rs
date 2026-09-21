@@ -14,7 +14,6 @@
 
 use async_compat::CompatExt;
 use databend_common_catalog::session_type::SessionType;
-use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_sql::binder::validate_stage_path_traversal_policy;
 use databend_common_storage::init_stage_operator;
@@ -116,10 +115,9 @@ pub async fn upload_to_stage(
     };
 
     let op = init_stage_operator(&stage).map_err(InternalServerError)?;
-    let path_traversal_policy = context
-        .get_settings()
-        .get_stage_path_traversal_policy()
-        .map_err(InternalServerError)?;
+    let path_traversal_policy = databend_common_config::GlobalConfig::instance()
+        .storage
+        .stage_path_traversal_policy;
 
     let mut files = vec![];
     while let Ok(Some(field)) = multipart.next_field().await {

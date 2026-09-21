@@ -16,3 +16,4 @@ mod queue_mgr;
 mod session;
 mod session_context;
 mod session_setting;
+mod temp_table;

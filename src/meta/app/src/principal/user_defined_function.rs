@@ -18,8 +18,8 @@ use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_expression::DataField;
-use databend_common_expression::types::DataType;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LambdaUDF {
@@ -34,8 +34,8 @@ pub struct UDFServer {
     pub headers: BTreeMap<String, String>,
     pub language: String,
     pub arg_names: Vec<String>,
-    pub arg_types: Vec<DataType>,
-    pub return_type: DataType,
+    pub arg_types: Vec<TableDataType>,
+    pub return_type: TableDataType,
     pub immutable: Option<bool>,
 }
 
@@ -46,21 +46,21 @@ pub struct UDFScript {
     pub packages: Vec<String>,
     pub handler: String,
     pub language: String,
-    pub arg_types: Vec<DataType>,
-    pub return_type: DataType,
+    pub arg_types: Vec<TableDataType>,
+    pub return_type: TableDataType,
     pub runtime_version: String,
     pub immutable: Option<bool>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UDTFServer {
     pub address: String,
     pub handler: String,
     pub headers: BTreeMap<String, String>,
     pub language: String,
     pub arg_names: Vec<String>,
-    pub arg_types: Vec<DataType>,
-    pub return_types: Vec<(String, DataType)>,
+    pub arg_types: Vec<TableDataType>,
+    pub return_types: Vec<(String, TableDataType)>,
     pub immutable: Option<bool>,
 }
 
@@ -72,8 +72,8 @@ pub struct UDTFServer {
 /// - `sql`: SQL implementing the UDTF
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UDTF {
-    pub arg_types: Vec<(String, DataType)>,
-    pub return_types: Vec<(String, DataType)>,
+    pub arg_types: Vec<(String, TableDataType)>,
+    pub return_types: Vec<(String, TableDataType)>,
     pub sql: String,
 }
 
@@ -85,8 +85,8 @@ pub struct UDTF {
 /// - `definition`: typically including the code or expression implementing the function logic
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ScalarUDF {
-    pub arg_types: Vec<(String, DataType)>,
-    pub return_type: DataType,
+    pub arg_types: Vec<(String, TableDataType)>,
+    pub return_type: TableDataType,
     pub definition: String,
 }
 
@@ -97,10 +97,10 @@ pub struct UDAFScript {
     pub packages: Vec<String>,
     pub language: String,
     // aggregate function input types
-    pub arg_types: Vec<DataType>,
+    pub arg_types: Vec<TableDataType>,
     // aggregate function state fields
-    pub state_fields: Vec<DataField>,
-    pub return_type: DataType,
+    pub state_fields: Vec<TableField>,
+    pub return_type: TableDataType,
     pub runtime_version: String,
 }
 
@@ -189,8 +189,8 @@ impl UserDefinedFunction {
         headers: &BTreeMap<String, String>,
         language: &str,
         arg_names: Vec<String>,
-        arg_types: Vec<DataType>,
-        return_type: DataType,
+        arg_types: Vec<TableDataType>,
+        return_type: TableDataType,
         description: &str,
         immutable: Option<bool>,
     ) -> Self {
@@ -218,8 +218,8 @@ impl UserDefinedFunction {
         code: &str,
         handler: &str,
         language: &str,
-        arg_types: Vec<DataType>,
-        return_type: DataType,
+        arg_types: Vec<TableDataType>,
+        return_type: TableDataType,
         runtime_version: &str,
         description: &str,
         immutable: Option<bool>,

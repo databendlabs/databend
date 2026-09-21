@@ -38,6 +38,7 @@ use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_io::GEOGRAPHY_SRID;
 use databend_common_io::GeometryDataType;
+use databend_common_io::UNKNOWN_SRID;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::FALSE_BYTES_NUM;
 use databend_common_io::constants::INF_BYTES_LONG;
@@ -154,7 +155,7 @@ impl FieldEncoderBytes {
             },
             Column::Decimal(c) => self.write_decimal(c, row_index, out_buf),
 
-            Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf, in_nested)?,
+            Column::Nullable(deref!(c)) => self.write_nullable(c, row_index, out_buf, in_nested)?,
 
             Column::Binary(c) => self.write_binary(c, row_index, out_buf)?,
             Column::String(c) => self.write_string(c, row_index, out_buf, in_nested),
@@ -167,8 +168,8 @@ impl FieldEncoderBytes {
             Column::Geometry(c) => self.write_geometry(c, row_index, out_buf, in_nested),
             Column::Geography(c) => self.write_geography(c, row_index, out_buf, in_nested),
 
-            Column::Array(box c) => self.write_array(c, row_index, out_buf)?,
-            Column::Map(box c) => self.write_map(c, row_index, out_buf)?,
+            Column::Array(deref!(c)) => self.write_array(c, row_index, out_buf)?,
+            Column::Map(deref!(c)) => self.write_map(c, row_index, out_buf)?,
             Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf)?,
             Column::Vector(c) => self.write_vector(c, row_index, out_buf),
             Column::Opaque(c) => self.write_opaque(c, row_index, out_buf),
@@ -307,7 +308,7 @@ setting binary_output_format to 'UTF-8-LOSSY'."
         in_nested: bool,
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
-        let s = date_to_string(*v as i64, &self.common_settings.settings.jiff_timezone).to_string();
+        let s = date_to_string(*v as i64);
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 
@@ -331,7 +332,7 @@ setting binary_output_format to 'UTF-8-LOSSY'."
         in_nested: bool,
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
-        let s = timestamp_to_string(*v, &self.common_settings.settings.jiff_timezone).to_string();
+        let s = timestamp_to_string(*v, &self.common_settings.settings.timezone).to_string();
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 
@@ -373,7 +374,7 @@ setting binary_output_format to 'UTF-8-LOSSY'."
         let v = unsafe { column.index_unchecked(row_index) };
         let s = ewkb_to_geo(&mut Ewkb(v))
             .and_then(|(geo, srid)| {
-                let srid = srid.unwrap_or(0);
+                let srid = srid.unwrap_or(UNKNOWN_SRID);
                 match self.common_settings.settings.geometry_format {
                     GeometryDataType::WKB => {
                         geo_to_wkb(geo).map(|v| hex::encode_upper(v).into_bytes())

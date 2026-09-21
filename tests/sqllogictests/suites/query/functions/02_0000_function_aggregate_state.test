@@ -1,9 +1,446 @@
-query IT
-select max_state(number).2, typeof(max_state(number)) from numbers(100);
+query T
+select typeof(max_state(number)) from numbers(100);
 ----
-99 TUPLE(BOOLEAN, UINT64, BOOLEAN)
+AGGREGATESTATE(MAX, UINT64)
 
-query IT
-select sum_state(number).1, typeof(sum_state(number)) from numbers(10000);
+query T
+select typeof(sum_state(number)) from numbers(10000);
 ----
-49995000 TUPLE(UINT64, BOOLEAN)
+AGGREGATESTATE(SUM, UINT64)
+
+query ITIT
+select sum_state(number).1,
+       typeof(sum_state(number).1),
+       max_state(number).2,
+       typeof(max_state(number).2)
+from numbers(100);
+----
+4950 BIGINT UNSIGNED 99 BIGINT UNSIGNED
+
+query I
+select sum_merge(state)
+from (
+    select number % 2, sum_state(number) as state
+    from numbers(10000)
+    group by number % 2
+);
+----
+49995000
+
+query RT
+select sum_merge(state), typeof(sum_merge(state))
+from (
+    select number % 2, sum_state(to_decimal(number, 10, 2)) as state
+    from numbers(10)
+    group by number % 2
+);
+----
+45.00 DECIMAL(18, 2) NULL
+
+query II
+select max_merge(max_state), min_merge(min_state)
+from (
+    select number % 2, max_state(number) as max_state, min_state(number) as min_state
+    from numbers(100)
+    group by number % 2
+);
+----
+99 0
+
+query I
+select sum_merge(merged_state)
+from (
+    select sum_merge_state(state) as merged_state
+    from (
+        select number % 4, sum_state(number) as state
+        from numbers(10000)
+        group by number % 4
+    )
+);
+----
+49995000
+
+query T
+select typeof(sum_merge_state(state))
+from (
+    select number % 4, sum_state(number) as state
+    from numbers(10000)
+    group by number % 4
+);
+----
+AGGREGATESTATE(SUM, UINT64)
+
+query II
+select max_merge(max_merged_state), min_merge(min_merged_state)
+from (
+    select max_merge_state(max_state) as max_merged_state,
+           min_merge_state(min_state) as min_merged_state
+    from (
+        select number % 4, max_state(number) as max_state, min_state(number) as min_state
+        from numbers(100)
+        group by number % 4
+    )
+);
+----
+99 0
+
+query IIII
+select sum_merge(sum_state),
+       min_merge(min_state),
+       max_merge(max_state),
+       count_merge(count_state)
+from (
+    select sum_merge_state(sum_state) as sum_state,
+           min_merge_state(min_state) as min_state,
+           max_merge_state(max_state) as max_state,
+           count_merge_state(count_state) as count_state
+    from (
+        select number % 4,
+               sum_state(number) as sum_state,
+               min_state(number) as min_state,
+               max_state(number) as max_state,
+               count_state(number) as count_state
+        from numbers(100)
+        group by number % 4
+    )
+);
+----
+4950 0 99 100
+
+query I
+select arg_min_merge(state)
+from (
+    select arg_min_merge_state(state) as state
+    from (
+        select number % 4, arg_min_state(number, 100 - number) as state
+        from numbers(100)
+        group by number % 4
+    )
+);
+----
+99
+
+query T
+select typeof(state)
+from (
+    select arg_min_merge_state(state) as state
+    from (
+        select number % 4, arg_min_state(number, 100 - number) as state
+        from numbers(100)
+        group by number % 4
+    )
+);
+----
+AGGREGATESTATE(ARG_MIN, UINT64, INT64)
+
+query T
+select typeof(quantile_tdigest_state(0.5)(number))
+from numbers(100);
+----
+AGGREGATESTATE(QUANTILE_TDIGEST(0.5), UINT64)
+
+query R
+select quantile_tdigest_merge(0.5)(state)
+from (
+    select quantile_tdigest_merge_state(0.5)(state) as state
+    from (
+        select number % 4, quantile_tdigest_state(0.5)(number) as state
+        from numbers(100)
+        group by number % 4
+    )
+);
+----
+50.0
+
+statement ok
+drop table if exists aggregate_state_parameter_test
+
+statement ok
+create table aggregate_state_parameter_test as
+select number % 4 as bucket,
+       quantile_tdigest_state(0.5)(number) as state
+from numbers(100)
+group by bucket
+
+query T
+select typeof(state)
+from aggregate_state_parameter_test
+limit 1;
+----
+AGGREGATESTATE(QUANTILE_TDIGEST(0.5), UINT64) NULL
+
+query R
+select quantile_tdigest_merge(0.5)(state)
+from aggregate_state_parameter_test;
+----
+50.0
+
+statement error 1006
+select quantile_tdigest_merge(0.9)(state)
+from aggregate_state_parameter_test;
+
+statement error 1006
+select quantile_tdigest_merge_state(0.9)(state)
+from aggregate_state_parameter_test;
+
+statement ok
+drop table aggregate_state_parameter_test
+
+statement ok
+drop table if exists aggregate_state_combinator_test
+
+statement ok
+create table aggregate_state_combinator_test as
+select number % 4 as bucket,
+       sum_state(number) as sum_state,
+       min_state(number) as min_state,
+       max_state(number) as max_state,
+       count_state(number) as count_state
+from numbers(100)
+group by bucket
+
+query TTTT
+select typeof(sum_state), typeof(min_state), typeof(max_state), typeof(count_state)
+from aggregate_state_combinator_test
+limit 1
+----
+AGGREGATESTATE(SUM, UINT64) NULL AGGREGATESTATE(MIN, UINT64) NULL AGGREGATESTATE(MAX, UINT64) NULL AGGREGATESTATE(COUNT, UINT64) NULL
+
+query IIII
+select sum_merge(sum_state), min_merge(min_state), max_merge(max_state), count_merge(count_state)
+from aggregate_state_combinator_test
+----
+4950 0 99 100
+
+query III
+select (select count() from (
+           select sum_state
+           from aggregate_state_combinator_test
+           group by sum_state
+       )),
+       count(distinct sum_state),
+       count_if(sum_state is not null)
+from aggregate_state_combinator_test;
+----
+4 4 4
+
+query I
+select count()
+from (
+    select sum_state
+    from aggregate_state_combinator_test
+    order by sum_state
+);
+----
+4
+
+query I
+select sum_merge(merged_state)
+from (
+    select sum_merge_state(sum_state) as merged_state
+    from aggregate_state_combinator_test
+);
+----
+4950
+
+query I
+select array_length(array(sum_state))
+from aggregate_state_combinator_test
+limit 1;
+----
+1
+
+statement ok
+drop table if exists legacy_state_cast_test
+
+statement ok
+create table legacy_state_cast_test(state tuple(uint64, boolean) null)
+
+statement ok
+insert into legacy_state_cast_test
+select sum_state(number) from numbers(10)
+
+query I
+select count() from legacy_state_cast_test;
+----
+1
+
+statement ok
+drop table legacy_state_cast_test
+
+statement ok
+drop table aggregate_state_combinator_test
+
+statement ok
+drop table if exists legacy_aggregate_state_combinator_test
+
+statement ok
+create table legacy_aggregate_state_combinator_test as
+select bucket,
+       tuple(sum_state.1, sum_state.2) as sum_state,
+       tuple(min_state.1, min_state.2, min_state.3) as min_state,
+       tuple(max_state.1, max_state.2, max_state.3) as max_state,
+       tuple(count_state.1) as count_state,
+       tuple(arg_min_state.1, arg_min_state.2, arg_min_state.3, arg_min_state.4) as arg_min_state
+from (
+    select number % 4 as bucket,
+           sum_state(number) as sum_state,
+           min_state(number) as min_state,
+           max_state(number) as max_state,
+           count_state(number) as count_state,
+           arg_min_state(number, 100 - number) as arg_min_state
+    from numbers(100)
+    group by bucket
+)
+
+query TT
+select typeof(sum_state), typeof(arg_min_state)
+from legacy_aggregate_state_combinator_test
+limit 1;
+----
+TUPLE(UINT64, BOOLEAN) NULL TUPLE(BOOLEAN, INT64, UINT64, BOOLEAN) NULL
+
+query IIIII
+select sum_merge(sum_state),
+       min_merge(min_state),
+       max_merge(max_state),
+       count_merge(count_state),
+       arg_min_merge(arg_min_state)
+from legacy_aggregate_state_combinator_test;
+----
+4950 0 99 100 99
+
+statement error 1010
+select sum_merge(tuple(to_decimal(4500, 38, 0), true));
+
+statement error 1010
+select avg_merge(tuple(to_decimal(4500, 38, 0), 10::uint64, true));
+
+statement ok
+drop table legacy_aggregate_state_combinator_test
+
+# Nullable sum keeps both the non-NULL and input-presence state flags.
+query III
+select s.1, s.2::int, s.3::int
+from (select sum_state(if(number = 0, NULL, number::int64)) as s from numbers(4));
+----
+6 1 1
+
+query I
+select sum_merge(s)
+from (
+    select sum_merge_state(s) as s
+    from (
+        select number % 2 as g,
+               sum_state(if(number = 0, NULL, number::int64)) as s
+        from numbers(4)
+        group by g
+    )
+);
+----
+6
+
+# Native nullable aggregates retain the outer v1 presence flag.
+query II
+select s.2::int, (abs(stddev_pop_merge(s) - sqrt(1.25)) < 0.000000001)::int
+from (select stddev_pop_state(number) as s from numbers(4))
+group by s.2;
+----
+1 1
+
+query TII
+select s.1, s.2::int, s.3::int
+from (select string_agg_state(if(number = 0, NULL, 'x')) as s from numbers(2));
+----
+x 1 1
+
+# String states retain a nullable value column; Decimal state metadata describes
+# raw storage integers and must not cause rescaling when merged.
+query TT
+select min_merge(s), max_merge(t)
+from (select min_state('x') as s, max_state('y') as t);
+----
+x y
+
+query III
+select (min_merge(s) = 1.10)::int,
+       (max_merge(t) = 1.10)::int,
+       (any_merge(u) = 1.10)::int
+from (
+    select min_state('1.10'::decimal(15, 2)) as s,
+           max_state('1.10'::decimal(30, 5)) as t,
+           any_state('1.10'::decimal(50, 8)) as u
+);
+----
+1 1 1
+
+# Median persists a typed array of samples, including Decimal raw values.
+query II
+select length(s.1), (median_merge(s) = 1.5)::int
+from (select median_state(number) as s from numbers(4))
+group by length(s.1);
+----
+4 1
+
+query I
+select (median_merge(s) = 1.10)::int
+from (select median_state('1.10'::decimal(30, 5)) as s);
+----
+1
+
+query T
+select json_object_agg(k, v)
+from (select 'a' as k, NULL::int as v union all select 'b', NULL::int);
+----
+{}
+
+query T
+select json_object_agg(k, v)
+from (select NULL::string as k, 1 as v);
+----
+{}
+
+query T
+select json_object_agg_merge(s)
+from (select json_object_agg_state(number::string, number) as s from numbers(0));
+----
+{}
+
+# Uniq persists only its set; overlapping partial states must not add counts.
+query I
+select uniq_merge(s)
+from (
+    select uniq_state(k) as s from (select 'a' as k union all select 'b')
+    union all
+    select uniq_state(k) as s from (select 'b' as k union all select 'c')
+);
+----
+3
+
+query I
+select length(s.1)
+from (select uniq_state(number % 2) as s from numbers(6));
+----
+2
+
+# Geographic states retain the outer flag and st_collect's typed geometry array.
+query II
+select length(s.1), s.2::int
+from (select st_collect_state(to_geometry('SRID=4326;POINT(1 2)')) as s from numbers(2));
+----
+2 1
+
+query I
+select st_srid(st_collect_merge(s))
+from (select st_collect_state(to_geometry('SRID=4326;POINT(1 2)')) as s from numbers(2));
+----
+4326
+
+query II
+select (st_area(st_union_agg_merge(s)) = 4)::int, st_srid(st_union_agg_merge(s))
+from (
+    select st_union_agg_state(to_geometry('SRID=4326;POLYGON((0 0,2 0,2 2,0 2,0 0))')) as s
+    from numbers(2)
+);
+----
+1 4326

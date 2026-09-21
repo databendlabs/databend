@@ -16,6 +16,9 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::LambdaArgument;
+use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::parser::expr::*;
@@ -29,6 +32,40 @@ use databend_common_ast::parser::*;
 use goldenfile::Mint;
 use nom::Parser;
 use nom_rule::rule;
+
+#[test]
+fn test_set_ttl_and_modify_column_are_distinct() {
+    use databend_common_ast::ast::AlterTableAction;
+    use databend_common_ast::ast::Statement;
+
+    for expr in ["timestamp", "date", "timestamp + INTERVAL 1 DAY"] {
+        let sql = format!("ALTER TABLE t SET TTL {expr}");
+        let tokens = tokenize_sql(&sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        let Statement::AlterTable(stmt) = stmt else {
+            panic!("expected ALTER TABLE: {sql}");
+        };
+        assert!(matches!(stmt.action, AlterTableAction::SetTableTtl { .. }));
+    }
+
+    for sql in [
+        "ALTER TABLE t MODIFY ttl TIMESTAMP",
+        "ALTER TABLE t MODIFY COLUMN ttl TIMESTAMP",
+        "ALTER TABLE t MODIFY \"ttl\" TIMESTAMP",
+        "ALTER TABLE t MODIFY ttl DATE",
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        let Statement::AlterTable(stmt) = stmt else {
+            panic!("expected ALTER TABLE: {sql}");
+        };
+        assert!(matches!(stmt.action, AlterTableAction::ModifyColumn { .. }));
+    }
+
+    // MODIFY is exclusively column syntax, not an alias for SET TTL.
+    let tokens = tokenize_sql("ALTER TABLE t MODIFY TTL event_time + INTERVAL 7 DAY").unwrap();
+    assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err());
+}
 
 fn run_parser<P, O>(file: &mut dyn Write, parser: P, src: &str)
 where
@@ -51,12 +88,10 @@ fn run_parser_with_dialect<P, O>(
     let src = unindent::unindent(src);
     let src = src.trim();
     let tokens = tokenize_sql(src).unwrap();
-    let backtrace = Backtrace::new();
     let input = Input {
         tokens: &tokens,
         dialect,
         mode,
-        backtrace: &backtrace,
     };
     let parser = parser;
     let mut parser = rule! { #parser ~ &EOI };
@@ -130,8 +165,6 @@ fn test_statement() {
         r#"explain analyze select * from t;"#,
         r#"describe a;"#,
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
-        r#"CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,
-        r#"CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;"#,
         r#"CREATE OR REPLACE INVERTED INDEX idx2 ON t1 (a, b);"#,
         r#"CREATE OR REPLACE NGRAM INDEX idx2 ON t1 (a, b);"#,
         r#"create table a (c decimal(38, 0))"#,
@@ -238,6 +271,8 @@ fn test_statement() {
         r#"DROP table IF EXISTS table1;"#,
         r#"undrop table test_db.test;"#,
         r#"analyze table test_db.test noscan;"#,
+        r#"analyze table test_db.test with histogram;"#,
+        r#"analyze table test_db.test with histogram algorithm = 'kll_full', error_rate = 0.01;"#,
         r#"exists table test_db.test;"#,
         r#"create role role1 comment='test';"#,
         r#"alter role role1 set comment='test';"#,
@@ -364,13 +399,22 @@ SELECT * from s;"#,
         r#"drop role if exists 'test'"#,
         r#"OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10;"#,
         r#"OPTIMIZE TABLE t COMPACT LIMIT 10;"#,
-        r#"OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') LIMIT 10;"#,
-        r#"OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10;"#,
+        r#"OPTIMIZE TABLE t PURGE;"#,
+        r#"OPTIMIZE TABLE db.t PURGE;"#,
         r#"ALTER TABLE t CLUSTER BY(c1);"#,
+        r#"ALTER TABLE t PARTITION BY (date_trunc(day, c1), c2);"#,
         r#"ALTER TABLE t1 swap with t2;"#,
         r#"ALTER TABLE t refresh cache;"#,
         r#"ALTER TABLE t COMMENT='t1-commnet';"#, // typos:disable-line
         r#"ALTER TABLE t DROP CLUSTER KEY;"#,
+        r#"ALTER TABLE t SET TTL event_time + INTERVAL 30 DAY;"#,
+        r#"ALTER TABLE t SET TTL event_time + INTERVAL 7 DAY;"#,
+        r#"ALTER TABLE t SET TTL expire_at;"#,
+        r#"ALTER TABLE t REMOVE TTL;"#,
+        r#"CREATE TABLE t (a int, event_time timestamp) TTL event_time + INTERVAL 30 DAY;"#,
+        r#"CREATE TABLE t (a int, expire_at timestamp) TTL expire_at;"#,
+        r#"CREATE TABLE t (a int, event_time timestamp) CLUSTER BY (a) TTL event_time + INTERVAL 1 DAY;"#,
+        r#"CREATE TABLE t (ttl int);"#,
         r#"ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10;"#,
         r#"ALTER TABLE t ADD c int null;"#,
         r#"ALTER TABLE t ADD COLUMN c int null;"#,
@@ -423,22 +467,25 @@ SELECT * from s;"#,
         r#"ALTER DATABASE ctl.c RENAME TO a;"#,
         r#"ALTER DATABASE ctl.c refresh cache;"#,
         r#"VACUUM TABLE t;"#,
-        r#"VACUUM TABLE t DRY RUN;"#,
-        r#"VACUUM TABLE t DRY RUN SUMMARY;"#,
+        r#"VACUUM TABLE db.t;"#,
+        r#"VACUUM TABLES;"#,
+        r#"VACUUM TABLES FROM db;"#,
+        r#"VACUUM ALL;"#,
         r#"VACUUM DROP TABLE;"#,
-        r#"VACUUM DROP TABLE DRY RUN;"#,
-        r#"VACUUM DROP TABLE DRY RUN SUMMARY;"#,
         r#"VACUUM DROP TABLE FROM db;"#,
-        r#"VACUUM DROP TABLE FROM db LIMIT 10;"#,
+        r#"VACUUM DROPPED OBJECTS;"#,
+        r#"VACUUM DROPPED OBJECTS FROM db;"#,
         r#"VACUUM TEMPORARY FILES RETAIN 7 DAYS LIMIT 10;"#,
         r#"ATTACH TABLE db.attached (c1, c2) 's3://testbucket/data/' CONNECTION=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
         r#"CREATE DICTIONARY IF NOT EXISTS db.dict1 (id int, name string) PRIMARY KEY id SOURCE(mysql(host='127.0.0.1' port='3306')) COMMENT 'test dictionary';"#,
         r#"SHOW CREATE DICTIONARY db.dict1;"#,
         r#"DROP DICTIONARY IF EXISTS db.dict1;"#,
         r#"RENAME DICTIONARY IF EXISTS db.dict1 TO db.dict2;"#,
-        r#"REFRESH AGGREGATING INDEX idx1 LIMIT 10;"#,
         r#"REFRESH INVERTED INDEX idx2 ON db.t LIMIT 5;"#,
         r#"REFRESH VIRTUAL COLUMN FOR db.t WHERE c1 > 0 LIMIT 5 OVERWRITE;"#,
+        r#"REFRESH LINEAGE FOR ALL VIEWS;"#,
+        r#"refresh lineage for all views dry run;"#,
+        r#"SELECT lineage FROM lineage;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='Comment types type speedily \' \\\\ \'\' Fun!';"#,
         r#"COMMENT IF EXISTS ON TABLE t IS 'test'"#,
         r#"COMMENT ON COLUMN t.C1 IS 'test'"#,
@@ -474,6 +521,11 @@ SELECT * from s;"#,
         r#"GRANT SELECT ON db01.tb1 TO ROLE role1;"#,
         r#"GRANT SELECT ON tb1 TO ROLE role1;"#,
         r#"GRANT ALL ON tb1 TO 'u1';"#,
+        r#"CREATE SHARE share1 CONNECTION = share_conn COMMENT = 'shared data';"#,
+        r#"DROP SHARE IF EXISTS share1;"#,
+        r#"ALTER SHARE share1 SET CONNECTION = replacement_conn COMMENT = 'rotated';"#,
+        r#"GRANT USAGE ON DATABASE db1 TO SHARE share1;"#,
+        r#"GRANT SELECT ON TABLE db1.t1 TO SHARE share1;"#,
         r#"GRANT CREATE MASKING POLICY ON *.* TO USER a;"#,
         r#"GRANT APPLY MASKING POLICY ON *.* TO USER a;"#,
         r#"GRANT APPLY ON MASKING POLICY ssn_mask TO ROLE human_resources;"#,
@@ -491,6 +543,8 @@ SELECT * from s;"#,
         r#"REVOKE SELECT, CREATE ON * FROM 'test-grant';"#,
         r#"REVOKE SELECT ON tb1 FROM ROLE role1;"#,
         r#"REVOKE SELECT ON tb1 FROM ROLE 'role1';"#,
+        r#"REVOKE USAGE ON DATABASE db1 FROM SHARE share1;"#,
+        r#"REVOKE SELECT ON TABLE db1.t1 FROM SHARE share1;"#,
         r#"drop role 'role1';"#,
         r#"GRANT ROLE test TO ROLE 'test-user';"#,
         r#"GRANT ROLE test TO ROLE `test-user`;"#,
@@ -857,12 +911,18 @@ SELECT * from s;"#,
         r#"ALTER NETWORK POLICY mypolicy SET ALLOWED_IP_LIST=('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test'"#,
         r#"SHOW PASSWORD POLICIES LIKE 'p%'"#,
         // dynamic tables
+        r#"CREATE DYNAMIC TABLE `db``name`.`table``name` (`col``name` BIGINT) AS SELECT id FROM src"#,
+        r#"REFRESH DYNAMIC TABLE db.dt"#,
+        r#"CREATE DYNAMIC TABLE dt AS SELECT a.id FROM a JOIN b ON a.id = b.id"#,
+        r#"CREATE DYNAMIC TABLE dt AS SELECT id FROM a"#,
+        r#"CREATE DYNAMIC TABLE dt TARGET_LAG = 10 MINUTE AS SELECT id FROM a"#,
+        r#"CREATE DYNAMIC TABLE dt TARGET_LAG = DOWNSTREAM AS SELECT id FROM a"#,
+        // INITIALIZE is a generic table option, not a dynamic table option; the binder rejects it.
+        r#"CREATE DYNAMIC TABLE dt INITIALIZE = ON_CREATE AS SELECT id FROM a"#,
         r#"
             CREATE OR REPLACE DYNAMIC TABLE db.MyDynamic LIKE t
                 TARGET_LAG = 10 SECOND
                 WAREHOUSE = 'MyWarehouse'
-                REFRESH_MODE = FULL
-                INITIALIZE = ON_CREATE
                 COMMENT = 'This is test dynamic table'
             AS
                 SELECT * FROM t
@@ -871,8 +931,6 @@ SELECT * from s;"#,
             CREATE DYNAMIC TABLE IF NOT EXISTS db.MyDynamic (a int, b string)
                 TARGET_LAG = 10 MINUTE
                 WAREHOUSE = 'MyWarehouse'
-                REFRESH_MODE = INCREMENTAL
-                INITIALIZE = ON_SCHEDULE
                 COMMENT = 'This is test dynamic table'
             AS
                 SELECT * FROM t
@@ -881,7 +939,6 @@ SELECT * from s;"#,
             CREATE DYNAMIC TABLE db.MyDynamic (a int, b string)
                 CLUSTER BY (a)
                 TARGET_LAG = 10 HOUR
-                REFRESH_MODE = AUTO
                 COMMENT = 'This is test dynamic table'
                 STORAGE_FORMAT = 'native'
             AS
@@ -897,7 +954,6 @@ SELECT * from s;"#,
         r#"
             CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
                 CLUSTER BY (a)
-                REFRESH_MODE = INCREMENTAL
                 TARGET_LAG = DOWNSTREAM
             AS
                 SELECT avg(a), d FROM db.t GROUP BY d
@@ -987,7 +1043,6 @@ SELECT * from s;"#,
         r#"SHOW LOCKS IN ACCOUNT"#,
         r#"SHOW STATISTICS FROM TABLE test_db.test"#,
         r#"SHOW DICTIONARIES FROM db LIKE 'dict%'"#,
-        r#"DROP AGGREGATING INDEX IF EXISTS idx1"#,
         r#"DROP INVERTED INDEX IF EXISTS idx2 ON test_db.test"#,
         r#"SHOW VIRTUAL COLUMNS FROM test FROM test_db LIKE 'v%'"#,
         // pipes
@@ -1194,6 +1249,15 @@ SELECT * from s;"#,
         let src = src.trim();
         let tokens = tokenize_sql(src).unwrap();
         let (stmt, fmt) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        if matches!(
+            stmt,
+            Statement::CreateDynamicTable(_) | Statement::RefreshDynamicTable(_)
+        ) {
+            let formatted = stmt.to_string();
+            let tokens = tokenize_sql(&formatted).unwrap();
+            let (reparsed, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+            assert_eq!(reparsed.to_string(), formatted);
+        }
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", src).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
@@ -1216,6 +1280,8 @@ fn test_statement_error() {
     let cases = &[
         r#"create table a.b (c integer not null 1, b float(10))"#,
         r#"SET SECONDARY ROLES"#,
+        // REFRESH_MODE is no longer a dynamic table option.
+        r#"CREATE DYNAMIC TABLE dt REFRESH_MODE = FULL AS SELECT id FROM a"#,
         r#"create table a (c float(10))"#,
         r#"create table a (c varch)"#,
         r#"create table a (c tuple())"#,
@@ -1364,6 +1430,38 @@ fn test_statement_error() {
 }
 
 #[test]
+fn test_removed_vacuum_syntax() {
+    let cases = [
+        "VACUUM TABLE t DRY RUN",
+        "VACUUM TABLE t DRY RUN SUMMARY",
+        "VACUUM TABLE catalog.db.t",
+        "VACUUM TABLES FROM catalog.db",
+        "VACUUM TABLES FROM db LIMIT 10",
+        "VACUUM ALL FROM db",
+        "VACUUM ALL LIMIT 10",
+        "VACUUM DROP TABLE DRY RUN",
+        "VACUUM DROP TABLE DRY RUN SUMMARY",
+        "VACUUM DROP TABLE FROM db LIMIT 10",
+        "VACUUM DROP TABLE FROM catalog.db",
+        "VACUUM DROPPED OBJECTS FROM db LIMIT 10",
+        "VACUUM DROPPED OBJECTS FROM catalog.db",
+        "VACUUM TEMPORARY TABLES",
+        "OPTIMIZE TABLE t ALL",
+        "OPTIMIZE TABLE t PURGE LIMIT 10",
+        "OPTIMIZE TABLE catalog.db.t PURGE",
+        "OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5')",
+    ];
+
+    for case in cases {
+        let tokens = tokenize_sql(case).unwrap();
+        assert!(
+            parse_sql(&tokens, Dialect::PostgreSQL).is_err(),
+            "removed syntax should fail to parse: {case}"
+        );
+    }
+}
+
+#[test]
 fn test_file_format_trim_space_option() {
     let sql = r#"
         COPY INTO mytable
@@ -1378,6 +1476,50 @@ fn test_file_format_trim_space_option() {
     let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
     let displayed = stmt.to_string().to_uppercase();
     assert!(displayed.contains("TRIM_SPACE = true".to_uppercase().as_str()));
+}
+
+#[test]
+fn test_create_table_options_before_partition_by() {
+    let cases = [
+        "CREATE TABLE t(c INT) ENGINE=ICEBERG LOCATION='s3://bucket/path' CONNECTION_NAME='conn' PARTITION BY (c)",
+        "CREATE TABLE iceberg.db.t(c INT) LOCATION='s3://bucket/path' PARTITION BY (c)",
+        "CREATE TABLE t(a INT) ENGINE=FUSE ROW_PER_BLOCK=1 PARTITION BY (a)",
+        "CREATE TABLE t(a INT) ROW_PER_BLOCK=1 PARTITION BY (a)",
+    ];
+    for sql in cases {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+
+        let displayed = stmt.to_string();
+        let displayed_uppercase = displayed.to_uppercase();
+        let partition_pos = displayed_uppercase.find("PARTITION BY").unwrap();
+        for option in ["LOCATION", "CONNECTION_NAME", "ROW_PER_BLOCK"] {
+            if let Some(option_pos) = displayed_uppercase.find(option) {
+                assert!(partition_pos < option_pos);
+            }
+        }
+
+        let tokens = tokenize_sql(&displayed).unwrap();
+        parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+    }
+}
+
+#[test]
+fn test_ngram_index_accepts_float_options() {
+    let cases = [
+        "CREATE NGRAM INDEX idx ON t(a) false_positive_rate=0.02",
+        "CREATE TABLE t(a STRING, NGRAM INDEX idx(a) false_positive_rate=0.02)",
+    ];
+
+    for sql in cases {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        let displayed = stmt.to_string();
+        assert!(displayed.contains("false_positive_rate = '0.02'"));
+
+        let tokens = tokenize_sql(&displayed).unwrap();
+        parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+    }
 }
 
 #[test]
@@ -1519,6 +1661,14 @@ fn test_query() {
         r#"SELECT * FROM ((SELECT * FROM xyu ORDER BY x, y)) AS xyu"#,
         r#"SELECT * FROM (VALUES(1,1),(2,null),(null,5)) AS t(a,b)"#,
         r#"VALUES(1,'a'),(2,'b'),(null,'c') order by col0 limit 2"#,
+        // Issue #20093: PostgreSQL aggregate syntax should parse in full queries.
+        r#"SELECT array_agg(a ORDER BY b) FROM (VALUES (1,4),(2,3),(3,1),(4,2)) v(a,b)"#,
+        r#"SELECT array_agg(DISTINCT a ORDER BY a DESC NULLS LAST) FROM (VALUES (1),(2),(1),(3),(NULL),(2)) v(a)"#,
+        r#"SELECT string_agg(DISTINCT f1::text, ',' ORDER BY f1) FROM varchar_tbl"#,
+        r#"SELECT min(unique1) FILTER (WHERE unique1 > 100) FROM tenk1"#,
+        r#"SELECT sum(DISTINCT four) FILTER (WHERE four::text ~ '123') FROM onek a GROUP BY ten"#,
+        r#"SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY income) FROM households"#,
+        r#"SELECT rank(42) WITHIN GROUP (ORDER BY score) FROM scores"#,
         r#"select * from t left join lateral(select 1) on true, lateral(select 2)"#,
         r#"select * from t, lateral flatten(input => u.col) f"#,
         r#"select * from flatten(input => parse_json('{"a":1, "b":[77,88]}'), outer => true)"#,
@@ -1648,8 +1798,12 @@ fn test_expr() {
         r#"(arr[0]:a).b"#,
         r#"arr[4]["k"]"#,
         r#"a rlike '^11'"#,
+        r#"a ~ '^11'"#,
+        r#"a !~ '^11'"#,
         r#"a like '%1$%1%' escape '$'"#,
         r#"a not like '%1$%1%' escape '$'"#,
+        r#"a ilike '%1$%1%' escape '$'"#,
+        r#"a not ilike '%1$%1%' escape '$'"#,
         r#"'中文'::text not in ('a', 'b')"#,
         r#"G.E.B IS NOT NULL AND col1 not between col2 and (1 + col3) DIV sum(col4)"#,
         r#"sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(ol_amount) = 0 THEN 1 ELSE sum(ol_amount) END"#,
@@ -1662,6 +1816,8 @@ fn test_expr() {
             AND l_shipinstruct = 'DELIVER IN PERSON'"#,
         r#"'中文'::text LIKE ANY ('a', 'b')"#,
         r#"'中文'::text LIKE ANY ('a', 'b') ESCAPE '$'"#,
+        r#"'中文'::text ILIKE ANY ('a', 'b')"#,
+        r#"'中文'::text ILIKE ANY ('a', 'b') ESCAPE '$'"#,
         r#"'中文'::text LIKE ANY (SELECT 'a', 'b')"#,
         r#"'中文'::text LIKE ALL (SELECT 'a', 'b')"#,
         r#"'中文'::text LIKE SOME (SELECT 'a', 'b')"#,
@@ -1676,8 +1832,16 @@ fn test_expr() {
         r#"a is distinct from b"#,
         r#"1 is not distinct from null"#,
         r#"{'k1':1,'k2':2}"#,
+        // PostgreSQL aggregate syntax
+        r#"ARRAY_AGG(a ORDER BY b)"#,
+        r#"ARRAY_AGG(DISTINCT a ORDER BY a DESC NULLS LAST)"#,
+        r#"STRING_AGG(name, ',' ORDER BY name)"#,
+        r#"SUM(amount) FILTER (WHERE status = 'paid')"#,
+        r#"COUNT(*) FILTER (WHERE amount > 0)"#,
         // within group
         r#"LISTAGG(salary, '|') WITHIN GROUP (ORDER BY salary DESC NULLS LAST)"#,
+        r#"PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY income)"#,
+        r#"RANK(42) WITHIN GROUP (ORDER BY score)"#,
         // window expr
         r#"ROW_NUMBER() OVER (ORDER BY salary DESC)"#,
         r#"SUM(salary) OVER ()"#,
@@ -1698,6 +1862,17 @@ fn test_expr() {
         r#"MAP_FILTER({1:1,2:2,3:4}, (k, v) -> k > v)"#,
         r#"MAP_TRANSFORM_KEYS({1:10,2:20,3:30}, (k, v) -> k + 1)"#,
         r#"MAP_TRANSFORM_VALUES({1:10,2:20,3:30}, (k, v) -> v + 1)"#,
+        r#"JSON_PATH_TRANSFORM(col, '$[*].name', v -> upper(v))"#,
+        r#"ARRAY_MAP(v -> v + 1)"#,
+        r#"ARRAY_FILTER(a, v -> v + 1)"#,
+        r#"JSON_PATH_TRANSFORM(a, b, v -> v + 1)"#,
+        r#"JSON_PATH_TRANSFORM(a, b, v -> v -> 'name')"#,
+        r#"ARRAY_TRANSFORM(a, (v -> v) + 1)"#,
+        r#"MAP_FILTER(a, b, c, (k, v) -> k + v)"#,
+        r#"JSON_ARRAY_MAP(doc -> 'items', v -> upper(v))"#,
+        r#"TO_STRING(col -> 'name')"#,
+        r#"CONCAT(a, b, doc -> 'key')"#,
+        r#"CONCAT(a -> 'k', b)"#,
         r#"INTERVAL '1 YEAR'"#,
         r#"(?, ?)"#,
         r#"@test_stage/input/34"#,
@@ -1706,6 +1881,47 @@ fn test_expr() {
     for case in cases {
         run_parser(file, expr, case);
     }
+}
+
+#[test]
+fn test_ambiguous_trailing_lambda_argument() {
+    let tokens = tokenize_sql("concat(a, b, doc -> 'key')").unwrap();
+    let input = Input {
+        tokens: &tokens,
+        dialect: Dialect::PostgreSQL,
+        mode: ParseMode::Default,
+    };
+    let (_, expr) = expr(input).unwrap();
+    let Expr::FunctionCall { func, .. } = expr else {
+        panic!("expected a function call");
+    };
+
+    assert_eq!(func.args.len(), 3);
+    assert!(matches!(func.args[2], Expr::JsonOp { .. }));
+    let Some(LambdaArgument::Ambiguous(lambda)) = func.lambda else {
+        panic!("expected an ambiguous trailing lambda argument");
+    };
+    assert_eq!(lambda.params[0].name, "doc");
+    assert!(matches!(*lambda.expr, Expr::Literal { .. }));
+}
+
+#[test]
+fn test_json_arrow_argument_before_aggregate_filter() {
+    let tokens = tokenize_sql("json_object_agg('k', doc -> 'v') FILTER (WHERE ok)").unwrap();
+    let input = Input {
+        tokens: &tokens,
+        dialect: Dialect::PostgreSQL,
+        mode: ParseMode::Default,
+    };
+    let (_, expr) = expr(input).unwrap();
+    let Expr::FunctionCall { func, .. } = expr else {
+        panic!("expected a function call");
+    };
+
+    assert_eq!(func.args.len(), 2);
+    assert!(matches!(func.args[1], Expr::JsonOp { .. }));
+    assert!(func.lambda.is_none());
+    assert!(func.filter.is_some());
 }
 
 // FIXME: this test cause stack overflow
@@ -1735,6 +1951,9 @@ fn test_expr_error() {
         r#"CAST(col1 AS foo)"#,
         r#"1 a"#,
         r#"CAST(col1)"#,
+        r#"SUBSTRING(col, 1"#,
+        r#"EXTRACT(YEAR)"#,
+        r#"TRIM(foo,"#,
         r#"a.add(b)"#,
         r#"$ abc + 3"#,
         r#"[ x * 100 FOR x in [1,2,3] if x % 2 = 0 ]"#,

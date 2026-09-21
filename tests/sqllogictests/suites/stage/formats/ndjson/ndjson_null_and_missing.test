@@ -11,8 +11,8 @@ copy into t from @data/ndjson/null.ndjson file_format = (type = NDJSON, null_fie
 query ?????
 copy into t from @data/ndjson/null_and_missing/ file_format = (type = NDJSON) on_error = continue force=true
 ----
-ndjson/null_and_missing/missing_a.ndjson 0 1 Missing value for column 1 (a Int32 NULL) 1
-ndjson/null_and_missing/missing_b.ndjson 0 1 Missing value for column 2 (b Int32) 1
+ndjson/null_and_missing/missing_a.ndjson 0 1 Missing value for column 1 (a Int32 NULL). current FILE_FORMAT option: MISSING_FIELD_AS=ERROR 1
+ndjson/null_and_missing/missing_b.ndjson 0 1 Missing value for column 2 (b Int32). current FILE_FORMAT option: MISSING_FIELD_AS=ERROR 1
 ndjson/null_and_missing/normal.ndjson 1 0 NULL NULL
 ndjson/null_and_missing/null_a.ndjson 1 0 NULL NULL
 ndjson/null_and_missing/null_b.ndjson 0 1 Invalid value 'null' for column 2 (b Int32): null value is not allowed for non-nullable field, when NULL_FIELDS_AS=NULL 1
@@ -30,7 +30,7 @@ query ?????
 copy into t from @data/ndjson/null_and_missing/ file_format = (type = NDJSON, null_field_as = NULL, missing_field_as = NULL) on_error = continue force=true
 ----
 ndjson/null_and_missing/missing_a.ndjson 1 0 NULL NULL
-ndjson/null_and_missing/missing_b.ndjson 0 1 Missing value for column 2 (b Int32) 1
+ndjson/null_and_missing/missing_b.ndjson 0 1 Missing value for column 2 (b Int32). current FILE_FORMAT option: MISSING_FIELD_AS=NULL. the column is not nullable 1
 ndjson/null_and_missing/normal.ndjson 1 0 NULL NULL
 ndjson/null_and_missing/null_a.ndjson 1 0 NULL NULL
 ndjson/null_and_missing/null_b.ndjson 0 1 Invalid value 'null' for column 2 (b Int32): null value is not allowed for non-nullable field, when NULL_FIELDS_AS=NULL 1

@@ -1,0 +1,467 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::sync::Arc;
+
+use databend_common_catalog::table::Table;
+use databend_common_exception::Result;
+use databend_common_meta_app::storage::S3StorageClass;
+use databend_storages_common_table_meta::meta::FormatVersion;
+use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
+use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::meta::is_uuid_v7;
+use databend_storages_common_table_meta::table::StreamMode;
+use futures::TryStreamExt;
+use log::warn;
+use opendal::EntryMode;
+
+use super::changes::estimate_change_rows;
+use crate::FUSE_TBL_SNAPSHOT_PREFIX;
+use crate::FuseTable;
+use crate::io::MetaReaders;
+use crate::io::SnapshotHistoryReader;
+use crate::io::SnapshotsIO;
+use crate::io::TableMetaLocationGenerator;
+
+const V4_SNAPSHOT_SUFFIX: &str = "_v4.mpk";
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct StreamBatchCandidate {
+    snapshot_id: SnapshotId,
+    prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
+    change_rows: u64,
+    location: String,
+    format_version: FormatVersion,
+}
+
+impl StreamBatchCandidate {
+    fn new(
+        snapshot: &TableSnapshot,
+        location: String,
+        format_version: FormatVersion,
+        change_rows: u64,
+    ) -> Self {
+        Self {
+            snapshot_id: snapshot.snapshot_id,
+            prev_snapshot_id: snapshot.prev_snapshot_id,
+            change_rows,
+            location,
+            format_version,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum ObserveResult {
+    Continue,
+    Selected(StreamBatchCandidate),
+    Fallback,
+}
+
+struct StreamBatchSelector {
+    base_snapshot_id: Option<SnapshotId>,
+    batch_limit: u64,
+    latest_snapshot_id: SnapshotId,
+    scanned: HashMap<SnapshotId, StreamBatchCandidate>,
+    proven_committed: HashSet<SnapshotId>,
+    selected: Option<StreamBatchCandidate>,
+}
+
+impl StreamBatchSelector {
+    fn new(
+        base_snapshot_id: Option<SnapshotId>,
+        batch_limit: u64,
+        latest_snapshot_id: SnapshotId,
+    ) -> Self {
+        let mut proven_committed = HashSet::new();
+        if let Some(base_snapshot_id) = base_snapshot_id {
+            proven_committed.insert(base_snapshot_id);
+        }
+
+        Self {
+            base_snapshot_id,
+            batch_limit,
+            latest_snapshot_id,
+            scanned: HashMap::new(),
+            proven_committed,
+            selected: None,
+        }
+    }
+
+    fn observe(&mut self, candidate: StreamBatchCandidate) -> ObserveResult {
+        let snapshot_id = candidate.snapshot_id;
+        let prev_snapshot_id = candidate.prev_snapshot_id;
+        self.scanned.insert(snapshot_id, candidate.clone());
+
+        // Every snapshot written by Databend is based on a committed previous snapshot.
+        // Thus, seeing a child proves that its previous snapshot is a legal batch boundary,
+        // even when the child itself is an orphan left by a failed optimistic commit.
+        // This assumes the table has not been FLASHBACKed: flashback can leave committed
+        // snapshots on an abandoned branch. Detecting that history is intentionally out of
+        // scope for this optimization; keep the setting disabled for tables using flashback.
+        if let Some((prev_snapshot_id, _)) = prev_snapshot_id {
+            if let Some(previous) = self.scanned.get(&prev_snapshot_id).cloned() {
+                let result = self.consider_committed(previous);
+                if result != ObserveResult::Continue {
+                    return result;
+                }
+            }
+        }
+
+        // The catalog pointer independently proves that the latest snapshot is committed.
+        if snapshot_id == self.latest_snapshot_id {
+            let result = self.consider_committed(candidate);
+            if result != ObserveResult::Continue {
+                return result;
+            }
+            return self
+                .selected
+                .clone()
+                .map_or(ObserveResult::Fallback, ObserveResult::Selected);
+        }
+
+        ObserveResult::Continue
+    }
+
+    fn consider_committed(&mut self, candidate: StreamBatchCandidate) -> ObserveResult {
+        if Some(candidate.snapshot_id) == self.base_snapshot_id
+            || !self.proven_committed.insert(candidate.snapshot_id)
+        {
+            return ObserveResult::Continue;
+        }
+
+        // A committed V4 snapshot pointing to an older-format snapshot means the requested
+        // interval crosses the UUID-v7 history boundary. Let the linked-list fallback handle it.
+        if candidate
+            .prev_snapshot_id
+            .is_some_and(|(_, version)| version < TableSnapshot::VERSION)
+        {
+            return ObserveResult::Fallback;
+        }
+
+        if candidate.change_rows <= self.batch_limit {
+            self.selected = Some(candidate);
+            ObserveResult::Continue
+        } else {
+            // The limit is a hint. If one commit is already larger than it, select that commit
+            // so the stream can still make progress.
+            ObserveResult::Selected(self.selected.clone().unwrap_or(candidate))
+        }
+    }
+}
+
+impl FuseTable {
+    /// Select a complete source snapshot whose estimated change rows fit in the requested batch.
+    ///
+    /// The limit is a hint: a single commit larger than it is selected so the consumer can always
+    /// make progress. Snapshot selection is shared by STREAM and materialized-view refresh.
+    pub async fn find_stream_batch_snapshot(
+        &self,
+        base_location: Option<&String>,
+        mode: &StreamMode,
+        batch_limit: u64,
+        enable_snapshot_forward_scan: bool,
+        s3_storage_class: S3StorageClass,
+    ) -> Result<Option<(Arc<FuseTable>, u64)>> {
+        let base_snapshot = match base_location {
+            Some(location) => Some(self.changes_read_offset_snapshot(location).await?),
+            None => None,
+        };
+
+        let selected = if enable_snapshot_forward_scan {
+            match self
+                .try_find_stream_batch_snapshot_v4(base_snapshot.as_deref(), mode, batch_limit)
+                .await
+            {
+                Ok(selected) => selected,
+                Err(error) => {
+                    warn!(
+                        "failed to select V4 stream batch snapshot, falling back to snapshot history: {}",
+                        error
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        let selected = match selected {
+            Some(selected) => Some(selected),
+            None => {
+                let Some(latest_location) = self.snapshot_loc() else {
+                    return Ok(None);
+                };
+                let Some(_) = self.read_table_snapshot().await? else {
+                    return Ok(None);
+                };
+                let base_timestamp = base_snapshot
+                    .as_ref()
+                    .and_then(|snapshot| snapshot.timestamp);
+                let snapshot_version =
+                    TableMetaLocationGenerator::snapshot_version(&latest_location);
+                let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+                let mut snapshot_stream = reader.snapshot_history(
+                    latest_location,
+                    snapshot_version,
+                    self.meta_location_generator().clone(),
+                );
+                let mut selected = None;
+                while let Some(snapshot_with_version) = snapshot_stream.try_next().await? {
+                    if snapshot_with_version.0.timestamp <= base_timestamp {
+                        break;
+                    }
+                    let change_rows = estimate_change_rows(
+                        base_snapshot.as_deref(),
+                        snapshot_with_version.0.as_ref(),
+                        mode,
+                    )?;
+                    selected = Some((snapshot_with_version, change_rows));
+                    if change_rows <= batch_limit {
+                        break;
+                    }
+                }
+                selected.map(|((snapshot, format_version), _)| (snapshot, format_version))
+            }
+        };
+
+        selected
+            .map(|(snapshot, format_version)| {
+                let source_seq = snapshot
+                    .prev_table_seq
+                    .map_or(self.get_table_info().ident.seq, |seq| seq + 1);
+                self.load_table_by_snapshot(snapshot.as_ref(), format_version, s3_storage_class)
+                    .map(|table| (table, source_seq))
+            })
+            .transpose()
+    }
+
+    /// Find a committed V4 snapshot after `base_snapshot` by listing UUID-v7 snapshot keys in
+    /// chronological order. Returns `None` when the fast path is unavailable or cannot establish
+    /// a boundary; callers should fall back to traversing `prev_snapshot_id` from the latest.
+    pub async fn try_find_stream_batch_snapshot_v4(
+        &self,
+        base_snapshot: Option<&TableSnapshot>,
+        mode: &StreamMode,
+        batch_limit: u64,
+    ) -> Result<Option<(Arc<TableSnapshot>, FormatVersion)>> {
+        let Some(latest_location) = self.snapshot_loc() else {
+            return Ok(None);
+        };
+        let latest_version = TableMetaLocationGenerator::snapshot_version(&latest_location);
+        if latest_version != TableSnapshot::VERSION {
+            return Ok(None);
+        }
+
+        let Some(latest_snapshot) = self.read_table_snapshot().await? else {
+            return Ok(None);
+        };
+        if !is_uuid_v7(&latest_snapshot.snapshot_id) {
+            return Ok(None);
+        }
+
+        let (base_snapshot_id, start_after) = match base_snapshot {
+            Some(base) => {
+                if base.format_version != TableSnapshot::VERSION || !is_uuid_v7(&base.snapshot_id) {
+                    return Ok(None);
+                }
+                if base.snapshot_id == latest_snapshot.snapshot_id {
+                    return Ok(Some((latest_snapshot, latest_version)));
+                }
+                let location = self
+                    .meta_location_generator()
+                    .gen_snapshot_location(&base.snapshot_id, TableSnapshot::VERSION)?;
+                (Some(base.snapshot_id), location)
+            }
+            None => {
+                let snapshot_prefix = format!(
+                    "{}/{}/",
+                    self.meta_location_generator().prefix(),
+                    FUSE_TBL_SNAPSHOT_PREFIX
+                );
+                (
+                    None,
+                    format!("{}{}", snapshot_prefix, VACUUM2_OBJECT_KEY_PREFIX),
+                )
+            }
+        };
+
+        let operator = self.get_operator();
+        if !operator.info().full_capability().list_with_start_after {
+            return Ok(None);
+        }
+
+        let snapshot_prefix = format!(
+            "{}/{}/",
+            self.meta_location_generator().prefix(),
+            FUSE_TBL_SNAPSHOT_PREFIX
+        );
+        let mut lister = operator
+            .lister_with(&snapshot_prefix)
+            .start_after(&start_after)
+            .await?;
+        let mut selector =
+            StreamBatchSelector::new(base_snapshot_id, batch_limit, latest_snapshot.snapshot_id);
+
+        while let Some(entry) = lister.try_next().await? {
+            if entry.metadata().mode() != EntryMode::FILE {
+                continue;
+            }
+
+            let location = entry.path().to_string();
+            if location.as_str() > latest_location.as_str() {
+                break;
+            }
+            if !location.ends_with(V4_SNAPSHOT_SUFFIX) {
+                continue;
+            }
+
+            let (snapshot, format_version) = if location == latest_location {
+                (latest_snapshot.clone(), latest_version)
+            } else {
+                SnapshotsIO::read_snapshot(location.clone(), operator.clone(), true).await?
+            };
+            if format_version != TableSnapshot::VERSION || !is_uuid_v7(&snapshot.snapshot_id) {
+                return Ok(None);
+            }
+
+            let change_rows = estimate_change_rows(base_snapshot, snapshot.as_ref(), mode)?;
+            let candidate =
+                StreamBatchCandidate::new(&snapshot, location.clone(), format_version, change_rows);
+            match selector.observe(candidate) {
+                ObserveResult::Continue => {}
+                ObserveResult::Fallback => return Ok(None),
+                ObserveResult::Selected(candidate) => {
+                    if candidate.snapshot_id == latest_snapshot.snapshot_id {
+                        return Ok(Some((latest_snapshot, latest_version)));
+                    }
+                    let (snapshot, _) =
+                        SnapshotsIO::read_snapshot(candidate.location, operator.clone(), true)
+                            .await?;
+                    return Ok(Some((snapshot, candidate.format_version)));
+                }
+            }
+
+            if location == latest_location {
+                break;
+            }
+        }
+
+        Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use uuid::Builder;
+
+    use super::*;
+
+    fn snapshot_id(millis: u64) -> SnapshotId {
+        Builder::from_unix_timestamp_millis(millis, &[0; 10]).into_uuid()
+    }
+
+    fn candidate(millis: u64, prev_millis: Option<u64>, change_rows: u64) -> StreamBatchCandidate {
+        let id = snapshot_id(millis);
+        StreamBatchCandidate {
+            snapshot_id: id,
+            prev_snapshot_id: prev_millis.map(|prev| (snapshot_id(prev), TableSnapshot::VERSION)),
+            change_rows,
+            location: id.to_string(),
+            format_version: TableSnapshot::VERSION,
+        }
+    }
+
+    #[test]
+    fn test_selects_proven_committed_snapshot_and_ignores_orphan() {
+        let base = snapshot_id(1);
+        let latest = snapshot_id(5);
+        let mut selector = StreamBatchSelector::new(Some(base), 2, latest);
+
+        assert_eq!(
+            selector.observe(candidate(2, Some(1), 100)),
+            ObserveResult::Continue
+        );
+        assert_eq!(
+            selector.observe(candidate(3, Some(1), 1)),
+            ObserveResult::Continue
+        );
+        assert_eq!(
+            selector.observe(candidate(4, Some(3), 2)),
+            ObserveResult::Continue
+        );
+        assert_eq!(
+            selector.observe(candidate(5, Some(4), 3)),
+            ObserveResult::Selected(candidate(4, Some(3), 2))
+        );
+    }
+
+    #[test]
+    fn test_oversized_first_commit_still_makes_progress() {
+        let base = snapshot_id(1);
+        let latest = snapshot_id(4);
+        let mut selector = StreamBatchSelector::new(Some(base), 1, latest);
+
+        assert_eq!(
+            selector.observe(candidate(2, Some(1), 3)),
+            ObserveResult::Continue
+        );
+        assert_eq!(
+            selector.observe(candidate(3, Some(2), 4)),
+            ObserveResult::Selected(candidate(2, Some(1), 3))
+        );
+    }
+
+    #[test]
+    fn test_mixed_snapshot_history_falls_back() {
+        let base = snapshot_id(1);
+        let latest = snapshot_id(2);
+        let mut selector = StreamBatchSelector::new(Some(base), 1, latest);
+        let mut latest_candidate = candidate(2, Some(1), 1);
+        latest_candidate.prev_snapshot_id = Some((base, TableSnapshot::VERSION - 1));
+
+        assert_eq!(selector.observe(latest_candidate), ObserveResult::Fallback);
+    }
+
+    #[test]
+    fn test_catalog_proves_latest_snapshot() {
+        let base = snapshot_id(1);
+        let latest = snapshot_id(2);
+        let mut selector = StreamBatchSelector::new(Some(base), 1, latest);
+
+        assert_eq!(
+            selector.observe(candidate(2, Some(1), 1)),
+            ObserveResult::Selected(candidate(2, Some(1), 1))
+        );
+    }
+
+    #[test]
+    fn test_stream_without_base_snapshot() {
+        let latest = snapshot_id(2);
+        let mut selector = StreamBatchSelector::new(None, 1, latest);
+
+        assert_eq!(
+            selector.observe(candidate(1, None, 1)),
+            ObserveResult::Continue
+        );
+        assert_eq!(
+            selector.observe(candidate(2, Some(1), 2)),
+            ObserveResult::Selected(candidate(1, None, 1))
+        );
+    }
+}

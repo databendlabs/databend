@@ -86,6 +86,11 @@ pub type Decimal256Type = DecimalType<i256>;
 pub type DecimalType<T> = SimpleValueType<CoreDecimal<T>>;
 pub type DecimalScalarType<T> = SimpleValueType<CoreScalarDecimal<T>>;
 
+// arrow-udf represents decimals with rust_decimal. These conservative ABI
+// limits are intentionally narrower than Databend's Decimal128/256 ranges.
+pub const ARROW_UDF_DECIMAL_MAX_PRECISION: u8 = 28;
+pub const ARROW_UDF_DECIMAL_MAX_SCALE: u8 = 28;
+
 impl<Num: Decimal> AccessType for CoreDecimal<Num> {
     type Scalar = Num;
     type ScalarRef<'a> = Num;
@@ -673,13 +678,8 @@ pub trait Decimal:
         let multiplier = Self::e(size.scale());
         let min_for_precision = Self::min_for_precision(size.precision());
         let max_for_precision = Self::max_for_precision(size.precision());
-        self.checked_mul(multiplier).and_then(|v| {
-            if v > max_for_precision || v < min_for_precision {
-                None
-            } else {
-                Some(v)
-            }
-        })
+        self.checked_mul(multiplier)
+            .filter(|&v| !(v > max_for_precision || v < min_for_precision))
     }
 }
 
@@ -1600,7 +1600,7 @@ impl DecimalDataType {
             Value::Column(Column::Decimal(column)) => with_decimal_type!(|T| match column {
                 DecimalColumn::T(_, size) => Some((DecimalDataType::T(*size), false)),
             }),
-            Value::Column(Column::Nullable(box column)) => {
+            Value::Column(Column::Nullable(deref!(column))) => {
                 with_decimal_type!(|T| match &column.column {
                     Column::Decimal(DecimalColumn::T(_, size)) =>
                         Some((DecimalDataType::T(*size), true)),

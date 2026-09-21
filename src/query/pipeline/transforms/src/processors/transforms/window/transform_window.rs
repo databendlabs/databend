@@ -32,8 +32,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
-use databend_common_expression::date_helper::EvalMonthsImpl;
-use databend_common_expression::date_helper::calc_date_to_timestamp;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -44,6 +42,8 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_functions::scalars::dt_func::date_arithmetic::EvalMonthsImpl;
+use databend_common_functions::scalars::dt_func::date_conversion::calc_date_to_timestamp;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
@@ -112,6 +112,9 @@ pub struct TransformWindow {
     partition_indices: Vec<usize>,
     // The second field indicate if the order by column is nullable.
     order_by: Vec<WindowSortDesc>,
+    /// Session function context. RANGE frames with INTERVAL offsets on
+    /// DATE/TIMESTAMP order keys do month arithmetic in the session time zone.
+    func_ctx: FunctionContext,
 
     /// A queue of data blocks that we need to process.
     /// If partition is ended, we may free the data block from front of the queue.
@@ -671,10 +674,7 @@ impl TransformWindow {
         debug_assert!(self.order_by.len() == 1);
         let col = self.entry_at(&self.current_row, self.order_by[0].offset);
         let value = unsafe { col.index_unchecked(self.current_row.row) };
-        if value.is_null() {
-            return true;
-        }
-        false
+        value.is_null()
     }
 
     #[inline]
@@ -747,6 +747,7 @@ impl TransformWindow {
         partition_indices: Vec<usize>,
         order_by: Vec<WindowSortDesc>,
         bounds: (FrameBound, FrameBound),
+        func_ctx: FunctionContext,
     ) -> Result<Self> {
         let func = WindowFunctionImpl::try_create(func)?;
         let (start_bound, end_bound) = bounds;
@@ -775,6 +776,7 @@ impl TransformWindow {
             func,
             partition_indices,
             order_by,
+            func_ctx,
             blocks: VecDeque::new(),
             outputs: VecDeque::new(),
             first_block: 0,
@@ -822,6 +824,7 @@ impl TransformWindow {
         partition_indices: Vec<usize>,
         order_by: Vec<WindowSortDesc>,
         bounds: (FrameBound, FrameBound),
+        func_ctx: FunctionContext,
     ) -> Result<Self> {
         let func = WindowFunctionImpl::try_create(func)?;
         let (start_bound, end_bound) = bounds;
@@ -850,6 +853,7 @@ impl TransformWindow {
             func,
             partition_indices,
             order_by,
+            func_ctx,
             blocks: VecDeque::new(),
             outputs: VecDeque::new(),
             first_block: 0,
@@ -1201,6 +1205,7 @@ fn compare_date(
     ref_v: i32,
     offset: &DateOffset,
     is_preceding: bool,
+    func_ctx: &FunctionContext,
 ) -> Result<Ordering> {
     match offset {
         DateOffset::Days(n) => {
@@ -1219,7 +1224,6 @@ fn compare_date(
             Ok(ordering)
         }
         DateOffset::Interval(n) => {
-            let func_ctx = FunctionContext::default();
             let tz = &func_ctx.tz;
             let cmp_v_timestamp = calc_date_to_timestamp(cmp_v, tz)?;
             let ref_v_timestamp = calc_date_to_timestamp(ref_v, tz)?;
@@ -1248,8 +1252,8 @@ fn compare_timestamp(
     ref_v: i64,
     offset: &months_days_micros,
     is_preceding: bool,
+    func_ctx: &FunctionContext,
 ) -> Result<Ordering> {
-    let func_ctx = FunctionContext::default();
     let ref_v = if is_preceding {
         timestamp_sub(ref_v, offset, func_ctx)?
     } else {
@@ -1258,7 +1262,7 @@ fn compare_timestamp(
     Ok(cmp_v.cmp(&ref_v))
 }
 
-fn timestamp_add(a: i64, b: &months_days_micros, func_ctx: FunctionContext) -> Result<i64> {
+fn timestamp_add(a: i64, b: &months_days_micros, func_ctx: &FunctionContext) -> Result<i64> {
     let ts = a
         .wrapping_add(b.microseconds())
         .wrapping_add((b.days() as i64).wrapping_mul(86_400_000_000));
@@ -1270,7 +1274,7 @@ fn timestamp_add(a: i64, b: &months_days_micros, func_ctx: FunctionContext) -> R
     )?)
 }
 
-fn timestamp_sub(a: i64, b: &months_days_micros, func_ctx: FunctionContext) -> Result<i64> {
+fn timestamp_sub(a: i64, b: &months_days_micros, func_ctx: &FunctionContext) -> Result<i64> {
     let ts = a
         .wrapping_sub(b.microseconds())
         .wrapping_sub((b.days() as i64).wrapping_mul(86_400_000_000));
@@ -1338,6 +1342,7 @@ impl TransformWindow {
         let WindowSortDesc { offset, asc, .. } = self.order_by[0];
 
         let preceding = asc == is_preceding;
+        let func_ctx = self.func_ctx.clone();
         let ref_entry = self.entry_at(&self.current_row, offset).clone();
         let data_type = ref_entry.data_type().remove_nullable();
 
@@ -1356,7 +1361,7 @@ impl TransformWindow {
                 let ref_v = unsafe { view.index_unchecked(self.current_row.row) };
                 let date_offset = prepare_date_offset(n_scalar.as_ref())?;
                 self.advance_frame_range_loop::<I, DateType, _>(offset, asc, |cmp_v| {
-                    compare_date(cmp_v, ref_v, &date_offset, preceding)
+                    compare_date(cmp_v, ref_v, &date_offset, preceding, &func_ctx)
                 })
             }
             DataType::Timestamp => {
@@ -1364,7 +1369,7 @@ impl TransformWindow {
                 let ref_v = unsafe { view.index_unchecked(self.current_row.row) };
                 let timestamp_offset = prepare_timestamp_offset(n_scalar.as_ref())?;
                 self.advance_frame_range_loop::<I, TimestampType, _>(offset, asc, |cmp_v| {
-                    compare_timestamp(cmp_v, ref_v, &timestamp_offset, preceding)
+                    compare_timestamp(cmp_v, ref_v, &timestamp_offset, preceding, &func_ctx)
                 })
             }
             _ => Err(ErrorCode::IllegalDataType(
@@ -1420,6 +1425,7 @@ impl TransformWindow {
         } = self.order_by[0];
 
         let preceding = asc == is_preceding;
+        let func_ctx = self.func_ctx.clone();
         // Current row should not be in the null frame.
         let ref_entry = self
             .entry_at(&self.current_row, offset)
@@ -1454,7 +1460,7 @@ impl TransformWindow {
                     offset,
                     asc,
                     nulls_first,
-                    |cmp_v| compare_date(cmp_v, ref_v, &date_offset, preceding),
+                    |cmp_v| compare_date(cmp_v, ref_v, &date_offset, preceding, &func_ctx),
                 )
             }
             DataType::Timestamp => {
@@ -1469,7 +1475,9 @@ impl TransformWindow {
                     offset,
                     asc,
                     nulls_first,
-                    |cmp_v| compare_timestamp(cmp_v, ref_v, &timestamp_offset, preceding),
+                    |cmp_v| {
+                        compare_timestamp(cmp_v, ref_v, &timestamp_offset, preceding, &func_ctx)
+                    },
                 )
             }
             _ => Err(ErrorCode::IllegalDataType(
@@ -1615,12 +1623,13 @@ mod tests {
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
     use databend_common_expression::Scalar;
+    use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
     use databend_common_expression::block_debug::assert_blocks_eq;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
-    use databend_common_functions::aggregates::AggregateFunctionFactory;
+    use databend_common_functions::aggregates::AGGR_REGISTRY;
     use databend_common_pipeline::core::Event;
     use databend_common_pipeline::core::InputPort;
     use databend_common_pipeline::core::OutputPort;
@@ -1644,6 +1653,7 @@ mod tests {
                 is_nullable: false,
             }],
             bounds,
+            FunctionContext::default(),
         )
     }
 
@@ -1652,8 +1662,13 @@ mod tests {
         bounds: (FrameBound, FrameBound),
         arg_type: DataType,
     ) -> Result<TransformWindow> {
-        let agg =
-            AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type], vec![])?;
+        let agg = AGGR_REGISTRY.resolve(RawAggregateCall {
+            name: "sum",
+            params: &[],
+            args_type: &[arg_type],
+            distinct: false,
+            order_by: &[],
+        })?;
         let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
         TransformWindow::try_create_rows(
             InputPort::create(),
@@ -1667,6 +1682,7 @@ mod tests {
                 is_nullable: false,
             }],
             bounds,
+            FunctionContext::default(),
         )
     }
 
@@ -1675,8 +1691,13 @@ mod tests {
         bounds: (FrameBound, FrameBound),
         arg_type: DataType,
     ) -> Result<TransformWindow> {
-        let agg =
-            AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type], vec![])?;
+        let agg = AGGR_REGISTRY.resolve(RawAggregateCall {
+            name: "sum",
+            params: &[],
+            args_type: &[arg_type],
+            distinct: false,
+            order_by: &[],
+        })?;
         let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
         TransformWindow::try_create_rows(
             InputPort::create(),
@@ -1685,6 +1706,7 @@ mod tests {
             vec![0],
             vec![],
             bounds,
+            FunctionContext::default(),
         )
     }
 
@@ -2527,12 +2549,13 @@ mod tests {
         _unit: WindowFuncFrameUnits,
         bounds: (FrameBound, FrameBound),
     ) -> Result<(Box<dyn Processor>, Arc<InputPort>, Arc<OutputPort>)> {
-        let agg = AggregateFunctionFactory::instance().get(
-            "sum",
-            vec![],
-            vec![DataType::Number(NumberDataType::Int32)],
-            vec![],
-        )?;
+        let agg = AGGR_REGISTRY.resolve(RawAggregateCall {
+            name: "sum",
+            params: &[],
+            args_type: &[DataType::Number(NumberDataType::Int32)],
+            distinct: false,
+            order_by: &[],
+        })?;
         let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
         let input = InputPort::create();
         let output = OutputPort::create();
@@ -2543,6 +2566,7 @@ mod tests {
             vec![0],
             vec![],
             bounds,
+            FunctionContext::default(),
         )?;
 
         Ok((Box::new(transform), input, output))

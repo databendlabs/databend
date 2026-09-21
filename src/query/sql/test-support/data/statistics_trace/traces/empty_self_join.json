@@ -1,0 +1,96 @@
+{
+  "views": [],
+  "udfs": [],
+  "table_stats": {
+    "0": {
+      "statistics": {
+        "num_rows": 0,
+        "data_size": 0,
+        "data_size_compressed": 0,
+        "index_size": 0,
+        "bloom_index_size": null,
+        "ngram_index_size": null,
+        "inverted_index_size": null,
+        "vector_index_size": null,
+        "virtual_column_size": null,
+        "number_of_blocks": null,
+        "number_of_segments": null
+      },
+      "fields": [
+        {
+          "name": "a",
+          "default_expr": null,
+          "data_type": {
+            "Nullable": {
+              "Number": "Int32"
+            }
+          },
+          "column_id": 0,
+          "computed_expr": null,
+          "auto_increment_expr": null
+        }
+      ]
+    },
+    "1": {
+      "statistics": {
+        "num_rows": 0,
+        "data_size": 0,
+        "data_size_compressed": 0,
+        "index_size": 0,
+        "bloom_index_size": null,
+        "ngram_index_size": null,
+        "inverted_index_size": null,
+        "vector_index_size": null,
+        "virtual_column_size": null,
+        "number_of_blocks": null,
+        "number_of_segments": null
+      },
+      "fields": [
+        {
+          "name": "a",
+          "default_expr": null,
+          "data_type": {
+            "Nullable": {
+              "Number": "Int32"
+            }
+          },
+          "column_id": 0,
+          "computed_expr": null,
+          "auto_increment_expr": null
+        }
+      ]
+    }
+  },
+  "column_stats": [
+    {
+      "table_index": 0,
+      "column_name": "a",
+      "statistics": null,
+      "histogram": null
+    },
+    {
+      "table_index": 1,
+      "column_name": "a",
+      "statistics": null,
+      "histogram": null
+    }
+  ],
+  "scan_mappings": [
+    {
+      "scan_id": 0,
+      "table_index": 0,
+      "catalog": "default",
+      "database": "default",
+      "table": "statistics_trace_t",
+      "change_type": null
+    },
+    {
+      "scan_id": 1,
+      "table_index": 1,
+      "catalog": "default",
+      "database": "default",
+      "table": "statistics_trace_t",
+      "change_type": null
+    }
+  ]
+}

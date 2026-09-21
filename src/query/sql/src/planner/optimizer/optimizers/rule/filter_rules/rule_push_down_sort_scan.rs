@@ -25,11 +25,12 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
-use crate::plans::Sort;
+use crate::plans::SortItem;
+use crate::plans::TopN;
 
-/// Matches: Sort -> [EvalScalar ->] Scan
+/// Matches: (Sort | TopN) -> [EvalScalar ->] Scan
 ///
-/// Push down order_by and limit from Sort to Scan.
+/// Push down order_by and limit from Sort/TopN to Scan.
 /// When `secure_predicates` has not been applied by prewhere, limit is not
 /// pushed down because storage TopK pruning would return N rows before RAP row
 /// selection, then secure predicates filter them further, yielding fewer rows
@@ -46,6 +47,8 @@ impl RulePushDownSortScan {
             matchers: vec![
                 match_op!(Sort -> Scan),
                 match_op!(Sort -> EvalScalar -> Scan),
+                match_op!(TopN -> Scan),
+                match_op!(TopN -> EvalScalar -> Scan),
             ],
         }
     }
@@ -57,7 +60,14 @@ impl Rule for RulePushDownSortScan {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let sort: Sort = s_expr.plan().clone().try_into()?;
+        let (sort_items, sort_limit): (Vec<SortItem>, Option<usize>) = match s_expr.plan() {
+            RelOperator::Sort(sort) => (sort.items.clone(), sort.limit),
+            RelOperator::TopN(top_n) => {
+                let top_n: TopN = top_n.clone();
+                (top_n.items.clone(), Some(top_n.candidate_count()))
+            }
+            _ => unreachable!(),
+        };
         let child = s_expr.child(0)?;
 
         let (eval_scalar, mut scan) = match child.plan() {
@@ -71,13 +81,13 @@ impl Rule for RulePushDownSortScan {
         };
 
         if scan.order_by.is_none() {
-            scan.order_by = Some(sort.items);
+            scan.order_by = Some(sort_items);
         }
 
         let can_push_limit = !scan.has_secure_predicates_not_applied_by_prewhere();
 
         if can_push_limit {
-            if let Some(limit) = sort.limit {
+            if let Some(limit) = sort_limit {
                 scan.limit = Some(scan.limit.map_or(limit, |c| cmp::max(c, limit)));
             }
         }

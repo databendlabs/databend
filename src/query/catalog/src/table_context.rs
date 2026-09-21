@@ -207,8 +207,6 @@ pub trait TableContext:
 
     fn written_segment_locations(&self) -> &SegmentLocationsState;
 
-    fn selected_segment_locations(&self) -> &SegmentLocationsState;
-
     fn as_any(&self) -> &dyn Any;
 }
 

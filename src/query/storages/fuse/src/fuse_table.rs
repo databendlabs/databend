@@ -25,6 +25,8 @@ use std::time::Instant;
 use async_channel::Receiver;
 use chrono::Duration;
 use chrono::TimeDelta;
+use databend_common_ast::ast::Expr as AstExpr;
+use databend_common_ast::parser::parse_cluster_key_exprs;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -47,7 +49,10 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::CHANGE_ROW_ID_COLUMN_ID;
 use databend_common_expression::ColumnId;
+use databend_common_expression::Expr;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
@@ -55,13 +60,18 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
 use databend_common_expression::VECTOR_SCORE_COLUMN_ID;
 use databend_common_expression::types::DataType;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_meta_app::schema::DYNAMIC_TABLE_ENGINE;
 use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -73,16 +83,21 @@ use databend_common_meta_app::storage::set_s3_storage_class;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_sql::bind_normalized_key_exprs;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::plans::TruncateMode;
+use databend_common_storage::EndpointPolicyScope;
 use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_common_storage::init_operator;
+use databend_common_storage::init_operator_with_policy_scope;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::BloomIndexType;
+use databend_storages_common_index::RangeIndex;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -93,28 +108,33 @@ use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::ClusterType;
+use databend_storages_common_table_meta::table::HILBERT_CLUSTER_TYPE;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
+use databend_storages_common_table_meta::table::OPT_KEY_WRITE_DISTRIBUTION_MODE;
 use databend_storages_common_table_meta::table::TableCompression;
+use databend_storages_common_table_meta::table::analyze_top_n_size_from_options;
 use futures_util::TryStreamExt;
 use itertools::Itertools;
 use log::info;
-use log::warn;
 use opendal::Operator;
 use parking_lot::Mutex;
 use sha2::Digest;
 
-use crate::DEFAULT_ROW_PER_PAGE;
+use crate::DEFAULT_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS;
+use crate::DEFAULT_VIRTUAL_COLUMN_MAX_PATH_STATISTICS;
 use crate::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
@@ -126,10 +146,10 @@ use crate::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
 use crate::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use crate::FUSE_OPT_KEY_FILE_SIZE;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
-use crate::FUSE_OPT_KEY_ROW_PER_PAGE;
+use crate::FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS;
+use crate::FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS;
 use crate::FuseSegmentFormat;
 use crate::FuseStorageFormat;
-use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
@@ -138,10 +158,12 @@ use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::TableSnapshotReader;
+use crate::io::VirtualColumnLayoutPolicy;
 use crate::io::WriteSettings;
 use crate::operations::ChangesDesc;
 use crate::operations::SnapshotHint;
 use crate::operations::load_last_snapshot_hint;
+use crate::pruning::PartitionPruningInfo;
 use crate::statistics::STATS_STRING_PREFIX_LEN;
 use crate::statistics::reduce_block_statistics;
 
@@ -171,6 +193,14 @@ pub struct FuseTable {
 type PartInfoReceiver = Option<Receiver<Result<PartInfoPtr>>>;
 
 impl FuseTable {
+    fn check_data_sharing_license(&self, ctx: &dyn TableContext) -> Result<()> {
+        if self.table_info.is_shared() {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(ctx.get_license_key(), Feature::DataSharing)?;
+        }
+        Ok(())
+    }
+
     pub fn create_and_refresh_table_info(
         table_info: TableInfo,
         s3storage_class: S3StorageClass,
@@ -191,18 +221,34 @@ impl FuseTable {
         disable_refresh: bool,
     ) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix_from_table_info(&table_info)?;
+        if table_info.is_shared() && table_info.meta.storage_params.is_none() {
+            return Err(ErrorCode::Internal(
+                "Shared table requires resolved provider storage parameters",
+            ));
+        }
         let (mut operator, table_type) = match table_info.db_type.clone() {
-            DatabaseType::NormalDB => {
+            DatabaseType::NormalDB | DatabaseType::SharedDB => {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
                     // External or attached table.
                     Some(sp) => {
                         let sp = apply_storage_class(&table_info, sp, storage_class_specs);
-                        // Special handling for history tables.
-                        // Since history tables storage params are fully generated from config,
-                        // we can safely allow credential chain.
-                        let sp = allow_system_history_credential_chain(&table_info, sp);
-                        let operator = init_operator(&sp)?;
+                        // Special handling for history tables. Since history
+                        // table storage params are fully generated from server
+                        // config, we both allow the credential chain and treat
+                        // the operator as trusted (skipping the request-time
+                        // endpoint egress policy).
+                        let is_system_history = is_system_history_table(&table_info);
+                        let sp = if is_system_history {
+                            allow_credential_chain_for_s3(sp)
+                        } else {
+                            sp
+                        };
+                        let operator = if is_system_history {
+                            init_operator(&sp)?
+                        } else {
+                            init_operator_with_policy_scope(&sp, EndpointPolicyScope::External)?
+                        };
 
                         let table_meta_options = &table_info.meta.options;
                         let table_type = if Self::is_table_attached(table_meta_options) {
@@ -292,7 +338,7 @@ impl FuseTable {
             approx_distinct_cols,
             operator,
             data_metrics,
-            storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
+            storage_format: FuseStorageFormat::from_table_option(storage_format.as_str()),
             segment_format: FuseSegmentFormat::from_str(segment_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
             table_type,
@@ -326,16 +372,11 @@ impl FuseTable {
         }
     }
 
-    pub fn is_native(&self) -> bool {
-        matches!(self.storage_format, FuseStorageFormat::Native)
-    }
-
     pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
         &self.meta_location_generator
     }
 
     pub fn get_write_settings(&self) -> WriteSettings {
-        let max_page_size = self.get_option(FUSE_OPT_KEY_ROW_PER_PAGE, DEFAULT_ROW_PER_PAGE);
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
@@ -357,7 +398,6 @@ impl FuseTable {
             storage_format: self.storage_format,
             table_compression: self.table_compression,
             bloom_index_type: self.bloom_index_type,
-            max_page_size,
             block_per_seg,
             enable_parquet_dictionary: enable_parquet_dictionary_encoding,
             data_page_rows,
@@ -372,16 +412,71 @@ impl FuseTable {
         }
     }
 
+    fn append_top_n_column_fields(
+        table_schema: TableSchemaRef,
+        columns: ApproxDistinctColumns,
+    ) -> BTreeMap<FieldIndex, TableField> {
+        let source_schema = table_schema.remove_virtual_computed_fields();
+        let mut fields_map = BTreeMap::new();
+
+        match columns {
+            ApproxDistinctColumns::All => {
+                for (i, field) in source_schema.fields.into_iter().enumerate() {
+                    if RangeIndex::supported_table_type(field.data_type()) {
+                        fields_map.insert(i, field);
+                    }
+                }
+            }
+            ApproxDistinctColumns::Specify(cols) => {
+                for col in cols {
+                    let Ok(field_index) = source_schema.index_of(&col) else {
+                        continue;
+                    };
+                    let field = source_schema.fields[field_index].clone();
+                    if RangeIndex::supported_table_type(field.data_type()) {
+                        fields_map.insert(field_index, field);
+                    }
+                }
+            }
+            ApproxDistinctColumns::None => {}
+        }
+
+        fields_map
+    }
+
+    pub(crate) fn append_top_n_columns(
+        &self,
+        source_schema: TableSchemaRef,
+    ) -> Result<Option<(BTreeMap<FieldIndex, TableField>, usize)>> {
+        let Some(top_n_size) = analyze_top_n_size_from_options(self.table_info.options())? else {
+            return Ok(None);
+        };
+        let Some(columns) = self
+            .table_info
+            .options()
+            .get(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS)
+        else {
+            return Ok(None);
+        };
+        let columns = columns.parse::<ApproxDistinctColumns>()?;
+        let top_n_columns_map = Self::append_top_n_column_fields(source_schema, columns);
+        Ok((!top_n_columns_map.is_empty()).then_some((top_n_columns_map, top_n_size)))
+    }
+
     pub fn enable_virtual_column(&self) -> bool {
         self.get_option(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN, false)
     }
 
-    /// Get max page size.
-    /// For native storage format.
-    pub fn get_max_page_size(&self) -> Option<usize> {
-        match self.storage_format {
-            FuseStorageFormat::Parquet => None,
-            FuseStorageFormat::Native => Some(self.get_write_settings().max_page_size),
+    pub fn virtual_column_layout_policy(&self) -> VirtualColumnLayoutPolicy {
+        VirtualColumnLayoutPolicy {
+            max_direct_columns: self.get_option(
+                FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS,
+                DEFAULT_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS,
+            ),
+            max_path_statistics: self.get_option(
+                FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS,
+                DEFAULT_VIRTUAL_COLUMN_MAX_PATH_STATISTICS,
+            ),
         }
     }
 
@@ -526,28 +621,89 @@ impl FuseTable {
         self.table_info.meta.cluster_key_id()
     }
 
-    pub fn linear_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
-        if self
-            .cluster_type()
-            .is_none_or(|v| matches!(v, ClusterType::Hilbert))
-        {
-            return vec![];
-        }
+    fn partition_key_str(&self) -> Option<&str> {
+        self.table_info
+            .meta
+            .options
+            .get(OPT_KEY_PARTITION_BY)
+            .map(String::as_str)
+    }
 
-        let table_meta = Arc::new(self.clone());
-        let cluster_key_exprs = self.resolve_cluster_keys().unwrap();
-        let exprs = parse_cluster_keys(ctx, table_meta.clone(), cluster_key_exprs).unwrap();
-        let cluster_keys = exprs
-            .iter()
-            .map(|k| {
-                k.project_column_ref(|index| {
-                    Ok(table_meta.schema().field(*index).name().to_string())
-                })
-                .unwrap()
-                .as_remote_expr()
+    pub(crate) fn resolve_partition_keys(&self) -> Option<Vec<AstExpr>> {
+        self.partition_key_str()
+            .map(|partition_key| parse_cluster_key_exprs(partition_key).unwrap())
+    }
+
+    pub fn partition_key_count(&self) -> usize {
+        self.resolve_partition_keys().map_or(0, |keys| keys.len())
+    }
+
+    pub fn use_hash_write_distribution(&self) -> bool {
+        self.partition_key_count() != 0
+            && self
+                .table_info
+                .options()
+                .get(OPT_KEY_WRITE_DISTRIBUTION_MODE)
+                .is_some_and(|mode| mode.eq_ignore_ascii_case("hash"))
+    }
+
+    pub fn cluster_type(&self) -> Option<ClusterType> {
+        self.cluster_key_id()?;
+        // Legacy Hilbert layouts are intentionally outside the supported upgrade path because
+        // they were not used in the deployments covered by this migration. Persisted `hilbert`
+        // metadata is therefore interpreted as the current two-dimensional Hilbert format.
+        match self.table_info.meta.options.get(OPT_KEY_CLUSTER_TYPE) {
+            Some(value) if value.eq_ignore_ascii_case(HILBERT_CLUSTER_TYPE) => {
+                Some(ClusterType::Hilbert)
+            }
+            _ => Some(ClusterType::Linear),
+        }
+    }
+
+    /// Cluster identity used by snapshot and statistics metadata.
+    pub fn cluster_key_info(&self) -> Option<ClusterKeyInfo> {
+        Some(ClusterKeyInfo::new(
+            self.cluster_key_meta()?,
+            self.cluster_type()?,
+        ))
+    }
+
+    pub fn partition_pruning_info(
+        &self,
+        ctx: Arc<dyn TableContext>,
+    ) -> Option<PartitionPruningInfo> {
+        let partition_keys = self.linear_partition_keys(ctx);
+        (!partition_keys.is_empty()).then_some(PartitionPruningInfo { partition_keys })
+    }
+
+    pub fn linear_partition_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
+        let Some(key_exprs) = self.resolve_partition_keys() else {
+            return vec![];
+        };
+        let keys = bind_normalized_key_exprs(ctx, Arc::new(self.clone()), key_exprs).unwrap();
+        self.keys_to_remote_exprs(keys)
+    }
+
+    pub fn linear_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
+        let Some(key_exprs) = self.resolve_cluster_keys() else {
+            return vec![];
+        };
+        let keys = parse_cluster_keys(ctx, Arc::new(self.clone()), key_exprs).unwrap();
+        if keys.is_hilbert() {
+            vec![]
+        } else {
+            self.keys_to_remote_exprs(keys.into_keys())
+        }
+    }
+
+    fn keys_to_remote_exprs(&self, keys: Vec<Expr<usize>>) -> Vec<RemoteExpr<String>> {
+        keys.into_iter()
+            .map(|key| {
+                key.project_column_ref(|index| Ok(self.schema().field(*index).name().to_string()))
+                    .unwrap()
+                    .as_remote_expr()
             })
-            .collect();
-        cluster_keys
+            .collect()
     }
 
     pub fn bloom_index_cols(&self) -> BloomIndexColumns {
@@ -573,18 +729,12 @@ impl FuseTable {
         let Some(ast_exprs) = self.resolve_cluster_keys() else {
             return vec![];
         };
-        let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
-        match cluster_type {
-            ClusterType::Hilbert => vec![DataType::Binary],
-            ClusterType::Linear => {
-                let cluster_keys =
-                    parse_cluster_keys(ctx, Arc::new(self.clone()), ast_exprs).unwrap();
-                cluster_keys
-                    .into_iter()
-                    .map(|v| v.data_type().clone())
-                    .collect()
-            }
-        }
+        let cluster_keys = parse_cluster_keys(ctx, Arc::new(self.clone()), ast_exprs).unwrap();
+        cluster_keys
+            .into_keys()
+            .into_iter()
+            .map(|v| v.data_type().clone())
+            .collect()
     }
 
     /// Returns the data retention policy for this table.
@@ -670,6 +820,28 @@ impl FuseTable {
 
     pub fn get_storage_format(&self) -> FuseStorageFormat {
         self.storage_format
+    }
+
+    /// Reject any data-touching operation on a table whose storage format is no
+    /// longer supported (e.g. the removed `native` format). Such tables can
+    /// still be listed and dropped, but cannot be read from, written to, or
+    /// compacted. The error carries the fully-qualified table name and the
+    /// original storage format string for diagnostics.
+    pub fn check_format_supported(&self) -> Result<()> {
+        if matches!(self.storage_format, FuseStorageFormat::Unsupported) {
+            let format = self
+                .table_info
+                .options()
+                .get(OPT_KEY_STORAGE_FORMAT)
+                .map(|s| s.as_str())
+                .unwrap_or("unknown");
+            return Err(ErrorCode::StorageUnsupported(format!(
+                "table {} uses storage_format '{}' which is no longer supported. \
+                 The table can be dropped, but cannot be queried, written to, or compacted.",
+                self.table_info.desc, format
+            )));
+        }
+        Ok(())
     }
 
     pub fn get_storage_prefix(&self) -> &str {
@@ -859,9 +1031,8 @@ impl FuseTable {
     pub fn enable_stream_block_write(&self, ctx: Arc<dyn TableContext>) -> Result<bool> {
         Ok(ctx.get_settings().get_enable_block_stream_write()?
             && matches!(self.storage_format, FuseStorageFormat::Parquet)
-            && self
-                .cluster_type()
-                .is_none_or(|v| matches!(v, ClusterType::Hilbert)))
+            && self.cluster_key_meta().is_none()
+            && self.partition_key_count() == 0)
     }
 
     pub fn with_schema(&self, schema: Arc<TableSchema>) -> Arc<FuseTable> {
@@ -890,11 +1061,12 @@ impl Table for FuseTable {
     }
 
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {
-        column_id >= VECTOR_SCORE_COLUMN_ID
+        (column_id >= VECTOR_SCORE_COLUMN_ID && column_id != CHANGE_ROW_ID_COLUMN_ID)
+            || (self.change_tracking_enabled() && column_id == CHANGE_ROW_ID_COLUMN_ID)
     }
 
     fn supported_lazy_materialize(&self) -> bool {
-        !matches!(self.storage_format, FuseStorageFormat::Native)
+        !self.table_info.is_shared()
     }
 
     fn support_column_projection(&self) -> bool {
@@ -919,6 +1091,10 @@ impl Table for FuseTable {
 
     fn change_tracking_enabled(&self) -> bool {
         self.get_option(OPT_KEY_CHANGE_TRACKING, false)
+    }
+
+    fn has_changes_source(&self) -> bool {
+        self.changes_desc.is_some()
     }
 
     fn stream_columns(&self) -> Vec<StreamColumn> {
@@ -947,6 +1123,8 @@ impl Table for FuseTable {
         push_downs: Option<PushDownInfo>,
         dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
+        self.check_data_sharing_license(ctx.as_ref())?;
+        self.check_format_supported()?;
         self.do_read_partitions(ctx, push_downs, dry_run).await
     }
 
@@ -959,6 +1137,8 @@ impl Table for FuseTable {
         dry_run: bool,
         reusable_pruned_metas: Option<ReusablePrunedMetas>,
     ) -> Result<(PartStatistics, Partitions, Option<ReusablePrunedMetas>)> {
+        self.check_data_sharing_license(ctx.as_ref())?;
+        self.check_format_supported()?;
         self.do_read_partitions_with_reusable_pruned_metas(
             ctx,
             push_downs,
@@ -976,6 +1156,8 @@ impl Table for FuseTable {
         pipeline: &mut Pipeline,
         put_cache: bool,
     ) -> Result<()> {
+        self.check_data_sharing_license(ctx.as_ref())?;
+        self.check_format_supported()?;
         self.do_read_data(ctx, plan, pipeline, put_cache)
     }
 
@@ -985,6 +1167,7 @@ impl Table for FuseTable {
         pipeline: &mut Pipeline,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
+        self.check_format_supported()?;
         self.do_append_data(ctx, pipeline, table_meta_timestamps)
     }
 
@@ -995,6 +1178,7 @@ impl Table for FuseTable {
         source_pipeline: &mut Pipeline,
         plan_id: u32,
     ) -> Result<Option<Pipeline>> {
+        self.check_data_sharing_license(table_ctx.as_ref())?;
         self.do_build_prune_pipeline(table_ctx, plan, source_pipeline, plan_id)
     }
 
@@ -1027,29 +1211,6 @@ impl Table for FuseTable {
         self.do_truncate(ctx, pipeline, TruncateMode::Normal).await
     }
 
-    #[fastrace::trace]
-    #[async_backtrace::framed]
-    async fn purge(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        instant: Option<NavigationPoint>,
-        num_snapshot_limit: Option<usize>,
-        dry_run: bool,
-    ) -> Result<Option<Vec<String>>> {
-        match self.navigate_for_purge(&ctx, instant).await {
-            Ok((table, files)) => {
-                table
-                    .do_purge(&ctx, files, num_snapshot_limit, dry_run)
-                    .await
-            }
-            Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
-                warn!("navigate failed: {:?}", e);
-                if dry_run { Ok(Some(vec![])) } else { Ok(None) }
-            }
-            Err(e) => Err(e),
-        }
-    }
-
     async fn table_statistics(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -1057,9 +1218,14 @@ impl Table for FuseTable {
         change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
         if let Some(desc) = &self.changes_desc {
-            assert!(change_type.is_some());
+            let change_type = change_type.ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "CHANGE_TRACKING table {} is missing its scan change type",
+                    self.table_info.desc
+                ))
+            })?;
             return self
-                .changes_table_statistics(ctx, &desc.location, change_type.unwrap())
+                .changes_table_statistics(ctx, &desc.location, change_type)
                 .await;
         }
 
@@ -1140,6 +1306,15 @@ impl Table for FuseTable {
                 .as_ref()
                 .map(|v| v.histograms.clone())
                 .unwrap_or_default();
+            let aligned_table_statistics = table_statistics
+                .as_ref()
+                .filter(|stats| stats.is_fresh_for(&snapshot));
+            let top_n = aligned_table_statistics
+                .map(|v| v.top_n.clone())
+                .unwrap_or_default();
+            let count_min_sketch = aligned_table_statistics
+                .map(|v| v.count_min_sketch.clone())
+                .unwrap_or_default();
             let stats_row_count = additional_stats_meta
                 .map(|v| v.row_count)
                 .or(table_statistics.as_ref().map(|v| v.row_count))
@@ -1147,6 +1322,8 @@ impl Table for FuseTable {
             FuseTableColumnStatisticsProvider::new(
                 stats,
                 histograms,
+                top_n,
+                count_min_sketch,
                 column_distinct_values,
                 stats_row_count,
                 snapshot.summary.row_count,
@@ -1305,14 +1482,16 @@ impl Table for FuseTable {
 
         self.check_changes_valid(&db_tb_name, *seq)?;
         let quote = ctx.get_settings().get_sql_dialect()?.default_ident_quote();
-        self.get_changes_query(
-            ctx,
-            mode,
-            location,
-            format!("{quote}{database_name}{quote}.{quote}{table_name}{quote} {desc}"),
-            *seq,
-        )
-        .await
+        let changes_query = self
+            .get_changes_query(
+                ctx,
+                mode,
+                location,
+                format!("{quote}{database_name}{quote}.{quote}{table_name}{quote} {desc}"),
+                *seq,
+            )
+            .await?;
+        Ok(changes_query.query)
     }
 
     fn get_block_thresholds(&self) -> BlockThresholds {
@@ -1337,9 +1516,11 @@ impl Table for FuseTable {
     async fn compact_segments(
         &self,
         ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
         limit: Option<usize>,
     ) -> Result<()> {
-        self.do_compact_segments(ctx, limit).await
+        self.check_format_supported()?;
+        self.do_compact_segments(ctx, pipeline, limit).await
     }
 
     #[async_backtrace::framed]
@@ -1348,6 +1529,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         limits: CompactionLimits,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
+        self.check_format_supported()?;
         self.do_compact_blocks(ctx, limits).await
     }
 
@@ -1357,6 +1539,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         point: NavigationDescriptor,
     ) -> Result<()> {
+        self.check_format_supported()?;
         self.do_revert_to(ctx, point).await
     }
 
@@ -1369,27 +1552,35 @@ impl Table for FuseTable {
     }
 
     fn result_can_be_cached(&self) -> bool {
-        true
+        !self.table_info.is_shared()
+    }
+
+    fn plan_can_be_cached(&self) -> bool {
+        // A new statement or transaction must resolve the share again, even
+        // when the provider's snapshot has not changed.
+        !self.table_info.is_shared()
     }
 
     fn is_read_only(&self) -> bool {
-        self.table_type.is_readonly()
+        self.table_info.is_shared()
+            || self.table_type.is_readonly()
+            || self.table_info.meta.engine == MATERIALIZED_VIEW_ENGINE
+            || self.table_info.meta.engine == DYNAMIC_TABLE_ENGINE
+    }
+
+    fn is_read_only_for_maintenance(&self) -> bool {
+        self.table_info.is_shared() || self.table_type.is_readonly()
     }
 
     fn use_own_sample_block(&self) -> bool {
         true
     }
 
-    async fn remove_aggregating_index_files(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        index_id: u64,
-    ) -> Result<u64> {
-        let prefix = format!(
-            "{}/{}",
-            self.meta_location_generator.agg_index_location_prefix(),
-            index_id
-        );
+    async fn remove_aggregating_index_files(&self, ctx: Arc<dyn TableContext>) -> Result<u64> {
+        let prefix = self
+            .meta_location_generator
+            .agg_index_location_prefix()
+            .to_string();
         let op = &self.operator;
         info!("remove_aggregating_index_files: {}", prefix);
         let mut lister = op.lister_with(&prefix).recursive(true).await?;
@@ -1413,22 +1604,28 @@ impl Table for FuseTable {
         index_name: String,
         index_version: String,
     ) -> Result<u64> {
-        let prefix = self
-            .meta_location_generator
-            .gen_specific_inverted_index_prefix(&index_name, &index_version);
+        let prefixes = [
+            self.meta_location_generator
+                .gen_specific_inverted_index_prefix(&index_name, &index_version),
+            self.meta_location_generator
+                .gen_specific_inverted_index_v2_prefix(&index_version),
+        ];
         let op = &self.operator;
-        info!("remove_inverted_index_files: {}", prefix);
-        let mut lister = op.lister_with(&prefix).recursive(true).await?;
-        let mut files = Vec::new();
-        while let Some(entry) = lister.try_next().await? {
-            if entry.metadata().is_dir() {
-                continue;
+        let mut files = std::collections::HashSet::new();
+        for prefix in prefixes {
+            info!("remove_inverted_index_files: {}", prefix);
+            let mut lister = op.lister_with(&prefix).recursive(true).await?;
+            while let Some(entry) = lister.try_next().await? {
+                if !entry.metadata().is_dir() {
+                    files.insert(entry.path().to_string());
+                }
             }
-            files.push(entry.path().to_string());
         }
-        let op = Files::create(ctx, self.operator.clone());
+        let files = files.into_iter().collect::<Vec<_>>();
         let len = files.len() as u64;
-        op.remove_file_in_batch(files).await?;
+        Files::create(ctx, self.operator.clone())
+            .remove_file_in_batch(files)
+            .await?;
         Ok(len)
     }
 }
@@ -1453,21 +1650,118 @@ pub enum RetentionPolicy {
     ByNumOfSnapshotsToKeep(usize),
 }
 
-fn allow_system_history_credential_chain(
-    table_info: &TableInfo,
-    storage_params: StorageParams,
-) -> StorageParams {
+/// Returns true if `table_info` belongs to the `system_history` database.
+///
+/// `system_history` storage params are fully generated from server config, so
+/// callers can treat them as trusted (e.g. allow the AWS credential chain and
+/// skip the user-SQL endpoint egress policy).
+fn is_system_history_table(table_info: &TableInfo) -> bool {
+    table_info
+        .database_name()
+        .is_ok_and(|db_name| db_name.eq_ignore_ascii_case("system_history"))
+}
+
+/// Force-enable the AWS credential chain on S3 storage params when it has not
+/// been set explicitly.
+///
+/// The `allow_credential_chain` flag is not persisted through meta proto
+/// conversion, so for storage params that originate from server config (such
+/// as `system_history` tables) we have to re-apply the default at load time;
+/// otherwise EC2/IRSA-only deployments would lose access to the history bucket
+/// after a round-trip through meta.
+fn allow_credential_chain_for_s3(storage_params: StorageParams) -> StorageParams {
     let mut sp = storage_params;
-    let Ok(db_name) = table_info.database_name() else {
-        return sp;
-    };
-    if !db_name.eq_ignore_ascii_case("system_history") {
-        return sp;
-    }
-    if let StorageParams::S3(cfg) = &mut sp {
-        if cfg.allow_credential_chain.is_none() {
-            cfg.allow_credential_chain = Some(true);
-        }
+    if let StorageParams::S3(cfg) = &mut sp
+        && cfg.allow_credential_chain.is_none()
+    {
+        cfg.allow_credential_chain = Some(true);
     }
     sp
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_meta_app::schema::DatabaseType;
+    use databend_common_meta_app::schema::TableIdent;
+    use databend_common_meta_app::schema::TableInfo;
+    use databend_common_meta_app::schema::TableMeta;
+    use databend_common_meta_app::storage::StorageParams;
+
+    use super::ApproxDistinctColumns;
+    use super::FuseTable;
+    use super::allow_credential_chain_for_s3;
+    use super::is_system_history_table;
+
+    fn table_info_with_db(db_name: &str) -> TableInfo {
+        // database_name() requires a FUSE engine.
+        let mut meta = TableMeta {
+            storage_params: Some(StorageParams::Memory),
+            ..Default::default()
+        };
+        meta.engine = "FUSE".to_string();
+        TableInfo {
+            ident: TableIdent::new(0, 0),
+            desc: format!("'{}'.'{}'", db_name, "t"),
+            name: "t".to_string(),
+            meta,
+            db_type: DatabaseType::NormalDB,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_is_system_history_table_matches_case_insensitively() {
+        for db in &["system_history", "SYSTEM_HISTORY", "System_History"] {
+            let info = table_info_with_db(db);
+            assert!(
+                is_system_history_table(&info),
+                "'{db}' should be treated as system_history"
+            );
+        }
+    }
+
+    #[test]
+    fn test_is_system_history_table_rejects_other_dbs() {
+        // These database names must NOT be treated as system_history.
+        for db in &["user_db", "system_history_backup", "SYSTEM", "default"] {
+            let info = table_info_with_db(db);
+            assert!(
+                !is_system_history_table(&info),
+                "db '{db}' must not be treated as system_history"
+            );
+        }
+    }
+
+    #[test]
+    fn test_allow_credential_chain_for_s3_is_noop_for_non_s3() {
+        let sp = StorageParams::Memory;
+        let result = allow_credential_chain_for_s3(sp.clone());
+        assert_eq!(result, sp);
+    }
+
+    #[test]
+    fn test_append_top_n_columns_tolerates_stale_options() {
+        let schema = Arc::new(TableSchema::new(vec![
+            TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
+            TableField::new("nested", TableDataType::Variant),
+        ]));
+
+        let fields = FuseTable::append_top_n_column_fields(
+            schema,
+            ApproxDistinctColumns::Specify(vec![
+                "a".to_string(),
+                "dropped".to_string(),
+                "nested".to_string(),
+            ]),
+        );
+
+        assert_eq!(fields.len(), 1);
+        assert_eq!(fields.values().next().unwrap().name(), "a");
+    }
 }

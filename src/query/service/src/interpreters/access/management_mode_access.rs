@@ -17,11 +17,13 @@ use std::sync::Arc;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 use crate::sql::plans::Plan;
 
@@ -47,6 +49,7 @@ impl AccessChecker for ManagementModeAccess {
                             RewriteKind::ShowDatabases
                             | RewriteKind::ShowDropDatabases
                             | RewriteKind::ShowTables(_, _)
+                            | RewriteKind::ShowMaterializedViews
                             | RewriteKind::ShowColumns(_, _, _)
                             | RewriteKind::ShowEngines
                             | RewriteKind::ShowSettings
@@ -71,6 +74,7 @@ impl AccessChecker for ManagementModeAccess {
                 // Show.
                 Plan::ShowCreateDatabase(_)
                 | Plan::ShowCreateTable(_)
+                | Plan::ShowCreateMaterializedView(_)
 
                 // Set
                 | Plan::Set(_)
@@ -83,7 +87,10 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::CreateTable(_)
                 | Plan::DropTable(_)
                 | Plan::DropView(_)
+                | Plan::DropMaterializedView(_)
                 | Plan::CreateView(_)
+                | Plan::RefreshLineage(_)
+                | Plan::CreateMaterializedView(_)
                 | Plan::CreateStream(_)
                 | Plan::DropStream(_)
 
@@ -139,7 +146,10 @@ impl AccessChecker for ManagementModeAccess {
             if !ok {
                 return Err(ErrorCode::ManagementModePermissionDenied(format!(
                     "Management Mode Error: Access denied for operation:{:?} in management-mode",
-                    plan.format_indent(Default::default())?
+                    plan.format_indent(
+                        Default::default(),
+                        &StatContext::new(ctx.get_function_context()?),
+                    )?
                 )));
             }
         };

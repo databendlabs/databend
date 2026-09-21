@@ -248,7 +248,7 @@ impl TopNPruner {
 
         let mut pruned_metas = Vec::new();
         if asc {
-            score_stats.sort_by(|a, b| a.1.cmp(&b.1));
+            score_stats.sort_by_key(|a| a.1);
             let mut topn_count = 0usize;
             let mut upper_bound = score_stats[0].2;
             for (_, min_score, max_score, matched_count) in &score_stats {
@@ -266,7 +266,7 @@ impl TopNPruner {
                 }
             }
         } else {
-            score_stats.sort_by(|a, b| b.2.cmp(&a.2));
+            score_stats.sort_by_key(|a| std::cmp::Reverse(a.2));
             let mut topn_count = 0usize;
             let mut lower_bound = score_stats[0].1;
             for (_, min_score, max_score, matched_count) in &score_stats {
@@ -706,7 +706,6 @@ mod tests {
             segment_idx: 0,
             block_idx: block_id,
             range: None,
-            page_size: if matched_rows == 0 { 1 } else { matched_rows },
             block_id,
             block_location: format!("block_{block_id}"),
             segment_location: "segment".to_string(),

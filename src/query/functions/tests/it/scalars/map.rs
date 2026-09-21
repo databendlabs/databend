@@ -14,8 +14,16 @@
 
 use std::io::Write;
 
+use databend_common_expression::DataBlock;
+use databend_common_expression::Evaluator;
 use databend_common_expression::FromData;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
+use databend_common_expression::Value;
+use databend_common_expression::type_check;
 use databend_common_expression::types::*;
+use databend_common_expression_test_support::parse_raw_expr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -35,6 +43,39 @@ fn test_map() {
     test_map_contains_key(file);
     test_map_pick(file);
     test_map_insert(file)
+}
+
+#[test]
+fn test_empty_map_nullable_flags() {
+    let flags = BooleanType::from_data_with_validity(vec![false, true, false, false], vec![
+        false, true, true, false,
+    ]);
+    let raw_expr = parse_raw_expr(
+        "map([], [], flag)",
+        &[("flag", flags.data_type())],
+        &BUILTIN_FUNCTIONS,
+    );
+    let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+    let block = DataBlock::new(vec![flags.into()], 4);
+    let func_ctx = FunctionContext::default();
+    let result = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS)
+        .run(&expr)
+        .unwrap();
+    let Value::Column(column) = result else {
+        panic!("a nullable flag column must produce a map column");
+    };
+    assert_eq!(column.len(), 4);
+    for (row, expected) in [
+        Scalar::Null,
+        Scalar::EmptyMap,
+        Scalar::EmptyMap,
+        Scalar::Null,
+    ]
+    .iter()
+    .enumerate()
+    {
+        assert_eq!(column.index(row).unwrap(), expected.as_ref());
+    }
 }
 
 fn test_map_cat(file: &mut impl Write) {
@@ -111,6 +152,39 @@ fn test_create(file: &mut impl Write) {
     run_ast(file, "map(['k1','k2'], ['v1','v2','v3'])", &[]);
     run_ast(file, "map(['k1','k1'], ['v1','v2'])", &[]);
 
+    for flag in ["false", "true"] {
+        for (keys, vals) in [
+            ("[]", "[]"),
+            ("[]::Array(Int64)", "[]::Array(String)"),
+            ("['a']", "[1]"),
+            ("['a', 'b']", "[1, 2]"),
+            ("['a', 'b', 'a', 'a', 'b']", "[1, 2, 3, 4, 5]"),
+            ("[1, 2, 1]", "['a', 'b', 'c']"),
+            ("['a', 'a']", "[NULL, 2]"),
+            ("['a', 'a']", "[1, NULL]"),
+            ("['a', 'a']", "[[1], [2, 3]]"),
+            ("['a']", "[1, 2]"),
+            ("[[1]]", "[1]"),
+            ("[NULL]", "[1]"),
+            ("NULL::Nullable(Array(String))", "[1]"),
+            ("['a']", "NULL::Nullable(Array(Int64))"),
+        ] {
+            run_ast(file, format!("map({keys}, {vals}, {flag})"), &[]);
+        }
+    }
+    run_ast(file, "map([], [], NULL)", &[]);
+    run_ast(file, "map(['a', 'a'], [1, 2], NULL)", &[]);
+    run_ast(
+        file,
+        "map_keys(map(['b', 'a', 'b', 'c', 'a'], [1, 2, 3, 4, 5], true))",
+        &[],
+    );
+    run_ast(
+        file,
+        "map_values(map(['b', 'a', 'b', 'c', 'a'], [1, 2, 3, 4, 5], true))",
+        &[],
+    );
+
     let columns = [
         ("a_col", Int8Type::from_data(vec![1i8, 2, 3])),
         ("b_col", Int8Type::from_data(vec![4i8, 5, 6])),
@@ -134,6 +208,43 @@ fn test_create(file: &mut impl Write) {
         &columns,
     );
     run_ast(file, "map(['k1', 'k2'], [a_col, b_col])", &columns);
+    run_ast(
+        file,
+        "map([a_col, b_col, a_col], [d_col, e_col, f_col], true)",
+        &columns,
+    );
+
+    // Keys repeat across rows, but are unique within each row. Deduplication must
+    // be row-local, and each row must retain its own values and key order.
+    let columns = [
+        ("k1", Int8Type::from_data(vec![1i8, 2, 1, 2])),
+        ("k2", Int8Type::from_data(vec![2i8, 1, 2, 1])),
+        ("v1", Int8Type::from_data(vec![10i8, 20, 30, 40])),
+        ("v2", Int8Type::from_data(vec![11i8, 21, 31, 41])),
+        (
+            "flag",
+            BooleanType::from_data(vec![true, false, true, false]),
+        ),
+    ];
+    for suffix in ["", ", false", ", true", ", flag"] {
+        run_ast(file, format!("map([k1, k2], [v1, v2]{suffix})"), &columns);
+    }
+
+    let columns = [
+        ("key", Int8Type::from_data(vec![2i8, 1, 1, 1])),
+        (
+            "flag",
+            BooleanType::from_data_with_validity(vec![false, true, true, false], vec![
+                true, true, true, false,
+            ]),
+        ),
+    ];
+    // Exercise a scalar array with a per-row nullable flag, including a masked duplicate error.
+    run_ast(file, "map([1, key, 1], ['a', 'b', 'c'], true)", &columns);
+    run_ast(file, "map([1, key], ['a', 'b'], flag)", &columns);
+    run_ast(file, "map([1, key], ['a', 'b'], false)", &columns);
+    run_ast(file, "map([1, 2], ['a', 'b'], flag)", &columns);
+    run_ast(file, "map([], [], flag)", &columns);
 }
 
 fn test_get(file: &mut impl Write) {

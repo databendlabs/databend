@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(box_patterns)]
+#![allow(incomplete_features)]
+#![feature(deref_patterns)]
 #![allow(clippy::cloned_ref_to_slice_refs)]
 
 mod read;

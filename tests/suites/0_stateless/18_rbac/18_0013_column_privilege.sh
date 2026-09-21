@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 
 export TEST_USER_PASSWORD="password"
-export USER_A_CONNECT="bendsql_query_http_user_connect a password -A"
+export USER_A_CONNECT="bendsql_connect_user a password -A"
 
 run_root_sql "
 drop user if exists a;
@@ -20,7 +20,7 @@ create or replace table default.test_t(id int not null);
 "
 
 echo "=== show grants for a ==="
-echo "show grants for a" | $BENDSQL_CLIENT_CONNECT | awk -F ' ' '{$3=""; print $0}'
+echo "show grants for a" | bendsql_connect_root | awk -F ' ' '{$3=""; print $0}'
 echo "=== show databases ==="
 echo "show databases" | $USER_A_CONNECT
 
@@ -40,7 +40,7 @@ echo "show tables from nogrant" | $USER_A_CONNECT
 echo "show columns from t from nogrant" | $USER_A_CONNECT
 
 echo "=== grant system to a ==="
-echo "grant select on system.* to a" | $BENDSQL_CLIENT_CONNECT
+echo "grant select on system.* to a" | bendsql_connect_root
 echo "show tables from system" | $USER_A_CONNECT | echo $?
 echo "use system" | $USER_A_CONNECT | echo $?
 

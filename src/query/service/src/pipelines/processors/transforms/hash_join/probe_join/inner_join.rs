@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::KeyAccessor;
+use databend_common_pipeline::core::check_interrupt;
 
 use crate::pipelines::processors::transforms::ProcessState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
@@ -195,9 +195,7 @@ impl HashJoinProbeState {
             Some(filter_executor) => {
                 let mut filtered_blocks = Vec::with_capacity(result_blocks.len());
                 for result_block in result_blocks {
-                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-                        return Err(ErrorCode::aborting());
-                    }
+                    check_interrupt()?;
                     let result_block = filter_executor.filter(result_block)?;
                     if !result_block.is_empty() {
                         filtered_blocks.push(result_block);
@@ -220,9 +218,7 @@ impl HashJoinProbeState {
         build_state: &BuildBlockGenerationState,
         right_single_scan_map: &mut [*mut AtomicBool],
     ) -> Result<DataBlock> {
-        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::aborting());
-        }
+        check_interrupt()?;
 
         let probe_block = if probe_state.is_probe_projected {
             Some(DataBlock::take(input, &probe_indexes[0..matched_idx])?)

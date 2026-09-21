@@ -35,8 +35,6 @@ use std::sync::atomic::Ordering;
 use databend_common_proto_conv::FromToProto;
 use databend_meta_client::types::Operation;
 
-use crate::kv_pb_api::errors::PbEncodeError;
-
 const MAGIC: u8 = 0x0F;
 const HEADER_LEN: usize = 4;
 const FLAG_ZSTD: u8 = 0x01;
@@ -62,13 +60,10 @@ impl Encoder {
     }
 
     /// Encode an upsert Operation of T into protobuf encoded value.
-    pub fn encode_operation<T: FromToProto>(
-        &self,
-        value: &Operation<T>,
-    ) -> Result<Operation<Vec<u8>>, PbEncodeError> {
+    pub fn encode_operation<T: FromToProto>(&self, value: &Operation<T>) -> Operation<Vec<u8>> {
         match value {
-            Operation::Update(t) => Ok(Operation::Update(self.encode_pb(t)?)),
-            Operation::Delete => Ok(Operation::Delete),
+            Operation::Update(t) => Operation::Update(self.encode_pb(t)),
+            Operation::Delete => Operation::Delete,
             _ => {
                 unreachable!("Operation::AsIs is not supported")
             }
@@ -76,11 +71,9 @@ impl Encoder {
     }
 
     /// Encode a `FromToProto` value to protobuf bytes, with optional zstd compression.
-    pub fn encode_pb<T: FromToProto>(&self, value: &T) -> Result<Vec<u8>, PbEncodeError> {
-        let p = value.to_pb()?;
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
-        Ok(self.encode_value(buf))
+    pub fn encode_pb<T: FromToProto>(&self, value: &T) -> Vec<u8> {
+        let p = value.to_pb();
+        self.encode_value(prost::Message::encode_to_vec(&p))
     }
 
     /// Optionally compress `buf` with zstd.

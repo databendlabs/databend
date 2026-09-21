@@ -1,0 +1,36 @@
+# GitHub issue: https://github.com/databendlabs/databend/issues/20134
+# Date arithmetic domain calculation incorrectly constant-folded when integer
+# column domain crosses the valid Date range.
+
+statement ok
+DROP TABLE IF EXISTS date_domain_overflow
+
+statement ok
+CREATE TABLE date_domain_overflow (x INT NOT NULL) ENGINE = FUSE ROW_PER_BLOCK = 3
+
+statement ok
+INSERT INTO date_domain_overflow VALUES (-1), (0), (2147483647)
+
+# Date plus with domain crossing valid range should not be constant-folded
+query IT
+SELECT x, DATE '1970-01-02' + CAST(x AS BIGINT) AS result FROM date_domain_overflow ORDER BY x
+----
+-1 1970-01-01
+0 1970-01-02
+2147483647 0001-01-01
+
+# Filter should not be eliminated by incorrect domain inference
+query I
+SELECT x FROM date_domain_overflow WHERE DATE '1970-01-02' + CAST(x AS BIGINT) > DATE '1970-01-01' ORDER BY x
+----
+0
+
+# Row-level constant evaluation (control)
+query TTT
+SELECT DATE '1970-01-02' + CAST(-1 AS BIGINT), DATE '1970-01-02' + CAST(0 AS BIGINT), DATE '1970-01-02' + CAST(2147483647 AS BIGINT)
+----
+1970-01-01 1970-01-02 0001-01-01
+
+statement ok
+DROP TABLE date_domain_overflow
+

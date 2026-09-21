@@ -74,9 +74,29 @@ jobs:
           dirs: ${{ matrix.tests.dirs }}
           handlers: ${{ matrix.handler }}
           parallel: ${{ matrix.tests.parallel }}
-          storage-format: all
+      # Reuse the Query/Meta processes and test binary initialized by the preceding
+      # standalone/http step; this small suite does not justify another runner.
+      - name: Run native UDF sqllogic tests
+        id: udf_native
+        if: matrix.tests.dirs == 'standalone' && matrix.handler == 'http'
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          # prepare_stage.sh creates @data in the current tenant, so enabling
+          # per-test sandbox tenants here would hide the stage from the UDFs.
+          target/${BUILD_PROFILE}/databend-sqllogictests \
+            --handlers http \
+            --run_dir udf_native \
+            --parallel 1
+          python3 scripts/ci/ci-check-query-log-duplicates.py \
+            .databend/logs_1/query-details
+      - name: Upload native UDF failure
+        if: failure() && steps.udf_native.outcome == 'failure'
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-standalone-udf-native-http
       - name: Upload failure
-        if: failure()
+        if: failure() && steps.udf_native.outcome != 'failure'
         uses: ./.github/actions/artifact_failure
         with:
           name: test-sqllogic-standalone-${{ matrix.tests.dirs }}-${{ matrix.handler }}
@@ -105,7 +125,6 @@ jobs:
           dirs: udf_server
           handlers: http,hybrid
           parallel: 1
-          storage-format: all
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
@@ -134,7 +153,6 @@ jobs:
         with:
           dirs: task
           handlers: http,hybrid
-          storage-format: all
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
@@ -156,9 +174,6 @@ jobs:
         handler:
           - "hybrid"
           - "http"
-        format:
-          - "native"
-          - "parquet"
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/test_sqllogic_standalone_linux_minio
@@ -166,12 +181,11 @@ jobs:
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handler }}
-          storage-format: ${{ matrix.format }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-standalone-minio-${{ matrix.dirs }}-${{ matrix.handler }}-${{ matrix.format }}
+          name: test-sqllogic-standalone-minio-${{ matrix.dirs }}-${{ matrix.handler }}
 
   standalone_minio_with_bendsave:
     runs-on:
@@ -250,6 +264,27 @@ jobs:
         uses: ./.github/actions/artifact_failure
         with:
           name: test-sqllogic-standalone-iceberg-tpch
+
+  standalone_paimon:
+    runs-on:
+      - self-hosted
+      - ${{ inputs.runner_arch }}
+      - Linux
+      - 4c
+      - "${{ inputs.runner_provider }}"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: "temurin"
+          java-version: "17"
+      - uses: ./.github/actions/test_sqllogic_paimon
+        timeout-minutes: 15
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-standalone-paimon
 
   cluster:
     runs-on:
@@ -350,7 +385,6 @@ jobs:
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handler }}
-          storage-format: all
           enable_table_meta_cache: false
       - name: Upload failure
         if: failure()
@@ -365,12 +399,6 @@ jobs:
       - Linux
       - 2c
       - "${{ inputs.runner_provider }}"
-    strategy:
-      fail-fast: false
-      matrix:
-        format:
-          - "parquet"
-          - "native"
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
@@ -382,9 +410,8 @@ jobs:
         with:
           dirs: ee
           handlers: http,hybrid
-          storage-format: ${{ matrix.format }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-ee-sqllogic-standalone-ee-${{ matrix.format }}
+          name: test-ee-sqllogic-standalone-ee

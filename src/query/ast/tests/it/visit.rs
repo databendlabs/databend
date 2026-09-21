@@ -405,7 +405,7 @@ fn test_visit2_mut_rewrite_create_table_components() {
 
     assert_eq!(
         stmt.to_string(),
-        "CREATE TABLE t (a Int32 DEFAULT renamed_default_expr CHECK (renamed_check_expr > 0)) CLUSTER BY LINEAR(renamed_cluster_expr) AS SELECT renamed_src_col FROM src WHERE renamed_src_filter"
+        "CREATE TABLE t (a Int32 DEFAULT renamed_default_expr CHECK (renamed_check_expr > 0)) CLUSTER BY (renamed_cluster_expr) AS SELECT renamed_src_col FROM src WHERE renamed_src_filter"
     );
 }
 

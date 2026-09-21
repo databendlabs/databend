@@ -89,9 +89,15 @@ runs:
         CLOUD_PASSWORD: ${{ inputs.cloud_password }}
         CLOUD_GATEWAY: ${{ inputs.cloud_gateway }}
         CLOUD_WAREHOUSE: benchmark-${{ inputs.run_id }}
+        RUSTFLAGS: ""
+        CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: cc
       shell: bash
       run: |
-        python3 benchmark_cloud.py
+        if [[ "${{ inputs.dataset }}" == "load" ]]; then
+          python3 benchmark_cloud_load.py
+        else
+          cargo run --quiet --bin benchmark-cloud
+        fi
 
     - name: Upload artifact
       uses: actions/upload-artifact@v7

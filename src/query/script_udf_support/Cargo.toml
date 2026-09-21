@@ -15,6 +15,7 @@ python-udf = ["script-udf", "arrow-udf-runtime/python"]
 [dependencies]
 anyhow = { workspace = true }
 arrow-array = { workspace = true }
+arrow-cast = { workspace = true }
 arrow-ipc = { workspace = true }
 arrow-schema = { workspace = true }
 arrow-select = { workspace = true }
@@ -23,7 +24,6 @@ databend-common-base = { workspace = true }
 databend-common-cache = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
-databend-common-functions = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
 databend-common-sql = { workspace = true }

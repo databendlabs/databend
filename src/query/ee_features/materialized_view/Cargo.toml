@@ -1,0 +1,20 @@
+[package]
+name = "databend-enterprise-materialized-view"
+description = "materialized view handler"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+async-backtrace = { workspace = true }
+async-trait = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-catalog = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-meta-client = { workspace = true }
+
+[lints]
+workspace = true

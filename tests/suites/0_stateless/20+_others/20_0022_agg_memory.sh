@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 ## warmup
 for i in `seq 1 2`;do
-	$BENDSQL_CLIENT_CONNECT --query="""
+	bendsql_connect_root --query="""
 	select number::string , max(number::string), min(number::string), count(distinct number) from numbers(10000000) group by 1 ignore_result;
 	"""
 done
@@ -21,7 +21,7 @@ done
 
 for i in `seq 1 5`;do
 	echo "executing $i"
-	$BENDSQL_CLIENT_CONNECT --query="""
+	bendsql_connect_root --query="""
 	select number::string , max(number::string), min(number::string), count(distinct number) from numbers(10000000) group by 1 ignore_result;
 	"""
 done

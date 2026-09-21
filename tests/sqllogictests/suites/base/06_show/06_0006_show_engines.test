@@ -2,11 +2,13 @@ query TT
 SHOW ENGINES
 ----
 DELTA DELTA Storage Engine
+DYNAMIC_TABLE Dynamic Table (Fuse-backed)
 FUSE FUSE Storage Engine
 ICEBERG ICEBERG Storage Engine
+MATERIALIZED_VIEW Materialized View (Fuse-backed)
 MEMORY MEMORY Storage Engine
 NULL NULL Storage Engine
-PROXY PROXY Storage Engine
+PAIMON PAIMON Storage Engine
 RANDOM RANDOM Storage Engine
 STREAM STREAM Storage Engine
 VIEW VIEW Storage (LOGICAL VIEW)

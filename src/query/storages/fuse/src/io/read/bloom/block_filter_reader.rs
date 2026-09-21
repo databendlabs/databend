@@ -252,7 +252,7 @@ fn should_read_whole_bloom_index(path: &str, settings: &ReadSettings, index_leng
 fn load_index_meta_from_bytes(data: &Bytes) -> Result<BloomIndexMeta> {
     const HEADER_SIZE: usize = 4;
     const FOOTER_SIZE: usize = 8;
-    const PARQUET_MAGIC: [u8; 4] = [b'P', b'A', b'R', b'1'];
+    const PARQUET_MAGIC: [u8; 4] = *b"PAR1";
 
     if data.len() < HEADER_SIZE + FOOTER_SIZE {
         return Err(ErrorCode::StorageOther(
@@ -348,15 +348,15 @@ mod tests {
         let bloom_index = builder.finalize()?.unwrap();
 
         let index_block = bloom_index.serialize_to_data_block()?;
-        let mut data = Vec::new();
-        let _ = blocks_to_parquet(
+        let data = blocks_to_parquet(
             &bloom_index.filter_schema,
             vec![index_block],
-            &mut data,
             TableCompression::None,
             false,
             None,
-        )?;
+        )?
+        .payload
+        .concat();
 
         let filter_name = BloomIndex::build_filter_bloom_name(
             BlockFilter::VERSION,

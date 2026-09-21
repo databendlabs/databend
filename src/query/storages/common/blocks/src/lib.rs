@@ -15,5 +15,7 @@
 #![allow(clippy::collapsible_if, clippy::uninlined_format_args)]
 
 mod parquet_rs;
+mod parquet_writer;
 pub use parquet_rs::*;
+pub use parquet_writer::*;
 pub mod memory;

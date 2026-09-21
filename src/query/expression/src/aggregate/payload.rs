@@ -17,17 +17,18 @@ use std::sync::Arc;
 
 use bumpalo::Bump;
 use databend_common_base::runtime::drop_guard;
+use databend_common_exception::Result;
 use log::info;
 use strength_reduce::StrengthReducedU64;
 
 use super::AggrState;
-use super::AggregateFunctionRef;
 use super::BATCH_SIZE;
 use super::MAX_PAGE_SIZE;
 use super::PayloadFlushState;
 use super::RowID;
 use super::StateAddr;
 use super::StatesLayout;
+use super::aggregate_function::AggregateCallRef;
 use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
 use super::payload_row::serialize_const_column_to_rowformat;
@@ -51,7 +52,7 @@ use crate::types::DataType;
 pub struct Payload {
     pub(super) arena: Arc<Bump>,
     pub(super) group_types: Vec<DataType>,
-    pub(super) aggrs: Vec<AggregateFunctionRef>,
+    pub(super) aggrs: Vec<AggregateCallRef>,
     pub(super) row_layout: RowLayout,
 
     pub(super) pages: Vec<Page>,
@@ -191,7 +192,7 @@ impl Payload {
     pub fn new(
         arena: Arc<Bump>,
         group_types: Vec<DataType>,
-        aggrs: Vec<AggregateFunctionRef>,
+        aggrs: Vec<AggregateCallRef>,
         states_layout: Option<StatesLayout>,
     ) -> Self {
         let mut tuple_size = 0;
@@ -254,6 +255,33 @@ impl Payload {
     #[inline]
     pub fn memory_size(&self) -> usize {
         self.total_rows * self.tuple_size
+    }
+
+    pub fn merge_result(&self, flush_state: &mut PayloadFlushState) -> Result<Option<DataBlock>> {
+        if !self.flush(flush_state) {
+            return Ok(None);
+        }
+
+        let row_count = flush_state.row_count;
+        flush_state.aggregate_results.clear();
+        if let Some(states_layout) = self.row_layout.states_layout.as_ref() {
+            for (aggr, loc) in self
+                .aggrs
+                .iter()
+                .zip(states_layout.states_loc.iter().cloned())
+            {
+                let return_type = aggr.signature().return_type.clone();
+                let mut builder = ColumnBuilder::with_capacity(&return_type, row_count * 4);
+                for place in &flush_state.state_places.as_slice()[0..row_count] {
+                    aggr.merge_result(AggrState::new(*place, &loc), &mut builder)?;
+                }
+                flush_state.aggregate_results.push(builder.build().into());
+            }
+        }
+
+        let mut entries = flush_state.take_aggregate_results();
+        entries.extend(flush_state.take_group_columns());
+        Ok(Some(DataBlock::new(entries, row_count)))
     }
 
     pub(super) fn commit_transferred_state_offsets(
@@ -349,7 +377,7 @@ impl Payload {
                     }
                     write_offset += 1;
                 }
-                BlockEntry::Column(Column::Nullable(box c)) => {
+                BlockEntry::Column(Column::Nullable(deref!(c))) => {
                     let bitmap = c.validity();
                     if bitmap.null_count() == 0 || bitmap.null_count() == bitmap.len() {
                         let val: u8 = if bitmap.null_count() == 0 { 1 } else { 0 };
@@ -638,7 +666,7 @@ impl Drop for Payload {
                 .zip(states_layout.states_loc.iter())
                 .enumerate()
             {
-                if !aggr.need_manual_drop_state() {
+                if !aggr.state().need_manual_drop() {
                     continue;
                 }
 

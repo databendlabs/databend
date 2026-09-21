@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
 
@@ -62,10 +64,18 @@ export function add_one(v) {
 $$
 "#;
 
+const TEST_LAMBDA_WRAPPING_SCRIPT_UDF_SQL: &str =
+    "CREATE OR REPLACE FUNCTION wrap_add_one AS (x) -> add_one(x)";
+
+const TEST_SCALAR_WRAPPING_SCRIPT_UDF_SQL: &str =
+    "CREATE OR REPLACE FUNCTION scalar_wrap_add_one (x INT) RETURNS INT AS $$ add_one(x) $$";
+
 async fn bind_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
     let ctx = setup_context(case).await?;
     let outcome = match ctx.bind_sql(case.sql).await {
-        Ok(plan) => SqlTestOutcome::Plan(plan.format_indent(Default::default())?),
+        Ok(plan) => {
+            SqlTestOutcome::Plan(plan.format_indent(Default::default(), &StatContext::default())?)
+        }
         Err(err) => SqlTestOutcome::Error {
             code: err.code(),
             message: err.message(),
@@ -78,7 +88,9 @@ async fn bind_case_with_commercial_license(case: &SqlTestCase) -> Result<SqlTest
     let ctx = setup_context(case).await?;
     ctx.enable_commercial_license_for_test();
     let outcome = match ctx.bind_sql(case.sql).await {
-        Ok(plan) => SqlTestOutcome::Plan(plan.format_indent(Default::default())?),
+        Ok(plan) => {
+            SqlTestOutcome::Plan(plan.format_indent(Default::default(), &StatContext::default())?)
+        }
         Err(err) => SqlTestOutcome::Error {
             code: err.code(),
             message: err.message(),
@@ -142,6 +154,14 @@ async fn test_binder_clauses_and_ordering() -> Result<()> {
             sql: "SELECT number FROM t HAVING count(*) > 0",
         },
         SqlTestCase {
+            name: "having_aggregate_reuses_select_alias_name_as_input_column",
+            description: "A HAVING aggregate argument should resolve to the input column even when a SELECT aggregate has the same alias.",
+            setup_sqls: &[
+                "CREATE TABLE t(creative_name String, impressions UInt64, clicks UInt64, cost UInt64, installs UInt64)",
+            ],
+            sql: "SELECT creative_name, sum(cost) AS cost FROM t GROUP BY creative_name HAVING sum(impressions) > 0 OR sum(clicks) > 0 OR sum(cost) > 0 OR sum(installs) > 0",
+        },
+        SqlTestCase {
             name: "order_by_can_introduce_aggregate_in_aggregate_query",
             description: "ORDER BY may introduce a new aggregate expression when the query is already aggregated.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],
@@ -189,6 +209,40 @@ async fn test_binder_clauses_and_ordering() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_binder_mutation_internal_column_strategy() -> Result<()> {
+    let cases = [
+        (
+            "UPDATE t SET b = to_string(_row_id) WHERE a = 1",
+            MutationStrategy::MatchedOnly,
+        ),
+        (
+            "UPDATE t SET b = to_string(a) WHERE a = 1",
+            MutationStrategy::Direct,
+        ),
+    ];
+
+    for (sql, expected_strategy) in cases {
+        let case = SqlTestCase {
+            name: "update_internal_column_strategy",
+            description: "UPDATE strategy is selected after assignment expressions are bound.",
+            setup_sqls: &["CREATE TABLE t(a INT, b STRING)"],
+            sql,
+        };
+        let ctx = setup_context(&case).await?;
+        let plan = ctx.bind_sql(sql).await?;
+        let Plan::DataMutation { s_expr, .. } = plan else {
+            panic!("expected mutation plan for {sql}");
+        };
+        let RelOperator::Mutation(mutation) = s_expr.plan() else {
+            panic!("expected mutation operator for {sql}");
+        };
+        assert_eq!(mutation.strategy, expected_strategy, "sql: {sql}");
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_binder_mutation_udf() -> Result<()> {
     let cases = [
         SqlTestCase {
@@ -226,6 +280,75 @@ async fn test_binder_mutation_udf() -> Result<()> {
     ];
 
     run_binder_cases("binder_mutation_udf.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_binder_nested_udf_rewrite() -> Result<()> {
+    let cases = [
+        SqlTestCase {
+            name: "lambda_udf_wrapping_script_udf_is_rewritten",
+            description: "A script UDF called from a lambda UDF body must still be rewritten into a UdfScript node.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                TEST_SCRIPT_UDF_SQL,
+                TEST_LAMBDA_WRAPPING_SCRIPT_UDF_SQL,
+            ],
+            sql: "SELECT wrap_add_one(a) FROM t",
+        },
+        SqlTestCase {
+            name: "sql_scalar_udf_wrapping_script_udf_is_rewritten",
+            description: "A script UDF called from a SQL scalar UDF body must still be rewritten into a UdfScript node.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                TEST_SCRIPT_UDF_SQL,
+                TEST_SCALAR_WRAPPING_SCRIPT_UDF_SQL,
+            ],
+            sql: "SELECT scalar_wrap_add_one(a) FROM t",
+        },
+        SqlTestCase {
+            name: "lambda_udf_wrapping_script_udf_in_filter_is_rewritten",
+            description: "A script UDF reached through a lambda UDF inside WHERE must be rewritten before the filter is evaluated.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                TEST_SCRIPT_UDF_SQL,
+                TEST_LAMBDA_WRAPPING_SCRIPT_UDF_SQL,
+            ],
+            sql: "SELECT a FROM t WHERE wrap_add_one(a) > 1",
+        },
+        SqlTestCase {
+            name: "script_udf_inside_sql_lambda_body_is_rejected",
+            description: "A script UDF cannot be lifted out of a SQL lambda body, so it must be rejected with a clear error instead of leaking an internal column id.",
+            setup_sqls: &["CREATE TABLE t(a INT, b INT)", TEST_SCRIPT_UDF_SQL],
+            sql: "SELECT array_transform([a], x -> add_one(x)) FROM t",
+        },
+        SqlTestCase {
+            name: "lambda_udf_wrapping_script_udf_inside_sql_lambda_body_is_rejected",
+            description: "The same rejection must apply when the script UDF is reached indirectly through a lambda UDF.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                TEST_SCRIPT_UDF_SQL,
+                TEST_LAMBDA_WRAPPING_SCRIPT_UDF_SQL,
+            ],
+            sql: "SELECT array_transform([a], x -> wrap_add_one(x)) FROM t",
+        },
+        SqlTestCase {
+            name: "udaf_script_inside_sql_lambda_body_is_rejected",
+            description: "A UDAF script is built outside the aggregate resolution path, so the lambda body check must reject it too.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
+            sql: "SELECT array_transform([a], x -> weighted_avg(x, b)) FROM t",
+        },
+        SqlTestCase {
+            name: "pure_sql_lambda_udf_inside_sql_lambda_body_is_allowed",
+            description: "A lambda UDF whose body is pure SQL is inlined, so it must remain usable inside a SQL lambda body.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE OR REPLACE FUNCTION sql_add_one AS (x) -> x + 1",
+            ],
+            sql: "SELECT array_transform([a], x -> sql_add_one(x)) FROM t",
+        },
+    ];
+
+    run_binder_cases("binder_nested_udf.txt", &cases).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -571,6 +694,42 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             description: "A non-window WITHIN GROUP aggregate should register its sort descriptors in the aggregate phase.",
             setup_sqls: &["CREATE TABLE empsalary(empno UInt64, salary UInt64)"],
             sql: "SELECT listagg(cast(salary as varchar), '|') WITHIN GROUP (ORDER BY empno DESC) FROM empsalary",
+        },
+        SqlTestCase {
+            name: "grouping_sets_select_alias_with_grouping_func_does_not_shadow_column",
+            description: "A SELECT alias containing grouping() must not shadow the underlying column in GROUPING SETS items.",
+            setup_sqls: &["CREATE TABLE t(k UInt64, d String, v Decimal(18,6))"],
+            sql: "SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d))",
+        },
+        SqlTestCase {
+            name: "grouping_alias_in_order_by_prefers_group_column",
+            description: "ORDER BY alias prebinding must resolve grouping() arguments to input group columns.",
+            setup_sqls: &["CREATE TABLE t(k UInt64, d String, v Decimal(18,6))"],
+            sql: "SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d)) ORDER BY k, d",
+        },
+        SqlTestCase {
+            name: "grouping_alias_in_having_prefers_group_column",
+            description: "HAVING alias prebinding must resolve grouping() arguments to input group columns.",
+            setup_sqls: &["CREATE TABLE t(k UInt64, d String, v Decimal(18,6))"],
+            sql: "SELECT if(grouping(k)=1, 0, k) AS k, d, sum(v) FROM t GROUP BY GROUPING SETS ((d), (k, d)) HAVING k IS NOT NULL",
+        },
+        SqlTestCase {
+            name: "grouping_in_order_by_falls_back_to_group_alias",
+            description: "GROUPING arguments should still fall back to a valid group alias when no input column has that name.",
+            setup_sqls: &["CREATE TABLE t(i UInt64, v UInt64)"],
+            sql: "SELECT i + 1 AS k, grouping(k) AS g, sum(v) FROM t GROUP BY GROUPING SETS ((k), ()) ORDER BY g, k",
+        },
+        SqlTestCase {
+            name: "grouping_in_order_by_keeps_alias_that_is_group_item",
+            description: "GROUPING arguments must keep resolving to a same-name alias that is itself a group item, even when an input column shares the name.",
+            setup_sqls: &["CREATE TABLE t(i UInt64, v UInt64)"],
+            sql: "SELECT i + 1 AS i, sum(v) FROM t GROUP BY GROUPING SETS ((i + 1), ()) ORDER BY grouping(i), i",
+        },
+        SqlTestCase {
+            name: "grouping_alias_case_when_with_lateral_alias",
+            description: "CASE WHEN grouping() aliases over string group columns must bind in ORDER BY together with lateral aliases.",
+            setup_sqls: &["CREATE TABLE t(k String, v UInt64)"],
+            sql: "SELECT CASE WHEN grouping(k) = 1 THEN 'all' ELSE k END AS k, count(*) AS c, sum(v) AS s, s / nullif(c, 0) AS ratio FROM t GROUP BY GROUPING SETS ((k), ()) ORDER BY k",
         },
     ];
 

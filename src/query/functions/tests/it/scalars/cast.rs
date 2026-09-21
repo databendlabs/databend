@@ -192,6 +192,11 @@ fn test_cast_to_variant(file: &mut impl Write, is_try: bool) {
         "a",
         gen_bitmap_data(),
     )]);
+
+    run_ast(file, format!("{prefix}CAST(a AS VARIANT NULL)"), &[(
+        "a",
+        Int64Type::from_data_with_validity(vec![1, 2, 3], vec![true, false, true]),
+    )]);
 }
 
 fn test_cast_number_to_timestamp(file: &mut impl Write, is_try: bool) {
@@ -383,6 +388,15 @@ fn test_cast_between_number_and_string(file: &mut impl Write, is_try: bool) {
     run_ast(file, format!("{prefix}CAST(num AS STRING)"), &[(
         "num",
         UInt64Type::from_data(vec![0, 1, u64::MAX]),
+    )]);
+    run_ast(
+        file,
+        format!("{prefix}CAST(CAST('3.40282347e38' AS FLOAT64) AS STRING)"),
+        &[],
+    );
+    run_ast(file, format!("{prefix}CAST(num AS STRING)"), &[(
+        "num",
+        Float64Type::from_data(vec![3.40282347e38]),
     )]);
 }
 

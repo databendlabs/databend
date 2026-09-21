@@ -27,14 +27,16 @@ use super::LOAD_FACTOR;
 use super::MAX_PAGE_SIZE;
 use super::Payload;
 use super::group_hash_entries;
-use super::legacy_hash_index::AdapterImpl;
+use super::hash_index_adapter::AdapterImpl;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
 use crate::BlockEntry;
 use crate::ColumnBuilder;
 use crate::ProjectedBlock;
-use crate::aggregate::AggregateFunctionRef;
+use crate::aggregate::AggrState;
+use crate::aggregate::aggregate_function::AggregateCallRef;
+use crate::aggregate::aggregate_function::AggregateStateSet;
 use crate::types::DataType;
 
 const SMALL_CAPACITY_RESIZE_COUNT: usize = 4;
@@ -59,7 +61,7 @@ unsafe impl Sync for AggregateHashTable {}
 impl AggregateHashTable {
     pub fn new(
         group_types: Vec<DataType>,
-        aggrs: Vec<AggregateFunctionRef>,
+        aggrs: Vec<AggregateCallRef>,
         config: HashTableConfig,
         arena: Arc<Bump>,
     ) -> Self {
@@ -69,7 +71,7 @@ impl AggregateHashTable {
 
     pub fn new_with_capacity(
         group_types: Vec<DataType>,
-        aggrs: Vec<AggregateFunctionRef>,
+        aggrs: Vec<AggregateCallRef>,
         config: HashTableConfig,
         capacity: usize,
         arena: Arc<Bump>,
@@ -84,15 +86,54 @@ impl AggregateHashTable {
                 config.partition_start_bit,
                 vec![arena],
             ),
-            hash_index: HashIndex::new(&config, capacity),
+            hash_index: HashIndex::with_capacity(capacity),
             config,
             hash_index_resize_count: 0,
         }
     }
 
+    pub fn new_with_partitioned_arenas(
+        group_types: Vec<DataType>,
+        aggrs: Vec<AggregateCallRef>,
+        config: HashTableConfig,
+    ) -> Self {
+        // Repartition transfers raw aggregate state addresses between payloads. Separate arenas
+        // are only safe for a final hash table whose partitions will never be repartitioned.
+        assert!(
+            !config.partial_agg,
+            "partition-local aggregate arenas cannot be used by a repartitioning hash table"
+        );
+        let capacity = Self::initial_capacity();
+        let partition_count = 1 << config.initial_radix_bits;
+        let arenas = (0..partition_count)
+            .map(|_| Arc::new(Bump::new()))
+            .collect();
+        Self {
+            direct_append: false,
+            current_radix_bits: config.initial_radix_bits,
+            payload: PartitionedPayload::new_with_start_bit(
+                group_types,
+                aggrs,
+                partition_count,
+                config.partition_start_bit,
+                arenas,
+            ),
+            hash_index: HashIndex::with_capacity(capacity),
+            config,
+            hash_index_resize_count: 0,
+        }
+    }
+
+    pub fn into_payloads(self) -> Vec<Payload> {
+        self.payload
+            .into_bucket_payloads()
+            .map(|(_, payload)| payload)
+            .collect()
+    }
+
     pub fn new_directly(
         group_types: Vec<DataType>,
-        aggrs: Vec<AggregateFunctionRef>,
+        aggrs: Vec<AggregateCallRef>,
         config: HashTableConfig,
         capacity: usize,
         arena: Arc<Bump>,
@@ -102,9 +143,9 @@ impl AggregateHashTable {
         // if need_init_entry is false, we will directly append rows without probing hash index
         // so we can use a dummy hash index, which is not allowed to insert any entry
         let hash_index = if need_init_entry {
-            HashIndex::new(&config, capacity)
+            HashIndex::with_capacity(capacity)
         } else {
-            HashIndex::new_dummy(&config)
+            HashIndex::dummy()
         };
         Self {
             direct_append: !need_init_entry,
@@ -179,7 +220,7 @@ impl AggregateHashTable {
         #[cfg(debug_assertions)]
         {
             for (i, group_column) in group_columns.iter().enumerate() {
-                if group_column.data_type() != self.payload.group_types[i] {
+                if !self.payload.group_types[i].matches_physical_type(&group_column.data_type()) {
                     return Err(databend_common_exception::ErrorCode::UnknownException(
                         format!(
                             "group_column type not match in index {}, expect: {:?}, actual: {:?}",
@@ -196,8 +237,8 @@ impl AggregateHashTable {
         group_hash_entries(group_columns, &mut state.group_hashes[..row_count]);
 
         let new_group_count = if self.direct_append {
-            for i in 0..row_count {
-                state.empty_vector[i] = i.into();
+            for (i, entry) in state.empty_vector[..row_count].iter_mut().enumerate() {
+                *entry = i.into();
             }
             self.payload.append_rows(state, row_count, group_columns);
             row_count
@@ -220,7 +261,7 @@ impl AggregateHashTable {
                     .zip(params.iter())
                     .zip(states_layout.states_loc.iter())
                 {
-                    func.accumulate_keys(state_places, loc, *params, row_count)?;
+                    func.accumulate_keys(AggregateStateSet::new(state_places, loc), *params)?;
                 }
             } else {
                 for ((func, state), loc) in self
@@ -230,7 +271,7 @@ impl AggregateHashTable {
                     .zip(agg_states.iter())
                     .zip(states_layout.states_loc.iter())
                 {
-                    func.batch_merge(state_places, loc, state, None)?;
+                    func.merge_serialized(AggregateStateSet::new(state_places, loc), state)?;
                 }
             }
         }
@@ -332,7 +373,9 @@ impl AggregateHashTable {
             if let Some(layout) = self.payload.row_layout.states_layout.as_ref() {
                 let rhses = &flush_state.state_places[..row_count];
                 for (aggr, loc) in self.payload.aggrs.iter().zip(layout.states_loc.iter()) {
-                    aggr.batch_merge_states(places, rhses, loc)?;
+                    for (place, rhs) in places.iter().zip(rhses.iter()) {
+                        aggr.merge_states(AggrState::new(*place, loc), AggrState::new(*rhs, loc))?;
+                    }
                 }
             }
         }
@@ -354,14 +397,12 @@ impl AggregateHashTable {
                 .iter()
                 .zip(states_layout.states_loc.iter().cloned())
             {
-                let return_type = aggr.return_type()?;
+                let return_type = aggr.signature().return_type.clone();
                 let mut builder = ColumnBuilder::with_capacity(&return_type, row_count * 4);
 
-                aggr.batch_merge_result(
-                    &flush_state.state_places.as_slice()[0..row_count],
-                    loc,
-                    &mut builder,
-                )?;
+                for place in &flush_state.state_places.as_slice()[0..row_count] {
+                    aggr.merge_result(AggrState::new(*place, &loc), &mut builder)?;
+                }
                 flush_state.aggregate_results.push(builder.build().into());
             }
         }
@@ -428,13 +469,13 @@ impl AggregateHashTable {
                 return;
             }
             self.hash_index_resize_count += 1;
-            self.hash_index = HashIndex::new(&self.config, target);
+            self.hash_index = HashIndex::with_capacity(target);
             return;
         }
 
         self.hash_index_resize_count += 1;
 
-        let mut hash_index = HashIndex::new(&self.config, new_capacity);
+        let mut hash_index = HashIndex::with_capacity(new_capacity);
         // iterate over payloads and copy to new entries
         for payload in self.payload.payloads.iter() {
             for page in payload.pages.iter() {

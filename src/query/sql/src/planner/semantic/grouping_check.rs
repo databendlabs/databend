@@ -19,6 +19,8 @@ use crate::BindContext;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::plans::BoundColumnRef;
+use crate::plans::FunctionCall;
+use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
 use crate::plans::VisitorMut;
 use crate::plans::walk_expr_mut;
@@ -118,7 +120,7 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
                 let column_binding = ColumnBindingBuilder::new(
                     agg.display_name.clone(),
                     agg_func.index,
-                    Box::new(agg_func.scalar.data_type()?),
+                    Box::new(agg_func.scalar.data_type().into_owned()),
                     Visibility::Visible,
                 )
                 .build();
@@ -140,7 +142,7 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
                 let column_binding = ColumnBindingBuilder::new(
                     udaf.display_name.clone(),
                     agg_func.index,
-                    Box::new(agg_func.scalar.data_type()?),
+                    Box::new(agg_func.scalar.data_type().into_owned()),
                     Visibility::Visible,
                 )
                 .build();
@@ -181,14 +183,27 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
     }
 
     fn visit_cast_expr(&mut self, cast: &'_ mut crate::plans::CastExpr) -> Result<()> {
-        let source_type = cast.argument.data_type()?;
+        let source_nullable = cast.argument.data_type().is_nullable();
         self.visit(&mut cast.argument)?;
-        let after_type = cast.argument.data_type()?;
 
-        if !source_type.is_nullable() && after_type.is_nullable() {
+        if !source_nullable && cast.argument.data_type().is_nullable() {
             cast.target_type = Box::new(cast.target_type.wrap_nullable());
         }
         Ok(())
+    }
+
+    fn visit_function_call(&mut self, function: &mut FunctionCall) -> Result<()> {
+        for argument in &mut function.arguments {
+            self.visit(argument)?;
+        }
+        function.refresh_return_type()
+    }
+
+    fn visit_lambda_function(&mut self, lambda: &mut LambdaFunc) -> Result<()> {
+        for argument in &mut lambda.args {
+            self.visit(argument)?;
+        }
+        lambda.refresh_return_type()
     }
 
     fn visit_bound_column_ref(&mut self, column: &mut BoundColumnRef) -> Result<()> {
@@ -226,7 +241,7 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
         // If this is a group item, then it should have been replaced with `group_items_map`
         Err(ErrorCode::SemanticError(format!(
             "column \"{}\" must appear in the GROUP BY clause or be used in an aggregate function",
-            &column.column.column_name
+            column.column.column_name
         ))
         .set_span(column.span))
     }

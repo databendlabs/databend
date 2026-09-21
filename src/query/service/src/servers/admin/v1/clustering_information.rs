@@ -75,7 +75,7 @@ async fn load_clustering_information(
     let mut dummy_session = SessionManager::instance()
         .create_session(SessionType::Dummy)
         .await?;
-    dummy_session.set_current_tenant(tenant.clone());
+    dummy_session.set_current_tenant(tenant.clone())?;
     let session = SessionManager::instance().register_session(dummy_session)?;
 
     let ctx: Arc<dyn TableContext> = session

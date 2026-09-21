@@ -81,3 +81,17 @@ sql: udaf_script(text)
 status: ok
 scalar: udaf_script(text)
 type: String
+
+=== scalar_udf_filter_rejected_after_resolution ===
+description: FILTER on a scalar UDF should still report the aggregate-only error, but only after UDF resolution.
+sql: scalar_to_string(number) FILTER (WHERE flag)
+status: error
+code: 1065
+message: FILTER clause is only supported for aggregate functions
+
+=== udaf_script_filter_reports_unimplemented ===
+description: FILTER on a UDAF should be recognized as an aggregate call and reported as not yet supported rather than aggregate-only.
+sql: udaf_script(text) FILTER (WHERE flag)
+status: error
+code: 1002
+message: FILTER clause is not supported for aggregate UDFs yet

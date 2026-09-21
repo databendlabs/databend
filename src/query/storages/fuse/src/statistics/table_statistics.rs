@@ -17,6 +17,9 @@ use std::collections::HashMap;
 use databend_common_expression::ColumnId;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
+use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 
 #[derive(Clone, Default)]
@@ -26,6 +29,7 @@ pub struct TableStatsGenerator {
     row_count: u64,
     unstats_rows: u64,
     hll: BlockHLL,
+    table_statistics: Option<TableSnapshotStatistics>,
 }
 
 impl TableStatsGenerator {
@@ -35,6 +39,7 @@ impl TableStatsGenerator {
         row_count: u64,
         unstats_rows: u64,
         hll: BlockHLL,
+        table_statistics: Option<TableSnapshotStatistics>,
     ) -> Self {
         Self {
             prev_stats_meta,
@@ -42,11 +47,16 @@ impl TableStatsGenerator {
             row_count,
             unstats_rows,
             hll,
+            table_statistics,
         }
     }
 
     pub fn table_statistics_location(&self) -> Option<String> {
         self.prev_stats_location.clone()
+    }
+
+    pub fn take_table_statistics(&mut self) -> Option<TableSnapshotStatistics> {
+        self.table_statistics.take()
     }
 
     pub fn additional_stats_meta(self) -> Option<AdditionalStatsMeta> {
@@ -68,5 +78,17 @@ impl TableStatsGenerator {
             .iter()
             .map(|(id, hll)| (*id, hll.count() as u64))
             .collect()
+    }
+}
+
+pub fn stamp_table_statistics_with_snapshot_predecessor(
+    table_statistics: &mut Option<TableSnapshotStatistics>,
+    snapshot: &TableSnapshot,
+) {
+    if let Some(table_statistics) = table_statistics {
+        table_statistics.snapshot_id = snapshot
+            .prev_snapshot_id
+            .map(|(snapshot_id, _)| snapshot_id)
+            .unwrap_or_else(SnapshotId::nil);
     }
 }

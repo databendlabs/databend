@@ -18,38 +18,38 @@ use std::sync::Arc;
 
 use async_channel::Receiver;
 use async_channel::Sender;
+use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContextProgress;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::core::check_interrupt;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_settings::Settings;
 use databend_common_storage::DataOperator;
-use databend_storages_common_cache::TempDirManager;
+use databend_common_storages_parquet::ReadSettings;
+use parquet::file::metadata::RowGroupMetaData;
 
 use crate::sessions::QueryContext;
-use crate::sessions::TableContextQueryIdentity;
-use crate::spillers::BackpressureSpiller;
-use crate::spillers::SpillReader;
-use crate::spillers::SpillWriter;
-use crate::spillers::SpillerConfig;
-use crate::spillers::SpillerDiskConfig;
-use crate::spillers::SpillerType;
+use crate::spillers::Layout;
+use crate::spillers::Location;
+use crate::spillers::SpillAdapter;
+use crate::spillers::SpillTarget;
 use crate::spillers::SpillsBufferPool;
 
-pub type MaterializedCteSpiller = BackpressureSpiller;
-
 const MATERIALIZED_CTE_SPILL_UNIT_SIZE: usize = 8 * 1024 * 1024;
+/// Maximum number of row groups per file.
+const MAX_ROW_GROUPS_PER_FILE: usize = 2 << 15;
 
 #[derive(Clone)]
 pub enum MaterializedCtePayload {
@@ -59,60 +59,58 @@ pub enum MaterializedCtePayload {
 
 #[derive(Clone)]
 pub struct MaterializedCteSpilledPayload {
-    reader: SpillReader,
-    row_group: usize,
+    path: String,
+    row_groups: Arc<Vec<RowGroupMetaData>>,
+    schema: DataSchemaRef,
 }
 
 impl MaterializedCteSpilledPayload {
-    fn restore(mut self) -> Result<DataBlock> {
-        let blocks = self.reader.restore(vec![self.row_group], usize::MAX)?;
+    fn restore(self) -> Result<DataBlock> {
+        if self.row_groups.is_empty() {
+            return Err(ErrorCode::Internal(
+                "Failed to restore materialized cte spilled block: empty row groups",
+            ));
+        }
+
+        let data_operator = DataOperator::instance();
+        let target = SpillTarget::from_storage_params(data_operator.spill_params());
+        let operator = data_operator.spill_operator();
+        let buffer_pool = SpillsBufferPool::instance();
+        let settings = ReadSettings::default();
+        let mut reader = buffer_pool.reader(
+            operator,
+            self.path,
+            self.schema,
+            (*self.row_groups).clone(),
+            target,
+            settings,
+        )?;
+
+        let mut blocks = Vec::new();
+        loop {
+            check_interrupt()?;
+            let Some(block) = reader.read()? else {
+                break;
+            };
+            blocks.push(block);
+        }
+
         match blocks.len() {
             0 => Err(ErrorCode::Internal(
                 "Failed to restore materialized cte spilled block",
             )),
-            1 => Ok(blocks.into_iter().next().unwrap()),
+            1 => Ok(blocks.pop().unwrap()),
             _ => DataBlock::concat(&blocks),
         }
     }
 }
 
-pub fn create_materialized_cte_spiller(
-    ctx: Arc<QueryContext>,
-    settings: Arc<Settings>,
-) -> Result<MaterializedCteSpiller> {
-    let temp_dir_manager = TempDirManager::instance();
-    let disk_bytes_limit = GlobalConfig::instance()
-        .spill
-        .materialized_cte_spill_bytes_limit();
-    let enable_dio = settings.get_enable_dio()?;
-    let disk_spill = temp_dir_manager
-        .get_disk_spill_dir(disk_bytes_limit, &ctx.get_id())
-        .map(|temp_dir| SpillerDiskConfig::new(temp_dir, enable_dio))
-        .transpose()?;
-
-    let config = SpillerConfig {
-        spiller_type: SpillerType::MaterializedCTE,
-        location_prefix: ctx.query_id_spill_prefix(),
-        disk_spill,
-        use_parquet: settings.get_spilling_file_format()?.is_parquet(),
-        writer_pool_bytes: settings
-            .get_spill_writer_memory_pool_size_mb()?
-            .saturating_mul(1024 * 1024),
-    };
-    let operator = DataOperator::instance().spill_operator();
-    BackpressureSpiller::create(
-        ctx,
-        operator,
-        config,
-        SpillsBufferPool::instance(),
-        MATERIALIZED_CTE_SPILL_UNIT_SIZE,
-    )
-}
-
 pub struct MaterializedCteSink {
+    ctx: Arc<QueryContext>,
     input: Arc<InputPort>,
     senders: Vec<Sender<MaterializedCtePayload>>,
-    spiller: MaterializedCteSpiller,
+    prefix: String,
+    writer_pool_bytes: usize,
     memory_settings: MemorySettings,
     input_data: Option<DataBlock>,
     pending_payloads: VecDeque<MaterializedCtePayload>,
@@ -123,15 +121,22 @@ pub struct MaterializedCteSink {
 
 impl MaterializedCteSink {
     pub fn create(
+        ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
         senders: Vec<Sender<MaterializedCtePayload>>,
-        spiller: MaterializedCteSpiller,
+        settings: &Settings,
         memory_settings: MemorySettings,
     ) -> Result<ProcessorPtr> {
+        let prefix = ctx.query_id_spill_prefix();
+        let writer_pool_bytes = settings
+            .get_spill_writer_memory_pool_size_mb()?
+            .saturating_mul(1024 * 1024);
         Ok(ProcessorPtr::create(Box::new(Self {
+            ctx,
             input,
             senders,
-            spiller,
+            prefix,
+            writer_pool_bytes,
             memory_settings,
             input_data: None,
             pending_payloads: VecDeque::new(),
@@ -151,27 +156,39 @@ impl MaterializedCteSink {
         &self,
         data_blocks: Vec<DataBlock>,
     ) -> Result<Vec<MaterializedCtePayload>> {
-        let local_file_size = data_blocks
-            .iter()
-            .map(DataBlock::memory_size)
-            .sum::<usize>()
-            .max(self.spill_unit_size())
-            .max(1);
-        let schema = Arc::new(data_blocks[0].infer_schema());
-        let mut writer_creator = self.spiller.new_writer_creator(schema)?;
-        let mut writer = writer_creator.open(Some(local_file_size))?;
-        let mut row_groups = Vec::with_capacity(data_blocks.len());
-        for data_block in data_blocks {
-            row_groups.push(writer.add_row_group(vec![data_block])?);
-        }
-        let reader = writer.close()?;
+        let data_operator = DataOperator::instance();
+        let target = SpillTarget::from_storage_params(data_operator.spill_params());
+        let operator = data_operator.spill_operator();
+        let buffer_pool = SpillsBufferPool::instance();
+        let path = format!("{}/{}", self.prefix, GlobalUniq::unique());
+        let mut writer =
+            buffer_pool.writer(operator, path.clone(), self.writer_pool_bytes, target)?;
 
-        Ok(row_groups
+        let schema = Arc::new(data_blocks[0].infer_schema());
+        let mut row_group_ranges = Vec::with_capacity(data_blocks.len());
+        let mut next_row_group = 0;
+        for block in data_blocks {
+            check_interrupt()?;
+            writer.write(block)?;
+            let row_group_count = writer.flush_row_groups()?;
+            row_group_ranges.push(next_row_group..row_group_count);
+            next_row_group = row_group_count;
+        }
+        let (bytes_written, row_groups) = writer.close()?;
+        if bytes_written > 0 {
+            self.ctx.add_spill_file(
+                Location::Remote(path.clone()),
+                Layout::Parquet,
+                bytes_written,
+            );
+        }
+        Ok(row_group_ranges
             .into_iter()
-            .map(|row_group| {
+            .map(|range| {
                 MaterializedCtePayload::Spilled(MaterializedCteSpilledPayload {
-                    reader: reader.clone(),
-                    row_group,
+                    path: path.clone(),
+                    row_groups: Arc::new(row_groups[range].to_vec()),
+                    schema: schema.clone(),
                 })
             })
             .collect())
@@ -184,7 +201,7 @@ impl MaterializedCteSink {
             self.spilling_blocks.push(data_block);
 
             if self.spilling_bytes >= self.spill_unit_size()
-                || self.spilling_blocks.len() >= SpillWriter::MAX_ORDINAL
+                || self.spilling_blocks.len() >= MAX_ROW_GROUPS_PER_FILE
             {
                 self.flush_spilling_blocks()?;
             }
@@ -196,13 +213,17 @@ impl MaterializedCteSink {
         Ok(())
     }
 
-    async fn send_payload(&self, payload: MaterializedCtePayload) -> Result<()> {
-        for sender in self.senders.iter() {
-            sender.send(payload.clone()).await.map_err(|_| {
-                ErrorCode::Internal("Failed to send blocks to materialized cte consumer")
-            })?;
+    async fn send_payload(&mut self, payload: MaterializedCtePayload) {
+        let mut index = 0;
+        while index < self.senders.len() {
+            if self.senders[index].send(payload.clone()).await.is_err() {
+                // A consumer can finish early (e.g. LIMIT), including while a
+                // bounded send is waiting. Other consumers still need this payload.
+                self.senders.remove(index);
+            } else {
+                index += 1;
+            }
         }
-        Ok(())
     }
 
     fn flush_spilling_blocks(&mut self) -> Result<()> {
@@ -246,6 +267,12 @@ impl Processor for MaterializedCteSink {
     }
 
     fn event(&mut self) -> Result<Event> {
+        self.senders.retain(|sender| !sender.is_closed());
+        if self.senders.is_empty() {
+            self.input.finish();
+            return Ok(Event::Finished);
+        }
+
         if !self.pending_payloads.is_empty() {
             self.input.set_not_need_data();
             return Ok(Event::Async);
@@ -294,14 +321,14 @@ impl Processor for MaterializedCteSink {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         while let Some(payload) = self.pending_payloads.pop_front() {
-            self.send_payload(payload).await?;
+            self.send_payload(payload).await;
         }
         Ok(())
     }
 }
 
 pub struct CTESource {
-    receiver: Receiver<MaterializedCtePayload>,
+    receiver: Option<Receiver<MaterializedCtePayload>>,
     output: Arc<OutputPort>,
     scan_progress: Arc<Progress>,
     received_payload: Option<MaterializedCtePayload>,
@@ -316,7 +343,7 @@ impl CTESource {
         receiver: Receiver<MaterializedCtePayload>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(Self {
-            receiver,
+            receiver: Some(receiver),
             output: output_port,
             scan_progress: ctx.get_scan_progress(),
             received_payload: None,
@@ -337,14 +364,12 @@ impl Processor for CTESource {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if self.is_finished {
-            self.output.finish();
-            return Ok(Event::Finished);
-        }
-
-        if self.output.is_finished() {
+        if self.is_finished || self.output.is_finished() {
             self.is_finished = true;
-            self.receiver.close();
+            // Dropping the last source's receiver closes the consumer's channel.
+            // Other sources sharing this consumer can keep reading until then.
+            self.receiver = None;
+            self.output.finish();
             return Ok(Event::Finished);
         }
 
@@ -389,7 +414,7 @@ impl Processor for CTESource {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        match self.receiver.recv().await {
+        match self.receiver.as_ref().unwrap().recv().await {
             Ok(payload) => self.received_payload = Some(payload),
             Err(_) => self.is_finished = true,
         }

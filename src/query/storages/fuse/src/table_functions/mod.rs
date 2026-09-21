@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod authorization;
 mod clustering_information;
 mod clustering_statistics;
 mod function_template;
@@ -21,6 +22,7 @@ mod fuse_block_statistics;
 mod fuse_column;
 mod fuse_dump_snapshot;
 mod fuse_encoding;
+mod fuse_inverted_index;
 mod fuse_page;
 mod fuse_segment;
 mod fuse_snapshot;
@@ -30,9 +32,13 @@ mod fuse_time_travel_size;
 mod fuse_vacuum_drop_aggregating_index;
 mod fuse_vacuum_drop_inverted_index;
 mod fuse_vacuum_temporary_table;
-mod fuse_virtual_column;
+mod fuse_virtual_column_block_meta;
+mod fuse_virtual_column_build;
+mod fuse_virtual_column_parquet_meta;
+mod fuse_virtual_column_segment_schema;
 mod set_cache_capacity;
 
+pub use authorization::check_shared_table_select;
 pub use clustering_information::ClusteringInformationFunc;
 pub use clustering_information::ClusteringInformationResponse;
 pub use clustering_information::get_clustering_information;
@@ -48,6 +54,7 @@ pub use fuse_block_statistics::FuseBlockStatisticsFunc;
 pub use fuse_column::FuseColumnFunc;
 pub use fuse_dump_snapshot::FuseDumpSnapshotsFunc;
 pub use fuse_encoding::FuseEncodingFunc;
+pub use fuse_inverted_index::FuseInvertedIndexTable;
 pub use fuse_page::FusePageFunc;
 pub use fuse_segment::FuseSegmentFunc;
 pub use fuse_snapshot::FuseSnapshotFunc;
@@ -59,5 +66,8 @@ pub use fuse_vacuum_drop_aggregating_index::FuseVacuumDropAggregatingIndex;
 pub use fuse_vacuum_drop_inverted_index::FuseVacuumDropInvertedIndex;
 pub use fuse_vacuum_temporary_table::FuseVacuumTemporaryTable;
 pub use fuse_vacuum_temporary_table::vacuum_inactive_temp_tables;
-pub use fuse_virtual_column::FuseVirtualColumnFunc;
+pub use fuse_virtual_column_block_meta::FuseVirtualColumnBlockMetaFunc;
+pub use fuse_virtual_column_build::FuseVirtualColumnBuildFunc;
+pub use fuse_virtual_column_parquet_meta::FuseVirtualColumnParquetMetaFunc;
+pub use fuse_virtual_column_segment_schema::FuseVirtualColumnSegmentSchemaFunc;
 pub use set_cache_capacity::SetCacheCapacity;

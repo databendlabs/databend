@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(box_patterns)]
+#![allow(incomplete_features)]
+#![feature(deref_patterns)]
 #![allow(clippy::uninlined_format_args)]
 
 mod bloom_pruner;
 mod eliminate_cast;
-mod page_pruner;
 mod range_pruner;
 mod xor8;

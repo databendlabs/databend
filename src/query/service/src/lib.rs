@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Query futures contain deeply nested async binder and executor calls.
+#![recursion_limit = "256"]
 #![allow(internal_features)]
 #![allow(
     clippy::derivable_impls,
@@ -25,30 +27,19 @@
     clippy::uninlined_format_args,
     clippy::useless_asref
 )]
-#![feature(int_roundings)]
-#![feature(never_type)]
-#![feature(iter_map_windows)]
 #![feature(core_intrinsics)]
 #![feature(arbitrary_self_types)]
-#![feature(type_alias_impl_trait)]
-#![feature(assert_matches)]
-#![feature(trusted_len)]
-#![feature(box_patterns)]
+#![allow(incomplete_features)]
+#![feature(deref_patterns)]
 #![feature(sync_unsafe_cell)]
 #![allow(mismatched_lifetime_syntaxes)]
 #![feature(iterator_try_reduce)]
-#![feature(cursor_split)]
 #![allow(clippy::large_enum_variant)]
-#![feature(impl_trait_in_assoc_type)]
-#![feature(iterator_try_collect)]
 #![feature(try_blocks)]
 #![feature(variant_count)]
 #![feature(duration_constructors)]
-#![feature(get_mut_unchecked)]
-#![feature(box_into_inner)]
 #![allow(clippy::diverging_sub_expression)]
 #![allow(clippy::arc_with_non_send_sync)]
-#![feature(debug_closure_helpers)]
 #![feature(stmt_expr_attributes)]
 
 extern crate core;
@@ -65,6 +56,7 @@ pub mod pipelines;
 pub mod schedulers;
 pub mod servers;
 pub mod sessions;
+pub mod share;
 pub mod spillers;
 pub mod stream;
 pub mod table_functions;

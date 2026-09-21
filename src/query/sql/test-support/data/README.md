@@ -28,6 +28,9 @@ data
 │   ├── basic/       # Basic test cases
 │   ├── tpcds/       # TPC-DS test cases
 │   └── obfuscated/  # Obfuscated test cases
+├── statistics_trace/ # StatisticsTrace replay fixtures
+│   ├── sql/          # SQL statements replayed from trace JSON
+│   └── traces/       # StatisticsTrace JSON payloads
 └── results/         # Test result files (generated)
     ├── basic/       # Results for basic test cases
     ├── tpcds/       # Results for TPC-DS test cases
@@ -143,6 +146,10 @@ Each replay test case generates up to three result files in the corresponding su
 - `{test_name}_raw.txt` - The raw plan before optimization
 - `{test_name}_optimized.txt` - The optimized logical plan
 - `{test_name}_physical.txt` - The physical execution plan when the runner supports physical planning
+
+## StatisticsTrace Replay Fixtures
+
+`statistics_trace/sql/` and `statistics_trace/traces/` contain paired SQL and JSON inputs for direct `StatisticsTrace` replay. The service-side trace test generates a fresh JSON payload from `CollectStatisticsOptimizer` and compares it with the JSON fixture. The SQL-side golden test consumes the same SQL and JSON fixtures through the lightweight replay harness.
 
 ## Adding New Replay Tests
 

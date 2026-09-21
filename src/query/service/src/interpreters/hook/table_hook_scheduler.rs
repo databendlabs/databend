@@ -45,7 +45,6 @@ use crate::interpreters::hook::refresh_hook::execute_refresh_hook;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sessions::TableContextPartitionStats;
-use crate::sessions::TableContextSettings;
 
 pub struct TableHookTask {
     pub ctx: Arc<QueryContext>,
@@ -60,29 +59,17 @@ pub struct TableHookTask {
 #[derive(Clone, Copy)]
 pub struct TableHookTaskSettings {
     pub compact_after_write: bool,
-    pub refresh_aggregating_index_after_write: bool,
 }
 
 impl TableHookTaskSettings {
     pub fn create(ctx: &Arc<QueryContext>) -> Self {
         Self {
             compact_after_write: compact_after_write_enabled(ctx),
-            refresh_aggregating_index_after_write: ctx
-                .get_settings()
-                .get_enable_refresh_aggregating_index_after_write()
-                .unwrap_or_else(|e| {
-                    warn!(
-                        "Failed to retrieve refresh aggregating index settings, continuing without refresh aggregating index: {}",
-                        e
-                    );
-                    false
-                }),
         }
     }
 
     fn merge(&mut self, other: Self) {
         self.compact_after_write |= other.compact_after_write;
-        self.refresh_aggregating_index_after_write |= other.refresh_aggregating_index_after_write;
     }
 }
 
@@ -229,9 +216,6 @@ impl TableHookScheduler {
             database: task.compact_target.database.clone(),
             table: task.compact_target.table.clone(),
             table_id: Some(task.table_id),
-            enable_refresh_aggregating_index_after_write: Some(
-                task.hook_settings.refresh_aggregating_index_after_write,
-            ),
         })
         .await
         .ok();
@@ -404,6 +388,7 @@ mod tests {
     use std::sync::atomic::Ordering;
     use std::time::Duration;
 
+    use databend_common_catalog::table_context::TableContextSettings;
     use tokio::sync::Notify;
     use tokio::time::sleep;
     use tokio::time::timeout;
@@ -825,23 +810,14 @@ mod tests {
         old_ctx
             .get_settings()
             .set_setting("enable_compact_after_write".to_string(), "1".to_string())?;
-        old_ctx.get_settings().set_setting(
-            "enable_refresh_aggregating_index_after_write".to_string(),
-            "1".to_string(),
-        )?;
         latest_ctx
             .get_settings()
             .set_setting("enable_compact_after_write".to_string(), "0".to_string())?;
-        latest_ctx.get_settings().set_setting(
-            "enable_refresh_aggregating_index_after_write".to_string(),
-            "0".to_string(),
-        )?;
 
         let mut task = table_hook_task(old_ctx, "t");
         task.merge(table_hook_task(latest_ctx, "t"));
 
         assert!(task.hook_settings.compact_after_write);
-        assert!(task.hook_settings.refresh_aggregating_index_after_write);
         Ok(())
     }
 

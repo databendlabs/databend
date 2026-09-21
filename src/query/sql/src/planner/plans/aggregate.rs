@@ -18,15 +18,18 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_statistics::TypedHistogram;
 
 use crate::ColumnSet;
 use crate::ScalarExpr;
 use crate::Symbol;
+use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
@@ -128,22 +131,22 @@ impl Aggregate {
 
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
-        for group_item in self.group_items.iter() {
+        for group_item in &self.group_items {
             used_columns.insert(group_item.index);
-            used_columns.extend(group_item.scalar.used_columns())
+            group_item.scalar.collect_used_columns(&mut used_columns);
         }
-        for agg in self.aggregate_functions.iter() {
+        for agg in &self.aggregate_functions {
             used_columns.insert(agg.index);
-            used_columns.extend(agg.scalar.used_columns())
+            agg.scalar.collect_used_columns(&mut used_columns);
         }
         Ok(used_columns)
     }
 
     pub fn group_columns(&self) -> Result<ColumnSet> {
         let mut col_set = ColumnSet::new();
-        for group_item in self.group_items.iter() {
+        for group_item in &self.group_items {
             col_set.insert(group_item.index);
-            col_set.extend(group_item.scalar.used_columns())
+            group_item.scalar.collect_used_columns(&mut col_set);
         }
         Ok(col_set)
     }
@@ -156,6 +159,8 @@ impl Aggregate {
                 statistics: Statistics {
                     precise_cardinality: Some(1),
                     column_stats: column_stats.clone(),
+                    top_n: Default::default(),
+                    count_min_sketch: Default::default(),
                 },
             }));
         }
@@ -164,7 +169,7 @@ impl Aggregate {
             .group_items
             .iter()
             .any(|item| match column_stats.get(&item.index) {
-                Some(stat) => stat.ndv.is_upper_only(),
+                Some(stat) => stat.ndv().is_upper_only(),
                 None => true,
             })
         {
@@ -173,6 +178,8 @@ impl Aggregate {
                 statistics: Statistics {
                     precise_cardinality: None,
                     column_stats: column_stats.clone(),
+                    top_n: Default::default(),
+                    count_min_sketch: Default::default(),
                 },
             }));
         }
@@ -182,7 +189,7 @@ impl Aggregate {
             .iter()
             .map(|group| {
                 column_stats[&group.index]
-                    .ndv
+                    .ndv()
                     .expected
                     .expect("upper-only group NDV should have used aggregate fallback")
             })
@@ -205,20 +212,14 @@ impl Aggregate {
         for item in self.group_items.iter() {
             let item_stat = column_stats.get_mut(&item.index).unwrap();
             if self.group_items.len() == 1 {
-                item_stat.ndv = item_stat.ndv.reduce(cardinality);
+                item_stat.set_ndv(item_stat.ndv().reduce(cardinality));
             }
-
-            let Some(histogram) = &mut item_stat.histogram else {
-                continue;
-            };
-            // When there is a high probability that eager aggregation
-            // is better, we will update the histogram.
-            if histogram
-                .ndv()
-                .expected
-                .is_some_and(|ndv| histogram.num_values() >= ndv * 10.0)
-            {
-                histogram.collapse_counts_to_distinct();
+            match item_stat {
+                ColumnStat::Int { histogram, .. } => collapse_dense_histogram(histogram),
+                ColumnStat::UInt { histogram, .. } => collapse_dense_histogram(histogram),
+                ColumnStat::Float { histogram, .. } => collapse_dense_histogram(histogram),
+                ColumnStat::Bytes { histogram, .. } => collapse_dense_histogram(histogram),
+                ColumnStat::Boolean { .. } | ColumnStat::AllNull { .. } => {}
             }
         }
 
@@ -227,8 +228,25 @@ impl Aggregate {
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
+                top_n: Default::default(),
+                count_min_sketch: Default::default(),
             },
         }))
+    }
+}
+
+fn collapse_dense_histogram<T>(histogram: &mut Option<TypedHistogram<T>>) {
+    let Some(histogram) = histogram else {
+        return;
+    };
+    // When there is a high probability that eager aggregation is better, we
+    // will update the histogram.
+    if histogram
+        .ndv()
+        .expected
+        .is_some_and(|ndv| histogram.num_values() >= ndv * 10.0)
+    {
+        histogram.collapse_counts_to_distinct();
     }
 }
 
@@ -332,12 +350,18 @@ impl Operator for Aggregate {
             output_columns.insert(agg.index);
         }
 
-        // Derive outer columns
-        let outer_columns = input_prop
-            .outer_columns
-            .difference(&output_columns)
-            .cloned()
-            .collect();
+        // GROUPING SETS rewrites use local producer symbols that are not necessarily
+        // exposed by the child property. Treating those symbols as outer references
+        // makes unrelated full outer joins fail during decorrelation.
+        let outer_columns = if self.grouping_sets.is_some() {
+            input_prop
+                .outer_columns
+                .difference(&output_columns)
+                .cloned()
+                .collect()
+        } else {
+            self.derive_outer_columns(input_prop.outer_columns.clone(), &input_prop.output_columns)
+        };
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
@@ -352,11 +376,11 @@ impl Operator for Aggregate {
         }))
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         if self.mode == AggregateMode::Final {
-            return rel_expr.derive_cardinality_child(0);
+            return rel_expr.derive_cardinality_child(0, stat_ctx);
         }
-        let stat_info = rel_expr.derive_cardinality_child(0)?;
+        let stat_info = rel_expr.derive_cardinality_child(0, stat_ctx)?;
         self.derive_agg_stats(stat_info)
     }
 

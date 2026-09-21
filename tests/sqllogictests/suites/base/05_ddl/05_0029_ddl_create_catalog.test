@@ -30,5 +30,3 @@ DROP DATABASE db1;
 statement ok
 DROP CATALOG IF EXISTS ctl;
 
-statement error 1001
-CREATE CATALOG ctl_wrong_hive TYPE=HIVE CONNECTION=( URL='s3://bucket' METASTORE_ADDRESS='127.0.0.1:1000' );

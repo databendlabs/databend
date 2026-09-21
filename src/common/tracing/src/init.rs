@@ -275,7 +275,7 @@ pub fn init_logging(
             .chain([(Cow::from("category"), Cow::from("system"))]);
         let mut otel_builder = logforth::append::opentelemetry::OpentelemetryLogBuilder::new(
             log_name,
-            format!("{}/v1/logs", &cfg.otlp.endpoint.endpoint),
+            format!("{}/v1/logs", cfg.otlp.endpoint.endpoint),
         )
         .protocol(cfg.otlp.endpoint.protocol.into());
         for (k, v) in labels {
@@ -331,7 +331,7 @@ pub fn init_logging(
                 .chain([(Cow::from("category"), Cow::from("query"))]);
             let mut otel_builder = logforth::append::opentelemetry::OpentelemetryLogBuilder::new(
                 log_name,
-                format!("{}/v1/logs", &endpoint.endpoint),
+                format!("{}/v1/logs", endpoint.endpoint),
             )
             .protocol(endpoint.protocol.into());
             for (k, v) in labels {
@@ -381,7 +381,7 @@ pub fn init_logging(
                 .chain([(Cow::from("category"), Cow::from("profile"))]);
             let otel = logforth::append::opentelemetry::OpentelemetryLogBuilder::new(
                 log_name,
-                format!("{}/v1/logs", &endpoint.endpoint),
+                format!("{}/v1/logs", endpoint.endpoint),
             )
             .protocol(endpoint.protocol.into())
             .labels(labels)
@@ -419,7 +419,7 @@ pub fn init_logging(
                 .append(structlog_log_file)
         });
     }
-    if cfg.history.on {
+    if cfg.history.enabled() {
         let (remote_log, flush_guard) =
             RemoteLog::new(&labels, cfg).expect("initialize remote logger");
 
@@ -428,7 +428,7 @@ pub fn init_logging(
 
         let mut table_to_target = table_to_target();
 
-        for table_cfg in cfg.history.tables.iter() {
+        for table_cfg in cfg.history.enabled_tables() {
             if let Some(target) = table_to_target.remove(&table_cfg.table_name) {
                 filter_builder = filter_builder.filter(Some(&target), LevelFilter::Trace);
             }

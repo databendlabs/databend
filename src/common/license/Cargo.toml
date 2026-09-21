@@ -14,5 +14,11 @@ jwt-simple = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
+[dev-dependencies]
+# The query build turns on `serde_json/arbitrary_precision` through `jsonb`,
+# which changes how JSON numbers reach custom deserializers. Enable it here so
+# these tests exercise the same configuration the query binary runs with.
+serde_json = { workspace = true, features = ["arbitrary_precision"] }
+
 [lints]
 workspace = true

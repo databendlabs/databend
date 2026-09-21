@@ -137,8 +137,8 @@ impl BinaryFuse32Builder {
         Self::default()
     }
 
-    pub(super) fn take_digests(&mut self) -> Vec<u64> {
-        std::mem::take(&mut self.digests).into_iter().collect()
+    pub(super) fn into_digests(self) -> Vec<u64> {
+        self.digests.into_iter().collect()
     }
 
     pub(super) fn build_from_digests(
@@ -283,12 +283,16 @@ impl FilterBuilder for BinaryFuse32Builder {
         }
     }
 
+    fn add_digest(&mut self, digest: u64) {
+        self.digests.insert(digest);
+    }
+
     fn add_digests<'i, I: IntoIterator<Item = &'i u64>>(&mut self, digests: I) {
         self.digests.extend(digests.into_iter().copied());
     }
 
-    fn build(&mut self) -> Result<Self::Filter, Self::Error> {
-        let digests = self.take_digests();
+    fn build(self) -> Result<Self::Filter, Self::Error> {
+        let digests = self.into_digests();
         Self::build_from_digests(digests.as_slice())
     }
 }
@@ -745,8 +749,10 @@ impl Filter for BinaryFuse32Filter {
             return Err(eof());
         }
         let fingerprints = buf[offset..offset + byte_len]
-            .chunks_exact(std::mem::size_of::<u32>())
-            .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|chunk| u32::from_le_bytes(*chunk))
             .collect();
         offset += byte_len;
 

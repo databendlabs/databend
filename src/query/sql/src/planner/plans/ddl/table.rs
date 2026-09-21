@@ -36,7 +36,9 @@ use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::SharedLockGuard;
+use databend_storages_common_table_meta::table::ClusterType;
 
+use crate::plans::MaintenanceTarget;
 use crate::plans::Plan;
 
 pub type TableOptions = BTreeMap<String, String>;
@@ -59,6 +61,8 @@ pub struct CreateTablePlan {
     pub field_comments: Vec<String>,
     pub field_stats_truncate_len: Vec<Option<u64>>,
     pub cluster_key: Option<String>,
+    /// Row-level TTL expression text, already validated and normalized.
+    pub ttl: Option<String>,
     pub as_select: Option<Box<Plan>>,
     pub table_indexes: Option<BTreeMap<String, TableIndex>>,
     pub table_constraints: Option<BTreeMap<String, Constraint>>,
@@ -113,37 +117,36 @@ pub struct VacuumTablePlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub option: VacuumTableOption,
 }
 
 impl VacuumTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
-        if let Some(summary) = self.option.dry_run {
-            if summary {
-                Arc::new(DataSchema::new(vec![
-                    DataField::new("total_files", DataType::Number(NumberDataType::UInt64)),
-                    DataField::new("total_size", DataType::Number(NumberDataType::UInt64)),
-                ]))
-            } else {
-                Arc::new(DataSchema::new(vec![
-                    DataField::new("file", DataType::String),
-                    DataField::new("file_size", DataType::Number(NumberDataType::UInt64)),
-                ]))
-            }
-        } else {
-            Arc::new(DataSchema::new(vec![
-                DataField::new("snapshot_files", DataType::Number(NumberDataType::UInt64)),
-                DataField::new("snapshot_size", DataType::Number(NumberDataType::UInt64)),
-                DataField::new("segments_files", DataType::Number(NumberDataType::UInt64)),
-                DataField::new("segments_size", DataType::Number(NumberDataType::UInt64)),
-                DataField::new("block_files", DataType::Number(NumberDataType::UInt64)),
-                DataField::new("block_size", DataType::Number(NumberDataType::UInt64)),
-                DataField::new("index_files", DataType::Number(NumberDataType::UInt64)),
-                DataField::new("index_size", DataType::Number(NumberDataType::UInt64)),
-                DataField::new("total_files", DataType::Number(NumberDataType::UInt64)),
-                DataField::new("total_size", DataType::Number(NumberDataType::UInt64)),
-            ]))
-        }
+        Arc::new(DataSchema::empty())
+    }
+}
+
+/// Vacuum tables
+#[derive(Clone, Debug)]
+pub struct VacuumTablesPlan {
+    pub catalog: String,
+    pub database: Option<String>,
+}
+
+impl VacuumTablesPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+/// Vacuum all
+#[derive(Clone, Debug)]
+pub struct VacuumAllPlan {
+    pub catalog: String,
+}
+
+impl VacuumAllPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
     }
 }
 
@@ -152,37 +155,11 @@ impl VacuumTablePlan {
 pub struct VacuumDropTablePlan {
     pub catalog: String,
     pub database: String,
-    pub option: VacuumDropTableOption,
 }
 
 impl VacuumDropTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
-        if let Some(summary) = self.option.dry_run {
-            if summary {
-                Arc::new(DataSchema::new(vec![
-                    DataField::new("table", DataType::String),
-                    DataField::new("total_files", DataType::Number(NumberDataType::UInt64)),
-                    DataField::new("total_size", DataType::Number(NumberDataType::UInt64)),
-                ]))
-            } else {
-                Arc::new(DataSchema::new(vec![
-                    DataField::new("table", DataType::String),
-                    DataField::new("file", DataType::String),
-                    DataField::new("file_size", DataType::Number(NumberDataType::UInt64)),
-                ]))
-            }
-        } else {
-            Arc::new(DataSchema::new(vec![
-                DataField::new(
-                    "success_tables_count",
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-                DataField::new(
-                    "failed_tables_count",
-                    DataType::Number(NumberDataType::UInt64),
-                ),
-            ]))
-        }
+        Arc::new(DataSchema::empty())
     }
 }
 
@@ -194,26 +171,8 @@ pub struct VacuumTemporaryFilesPlan {
 
 impl crate::plans::VacuumTemporaryFilesPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::new(vec![
-            DataField::new("spill_files", DataType::Number(NumberDataType::UInt64)),
-            DataField::new(
-                "temp_table_sessions",
-                DataType::Number(NumberDataType::UInt64),
-            ),
-        ]))
+        Arc::new(DataSchema::empty())
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct VacuumDropTableOption {
-    // Some(true) means dry run with summary option
-    pub dry_run: Option<bool>,
-    pub limit: Option<usize>,
-}
-
-#[derive(Debug, Clone)]
-pub struct VacuumTableOption {
-    pub dry_run: Option<bool>,
 }
 
 #[derive(Clone, Debug)]
@@ -222,6 +181,9 @@ pub struct AnalyzeTablePlan {
     pub database: String,
     pub table: String,
     pub no_scan: bool,
+    pub histogram_requested: bool,
+    pub histogram_algorithm: Option<String>,
+    pub histogram_kll_relative_error: Option<f64>,
 }
 
 impl AnalyzeTablePlan {
@@ -273,6 +235,7 @@ pub struct ModifyTableCommentPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub target: MaintenanceTarget,
 }
 
 impl ModifyTableCommentPlan {
@@ -303,6 +266,7 @@ pub struct SetOptionsPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub target: MaintenanceTarget,
 }
 
 impl SetOptionsPlan {
@@ -317,6 +281,7 @@ pub struct UnsetOptionsPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub target: MaintenanceTarget,
 }
 
 impl UnsetOptionsPlan {
@@ -531,12 +496,30 @@ pub struct AlterTableClusterKeyPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub target: MaintenanceTarget,
     pub branch: Option<String>,
     pub cluster_keys: Vec<String>,
-    pub cluster_type: String,
+    pub cluster_type: ClusterType,
 }
 
 impl AlterTableClusterKeyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct AlterTablePartitionByPlan {
+    pub if_exists: bool,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    /// `None` when `IF EXISTS` resolves a missing table during binding.
+    pub table_id: Option<u64>,
+    pub partition_keys: Vec<String>,
+}
+
+impl AlterTablePartitionByPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
@@ -548,10 +531,33 @@ pub struct DropTableClusterKeyPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub target: MaintenanceTarget,
     pub branch: Option<String>,
 }
 
 impl DropTableClusterKeyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+/// Row-level TTL: `ALTER TABLE ... SET TTL <expr>` and `... REMOVE TTL`.
+///
+/// Removing a TTL is just setting it to nothing, so one plan covers both rather
+/// than duplicating the surrounding plumbing for a single `Option`.
+#[derive(Clone, Debug)]
+pub struct AlterTableTtlPlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub if_exists: bool,
+    /// `None` when IF EXISTS resolves a missing table during binding.
+    pub table_id: Option<u64>,
+    /// Validated and normalized TTL expression text; `None` means `REMOVE TTL`.
+    pub ttl: Option<String>,
+}
+
+impl AlterTableTtlPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

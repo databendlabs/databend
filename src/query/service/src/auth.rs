@@ -129,7 +129,7 @@ impl AuthMgr {
                 let tenant = Tenant::new_or_err(claim.tenant.to_string(), func_name!())?;
                 if need_user_info {
                     let identity = UserIdentity::new(claim.user.clone(), "%");
-                    session.set_current_tenant(tenant.clone());
+                    session.set_current_tenant(tenant.clone())?;
                     let user_info = user_api.get_user(&tenant, identity.clone()).await?;
                     session.set_authed_user(user_info, claim.auth_role).await?;
                 }
@@ -154,7 +154,7 @@ impl AuthMgr {
                 // setup tenant if the JWT claims contain extra.tenant_id
                 if let Some(tenant) = jwt.custom.tenant_id {
                     let tenant = Tenant::new_or_err(tenant, func_name!())?;
-                    session.set_current_tenant(tenant);
+                    session.set_current_tenant(tenant)?;
                 };
 
                 let tenant = session.get_current_tenant();

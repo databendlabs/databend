@@ -94,6 +94,7 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
         for table in tables {
             let create_query = ShowCreateTableInterpreter::show_create_query(
                 catalog.as_ref(),
+                tenant,
                 database.name(),
                 table.as_ref(),
                 &settings,
@@ -110,17 +111,22 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
                 "".to_owned()
             });
 
-            let table_id = table.get_table_info().ident.table_id;
-            let stats = &table.get_table_info().meta.statistics;
+            let table_info = table.get_table_info();
+            let table_id = table_info.ident.table_id;
+            let stats = &table_info.meta.statistics;
+            let is_shared = table_info.is_shared();
             table_infos.push(TenantTableInfo {
                 table: table.name().to_string(),
                 database: database.name().to_string(),
                 database_id: format!("{}", database_info.database_id),
                 engine: table.engine().to_string(),
-                created_on: table.get_table_info().meta.created_on,
-                updated_on: table.get_table_info().meta.updated_on,
-                is_local: matches!(table.distribution_level(), DistributionLevel::Local),
-                is_external: table.get_table_info().meta.storage_params.is_some(),
+                created_on: table_info.meta.created_on,
+                updated_on: table_info.meta.updated_on,
+                // Preserve the admin classification of shared tables even though
+                // they now use cluster execution and resolved provider storage.
+                is_local: is_shared
+                    || matches!(table.distribution_level(), DistributionLevel::Local),
+                is_external: !is_shared && table_info.meta.storage_params.is_some(),
                 rows: stats.number_of_rows,
                 data_bytes: stats.data_bytes,
                 compressed_data_bytes: stats.compressed_data_bytes,

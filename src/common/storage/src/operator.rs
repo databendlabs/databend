@@ -35,7 +35,6 @@ use databend_common_meta_app::storage::StorageHdfsConfig;
 use databend_common_meta_app::storage::StorageHttpConfig;
 use databend_common_meta_app::storage::StorageHuggingfaceConfig;
 use databend_common_meta_app::storage::StorageIpfsConfig;
-use databend_common_meta_app::storage::StorageMokaConfig;
 use databend_common_meta_app::storage::StorageNetworkParams;
 use databend_common_meta_app::storage::StorageObsConfig;
 use databend_common_meta_app::storage::StorageOssConfig;
@@ -62,6 +61,7 @@ use crate::StorageConfig;
 use crate::StorageHttpClient;
 use crate::concurrent_limit_layer::ConcurrentLimitLayer;
 use crate::config::CredentialChainConfig;
+use crate::config::EndpointPolicyScope;
 use crate::http_client::get_storage_http_client;
 use crate::metrics_layer::METRICS_LAYER;
 use crate::operator_cache::get_operator_cache;
@@ -72,54 +72,90 @@ static METRIC_OPENDAL_RETRIES_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, S
 
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
+    init_operator_with_policy_scope(cfg, EndpointPolicyScope::Trusted)
+}
+
+/// init_operator_with_policy_scope will init an opendal operator with an
+/// explicit endpoint egress policy scope.
+pub fn init_operator_with_policy_scope(
+    cfg: &StorageParams,
+    endpoint_policy_scope: EndpointPolicyScope,
+) -> Result<Operator> {
     let cache = get_operator_cache();
     cache
-        .get_or_create(cfg)
+        .get_or_create(cfg, endpoint_policy_scope)
         .map_err(|e| Error::other(anyhow!("Failed to get or create operator: {}", e)))
 }
 
 /// init_operator_uncached will init an opendal operator without caching.
 /// This function creates a new operator every time it's called.
-pub(crate) fn init_operator_uncached(cfg: &StorageParams) -> Result<Operator> {
+pub(crate) fn init_operator_uncached(
+    cfg: &StorageParams,
+    endpoint_policy_scope: EndpointPolicyScope,
+) -> Result<Operator> {
     let op = match &cfg {
-        StorageParams::Azblob(cfg) => {
-            build_operator(init_azblob_operator(cfg)?, cfg.network_config.as_ref())?
+        StorageParams::Azblob(cfg) => build_operator(
+            init_azblob_operator(cfg)?,
+            cfg.network_config.as_ref(),
+            endpoint_policy_scope,
+        )?,
+        StorageParams::Fs(cfg) => {
+            build_operator(init_fs_operator(cfg)?, None, endpoint_policy_scope)?
         }
-        StorageParams::Fs(cfg) => build_operator(init_fs_operator(cfg)?, None)?,
-        StorageParams::Gcs(cfg) => {
-            build_operator(init_gcs_operator(cfg)?, cfg.network_config.as_ref())?
-        }
+        StorageParams::Gcs(cfg) => build_operator(
+            init_gcs_operator(cfg)?,
+            cfg.network_config.as_ref(),
+            endpoint_policy_scope,
+        )?,
         #[cfg(feature = "storage-hdfs")]
-        StorageParams::Hdfs(cfg) => {
-            build_operator(init_hdfs_operator(cfg)?, cfg.network_config.as_ref())?
-        }
+        StorageParams::Hdfs(cfg) => build_operator(
+            init_hdfs_operator(cfg)?,
+            cfg.network_config.as_ref(),
+            endpoint_policy_scope,
+        )?,
         StorageParams::Http(cfg) => {
             let (builder, layer) = init_http_operator(cfg)?;
-            build_operator(builder, cfg.network_config.as_ref())?.layer(layer)
+            build_operator(builder, cfg.network_config.as_ref(), endpoint_policy_scope)?
+                .layer(layer)
         }
-        StorageParams::Ipfs(cfg) => {
-            build_operator(init_ipfs_operator(cfg)?, cfg.network_config.as_ref())?
+        StorageParams::Ipfs(cfg) => build_operator(
+            init_ipfs_operator(cfg)?,
+            cfg.network_config.as_ref(),
+            endpoint_policy_scope,
+        )?,
+        StorageParams::Memory => {
+            build_operator(init_memory_operator()?, None, endpoint_policy_scope)?
         }
-        StorageParams::Memory => build_operator(init_memory_operator()?, None)?,
-        StorageParams::Moka(cfg) => build_operator(init_moka_operator(cfg)?, None)?,
-        StorageParams::Obs(cfg) => {
-            build_operator(init_obs_operator(cfg)?, cfg.network_config.as_ref())?
-        }
-        StorageParams::S3(cfg) => {
-            build_operator(init_s3_operator(cfg)?, cfg.network_config.as_ref())?
-        }
-        StorageParams::Oss(cfg) => {
-            build_operator(init_oss_operator(cfg)?, cfg.network_config.as_ref())?
-        }
-        StorageParams::Webhdfs(cfg) => {
-            build_operator(init_webhdfs_operator(cfg)?, cfg.network_config.as_ref())?
-        }
-        StorageParams::Cos(cfg) => {
-            build_operator(init_cos_operator(cfg)?, cfg.network_config.as_ref())?
-        }
-        StorageParams::Huggingface(cfg) => {
-            build_operator(init_huggingface_operator(cfg)?, cfg.network_config.as_ref())?
-        }
+        StorageParams::Obs(cfg) => build_operator(
+            init_obs_operator(cfg)?,
+            cfg.network_config.as_ref(),
+            endpoint_policy_scope,
+        )?,
+        StorageParams::S3(cfg) => build_operator(
+            init_s3_operator(cfg)?,
+            cfg.network_config.as_ref(),
+            endpoint_policy_scope,
+        )?,
+        StorageParams::Oss(cfg) => build_operator(
+            init_oss_operator(cfg)?,
+            cfg.network_config.as_ref(),
+            endpoint_policy_scope,
+        )?,
+        StorageParams::Webhdfs(cfg) => build_operator(
+            init_webhdfs_operator(cfg)?,
+            cfg.network_config.as_ref(),
+            endpoint_policy_scope,
+        )?,
+        StorageParams::Cos(cfg) => build_operator(
+            init_cos_operator(cfg)?,
+            cfg.network_config.as_ref(),
+            endpoint_policy_scope,
+        )?,
+        StorageParams::Huggingface(cfg) => build_operator(
+            init_huggingface_operator(cfg)?,
+            cfg.network_config.as_ref(),
+            endpoint_policy_scope,
+        )?,
         v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -149,7 +185,11 @@ pub(crate) fn init_operator_uncached(cfg: &StorageParams) -> Result<Operator> {
 /// ```
 ///
 /// Please balance the performance and compile time.
-fn build_operator<B: Builder>(builder: B, cfg: Option<&StorageNetworkParams>) -> Result<Operator> {
+fn build_operator<B: Builder>(
+    builder: B,
+    cfg: Option<&StorageNetworkParams>,
+    endpoint_policy_scope: EndpointPolicyScope,
+) -> Result<Operator> {
     let ob = Operator::new(builder)?
         // Timeout layer is required to be the first layer so that internal
         // futures can be cancelled safely when the timeout is reached.
@@ -202,7 +242,14 @@ fn build_operator<B: Builder>(builder: B, cfg: Option<&StorageNetworkParams>) ->
         .finish();
 
     // Make sure the http client has been updated.
-    let ob = ob.layer(HttpClientLayer::new(HttpClient::with(get_http_client(cfg))));
+    // HTTP-based storage backends built through this path, including S3,
+    // Azblob, GCS, OSS, OBS, COS and HTTP, share StorageHttpClient. Only
+    // operators built with EndpointPolicyScope::External apply request-time
+    // endpoint egress checks; trusted config-backed operators bypass them.
+    let ob = ob.layer(HttpClientLayer::new(HttpClient::with(get_http_client(
+        cfg,
+        endpoint_policy_scope,
+    ))));
 
     let mut op = ob
         // Add retry
@@ -237,7 +284,10 @@ fn build_operator<B: Builder>(builder: B, cfg: Option<&StorageNetworkParams>) ->
     Ok(op)
 }
 
-fn get_http_client(cfg: Option<&StorageNetworkParams>) -> StorageHttpClient {
+fn get_http_client(
+    cfg: Option<&StorageNetworkParams>,
+    endpoint_policy_scope: EndpointPolicyScope,
+) -> StorageHttpClient {
     let mut pool_max_idle_per_host = usize::MAX;
 
     if let Some(cfg) = cfg {
@@ -280,7 +330,12 @@ fn get_http_client(cfg: Option<&StorageNetworkParams>) -> StorageHttpClient {
         }
     }
 
-    get_storage_http_client(pool_max_idle_per_host, connect_timeout, keepalive)
+    get_storage_http_client(
+        pool_max_idle_per_host,
+        connect_timeout,
+        keepalive,
+        endpoint_policy_scope,
+    )
 }
 
 /// init_azblob_operator will init an opendal azblob operator.
@@ -488,16 +543,6 @@ fn init_oss_operator(cfg: &StorageOssConfig) -> Result<impl Builder> {
     if cfg.role_arn.is_empty() && cfg.access_key_id.is_empty() && cfg.access_key_secret.is_empty() {
         builder = builder.allow_anonymous();
     }
-
-    Ok(builder)
-}
-
-/// init_moka_operator will init a moka operator.
-fn init_moka_operator(v: &StorageMokaConfig) -> Result<impl Builder> {
-    let builder = services::Moka::default()
-        .max_capacity(v.max_capacity)
-        .time_to_live(std::time::Duration::from_secs(v.time_to_live as u64))
-        .time_to_idle(std::time::Duration::from_secs(v.time_to_idle as u64));
 
     Ok(builder)
 }

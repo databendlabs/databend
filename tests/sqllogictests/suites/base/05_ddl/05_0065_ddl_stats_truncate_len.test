@@ -28,15 +28,15 @@ SELECT a, b, c FROM t_stats_truncate;
 abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz 1
 
 ## Verify column statistics are truncated correctly via fuse_block_statistics:
-## - column 'a' (STATS_TRUNCATE_LEN 4): min truncated to 4 chars, max has replacement char at position 4
-## - column 'b' (default 16): min truncated to 16 chars, max has replacement char at position 16
+## - column 'a' (STATS_TRUNCATE_LEN 4): min is truncated to 4 chars and max uses U+10FFFF at position 4
+## - column 'b': adaptive truncation keeps the single 26-character value exact
 query IT?
 SELECT column_id, column_name, statistics
 FROM fuse_block_statistics('default', 't_stats_truncate')
 ORDER BY column_id;
 ----
 0 a {"distinct_count":1,"in_memory_size":43,"max":"abc􏿿","min":"abcd","null_count":0}
-1 b {"distinct_count":1,"in_memory_size":43,"max":"abcdefghijklmno􏿿","min":"abcdefghijklmnop","null_count":0}
+1 b {"distinct_count":1,"in_memory_size":43,"max":"abcdefghijklmnopqrstuvwxyz","min":"abcdefghijklmnopqrstuvwxyz","null_count":0}
 2 c {"distinct_count":1,"in_memory_size":5,"max":1,"min":1,"null_count":0}
 
 statement ok
@@ -139,15 +139,15 @@ CREATE TABLE t_trunc40 (
 statement ok
 INSERT INTO t_trunc40 VALUES ('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ');
 
-## column 'a' (STATS_TRUNCATE_LEN 40): min=first 40 chars, max=first 39 chars + replacement
-## column 'b' (default 16): min=first 16 chars, max=first 15 chars + replacement
+## column 'a' (STATS_TRUNCATE_LEN 40): min=first 40 chars, max uses U+10FFFF at position 40
+## column 'b' (adaptive max 32): min=first 32 chars, max uses U+10FFFF at position 32
 query IT?
 SELECT column_id, column_name, statistics
 FROM fuse_block_statistics('default', 't_trunc40')
 ORDER BY column_id;
 ----
 0 a {"distinct_count":1,"in_memory_size":69,"max":"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLM􏿿","min":"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN","null_count":0}
-1 b {"distinct_count":1,"in_memory_size":69,"max":"abcdefghijklmno􏿿","min":"abcdefghijklmnop","null_count":0}
+1 b {"distinct_count":1,"in_memory_size":69,"max":"abcdefghijklmnopqrstuvwxyzABCDE􏿿","min":"abcdefghijklmnopqrstuvwxyzABCDEF","null_count":0}
 
 statement ok
 DROP TABLE t_trunc40;
@@ -214,3 +214,28 @@ ab
 
 statement ok
 DROP TABLE t_short;
+
+## Without an explicit option, a common 16-character prefix enables adaptive
+## truncation. common_prefix + 1 retains the first differing character in the
+## min bound and provides a position for U+10FFFF in the max bound.
+statement ok
+CREATE TABLE t_adaptive_stats_truncate (
+    adaptive STRING,
+    explicit STRING STATS_TRUNCATE_LEN 16
+) row_per_block=100;
+
+statement ok
+INSERT INTO t_adaptive_stats_truncate VALUES
+    ('abcdefghijklmnopa-min-suffix', 'abcdefghijklmnopa-min-suffix'),
+    ('abcdefghijklmnopz-max-suffix', 'abcdefghijklmnopz-max-suffix');
+
+query TTT
+SELECT column_name, statistics:min::string, statistics:max::string
+FROM fuse_block_statistics('default', 't_adaptive_stats_truncate')
+ORDER BY column_id;
+----
+adaptive abcdefghijklmnopa abcdefghijklmnop􏿿
+explicit abcdefghijklmnop abcdefghijklmno􏿿
+
+statement ok
+DROP TABLE t_adaptive_stats_truncate;

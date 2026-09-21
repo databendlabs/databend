@@ -309,7 +309,13 @@ mod tests {
     ) {
         let (send_tx, send_rx) = async_channel::bounded(1);
         let (pong_tx, pong_rx) = async_channel::unbounded();
-        let exchange = PingPongExchange::from_stream(num_threads, send_tx, pong_rx);
+        let exchange = PingPongExchange::from_stream(
+            num_threads,
+            send_tx,
+            pong_rx,
+            "query-node-0",
+            "query-node-1",
+        );
         (exchange, send_rx, pong_tx)
     }
 

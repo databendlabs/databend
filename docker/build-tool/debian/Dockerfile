@@ -3,7 +3,12 @@ FROM python:3.12-bullseye
 ENV TERM=dumb
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update -yq && \
+# Bullseye security packages were removed before archival (Debian bug #1147093).
+# Only the frozen snapshot's expiry check is disabled; signatures are still checked.
+RUN sed -i '/ bullseye-security /d' /etc/apt/sources.list && \
+    printf '%s\n' 'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20260903T220410Z/ bullseye-security main' \
+        > /etc/apt/sources.list.d/bullseye-security.list && \
+    apt-get update -yq && \
     apt-get install -yq locales sudo unzip file lsb-release wget software-properties-common gnupg && \
     printf 'en_US.UTF-8 UTF-8\n' > /etc/locale.gen && \
     locale-gen && \
@@ -26,6 +31,7 @@ COPY rust-toolchain.toml /build/rust-toolchain.toml
 COPY dev_setup.sh /build/scripts/setup/dev_setup.sh
 RUN chmod +x /build/scripts/setup/dev_setup.sh && \
     /build/scripts/setup/dev_setup.sh -yb && \
+    test -f /usr/local/include/google/protobuf/timestamp.proto && \
     rm -rf /root/.cargo/git && \
     rm -rf /root/.cargo/registry && \
     mkdir -p /opt/rust && \

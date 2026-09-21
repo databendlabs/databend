@@ -141,6 +141,7 @@ impl BlockMetaTransform<ExchangeDeserializeMeta> for TransformExchangeDeserializ
             DataPacket::QueryPerf(_) => unreachable!(),
             DataPacket::PartStatistics(_) => unreachable!(),
             DataPacket::QueryPerfCounters(_) => unreachable!(),
+            DataPacket::IoStats(_) => unreachable!(),
         }
     }
 }

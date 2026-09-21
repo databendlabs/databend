@@ -20,11 +20,12 @@ use databend_common_exception::Result;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 
 use crate::data_mask::RealDatamaskHandler;
+use crate::data_sharing::RealDataSharingHandler;
 use crate::license::RealLicenseManager;
+use crate::materialized_view::RealMaterializedViewHandler;
 use crate::row_access_policy::row_access_policy_handler::RealRowAccessPolicyHandler;
 use crate::storages::fuse::operations::RealVacuumHandler;
 use crate::stream::RealStreamHandler;
-use crate::virtual_column::RealVirtualColumnHandler;
 
 pub struct MockServices;
 impl MockServices {
@@ -34,8 +35,9 @@ impl MockServices {
         GlobalInstance::set(Arc::new(LicenseManagerSwitch::create(Box::new(rm))));
         RealVacuumHandler::init()?;
         RealDatamaskHandler::init()?;
+        RealDataSharingHandler::init()?;
         RealRowAccessPolicyHandler::init()?;
-        RealVirtualColumnHandler::init()?;
+        RealMaterializedViewHandler::init()?;
         RealStreamHandler::init()?;
         Ok(())
     }

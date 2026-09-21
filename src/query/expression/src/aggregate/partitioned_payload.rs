@@ -17,11 +17,11 @@ use std::sync::Arc;
 use bumpalo::Bump;
 use itertools::Itertools;
 
-use super::AggregateFunctionRef;
 use super::BATCH_SIZE;
 use super::PayloadFlushState;
 use super::StatesLayout;
-use super::get_states_layout;
+use super::aggregate_function::AggregateCallRef;
+use super::aggregate_function::get_states_layout;
 use super::payload::Payload;
 use super::payload::PayloadTransferBatch;
 use super::payload::PayloadTransferStateOffsets;
@@ -60,7 +60,7 @@ impl PartitionMask {
 pub struct PartitionedPayload {
     pub(super) payloads: Vec<Payload>,
     pub(super) group_types: Vec<DataType>,
-    pub(super) aggrs: Vec<AggregateFunctionRef>,
+    pub(super) aggrs: Vec<AggregateCallRef>,
 
     pub(super) row_layout: RowLayout,
 
@@ -76,7 +76,7 @@ unsafe impl Sync for PartitionedPayload {}
 impl PartitionedPayload {
     pub fn new(
         group_types: Vec<DataType>,
-        aggrs: Vec<AggregateFunctionRef>,
+        aggrs: Vec<AggregateCallRef>,
         partition_count: u64,
         arenas: Vec<Arc<Bump>>,
     ) -> Self {
@@ -85,11 +85,15 @@ impl PartitionedPayload {
 
     pub(super) fn new_with_start_bit(
         group_types: Vec<DataType>,
-        aggrs: Vec<AggregateFunctionRef>,
+        aggrs: Vec<AggregateCallRef>,
         partition_count: u64,
         partition_start_bit: u64,
         arenas: Vec<Arc<Bump>>,
     ) -> Self {
+        assert!(
+            arenas.len() == 1 || arenas.len() == partition_count as usize,
+            "arenas must be shared or match the payload partition count"
+        );
         let states_layout = if !aggrs.is_empty() {
             Some(get_states_layout(&aggrs).unwrap())
         } else {
@@ -97,9 +101,14 @@ impl PartitionedPayload {
         };
 
         let payloads = (0..partition_count)
-            .map(|_| {
+            .map(|partition| {
                 Payload::new(
-                    arenas[0].clone(),
+                    arenas[if arenas.len() == 1 {
+                        0
+                    } else {
+                        partition as usize
+                    }]
+                    .clone(),
                     group_types.clone(),
                     aggrs.clone(),
                     states_layout.clone(),
@@ -206,6 +215,14 @@ impl PartitionedPayload {
             ..
         } = self;
 
+        // Repartition shallow-copies aggregate state addresses. Partition-local arenas would
+        // allow a source arena to be freed while a target partition still points into it.
+        assert_eq!(
+            arenas.len(),
+            1,
+            "partition-local aggregate arenas cannot be repartitioned"
+        );
+
         let mut new_partition_payload = PartitionedPayload::new_with_start_bit(
             group_types,
             aggrs,
@@ -298,6 +315,12 @@ impl PartitionedPayload {
     }
 
     pub fn scatter_into_buckets(self, buckets: usize) -> Vec<PartitionedPayload> {
+        // Scatter also shallow-copies aggregate state addresses, just like repartition.
+        assert_eq!(
+            self.arenas.len(),
+            1,
+            "partition-local aggregate arenas cannot be scattered"
+        );
         let group_types = self.group_types.clone();
         let aggrs = self.aggrs.clone();
         let partition_count = self.partition_count() as u64;

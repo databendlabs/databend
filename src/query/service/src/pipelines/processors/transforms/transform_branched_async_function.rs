@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
@@ -23,9 +24,10 @@ use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::binder::AsyncFunctionDesc;
 
+use crate::pipelines::processors::transforms::AsyncFunctionState;
+use crate::pipelines::processors::transforms::AsyncFunctionStates;
 use crate::pipelines::processors::transforms::AutoIncrementNextValFetcher;
 use crate::pipelines::processors::transforms::ReadFileContext;
-use crate::pipelines::processors::transforms::SequenceCounters;
 use crate::pipelines::processors::transforms::SequenceNextValFetcher;
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::sessions::QueryContext;
@@ -41,7 +43,7 @@ pub struct TransformBranchedAsyncFunction {
 
 pub struct AsyncFunctionBranch {
     pub async_func_descs: Vec<AsyncFunctionDesc>,
-    pub sequence_counters: SequenceCounters,
+    pub async_func_states: AsyncFunctionStates,
 }
 
 #[async_trait::async_trait]
@@ -63,17 +65,21 @@ impl AsyncTransform for TransformBranchedAsyncFunction {
 
         let AsyncFunctionBranch {
             async_func_descs,
-            sequence_counters,
+            async_func_states,
         } = branch;
 
         for (i, async_func_desc) in async_func_descs.iter().enumerate() {
             match &async_func_desc.func_arg {
                 AsyncFunctionArgument::SequenceFunction(sequence_name) => {
-                    let counter_lock = sequence_counters[i].clone();
+                    let AsyncFunctionState::Sequence(counter) = &async_func_states[i] else {
+                        return Err(ErrorCode::Internal(
+                            "sequence function state is not initialized",
+                        ));
+                    };
                     TransformAsyncFunction::transform(
                         self.ctx.clone(),
                         &mut block,
-                        counter_lock,
+                        counter.clone(),
                         SequenceNextValFetcher {
                             sequence_ident: SequenceIdent::new(
                                 self.ctx.get_tenant(),
@@ -84,11 +90,15 @@ impl AsyncTransform for TransformBranchedAsyncFunction {
                     .await?;
                 }
                 AsyncFunctionArgument::AutoIncrement { key, expr } => {
-                    let counter_lock = sequence_counters[i].clone();
+                    let AsyncFunctionState::Sequence(counter) = &async_func_states[i] else {
+                        return Err(ErrorCode::Internal(
+                            "auto increment function state is not initialized",
+                        ));
+                    };
                     TransformAsyncFunction::transform(
                         self.ctx.clone(),
                         &mut block,
-                        counter_lock,
+                        counter.clone(),
                         AutoIncrementNextValFetcher {
                             key: key.clone(),
                             expr: expr.clone(),
@@ -97,6 +107,19 @@ impl AsyncTransform for TransformBranchedAsyncFunction {
                     .await?;
                 }
                 AsyncFunctionArgument::DictGetFunction(_) => unreachable!(),
+                AsyncFunctionArgument::Sleep => {
+                    let AsyncFunctionState::Sleep(sleep_state) = &async_func_states[i] else {
+                        return Err(ErrorCode::Internal(
+                            "sleep function state is not initialized",
+                        ));
+                    };
+                    TransformAsyncFunction::transform_sleep(
+                        &mut block,
+                        async_func_desc.arg_indices[0],
+                        sleep_state,
+                    )
+                    .await?;
+                }
                 AsyncFunctionArgument::ReadFile(read_file_arg) => {
                     self.read_file_ctx
                         .transform_read_file(

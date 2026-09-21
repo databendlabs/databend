@@ -37,13 +37,13 @@ impl FromToProto for mt::UserDefinedConnection {
         })
     }
 
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(Self::PB {
+    fn to_pb(&self) -> Self::PB {
+        Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             name: self.name.clone(),
             storage_type: self.storage_type.clone(),
             storage_params: self.storage_params.clone(),
-        })
+        }
     }
 }

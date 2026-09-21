@@ -15,13 +15,13 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::CreateTableIndexPlan;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::check_materialized_view_license;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
@@ -48,37 +48,37 @@ impl Interpreter for CreateTableIndexInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let index_name = self.plan.index_name.clone();
-        let column_ids = self.plan.column_ids.clone();
-        let sync_creation = self.plan.sync_creation;
-        let table_id = self.plan.table_id;
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let tenant = self.ctx.get_tenant();
-        let index_type = match self.plan.index_type {
-            ast::TableIndexType::Aggregating => {
-                return Err(ErrorCode::InvalidArgument(
-                    "Aggregating Index does not belong to Table Index",
-                ));
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let index_name = self.plan.index_name.clone();
+            let column_ids = self.plan.column_ids.clone();
+            let sync_creation = self.plan.sync_creation;
+            let table_id = self.plan.table_id;
+            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+            let tenant = self.ctx.get_tenant();
+            if let Some(table_meta) = catalog.get_table_meta_by_id(table_id).await? {
+                check_materialized_view_license(&self.ctx, &table_meta.data.engine)?;
             }
-            ast::TableIndexType::Inverted => TableIndexType::Inverted,
-            ast::TableIndexType::Ngram => TableIndexType::Ngram,
-            ast::TableIndexType::Vector => TableIndexType::Vector,
-            ast::TableIndexType::Spatial => TableIndexType::Spatial,
-        };
+            let index_type = match self.plan.index_type {
+                ast::TableIndexType::Inverted => TableIndexType::Inverted,
+                ast::TableIndexType::Ngram => TableIndexType::Ngram,
+                ast::TableIndexType::Vector => TableIndexType::Vector,
+                ast::TableIndexType::Spatial => TableIndexType::Spatial,
+            };
 
-        let create_index_req = CreateTableIndexReq {
-            create_option: self.plan.create_option,
-            index_type,
-            tenant,
-            table_id,
-            name: index_name,
-            column_ids,
-            sync_creation,
-            options: self.plan.index_options.clone(),
-        };
+            let create_index_req = CreateTableIndexReq {
+                create_option: self.plan.create_option,
+                index_type,
+                tenant,
+                table_id,
+                name: index_name,
+                column_ids,
+                sync_creation,
+                options: self.plan.index_options.clone(),
+            };
 
-        let _ = catalog.create_table_index(create_index_req).await?;
-        Ok(PipelineBuildResult::create())
+            catalog.create_table_index(create_index_req).await?;
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

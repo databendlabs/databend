@@ -15,6 +15,7 @@
 use crate::ast::Expr;
 use crate::ast::FunctionCall;
 use crate::ast::Identifier;
+use crate::ast::LambdaArgument;
 use crate::ast::MapAccessor;
 use crate::ast::WindowDesc;
 use crate::visit::VisitControl;
@@ -116,12 +117,18 @@ impl Walk for Expr {
                     }
                 }
                 Expr::CountAll {
-                    window, qualified, ..
+                    filter,
+                    window,
+                    qualified,
+                    ..
                 } => {
                     for item in qualified {
                         if let crate::ast::Indirection::Identifier(ident) = item {
                             try_walk!(ident.walk(visitor));
                         }
+                    }
+                    if let Some(filter) = filter {
+                        try_walk!(filter.walk(visitor));
                     }
                     if let Some(window) = window {
                         try_walk!(window.walk(visitor));
@@ -290,12 +297,18 @@ impl WalkMut for Expr {
                     }
                 }
                 Expr::CountAll {
-                    window, qualified, ..
+                    filter,
+                    window,
+                    qualified,
+                    ..
                 } => {
                     for item in qualified {
                         if let crate::ast::Indirection::Identifier(ident) = item {
                             try_walk!(ident.walk_mut(visitor));
                         }
+                    }
+                    if let Some(filter) = filter {
+                        try_walk!(filter.walk_mut(visitor));
                     }
                     if let Some(window) = window {
                         try_walk!(window.walk_mut(visitor));
@@ -388,10 +401,18 @@ impl Walk for FunctionCall {
         for order in &self.order_by {
             try_walk!(order.expr.walk(visitor));
         }
+        if let Some(filter) = &self.filter {
+            try_walk!(filter.walk(visitor));
+        }
         if let Some(window) = &self.window {
             try_walk!(window.walk(visitor));
         }
-        if let Some(lambda) = &self.lambda {
+        if let Some(LambdaArgument::Lambda(lambda)) = &self.lambda {
+            try_walk!(lambda.walk(visitor));
+        } else if let Some(LambdaArgument::Ambiguous(lambda)) = &self.lambda {
+            // The ordinary interpretation is walked through `args`; walk the
+            // lambda interpretation as well because the function kind has not
+            // been resolved at the AST layer yet.
             try_walk!(lambda.walk(visitor));
         }
 
@@ -416,10 +437,15 @@ impl WalkMut for FunctionCall {
         for order in &mut self.order_by {
             try_walk!(order.expr.walk_mut(visitor));
         }
+        if let Some(filter) = &mut self.filter {
+            try_walk!(filter.walk_mut(visitor));
+        }
         if let Some(window) = &mut self.window {
             try_walk!(window.walk_mut(visitor));
         }
-        if let Some(lambda) = &mut self.lambda {
+        if let Some(LambdaArgument::Lambda(lambda)) = &mut self.lambda {
+            try_walk!(lambda.walk_mut(visitor));
+        } else if let Some(LambdaArgument::Ambiguous(lambda)) = &mut self.lambda {
             try_walk!(lambda.walk_mut(visitor));
         }
 

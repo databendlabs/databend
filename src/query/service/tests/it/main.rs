@@ -13,10 +13,7 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
-#![feature(thread_local)]
-#![feature(int_roundings)]
 #![allow(clippy::diverging_sub_expression)]
-#![feature(assert_matches)]
 #![recursion_limit = "256"]
 
 extern crate core;
@@ -33,6 +30,7 @@ mod parquet_rs;
 mod pipelines;
 mod servers;
 mod sessions;
+mod share;
 mod spillers;
 mod sql;
 mod storages;

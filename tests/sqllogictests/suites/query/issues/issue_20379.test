@@ -1,0 +1,28 @@
+# GitHub issue: https://github.com/databendlabs/databend/issues/20379
+# Reflexive equality is not a tautology for nullable operands because NULL = NULL is NULL.
+
+statement ok
+DROP TABLE IF EXISTS issue_20379_reflexive_equality
+
+statement ok
+CREATE TABLE issue_20379_reflexive_equality(c TIMESTAMP NULL)
+
+statement ok
+INSERT INTO issue_20379_reflexive_equality VALUES
+    ('2020-01-01 10:00:00'),
+    ('2020-05-05 08:30:00'),
+    (NULL)
+
+# The all-NULL group must not pass HAVING.
+query I
+SELECT count(*) FROM (
+    SELECT c
+    FROM issue_20379_reflexive_equality
+    GROUP BY c
+    HAVING min(c) = min(c)
+)
+----
+2
+
+statement ok
+DROP TABLE issue_20379_reflexive_equality

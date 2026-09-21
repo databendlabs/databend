@@ -1,0 +1,284 @@
+{
+  "table_stats": {
+    "0": {
+      "statistics": {
+        "num_rows": 150000,
+        "data_size": 4800000,
+        "data_size_compressed": null,
+        "index_size": null,
+        "bloom_index_size": null,
+        "ngram_index_size": null,
+        "inverted_index_size": null,
+        "vector_index_size": null,
+        "virtual_column_size": null,
+        "number_of_blocks": 1,
+        "number_of_segments": 1
+      },
+      "fields": [
+        {
+          "name": "c_custkey",
+          "default_expr": null,
+          "data_type": {
+            "Number": "Int64"
+          },
+          "column_id": 0,
+          "computed_expr": null,
+          "auto_increment_expr": null
+        },
+        {
+          "name": "c_nationkey",
+          "default_expr": null,
+          "data_type": {
+            "Number": "Int64"
+          },
+          "column_id": 0,
+          "computed_expr": null,
+          "auto_increment_expr": null
+        },
+        {
+          "name": "c_name",
+          "default_expr": null,
+          "data_type": "String",
+          "column_id": 0,
+          "computed_expr": null,
+          "auto_increment_expr": null
+        }
+      ]
+    },
+    "1": {
+      "statistics": {
+        "num_rows": 150000,
+        "data_size": 4800000,
+        "data_size_compressed": null,
+        "index_size": null,
+        "bloom_index_size": null,
+        "ngram_index_size": null,
+        "inverted_index_size": null,
+        "vector_index_size": null,
+        "virtual_column_size": null,
+        "number_of_blocks": 1,
+        "number_of_segments": 1
+      },
+      "fields": [
+        {
+          "name": "c_custkey",
+          "default_expr": null,
+          "data_type": {
+            "Number": "Int64"
+          },
+          "column_id": 0,
+          "computed_expr": null,
+          "auto_increment_expr": null
+        },
+        {
+          "name": "c_nationkey",
+          "default_expr": null,
+          "data_type": {
+            "Number": "Int64"
+          },
+          "column_id": 0,
+          "computed_expr": null,
+          "auto_increment_expr": null
+        },
+        {
+          "name": "c_name",
+          "default_expr": null,
+          "data_type": "String",
+          "column_id": 0,
+          "computed_expr": null,
+          "auto_increment_expr": null
+        }
+      ]
+    }
+  },
+  "column_stats": [
+    {
+      "table_index": 0,
+      "column_name": "c_custkey",
+      "statistics": {
+        "min": {
+          "Int": 1
+        },
+        "max": {
+          "Int": 150000
+        },
+        "ndv": 130526,
+        "null_count": 0,
+        "in_memory_size": 1200000
+      },
+      "histogram": null
+    },
+    {
+      "table_index": 0,
+      "column_name": "c_nationkey",
+      "statistics": {
+        "min": {
+          "Int": 0
+        },
+        "max": {
+          "Int": 24
+        },
+        "ndv": 25,
+        "null_count": 0,
+        "in_memory_size": 1200000
+      },
+      "histogram": null
+    },
+    {
+      "table_index": 0,
+      "column_name": "c_name",
+      "statistics": {
+        "min": {
+          "Bytes": [
+            67,
+            117,
+            115,
+            116,
+            111,
+            109,
+            101,
+            114,
+            35,
+            48,
+            48,
+            48,
+            48,
+            48,
+            48,
+            48,
+            48,
+            49
+          ]
+        },
+        "max": {
+          "Bytes": [
+            67,
+            117,
+            115,
+            116,
+            111,
+            109,
+            101,
+            114,
+            35,
+            48,
+            48,
+            49,
+            53,
+            48,
+            48,
+            48,
+            48
+          ]
+        },
+        "ndv": 150000,
+        "null_count": 0,
+        "in_memory_size": 2700000
+      },
+      "histogram": null
+    },
+    {
+      "table_index": 1,
+      "column_name": "c_custkey",
+      "statistics": {
+        "min": {
+          "Int": 1
+        },
+        "max": {
+          "Int": 150000
+        },
+        "ndv": 130526,
+        "null_count": 0,
+        "in_memory_size": 1200000
+      },
+      "histogram": null
+    },
+    {
+      "table_index": 1,
+      "column_name": "c_nationkey",
+      "statistics": {
+        "min": {
+          "Int": 0
+        },
+        "max": {
+          "Int": 24
+        },
+        "ndv": 25,
+        "null_count": 0,
+        "in_memory_size": 1200000
+      },
+      "histogram": null
+    },
+    {
+      "table_index": 1,
+      "column_name": "c_name",
+      "statistics": {
+        "min": {
+          "Bytes": [
+            67,
+            117,
+            115,
+            116,
+            111,
+            109,
+            101,
+            114,
+            35,
+            48,
+            48,
+            48,
+            48,
+            48,
+            48,
+            48,
+            48,
+            49
+          ]
+        },
+        "max": {
+          "Bytes": [
+            67,
+            117,
+            115,
+            116,
+            111,
+            109,
+            101,
+            114,
+            35,
+            48,
+            48,
+            49,
+            53,
+            48,
+            48,
+            48,
+            48
+          ]
+        },
+        "ndv": 150000,
+        "null_count": 0,
+        "in_memory_size": 2700000
+      },
+      "histogram": null
+    }
+  ],
+  "scan_mappings": [
+    {
+      "scan_id": 0,
+      "table_index": 0,
+      "catalog": "default",
+      "database": "default",
+      "table": "customer",
+      "change_type": null
+    },
+    {
+      "scan_id": 1,
+      "table_index": 1,
+      "catalog": "default",
+      "database": "default",
+      "table": "customer",
+      "change_type": null
+    }
+  ]
+}

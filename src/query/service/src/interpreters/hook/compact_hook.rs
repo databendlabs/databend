@@ -22,14 +22,15 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::always_callback;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::plans::MaintenanceTarget;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::ReclusterPlan;
 use databend_common_sql::plans::RelOperator;
-use databend_storages_common_table_meta::table::ClusterType;
 use log::info;
 
 use crate::interpreters::Interpreter;
@@ -218,12 +219,8 @@ pub(crate) async fn compact_table(
             limit: compaction_limits.clone(),
         });
         let s_expr = SExpr::create_leaf(Arc::new(compact_block));
-        let compact_interpreter = OptimizeCompactBlockInterpreter::try_create(
-            ctx.clone(),
-            s_expr,
-            lock_opt.clone(),
-            false,
-        )?;
+        let compact_interpreter =
+            OptimizeCompactBlockInterpreter::try_create(ctx.clone(), s_expr, lock_opt.clone())?;
         let mut build_res = compact_interpreter.execute2().await?;
         // execute the compact pipeline
         if build_res.main_pipeline.is_complete_pipeline()? {
@@ -266,30 +263,43 @@ pub(crate) async fn compact_table(
             return Ok(());
         }
         // do recluster.
-        if let Some(cluster_type) = table.cluster_type() {
-            if cluster_type == ClusterType::Linear {
-                // evict the table from cache
-                ctx.evict_table_from_cache(
-                    &compact_target.catalog,
-                    &compact_target.database,
-                    &compact_target.table,
-                )?;
-                ctx.set_enable_sort_spill(false);
-                let recluster = ReclusterPlan {
-                    catalog: compact_target.catalog,
-                    database: compact_target.database,
-                    table: compact_target.table,
-                    limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
-                    selection: None,
-                    is_final: false,
-                };
-                let recluster_interpreter =
-                    ReclusterTableInterpreter::try_create(ctx.clone(), recluster, lock_opt)?;
-                // Recluster will be done in `ReclusterTableInterpreter::execute2` directly,
-                // we do not need to use `PipelineCompleteExecutor` to execute it.
-                let build_res = recluster_interpreter.execute2().await?;
-                debug_assert!(build_res.main_pipeline.is_empty());
-            }
+        if table.cluster_key_meta().is_some() {
+            // evict the table from cache
+            ctx.evict_table_from_cache(
+                &compact_target.catalog,
+                &compact_target.database,
+                &compact_target.table,
+            )?;
+            // Spill is disabled to keep this synchronous hook fast (spilling adds
+            // disk IO). Admission must then keep tasks inside the memory budget.
+            // TODO: remove once the async hook is enabled.
+            ctx.set_enable_sort_spill(false);
+            let target = if is_materialized_view_engine(table.engine()) {
+                MaintenanceTarget::MaterializedView {
+                    table_id: table.get_id(),
+                }
+            } else {
+                MaintenanceTarget::Table
+            };
+            let recluster = ReclusterPlan {
+                catalog: compact_target.catalog,
+                database: compact_target.database,
+                table: compact_target.table,
+                target,
+                limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
+                selection: None,
+                is_final: false,
+            };
+            let allow_segment_claims = lock_opt != LockTableOption::NoLock;
+            let recluster_interpreter = ReclusterTableInterpreter::try_create(
+                ctx.clone(),
+                recluster,
+                allow_segment_claims,
+            )?;
+            // Recluster will be done in `ReclusterTableInterpreter::execute2` directly,
+            // we do not need to use `PipelineCompleteExecutor` to execute it.
+            let build_res = recluster_interpreter.execute2().await?;
+            debug_assert!(build_res.main_pipeline.is_empty());
         }
     }
 

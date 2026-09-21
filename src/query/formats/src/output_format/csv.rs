@@ -69,7 +69,7 @@ impl CSVOutputFormat {
 impl OutputFormat for CSVOutputFormat {
     fn serialize_block(&mut self, block: &DataBlock) -> Result<Vec<u8>> {
         let rows_size = block.num_rows();
-        let mut buf = Vec::with_capacity(block.memory_size());
+        let mut buf = Vec::with_capacity(block.estimate_block_size(block.num_columns()));
 
         let fd = self.field_delimiter;
         let rd = &self.record_delimiter;

@@ -30,6 +30,18 @@ pub enum ConflictResolveContext {
 }
 
 impl ConflictResolveContext {
+    pub fn logical_insert_rows(&self, deleted_rows: u64) -> u64 {
+        match self {
+            ConflictResolveContext::None => 0,
+            ConflictResolveContext::AppendOnly((merged, _)) => merged.merged_statistics.row_count,
+            ConflictResolveContext::ModifiedSegmentExistsInLatest(changes) => changes
+                .merged_statistics
+                .row_count
+                .saturating_add(deleted_rows)
+                .saturating_sub(changes.removed_statistics.row_count),
+        }
+    }
+
     pub fn is_latest_snapshot_append_only(
         base: &TableSnapshot,
         latest: &TableSnapshot,
@@ -64,20 +76,18 @@ impl ConflictResolveContext {
         let mut removed = Vec::with_capacity(removed_segments.len());
         for removed_segment in removed_segments {
             let removed_segment = &base_segments[*removed_segment];
-            if let Some(position) = latest_segments.get(removed_segment) {
+            {
+                let position = latest_segments.get(removed_segment)?;
                 removed.push(*position);
-            } else {
-                return None;
             }
         }
 
         let mut replaced = HashMap::with_capacity(replaced_segments.len());
         for (position, location) in replaced_segments {
             let origin_segment = &base_segments[*position];
-            if let Some(position) = latest_segments.get(origin_segment) {
+            {
+                let position = latest_segments.get(origin_segment)?;
                 replaced.insert(*position, location.clone());
-            } else {
-                return None;
             }
         }
         Some((removed, replaced))
@@ -135,13 +145,10 @@ impl SnapshotChanges {
                 return true;
             }
         }
-        if Self::is_slice_intersect(
+        Self::is_slice_intersect(
             &self.removed_segment_indexes,
             &other.removed_segment_indexes,
-        ) {
-            return true;
-        }
-        false
+        )
     }
 
     fn is_slice_intersect<T: Eq + std::hash::Hash>(l: &[T], r: &[T]) -> bool {

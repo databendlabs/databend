@@ -12,16 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(box_patterns)]
-#![feature(type_ascription)]
-#![feature(try_blocks)]
-#![feature(downcast_unchecked)]
-#![feature(associated_type_defaults)]
+#![allow(incomplete_features)]
+#![feature(deref_patterns)]
 
-use aggregates::AggregateFunctionFactory;
 use ctor::ctor;
 use databend_common_expression::FunctionRegistry;
 use unicase::Ascii;
+
+use crate::aggregates::registry::AGGR_REGISTRY;
 
 pub mod aggregates;
 mod cast_rules;
@@ -31,7 +29,7 @@ pub mod srfs;
 pub fn is_builtin_function(name: &str) -> bool {
     let name = Ascii::new(name);
     BUILTIN_FUNCTIONS.contains(name.into_inner())
-        || AggregateFunctionFactory::instance().contains(name.into_inner())
+        || AGGR_REGISTRY.contains(name.into_inner())
         || GENERAL_WINDOW_FUNCTIONS.contains(&name)
         || GENERAL_LAMBDA_FUNCTIONS.contains(&name)
         || GENERAL_SEARCH_FUNCTIONS.contains(&name)
@@ -45,7 +43,7 @@ pub fn is_cacheable_function(name: &str) -> bool {
     let name = Ascii::new(name);
     (BUILTIN_FUNCTIONS.contains(name.into_inner())
         && !BUILTIN_FUNCTIONS.get_property(n).unwrap().non_deterministic)
-        || AggregateFunctionFactory::instance().contains(name.into_inner())
+        || AGGR_REGISTRY.contains(name.into_inner())
         || GENERAL_WINDOW_FUNCTIONS.contains(&name)
         || GENERAL_LAMBDA_FUNCTIONS.contains(&name)
 }
@@ -53,10 +51,11 @@ pub fn is_cacheable_function(name: &str) -> bool {
 #[ctor]
 pub static BUILTIN_FUNCTIONS: FunctionRegistry = builtin_functions();
 
-pub const ASYNC_FUNCTIONS: [Ascii<&str>; 3] = [
+pub const ASYNC_FUNCTIONS: [Ascii<&str>; 4] = [
     Ascii::new("nextval"),
     Ascii::new("dict_get"),
     Ascii::new("read_file"),
+    Ascii::new("sleep"),
 ];
 
 pub const GENERAL_WITHIN_GROUP_FUNCTIONS: [Ascii<&str>; 5] = [
@@ -86,7 +85,7 @@ pub const GENERAL_WINDOW_FUNCTIONS: [Ascii<&str>; 13] = [
 pub const RANK_WINDOW_FUNCTIONS: [&str; 5] =
     ["first_value", "first", "last_value", "last", "nth_value"];
 
-pub const GENERAL_LAMBDA_FUNCTIONS: [Ascii<&str>; 16] = [
+pub const GENERAL_LAMBDA_FUNCTIONS: [Ascii<&str>; 17] = [
     Ascii::new("array_transform"),
     Ascii::new("array_apply"),
     Ascii::new("array_map"),
@@ -103,6 +102,7 @@ pub const GENERAL_LAMBDA_FUNCTIONS: [Ascii<&str>; 16] = [
     Ascii::new("json_map_filter"),
     Ascii::new("json_map_transform_keys"),
     Ascii::new("json_map_transform_values"),
+    Ascii::new("json_path_transform"),
 ];
 
 pub const GENERAL_SEARCH_FUNCTIONS: [Ascii<&str>; 3] = [

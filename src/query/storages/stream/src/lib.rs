@@ -12,6 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(impl_trait_in_assoc_type)]
+pub mod stream_backlog_table_func;
 pub mod stream_status_table_func;
 pub mod stream_table;

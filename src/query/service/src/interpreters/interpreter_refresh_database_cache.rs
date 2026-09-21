@@ -44,16 +44,18 @@ impl Interpreter for RefreshDatabaseCacheInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let plan = &self.plan;
-        let catalog = self.ctx.get_catalog(&plan.catalog).await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let plan = &self.plan;
+            let catalog = self.ctx.get_catalog(&plan.catalog).await?;
 
-        let _ = catalog
-            .get_database(&plan.tenant, &plan.database)
-            .await?
-            .refresh_database()
-            .await?;
+            catalog
+                .get_database(&plan.tenant, &plan.database)
+                .await?
+                .refresh_database()
+                .await?;
 
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

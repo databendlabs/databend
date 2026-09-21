@@ -22,13 +22,14 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
-use databend_common_settings::StagePathTraversalPolicy;
+use databend_common_storage::StagePathTraversalPolicy;
 use databend_common_storage::ensure_no_stage_path_traversal;
 use databend_common_storage::is_stage_path_traversal;
 use databend_common_users::Object;
@@ -41,6 +42,7 @@ use crate::binder::location::apply_uri_connection;
 use crate::binder::location::get_storage_params_from_options;
 use crate::binder::location::parse_storage_params_from_uri;
 use crate::binder::location::parse_uri_location;
+use crate::planner::binder::file_format::ensure_query_file_format_supported;
 
 /// location can be:
 /// - mystage
@@ -110,11 +112,13 @@ pub fn parse_stage_name(location: &str) -> Result<String> {
 }
 
 pub fn validate_stage_path_traversal(
-    settings: &Settings,
+    _settings: &Settings,
     path: &str,
     is_write: bool,
 ) -> Result<()> {
-    let policy = settings.get_stage_path_traversal_policy()?;
+    let policy = databend_common_config::GlobalConfig::instance()
+        .storage
+        .stage_path_traversal_policy;
     validate_stage_path_traversal_policy(policy, path, is_write)
 }
 
@@ -328,6 +332,21 @@ where
             }
         }
     }
+
+    #[async_backtrace::framed]
+    pub async fn resolve_data_file_location(
+        &self,
+        location: &FileLocation,
+        access: StagePathAccess,
+        file_format: Option<FileFormatParams>,
+    ) -> Result<(StageInfo, String)> {
+        let (mut stage, path) = self.resolve_file_location(location, access).await?;
+        if let Some(file_format) = file_format {
+            stage.file_format_params = file_format;
+        }
+        ensure_query_file_format_supported(&stage.file_format_params)?;
+        Ok((stage, path))
+    }
 }
 
 impl StageResolver {
@@ -374,6 +393,21 @@ impl<A> StageResolver<A> {
         validate_stage_path_traversal(self.settings.as_ref(), &path, access.is_write())?;
 
         debug!("parsed stage: {stage:?}, path: {path}");
+        Ok((stage, path))
+    }
+
+    #[async_backtrace::framed]
+    pub async fn resolve_data_stage_location(
+        &self,
+        location: &str,
+        access: StagePathAccess,
+        file_format: Option<FileFormatParams>,
+    ) -> Result<(StageInfo, String)> {
+        let (mut stage, path) = self.resolve_stage_location(location, access).await?;
+        if let Some(file_format) = file_format {
+            stage.file_format_params = file_format;
+        }
+        ensure_query_file_format_supported(&stage.file_format_params)?;
         Ok((stage, path))
     }
 

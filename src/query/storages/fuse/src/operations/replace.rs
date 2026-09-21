@@ -21,15 +21,12 @@ use databend_common_expression::FieldIndex;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_sql::executor::physical_plans::OnConflictField;
 use databend_storages_common_index::BloomIndex;
-use databend_storages_common_io::ReadSettings;
-use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::Location;
 use rand::prelude::SliceRandom;
-use tokio::sync::Semaphore;
 
 use crate::FuseTable;
-use crate::io::BlockBuilder;
 use crate::operations::mutation::SegmentIndex;
+use crate::operations::replace_into::ReplaceIntoMutatorParams;
 use crate::operations::replace_into::ReplaceIntoOperationAggregator;
 
 impl FuseTable {
@@ -86,32 +83,19 @@ impl FuseTable {
     //                      └─────►│ResizeProcessor(1) ├──────►│TableMutationAggregator├────────►│     CommitSink    │
     //                             └───────────────────┘       └───────────────────────┘         └───────────────────┘
 
-    #[allow(clippy::too_many_arguments)]
     pub fn merge_into_mutators(
         &self,
-        ctx: Arc<dyn TableContext>,
         num_partition: usize,
-        block_builder: BlockBuilder,
-        on_conflicts: Vec<OnConflictField>,
-        bloom_filter_column_indexes: Vec<FieldIndex>,
         segments: &[(usize, Location)],
-        block_slots: Option<BlockSlotDescription>,
-        io_request_semaphore: Arc<Semaphore>,
+        params: ReplaceIntoMutatorParams,
     ) -> Result<Vec<PipeItem>> {
         let chunks = Self::partition_segments(segments, num_partition);
-        let read_settings = ReadSettings::from_ctx(&ctx)?;
         let mut items = Vec::with_capacity(num_partition);
-        for chunk_of_segment_locations in chunks {
+        for segment_locations in chunks {
             let item = ReplaceIntoOperationAggregator::try_create(
-                ctx.clone(),
-                on_conflicts.clone(),
-                bloom_filter_column_indexes.clone(),
-                chunk_of_segment_locations,
-                block_slots.clone(),
                 self,
-                read_settings,
-                block_builder.clone(),
-                io_request_semaphore.clone(),
+                params.clone(),
+                segment_locations,
             )?;
             items.push(item.into_pipe_item());
         }

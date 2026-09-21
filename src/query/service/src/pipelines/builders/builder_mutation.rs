@@ -73,11 +73,11 @@ impl PipelineBuilder {
                 default_expr_binder
                     .split_async_default_exprs(input_schema.clone(), default_schema.clone())?
             {
-                let sequence_counters =
-                    TransformAsyncFunction::create_sequence_counters(async_funcs.len());
+                let async_func_states =
+                    TransformAsyncFunction::create_async_func_states(&async_funcs);
                 async_function_branches.insert(idx, AsyncFunctionBranch {
                     async_func_descs: async_funcs,
-                    sequence_counters,
+                    async_func_states,
                 });
 
                 if new_default_schema != new_default_schema_no_cast {
@@ -251,7 +251,7 @@ impl PipelineBuilder {
                 Ok(ProcessorPtr::create(BlockMetaTransformer::create(
                     transform_input_port,
                     transform_output_port,
-                    TransformCompactBlock::default(),
+                    TransformCompactBlock,
                 )))
             },
             transform_len,

@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use databend_common_catalog::runtime_filter_info::RuntimeLimitFilter;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline::core::Event;
@@ -30,11 +31,16 @@ impl TransformLimit {
         offset: usize,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
+        runtime_limit_filter: Option<Arc<RuntimeLimitFilter>>,
     ) -> Result<Box<dyn Processor>> {
         match (limit, offset) {
-            (Some(_), 0) => OnlyLimitTransform::create(input, output, limit, offset),
-            (None, _) => OnlyOffsetTransform::create(input, output, limit, offset),
-            (Some(_), _) => OffsetAndLimitTransform::create(input, output, limit, offset),
+            (Some(_), 0) => {
+                OnlyLimitTransform::create(input, output, limit, offset, runtime_limit_filter)
+            }
+            (None, _) => OnlyOffsetTransform::create(input, output, limit, offset, None),
+            (Some(_), _) => {
+                OffsetAndLimitTransform::create(input, output, limit, offset, runtime_limit_filter)
+            }
         }
     }
 }
@@ -56,6 +62,7 @@ struct TransformLimitImpl<const MODE: usize> {
 
     input_data_block: Option<DataBlock>,
     output_data_block: Option<DataBlock>,
+    runtime_limit_filter: Option<Arc<RuntimeLimitFilter>>,
 }
 
 impl<const MODE: usize> TransformLimitImpl<MODE> {
@@ -64,6 +71,7 @@ impl<const MODE: usize> TransformLimitImpl<MODE> {
         output: Arc<OutputPort>,
         limit: Option<usize>,
         offset: usize,
+        runtime_limit_filter: Option<Arc<RuntimeLimitFilter>>,
     ) -> Result<Box<dyn Processor>> {
         Ok(Box::new(Self {
             input,
@@ -72,7 +80,14 @@ impl<const MODE: usize> TransformLimitImpl<MODE> {
             output_data_block: None,
             skip_remaining: offset,
             take_remaining: limit.unwrap_or(0),
+            runtime_limit_filter,
         }))
+    }
+
+    fn finish_scan(&self) {
+        if let Some(filter) = &self.runtime_limit_filter {
+            filter.finish();
+        }
     }
 
     pub fn take_rows(&mut self, data_block: DataBlock) -> DataBlock {
@@ -132,6 +147,7 @@ impl<const MODE: usize> Processor for TransformLimitImpl<MODE> {
 
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
+            self.finish_scan();
             self.input.finish();
             return Ok(Event::Finished);
         }
@@ -146,27 +162,26 @@ impl<const MODE: usize> Processor for TransformLimitImpl<MODE> {
             return Ok(Event::NeedConsume);
         }
 
-        if self.skip_remaining == 0 && self.take_remaining == 0 {
-            if MODE == ONLY_LIMIT || MODE == OFFSET_AND_LIMIT {
-                self.input.finish();
+        if self.take_remaining == 0 && (MODE == ONLY_LIMIT || MODE == OFFSET_AND_LIMIT) {
+            self.finish_scan();
+            self.input.finish();
+            self.output.finish();
+            return Ok(Event::Finished);
+        }
+
+        if self.skip_remaining == 0 && MODE == ONLY_OFFSET {
+            if self.input.is_finished() {
                 self.output.finish();
                 return Ok(Event::Finished);
             }
 
-            if MODE == ONLY_OFFSET {
-                if self.input.is_finished() {
-                    self.output.finish();
-                    return Ok(Event::Finished);
-                }
-
-                if !self.input.has_data() {
-                    self.input.set_need_data();
-                    return Ok(Event::NeedData);
-                }
-
-                self.output.push_data(self.input.pull_data().unwrap());
-                return Ok(Event::NeedConsume);
+            if !self.input.has_data() {
+                self.input.set_need_data();
+                return Ok(Event::NeedData);
             }
+
+            self.output.push_data(self.input.pull_data().unwrap());
+            return Ok(Event::NeedConsume);
         }
 
         if self.input_data_block.is_some() {
@@ -199,5 +214,35 @@ impl<const MODE: usize> Processor for TransformLimitImpl<MODE> {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_catalog::runtime_filter_info::RuntimeScanFilter;
+    use databend_common_pipeline::core::Event;
+    use databend_common_pipeline::core::InputPort;
+    use databend_common_pipeline::core::OutputPort;
+    use databend_common_pipeline::core::port::connect;
+
+    use super::*;
+
+    #[test]
+    fn limit_zero_finishes_runtime_scan_filter() {
+        for offset in [0, 10] {
+            let input = InputPort::create();
+            let output = OutputPort::create();
+            let downstream = InputPort::create();
+            unsafe { connect(&downstream, &output) };
+            downstream.set_need_data();
+
+            let filter = Arc::new(RuntimeLimitFilter::new());
+            let processor =
+                TransformLimit::try_create(Some(0), offset, input, output, Some(filter.clone()));
+            let mut processor = processor.unwrap();
+
+            assert!(matches!(processor.event().unwrap(), Event::Finished));
+            assert!(filter.finished());
+        }
     }
 }

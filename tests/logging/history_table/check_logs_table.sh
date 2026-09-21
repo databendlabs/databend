@@ -71,6 +71,12 @@ check_query_log "basic-10" "$CREATE_VIEW_QUERY_ID" "select query_text from syste
 
 check_query_log "basic-11" null "SELECT count(*) FROM system_history.login_history WHERE session_id = '$SELECT_SESSION_ID' " "1"
 
+check_query_log "resource-1" "$SELECT_QUERY_ID" "SELECT count(*) FROM system_history.query_history WHERE resource_usage IS NOT NULL AND resource_usage['read_count']::UInt64 > 0 AND resource_usage['read_bytes']::UInt64 > 0 AND resource_usage['read_duration_ms'] IS NOT NULL AND resource_usage['cpu_time_ms'] IS NOT NULL AND resource_usage['wait_time_ms'] IS NOT NULL AND" "1"
+
+check_query_log "resource-2" "$INSERT_QUERY_ID" "SELECT count(*) FROM system_history.query_history WHERE resource_usage IS NOT NULL AND resource_usage['write_count']::UInt64 > 0 AND resource_usage['write_bytes']::UInt64 > 0 AND resource_usage['write_duration_ms'] IS NOT NULL AND resource_usage['cpu_time_ms'] IS NOT NULL AND resource_usage['wait_time_ms'] IS NOT NULL AND" "1"
+
+check_query_log "resource-3" null "SELECT count(*) FROM (SELECT parse_json(message) AS m FROM system_history.log_history WHERE target = 'databend::log::query' AND query_id = '$SELECT_QUERY_ID') WHERE m['log_type'] = 1 AND m['resource_usage'] IS NOT NULL AND m['resource_usage']['list_count'] IS NOT NULL AND m['resource_usage']['cpu_time_ms'] IS NOT NULL AND m['resource_usage']['wait_time_ms'] IS NOT NULL" "1"
+
 check_log_history_integrity
 
 # Timezone tests - regression test for https://github.com/databendlabs/databend/pull/18059

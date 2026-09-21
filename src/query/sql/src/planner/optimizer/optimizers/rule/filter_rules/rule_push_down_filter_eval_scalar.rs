@@ -24,6 +24,8 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
+use crate::plans::FunctionCall;
+use crate::plans::LambdaFunc;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -59,8 +61,8 @@ impl RulePushDownFilterEvalScalar {
         struct PredicateVisitor<'a> {
             items: &'a [ScalarItem],
         }
-        impl<'a> VisitorMut<'a> for PredicateVisitor<'a> {
-            fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
+        impl VisitorMut<'_> for PredicateVisitor<'_> {
+            fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
                 if let ScalarExpr::BoundColumnRef(column) = expr {
                     for item in self.items {
                         if item.index == column.column.index {
@@ -72,12 +74,26 @@ impl RulePushDownFilterEvalScalar {
                 };
                 walk_expr_mut(self, expr)
             }
+
+            fn visit_function_call(&mut self, function: &mut FunctionCall) -> Result<()> {
+                for argument in &mut function.arguments {
+                    self.visit(argument)?;
+                }
+                function.refresh_return_type()
+            }
+
+            fn visit_lambda_function(&mut self, lambda: &mut LambdaFunc) -> Result<()> {
+                for argument in &mut lambda.args {
+                    self.visit(argument)?;
+                }
+                lambda.refresh_return_type()
+            }
         }
 
         let mut visitor = PredicateVisitor { items };
         let mut predicate = predicate.clone();
         visitor.visit(&mut predicate)?;
-        Ok(predicate.clone())
+        Ok(predicate)
     }
 }
 

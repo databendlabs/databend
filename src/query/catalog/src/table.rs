@@ -41,12 +41,12 @@ use databend_common_statistics::Histogram;
 use databend_common_storage::StorageMetrics;
 use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::ColumnCountMinSketch;
+use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
-use databend_storages_common_table_meta::table::ClusterType;
-use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 
@@ -109,6 +109,15 @@ pub trait Table: Sync + Send {
 
     fn get_table_info(&self) -> &TableInfo;
 
+    /// Returns the source table whose data columns a stream exposes.
+    ///
+    /// Lineage intentionally passes through a stream to its source table.
+    /// Views are lineage boundaries and must not use this relation-level hook;
+    /// their output columns are annotated separately by the planner.
+    fn stream_source_table_info(&self) -> Option<&TableInfo> {
+        None
+    }
+
     fn get_data_source_info(&self) -> DataSourceInfo {
         DataSourceInfo::TableSource(self.get_table_info().clone())
     }
@@ -134,16 +143,6 @@ pub trait Table: Sync + Send {
 
     fn cluster_key_meta(&self) -> Option<ClusterKey> {
         None
-    }
-
-    fn cluster_type(&self) -> Option<ClusterType> {
-        self.cluster_key_meta()?;
-        let cluster_type = self
-            .options()
-            .get(OPT_KEY_CLUSTER_TYPE)
-            .and_then(|s| s.parse::<ClusterType>().ok())
-            .unwrap_or(ClusterType::Linear);
-        Some(cluster_type)
     }
 
     fn resolve_cluster_keys(&self) -> Option<Vec<Expr>> {
@@ -311,19 +310,6 @@ pub trait Table: Sync + Send {
         Ok(())
     }
 
-    #[async_backtrace::framed]
-    async fn purge(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        instant: Option<NavigationPoint>,
-        num_snapshot_limit: Option<usize>,
-        dry_run: bool,
-    ) -> Result<Option<Vec<String>>> {
-        let (_, _, _, _) = (ctx, instant, num_snapshot_limit, dry_run);
-
-        Ok(None)
-    }
-
     async fn table_statistics(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -397,9 +383,10 @@ pub trait Table: Sync + Send {
     async fn compact_segments(
         &self,
         ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
         limit: Option<usize>,
     ) -> Result<()> {
-        let (_, _) = (ctx, limit);
+        let (_, _, _) = (ctx, pipeline, limit);
 
         Err(ErrorCode::Unimplemented(format!(
             "The operation 'compact_segments' is not supported for the table '{}', which is using the '{}' engine.",
@@ -446,12 +433,21 @@ pub trait Table: Sync + Send {
         false
     }
 
+    fn plan_can_be_cached(&self) -> bool {
+        true
+    }
+
     fn broadcast_truncate_to_warehouse(&self) -> bool {
         false
     }
 
     fn is_read_only(&self) -> bool {
         false
+    }
+
+    /// Whether physical maintenance is forbidden (for example, on shared or attached data).
+    fn is_read_only_for_maintenance(&self) -> bool {
+        self.is_read_only()
     }
 
     fn is_temp(&self) -> bool {
@@ -462,15 +458,16 @@ pub trait Table: Sync + Send {
         self.engine() == "STREAM"
     }
 
+    /// Whether this table instance represents a CHANGE_TRACKING data source.
+    fn has_changes_source(&self) -> bool {
+        false
+    }
+
     fn use_own_sample_block(&self) -> bool {
         false
     }
 
-    async fn remove_aggregating_index_files(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _index_id: u64,
-    ) -> Result<u64> {
+    async fn remove_aggregating_index_files(&self, _ctx: Arc<dyn TableContext>) -> Result<u64> {
         Ok(0)
     }
 
@@ -528,6 +525,15 @@ pub trait TableExt: Table {
                 "Modification not permitted: Table {} is READ ONLY, preventing any changes or updates.",
                 self.get_table_info().desc,
             )))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Owned derived tables allow physical maintenance while rejecting user DML.
+    fn check_mutable_for_maintenance(&self) -> Result<()> {
+        if self.is_read_only_for_maintenance() {
+            self.check_mutable()
         } else {
             Ok(())
         }
@@ -602,6 +608,16 @@ pub trait ColumnStatisticsProvider: Send {
 
     // return histogram if any
     fn histogram(&self, _column_id: ColumnId) -> Option<Histogram> {
+        None
+    }
+
+    // return top-N frequency stats if any
+    fn top_n(&self, _column_id: ColumnId) -> Option<ColumnTopN> {
+        None
+    }
+
+    // return count-min sketch frequency stats if any
+    fn count_min_sketch(&self, _column_id: ColumnId) -> Option<ColumnCountMinSketch> {
         None
     }
 }

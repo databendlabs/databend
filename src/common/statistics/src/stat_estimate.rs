@@ -435,6 +435,18 @@ impl StatCount {
             }
         }
     }
+
+    pub fn sum(left: Self, right: Self) -> Self {
+        match (left, right) {
+            (StatCount::Exact(left), StatCount::Exact(right)) => {
+                StatCount::exact(left.saturating_add(right))
+            }
+            _ => StatCount::estimate(
+                left.expected() + right.expected(),
+                left.upper() + right.upper(),
+            ),
+        }
+    }
 }
 
 #[cfg(test)]

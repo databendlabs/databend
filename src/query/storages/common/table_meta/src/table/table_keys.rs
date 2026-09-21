@@ -12,17 +12,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::str::FromStr;
 use std::sync::LazyLock;
 
+use databend_common_exception::ErrorCode;
 use databend_common_frozen_api::FrozenAPI;
+use databend_common_meta_app::schema::DYNAMIC_TABLE_ENGINE;
+use databend_common_meta_app::schema::is_materialized_view_engine;
+
+use super::dynamic_table_keys::OPT_KEY_AS_QUERY;
+use super::dynamic_table_keys::OPT_KEY_SOURCE_TABLE_IDS;
+use crate::meta::ColumnCountMinSketch;
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_STORAGE_PREFIX: &str = "storage_prefix";
 pub const OPT_KEY_TEMP_PREFIX: &str = "temp_prefix";
 pub const OPT_KEY_RECURSIVE_CTE: &str = "recursive_cte";
 pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
+pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION: &str =
+    "materialized_view_source_snapshot_location";
+pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_DATABASE_NAME: &str =
+    "materialized_view_source_database_name";
+pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID: &str = "materialized_view_source_table_id";
+pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME: &str = "materialized_view_source_table_name";
+pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ: &str = "materialized_view_source_table_seq";
+pub const OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS: &str =
+    "materialized_view_aggregate_compaction_delta_blocks";
+/// Reason reported when the source table bound by CREATE no longer has the same lifecycle identity.
+pub const MATERIALIZED_VIEW_INVALID_SOURCE_REASON: &str =
+    "source table was dropped, renamed, or replaced";
+/// Reason reported when the database name persisted in the MV definition no longer resolves.
+pub const MATERIALIZED_VIEW_INVALID_SOURCE_DATABASE_REASON: &str = "source database was renamed";
 pub const OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG: &str = "snapshot_location_fixed";
 pub const OPT_KEY_STORAGE_FORMAT: &str = "storage_format";
 pub const OPT_KEY_SEGMENT_FORMAT: &str = "segment_format";
@@ -35,6 +58,13 @@ pub const OPT_KEY_APPROX_DISTINCT_COLUMNS: &str = "approx_distinct_columns";
 pub const OPT_KEY_CHANGE_TRACKING: &str = "change_tracking";
 pub const OPT_KEY_CHANGE_TRACKING_BEGIN_VER: &str = "begin_version";
 pub const OPT_KEY_ENABLE_SCHEMA_EVOLUTION: &str = "enable_schema_evolution";
+pub const OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM: &str = "analyze_histogram_algorithm";
+pub const OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR: &str =
+    "analyze_histogram_kll_relative_error";
+pub const OPT_KEY_ANALYZE_FREQUENCY_COLUMNS: &str = "analyze_frequency_columns";
+pub const OPT_KEY_ANALYZE_TOP_N_SIZE: &str = "analyze_top_n_size";
+pub const OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE: &str = "analyze_count_min_sketch_error_rate";
+pub const MAX_ANALYZE_TOP_N_SIZE: usize = 10_000;
 
 // Attached table options.
 pub const OPT_KEY_TABLE_ATTACHED_DATA_URI: &str = "table_data_uri";
@@ -62,9 +92,47 @@ pub const OPT_KEY_RANDOM_MAX_STRING_LEN: &str = "max_string_len";
 pub const OPT_KEY_RANDOM_MAX_ARRAY_LEN: &str = "max_array_len";
 
 pub const OPT_KEY_CLUSTER_TYPE: &str = "cluster_type";
+/// The normalized Fuse partition expressions. This is set by CREATE TABLE
+/// PARTITION BY and is not a user-settable table option.
+pub const OPT_KEY_PARTITION_BY: &str = "partition_by";
+pub const OPT_KEY_WRITE_DISTRIBUTION_MODE: &str = "write_distribution_mode";
+pub const OPT_KEY_AGGRESSIVE_RECLUSTER: &str = "aggressive_recluster";
 pub const OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH: &str = "copy_dedup_full_path";
 pub const LINEAR_CLUSTER_TYPE: &str = "linear";
 pub const HILBERT_CLUSTER_TYPE: &str = "hilbert";
+pub const HILBERT_CLUSTER_DIMENSIONS: usize = 2;
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum WriteDistributionMode {
+    None,
+    Hash,
+}
+
+impl FromStr for WriteDistributionMode {
+    type Err = ErrorCode;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.to_ascii_lowercase().as_str() {
+            "none" => Ok(Self::None),
+            "hash" => Ok(Self::Hash),
+            _ => Err(ErrorCode::TableOptionInvalid(format!(
+                "{OPT_KEY_WRITE_DISTRIBUTION_MODE} must be either 'none' or 'hash', got: {value}"
+            ))),
+        }
+    }
+}
+
+pub const FUSE_ENGINE: &str = "FUSE";
+
+pub fn is_fuse_engine(engine: &str) -> bool {
+    engine.eq_ignore_ascii_case(FUSE_ENGINE)
+}
+
+pub fn is_fuse_backed_engine(engine: &str) -> bool {
+    is_fuse_engine(engine)
+        || is_materialized_view_engine(engine)
+        || engine.eq_ignore_ascii_case(DYNAMIC_TABLE_ENGINE)
+}
 
 /// Table option keys that reserved for internal usage only
 /// - Users are not allowed to specify this option keys in DDL
@@ -74,10 +142,20 @@ pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_RECURSIVE_CTE);
+    r.insert(OPT_KEY_PARTITION_BY);
+    r.insert(OPT_KEY_CLUSTER_TYPE);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_DATABASE_NAME);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS);
+    r.insert(OPT_KEY_AS_QUERY);
+    r.insert(OPT_KEY_SOURCE_TABLE_IDS);
     r
 });
 
-/// Table option keys that Should not be shown in `show create table` statement
+/// Table option keys that should not be shown in `show create table` statement.
 pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
@@ -86,6 +164,16 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER);
     r.insert(OPT_KEY_TEMP_PREFIX);
     r.insert(OPT_KEY_RECURSIVE_CTE);
+    r.insert(OPT_KEY_PARTITION_BY);
+    r.insert(OPT_KEY_CLUSTER_TYPE);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_DATABASE_NAME);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ);
+    r.insert(OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS);
+    r.insert(OPT_KEY_AS_QUERY);
+    r.insert(OPT_KEY_SOURCE_TABLE_IDS);
     r
 });
 
@@ -95,6 +183,43 @@ pub fn is_reserved_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
 
 pub fn is_internal_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
     INTERNAL_TABLE_OPTION_KEYS.contains(opt_key.as_ref().to_lowercase().as_str())
+}
+
+pub fn analyze_top_n_size_from_options(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<Option<usize>> {
+    let Some(value) = options.get(OPT_KEY_ANALYZE_TOP_N_SIZE) else {
+        return Ok(None);
+    };
+    let top_n_size = value.parse::<usize>().map_err(|_| {
+        ErrorCode::TableOptionInvalid(format!(
+            "{OPT_KEY_ANALYZE_TOP_N_SIZE} must be a non-negative integer, got: {value}"
+        ))
+    })?;
+    if top_n_size > MAX_ANALYZE_TOP_N_SIZE {
+        return Err(ErrorCode::TableOptionInvalid(format!(
+            "{OPT_KEY_ANALYZE_TOP_N_SIZE} must be no greater than {MAX_ANALYZE_TOP_N_SIZE}, got: {top_n_size}"
+        )));
+    }
+    Ok((top_n_size > 0).then_some(top_n_size))
+}
+
+pub fn analyze_count_min_sketch_error_rate_from_options(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<Option<f64>> {
+    let Some(value) = options.get(OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE) else {
+        return Ok(None);
+    };
+    let error_rate = value.parse::<f64>().map_err(|_| {
+        ErrorCode::TableOptionInvalid(format!(
+            "{OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE} must be a floating-point number, got: {value}"
+        ))
+    })?;
+    if error_rate == 0.0 {
+        return Ok(None);
+    }
+    ColumnCountMinSketch::width_for_error_rate(error_rate)?;
+    Ok(Some(error_rate))
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq, Copy, FrozenAPI)]
@@ -112,6 +237,13 @@ impl Display for ClusterType {
     }
 }
 
+pub fn cluster_type_from_options(options: &BTreeMap<String, String>) -> ClusterType {
+    match options.get(OPT_KEY_CLUSTER_TYPE) {
+        Some(value) if value.eq_ignore_ascii_case(HILBERT_CLUSTER_TYPE) => ClusterType::Hilbert,
+        _ => ClusterType::Linear,
+    }
+}
+
 impl std::str::FromStr for ClusterType {
     type Err = databend_common_exception::ErrorCode;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -123,5 +255,117 @@ impl std::str::FromStr for ClusterType {
                 s
             ))),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cluster_type_is_reserved_and_internal() {
+        assert!(is_reserved_opt_key(OPT_KEY_CLUSTER_TYPE));
+        assert!(is_reserved_opt_key("CLUSTER_TYPE"));
+        assert!(is_internal_opt_key(OPT_KEY_CLUSTER_TYPE));
+    }
+
+    #[test]
+    fn test_dynamic_table_source_table_ids_are_reserved_and_internal() {
+        assert!(is_reserved_opt_key(OPT_KEY_SOURCE_TABLE_IDS));
+        assert!(is_internal_opt_key(OPT_KEY_SOURCE_TABLE_IDS));
+    }
+
+    #[test]
+    fn test_materialized_view_source_table_id_is_reserved() {
+        assert!(is_reserved_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_DATABASE_NAME
+        ));
+        assert!(is_internal_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_DATABASE_NAME
+        ));
+        assert!(is_reserved_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID
+        ));
+        assert!(is_reserved_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME
+        ));
+        assert!(is_internal_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME
+        ));
+        assert!(is_reserved_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ
+        ));
+        assert!(is_internal_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_SEQ
+        ));
+        assert!(is_reserved_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS
+        ));
+        assert!(is_internal_opt_key(
+            OPT_KEY_MATERIALIZED_VIEW_AGGREGATE_COMPACTION_DELTA_BLOCKS
+        ));
+    }
+
+    #[test]
+    fn test_analyze_top_n_size_from_options() {
+        let mut options = BTreeMap::new();
+        assert_eq!(analyze_top_n_size_from_options(&options).unwrap(), None);
+
+        options.insert(OPT_KEY_ANALYZE_TOP_N_SIZE.to_string(), "0".to_string());
+        assert_eq!(analyze_top_n_size_from_options(&options).unwrap(), None);
+
+        options.insert(OPT_KEY_ANALYZE_TOP_N_SIZE.to_string(), "2".to_string());
+        assert_eq!(analyze_top_n_size_from_options(&options).unwrap(), Some(2));
+
+        options.insert(
+            OPT_KEY_ANALYZE_TOP_N_SIZE.to_string(),
+            (MAX_ANALYZE_TOP_N_SIZE + 1).to_string(),
+        );
+        assert!(analyze_top_n_size_from_options(&options).is_err());
+
+        options.insert(
+            OPT_KEY_ANALYZE_TOP_N_SIZE.to_string(),
+            "invalid".to_string(),
+        );
+        assert!(analyze_top_n_size_from_options(&options).is_err());
+    }
+
+    #[test]
+    fn test_analyze_count_min_sketch_error_rate_from_options() {
+        let mut options = BTreeMap::new();
+        assert_eq!(
+            analyze_count_min_sketch_error_rate_from_options(&options).unwrap(),
+            None
+        );
+
+        options.insert(
+            OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE.to_string(),
+            "0".to_string(),
+        );
+        assert_eq!(
+            analyze_count_min_sketch_error_rate_from_options(&options).unwrap(),
+            None
+        );
+
+        options.insert(
+            OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE.to_string(),
+            "0.01".to_string(),
+        );
+        assert_eq!(
+            analyze_count_min_sketch_error_rate_from_options(&options).unwrap(),
+            Some(0.01)
+        );
+
+        options.insert(
+            OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE.to_string(),
+            "-0.1".to_string(),
+        );
+        assert!(analyze_count_min_sketch_error_rate_from_options(&options).is_err());
+
+        options.insert(
+            OPT_KEY_ANALYZE_COUNT_MIN_SKETCH_ERROR_RATE.to_string(),
+            "invalid".to_string(),
+        );
+        assert!(analyze_count_min_sketch_error_rate_from_options(&options).is_err());
     }
 }

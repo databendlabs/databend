@@ -38,10 +38,11 @@ use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::Value;
 use databend_common_expression::aggregate::AggrState;
-use databend_common_expression::aggregate::AggregateFunctionRef;
 use databend_common_expression::aggregate::StateAddr;
 use databend_common_expression::aggregate::StatesLayout;
-use databend_common_expression::aggregate::get_states_layout;
+use databend_common_expression::aggregate::aggregate_function::AggregateCallRef;
+use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
+use databend_common_expression::aggregate::aggregate_function::get_states_layout;
 use databend_common_expression::domain_evaluator;
 use databend_common_expression::scalar_evaluator;
 use databend_common_expression::types::ALL_NUMERICS_TYPES;
@@ -86,7 +87,7 @@ use jsonb::RawJsonb;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
 
-use crate::AggregateFunctionFactory;
+use crate::aggregates::registry::AGGR_REGISTRY;
 
 const ARRAY_AGGREGATE_FUNCTIONS: &[(&str, &str); 14] = &[
     ("array_avg", "avg"),
@@ -195,7 +196,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             .map(|arg_type| {
                 let is_nullable = arg_type.is_nullable();
                 match arg_type.remove_nullable() {
-                    DataType::Array(box inner_type) => {
+                    DataType::Array(deref!(inner_type)) => {
                         if is_nullable {
                             inner_type.wrap_nullable()
                         } else {
@@ -219,7 +220,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         .iter()
                         .map(|arg_domain| match arg_domain {
                             Domain::Nullable(nullable_domain) => match &nullable_domain.value {
-                                Some(box Domain::Array(Some(inner_domain))) => {
+                                Some(deref!(Domain::Array(Some(inner_domain)))) => {
                                     Domain::Nullable(NullableDomain {
                                         has_null: nullable_domain.has_null,
                                         value: Some(Box::new(*inner_domain.clone())),
@@ -227,7 +228,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 }
                                 _ => Domain::Nullable(nullable_domain.clone()),
                             },
-                            Domain::Array(Some(box inner_domain)) => inner_domain.clone(),
+                            Domain::Array(Some(deref!(inner_domain))) => inner_domain.clone(),
                             _ => arg_domain.clone(),
                         })
                         .collect();
@@ -739,7 +740,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             let domain = array_domain
                 .value
                 .as_ref()
-                .map(|box inner_domain| {
+                .map(|deref!( inner_domain)| {
                     inner_domain
                         .as_ref()
                         .map(|inner_domain| inner_domain.merge(item_domain))
@@ -765,7 +766,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             let domain = array_domain
                 .value
                 .as_ref()
-                .map(|box inner_domain| {
+                .map(|deref!( inner_domain)| {
                     inner_domain
                         .as_ref()
                         .map(|inner_domain| inner_domain.merge(item_domain))
@@ -1224,7 +1225,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 }
 
 struct ArrayAggEvaluator<'a> {
-    func: &'a AggregateFunctionRef,
+    func: &'a AggregateCallRef,
     state_layout: &'a StatesLayout,
     addr: StateAddr,
     need_manual_drop_state: bool,
@@ -1232,14 +1233,14 @@ struct ArrayAggEvaluator<'a> {
 }
 
 impl<'a> ArrayAggEvaluator<'a> {
-    fn new(func: &'a AggregateFunctionRef, state_layout: &'a StatesLayout) -> Self {
+    fn new(func: &'a AggregateCallRef, state_layout: &'a StatesLayout) -> Self {
         let arena = Bump::new();
         let addr = arena.alloc_layout(state_layout.layout).into();
         func.init_state(AggrState::new(addr, &state_layout.states_loc[0]));
         Self {
             state_layout,
             addr,
-            need_manual_drop_state: func.need_manual_drop_state(),
+            need_manual_drop_state: func.state().need_manual_drop(),
             func,
             _arena: arena,
         }
@@ -1257,10 +1258,9 @@ impl<'a> ArrayAggEvaluator<'a> {
             }
         }
         self.func.init_state(state);
-        let rows = entry.len();
         let entries = &[entry];
-        self.func.accumulate(state, entries.into(), None, rows)?;
-        self.func.merge_result(state, false, builder)?;
+        self.func.accumulate(state, entries.into())?;
+        self.func.merge_result(state, builder)?;
         Ok(())
     }
 }
@@ -1277,16 +1277,21 @@ impl Drop for ArrayAggEvaluator<'_> {
 }
 
 struct ArrayAggDesc {
-    func: AggregateFunctionRef,
+    func: AggregateCallRef,
     state_layout: Arc<StatesLayout>,
     return_type: DataType,
 }
 
 impl ArrayAggDesc {
     fn new(name: &str, array_type: &DataType) -> Result<Self> {
-        let factory = AggregateFunctionFactory::instance();
-        let func = factory.get(name, vec![], vec![array_type.clone()], vec![])?;
-        let return_type = func.return_type()?;
+        let func = AGGR_REGISTRY.resolve(RawAggregateCall {
+            name,
+            params: &[],
+            args_type: std::slice::from_ref(array_type),
+            distinct: false,
+            order_by: &[],
+        })?;
+        let return_type = func.signature().return_type.clone();
         let funcs = [func.clone()];
         let state_layout = Arc::new(get_states_layout(&funcs)?);
         Ok(Self {
@@ -1309,7 +1314,7 @@ struct ArrayAggFunctionImpl {
 impl ArrayAggFunctionImpl {
     fn new(name: &'static str, arg_type: &DataType) -> Option<Self> {
         let (desc, return_type) = match arg_type {
-            DataType::Nullable(box DataType::EmptyArray) | DataType::EmptyArray => (
+            DataType::Nullable(deref!(DataType::EmptyArray)) | DataType::EmptyArray => (
                 None,
                 if name == "count" {
                     UInt64Type::data_type()
@@ -1317,9 +1322,9 @@ impl ArrayAggFunctionImpl {
                     DataType::Null
                 },
             ),
-            DataType::Nullable(box DataType::Array(box array_type))
-            | DataType::Array(box array_type)
-            | DataType::Nullable(box array_type @ DataType::Variant)
+            DataType::Nullable(deref!(DataType::Array(deref!(array_type))))
+            | DataType::Array(deref!(array_type))
+            | DataType::Nullable(deref!( array_type @ DataType::Variant))
             | array_type @ DataType::Variant => {
                 let desc = ArrayAggDesc::new(name, array_type).ok()?;
                 let return_type = desc.return_type.clone();
@@ -1363,12 +1368,12 @@ impl ArrayAggFunctionImpl {
                     })
             }
             [Value::Scalar(_)] => unreachable!(),
-            [Value::Column(Column::Nullable(box column))]
+            [Value::Column(Column::Nullable(deref!(column)))]
                 if desc.return_type != self.return_type =>
             {
                 let mut builder = ColumnBuilder::with_capacity(&self.return_type, column.len());
                 let mut evaluator = desc.create_evaluator();
-                let ColumnBuilder::Nullable(box nullable) = &mut builder else {
+                let ColumnBuilder::Nullable(deref!(nullable)) = &mut builder else {
                     unreachable!()
                 };
                 for (row_index, scalar) in column.iter().enumerate() {
@@ -1519,7 +1524,7 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                                         let val = scalar.as_variant().unwrap();
                                         sorted_vals.push(RawJsonb::new(val));
                                     }
-                                    match OwnedJsonb::build_array(sorted_vals.into_iter()) {
+                                    match OwnedJsonb::build_array(sorted_vals) {
                                         Ok(owned_jsonb) => {
                                             output.put_slice(owned_jsonb.as_ref());
                                         }

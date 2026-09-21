@@ -735,7 +735,7 @@ impl DataBlock {
         match value {
             Value::Scalar(scalar) => self.add_const_column(scalar, data_type),
             Value::Column(column) => {
-                debug_assert_eq!(data_type, column.data_type());
+                debug_assert!(data_type.matches_physical_type(&column.data_type()));
                 self.add_column(column)
             }
         }
@@ -926,19 +926,6 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn project_with_agg_index(self, projections: &ColumnSet, num_evals: usize) -> Self {
-        let mut columns = Vec::with_capacity(projections.len());
-        let eval_offset = self.entries.len() - num_evals;
-        for (index, column) in self.entries.into_iter().enumerate() {
-            if !projections.contains(&index) && index < eval_offset {
-                continue;
-            }
-            columns.push(column);
-        }
-        DataBlock::new_with_meta(columns, self.num_rows, self.meta)
-    }
-
-    #[inline]
     pub fn get_last_column(&self) -> &Column {
         self.entries.last().unwrap().as_column().unwrap()
     }
@@ -960,10 +947,15 @@ impl DataBlock {
 
     /// Calculates the memory size of a `DataBlock` for writing purposes.
     /// This function is used to estimate the memory footprint of a `DataBlock` when writing it to storage.
-    pub fn estimate_block_size(&self) -> usize {
+    /// `num_columns` is the number of leading columns to include in the estimate.
+    /// Temporary columns appended for sorting/statistics, such as extra cluster key columns,
+    /// should not be included when they are not written.
+    pub fn estimate_block_size(&self, num_columns: usize) -> usize {
+        debug_assert!(num_columns <= self.entries.len());
         let num_rows = self.num_rows();
         self.columns()
             .iter()
+            .take(num_columns)
             .map(|entry| match entry {
                 BlockEntry::Column(Column::Nullable(col)) if col.validity().true_count() == 0 => {
                     // For `Nullable` columns with no valid values,

@@ -19,17 +19,14 @@ use std::ops::RangeBounds;
 use enum_as_inner::EnumAsInner;
 use nom::Needed;
 
-use crate::parser::Backtrace;
 use crate::parser::token::Token;
 
-/// Input tokens slice with a backtrace that records all errors including
-/// the optional branch.
+/// Input tokens for the current parser branch.
 #[derive(Debug, Clone, Copy)]
 pub struct Input<'a> {
     pub tokens: &'a [Token<'a>],
     pub dialect: Dialect,
     pub mode: ParseMode,
-    pub backtrace: &'a Backtrace,
 }
 
 impl<'a> std::ops::Deref for Input<'a> {

@@ -202,7 +202,7 @@ impl From<MetaHLLVariant> for MetaHLL {
             MetaHLLVariant::Empty => MetaHLL::new(),
             MetaHLLVariant::Sparse { indices, values } => {
                 let mut registers = vec![0; 1 << P];
-                for (i, v) in indices.into_iter().zip(values.into_iter()) {
+                for (i, v) in indices.into_iter().zip(values) {
                     registers[i as usize] = v;
                 }
                 MetaHLL { registers }

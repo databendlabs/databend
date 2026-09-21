@@ -95,27 +95,33 @@ EXPLAIN SELECT * FROM (
     SELECT * FROM test_table ORDER BY id LIMIT 10
 ) ORDER BY name LIMIT 5;
 ----
-Limit
+TopN(Final)
 ├── output columns: [test_table.id (#0), test_table._row_id (#3), test_table.name (#1), test_table.value (#2)]
+├── sort keys: [name ASC NULLS LAST]
 ├── limit: 5
 ├── offset: 0
 ├── estimated rows: 0.00
-└── Sort(Single)
-    ├── output columns: [test_table.id (#0), test_table._row_id (#3), test_table.name (#1), test_table.value (#2)]
+└── TopN(Partial)
+    ├── output columns: [test_table.id (#0), test_table._row_id (#3), test_table.name (#1), test_table.value (#2), #_order_col]
     ├── sort keys: [name ASC NULLS LAST]
+    ├── limit: 5
+    ├── offset: 0
     ├── estimated rows: 0.00
     └── RowFetch
         ├── output columns: [test_table.id (#0), test_table._row_id (#3), test_table.name (#1), test_table.value (#2)]
         ├── columns to fetch: [name, value]
         ├── estimated rows: 0.00
-        └── Limit
+        └── TopN(Final)
             ├── output columns: [test_table.id (#0), test_table._row_id (#3)]
+            ├── sort keys: [id ASC NULLS LAST]
             ├── limit: 10
             ├── offset: 0
             ├── estimated rows: 0.00
-            └── Sort(Single)
-                ├── output columns: [test_table.id (#0), test_table._row_id (#3)]
+            └── TopN(Partial)
+                ├── output columns: [test_table.id (#0), test_table._row_id (#3), #_order_col]
                 ├── sort keys: [id ASC NULLS LAST]
+                ├── limit: 10
+                ├── offset: 0
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.default.test_table

@@ -15,13 +15,18 @@
 use std::collections::HashMap;
 
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
+use databend_common_expression::cast_scalar;
 use databend_common_expression::conversion::common_super_type_with_conversion;
+use databend_common_expression::types::DataType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::ScalarExpr;
 use crate::optimizer::optimizers::operator::filter::remove_trivial_type_cast;
 use crate::plans::BoundColumnRef;
 use crate::plans::ComparisonOp;
 use crate::plans::FunctionCall;
+use crate::plans::LambdaFunc;
 use crate::plans::VisitorMut;
 use crate::plans::walk_expr_mut;
 
@@ -65,6 +70,40 @@ impl EquivalentConstantsVisitorInner {
         self.left_visit_order = left_visit_order;
         self
     }
+
+    fn normalize_equivalent_constant(
+        column: &BoundColumnRef,
+        expr: ScalarExpr,
+    ) -> Result<ScalarExpr> {
+        let (constant, value) = match &expr {
+            ScalarExpr::ConstantExpr(constant) | ScalarExpr::TypedConstantExpr(constant, _)
+                if matches!(
+                    constant.value,
+                    Scalar::Null | Scalar::EmptyArray | Scalar::EmptyMap
+                ) =>
+            {
+                (constant.clone(), constant.value.clone())
+            }
+            _ => return Ok(expr),
+        };
+
+        let target_type = match (&value, column.column.data_type.remove_nullable()) {
+            (Scalar::EmptyArray, target_type @ DataType::Array(_))
+            | (Scalar::EmptyMap, target_type @ DataType::Map(_)) => target_type,
+            (Scalar::Null, _) if column.column.data_type.is_nullable_or_null() => {
+                column.column.data_type.as_ref().clone()
+            }
+            _ => return Ok(expr),
+        };
+        let value = cast_scalar(constant.span, value, &target_type, &BUILTIN_FUNCTIONS)?;
+        Ok(ScalarExpr::TypedConstantExpr(
+            crate::plans::ConstantExpr {
+                span: constant.span,
+                value,
+            },
+            target_type,
+        ))
+    }
 }
 
 impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
@@ -107,7 +146,7 @@ impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
                     visitor.visit(expr)?;
                 }
                 let Some(op) = ComparisonOp::try_from_func_name(&func.func_name) else {
-                    return Ok(());
+                    return func.refresh_return_type();
                 };
 
                 let (left, right) =
@@ -119,7 +158,7 @@ impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
                     func.arguments[1] = right;
                 }
                 if !matches!(op, ComparisonOp::Equal) {
-                    return Ok(());
+                    return func.refresh_return_type();
                 }
 
                 match (func.arguments[0].clone(), func.arguments[1].clone()) {
@@ -156,21 +195,85 @@ impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
                         }
                     }
                     (ScalarExpr::BoundColumnRef(column), expr)
-                    | (expr, ScalarExpr::BoundColumnRef(column)) => {
+                    | (expr, ScalarExpr::BoundColumnRef(column))
                         if expr.used_columns().is_empty()
                             && common_super_type_with_conversion(
                                 column.column.data_type.as_ref(),
-                                expr.data_type()?,
+                                expr.data_type().as_ref(),
                             )
-                            .is_some_and(|conversion| conversion.is_safe_for_equality_inference())
-                        {
-                            self.eq_constants.insert(column, expr);
-                        }
+                            .is_some_and(|conversion| {
+                                conversion.is_safe_for_equality_inference()
+                            }) =>
+                    {
+                        let expr = Self::normalize_equivalent_constant(&column, expr)?;
+                        self.eq_constants.insert(column, expr);
                     }
                     _ => (),
                 }
             }
         }
-        Ok(())
+        func.refresh_return_type()
+    }
+
+    fn visit_lambda_function(&mut self, lambda: &mut LambdaFunc) -> Result<()> {
+        for argument in &mut lambda.args {
+            let mut visitor = EquivalentConstantsVisitorInner::default()
+                .eq_constants(self.eq_constants.clone())
+                .left_visit_order(self.left_visit_order);
+            visitor.visit(argument)?;
+        }
+        lambda.refresh_return_type()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+
+    use super::EquivalentConstantsVisitorInner;
+    use crate::ColumnBindingBuilder;
+    use crate::Symbol;
+    use crate::Visibility;
+    use crate::plans::BoundColumnRef;
+    use crate::plans::ConstantExpr;
+    use crate::plans::ScalarExpr;
+
+    #[test]
+    fn test_normalize_empty_array_preserves_column_element_type() {
+        let array_type = DataType::Array(Box::new(DataType::Number(NumberDataType::Int64)));
+        let column = BoundColumnRef {
+            span: None,
+            column: ColumnBindingBuilder::new(
+                "a".to_string(),
+                Symbol::new(0),
+                Box::new(array_type.clone().wrap_nullable()),
+                Visibility::Visible,
+            )
+            .build(),
+        };
+        let empty_array = ScalarExpr::ConstantExpr(ConstantExpr {
+            span: None,
+            value: Scalar::EmptyArray,
+        });
+
+        let normalized =
+            EquivalentConstantsVisitorInner::normalize_equivalent_constant(&column, empty_array)
+                .unwrap();
+        let ScalarExpr::TypedConstantExpr(constant, data_type) = normalized else {
+            panic!("expected a typed array constant");
+        };
+
+        assert_eq!(data_type, array_type);
+        assert!(constant.value.as_ref().is_value_of_type(&data_type));
+        let Scalar::Array(elements) = constant.value else {
+            panic!("expected a physical array scalar");
+        };
+        assert_eq!(elements.len(), 0);
+        assert_eq!(
+            elements.data_type(),
+            DataType::Number(NumberDataType::Int64)
+        );
     }
 }

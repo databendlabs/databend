@@ -28,7 +28,7 @@ pub enum LikePattern<'a> {
     EndOfPercent(Cow<'a, [u8]>),
     // e.g. '%Arrow%'.
     SurroundByPercent(VolnitskyBase<'a>),
-    // e.g. 'A%row', 'A_row', 'A\\%row'.
+    // e.g. 'A%row', 'A_row'.
     ComplexPattern(Cow<'a, [u8]>),
     // Only includes %, e.g. 'A%r%w'.
     // SimplePattern is composed of: (has_start_percent, has_end_percent, segments).
@@ -219,7 +219,7 @@ pub fn generate_like_pattern<'a, B: Into<Cow<'a, [u8]>>>(
     let pattern: Cow<'a, [u8]> = pattern.into();
     let len = pattern.len();
     if len == 0 {
-        return LikePattern::Constant(true);
+        return LikePattern::OrdinalStr(pattern);
     }
 
     let mut index = 0;
@@ -253,6 +253,11 @@ pub fn generate_like_pattern<'a, B: Into<Cow<'a, [u8]>>>(
                 if index < len - 1 {
                     index += 1;
                     if is_like_pattern_escape(pattern[index] as char) {
+                        if let Some(literal_pattern) =
+                            parse_escaped_literal_pattern(&pattern, haystack_size_hint)
+                        {
+                            return literal_pattern;
+                        }
                         return LikePattern::ComplexPattern(pattern);
                     }
                 }
@@ -300,6 +305,86 @@ pub fn generate_like_pattern<'a, B: Into<Cow<'a, [u8]>>>(
             }
         }
     }
+}
+
+/// Compile a LIKE pattern whose only wildcard is a leading or trailing `%` and
+/// whose escapes all represent literal LIKE metacharacters.
+///
+/// This is called only after the regular classifier finds a supported escape,
+/// so patterns without escapes keep the existing zero-copy path.
+fn parse_escaped_literal_pattern<'a>(
+    pattern: &[u8],
+    haystack_size_hint: usize,
+) -> Option<LikePattern<'a>> {
+    #[derive(Clone, Copy)]
+    enum Phase {
+        LeadingPercent,
+        Literal,
+        TrailingPercent,
+    }
+
+    let mut phase = Phase::LeadingPercent;
+    let mut has_start_percent = false;
+    let mut has_end_percent = false;
+    let mut literal_start = 0;
+    let mut index = 0;
+    let mut literal = None;
+
+    while index < pattern.len() {
+        match pattern[index] {
+            b'%' => match phase {
+                Phase::LeadingPercent => {
+                    has_start_percent = true;
+                    literal_start = index + 1;
+                    index += 1;
+                }
+                Phase::Literal => {
+                    has_end_percent = true;
+                    phase = Phase::TrailingPercent;
+                    index += 1;
+                }
+                Phase::TrailingPercent => index += 1,
+            },
+            b'_' => return None,
+            b'\\' => {
+                if matches!(phase, Phase::TrailingPercent)
+                    || index + 1 >= pattern.len()
+                    || !is_like_pattern_escape(pattern[index + 1] as char)
+                {
+                    return None;
+                }
+                let literal = literal.get_or_insert_with(|| {
+                    let mut literal = Vec::with_capacity(pattern.len());
+                    literal.extend_from_slice(&pattern[literal_start..index]);
+                    literal
+                });
+                literal.push(pattern[index + 1]);
+                phase = Phase::Literal;
+                index += 2;
+            }
+            byte => {
+                if matches!(phase, Phase::TrailingPercent) {
+                    return None;
+                }
+                if let Some(literal) = &mut literal {
+                    literal.push(byte);
+                }
+                phase = Phase::Literal;
+                index += 1;
+            }
+        }
+    }
+
+    let literal = literal?;
+    Some(match (has_start_percent, has_end_percent) {
+        (false, false) => LikePattern::OrdinalStr(Cow::Owned(literal)),
+        (true, false) => LikePattern::StartOfPercent(Cow::Owned(literal)),
+        (false, true) => LikePattern::EndOfPercent(Cow::Owned(literal)),
+        (true, true) => LikePattern::SurroundByPercent(VolnitskyBase::new_cow(
+            Cow::Owned(literal),
+            haystack_size_hint,
+        )),
+    })
 }
 
 fn normalize_simple_pattern<'a>(
@@ -393,6 +478,7 @@ fn test_generate_like_pattern() {
         "warehouse".as_bytes().to_vec(),
     ];
     let test_cases = vec![
+        ("", LikePattern::OrdinalStr("".as_bytes().into())),
         (
             "databend",
             LikePattern::OrdinalStr("databend".as_bytes().into()),
@@ -439,6 +525,42 @@ fn test_generate_like_pattern() {
             LikePattern::SurroundByPercent(VolnitskyBase::new("databend".as_bytes(), 1)),
         ),
         (
+            "%alpha\\_beta%",
+            LikePattern::SurroundByPercent(VolnitskyBase::new("alpha_beta".as_bytes(), 1)),
+        ),
+        (
+            "alpha\\_beta",
+            LikePattern::OrdinalStr("alpha_beta".as_bytes().to_vec().into()),
+        ),
+        (
+            "alpha\\_beta%",
+            LikePattern::EndOfPercent("alpha_beta".as_bytes().to_vec().into()),
+        ),
+        (
+            "%alpha\\_beta",
+            LikePattern::StartOfPercent("alpha_beta".as_bytes().to_vec().into()),
+        ),
+        (
+            "%alpha\\%beta%",
+            LikePattern::SurroundByPercent(VolnitskyBase::new("alpha%beta".as_bytes(), 1)),
+        ),
+        (
+            "%alpha\\\\beta%",
+            LikePattern::SurroundByPercent(VolnitskyBase::new("alpha\\beta".as_bytes(), 1)),
+        ),
+        (
+            "\\%alpha%",
+            LikePattern::EndOfPercent("%alpha".as_bytes().to_vec().into()),
+        ),
+        (
+            "%alpha\\%",
+            LikePattern::StartOfPercent("alpha%".as_bytes().to_vec().into()),
+        ),
+        (
+            "%%%alpha\\_beta%%%",
+            LikePattern::SurroundByPercent(VolnitskyBase::new("alpha_beta".as_bytes(), 1)),
+        ),
+        (
             "databend_cloud%data%warehouse",
             LikePattern::ComplexPattern("databend_cloud%data%warehouse".as_bytes().into()),
         ),
@@ -450,9 +572,137 @@ fn test_generate_like_pattern() {
             "databend%cloud_data%warehouse",
             LikePattern::ComplexPattern("databend%cloud_data%warehouse".as_bytes().into()),
         ),
+        (
+            "%alpha\\_beta%gamma%",
+            LikePattern::ComplexPattern("%alpha\\_beta%gamma%".as_bytes().into()),
+        ),
+        (
+            "%alpha\\xbeta%gamma%",
+            LikePattern::ComplexPattern("%alpha\\xbeta%gamma%".as_bytes().into()),
+        ),
     ];
     for (pattern, pattern_type) in test_cases {
         assert_eq!(pattern_type, generate_like_pattern(pattern.as_bytes(), 1));
+    }
+}
+
+#[test]
+fn test_empty_like_pattern_only_matches_empty_haystack() {
+    let pattern = generate_like_pattern("".as_bytes(), 0);
+
+    assert!(pattern.compare("".as_bytes()));
+    assert!(!pattern.compare("anything".as_bytes()));
+}
+
+#[test]
+fn test_escaped_literal_patterns_match_complex_pattern() {
+    let patterns = [
+        "alpha\\_beta",
+        "alpha\\_beta%",
+        "%alpha\\_beta",
+        "%alpha\\_beta%",
+        "%alpha\\%beta%",
+        "%alpha\\\\beta%",
+        "\\%alpha%",
+        "%alpha\\%",
+        "%%%alpha\\_beta%%%",
+    ];
+    let haystacks = [
+        "",
+        "alpha_beta",
+        "prefix alpha_beta suffix",
+        "alpha-beta",
+        "alpha%beta",
+        "prefix alpha%beta suffix",
+        "alpha\\beta",
+        "prefix alpha\\beta suffix",
+        "%alpha suffix",
+        "prefix alpha%",
+        "α alpha_beta β",
+    ];
+
+    for pattern in patterns {
+        let optimized = generate_like_pattern(pattern.as_bytes(), 0);
+        assert!(!matches!(optimized, LikePattern::ComplexPattern(_)));
+
+        for haystack in haystacks {
+            assert_eq!(
+                optimized.compare(haystack.as_bytes()),
+                LikePattern::complex_pattern(haystack.as_bytes(), pattern.as_bytes()),
+                "{haystack:?} LIKE {pattern:?}"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod property_tests {
+    use proptest::prelude::*;
+
+    use super::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        #[test]
+        fn escaped_literal_pattern_is_equivalent_to_complex_pattern(
+            escaped_literal in prop::sample::select(vec![b'%', b'_', b'\\']),
+            literal_tail in prop::collection::vec(any::<u8>(), 0..32),
+            leading_percent_count in 0usize..4,
+            trailing_percent_count in 0usize..4,
+            prefix in prop::collection::vec(any::<u8>(), 0..64),
+            suffix in prop::collection::vec(any::<u8>(), 0..64),
+            arbitrary in prop::collection::vec(any::<u8>(), 0..128),
+        ) {
+            let mut literal = Vec::with_capacity(literal_tail.len() + 1);
+            literal.push(escaped_literal);
+            literal.extend(literal_tail);
+
+            let mut pattern = Vec::with_capacity(
+                literal.len() * 2 + leading_percent_count + trailing_percent_count,
+            );
+            pattern.extend(std::iter::repeat_n(b'%', leading_percent_count));
+            for byte in &literal {
+                if matches!(byte, b'%' | b'_' | b'\\') {
+                    pattern.push(b'\\');
+                }
+                pattern.push(*byte);
+            }
+            pattern.extend(std::iter::repeat_n(b'%', trailing_percent_count));
+
+            let optimized = generate_like_pattern(pattern.as_slice(), 0);
+            match (leading_percent_count > 0, trailing_percent_count > 0) {
+                (false, false) => prop_assert!(matches!(&optimized, LikePattern::OrdinalStr(_))),
+                (true, false) => {
+                    prop_assert!(matches!(&optimized, LikePattern::StartOfPercent(_)))
+                }
+                (false, true) => {
+                    prop_assert!(matches!(&optimized, LikePattern::EndOfPercent(_)))
+                }
+                (true, true) => {
+                    prop_assert!(matches!(&optimized, LikePattern::SurroundByPercent(_)))
+                }
+            }
+
+            prop_assert_eq!(
+                optimized.compare(&arbitrary),
+                LikePattern::complex_pattern(&arbitrary, &pattern),
+            );
+
+            let mut matching = Vec::new();
+            if leading_percent_count > 0 {
+                matching.extend_from_slice(&prefix);
+            }
+            matching.extend_from_slice(&literal);
+            if trailing_percent_count > 0 {
+                matching.extend_from_slice(&suffix);
+            }
+            prop_assert!(optimized.compare(&matching));
+            prop_assert_eq!(
+                optimized.compare(&matching),
+                LikePattern::complex_pattern(&matching, &pattern),
+            );
+        }
     }
 }
 

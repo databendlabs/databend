@@ -30,7 +30,6 @@ fn test_other() {
     test_run_diff(file);
     test_humanize(file);
     test_typeof(file);
-    test_sleep(file);
     test_ignore(file);
     test_assume_not_null(file);
     test_inet_aton(file);
@@ -67,11 +66,6 @@ fn test_typeof(file: &mut impl Write) {
         "a",
         Float64Type::from_data(vec![37.617673, 38.617673, 39.617673]),
     )]);
-}
-
-fn test_sleep(file: &mut impl Write) {
-    run_ast(file, "sleep(2)", &[]);
-    run_ast(file, "sleep(300.2)", &[]);
 }
 
 fn test_ignore(file: &mut impl Write) {

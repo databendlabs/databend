@@ -206,7 +206,16 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (174, "2026-04-28: Add: AuthInfo::KeyPair for key-pair authentication"),
     (175, "2026-05-08: Add: field_stats_truncate_len per-column string stats truncation in TableMeta"),
     (176, "2026-05-25: Add: task.proto/Task.script_sql"),
-    (177, "2026-06-02: Add: file_format.proto Arrow and ArrowStream file formats")
+    (177, "2026-06-02: Add: file_format.proto Arrow and ArrowStream file formats"),
+    (178, "2026-06-22: Add: config.proto StorageConfig variants for StorageParams::{Azblob,Ftp,Http,Ipfs,Memory}"),
+    (179, "2026-07-06: Add: task.proto/TaskMessage.DeleteTask.task_id"),
+    (180, "2026-07-10: Add: catalog.proto/PaimonCatalogOption"),
+    (181, "2026-07-21: Add: materialized_view.proto/{MVDefinition,MVSourceBinding,MVSourceBindingVersion}"),
+    (182, "2026-08-05: Add: datatype.proto/AggregateState"),
+    (183, "2026-08-18: Add: data share metadata with id-only grants"),
+    (184, "2026-09-01: Add: provider storage location to data share table grants"),
+    (185, "2026-09-03: Add: segment_claim.proto/SegmentClaimMeta"),
+    (186, "2026-09-04: Add: table.proto/TableMeta.ttl row-level TTL expression"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

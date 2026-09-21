@@ -21,6 +21,6 @@ pub use transaction::TxnManagerRef;
 pub use transaction::TxnState;
 mod session_state;
 pub use session_state::SessionState;
-#[allow(unused_imports)]
+pub use temp_table::abort_staged_temp_table;
 pub use temp_table::drop_all_temp_tables;
 pub use temp_table::drop_table_by_id;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Display;
+use std::io;
 
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::DatabaseAlreadyExists;
@@ -22,8 +23,16 @@ use databend_common_meta_app::app_error::UnknownDatabaseId;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_meta_client::types::InvalidReply;
 
 use super::app_error::KVAppError;
+
+pub(crate) fn invalid_reply<M>(message: M) -> InvalidReply
+where M: Display {
+    let message = message.to_string();
+    let source = io::Error::new(io::ErrorKind::InvalidData, message.clone());
+    InvalidReply::new(message, &source)
+}
 
 pub fn unknown_database_error(db_name_ident: &DatabaseNameIdent, msg: impl Display) -> AppError {
     let e = UnknownDatabase::new(

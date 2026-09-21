@@ -1,0 +1,129 @@
+statement ok
+drop database if exists mti_distributed
+
+statement ok
+create database mti_distributed
+
+statement ok
+use mti_distributed
+
+statement ok
+create table mti_src(a int, b int)
+
+statement ok
+insert into mti_src select number::int, (number % 3)::int from numbers(100)
+
+statement ok
+create table mti_all(a int, b int)
+
+statement ok
+create table mti_even(a int, tag string)
+
+statement ok
+create table mti_mod0(a int, tag string)
+
+query III
+INSERT ALL
+  WHEN true THEN INTO mti_all
+  WHEN b = 0 THEN INTO mti_mod0 VALUES(a, 'mod0')
+  WHEN a % 2 = 0 THEN INTO mti_even VALUES(a, 'even')
+SELECT * FROM mti_src
+----
+100 50 34
+
+query IIII
+select count(*), sum(a), min(b), max(b) from mti_all
+----
+100 4950 0 2
+
+query IIII
+select count(*), sum(a), min(a), max(a) from mti_even
+----
+50 2450 0 98
+
+query IIII
+select count(*), sum(a), min(a), max(a) from mti_mod0
+----
+34 1683 0 99
+
+query T
+EXPLAIN INSERT ALL
+  WHEN true THEN INTO mti_all
+  WHEN b = 0 THEN INTO mti_mod0 VALUES(a, 'mod0')
+  WHEN a % 2 = 0 THEN INTO mti_even VALUES(a, 'even')
+SELECT * FROM mti_src
+----
+Commit
+└── Exchange
+    ├── output columns: []
+    ├── exchange type: Merge
+    └── CommitMeta
+        └── WriteData
+            └── EvalScalar
+                ├── branch 0: None
+                ├── branch 1: mti_src.a (#0), 'even'
+                ├── branch 2: mti_src.a (#0), 'mod0'
+                └── Filter
+                    ├── branch 0: true
+                    ├── branch 1: is_true(mti_src.a (#0) % CAST(2 AS UInt8 NULL) = CAST(0 AS Int16 NULL))
+                    ├── branch 2: is_true(mti_src.b (#1) = CAST(0 AS Int32 NULL))
+                    └── Duplicate
+                        ├── Duplicate data to 3 branch
+                        └── TableScan
+                            ├── table: default.mti_distributed.mti_src
+                            ├── scan id: 0
+                            ├── output columns: [a (#0), b (#1)]
+                            ├── read rows: 100
+                            ├── read size: < 1 KiB
+                            ├── partitions total: <slt:ignore>
+                            ├── partitions scanned: <slt:ignore>
+                            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: <slt:ignore> to <slt:ignore> cost: <slt:ignore>>, blocks: <range pruning: <slt:ignore> to <slt:ignore> cost: <slt:ignore>>]
+                            ├── push downs: [filters: [], limit: NONE]
+                            └── estimated rows: 100.00
+
+query T
+EXPLAIN FRAGMENTS INSERT ALL
+  WHEN true THEN INTO mti_all
+  WHEN b = 0 THEN INTO mti_mod0 VALUES(a, 'mod0')
+  WHEN a % 2 = 0 THEN INTO mti_even VALUES(a, 'even')
+SELECT * FROM mti_src
+----
+Fragment 0:
+  DataExchange: Merge
+    ExchangeSink
+    ├── output columns: []
+    ├── destination fragment: [2]
+    └── CommitMeta
+        └── WriteData
+            └── EvalScalar
+                ├── branch 0: None
+                ├── branch 1: mti_src.a (#0), 'even'
+                ├── branch 2: mti_src.a (#0), 'mod0'
+                └── Filter
+                    ├── branch 0: true
+                    ├── branch 1: is_true(mti_src.a (#0) % CAST(2 AS UInt8 NULL) = CAST(0 AS Int16 NULL))
+                    ├── branch 2: is_true(mti_src.b (#1) = CAST(0 AS Int32 NULL))
+                    └── Duplicate
+                        ├── Duplicate data to 3 branch
+                        └── TableScan
+                            ├── table: default.mti_distributed.mti_src
+                            ├── scan id: 0
+                            ├── output columns: [a (#0), b (#1)]
+                            ├── read rows: 100
+                            ├── read size: < 1 KiB
+                            ├── partitions total: <slt:ignore>
+                            ├── partitions scanned: <slt:ignore>
+                            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: <slt:ignore> to <slt:ignore> cost: <slt:ignore>>, blocks: <range pruning: <slt:ignore> to <slt:ignore> cost: <slt:ignore>>]
+                            ├── push downs: [filters: [], limit: NONE]
+                            └── estimated rows: 100.00
+(empty)
+(empty)
+Fragment 2:
+    Commit
+    └── ExchangeSource
+        ├── output columns: []
+        └── source fragment: [0]
+(empty)
+
+statement ok
+drop database mti_distributed

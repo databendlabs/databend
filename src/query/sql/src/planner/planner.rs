@@ -44,15 +44,15 @@ use parking_lot::RwLock;
 
 use super::semantic::AggregateRewriter;
 use super::semantic::DistinctToGroupBy;
+use super::statement_settings::apply_statement_settings;
 use crate::Binder;
 use crate::CountSetOps;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::VariableNormalizer;
+use crate::binder::lineage_enabled;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::optimize;
-use crate::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
-use crate::optimizer::optimizers::rule::RuleID;
 use crate::planner::QueryExecutor;
 use crate::plans::Plan;
 
@@ -95,6 +95,32 @@ impl Planner {
         Ok((plan, extras))
     }
 
+    /// Parse and bind `sql` without optimizing it or consulting the plan cache.
+    ///
+    /// Lineage consumers use this to inspect the logical plan exactly as written, since the
+    /// optimizer may fold scans away or route them through materialized views.
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn bind_sql(&mut self, sql: &str) -> Result<Plan> {
+        let extras = self.parse_sql(sql)?;
+        let stmt = &extras.statement;
+        let query_kind = get_query_kind(stmt);
+        apply_statement_settings(self.ctx.clone(), stmt)?;
+        let name_resolution_ctx =
+            NameResolutionContext::try_from(self.ctx.get_settings().as_ref())?;
+        let binder = Binder::new(
+            self.ctx.clone(),
+            CatalogManager::instance(),
+            name_resolution_ctx,
+            Metadata::default_ref(),
+        )
+        .with_subquery_executor(self.query_executor.clone());
+        // Attach before bind for the same reason as `plan_stmt`: table sources such as
+        // ParquetRSTable::create read the query string during binding.
+        self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
+        binder.bind(stmt).await
+    }
+
     #[fastrace::trace]
     pub fn parse_sql_with_params(&self, sql: &str) -> Result<PlanExtras> {
         self.parse_sql_inner(sql, true)
@@ -114,7 +140,7 @@ impl Planner {
                 let options = prqlc::Options::default();
                 match prqlc::compile(sql, &options) {
                     Ok(res) => {
-                        info!("PRQL to SQL conversion successful: {}", &res);
+                        info!("PRQL to SQL conversion successful: {}", res);
                         prql_converted = true;
                         res
                     }
@@ -244,14 +270,47 @@ impl Planner {
         stmt: &Statement,
         force_disable_distributed_optimization: bool,
     ) -> Result<Plan> {
+        self.plan_stmt_with_materialized_view_rewrite(
+            stmt,
+            force_disable_distributed_optimization,
+            self.ctx
+                .get_settings()
+                .get_enable_materialized_view_rewrite()?,
+        )
+        .await
+    }
+
+    pub async fn plan_stmt_without_materialized_view_rewrite(
+        &mut self,
+        stmt: &Statement,
+        force_disable_distributed_optimization: bool,
+    ) -> Result<Plan> {
+        self.plan_stmt_with_materialized_view_rewrite(
+            stmt,
+            force_disable_distributed_optimization,
+            false,
+        )
+        .await
+    }
+
+    async fn plan_stmt_with_materialized_view_rewrite(
+        &mut self,
+        stmt: &Statement,
+        force_disable_distributed_optimization: bool,
+        enable_materialized_view_rewrite: bool,
+    ) -> Result<Plan> {
         let start = Instant::now();
         let query_kind = get_query_kind(stmt);
+        apply_statement_settings(self.ctx.clone(), stmt)?;
         let settings = self.ctx.get_settings();
         // Step 3: Bind AST with catalog, and generate a pure logical SExpr
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
 
-        let plan_cache_context =
-            self.build_plan_cache_context(name_resolution_ctx.clone(), stmt)?;
+        let plan_cache_context = if enable_materialized_view_rewrite {
+            self.build_plan_cache_context(name_resolution_ctx.clone(), stmt)?
+        } else {
+            None
+        };
 
         if let Some(cache_ctx) = &plan_cache_context {
             if let Some(plan) = self.get_cache(cache_ctx) {
@@ -272,6 +331,7 @@ impl Planner {
             name_resolution_ctx,
             metadata.clone(),
         )
+        .with_materialized_view_rewrite(enable_materialized_view_rewrite)
         .with_subquery_executor(self.query_executor.clone());
 
         // must attach before bind, because ParquetRSTable::create used it.
@@ -280,8 +340,17 @@ impl Planner {
         // attach again to avoid the query kind is overwritten by the subquery
         self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
 
+        // Lineage describes what the user wrote, so capture it before the optimizer
+        // rewrites the plan for execution.
+        if lineage_enabled() {
+            plan.capture_bound_query_lineage();
+        }
+
         // Step 4: Optimize the SExpr with optimizers, and generate optimized physical SExpr
-        let opt_ctx = OptimizerContext::new(self.ctx.clone(), metadata.clone())
+        // Single-statement EXECUTE IMMEDIATE can apply inner settings during binding.
+        let settings = self.ctx.get_settings();
+        let func_ctx = self.ctx.get_function_context()?;
+        let opt_ctx = OptimizerContext::new(self.ctx.clone(), metadata.clone(), func_ctx)
             .with_settings(&settings)?
             .set_enable_distributed_optimization(
                 !force_disable_distributed_optimization
@@ -290,22 +359,6 @@ impl Planner {
             )
             .set_sample_executor(self.query_executor.clone())
             .clone();
-
-        {
-            let mut agg_indices = metadata.read().agg_indices().clone();
-            let optimizer = RecursiveRuleOptimizer::new(opt_ctx.clone(), &[
-                RuleID::NormalizeScalarFilter,
-                RuleID::FilterNulls,
-                RuleID::EliminateFilter,
-                RuleID::MergeFilter,
-            ]);
-            for indices in &mut agg_indices.values_mut() {
-                for (_, _, s_expr) in indices {
-                    *s_expr = optimizer.optimize_sync(s_expr)?;
-                }
-            }
-            metadata.write().replace_agg_indices(agg_indices);
-        }
 
         let optimized_plan = optimize(opt_ctx, plan).await?;
 

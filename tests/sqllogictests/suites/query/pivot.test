@@ -50,6 +50,11 @@ SELECT EMPID,
 1	10400	8000	11000	18000
 2	39500	90700	12000	5300
 
+statement error PIVOT aggregate FILTER is not supported yet
+SELECT *
+    FROM monthly_sales
+        PIVOT(SUM(amount) FILTER (WHERE amount > 0) FOR MONTH IN ('JAN', 'FEB'));
+
 query IIIII
 SELECT *
     FROM (SELECT * FROM monthly_sales)

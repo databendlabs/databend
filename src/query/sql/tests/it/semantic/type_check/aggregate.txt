@@ -1,3 +1,73 @@
+=== listagg_legacy_delimiter ===
+description: Legacy configuration arguments should become params before aggregate construction.
+sql: listagg(text, '|')
+status: ok
+scalar: listagg(text, '|')
+type: String NULL
+
+=== group_concat_legacy_delimiter ===
+description: Legacy configuration arguments should become params before aggregate construction.
+sql: group_concat(text, '|')
+status: ok
+scalar: group_concat(text, '|')
+type: String NULL
+
+=== string_agg_distinct_legacy_delimiter ===
+description: Legacy configuration arguments should become params before aggregate construction.
+sql: string_agg_distinct(text, '|')
+status: ok
+scalar: string_agg_distinct(text, '|')
+type: String NULL
+
+=== listagg_distinct_legacy_delimiter ===
+description: Legacy configuration arguments should become params before aggregate construction.
+sql: listagg_distinct(text, '|')
+status: ok
+scalar: listagg_distinct(text, '|')
+type: String NULL
+
+=== group_concat_distinct_legacy_delimiter ===
+description: Legacy configuration arguments should become params before aggregate construction.
+sql: group_concat_distinct(text, '|')
+status: ok
+scalar: group_concat_distinct(text, '|')
+type: String NULL
+
+=== string_agg_state_legacy_delimiter ===
+description: Legacy configuration arguments should become params before aggregate construction.
+sql: string_agg_state(text, '|')
+status: ok
+scalar: string_agg_state(text, '|')
+type: AggregateState(string_agg('|'), String NULL)
+
+=== histogram_distinct_legacy_buckets ===
+description: Legacy configuration arguments should become params before aggregate construction.
+sql: histogram_distinct(number, 2)
+status: ok
+scalar: histogram_distinct(number, 2)
+type: String NULL
+
+=== histogram_state_legacy_buckets ===
+description: Legacy configuration arguments should become params before aggregate construction.
+sql: histogram_state(number, 2)
+status: ok
+scalar: histogram_state(number, 2)
+type: AggregateState(histogram(2), Int64 NULL)
+
+=== histogram_semantic_distinct_legacy_buckets ===
+description: Legacy configuration arguments should become params before aggregate construction.
+sql: histogram(distinct number, 2)
+status: ok
+scalar: histogram(DISTINCT number, 2)
+type: String NULL
+
+=== listagg_filter_legacy_delimiter ===
+description: Legacy configuration arguments should become params before aggregate construction.
+sql: listagg(text, '|') FILTER (WHERE flag)
+status: ok
+scalar: listagg(text, '|') FILTER ( WHERE flag )
+type: String NULL
+
 === count_star_removes_count_args ===
 description: count(*) should type check through the aggregate path that removes redundant count arguments.
 sql: count(*)
@@ -5,15 +75,15 @@ status: ok
 scalar: COUNT(*)
 type: UInt64
 
-=== count_distinct_rewrites_to_count_distinct ===
-description: count(distinct x) should select the count_distinct aggregate implementation.
+=== count_distinct_resolves_named_target ===
+description: A semantic count DISTINCT request should resolve to the visibly named count_distinct implementation.
 sql: count(distinct number)
 status: ok
 scalar: count(DISTINCT number)
 type: UInt64
 
-=== sum_distinct_uses_distinct_aggregate_name ===
-description: A non-count DISTINCT aggregate should append the _distinct suffix during type checking.
+=== sum_distinct_resolves_named_target ===
+description: A semantic sum DISTINCT request should use the resolved sum_distinct implementation name.
 sql: sum(distinct number)
 status: ok
 scalar: sum(DISTINCT number)
@@ -32,6 +102,41 @@ sql: string_agg(text, '|')
 status: ok
 scalar: string_agg(text, '|')
 type: String NULL
+
+=== aggregate_argument_order_by_preserves_sort_desc ===
+description: ORDER BY inside aggregate arguments should resolve aggregate sort descriptors.
+sql: string_agg(text, '|' ORDER BY number DESC NULLS LAST)
+status: ok
+scalar: string_agg(text, '|') WITHIN GROUP ( ORDER BY number DESC NULLS LAST )
+type: String NULL
+
+=== ordered_aggregate_filter_uses_base_name_for_validation ===
+description: FILTER should not make ordered aggregate validation check the internal _if combinator name.
+sql: string_agg(text, '|' ORDER BY number DESC NULLS LAST) FILTER (WHERE flag)
+status: ok
+scalar: string_agg(text, '|') WITHIN GROUP ( ORDER BY number DESC NULLS LAST ) FILTER ( WHERE flag )
+type: String NULL
+
+=== aggregate_filter_lowers_to_if_combinator ===
+description: Aggregate FILTER should lower to the existing _if aggregate combinator.
+sql: sum(number) FILTER (WHERE flag)
+status: ok
+scalar: sum(number) FILTER ( WHERE flag )
+type: Int64 NULL
+
+=== aggregate_filter_preserves_json_arrow_argument ===
+description: A JSON-arrow argument before FILTER should remain an ordinary aggregate argument.
+sql: json_object_agg(text, parse_json(text) -> 'v') FILTER (WHERE flag)
+status: ok
+scalar: json_object_agg(text, parse_json(text) -> 'v') FILTER ( WHERE flag )
+type: Variant
+
+=== count_star_filter_lowers_to_count_if ===
+description: COUNT(*) FILTER should add a constant count argument before the filter predicate.
+sql: count(*) FILTER (WHERE flag)
+status: ok
+scalar: COUNT(*) FILTER ( WHERE flag )
+type: UInt64
 
 === listagg_within_group_preserves_sort_desc ===
 description: WITHIN GROUP should resolve aggregate sort descriptors at type-check time.
@@ -74,6 +179,48 @@ sql: abs(number) WITHIN GROUP (ORDER BY number)
 status: error
 code: 1065
 message: only aggregate functions allowed in within group syntax
+
+=== non_aggregate_function_rejects_filter ===
+description: FILTER syntax should return a clear semantic error for non-aggregate functions.
+sql: abs(number) FILTER (WHERE flag)
+status: error
+code: 1065
+message: FILTER clause is only supported for aggregate functions
+
+=== distinct_aggregate_filter_reports_unsupported ===
+description: Parser accepts DISTINCT aggregate FILTER, but execution semantics are not wired yet.
+sql: sum(DISTINCT number) FILTER (WHERE flag)
+status: error
+code: 1065
+message: DISTINCT aggregate FILTER is not supported
+
+=== combinator_aggregate_filter_reports_unsupported ===
+description: FILTER on an aggregate that already targets a combinator (sum_if) should be rejected instead of producing sum_if_if.
+sql: sum_if(number, flag) FILTER (WHERE flag)
+status: error
+code: 1065
+message: FILTER clause is not supported for aggregate function `sum_if`
+
+=== aggregate_without_if_route_filter_reports_unsupported ===
+description: FILTER should be rejected when the aggregate does not advertise support for the _if route.
+sql: sum0(number) FILTER (WHERE flag)
+status: error
+code: 1065
+message: FILTER clause is not supported for aggregate function `sum0`
+
+=== distinct_aggregate_order_by_reports_unsupported ===
+description: Parser accepts DISTINCT aggregate ORDER BY, but execution semantics are not wired yet.
+sql: string_agg(DISTINCT text ORDER BY number)
+status: error
+code: 1005
+message: DISTINCT aggregate ORDER BY is not supported
+
+=== count_distinct_aggregate_order_by_reports_unsupported ===
+description: DISTINCT aggregate ORDER BY should be rejected before ordered aggregate function validation.
+sql: count(DISTINCT number ORDER BY delta)
+status: error
+code: 1005
+message: DISTINCT aggregate ORDER BY is not supported
 
 === aggregate_parameter_must_be_constant ===
 description: Parameterized aggregate arguments should be constant before aggregate resolution.

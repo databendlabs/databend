@@ -161,8 +161,7 @@ mod tests {
 
     fn assert_pb_round_trip(value: u64) {
         let id = ValueId::<Resource>::new(value);
-        let mut buf = Vec::new();
-        prost::Message::encode(&id, &mut buf).unwrap();
+        let buf = prost::Message::encode_to_vec(&id);
 
         let expected = value.to_string();
         assert_eq!(buf, expected.as_bytes());

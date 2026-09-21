@@ -41,7 +41,10 @@ pub fn register(registry: &mut FunctionRegistry) {
             [
                 ty @ (DataType::Null
                 | DataType::EmptyArray
-                | DataType::Nullable(_)
+                | DataType::Nullable(deref!(DataType::Null))
+                | DataType::Nullable(deref!(DataType::EmptyArray))
+                | DataType::Nullable(deref!(DataType::Array(_)))
+                | DataType::Nullable(deref!(DataType::Variant))
                 | DataType::Array(_)
                 | DataType::Variant),
             ] => Some(build_unnest(ty, Box::new(|ty| ty))),
@@ -62,25 +65,26 @@ fn build_unnest(
     wrap_type: Box<dyn Fn(DataType) -> DataType>,
 ) -> Arc<Function> {
     match arg_type {
-        DataType::Null | DataType::EmptyArray | DataType::Nullable(box DataType::EmptyArray) => {
-            Arc::new(Function {
-                signature: FunctionSignature {
-                    name: "unnest".to_string(),
-                    args_type: vec![wrap_type(arg_type.clone())],
-                    return_type: DataType::Tuple(vec![DataType::Null]),
-                },
-                eval: FunctionEval::SRF {
-                    eval: Box::new(|_, ctx, _| {
-                        vec![(Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0); ctx.num_rows]
-                    }),
-                },
-            })
-        }
+        DataType::Null
+        | DataType::EmptyArray
+        | DataType::Nullable(deref!(DataType::Null))
+        | DataType::Nullable(deref!(DataType::EmptyArray)) => Arc::new(Function {
+            signature: FunctionSignature {
+                name: "unnest".to_string(),
+                args_type: vec![wrap_type(arg_type.clone())],
+                return_type: DataType::Tuple(vec![DataType::Null]),
+            },
+            eval: FunctionEval::SRF {
+                eval: Box::new(|_, ctx, _| {
+                    vec![(Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0); ctx.num_rows]
+                }),
+            },
+        }),
         DataType::Array(ty) => build_unnest(
             ty,
             Box::new(move |ty| wrap_type(DataType::Array(Box::new(ty)))),
         ),
-        DataType::Nullable(box DataType::Array(ty)) => build_unnest(
+        DataType::Nullable(deref!(DataType::Array(ty))) => build_unnest(
             ty,
             Box::new(move |ty| {
                 wrap_type(DataType::Nullable(Box::new(DataType::Array(Box::new(ty)))))
@@ -105,10 +109,12 @@ fn build_unnest(
                                 match col {
                                     Column::Array(col) => unnest_column(col.underlying_column()),
                                     // Assuming that the invalid array has zero elements in the underlying column.
-                                    Column::Nullable(box NullableColumn {
-                                        column: Column::Array(col),
-                                        ..
-                                    }) => unnest_column(col.underlying_column()),
+                                    Column::Nullable(
+                                        deref!(NullableColumn {
+                                            column: Column::Array(col),
+                                            ..
+                                        }),
+                                    ) => unnest_column(col.underlying_column()),
                                     _ => col,
                                 }
                             }

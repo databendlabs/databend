@@ -15,6 +15,7 @@
 mod extract;
 mod m_expr;
 mod s_expr;
+mod type_validator;
 mod visitor;
 
 pub use extract::Matcher;

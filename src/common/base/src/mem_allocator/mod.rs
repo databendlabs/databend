@@ -25,6 +25,13 @@ pub use global::TrackingGlobalAllocator;
 pub use jemalloc::JEAllocator;
 pub use std_::StdAllocator;
 
+/// The default allocator wrapped with Databend's memory accounting.
+///
+/// Use this for allocator-aware containers that bypass Rust's global
+/// allocator. Ordinary containers such as `Vec` are already tracked by the
+/// query binary's global allocator.
+pub type TrackingAllocator = tracker::MetaTrackerAllocator<DefaultAllocator>;
+
 mod default;
 #[cfg(feature = "memory-profiling")]
 mod profiling;

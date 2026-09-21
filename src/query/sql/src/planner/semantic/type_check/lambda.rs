@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashSet;
-use std::mem;
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Lambda;
+use databend_common_ast::ast::LambdaArgument;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -52,6 +53,8 @@ use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
+use crate::plans::UDAFCall;
+use crate::plans::UDFCall;
 use crate::plans::Visitor;
 
 impl<'a> CoreExprArena<'a> {
@@ -62,31 +65,41 @@ impl<'a> CoreExprArena<'a> {
         func: &'a ASTFunctionCall,
     ) -> Result<Option<CoreExprId>> {
         let uni_case_func_name = Ascii::new(func_name);
-        if func.lambda.is_some() && !GENERAL_LAMBDA_FUNCTIONS.contains(&uni_case_func_name) {
-            return Err(
-                ErrorCode::SemanticError("only lambda functions allowed in lambda syntax")
-                    .set_span(span),
-            );
-        }
-
         let Some(func_name) = GENERAL_LAMBDA_FUNCTIONS
             .iter()
             .cloned()
             .find(|name| *name == uni_case_func_name)
             .map(Ascii::into_inner)
         else {
+            if func.has_explicit_lambda() {
+                return Err(ErrorCode::SemanticError(
+                    "only lambda functions allowed in lambda syntax",
+                )
+                .set_span(span));
+            }
             return Ok(None);
         };
-        let Some(lambda) = func.lambda.as_ref() else {
+        let Some(lambda_arg) = func.lambda.as_ref() else {
             return Err(ErrorCode::SemanticError(format!(
                 "function {func_name} must have a lambda expression",
             ))
             .set_span(span));
         };
 
-        Ok(Some(
-            self.lambda_function(span, func_name, &func.args, lambda)?,
-        ))
+        let (args, lambda) = match lambda_arg {
+            LambdaArgument::Lambda(lambda) => (func.args.as_slice(), lambda),
+            LambdaArgument::Ambiguous(lambda) => {
+                let Some((_, args)) = func.args.split_last() else {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "function {func_name} must have a lambda expression",
+                    ))
+                    .set_span(span));
+                };
+                (args, lambda)
+            }
+        };
+
+        Ok(Some(self.lambda_function(span, func_name, args, lambda)?))
     }
 
     pub(super) fn lambda_function(
@@ -118,6 +131,8 @@ where A: super::TypeCheckAdapter
     fn resolve_core_lambda_expr(
         &mut self,
         arena: &CoreExprArena<'_>,
+        func_name: &str,
+        span: Span,
         lambda_context: &mut BindContext,
         lambda_columns: &[(String, DataType)],
         lambda_expr: CoreExprId,
@@ -157,7 +172,53 @@ where A: super::TypeCheckAdapter
             self.metadata.clone(),
             &[],
         )?;
-        type_checker.resolve_core(arena, lambda_expr)
+        let resolved = type_checker.resolve_core(arena, lambda_expr)?;
+        Self::reject_runtime_udf_in_lambda_body(func_name, span, &resolved.0)?;
+        Ok(resolved)
+    }
+
+    /// A lambda body is compiled into a `RemoteExpr` and evaluated per element by
+    /// the expression evaluator, so it cannot host a script or server UDF: those
+    /// are executed by a separate `Udf` plan node that `UdfRewriter` lifts out of
+    /// the enclosing `EvalScalar`/`Filter`. Without this check the unrewritten
+    /// call is lowered into a dummy column reference and later fails with a
+    /// confusing "Unable to get field named <internal column id>" error.
+    fn reject_runtime_udf_in_lambda_body(
+        func_name: &str,
+        span: Span,
+        lambda_body: &ScalarExpr,
+    ) -> Result<()> {
+        struct RuntimeUdfVisitor {
+            found: Option<(Span, String)>,
+        }
+
+        impl<'b> Visitor<'b> for RuntimeUdfVisitor {
+            fn visit_udf_call(&mut self, udf: &'b UDFCall) -> Result<()> {
+                if self.found.is_none() {
+                    self.found = Some((udf.span, udf.name.clone()));
+                }
+                Ok(())
+            }
+
+            fn visit_udaf_call(&mut self, udaf: &'b UDAFCall) -> Result<()> {
+                if self.found.is_none() {
+                    self.found = Some((udaf.span, udaf.name.clone()));
+                }
+                Ok(())
+            }
+        }
+
+        let mut visitor = RuntimeUdfVisitor { found: None };
+        visitor.visit(lambda_body)?;
+
+        match visitor.found {
+            None => Ok(()),
+            Some((udf_span, udf_name)) => Err(ErrorCode::SemanticError(format!(
+                "UDF {udf_name:?} is not supported in the lambda body of {func_name}, \
+                 because script and server UDFs are evaluated by a separate plan node"
+            ))
+            .set_span(udf_span.or(span))),
+        }
     }
 
     fn transform_to_max_type(&self, ty: &DataType) -> Result<DataType> {
@@ -205,6 +266,17 @@ where A: super::TypeCheckAdapter
         lambda_params: &[Identifier],
         lambda_expr: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if func_name == "json_path_transform" {
+            if args.len() != 2 {
+                return Err(ErrorCode::SemanticError(format!(
+                    "invalid arguments for lambda function, {} expects 2 arguments (json, path), but got {}",
+                    func_name,
+                    args.len()
+                ))
+                .set_span(span));
+            }
+            return self.resolve_json_path_transform(arena, span, args, lambda_params, lambda_expr);
+        }
         if args.len() != 1 {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for lambda function, {} expects 1 argument, but got {}",
@@ -213,7 +285,7 @@ where A: super::TypeCheckAdapter
             ))
             .set_span(span));
         }
-        let box (arg, arg_type) = self.resolve_core(arena, args[0])?;
+        let deref!((arg, arg_type)) = self.resolve_core(arena, args[0])?;
         self.resolve_lambda_function_arg(
             arena,
             span,
@@ -274,8 +346,8 @@ where A: super::TypeCheckAdapter
         self.check_lambda_param_count(func_name, params.len(), span)?;
 
         let inner_ty = match arg_type.remove_nullable() {
-            DataType::Array(box inner_ty) => inner_ty.clone(),
-            DataType::Map(box inner_ty) => inner_ty.clone(),
+            DataType::Array(deref!(inner_ty)) => inner_ty.clone(),
+            DataType::Map(deref!(inner_ty)) => inner_ty.clone(),
             DataType::Null | DataType::EmptyArray | DataType::EmptyMap => DataType::Null,
             _ => {
                 return Err(ErrorCode::SemanticError(
@@ -311,8 +383,10 @@ where A: super::TypeCheckAdapter
             .collect::<Vec<_>>();
 
         let mut lambda_context = self.bind_context.clone();
-        let box (lambda_expr, lambda_type) = self.resolve_core_lambda_expr(
+        let deref!((lambda_expr, lambda_type)) = self.resolve_core_lambda_expr(
             arena,
+            func_name,
+            span,
             &mut lambda_context,
             &lambda_columns,
             lambda_expr,
@@ -406,50 +480,10 @@ where A: super::TypeCheckAdapter
                 DataType::EmptyMap,
             ),
             _ => {
-                struct LambdaVisitor<'a> {
-                    bind_context: &'a BindContext,
-                    arg_index: HashSet<Symbol>,
-                    args: Vec<ScalarExpr>,
-                    fields: Vec<DataField>,
-                }
-
-                impl<'a> Visitor<'a> for LambdaVisitor<'a> {
-                    fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) -> Result<()> {
-                        if self.arg_index.contains(&col.column.index) {
-                            return Ok(());
-                        }
-                        self.arg_index.insert(col.column.index);
-                        let is_outer_column = self
-                            .bind_context
-                            .all_column_bindings()
-                            .iter()
-                            .map(|c| c.index)
-                            .contains(&col.column.index);
-                        if is_outer_column {
-                            let arg = ScalarExpr::BoundColumnRef(col.clone());
-                            self.args.push(arg);
-                            let field = DataField::new(
-                                &format!("{}", col.column.index),
-                                *col.column.data_type.clone(),
-                            );
-                            self.fields.push(field);
-                        }
-                        Ok(())
-                    }
-                }
-
                 // Collect outer scope columns as arguments first.
-                let mut lambda_visitor = LambdaVisitor {
-                    bind_context: self.bind_context,
-                    arg_index: HashSet::new(),
-                    args: Vec::new(),
-                    fields: Vec::new(),
-                };
-                lambda_visitor.visit(&lambda_expr)?;
-
-                let mut lambda_args = mem::take(&mut lambda_visitor.args);
+                let (mut lambda_args, mut lambda_fields) =
+                    self.collect_lambda_capture_args(&lambda_expr)?;
                 lambda_args.push(arg);
-                let mut lambda_fields = mem::take(&mut lambda_visitor.fields);
                 // Add lambda columns as arguments at end.
                 for (lambda_column_name, lambda_column_type) in lambda_columns.into_iter() {
                     for column in lambda_context.all_column_bindings().iter().rev() {
@@ -465,7 +499,8 @@ where A: super::TypeCheckAdapter
                 let expr = lambda_expr
                     .type_check(&lambda_schema)?
                     .project_column_ref(|index| lambda_schema.index_of(&index.to_string()))?;
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let (expr, _) =
+                    ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let remote_lambda_expr = expr.as_remote_expr();
                 let lambda_display = format!("{:?} -> {}", params, expr.sql_display());
 
@@ -500,6 +535,180 @@ where A: super::TypeCheckAdapter
         } else {
             Ok(Box::new((lambda_func, data_type)))
         }
+    }
+
+    /// Collects the outer scope columns referenced by a lambda body; they
+    /// become the lambda function's leading arguments and schema fields.
+    fn collect_lambda_capture_args(
+        &self,
+        lambda_expr: &ScalarExpr,
+    ) -> Result<(Vec<ScalarExpr>, Vec<DataField>)> {
+        struct LambdaVisitor<'a> {
+            bind_context: &'a BindContext,
+            arg_index: HashSet<Symbol>,
+            args: Vec<ScalarExpr>,
+            fields: Vec<DataField>,
+        }
+
+        impl<'a> Visitor<'a> for LambdaVisitor<'a> {
+            fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) -> Result<()> {
+                if self.arg_index.contains(&col.column.index) {
+                    return Ok(());
+                }
+                self.arg_index.insert(col.column.index);
+                let is_outer_column = self
+                    .bind_context
+                    .all_column_bindings()
+                    .iter()
+                    .map(|c| c.index)
+                    .contains(&col.column.index);
+                if is_outer_column {
+                    let arg = ScalarExpr::BoundColumnRef(col.clone());
+                    self.args.push(arg);
+                    let field = DataField::new(
+                        &format!("{}", col.column.index),
+                        *col.column.data_type.clone(),
+                    );
+                    self.fields.push(field);
+                }
+                Ok(())
+            }
+        }
+
+        let mut lambda_visitor = LambdaVisitor {
+            bind_context: self.bind_context,
+            arg_index: HashSet::new(),
+            args: Vec::new(),
+            fields: Vec::new(),
+        };
+        lambda_visitor.visit(lambda_expr)?;
+        Ok((lambda_visitor.args, lambda_visitor.fields))
+    }
+
+    /// Resolves `json_path_transform(<json>, <path>, <param> -> <expr>)`.
+    ///
+    /// The variant argument is not cast to an array or map: the path locates
+    /// the values to transform and the lambda only runs on them. The lambda
+    /// body is cast to `Nullable(Variant)`; a NULL result writes a JSON null.
+    fn resolve_json_path_transform(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        args: &CoreExprArgs,
+        lambda_params: &[Identifier],
+        lambda_expr: CoreExprId,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let func_name = "json_path_transform";
+        let deref!((json_arg, json_type)) = self.resolve_core(arena, args[0])?;
+        let deref!((path_arg, path_type)) = self.resolve_core(arena, args[1])?;
+
+        if lambda_params.len() != 1 {
+            return Err(ErrorCode::SemanticError(format!(
+                "incorrect number of parameters in lambda function, {} expects 1 parameter, but got {}",
+                func_name,
+                lambda_params.len()
+            ))
+            .set_span(span));
+        }
+        if json_type != DataType::Null && json_type.remove_nullable() != DataType::Variant {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for {}, the json argument must be a variant, but got {}",
+                func_name, json_type
+            ))
+            .set_span(span));
+        }
+        if path_type != DataType::Null && path_type.remove_nullable() != DataType::String {
+            return Err(ErrorCode::SemanticError(format!(
+                "invalid arguments for {}, the path argument must be a string, but got {}",
+                func_name, path_type
+            ))
+            .set_span(span));
+        }
+
+        let fold_to_null = json_type == DataType::Null || path_type == DataType::Null;
+
+        let params = lambda_params
+            .iter()
+            .map(|param| param.name.to_lowercase())
+            .collect::<Vec<_>>();
+        let param_type = DataType::Nullable(Box::new(DataType::Variant));
+        let lambda_columns = vec![(params[0].clone(), param_type.clone())];
+
+        let mut lambda_context = self.bind_context.clone();
+        let deref!((lambda_scalar, lambda_type)) = self.resolve_core_lambda_expr(
+            arena,
+            func_name,
+            span,
+            &mut lambda_context,
+            &lambda_columns,
+            lambda_expr,
+        )?;
+
+        let lambda_scalar = if lambda_type != param_type {
+            ScalarExpr::CastExpr(CastExpr {
+                span: lambda_scalar.span(),
+                is_try: false,
+                argument: Box::new(lambda_scalar),
+                target_type: Box::new(param_type.clone()),
+            })
+        } else {
+            lambda_scalar
+        };
+
+        // Argument layout is `[json, path, captures...]` so that EXPLAIN and
+        // profile output keep the signature order; the evaluator relies on it.
+        let (capture_args, mut lambda_fields) = self.collect_lambda_capture_args(&lambda_scalar)?;
+        let mut lambda_args = vec![json_arg, path_arg];
+        lambda_args.extend(capture_args);
+
+        // Add the lambda parameter as the last schema field.
+        for column in lambda_context.all_column_bindings().iter().rev() {
+            if column.column_name == params[0] {
+                let lambda_field = DataField::new(&format!("{}", column.index), param_type.clone());
+                lambda_fields.push(lambda_field);
+                break;
+            }
+        }
+
+        let lambda_schema = DataSchema::new(lambda_fields);
+        let expr = lambda_scalar
+            .type_check(&lambda_schema)?
+            .project_column_ref(|index| lambda_schema.index_of(&index.to_string()))?;
+        let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let remote_lambda_expr = expr.as_remote_expr();
+        let lambda_display = format!("{:?} -> {}", params, expr.sql_display());
+
+        // Fold NULL constants only after the lambda body passed normal
+        // semantic and type validation.
+        if fold_to_null {
+            return Ok(Box::new((
+                ConstantExpr {
+                    span,
+                    value: Scalar::Null,
+                }
+                .into(),
+                DataType::Null,
+            )));
+        }
+
+        let return_type = if json_type.is_nullable() || path_type.is_nullable() {
+            DataType::Nullable(Box::new(DataType::Variant))
+        } else {
+            DataType::Variant
+        };
+
+        Ok(Box::new((
+            LambdaFunc {
+                span,
+                func_name: func_name.to_string(),
+                args: lambda_args,
+                lambda_expr: Box::new(remote_lambda_expr),
+                lambda_display,
+                return_type: Box::new(return_type.clone()),
+            }
+            .into(),
+            return_type,
+        )))
     }
 
     fn check_lambda_param_count(

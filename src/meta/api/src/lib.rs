@@ -17,7 +17,6 @@
 #![allow(clippy::type_complexity)]
 #![allow(clippy::collapsible_if)]
 #![allow(clippy::unnecessary_unwrap)]
-#![feature(try_blocks)]
 
 /// The value type associated with a `kvapi::Key`.
 pub type ValueOf<K> = <K as databend_meta_client::kvapi::Key>::ValueType;
@@ -25,6 +24,8 @@ pub type ValueOf<K> = <K as databend_meta_client::kvapi::Key>::ValueType;
 pub mod api_impl;
 pub mod error;
 pub mod kv;
+#[cfg(test)]
+pub(crate) mod testing;
 pub mod txn;
 pub mod util;
 
@@ -40,10 +41,12 @@ pub(crate) use api_impl::errors;
 pub use api_impl::garbage_collection_api;
 pub use api_impl::index_api;
 pub use api_impl::lock_api2;
+pub use api_impl::materialized_view_api;
 pub use api_impl::ref_api;
 pub(crate) use api_impl::row_access_policy_api;
 pub(crate) use api_impl::schema_api;
 pub use api_impl::security_api;
+pub use api_impl::segment_claim_api;
 pub(crate) use api_impl::sequence_api;
 pub use api_impl::table_api;
 pub use api_impl::tag_api;
@@ -81,15 +84,23 @@ pub use kv_fetch_util::deserialize_struct_get_response;
 pub use kv_fetch_util::fetch_id;
 pub use kv_fetch_util::mget_pb_values;
 pub use lock_api2::LockApi2;
+pub use materialized_view_api::MaterializedViewApi;
 pub use ref_api::RefApi;
 pub use row_access_policy_api::RowAccessPolicyApi;
 pub use schema_api::SchemaApi;
 pub use security_api::SecurityApi;
+pub use segment_claim_api::SegmentClaimApi;
 pub use sequence_api::SequenceApi;
 pub use serialization_util::deserialize_struct;
 pub use serialization_util::serialize_struct;
 pub use table_api::TableApi;
 pub use tag_api::TagApi;
+pub use txn::AbsentRecord;
+pub use txn::FetchedRecord;
+pub use txn::MetaTxn;
+pub use txn::MetaTxnManager;
+pub use txn::PresentRecord;
+pub use txn::ReadRecord;
 pub use txn::backoff as txn_backoff;
 pub use txn::backoff::txn_backoff;
 pub use txn::condition as txn_condition_util;

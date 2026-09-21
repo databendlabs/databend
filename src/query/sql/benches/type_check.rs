@@ -27,16 +27,12 @@ use databend_common_sql::ColumnBindingBuilder;
 use databend_common_sql::Metadata;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::NameResolutionContext;
+use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeChecker;
 use databend_common_sql::Visibility;
+use databend_common_sql_test_support::LiteTableContext;
 use parking_lot::RwLock;
 use tokio::runtime::Runtime;
-
-#[allow(dead_code)]
-#[path = "../tests/it/framework/lite_context.rs"]
-mod lite_context;
-
-use lite_context::LiteTableContext;
 
 fn main() {
     divan::main();
@@ -102,6 +98,23 @@ impl TypeCheckCase {
                 resolved += 1;
             }
             resolved
+        })
+    }
+
+    fn resolve_first(&self) -> ScalarExpr {
+        let mut bind_context = self.bind_context.clone();
+        bench_runtime().block_on(async {
+            let mut type_checker = TypeChecker::try_create(
+                &mut bind_context,
+                self.ctx.clone(),
+                &self.name_resolution_ctx,
+                self.metadata.clone(),
+                &[],
+                true,
+            )
+            .unwrap();
+            let (scalar, _) = *type_checker.resolve(&self.asts[0]).unwrap();
+            scalar
         })
     }
 }
@@ -230,6 +243,22 @@ mod resolve {
         bencher.bench_local(|| {
             let resolved = case.resolve_all(divan::black_box(&mut bind_context));
             divan::black_box(resolved);
+        });
+    }
+}
+
+#[divan::bench_group(max_time = 1)]
+mod data_type {
+    use super::*;
+
+    #[divan::bench(args = [16, 64])]
+    fn rewritten_original_partition_keys(bencher: divan::Bencher, nodes: usize) {
+        let case = TypeCheckCase::new(vec![repeated_rewritten_original_partition_key(nodes)]);
+        let scalar = case.resolve_first();
+
+        bencher.bench_local(|| {
+            let data_type = divan::black_box(&scalar).data_type();
+            divan::black_box(data_type);
         });
     }
 }

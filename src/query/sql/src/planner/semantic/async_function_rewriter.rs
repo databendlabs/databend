@@ -101,7 +101,7 @@ impl AsyncFunctionRewriter {
                         self.visit(condition)?;
                     }
                     if let Some(update) = matched_evaluator.update.as_mut() {
-                        for (_, scalar) in update.iter_mut() {
+                        for scalar in update.values_mut() {
                             self.visit(scalar)?;
                         }
                     }
@@ -171,17 +171,18 @@ impl<'a> VisitorMut<'a> for AsyncFunctionRewriter {
             let new_column_ref = if let ScalarExpr::BoundColumnRef(column_ref) = &arg {
                 column_ref.clone()
             } else {
-                let name = format!("{}_arg_{}", &async_func.display_name, i);
+                let name = format!("{}_arg_{}", async_func.display_name, i);
+                let data_type = arg.data_type().into_owned();
                 let index = self
                     .metadata
                     .write()
-                    .add_derived_column(name.clone(), arg.data_type()?);
+                    .add_derived_column(name.clone(), data_type.clone());
 
                 // Generate a ColumnBinding for each argument of async function
                 let column = ColumnBindingBuilder::new(
                     name,
                     index,
-                    Box::new(arg.data_type()?),
+                    Box::new(data_type),
                     Visibility::Visible,
                 )
                 .build();

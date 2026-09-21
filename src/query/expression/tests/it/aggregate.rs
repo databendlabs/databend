@@ -25,15 +25,9 @@ use bumpalo::Bump;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggrState;
-use databend_common_expression::AggrStateLoc;
-use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
-use databend_common_expression::AggregateFunction;
-use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::AggregateHashTable;
-use databend_common_expression::AggregatePayload;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::BucketSpilledPayload;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -43,11 +37,11 @@ use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SerializedPayload;
-use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::aggregate::aggregate_function::*;
+use databend_common_expression::aggregate_function::EagerAggregation;
 use databend_common_expression::block_debug::assert_block_value_sort_eq;
 use databend_common_expression::types::ArgType;
-use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::NumberScalar;
@@ -145,19 +139,56 @@ impl fmt::Display for TrackedHeapAggregateFunction {
     }
 }
 
-impl AggregateFunction for TrackedHeapAggregateFunction {
-    fn name(&self) -> &str {
-        "tracked_heap"
+impl AggregateCall for TrackedHeapAggregateFunction {
+    fn signature(&self) -> &AggregateSignature {
+        static SIGNATURE: std::sync::LazyLock<AggregateSignature> =
+            std::sync::LazyLock::new(|| AggregateSignature {
+                name: "tracked_heap".to_string(),
+                params: vec![],
+                args_type: vec![],
+                distinct: false,
+                order_by: vec![],
+                return_type: UInt64Type::data_type(),
+            });
+        &SIGNATURE
     }
 
-    fn return_type(&self) -> Result<DataType> {
-        Ok(UInt64Type::data_type())
+    fn features(&self) -> &AggregateFeatures {
+        static FEATURES: AggregateFeatures = AggregateFeatures {
+            eager_aggregation: EagerAggregation::Unsupported,
+            supports_filter: false,
+            supports_state: false,
+            sort_policy: databend_common_expression::aggregate::aggregate_function::SortPolicy::Unsupported,
+            distinct_policy: databend_common_expression::aggregate::aggregate_function::DistinctPolicy::Unsupported,
+            hide_doc: false,
+            category: "",
+            description: "",
+            definition: "",
+            example: "",
+        };
+        &FEATURES
     }
 
-    fn init_state(&self, place: AggrState) {
+    fn input_layout(&self) -> &FunctionInputLayout {
+        &FunctionInputLayout::Identity
+    }
+
+    fn state(&self) -> &AggregateStateDescription {
+        static STATE: std::sync::LazyLock<AggregateStateDescription> =
+            std::sync::LazyLock::new(|| {
+                AggregateStateDescription::new(
+                    vec![AggrStateType::Custom(Layout::new::<TrackedHeapState>())],
+                    vec![StateSerdeItem::DataType(UInt64Type::data_type())],
+                )
+                .with_manual_drop(true)
+            });
+        &STATE
+    }
+
+    fn init_state(&self, state: AggrState) {
         let live_bytes = self.live_bytes.clone();
         let drop_count = self.drop_count.clone();
-        place.write(|| TrackedHeapState {
+        state.write(|| TrackedHeapState {
             bytes: Vec::new(),
             failures: TrackedHeapFailures::default(),
             live_bytes,
@@ -165,19 +196,9 @@ impl AggregateFunction for TrackedHeapAggregateFunction {
         });
     }
 
-    fn register_state(&self, registry: &mut AggrStateRegistry) {
-        registry.register(AggrStateType::Custom(Layout::new::<TrackedHeapState>()));
-    }
-
-    fn accumulate(
-        &self,
-        place: AggrState,
-        columns: ProjectedBlock,
-        _validity: Option<&Bitmap>,
-        input_rows: usize,
-    ) -> Result<()> {
-        let state = place.get::<TrackedHeapState>();
-        for row in 0..input_rows {
+    fn accumulate(&self, state: AggrState<'_>, columns: ProjectedBlock<'_>) -> Result<()> {
+        let state = state.get::<TrackedHeapState>();
+        for row in 0..columns.num_rows() {
             state.append_row(self.bytes_per_row, tracked_heap_row_trigger(columns, row))?;
         }
         Ok(())
@@ -185,38 +206,40 @@ impl AggregateFunction for TrackedHeapAggregateFunction {
 
     fn accumulate_keys(
         &self,
-        addrs: &[StateAddr],
-        loc: &[AggrStateLoc],
-        columns: ProjectedBlock,
-        _input_rows: usize,
+        states: AggregateStateSet<'_>,
+        columns: ProjectedBlock<'_>,
     ) -> Result<()> {
-        for (row, addr) in addrs.iter().enumerate() {
-            AggrState::new(*addr, loc)
+        for (row, state) in states.iter().enumerate() {
+            state
                 .get::<TrackedHeapState>()
                 .append_row(self.bytes_per_row, tracked_heap_row_trigger(columns, row))?;
         }
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
-        place
+    fn accumulate_row(
+        &self,
+        state: AggrState<'_>,
+        columns: ProjectedBlock<'_>,
+        row: usize,
+    ) -> Result<()> {
+        state
             .get::<TrackedHeapState>()
             .append_row(self.bytes_per_row, tracked_heap_row_trigger(columns, row))
     }
 
-    fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::DataType(UInt64Type::data_type())]
+    fn accumulate_row_count(&self, _state: AggrState<'_>, _rows: usize) -> Result<()> {
+        Ok(())
     }
 
-    fn batch_serialize(
+    fn serialize(
         &self,
-        places: &[StateAddr],
-        loc: &[AggrStateLoc],
+        states: AggregateStateSet<'_>,
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
         let builder = &mut builders[0];
-        for place in places {
-            let state = AggrState::new(*place, loc).get::<TrackedHeapState>();
+        for state in states.iter() {
+            let state = state.get::<TrackedHeapState>();
             if state.failures.serialize {
                 return Err(ErrorCode::Internal(
                     "injected tracked_heap serialize failure",
@@ -229,19 +252,17 @@ impl AggregateFunction for TrackedHeapAggregateFunction {
         Ok(())
     }
 
-    fn batch_merge(
+    fn merge_serialized(
         &self,
-        places: &[StateAddr],
-        loc: &[AggrStateLoc],
-        state: &BlockEntry,
-        _filter: Option<&Bitmap>,
+        states: AggregateStateSet<'_>,
+        serialized: &BlockEntry,
     ) -> Result<()> {
-        for (row, place) in places.iter().enumerate() {
-            let target = AggrState::new(*place, loc).get::<TrackedHeapState>();
-            let trigger = tracked_heap_trigger_from_entry(state, row);
+        for (row, state) in states.iter().enumerate() {
+            let target = state.get::<TrackedHeapState>();
+            let trigger = tracked_heap_trigger_from_entry(serialized, row);
             let bytes = match trigger {
                 TrackedHeapFailureTrigger::BatchMerge => self.bytes_per_row,
-                _ => tracked_heap_bytes_from_scalar(unsafe { state.index_unchecked(row) })
+                _ => tracked_heap_bytes_from_scalar(unsafe { serialized.index_unchecked(row) })
                     .unwrap_or(0),
             };
             target.append(bytes);
@@ -255,8 +276,8 @@ impl AggregateFunction for TrackedHeapAggregateFunction {
         Ok(())
     }
 
-    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
-        let state = place.get::<TrackedHeapState>();
+    fn merge_states(&self, state: AggrState<'_>, rhs: AggrState<'_>) -> Result<()> {
+        let state = state.get::<TrackedHeapState>();
         let rhs = rhs.get::<TrackedHeapState>();
         state.bytes.extend_from_slice(&rhs.bytes);
         state
@@ -271,13 +292,8 @@ impl AggregateFunction for TrackedHeapAggregateFunction {
         Ok(())
     }
 
-    fn merge_result(
-        &self,
-        place: AggrState,
-        _read_only: bool,
-        builder: &mut ColumnBuilder,
-    ) -> Result<()> {
-        let state = place.get::<TrackedHeapState>();
+    fn merge_result(&self, state: AggrState<'_>, builder: &mut ColumnBuilder) -> Result<()> {
+        let state = state.get::<TrackedHeapState>();
         if state.failures.merge_result {
             return Err(ErrorCode::Internal(
                 "injected tracked_heap merge_result failure",
@@ -289,12 +305,16 @@ impl AggregateFunction for TrackedHeapAggregateFunction {
         Ok(())
     }
 
-    fn need_manual_drop_state(&self) -> bool {
-        true
+    fn merge_result_read_only(
+        &self,
+        state: AggrState<'_>,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
+        self.merge_result(state, builder)
     }
 
-    unsafe fn drop_state(&self, place: AggrState) {
-        let state = place.get::<TrackedHeapState>();
+    unsafe fn drop_state(&self, state: AggrState) {
+        let state = state.get::<TrackedHeapState>();
         unsafe { std::ptr::drop_in_place(state) };
     }
 }
@@ -359,7 +379,7 @@ impl TrackedHeapFixture {
         }
     }
 
-    fn aggrs(&self) -> Vec<AggregateFunctionRef> {
+    fn aggrs(&self) -> Vec<AggregateCallRef> {
         vec![Arc::new(TrackedHeapAggregateFunction {
             live_bytes: self.live_bytes.clone(),
             drop_count: self.drop_count.clone(),
@@ -566,7 +586,6 @@ fn test_serialized_payload_conversions_preserve_results_and_drop_states() {
                 fixture.aggrs(),
                 1,
                 0,
-                false,
                 Arc::new(Bump::new()),
                 true,
             )
@@ -583,7 +602,6 @@ fn test_serialized_payload_conversions_preserve_results_and_drop_states() {
             fixture.aggrs(),
             1,
             0,
-            false,
             Arc::new(Bump::new()),
         )
         .unwrap();
@@ -602,7 +620,6 @@ fn test_serialized_payload_conversions_preserve_results_and_drop_states() {
             vec![Int64Type::data_type()],
             fixture.aggrs(),
             1,
-            false,
             Arc::new(Bump::new()),
         )
         .unwrap();
@@ -612,100 +629,7 @@ fn test_serialized_payload_conversions_preserve_results_and_drop_states() {
             .unwrap();
         fixture.assert_result(&mut merged_single);
 
-        let payloads = SerializedPayload {
-            bucket: 0,
-            data_block: serialized_block,
-            max_partition_count: 1,
-        }
-        .repartition_to_payloads(
-            4,
-            vec![Int64Type::data_type()],
-            fixture.aggrs(),
-            1,
-            false,
-            &mut PayloadFlushState::default(),
-        )
-        .unwrap();
-        assert_eq!(payloads.len(), 4);
-        assert_eq!(
-            payloads
-                .iter()
-                .map(AggregatePayload::exchange_block_number)
-                .collect::<Vec<_>>(),
-            vec![4000, 4001, 4002, 4003]
-        );
-        let mut merged_payloads = fixture.empty_table(HashTableConfig::default());
-        let mut flush_state = PayloadFlushState::default();
-        for payload in &payloads {
-            merged_payloads
-                .combine_payload(&payload.payload, &mut flush_state)
-                .unwrap();
-        }
-        fixture.assert_result(&mut merged_payloads);
-
         assert!(fixture.live_bytes() > 0);
-    }
-
-    fixture.assert_all_states_dropped();
-}
-
-#[test]
-fn test_bucket_spilled_payload_deserialize_restores_serialized_payload() {
-    let fixture = TrackedHeapFixture::new();
-
-    {
-        let hashtable =
-            fixture.build_from_rows(0, HashTableConfig::default().with_initial_radix_bits(0));
-        let serialized_block = hashtable.payload.aggregate_flush_all().unwrap();
-        let columns = serialized_block.columns();
-        let mut data = Vec::new();
-        let mut columns_layout = Vec::with_capacity(columns.len());
-
-        for entry in columns {
-            let bytes = databend_common_expression::utils::arrow::serialize_column(
-                entry.as_column().unwrap(),
-            );
-            columns_layout.push(bytes.len() as u64);
-            data.extend_from_slice(&bytes);
-        }
-
-        let payload = BucketSpilledPayload {
-            bucket: 7,
-            location: "memory://aggregate-spill".to_string(),
-            data_range: 0..data.len() as u64,
-            columns_layout,
-            max_partition_count: 16,
-        }
-        .deserialize(data)
-        .unwrap();
-
-        assert_eq!(payload.bucket, 7);
-        assert_eq!(payload.max_partition_count, 16);
-        assert_eq!(payload.data_block.num_rows(), GROUPS);
-        assert_eq!(
-            payload
-                .data_block
-                .columns()
-                .last()
-                .unwrap()
-                .as_column()
-                .unwrap()
-                .len(),
-            GROUPS
-        );
-
-        let mut restored = payload
-            .convert_to_aggregate_table(
-                vec![Int64Type::data_type()],
-                fixture.aggrs(),
-                1,
-                0,
-                false,
-                Arc::new(Bump::new()),
-                true,
-            )
-            .unwrap();
-        fixture.assert_result(&mut restored);
     }
 
     fixture.assert_all_states_dropped();
@@ -895,4 +819,89 @@ fn test_combined_payload_bucket_extraction_keeps_states_valid() {
     }
 
     fixture.assert_all_states_dropped();
+}
+
+/// `accepts_arity` is a pruning aid, so it must never reject an argument list
+/// that `matches_types` would accept. Both are derived from the same pattern,
+/// and this pins the two together for the shapes used by real functions.
+#[test]
+fn test_argument_pattern_accepts_arity_agrees_with_matches_types() {
+    let any = ArgumentPattern::any;
+    let boolean = || ArgumentPattern::exact(DataType::Boolean);
+
+    // sum: exactly one numeric-or-interval argument.
+    let sum = ArgumentsPattern::one_of(vec![
+        ArgumentsPattern::fixed(vec![ArgumentPattern::any_numeric()]),
+        ArgumentsPattern::fixed(vec![ArgumentPattern::exact(DataType::Interval)]),
+    ]);
+    assert!(!sum.accepts_arity(0));
+    assert!(sum.accepts_arity(1));
+    assert!(!sum.accepts_arity(2));
+    assert!(!sum.accepts_arity(3));
+
+    // count: zero or one argument.
+    let count = ArgumentsPattern::one_of(vec![
+        ArgumentsPattern::fixed(vec![]),
+        ArgumentsPattern::fixed(vec![any()]),
+    ]);
+    assert!(count.accepts_arity(0));
+    assert!(count.accepts_arity(1));
+    assert!(!count.accepts_arity(2));
+
+    // arg_min: exactly two arguments.
+    let arg_min = ArgumentsPattern::fixed(vec![any(), any()]);
+    assert!(!arg_min.accepts_arity(1));
+    assert!(arg_min.accepts_arity(2));
+    assert!(!arg_min.accepts_arity(3));
+
+    // retention: 1..=32 boolean arguments.
+    let retention = ArgumentsPattern::variadic(vec![], boolean(), 1, Some(32));
+    assert!(!retention.accepts_arity(0));
+    assert!(retention.accepts_arity(1));
+    assert!(retention.accepts_arity(32));
+    assert!(!retention.accepts_arity(33));
+
+    // `_if` wraps a nested pattern and appends a boolean condition.
+    let sum_if = ArgumentsPattern::if_condition(sum.clone());
+    assert!(!sum_if.accepts_arity(0));
+    assert!(!sum_if.accepts_arity(1));
+    assert!(sum_if.accepts_arity(2));
+    assert!(!sum_if.accepts_arity(3));
+
+    // Cross-check: whenever matches_types accepts a list, so must accepts_arity.
+    let types = [
+        DataType::Boolean,
+        UInt64Type::data_type(),
+        DataType::Interval,
+        DataType::String,
+    ];
+    let patterns = [sum, count, arg_min, retention, sum_if];
+    for pattern in &patterns {
+        for len in 0..=3usize {
+            for combo in candidate_lists(&types, len) {
+                if pattern.matches_types(&combo) {
+                    assert!(
+                        pattern.accepts_arity(combo.len()),
+                        "accepts_arity rejected an arity that matches_types accepted: \
+                         pattern={pattern:?} args={combo:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn candidate_lists(types: &[DataType], len: usize) -> Vec<Vec<DataType>> {
+    if len == 0 {
+        return vec![vec![]];
+    }
+    let mut out = Vec::new();
+    for prefix in candidate_lists(types, len - 1) {
+        for data_type in types {
+            let mut next = prefix.clone();
+            next.push(data_type.clone());
+            out.push(next);
+        }
+    }
+    out
 }

@@ -25,7 +25,7 @@ impl Binder {
         bind_context: &mut BindContext,
         table_ref: &TableReference,
     ) -> Result<(SExpr, BindContext)> {
-        match table_ref {
+        let (s_expr, bind_context) = match table_ref {
             TableReference::Table {
                 span,
                 table,
@@ -76,6 +76,12 @@ impl Binder {
                 alias,
             } => self.bind_location(bind_context, location, options, alias),
             TableReference::Join { join, .. } => self.bind_join(bind_context, join),
+        }?;
+
+        if let Some(unpivot) = table_ref.unpivot() {
+            self.bind_unpivot(s_expr, bind_context, unpivot)
+        } else {
+            Ok((s_expr, bind_context))
         }
     }
 }

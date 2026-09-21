@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use databend_common_exception::ErrorCode;
 use databend_common_management::*;
 use databend_common_meta_app::principal::StageFile;
 use databend_common_meta_app::principal::StageInfo;
@@ -46,10 +45,7 @@ async fn test_add_stage() -> anyhow::Result<()> {
             meta: _,
             data: value,
         }) => {
-            assert_eq!(
-                value,
-                serialize_struct(&stage_info, ErrorCode::IllegalUserStageFormat, || "")?
-            );
+            assert_eq!(value, serialize_struct(&stage_info));
         }
         catch => panic!("GetKVActionReply{:?}", catch),
     }
@@ -176,10 +172,7 @@ async fn test_add_stage_file() -> anyhow::Result<()> {
             meta: _,
             data: value,
         }) => {
-            assert_eq!(
-                value,
-                serialize_struct(&stage_file, ErrorCode::IllegalStageFileFormat, || "")?
-            );
+            assert_eq!(value, serialize_struct(&stage_file));
         }
         catch => panic!("GetKVActionReply{:?}", catch),
     }

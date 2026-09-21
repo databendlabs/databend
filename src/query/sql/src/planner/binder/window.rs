@@ -23,7 +23,6 @@ use databend_common_ast::ast::WindowSpec;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use itertools::Itertools;
 
 use super::select::SelectList;
 use crate::BindContext;
@@ -212,7 +211,7 @@ pub struct WindowInfo {
 impl WindowInfo {
     pub fn reorder(&mut self) {
         self.window_functions
-            .sort_by(|a, b| b.order_by_items.len().cmp(&a.order_by_items.len()));
+            .sort_by_key(|a| std::cmp::Reverse(a.order_by_items.len()));
 
         self.window_functions_map.clear();
         for (i, window) in self.window_functions.iter().enumerate() {
@@ -294,11 +293,9 @@ impl<'a> WindowRewriter<'a> {
                     let (replaced_expr, scalar) = self.replace_expr(&name, &expr)?;
 
                     let index = replaced_expr.column.index;
-                    let is_reuse_index = window_args.iter().map(|item| item.index).contains(&index);
                     window_args.push(ScalarItem { index, scalar });
                     replaced_sort_descs.push(AggregateFunctionScalarSortDesc {
                         expr: replaced_expr.into(),
-                        is_reuse_index,
                         nulls_first: desc.nulls_first,
                         asc: desc.asc,
                     });
@@ -466,7 +463,7 @@ impl<'a> WindowRewriter<'a> {
                     let column = ColumnBindingBuilder::new(
                         "group_item".to_string(),
                         group_expr.index,
-                        Box::new(group_expr.scalar.data_type()?),
+                        Box::new(group_expr.scalar.data_type().into_owned()),
                         Visibility::Visible,
                     )
                     .build();
@@ -479,7 +476,7 @@ impl<'a> WindowRewriter<'a> {
                 }
             }
 
-            let ty = arg.data_type()?;
+            let ty = arg.data_type().into_owned();
             let index = self
                 .metadata
                 .write()
@@ -620,14 +617,16 @@ pub fn bind_window_function_info(
     // eval scalars before sort
     // Generate a `EvalScalar` as the input of `Window`.
     let mut scalar_items: Vec<ScalarItem> = Vec::new();
-    for arg in &window_plan.arguments {
-        scalar_items.push(arg.clone());
-    }
-    for part in &window_plan.partition_by {
-        scalar_items.push(part.clone());
-    }
-    for order in &window_plan.order_by {
-        scalar_items.push(order.order_by_item.clone())
+    let mut scalar_indexes = HashSet::new();
+    for item in std::iter::chain(&window_plan.arguments, &window_plan.partition_by).chain(
+        window_plan
+            .order_by
+            .iter()
+            .map(|order| &order.order_by_item),
+    ) {
+        if scalar_indexes.insert(item.index) {
+            scalar_items.push(item.clone());
+        }
     }
 
     let child = if !scalar_items.is_empty() {

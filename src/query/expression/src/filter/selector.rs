@@ -363,9 +363,10 @@ impl<'a> Selector<'a> {
         let (value, data_type) = self
             .evaluator
             .get_select_child(column_ref, &mut eval_options)?;
-        debug_assert!(
-            matches!(data_type, DataType::String | DataType::Nullable(box DataType::String))
-        );
+        debug_assert!(matches!(
+            data_type,
+            DataType::String | DataType::Nullable(deref!(DataType::String))
+        ));
 
         if value.is_scalar_null() {
             return Ok(0);
@@ -482,13 +483,17 @@ impl<'a> Selector<'a> {
                 ..
             }) => {
                 debug_assert!(
-                    matches!(return_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean)),
+                    matches!(
+                        return_type,
+                        DataType::Boolean | DataType::Nullable(deref!(DataType::Boolean))
+                    ),
                     "{} return {} not boolean",
                     expr.sql_display(),
                     return_type
                 );
+                let child_suppress_error = function.signature.name == "is_not_error";
                 let mut eval_options = EvaluateOptions::new_for_select(selection)
-                    .with_suppress_error(function.signature.name == "is_not_error");
+                    .with_suppress_error(child_suppress_error);
 
                 let args = args
                     .iter()
@@ -506,7 +511,12 @@ impl<'a> Selector<'a> {
                     generics,
                     num_rows: self.evaluator.data_block().num_rows(),
                     validity: None,
-                    errors: None,
+                    // Boundary functions consume the errors of their subtree.
+                    errors: if child_suppress_error {
+                        eval_options.errors.take()
+                    } else {
+                        None
+                    },
                     func_ctx: self.evaluator.func_ctx(),
                     suppress_error: eval_options.suppress_error,
                     strict_eval: eval_options.strict_eval,
@@ -590,9 +600,14 @@ impl<'a> Selector<'a> {
                         })
                         .all_equal()
                 );
-                let result =
-                    self.evaluator
-                        .run_lambda(name, args, data_types, lambda_expr, return_type)?;
+                let result = self.evaluator.run_lambda(
+                    name,
+                    args,
+                    data_types,
+                    lambda_expr,
+                    return_type,
+                    None,
+                )?;
                 (result, return_type.clone())
             }
             _ => {

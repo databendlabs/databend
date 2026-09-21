@@ -1,9 +1,9 @@
-=== non_lambda_function_rejects_lambda_syntax ===
-description: Only lambda functions should accept lambda syntax.
+=== non_lambda_function_keeps_ambiguous_arrow_as_json_expression ===
+description: Non-lambda functions should interpret an ambiguous trailing arrow as a JSON expression.
 sql: abs(number, x -> x)
 status: error
 code: 1065
-message: only lambda functions allowed in lambda syntax
+message: column x doesn't exist
 
 === lambda_function_requires_lambda_expression ===
 description: Lambda functions should reject calls without a lambda expression.

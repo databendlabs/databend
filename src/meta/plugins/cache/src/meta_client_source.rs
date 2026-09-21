@@ -32,7 +32,7 @@ use sub_cache::errors::Unsupported;
 use sub_cache::event_stream::Change;
 use sub_cache::event_stream::Event;
 use sub_cache::event_stream::EventStream;
-use tonic_013::Status;
+use tonic::Status;
 
 pub struct MetaClientSource {
     pub(crate) client: Arc<ClientHandle<DatabendRuntime>>,

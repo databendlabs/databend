@@ -594,7 +594,7 @@ impl QueryEntry {
             retry_timeout,
             need_acquire_to_queue,
             query_id: ctx.get_id(),
-            create_time: ctx.get_created_time(),
+            create_time: ctx.get_query_created_time(),
             sql: plan_extras.statement.to_mask_sql(),
             user_info: ctx.get_current_user()?,
             timeout: match settings.get_statement_queued_timeout()? {
@@ -666,10 +666,12 @@ impl QueryEntry {
             }
 
             // DDL: Heavy actions.
-            Plan::OptimizePurge(_)
-            | Plan::OptimizeCompactSegment(_)
+            Plan::OptimizeCompactSegment(_)
             | Plan::OptimizeCompactBlock { .. }
             | Plan::VacuumTable(_)
+            | Plan::VacuumTables(_)
+            | Plan::VacuumAll(_)
+            | Plan::VacuumDropTable(_)
             | Plan::VacuumTemporaryFiles(_)
             | Plan::RefreshIndex(_)
             | Plan::ReclusterTable(_)
@@ -682,10 +684,12 @@ impl QueryEntry {
             Plan::DropTable(v) if v.all => {
                 return true;
             }
-            Plan::ModifyTableColumn(box ModifyTableColumnPlan {
-                action: ModifyColumnAction::SetDataType(_),
-                ..
-            }) => {
+            Plan::ModifyTableColumn(
+                deref!(ModifyTableColumnPlan {
+                    action: ModifyColumnAction::SetDataType(_),
+                    ..
+                }),
+            ) => {
                 return true;
             }
 

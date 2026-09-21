@@ -16,7 +16,7 @@ use std::alloc::Allocator;
 use std::intrinsics::unlikely;
 use std::mem::MaybeUninit;
 
-use databend_common_base::mem_allocator::DefaultAllocator;
+use databend_common_base::mem_allocator::TrackingAllocator;
 
 use super::container::StackContainer;
 use super::table0::Entry;
@@ -25,7 +25,7 @@ use super::table0::Table0Iter;
 use super::traits::Keyable;
 use super::utils::ZeroEntry;
 
-pub struct StackHashtable<K, V, const N: usize = 16, A = DefaultAllocator>
+pub struct StackHashtable<K, V, const N: usize = 16, A = TrackingAllocator>
 where
     K: Keyable,
     A: Allocator + Clone,
@@ -96,11 +96,7 @@ where
     #[inline(always)]
     pub fn entry(&self, key: &K) -> Option<&Entry<K, V>> {
         if unlikely(K::equals_zero(key)) {
-            if let Some(entry) = self.zero.as_ref() {
-                return Some(entry);
-            } else {
-                return None;
-            }
+            return self.zero.as_ref();
         }
         unsafe { self.table.get(key) }
     }
@@ -111,11 +107,7 @@ where
     #[inline(always)]
     pub fn entry_mut(&mut self, key: &K) -> Option<&mut Entry<K, V>> {
         if unlikely(K::equals_zero(key)) {
-            if let Some(entry) = self.zero.as_mut() {
-                return Some(entry);
-            } else {
-                return None;
-            }
+            return self.zero.as_mut();
         }
         unsafe { self.table.get_mut(key) }
     }

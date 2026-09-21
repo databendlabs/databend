@@ -19,18 +19,23 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::VirtualColumnField;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::format_runtime_keypaths;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_storages_common_index::VirtualColumnFileMeta;
 use databend_storages_common_index::VirtualColumnIdWithMeta;
 use databend_storages_common_index::VirtualColumnNameIndex;
 use databend_storages_common_index::VirtualColumnNode;
 use databend_storages_common_index::VirtualColumnSharedColumnMetaMap;
 use databend_storages_common_index::VirtualColumnSharedDataType;
+use databend_storages_common_index::cast_virtual_column_statistics;
+use databend_storages_common_pruner::ProjectedVirtualSegmentSchema;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
-use databend_storages_common_pruner::VirtualColumnReadPlan;
+use databend_storages_common_pruner::VirtualFieldReadPlan;
+use databend_storages_common_pruner::VirtualReadSlot;
+use databend_storages_common_pruner::VirtualReadSlotId;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
 use jsonb::keypath::OwnedKeyPath;
@@ -45,11 +50,14 @@ pub struct VirtualColumnPruner {
     source_column_ids: HashSet<ColumnId>,
     // Cache path matching info once to avoid repeated parsing per block.
     virtual_column_fields: Vec<VirtualColumnFieldMatch>,
+    // Query-time column ID of the typed virtual field used by single-column ORDER BY ... LIMIT.
+    top_n_query_column_id: Option<ColumnId>,
 }
 
 struct VirtualColumnFieldMatch {
     field: VirtualColumnField,
     match_info: KeyPathMatchInfo,
+    encoded_path: String,
 }
 
 impl VirtualColumnPruner {
@@ -57,30 +65,38 @@ impl VirtualColumnPruner {
         dal: Operator,
         push_down: &Option<PushDownInfo>,
     ) -> Result<Option<Arc<VirtualColumnPruner>>> {
-        let virtual_column = push_down.as_ref().and_then(|p| p.virtual_column.as_ref());
-        if let Some(virtual_column) = virtual_column {
-            let mut virtual_column_fields =
-                Vec::with_capacity(virtual_column.virtual_column_fields.len());
-            for field in &virtual_column.virtual_column_fields {
-                let match_info = key_paths_match_info(&field.key_paths);
-                virtual_column_fields.push(VirtualColumnFieldMatch {
-                    field: field.clone(),
-                    match_info,
-                });
-            }
-            return Ok(Some(Arc::new(VirtualColumnPruner {
-                dal,
-                source_column_ids: virtual_column.source_column_ids.clone(),
-                virtual_column_fields,
-            })));
+        let Some(push_down) = push_down.as_ref() else {
+            return Ok(None);
+        };
+        let Some(virtual_column) = push_down.virtual_column.as_ref() else {
+            return Ok(None);
+        };
+        let top_n_query_column_id = push_down
+            .order_by_virtual_column()
+            .map(|field| field.query_column_id);
+        let mut virtual_column_fields =
+            Vec::with_capacity(virtual_column.virtual_column_fields.len());
+        for field in &virtual_column.virtual_column_fields {
+            let match_info = key_paths_match_info(&field.key_paths);
+            virtual_column_fields.push(VirtualColumnFieldMatch {
+                field: field.clone(),
+                match_info,
+                encoded_path: field.key_paths.to_canonical_path(),
+            });
         }
-        Ok(None)
+        Ok(Some(Arc::new(VirtualColumnPruner {
+            dal,
+            source_column_ids: virtual_column.source_column_ids.clone(),
+            virtual_column_fields,
+            top_n_query_column_id,
+        })))
     }
 
     #[async_backtrace::framed]
     pub async fn prune_virtual_columns(
         &self,
         virtual_block_meta: &Option<VirtualBlockMeta>,
+        projected_virtual_schema: Option<&ProjectedVirtualSegmentSchema>,
     ) -> Result<Option<VirtualBlockMetaIndex>> {
         let Some(virtual_block_meta) = virtual_block_meta else {
             return Ok(None);
@@ -94,10 +110,17 @@ impl VirtualColumnPruner {
             return Ok(None);
         }
 
+        if let Some(index) =
+            self.try_prune_from_block_meta(virtual_block_meta, projected_virtual_schema)
+        {
+            return Ok(Some(index));
+        }
+
         let Ok(virtual_meta) =
             load_virtual_column_file_meta(self.dal.clone(), &virtual_block_meta.virtual_location.0)
                 .await
         else {
+            // Read planning can still fall back to the authoritative source column.
             return Ok(None);
         };
 
@@ -106,11 +129,9 @@ impl VirtualColumnPruner {
         // - Shared: sparse path stored in the shared map column.
         // - Object: reconstruct parent object from child plans.
         // - FromParent: read nearest variant parent and extract suffix via keypath.
-        let mut virtual_column_metas = BTreeMap::new();
-        // Each column can have multiple read plans due to heterogeneous JSON shapes.
-        let mut virtual_column_read_plan = BTreeMap::new();
+        let mut slot_builder = VirtualReadSlotBuilder::default();
+        let mut fields = BTreeMap::new();
         let mut fallback_source_column_ids = HashSet::new();
-        let mut shared_virtual_column_ids = BTreeMap::new();
         let string_table_index: HashMap<String, u32> = virtual_meta
             .string_table
             .iter()
@@ -169,9 +190,10 @@ impl VirtualColumnPruner {
                         source_column_id,
                         segments,
                         &virtual_meta,
-                        &mut virtual_column_metas,
-                        &mut shared_virtual_column_ids,
-                    );
+                        virtual_block_meta,
+                        projected_virtual_schema,
+                        &mut slot_builder,
+                    )?;
                     plans.append(&mut node_plans);
                 }
             }
@@ -187,9 +209,10 @@ impl VirtualColumnPruner {
                         source_column_id,
                         parent_segments,
                         &virtual_meta,
-                        &mut virtual_column_metas,
-                        &mut shared_virtual_column_ids,
-                    );
+                        virtual_block_meta,
+                        projected_virtual_schema,
+                        &mut slot_builder,
+                    )?;
                     let suffix_start = name_positions
                         .get(prefix_len.saturating_sub(1))
                         .copied()
@@ -198,7 +221,7 @@ impl VirtualColumnPruner {
                         build_virtual_column_suffix_path(&field.key_paths, suffix_start);
                     if !suffix_path.is_empty() {
                         for parent_plan in parent_plans {
-                            plans.push(VirtualColumnReadPlan::FromParent {
+                            plans.push(VirtualFieldReadPlan::FromParent {
                                 parent: Box::new(parent_plan),
                                 suffix_path: suffix_path.clone(),
                             });
@@ -207,15 +230,8 @@ impl VirtualColumnPruner {
                 }
             }
 
-            if !plans.is_empty() {
-                let entry = virtual_column_read_plan
-                    .entry(field.column_id)
-                    .or_insert_with(Vec::new);
-                for plan in plans {
-                    if !entry.contains(&plan) {
-                        entry.push(plan);
-                    }
-                }
+            if let Some(plan) = coalesce_read_plans(plans) {
+                fields.insert(field.query_column_id, plan);
             } else if starts_with_index {
                 // Virtual column metadata currently does not fully support unresolved array-index
                 // paths. In particular, root-array paths like `v[0]['k']` have no object segment
@@ -228,10 +244,7 @@ impl VirtualColumnPruner {
                 // The virtual column file was generated from the observed paths in this block.
                 // If a requested path is absent from the trie/shared metadata, the path is absent
                 // for this block and can be materialized as NULL without reading the source column.
-                virtual_column_read_plan
-                    .entry(field.column_id)
-                    .or_insert_with(Vec::new)
-                    .push(VirtualColumnReadPlan::Missing);
+                fields.insert(field.query_column_id, VirtualFieldReadPlan::Missing);
             }
         }
 
@@ -243,39 +256,78 @@ impl VirtualColumnPruner {
             .copied()
             .collect();
 
-        if !virtual_column_read_plan.is_empty() {
+        if !fields.is_empty() {
             let virtual_block_meta = VirtualBlockMetaIndex {
                 virtual_block_location: virtual_block_meta.virtual_location.0.clone(),
-                virtual_column_metas,
-                shared_virtual_column_ids,
+                fields,
+                read_slots: slot_builder.into_slots(),
                 ignored_source_column_ids,
-                virtual_column_read_plan,
+                virtual_column_stats: HashMap::new(),
             };
             return Ok(Some(virtual_block_meta));
         }
         Ok(None)
     }
-}
 
-fn virtual_column_data_type_code(data_type: &DataType) -> u8 {
-    match data_type.remove_nullable() {
-        DataType::Variant => 0,
-        DataType::Boolean => 1,
-        DataType::Number(NumberDataType::UInt64) => 2,
-        DataType::Number(NumberDataType::Int64) => 3,
-        DataType::Number(NumberDataType::Float64) => 4,
-        DataType::String => 5,
-        _ => unreachable!(),
-    }
-}
+    fn try_prune_from_block_meta(
+        &self,
+        virtual_block_meta: &VirtualBlockMeta,
+        projected_virtual_schema: Option<&ProjectedVirtualSegmentSchema>,
+    ) -> Option<VirtualBlockMetaIndex> {
+        // Incomplete block metadata may omit shared ancestors/descendants from
+        // the bounded segment schema. The sidecar footer trie is authoritative.
+        if !virtual_block_meta.virtual_columns_complete {
+            return None;
+        }
+        let schema = projected_virtual_schema?;
 
-fn build_virtual_column_meta(meta: &VirtualColumnIdWithMeta) -> VirtualColumnMeta {
-    VirtualColumnMeta {
-        offset: meta.meta.offset,
-        len: meta.meta.len,
-        num_values: meta.meta.num_values,
-        data_type: virtual_column_data_type_code(&meta.data_type),
-        column_stat: None,
+        let mut slot_builder = VirtualReadSlotBuilder::default();
+        let mut fields = BTreeMap::new();
+        let mut virtual_column_stats = HashMap::new();
+        for virtual_column_field in &self.virtual_column_fields {
+            let field = &virtual_column_field.field;
+            // Array indexes and unextracted/shared paths still need sidecar parquet meta.
+            if virtual_column_field.match_info.has_index {
+                return None;
+            }
+            let projected_field =
+                schema.get(field.source_column_id, &virtual_column_field.encoded_path)?;
+            // Related paths require plans derived from the authoritative sidecar trie.
+            if projected_field.has_related_paths() {
+                return None;
+            }
+            let Some(column_id) = projected_field.column_id else {
+                fields.insert(field.query_column_id, VirtualFieldReadPlan::Missing);
+                continue;
+            };
+            match virtual_block_meta.virtual_column_metas.get(&column_id) {
+                Some(column_meta) => {
+                    let slot = slot_builder.add_segment_column(column_id, column_meta);
+                    fields.insert(field.query_column_id, VirtualFieldReadPlan::Direct { slot });
+
+                    if self.top_n_query_column_id == Some(field.query_column_id) {
+                        let requested_type = DataType::from(field.data_type.as_ref());
+                        let physical_type = DataType::from(&column_meta.data_type());
+                        if let Some(stat) = column_meta.column_stat.as_ref().and_then(|stat| {
+                            cast_virtual_column_statistics(stat, &physical_type, &requested_type)
+                        }) {
+                            virtual_column_stats.insert(field.query_column_id, stat);
+                        }
+                    }
+                }
+                None => {
+                    fields.insert(field.query_column_id, VirtualFieldReadPlan::Missing);
+                }
+            }
+        }
+
+        Some(VirtualBlockMetaIndex {
+            virtual_block_location: virtual_block_meta.virtual_location.0.clone(),
+            fields,
+            read_slots: slot_builder.into_slots(),
+            ignored_source_column_ids: self.source_column_ids.clone(),
+            virtual_column_stats,
+        })
     }
 }
 
@@ -300,105 +352,181 @@ fn node_has_jsonb_parent_plan(
     }
 }
 
-fn ensure_virtual_column_id(
-    virtual_column_metas: &mut BTreeMap<ColumnId, VirtualColumnMeta>,
-    meta: &VirtualColumnIdWithMeta,
-) -> ColumnId {
-    let column_id = meta.column_id;
-    if !virtual_column_metas.contains_key(&column_id) {
-        virtual_column_metas.insert(column_id, build_virtual_column_meta(meta));
+fn direct_virtual_column_meta(
+    source_column_id: ColumnId,
+    canonical_path: &str,
+    footer_meta: &VirtualColumnIdWithMeta,
+    block_meta: &VirtualBlockMeta,
+    projected_virtual_schema: Option<&ProjectedVirtualSegmentSchema>,
+) -> Result<VirtualColumnMeta> {
+    // Requested paths can reuse compact block metadata through their segment-local ID.
+    // Recursive object/parent plans may visit non-requested paths omitted from the
+    // projection; for those paths the Parquet footer remains authoritative and supplies
+    // the actual ordinal, byte range, and physical type.
+    let block_column_meta = projected_virtual_schema
+        .and_then(|schema| schema.find_column_id(source_column_id, canonical_path))
+        .and_then(|column_id| block_meta.virtual_column_metas.get(&column_id));
+    match block_column_meta {
+        Some(meta) => Ok(meta.clone()),
+        None => footer_meta.to_virtual_column_meta(),
     }
-    column_id
 }
 
-fn ensure_shared_virtual_column_ids(
-    virtual_column_metas: &mut BTreeMap<ColumnId, VirtualColumnMeta>,
-    shared_virtual_column_ids: &mut BTreeMap<(ColumnId, VirtualColumnSharedDataType), ColumnId>,
-    typed_shared_column_metas: &VirtualColumnSharedColumnMetaMap,
-    source_column_id: u32,
-    data_type: VirtualColumnSharedDataType,
-) -> bool {
-    if shared_virtual_column_ids.contains_key(&(source_column_id, data_type)) {
-        return true;
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum PhysicalSlotKey {
+    SegmentColumn(ColumnId),
+    ParquetLeaf(u32),
+}
+
+#[derive(Default)]
+struct VirtualReadSlotBuilder {
+    slots: Vec<VirtualReadSlot>,
+    slots_by_physical_column: HashMap<PhysicalSlotKey, VirtualReadSlotId>,
+    shared_slots:
+        HashMap<(ColumnId, VirtualColumnSharedDataType), (VirtualReadSlotId, VirtualReadSlotId)>,
+}
+
+impl VirtualReadSlotBuilder {
+    fn into_slots(self) -> Vec<VirtualReadSlot> {
+        self.slots
     }
-    let Some(source_shared_metas) = typed_shared_column_metas.get(&source_column_id) else {
-        return false;
-    };
-    let Some((key_meta, value_meta)) = source_shared_metas.get(&data_type) else {
-        return false;
-    };
-    let key_id = key_meta.column_id;
-    let value_id = value_meta.column_id;
-    if !virtual_column_metas.contains_key(&key_id) {
-        virtual_column_metas.insert(key_id, VirtualColumnMeta {
+
+    fn add_segment_column(
+        &mut self,
+        column_id: ColumnId,
+        meta: &VirtualColumnMeta,
+    ) -> VirtualReadSlotId {
+        let key = PhysicalSlotKey::SegmentColumn(column_id);
+        if let Some(slot) = self.slots_by_physical_column.get(&key) {
+            return *slot;
+        }
+        let slot = self.push_slot(VirtualReadSlot {
+            offset: meta.offset,
+            len: meta.len,
+            num_values: meta.num_values,
+            data_type: DataType::from(&meta.data_type()),
+        });
+        self.slots_by_physical_column.insert(key, slot);
+        slot
+    }
+
+    fn add_parquet_column(
+        &mut self,
+        meta: &VirtualColumnIdWithMeta,
+        column_meta: &VirtualColumnMeta,
+    ) -> VirtualReadSlotId {
+        let key = PhysicalSlotKey::ParquetLeaf(meta.parquet_column_id);
+        if let Some(slot) = self.slots_by_physical_column.get(&key) {
+            return *slot;
+        }
+        let slot = self.push_slot(VirtualReadSlot {
+            offset: column_meta.offset,
+            len: column_meta.len,
+            num_values: column_meta.num_values,
+            data_type: DataType::from(&column_meta.data_type()),
+        });
+        self.slots_by_physical_column.insert(key, slot);
+        slot
+    }
+
+    fn add_shared_columns(
+        &mut self,
+        typed_shared_column_metas: &VirtualColumnSharedColumnMetaMap,
+        source_column_id: ColumnId,
+        data_type: VirtualColumnSharedDataType,
+    ) -> Option<(VirtualReadSlotId, VirtualReadSlotId)> {
+        let shared_key = (source_column_id, data_type);
+        if let Some(slots) = self.shared_slots.get(&shared_key) {
+            return Some(*slots);
+        }
+        let source_shared_metas = typed_shared_column_metas.get(&source_column_id)?;
+        let (key_meta, value_meta) = source_shared_metas.get(&data_type)?;
+
+        // Shared key/value slots are deliberately allocated together. The
+        // Parquet map decoder consumes them as one adjacent logical column.
+        let key_slot = self.push_slot(VirtualReadSlot {
             offset: key_meta.meta.offset,
             len: key_meta.meta.len,
             num_values: key_meta.meta.num_values,
-            data_type: 0,
-            column_stat: None,
+            data_type: key_meta.data_type.clone(),
         });
-    }
-    if !virtual_column_metas.contains_key(&value_id) {
-        virtual_column_metas.insert(value_id, VirtualColumnMeta {
+        let value_slot = self.push_slot(VirtualReadSlot {
             offset: value_meta.meta.offset,
             len: value_meta.meta.len,
             num_values: value_meta.meta.num_values,
-            data_type: 0,
-            column_stat: None,
+            data_type: value_meta.data_type.clone(),
         });
+        debug_assert_eq!(value_slot.0, key_slot.0 + 1);
+        self.shared_slots.insert(shared_key, (key_slot, value_slot));
+        Some((key_slot, value_slot))
     }
-    shared_virtual_column_ids.insert((source_column_id, data_type), key_id);
-    true
+
+    fn push_slot(&mut self, slot: VirtualReadSlot) -> VirtualReadSlotId {
+        let id = VirtualReadSlotId(self.slots.len() as u32);
+        self.slots.push(slot);
+        id
+    }
 }
 
 fn build_plans_for_node(
     node: &VirtualColumnNode,
-    source_column_id: u32,
+    source_column_id: ColumnId,
     segments: &[String],
     virtual_meta: &VirtualColumnFileMeta,
-    virtual_column_metas: &mut BTreeMap<ColumnId, VirtualColumnMeta>,
-    shared_virtual_column_ids: &mut BTreeMap<(ColumnId, VirtualColumnSharedDataType), ColumnId>,
-) -> Vec<VirtualColumnReadPlan> {
+    block_meta: &VirtualBlockMeta,
+    projected_virtual_schema: Option<&ProjectedVirtualSegmentSchema>,
+    slot_builder: &mut VirtualReadSlotBuilder,
+) -> Result<Vec<VirtualFieldReadPlan>> {
     let mut plans = Vec::new();
 
     if let Some(leaf) = node.leaf.as_ref() {
         match leaf {
             VirtualColumnNameIndex::Column(leaf_index) => {
-                if let Some(meta) = virtual_meta.column_metas.get(*leaf_index as usize) {
-                    ensure_virtual_column_id(virtual_column_metas, meta);
-                    // Direct: read the materialized virtual column.
-                    let name = meta.column_id.to_string();
-                    plans.push(VirtualColumnReadPlan::Direct { name });
+                let meta = virtual_meta
+                    .column_metas
+                    .get(*leaf_index as usize)
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "virtual column trie references missing parquet column {}",
+                            leaf_index
+                        ))
+                    })?;
+                let canonical_path = OwnedKeyPaths {
+                    paths: segments.iter().cloned().map(OwnedKeyPath::Name).collect(),
                 }
+                .to_canonical_path();
+                let column_meta = direct_virtual_column_meta(
+                    source_column_id,
+                    &canonical_path,
+                    meta,
+                    block_meta,
+                    projected_virtual_schema,
+                )?;
+                let slot = slot_builder.add_parquet_column(meta, &column_meta);
+                plans.push(VirtualFieldReadPlan::Direct { slot });
             }
             VirtualColumnNameIndex::Shared(index) => {
-                if ensure_shared_virtual_column_ids(
-                    virtual_column_metas,
-                    shared_virtual_column_ids,
+                if let Some((key_slot, value_slot)) = slot_builder.add_shared_columns(
                     &virtual_meta.typed_shared_column_metas,
                     source_column_id,
                     VirtualColumnSharedDataType::Jsonb,
                 ) {
-                    // Shared: read from the shared map column by key index.
-                    plans.push(VirtualColumnReadPlan::Shared {
-                        source_column_id,
-                        data_type: VirtualColumnSharedDataType::Jsonb,
+                    plans.push(VirtualFieldReadPlan::Shared {
+                        key_slot,
+                        value_slot,
                         index: *index,
                     });
                 }
             }
             VirtualColumnNameIndex::TypedShared { data_type, index } => {
-                if ensure_shared_virtual_column_ids(
-                    virtual_column_metas,
-                    shared_virtual_column_ids,
+                if let Some((key_slot, value_slot)) = slot_builder.add_shared_columns(
                     &virtual_meta.typed_shared_column_metas,
                     source_column_id,
                     *data_type,
                 ) {
-                    // Shared: read from the typed shared map column by key index.
-                    plans.push(VirtualColumnReadPlan::Shared {
-                        source_column_id,
-                        data_type: *data_type,
+                    plans.push(VirtualFieldReadPlan::Shared {
+                        key_slot,
+                        value_slot,
                         index: *index,
                     });
                 }
@@ -427,26 +555,33 @@ fn build_plans_for_node(
             source_column_id,
             &child_segments,
             virtual_meta,
-            virtual_column_metas,
-            shared_virtual_column_ids,
-        );
+            block_meta,
+            projected_virtual_schema,
+            slot_builder,
+        )?;
         if let Some(plan) = coalesce_read_plans(child_plans) {
             entries.push((child_key, plan));
         }
     }
     if !entries.is_empty() {
-        // Object: reconstruct a parent object from child plans.
-        plans.push(VirtualColumnReadPlan::Object { entries });
+        plans.push(VirtualFieldReadPlan::Object { entries });
     }
 
-    plans
+    Ok(plans)
 }
 
-fn coalesce_read_plans(mut plans: Vec<VirtualColumnReadPlan>) -> Option<VirtualColumnReadPlan> {
+fn coalesce_read_plans(plans: Vec<VirtualFieldReadPlan>) -> Option<VirtualFieldReadPlan> {
+    let mut unique = Vec::with_capacity(plans.len());
+    for plan in plans {
+        if !unique.contains(&plan) {
+            unique.push(plan);
+        }
+    }
+    let mut plans = unique;
     match plans.len() {
         0 => None,
         1 => plans.pop(),
-        _ => Some(VirtualColumnReadPlan::Coalesce { plans }),
+        _ => Some(VirtualFieldReadPlan::Coalesce { plans }),
     }
 }
 
@@ -471,7 +606,7 @@ fn key_paths_match_info(key_paths: &OwnedKeyPaths) -> KeyPathMatchInfo {
             OwnedKeyPath::Index(_) => {
                 has_index = true;
             }
-            OwnedKeyPath::Name(name) | OwnedKeyPath::QuotedName(name) => {
+            OwnedKeyPath::Name(name) => {
                 if has_index {
                     continue;
                 }
@@ -495,7 +630,7 @@ fn build_virtual_column_suffix_path(key_paths: &OwnedKeyPaths, start: usize) -> 
     let suffix = OwnedKeyPaths {
         paths: key_paths.paths[start..].to_vec(),
     };
-    suffix.to_string()
+    format_runtime_keypaths(&suffix)
 }
 
 fn segment_to_object_key(segment: &str) -> Option<String> {

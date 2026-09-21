@@ -48,7 +48,8 @@ impl Interpreter for DescribeTaskInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
         let Some(task) = TaskInterpreterManager::build(self.ctx.as_ref())?
             .describe_task(&self.ctx, &self.plan)
             .await?
@@ -56,5 +57,6 @@ impl Interpreter for DescribeTaskInterpreter {
             return Ok(PipelineBuildResult::create());
         };
         PipelineBuildResult::from_blocks(vec![parse_tasks_to_datablock(vec![task])?])
+        })
     }
 }

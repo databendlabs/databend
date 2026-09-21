@@ -13,13 +13,10 @@
 // limitations under the License.
 
 #![allow(clippy::collapsible_if, clippy::uninlined_format_args)]
-#![feature(type_alias_impl_trait)]
-#![feature(impl_trait_in_assoc_type)]
 
 // Memory storage
 mod memory_part;
 mod memory_table;
-mod proxy_table;
 mod recursive_cte_memory_table;
 
 // Null storage
@@ -38,10 +35,6 @@ pub mod view;
 pub use memory_table::MemoryTable;
 // Null storage exports
 pub use null::NullTable;
-pub use proxy_table::PROXY_OPT_KEY_DEFAULT;
-pub use proxy_table::PROXY_OPT_KEY_TARGETS;
-pub use proxy_table::ProxyPartInfo;
-pub use proxy_table::ProxyTable;
 // Random storage exports
 pub use random::{RandomPartInfo, RandomTable};
 pub use recursive_cte_memory_table::RecursiveCteMemoryTable;

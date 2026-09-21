@@ -149,9 +149,12 @@ impl Walk for CreateTableStmt {
         if let Some(cluster_by) = &self.cluster_by {
             try_walk!(cluster_by.walk(visitor));
         }
-        if let Some(partitions) = &self.iceberg_table_partition {
-            for ident in partitions {
-                try_walk!(ident.walk(visitor));
+        if let Some(ttl) = &self.ttl {
+            try_walk!(ttl.walk(visitor));
+        }
+        if let Some(partitions) = &self.partition_by {
+            for expr in partitions {
+                try_walk!(expr.walk(visitor));
             }
         }
         if let Some(as_query) = &self.as_query {
@@ -173,9 +176,12 @@ impl WalkMut for CreateTableStmt {
         if let Some(cluster_by) = &mut self.cluster_by {
             try_walk!(cluster_by.walk_mut(visitor));
         }
-        if let Some(partitions) = &mut self.iceberg_table_partition {
-            for ident in partitions {
-                try_walk!(ident.walk_mut(visitor));
+        if let Some(ttl) = &mut self.ttl {
+            try_walk!(ttl.walk_mut(visitor));
+        }
+        if let Some(partitions) = &mut self.partition_by {
+            for expr in partitions {
+                try_walk!(expr.walk_mut(visitor));
             }
         }
         if let Some(as_query) = &mut self.as_query {
@@ -185,13 +191,46 @@ impl WalkMut for CreateTableStmt {
     }
 }
 
-impl Walk for AlterTableStmt {
+impl Walk for CreateMaterializedViewStmt {
     fn walk<V: Visitor + ?Sized>(
         &self,
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
-        try_walk!(self.table_reference.walk(visitor));
-        match &self.action {
+        try_walk!((&self.catalog, &self.database, &self.view).walk(visitor));
+        for column in &self.columns {
+            try_walk!(column.walk(visitor));
+        }
+        if let Some(cluster_by) = &self.cluster_by {
+            try_walk!(cluster_by.walk(visitor));
+        }
+        try_walk!(self.query.walk(visitor));
+        Ok(VisitControl::Continue)
+    }
+}
+
+impl WalkMut for CreateMaterializedViewStmt {
+    fn walk_mut<V: VisitorMut + ?Sized>(
+        &mut self,
+        visitor: &mut V,
+    ) -> Result<VisitControl<V::Break>, V::Error> {
+        try_walk!((&mut self.catalog, &mut self.database, &mut self.view).walk_mut(visitor));
+        for column in &mut self.columns {
+            try_walk!(column.walk_mut(visitor));
+        }
+        if let Some(cluster_by) = &mut self.cluster_by {
+            try_walk!(cluster_by.walk_mut(visitor));
+        }
+        try_walk!(self.query.walk_mut(visitor));
+        Ok(VisitControl::Continue)
+    }
+}
+
+impl Walk for AlterTableAction {
+    fn walk<V: Visitor + ?Sized>(
+        &self,
+        visitor: &mut V,
+    ) -> Result<VisitControl<V::Break>, V::Error> {
+        match self {
             AlterTableAction::RenameTable { new_table }
             | AlterTableAction::SwapWith {
                 target_table: new_table,
@@ -224,10 +263,14 @@ impl Walk for AlterTableStmt {
             }
             AlterTableAction::ModifyTableComment { .. }
             | AlterTableAction::DropTableClusterKey
+            | AlterTableAction::RemoveTableTtl
             | AlterTableAction::RefreshTableCache
             | AlterTableAction::SetOptions { .. }
             | AlterTableAction::ModifyConnection { .. }
             | AlterTableAction::DropAllRowAccessPolicies => {}
+            AlterTableAction::SetTableTtl { ttl } => {
+                try_walk!(ttl.walk(visitor));
+            }
             AlterTableAction::ModifyColumn { action } => match action {
                 ModifyColumnAction::SetMaskingPolicy(column, _, using_columns) => {
                     try_walk!(column.walk(visitor));
@@ -264,6 +307,11 @@ impl Walk for AlterTableStmt {
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
                 try_walk!(cluster_by.walk(visitor));
             }
+            AlterTableAction::AlterTablePartitionBy { partition_by } => {
+                for expr in partition_by {
+                    try_walk!(expr.walk(visitor));
+                }
+            }
             AlterTableAction::ReclusterTable { selection, .. } => {
                 if let Some(selection) = selection {
                     try_walk!(selection.walk(visitor));
@@ -289,13 +337,12 @@ impl Walk for AlterTableStmt {
     }
 }
 
-impl WalkMut for AlterTableStmt {
+impl WalkMut for AlterTableAction {
     fn walk_mut<V: VisitorMut + ?Sized>(
         &mut self,
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
-        try_walk!(self.table_reference.walk_mut(visitor));
-        match &mut self.action {
+        match self {
             AlterTableAction::RenameTable { new_table }
             | AlterTableAction::SwapWith {
                 target_table: new_table,
@@ -328,10 +375,14 @@ impl WalkMut for AlterTableStmt {
             }
             AlterTableAction::ModifyTableComment { .. }
             | AlterTableAction::DropTableClusterKey
+            | AlterTableAction::RemoveTableTtl
             | AlterTableAction::RefreshTableCache
             | AlterTableAction::SetOptions { .. }
             | AlterTableAction::ModifyConnection { .. }
             | AlterTableAction::DropAllRowAccessPolicies => {}
+            AlterTableAction::SetTableTtl { ttl } => {
+                try_walk!(ttl.walk_mut(visitor));
+            }
             AlterTableAction::ModifyColumn { action } => match action {
                 ModifyColumnAction::SetMaskingPolicy(column, _, using_columns) => {
                     try_walk!(column.walk_mut(visitor));
@@ -368,6 +419,11 @@ impl WalkMut for AlterTableStmt {
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
                 try_walk!(cluster_by.walk_mut(visitor));
             }
+            AlterTableAction::AlterTablePartitionBy { partition_by } => {
+                for expr in partition_by {
+                    try_walk!(expr.walk_mut(visitor));
+                }
+            }
             AlterTableAction::ReclusterTable { selection, .. } => {
                 if let Some(selection) = selection {
                     try_walk!(selection.walk_mut(visitor));
@@ -389,6 +445,28 @@ impl WalkMut for AlterTableStmt {
                 }
             }
         }
+        Ok(VisitControl::Continue)
+    }
+}
+
+impl Walk for AlterTableStmt {
+    fn walk<V: Visitor + ?Sized>(
+        &self,
+        visitor: &mut V,
+    ) -> Result<VisitControl<V::Break>, V::Error> {
+        try_walk!(self.table_reference.walk(visitor));
+        try_walk!(self.action.walk(visitor));
+        Ok(VisitControl::Continue)
+    }
+}
+
+impl WalkMut for AlterTableStmt {
+    fn walk_mut<V: VisitorMut + ?Sized>(
+        &mut self,
+        visitor: &mut V,
+    ) -> Result<VisitControl<V::Break>, V::Error> {
+        try_walk!(self.table_reference.walk_mut(visitor));
+        try_walk!(self.action.walk_mut(visitor));
         Ok(VisitControl::Continue)
     }
 }
@@ -496,26 +574,6 @@ impl WalkMut for CreateDynamicTableStmt {
     }
 }
 
-impl Walk for RefreshIndexStmt {
-    fn walk<V: Visitor + ?Sized>(
-        &self,
-        visitor: &mut V,
-    ) -> Result<VisitControl<V::Break>, V::Error> {
-        try_walk!(self.index.walk(visitor));
-        Ok(VisitControl::Continue)
-    }
-}
-
-impl WalkMut for RefreshIndexStmt {
-    fn walk_mut<V: VisitorMut + ?Sized>(
-        &mut self,
-        visitor: &mut V,
-    ) -> Result<VisitControl<V::Break>, V::Error> {
-        try_walk!(self.index.walk_mut(visitor));
-        Ok(VisitControl::Continue)
-    }
-}
-
 impl Walk for RefreshTableIndexStmt {
     fn walk<V: Visitor + ?Sized>(
         &self,
@@ -556,42 +614,6 @@ impl WalkMut for OptimizeTableStmt {
     ) -> Result<VisitControl<V::Break>, V::Error> {
         try_walk!((&mut self.catalog, &mut self.database, &mut self.table).walk_mut(visitor));
         try_walk!(self.action.walk_mut(visitor));
-        Ok(VisitControl::Continue)
-    }
-}
-
-impl Walk for VacuumTableOption {
-    fn walk<V: Visitor + ?Sized>(
-        &self,
-        _visitor: &mut V,
-    ) -> Result<VisitControl<V::Break>, V::Error> {
-        Ok(VisitControl::Continue)
-    }
-}
-
-impl WalkMut for VacuumTableOption {
-    fn walk_mut<V: VisitorMut + ?Sized>(
-        &mut self,
-        _visitor: &mut V,
-    ) -> Result<VisitControl<V::Break>, V::Error> {
-        Ok(VisitControl::Continue)
-    }
-}
-
-impl Walk for VacuumDropTableOption {
-    fn walk<V: Visitor + ?Sized>(
-        &self,
-        _visitor: &mut V,
-    ) -> Result<VisitControl<V::Break>, V::Error> {
-        Ok(VisitControl::Continue)
-    }
-}
-
-impl WalkMut for VacuumDropTableOption {
-    fn walk_mut<V: VisitorMut + ?Sized>(
-        &mut self,
-        _visitor: &mut V,
-    ) -> Result<VisitControl<V::Break>, V::Error> {
         Ok(VisitControl::Continue)
     }
 }

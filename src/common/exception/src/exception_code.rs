@@ -483,8 +483,8 @@ build_exceptions! {
     DuplicatedUpsertFiles(2014),
     /// Table already locked
     TableAlreadyLocked(2015),
-    /// Table lock expired
-    TableLockExpired(2016),
+    /// Lease expired
+    LeaseExpired(2016),
 }
 
 // User and Role Management Errors [2201-2218]
@@ -525,7 +525,7 @@ build_exceptions! {
     IllegalUser(2218),
 }
 
-// Database and Catalog Management Errors [2301-2317, 2321-2327]
+// Database and Catalog Management Errors [2301-2317, 2321-2329]
 build_exceptions! {
     /// Database already exists
     DatabaseAlreadyExists(2301),
@@ -569,6 +569,10 @@ build_exceptions! {
     GeneralDbGcFailure(2325),
     /// Table snapshot expired
     TableSnapshotExpired(2327),
+    /// Invalid materialized view metadata or state
+    InvalidMaterializedView(2328),
+    /// Materialized view already exists
+    MaterializedViewAlreadyExists(2329),
 }
 
 // Stage and Connection Errors [2501-2505, 2510-2512]

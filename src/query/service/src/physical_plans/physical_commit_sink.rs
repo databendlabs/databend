@@ -25,6 +25,7 @@ use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::CommitSink as FuseCommitSink;
 use databend_common_storages_fuse::operations::MutationGenerator;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformMergeCommitMeta;
@@ -133,7 +134,7 @@ impl IPhysicalPlan for CommitSink {
                         });
                 }
                 builder.main_pipeline.add_sink(|input| {
-                    databend_common_storages_fuse::operations::CommitSink::try_create(
+                    FuseCommitSink::try_create(
                         table,
                         builder.ctx.clone(),
                         None,
@@ -144,14 +145,19 @@ impl IPhysicalPlan for CommitSink {
                         prev_snapshot_id,
                         self.deduplicated_label.clone(),
                         self.table_meta_timestamps,
+                        false,
                     )
                 })
             }
             CommitType::Mutation { kind, merge_meta } => {
+                let cluster_key_info = table.cluster_key_info();
+                let acquire_commit_lock = self
+                    .recluster_info
+                    .as_ref()
+                    .is_some_and(|info| info.acquire_commit_lock);
                 if *merge_meta {
-                    let cluster_key_id = table.cluster_key_id();
-                    builder.main_pipeline.add_accumulating_transformer(|| {
-                        TransformMergeCommitMeta::create(cluster_key_id)
+                    builder.main_pipeline.add_accumulating_transformer(move || {
+                        TransformMergeCommitMeta::create(cluster_key_info.clone())
                     });
                 } else {
                     builder
@@ -179,6 +185,7 @@ impl IPhysicalPlan for CommitSink {
                                         block_meta: Arc::unwrap_or_clone(block_meta),
                                         draft_virtual_block_meta: None,
                                         column_hlls: column_hlls.map(BlockHLLState::Serialized),
+                                        column_top_n: None,
                                     })
                                 })
                                 .collect::<Vec<Arc<ExtendedBlockMeta>>>();
@@ -198,7 +205,7 @@ impl IPhysicalPlan for CommitSink {
 
                 let snapshot_gen = MutationGenerator::new(self.snapshot.clone(), *kind);
                 builder.main_pipeline.add_sink(|input| {
-                    databend_common_storages_fuse::operations::CommitSink::try_create(
+                    FuseCommitSink::try_create(
                         table,
                         builder.ctx.clone(),
                         None,
@@ -209,6 +216,7 @@ impl IPhysicalPlan for CommitSink {
                         None,
                         self.deduplicated_label.clone(),
                         self.table_meta_timestamps,
+                        acquire_commit_lock,
                     )
                 })
             }

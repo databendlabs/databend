@@ -17,6 +17,8 @@ use std::hash::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::ErrorCode;
@@ -26,6 +28,8 @@ use databend_common_exception::Result;
 pub struct SingleFilePartition {
     pub path: String,
     pub size: usize,
+    pub content_key: Option<String>,
+    pub last_modified: Option<DateTime<Utc>>,
 }
 
 #[typetag::serde(name = "single_file_part")]

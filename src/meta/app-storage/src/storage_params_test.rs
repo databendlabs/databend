@@ -23,7 +23,6 @@ use crate::StorageHdfsConfig;
 use crate::StorageHttpConfig;
 use crate::StorageHuggingfaceConfig;
 use crate::StorageIpfsConfig;
-use crate::StorageMokaConfig;
 use crate::StorageObsConfig;
 use crate::StorageOssConfig;
 use crate::StorageParams;
@@ -296,19 +295,6 @@ fn test_memory_url_none() {
 }
 
 #[test]
-fn test_none_url_none() {
-    assert_eq!(StorageParams::None.url(), None);
-}
-
-#[test]
-fn test_moka_url_none() {
-    assert_eq!(
-        StorageParams::Moka(StorageMokaConfig::default()).url(),
-        None
-    );
-}
-
-#[test]
 fn test_has_credentials_matrix() {
     let s3 = StorageS3Config {
         access_key_id: "ak".to_string(),
@@ -382,12 +368,6 @@ fn test_has_credentials_matrix() {
             "hdfs",
         ),
         (StorageParams::Memory, false, "memory"),
-        (
-            StorageParams::Moka(StorageMokaConfig::default()),
-            false,
-            "moka",
-        ),
-        (StorageParams::None, false, "none"),
     ];
 
     for (params, expected, label) in cases {

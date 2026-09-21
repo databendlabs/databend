@@ -74,49 +74,51 @@ impl Interpreter for DropUserStageInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_user_stage_execute");
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "drop_user_stage_execute");
 
-        let plan = self.plan.clone();
-        let tenant = self.ctx.get_tenant();
-        let user_mgr = UserApiProvider::instance();
+            let plan = self.plan.clone();
+            let tenant = self.ctx.get_tenant();
+            let user_mgr = UserApiProvider::instance();
 
-        // Get stage info first for cleanup operations
-        let stage = user_mgr.get_stage(&tenant, &plan.name).await;
+            // Get stage info first for cleanup operations
+            let stage = user_mgr.get_stage(&tenant, &plan.name).await;
 
-        // 1. Remove stage files for internal stages
-        if let Ok(stage) = &stage {
-            if !matches!(&stage.stage_type, StageType::External) {
-                let op = init_stage_operator(stage)?;
-                Self::remove_all(self.ctx.clone(), op).await?;
-                info!(
-                    "drop stage {:?} with all objects removed in stage",
-                    stage.stage_name
-                );
+            // 1. Remove stage files for internal stages
+            if let Ok(stage) = &stage {
+                if !matches!(&stage.stage_type, StageType::External) {
+                    let op = init_stage_operator(stage)?;
+                    Self::remove_all(self.ctx.clone(), op).await?;
+                    info!(
+                        "drop stage {:?} with all objects removed in stage",
+                        stage.stage_name
+                    );
+                }
             }
-        }
 
-        // 2. Drop the stage
-        user_mgr
-            .drop_stage(&tenant, &plan.name, plan.if_exists)
-            .await?;
+            // 2. Drop the stage
+            user_mgr
+                .drop_stage(&tenant, &plan.name, plan.if_exists)
+                .await?;
 
-        // 3. Revoke ownership (after drop succeeds to prevent permission leak)
-        if let Ok(ref stage) = stage {
-            let role_api = UserApiProvider::instance().role_api(&tenant);
-            let owner_object = OwnershipObject::Stage {
-                name: stage.stage_name.clone(),
+            // 3. Revoke ownership (after drop succeeds to prevent permission leak)
+            if let Ok(ref stage) = stage {
+                let role_api = UserApiProvider::instance().role_api(&tenant);
+                let owner_object = OwnershipObject::Stage {
+                    name: stage.stage_name.clone(),
+                };
+                role_api.revoke_ownership(&owner_object).await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
+            }
+
+            // 4. Clean up tag references (must be after drop for concurrency safety)
+            let taggable_object = TaggableObject::Stage {
+                name: plan.name.clone(),
             };
-            role_api.revoke_ownership(&owner_object).await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
-        }
+            cleanup_object_tags(&tenant, taggable_object).await?;
 
-        // 4. Clean up tag references (must be after drop for concurrency safety)
-        let taggable_object = TaggableObject::Stage {
-            name: plan.name.clone(),
-        };
-        cleanup_object_tags(&tenant, taggable_object).await?;
-
-        Ok(PipelineBuildResult::create())
+            Ok(PipelineBuildResult::create())
+        })
     }
 }

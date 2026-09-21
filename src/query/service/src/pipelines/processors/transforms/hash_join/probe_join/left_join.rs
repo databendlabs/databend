@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::Ordering;
-
 use databend_common_base::hints::assume;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -22,6 +20,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::KeyAccessor;
 use databend_common_expression::Scalar;
+use databend_common_pipeline::core::check_interrupt;
 
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
@@ -364,9 +363,7 @@ impl HashJoinProbeState {
         probe_state: &mut ProbeBlockGenerationState,
         build_state: &BuildBlockGenerationState,
     ) -> Result<DataBlock> {
-        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::aborting());
-        }
+        check_interrupt()?;
 
         let probe_block = if probe_state.is_probe_projected {
             let mut probe_block = DataBlock::take(input, &probe_indexes[0..unmatched_idx])?;
@@ -412,9 +409,7 @@ impl HashJoinProbeState {
         row_state: Option<&mut Vec<usize>>,
         row_state_indexes: Option<&mut Vec<usize>>,
     ) -> Result<()> {
-        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::aborting());
-        }
+        check_interrupt()?;
 
         let probe_block = if probe_state.is_probe_projected {
             let mut probe_block = DataBlock::take(input, &probe_indexes[0..matched_idx])?;

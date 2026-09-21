@@ -16,12 +16,12 @@
 //! Iceberg offered support for tables, that meaning the catalog and database data
 //! should be managed by ourselves.
 
-#![feature(impl_trait_in_assoc_type)]
 #![allow(clippy::collapsible_if, clippy::diverging_sub_expression)]
 
 mod append;
 pub(crate) mod cache;
 mod catalog;
+mod credential;
 mod database;
 mod iceberg_inspect;
 mod partition;

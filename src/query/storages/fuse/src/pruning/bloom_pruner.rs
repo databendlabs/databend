@@ -31,6 +31,7 @@ use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::NgramArgs;
+use databend_storages_common_index::NgramLikeScalarMap;
 use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::Location;
@@ -44,6 +45,8 @@ use crate::FuseBlockPartInfo;
 use crate::io::BlockWriter;
 use crate::io::BloomBlockFilterReader;
 use crate::io::BloomIndexRebuilder;
+use crate::pruning::PruningCostController;
+use crate::pruning::PruningCostKind;
 
 #[async_trait::async_trait]
 pub trait BloomPruner {
@@ -139,8 +142,8 @@ pub struct BloomPrunerCreator {
     /// pre calculated digest for constant Scalar for eq conditions
     eq_scalar_map: HashMap<Scalar, u64>,
 
-    /// pre calculated digest for constant Scalar for like conditions
-    like_scalar_map: HashMap<Scalar, Vec<u64>>,
+    /// Pre-calculated digests for LIKE constants, grouped by NGRAM argument index.
+    like_scalar_map: NgramLikeScalarMap,
 
     /// Ngram args aligned with BloomColumn using Ngram
     ngram_args: Vec<NgramArgs>,
@@ -155,6 +158,8 @@ pub struct BloomPrunerCreator {
 
     /// bloom index builder, if set to Some(_), missing bloom index will be built during pruning
     bloom_index_builder: Option<BloomIndexRebuilder>,
+
+    pruning_cost: PruningCostController,
 }
 
 impl BloomPrunerCreator {
@@ -167,6 +172,7 @@ impl BloomPrunerCreator {
         bloom_index_cols: BloomIndexColumns,
         ngram_args: Vec<NgramArgs>,
         bloom_index_builder: Option<BloomIndexRebuilder>,
+        pruning_cost: PruningCostController,
     ) -> Result<Option<Arc<dyn BloomPruner + Send + Sync>>> {
         let Some(expr) = filter_expr else {
             return Ok(None);
@@ -191,18 +197,22 @@ impl BloomPrunerCreator {
                 e.insert(digest);
             }
         }
-        let mut like_scalar_map = HashMap::<Scalar, Vec<u64>>::new();
-        for (i, scalar) in result.ngram_scalars.into_iter() {
-            let Some(digests) = BloomIndex::calculate_ngram_nullable_column(
+        let mut like_scalar_map = NgramLikeScalarMap::new();
+        for (index, scalar) in result.ngram_scalars {
+            let ngram_arg = &ngram_args[index];
+            let mut digests = Vec::new();
+            BloomIndex::calculate_ngram_digests(
                 Value::Scalar(scalar.clone()),
-                ngram_args[i].gram_size(),
-                BloomIndex::ngram_hash,
-            )
-            .next() else {
-                continue;
-            };
-            if let Entry::Vacant(e) = like_scalar_map.entry(scalar) {
-                e.insert(digests);
+                ngram_arg.gram_size(),
+                ngram_arg.hash_algorithm(),
+                |digest| digests.push(digest),
+            );
+            if !digests.is_empty() {
+                like_scalar_map
+                    .entry(index)
+                    .or_default()
+                    .entry(scalar)
+                    .or_insert(digests);
             }
         }
         let mut index_fields = result.bloom_fields;
@@ -219,6 +229,7 @@ impl BloomPrunerCreator {
             settings,
             data_schema: schema.clone(),
             bloom_index_builder,
+            pruning_cost,
         })))
     }
 
@@ -246,6 +257,7 @@ impl BloomPrunerCreator {
                         field.column_id(),
                         ngram_arg.gram_size(),
                         ngram_arg.bloom_size(),
+                        ngram_arg.hash_algorithm(),
                     ));
                 }
                 Ok::<_, ErrorCode>(acc)
@@ -253,12 +265,16 @@ impl BloomPrunerCreator {
         )?;
 
         // load the relevant index columns
-        let maybe_filter = index_location
-            .read_block_filter(
-                self.dal.clone(),
-                &self.settings,
-                &index_columns,
-                index_length,
+        let maybe_filter = self
+            .pruning_cost
+            .measure_async(
+                PruningCostKind::BlocksBloomIndexRead,
+                index_location.read_block_filter(
+                    self.dal.clone(),
+                    &self.settings,
+                    &index_columns,
+                    index_length,
+                ),
             )
             .await;
 

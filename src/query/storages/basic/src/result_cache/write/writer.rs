@@ -17,6 +17,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_table_meta::table::TableCompression;
+use opendal::Buffer;
 use opendal::Operator;
 use tokio::time::Instant;
 use uuid::Uuid;
@@ -72,11 +73,9 @@ impl ResultCacheWriter {
     /// Write the result cache to the storage and return the location.
     #[async_backtrace::framed]
     pub async fn write_to_storage(&self) -> Result<String> {
-        let mut buf = Vec::with_capacity(self.current_bytes);
-        let _ = blocks_to_parquet(
+        let serialized = blocks_to_parquet(
             &self.schema,
             self.blocks.clone(),
-            &mut buf,
             TableCompression::None,
             false,
             None,
@@ -84,7 +83,9 @@ impl ResultCacheWriter {
 
         let file_location = format!("{}/{}.parquet", self.location, Uuid::new_v4().as_simple());
 
-        self.operator.write(&file_location, buf).await?;
+        self.operator
+            .write(&file_location, Buffer::from(serialized.payload))
+            .await?;
         Ok(file_location)
     }
 

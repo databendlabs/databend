@@ -66,7 +66,7 @@ impl Binder {
                             || TypeChecker::<()>::all_rewrite_functions()
                                 .contains(&uni_case_func_name)
                             || func.window.is_none()
-                            || func.lambda.is_none()
+                            || !func.has_explicit_lambda()
                             || func.order_by.is_empty())
                         {
                             return Err(ErrorCode::InvalidArgument(

@@ -14,20 +14,36 @@
 
 use std::cmp::Ordering;
 
+use databend_common_exception::Result;
+
 use super::Intersection;
+use super::NumericValue;
 use super::OverlapCoverage;
 use super::TypedHistogram;
 use super::TypedHistogramBucket;
 use super::Value;
 use crate::Histogram;
 use crate::NdvEstimate;
+use crate::NumericHistogramType;
+use crate::NumericRange;
 use crate::StatEstimate;
+use crate::TypedHistogramBounds;
 
 #[must_use]
 #[derive(Debug, Clone, PartialEq)]
 pub struct JoinEstimation {
     pub cardinality: StatEstimate,
     pub ndv: NdvEstimate,
+    /// Input rows whose values are expected to occur on the other side. These
+    /// are side row counts, not output pairs, so join fanout is not included.
+    pub left_matched_rows: f64,
+    pub right_matched_rows: f64,
+    /// Matched side rows inferred from bucket overlap rather than proven by
+    /// matching exact singleton values on both sides.
+    pub left_estimated_matched_rows: f64,
+    pub right_estimated_matched_rows: f64,
+    pub left_matched_histogram: Option<Histogram>,
+    pub right_matched_histogram: Option<Histogram>,
     pub histogram: Option<Histogram>,
 }
 
@@ -36,63 +52,310 @@ impl JoinEstimation {
         Self {
             cardinality: StatEstimate::exact(0.0),
             ndv: NdvEstimate::exact(0.0),
+            left_matched_rows: 0.0,
+            right_matched_rows: 0.0,
+            left_estimated_matched_rows: 0.0,
+            right_estimated_matched_rows: 0.0,
+            left_matched_histogram: None,
+            right_matched_histogram: None,
             histogram: None,
         }
     }
 }
 
-impl<T: Value> TypedHistogram<T> {
-    pub fn estimate_join(&self, other: &TypedHistogram<T>) -> JoinEstimation {
-        let mut cardinality = StatEstimate::exact(0.0);
-        let mut ndv = NdvEstimate::exact(0.0);
-        let mut output_buckets = Vec::new();
-
-        for left_bucket in &self.buckets {
-            for right_bucket in &other.buckets {
-                let contribution = left_bucket.estimate_join_contribution(
-                    right_bucket,
-                    self.row_scale,
-                    other.row_scale,
-                );
-                cardinality = cardinality.add(contribution.cardinality);
-                ndv = ndv.add(contribution.ndv);
-                if let Some(bucket) = contribution.bucket {
-                    output_buckets.push(bucket);
-                }
-            }
-        }
-
-        let histogram = (!output_buckets.is_empty()).then(|| {
-            T::into_histogram(TypedHistogram {
-                accuracy: self.accuracy && other.accuracy,
-                row_scale: 1.0,
-                buckets: output_buckets,
-                avg_spacing: self.avg_spacing.or(other.avg_spacing),
-            })
-        });
-
-        JoinEstimation {
-            cardinality,
-            ndv,
-            histogram,
-        }
-    }
-}
-
-struct JoinContribution<T> {
+struct JoinCounts {
     cardinality: StatEstimate,
     ndv: NdvEstimate,
-    bucket: Option<TypedHistogramBucket<T>>,
+    left_matched_rows: f64,
+    right_matched_rows: f64,
+    left_estimated_matched_rows: f64,
+    right_estimated_matched_rows: f64,
 }
 
-impl<T> JoinContribution<T> {
+impl JoinCounts {
     fn zero() -> Self {
         Self {
             cardinality: StatEstimate::exact(0.0),
             ndv: NdvEstimate::exact(0.0),
-            bucket: None,
+            left_matched_rows: 0.0,
+            right_matched_rows: 0.0,
+            left_estimated_matched_rows: 0.0,
+            right_estimated_matched_rows: 0.0,
         }
     }
+
+    fn add(&mut self, contribution: Self) {
+        self.cardinality = self.cardinality.add(contribution.cardinality);
+        self.ndv = self.ndv.add(contribution.ndv);
+        self.left_matched_rows += contribution.left_matched_rows;
+        self.right_matched_rows += contribution.right_matched_rows;
+        self.left_estimated_matched_rows += contribution.left_estimated_matched_rows;
+        self.right_estimated_matched_rows += contribution.right_estimated_matched_rows;
+    }
+
+    fn into_estimation(self, left_num_values: f64, right_num_values: f64) -> JoinEstimation {
+        JoinEstimation {
+            cardinality: self.cardinality,
+            ndv: self.ndv,
+            left_matched_rows: self.left_matched_rows.min(left_num_values),
+            right_matched_rows: self.right_matched_rows.min(right_num_values),
+            left_estimated_matched_rows: self.left_estimated_matched_rows.min(left_num_values),
+            right_estimated_matched_rows: self.right_estimated_matched_rows.min(right_num_values),
+            left_matched_histogram: None,
+            right_matched_histogram: None,
+            histogram: None,
+        }
+    }
+}
+
+#[derive(Default)]
+struct ExpectedJoinCounts {
+    cardinality: f64,
+    ndv: f64,
+    left_matched_rows: f64,
+    right_matched_rows: f64,
+}
+
+struct JoinContribution<T> {
+    counts: JoinCounts,
+    left_matched_bucket: Option<TypedHistogramBucket<T>>,
+    right_matched_bucket: Option<TypedHistogramBucket<T>>,
+    output_bucket: Option<TypedHistogramBucket<T>>,
+}
+
+impl<T: Clone> JoinContribution<T> {
+    fn zero() -> Self {
+        Self {
+            counts: JoinCounts::zero(),
+            left_matched_bucket: None,
+            right_matched_bucket: None,
+            output_bucket: None,
+        }
+    }
+
+    fn from_counts(
+        counts: JoinCounts,
+        overlap_bounds: TypedHistogramBounds<T>,
+        singleton_match: bool,
+    ) -> Self {
+        let expected_cardinality = counts.cardinality.expected;
+        let expected_ndv = counts.ndv.expected.unwrap_or(0.0);
+        let TypedHistogramBounds {
+            lower_bound,
+            upper_bound,
+        } = overlap_bounds;
+
+        let matched_bucket = |num_values: f64| {
+            (num_values > 0.0 && expected_ndv > 0.0).then(|| {
+                TypedHistogramBucket::new(
+                    lower_bound.clone(),
+                    upper_bound.clone(),
+                    num_values.max(expected_ndv),
+                    expected_ndv,
+                )
+            })
+        };
+        let output_bucket = if singleton_match {
+            Some(TypedHistogramBucket::new(
+                lower_bound.clone(),
+                upper_bound.clone(),
+                expected_cardinality,
+                1.0,
+            ))
+        } else {
+            (expected_cardinality > 0.0 && expected_ndv > 0.0).then(|| {
+                TypedHistogramBucket::new(
+                    lower_bound.clone(),
+                    upper_bound.clone(),
+                    expected_cardinality.max(expected_ndv),
+                    expected_ndv,
+                )
+            })
+        };
+
+        Self {
+            left_matched_bucket: matched_bucket(counts.left_matched_rows),
+            right_matched_bucket: matched_bucket(counts.right_matched_rows),
+            output_bucket,
+            counts,
+        }
+    }
+}
+
+struct JoinAccumulator<T> {
+    counts: JoinCounts,
+    left_matched_buckets: Vec<TypedHistogramBucket<T>>,
+    right_matched_buckets: Vec<TypedHistogramBucket<T>>,
+    output_buckets: Vec<TypedHistogramBucket<T>>,
+}
+
+impl<T: Value> JoinAccumulator<T> {
+    fn new() -> Self {
+        Self {
+            counts: JoinCounts::zero(),
+            left_matched_buckets: Vec::new(),
+            right_matched_buckets: Vec::new(),
+            output_buckets: Vec::new(),
+        }
+    }
+
+    fn add(&mut self, contribution: JoinContribution<T>) {
+        let JoinContribution {
+            counts,
+            left_matched_bucket,
+            right_matched_bucket,
+            output_bucket,
+        } = contribution;
+
+        self.counts.add(counts);
+        self.left_matched_buckets.extend(left_matched_bucket);
+        self.right_matched_buckets.extend(right_matched_bucket);
+        self.output_buckets.extend(output_bucket);
+    }
+
+    fn finish(self, left: &TypedHistogram<T>, right: &TypedHistogram<T>) -> JoinEstimation {
+        let Self {
+            counts,
+            left_matched_buckets,
+            right_matched_buckets,
+            output_buckets,
+        } = self;
+        let accuracy = left.accuracy && right.accuracy;
+        let avg_spacing = left.avg_spacing.or(right.avg_spacing);
+
+        JoinEstimation {
+            cardinality: counts.cardinality,
+            ndv: counts.ndv,
+            left_matched_rows: counts.left_matched_rows.min(left.num_values()),
+            right_matched_rows: counts.right_matched_rows.min(right.num_values()),
+            left_estimated_matched_rows: counts.left_estimated_matched_rows.min(left.num_values()),
+            right_estimated_matched_rows: counts
+                .right_estimated_matched_rows
+                .min(right.num_values()),
+            left_matched_histogram: build_histogram(left_matched_buckets, accuracy, avg_spacing),
+            right_matched_histogram: build_histogram(right_matched_buckets, accuracy, avg_spacing),
+            histogram: build_histogram(output_buckets, accuracy, avg_spacing),
+        }
+    }
+}
+
+fn build_histogram<T: Value>(
+    buckets: Vec<TypedHistogramBucket<T>>,
+    accuracy: bool,
+    avg_spacing: Option<f64>,
+) -> Option<Histogram> {
+    (!buckets.is_empty()).then(|| {
+        T::into_histogram(TypedHistogram {
+            accuracy,
+            row_scale: 1.0,
+            buckets,
+            avg_spacing,
+        })
+    })
+}
+
+impl<T: Value> TypedHistogram<T> {
+    pub fn estimate_join(&self, other: &TypedHistogram<T>) -> JoinEstimation {
+        let mut accumulator = JoinAccumulator::new();
+
+        for left_bucket in &self.buckets {
+            for right_bucket in &other.buckets {
+                accumulator.add(left_bucket.estimate_join_contribution(
+                    right_bucket,
+                    self.row_scale,
+                    other.row_scale,
+                ));
+            }
+        }
+
+        accumulator.finish(self, other)
+    }
+}
+
+impl<L> TypedHistogram<L> {
+    pub(crate) fn estimate_join_as<R>(
+        &self,
+        other: &TypedHistogram<R>,
+        return_type: NumericHistogramType,
+    ) -> Result<JoinEstimation>
+    where
+        L: NumericValue,
+        R: NumericValue,
+    {
+        let mut counts = JoinCounts::zero();
+
+        for left_bucket in &self.buckets {
+            for right_bucket in &other.buckets {
+                counts.add(estimate_join_contribution_from_ranges(
+                    left_bucket,
+                    right_bucket,
+                    self.row_scale,
+                    other.row_scale,
+                    return_type.project_range(&left_bucket.lower_bound, &left_bucket.upper_bound),
+                    return_type.project_range(&right_bucket.lower_bound, &right_bucket.upper_bound),
+                )?);
+            }
+        }
+
+        Ok(counts.into_estimation(self.num_values(), other.num_values()))
+    }
+}
+
+fn estimate_join_contribution_from_ranges<L, R>(
+    left: &TypedHistogramBucket<L>,
+    right: &TypedHistogramBucket<R>,
+    left_row_scale: f64,
+    right_row_scale: f64,
+    left_bounds: NumericRange,
+    right_bounds: NumericRange,
+) -> Result<JoinCounts> {
+    let Some(overlap_bounds) = left_bounds.intersection(right_bounds)? else {
+        return Ok(JoinCounts::zero());
+    };
+    let intersection = if overlap_bounds.is_singleton() {
+        Intersection::Point
+    } else {
+        Intersection::Range
+    };
+    let singleton_match =
+        left_bounds.is_singleton() && right_bounds.is_singleton() && left_bounds == right_bounds;
+    let coverage = match intersection {
+        Intersection::None => None,
+        Intersection::Point => OverlapCoverage::point(left.num_distinct, right.num_distinct),
+        Intersection::Range => {
+            match (
+                overlap_bounds.width(),
+                left_bounds.width(),
+                right_bounds.width(),
+            ) {
+                (Some(overlap_width), Some(left_width), Some(right_width))
+                    if overlap_width > 0.0 && left_width > 0.0 && right_width > 0.0 =>
+                {
+                    let left = overlap_width / left_width;
+                    let right = overlap_width / right_width;
+                    debug_assert!(
+                        (0.0..=1.0).contains(&left),
+                        "invalid left overlap coverage: {left:?}"
+                    );
+                    debug_assert!(
+                        (0.0..=1.0).contains(&right),
+                        "invalid right overlap coverage: {right:?}"
+                    );
+                    Some(OverlapCoverage { left, right })
+                }
+                _ => None,
+            }
+        }
+    };
+    Ok(estimate_join_counts(
+        left,
+        right,
+        left_row_scale,
+        right_row_scale,
+        intersection,
+        singleton_match,
+        coverage,
+    ))
 }
 
 impl<T: Value> TypedHistogramBucket<T> {
@@ -107,116 +370,149 @@ impl<T: Value> TypedHistogramBucket<T> {
             return JoinContribution::zero();
         }
 
-        let (Some(lower_bound), Some(upper_bound)) = self.bounds().intersection(&other.bounds())
-        else {
+        let Some(overlap_bounds) = self.bounds().intersection(&other.bounds()) else {
             return JoinContribution::zero();
         };
-        if self.is_singleton_value()
+        let singleton_match = self.is_singleton_value()
             && other.is_singleton_value()
-            && T::compare(&self.lower_bound, &other.lower_bound) == Ordering::Equal
-        {
-            let cardinality =
-                (self.num_values * left_row_scale) * (other.num_values * right_row_scale);
-            return JoinContribution {
-                cardinality: StatEstimate::exact(cardinality),
-                ndv: NdvEstimate::exact(1.0),
-                bucket: Some(TypedHistogramBucket::new(
-                    lower_bound.clone(),
-                    upper_bound.clone(),
-                    cardinality,
-                    1.0,
-                )),
-            };
-        }
-
-        let upper_cardinality =
-            (self.num_values * left_row_scale) * (other.num_values * right_row_scale);
+            && T::compare(&self.lower_bound, &other.lower_bound) == Ordering::Equal;
         let coverage = T::estimate_overlap_coverages(self, other);
-        let (expected_cardinality, expected_ndv) = coverage
-            .and_then(|coverage| {
-                self.estimate_expected_join_counts(
-                    other,
-                    coverage,
-                    left_row_scale,
-                    right_row_scale,
-                    upper_cardinality,
-                )
-            })
-            .unwrap_or((0.0, 0.0));
+        let counts = estimate_join_counts(
+            self,
+            other,
+            left_row_scale,
+            right_row_scale,
+            intersection,
+            singleton_match,
+            coverage,
+        );
+        JoinContribution::from_counts(counts, overlap_bounds, singleton_match)
+    }
+}
 
-        let upper_ndv = match intersection {
-            Intersection::None => 0.0,
-            Intersection::Point => 1.0,
-            Intersection::Range => coverage
-                .map(|coverage| {
-                    let left_rows = self.num_values * left_row_scale * coverage.left;
-                    let right_rows = other.num_values * right_row_scale * coverage.right;
-                    let left_distinct = self.num_distinct * coverage.left;
-                    let right_distinct = other.num_distinct * coverage.right;
-                    left_distinct
-                        .min(right_distinct)
-                        .min(left_rows)
-                        .min(right_rows)
-                })
-                .unwrap_or_else(|| self.num_distinct.min(other.num_distinct)),
+fn estimate_join_counts<L, R>(
+    left: &TypedHistogramBucket<L>,
+    right: &TypedHistogramBucket<R>,
+    left_row_scale: f64,
+    right_row_scale: f64,
+    intersection: Intersection,
+    singleton_match: bool,
+    coverage: Option<OverlapCoverage>,
+) -> JoinCounts {
+    if intersection == Intersection::None {
+        return JoinCounts::zero();
+    }
+
+    let upper_cardinality =
+        (left.num_values * left_row_scale) * (right.num_values * right_row_scale);
+    if singleton_match {
+        let left_matched_rows = left.num_values * left_row_scale;
+        let right_matched_rows = right.num_values * right_row_scale;
+        return JoinCounts {
+            cardinality: StatEstimate::exact(upper_cardinality),
+            ndv: NdvEstimate::exact(1.0),
+            left_matched_rows,
+            right_matched_rows,
+            left_estimated_matched_rows: left_matched_rows,
+            right_estimated_matched_rows: right_matched_rows,
         };
+    }
 
-        debug_assert!(
-            expected_cardinality <= upper_cardinality,
-            "join expected cardinality exceeds cartesian upper: {expected_cardinality:?} > {upper_cardinality:?}"
-        );
-        debug_assert!(
-            expected_ndv <= upper_ndv,
-            "join expected ndv exceeds intersection upper: {expected_ndv:?} > {upper_ndv:?}"
-        );
-
-        let bucket = (expected_cardinality > 0.0 && expected_ndv > 0.0).then(|| {
-            TypedHistogramBucket::new(
-                lower_bound.clone(),
-                upper_bound.clone(),
-                expected_cardinality.max(expected_ndv),
-                expected_ndv,
+    let expected = coverage
+        .and_then(|coverage| {
+            estimate_expected_join_counts(
+                left,
+                right,
+                coverage,
+                left_row_scale,
+                right_row_scale,
+                upper_cardinality,
             )
-        });
+        })
+        .unwrap_or_default();
+    let upper_ndv = match intersection {
+        Intersection::None => 0.0,
+        Intersection::Point => 1.0,
+        Intersection::Range => coverage
+            .map(|coverage| {
+                let left_rows = left.num_values * left_row_scale * coverage.left;
+                let right_rows = right.num_values * right_row_scale * coverage.right;
+                let left_distinct = left.num_distinct * coverage.left;
+                let right_distinct = right.num_distinct * coverage.right;
+                left_distinct
+                    .min(right_distinct)
+                    .min(left_rows)
+                    .min(right_rows)
+            })
+            .unwrap_or_else(|| left.num_distinct.min(right.num_distinct)),
+    };
 
-        JoinContribution {
-            cardinality: StatEstimate::new(0.0, expected_cardinality, upper_cardinality),
-            ndv: NdvEstimate::new(expected_ndv, upper_ndv),
-            bucket,
-        }
+    debug_assert!(
+        expected.cardinality <= upper_cardinality,
+        "join expected cardinality exceeds cartesian upper: {:?} > {upper_cardinality:?}",
+        expected.cardinality
+    );
+    debug_assert!(
+        expected.ndv <= upper_ndv,
+        "join expected ndv exceeds intersection upper: {:?} > {upper_ndv:?}",
+        expected.ndv
+    );
+
+    JoinCounts {
+        cardinality: StatEstimate::new(0.0, expected.cardinality, upper_cardinality),
+        ndv: NdvEstimate::new(expected.ndv, upper_ndv),
+        left_matched_rows: expected.left_matched_rows,
+        right_matched_rows: expected.right_matched_rows,
+        left_estimated_matched_rows: expected.left_matched_rows,
+        right_estimated_matched_rows: expected.right_matched_rows,
     }
+}
 
-    fn estimate_expected_join_counts(
-        &self,
-        other: &TypedHistogramBucket<T>,
-        coverage: OverlapCoverage,
-        left_row_scale: f64,
-        right_row_scale: f64,
-        upper_cardinality: f64,
-    ) -> Option<(f64, f64)> {
-        let left_rows = self.num_values * left_row_scale * coverage.left;
-        let right_rows = other.num_values * right_row_scale * coverage.right;
-        let left_ndv =
-            (self.expected_distinct_after_row_scale(left_row_scale) * coverage.left).min(left_rows);
-        let right_ndv = (other.expected_distinct_after_row_scale(right_row_scale) * coverage.right)
-            .min(right_rows);
-        let max_ndv = left_ndv.max(right_ndv);
-        if max_ndv <= 0.0 {
-            return None;
-        }
-        // The equality denominator is a value count. Fractional NDV estimates
-        // below one would otherwise produce more rows than the cartesian upper.
-        let effective_max_ndv = max_ndv.max(1.0);
-
-        let match_factor = coverage.left * coverage.right / effective_max_ndv;
-        debug_assert!(
-            (0.0..=1.0).contains(&match_factor),
-            "invalid join match factor: {match_factor:?}"
-        );
-        let expected_cardinality =
-            (upper_cardinality / effective_max_ndv) * coverage.left * coverage.right;
-        Some((expected_cardinality, left_ndv.min(right_ndv)))
+fn estimate_expected_join_counts<L, R>(
+    left: &TypedHistogramBucket<L>,
+    right: &TypedHistogramBucket<R>,
+    coverage: OverlapCoverage,
+    left_row_scale: f64,
+    right_row_scale: f64,
+    upper_cardinality: f64,
+) -> Option<ExpectedJoinCounts> {
+    let left_rows = left.num_values * left_row_scale * coverage.left;
+    let right_rows = right.num_values * right_row_scale * coverage.right;
+    let left_ndv =
+        (left.expected_distinct_after_row_scale(left_row_scale) * coverage.left).min(left_rows);
+    let right_ndv =
+        (right.expected_distinct_after_row_scale(right_row_scale) * coverage.right).min(right_rows);
+    let matched_ndv = left_ndv.min(right_ndv);
+    let max_ndv = left_ndv.max(right_ndv);
+    if max_ndv <= 0.0 {
+        return None;
     }
+    // The equality denominator is a value count. Fractional NDV estimates
+    // below one would otherwise produce more rows than the cartesian upper.
+    let effective_max_ndv = max_ndv.max(1.0);
+    let match_factor = coverage.left * coverage.right / effective_max_ndv;
+    debug_assert!(
+        (0.0..=1.0).contains(&match_factor),
+        "invalid join match factor: {match_factor:?}"
+    );
+    let expected_cardinality =
+        (upper_cardinality / effective_max_ndv) * coverage.left * coverage.right;
+    let matched_rows = |rows: f64, ndv: f64| {
+        if ndv <= 0.0 {
+            0.0
+        } else {
+            rows * matched_ndv / ndv
+        }
+    };
+    Some(ExpectedJoinCounts {
+        cardinality: expected_cardinality,
+        ndv: matched_ndv,
+        // Range overlap only identifies the rows whose values may match. Scale
+        // those rows by the overlapping value-set fraction as well: otherwise
+        // a sparse bucket is treated as covering every value in its range.
+        left_matched_rows: matched_rows(left_rows, left_ndv),
+        right_matched_rows: matched_rows(right_rows, right_ndv),
+    })
 }
 
 #[cfg(test)]
@@ -241,6 +537,22 @@ mod tests {
         assert_eq!(left.estimate_join(&right), JoinEstimation {
             cardinality: StatEstimate::new(0.0, 1.0, 100.0),
             ndv: NdvEstimate::new(1.0, 1.0),
+            left_matched_rows: 1.0,
+            right_matched_rows: 1.0,
+            left_estimated_matched_rows: 1.0,
+            right_estimated_matched_rows: 1.0,
+            left_matched_histogram: Some(crate::Histogram::UInt(TypedHistogram {
+                accuracy: true,
+                row_scale: 1.0,
+                buckets: vec![TypedHistogramBucket::new(10, 10, 1.0, 1.0)],
+                avg_spacing: None,
+            })),
+            right_matched_histogram: Some(crate::Histogram::UInt(TypedHistogram {
+                accuracy: true,
+                row_scale: 1.0,
+                buckets: vec![TypedHistogramBucket::new(10, 10, 1.0, 1.0)],
+                avg_spacing: None,
+            })),
             histogram: Some(crate::Histogram::UInt(TypedHistogram {
                 accuracy: true,
                 row_scale: 1.0,
@@ -251,7 +563,7 @@ mod tests {
     }
 
     #[test]
-    fn test_typed_histogram_estimate_join_is_exact_for_singleton_buckets() {
+    fn test_typed_histogram_estimate_join_models_singleton_bucket_matches() {
         let left = TypedHistogram {
             accuracy: true,
             row_scale: 1.0,
@@ -268,6 +580,22 @@ mod tests {
         assert_eq!(left.estimate_join(&right), JoinEstimation {
             cardinality: StatEstimate::exact(12.0),
             ndv: NdvEstimate::exact(1.0),
+            left_matched_rows: 4.0,
+            right_matched_rows: 3.0,
+            left_estimated_matched_rows: 4.0,
+            right_estimated_matched_rows: 3.0,
+            left_matched_histogram: Some(crate::Histogram::Int(TypedHistogram {
+                accuracy: true,
+                row_scale: 1.0,
+                buckets: vec![TypedHistogramBucket::new(10, 10, 4.0, 1.0)],
+                avg_spacing: None,
+            })),
+            right_matched_histogram: Some(crate::Histogram::Int(TypedHistogram {
+                accuracy: true,
+                row_scale: 1.0,
+                buckets: vec![TypedHistogramBucket::new(10, 10, 3.0, 1.0)],
+                avg_spacing: None,
+            })),
             histogram: Some(crate::Histogram::Int(TypedHistogram {
                 accuracy: true,
                 row_scale: 1.0,
@@ -332,75 +660,6 @@ mod tests {
     }
 
     #[test]
-    fn test_typed_histogram_estimate_join_uses_scaled_expected_ndv_for_dense_ranges() {
-        let orders = TypedHistogram {
-            accuracy: false,
-            row_scale: 1.0,
-            buckets: vec![TypedHistogramBucket::new(
-                1_i64,
-                6_000_000_i64,
-                57_356.61,
-                57_356.61,
-            )],
-            avg_spacing: None,
-        };
-        let mut lineitem = TypedHistogram {
-            accuracy: false,
-            row_scale: 1.0,
-            buckets: vec![TypedHistogramBucket::new(
-                1_i64,
-                6_000_000_i64,
-                6_001_215.0,
-                1_601_092.0,
-            )],
-            avg_spacing: None,
-        };
-        lineitem.scale_counts(2_000_405.0 / 6_001_215.0);
-
-        let estimation = orders.estimate_join(&lineitem);
-
-        assert!((estimation.cardinality.expected - 91_728.1213324728).abs() < 1e-6);
-        assert!((estimation.ndv.expected.unwrap() - 57_356.61).abs() < 1e-9);
-    }
-
-    #[test]
-    fn test_typed_histogram_estimate_join_builds_output_buckets_from_contributions() {
-        let left = TypedHistogram {
-            accuracy: true,
-            row_scale: 1.0,
-            buckets: vec![
-                TypedHistogramBucket::new(1_u64, 1_u64, 2.0, 1.0),
-                TypedHistogramBucket::new(3_u64, 3_u64, 4.0, 1.0),
-            ],
-            avg_spacing: None,
-        };
-        let right = TypedHistogram {
-            accuracy: true,
-            row_scale: 1.0,
-            buckets: vec![
-                TypedHistogramBucket::new(1_u64, 1_u64, 5.0, 1.0),
-                TypedHistogramBucket::new(2_u64, 2_u64, 7.0, 1.0),
-                TypedHistogramBucket::new(3_u64, 3_u64, 6.0, 1.0),
-            ],
-            avg_spacing: None,
-        };
-
-        assert_eq!(left.estimate_join(&right), JoinEstimation {
-            cardinality: StatEstimate::exact(34.0),
-            ndv: NdvEstimate::exact(2.0),
-            histogram: Some(crate::Histogram::UInt(TypedHistogram {
-                accuracy: true,
-                row_scale: 1.0,
-                buckets: vec![
-                    TypedHistogramBucket::new(1, 1, 10.0, 1.0),
-                    TypedHistogramBucket::new(3, 3, 24.0, 1.0),
-                ],
-                avg_spacing: None,
-            })),
-        });
-    }
-
-    #[test]
     fn test_typed_histogram_estimate_join_converts_string_output_to_bytes_histogram() {
         let left = TypedHistogram {
             accuracy: true,
@@ -428,6 +687,32 @@ mod tests {
         assert_eq!(left.estimate_join(&right), JoinEstimation {
             cardinality: StatEstimate::exact(6.0),
             ndv: NdvEstimate::exact(1.0),
+            left_matched_rows: 2.0,
+            right_matched_rows: 3.0,
+            left_estimated_matched_rows: 2.0,
+            right_estimated_matched_rows: 3.0,
+            left_matched_histogram: Some(crate::Histogram::Bytes(TypedHistogram {
+                accuracy: true,
+                row_scale: 1.0,
+                buckets: vec![TypedHistogramBucket::new(
+                    b"a".to_vec(),
+                    b"a".to_vec(),
+                    2.0,
+                    1.0,
+                )],
+                avg_spacing: None,
+            })),
+            right_matched_histogram: Some(crate::Histogram::Bytes(TypedHistogram {
+                accuracy: true,
+                row_scale: 1.0,
+                buckets: vec![TypedHistogramBucket::new(
+                    b"a".to_vec(),
+                    b"a".to_vec(),
+                    3.0,
+                    1.0,
+                )],
+                avg_spacing: None,
+            })),
             histogram: Some(crate::Histogram::Bytes(TypedHistogram {
                 accuracy: true,
                 row_scale: 1.0,

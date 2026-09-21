@@ -15,12 +15,15 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::types::DataType;
 
 use crate::MetadataRef;
 use crate::binder::JoinPredicate;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::optimizers::operator::EquivalentConstantsVisitor;
 use crate::optimizer::optimizers::operator::InferFilterOptimizer;
 use crate::optimizer::optimizers::operator::JoinProperty;
@@ -31,6 +34,7 @@ use crate::optimizer::optimizers::rule::can_filter_null;
 use crate::optimizer::optimizers::rule::constant::false_constant;
 use crate::optimizer::optimizers::rule::constant::is_falsy;
 use crate::optimizer::optimizers::rule::convert_mark_to_semi_join;
+use crate::optimizer::optimizers::rule::outer_join_to_anti_join;
 use crate::optimizer::optimizers::rule::outer_join_to_inner_join;
 use crate::optimizer::optimizers::rule::rewrite_predicates;
 use crate::plans::ComparisonOp;
@@ -45,15 +49,14 @@ use crate::plans::ScalarExpr;
 use crate::plans::VisitorMut;
 
 pub struct RulePushDownFilterJoin {
-    id: RuleID,
     matchers: Vec<Matcher>,
     metadata: MetadataRef,
+    stat_context: StatContext,
 }
 
 impl RulePushDownFilterJoin {
-    pub fn new(metadata: MetadataRef) -> Self {
+    pub fn new(metadata: MetadataRef, stat_context: StatContext) -> Self {
         Self {
-            id: RuleID::PushDownFilterJoin,
             // Filter
             //  \
             //   Join
@@ -68,20 +71,29 @@ impl RulePushDownFilterJoin {
                 }],
             }],
             metadata,
+            stat_context,
         }
     }
 }
 
 impl Rule for RulePushDownFilterJoin {
     fn id(&self) -> RuleID {
-        self.id
+        RuleID::PushDownFilterJoin
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        // First, try to convert outer join to inner join
-        let (s_expr, outer_to_inner) = outer_join_to_inner_join(s_expr, self.metadata.clone())?;
+        // First, try to convert the outer join exclusion pattern to an anti join.
+        if let Some(mut result) = outer_join_to_anti_join(s_expr, self.metadata.clone())? {
+            result.set_applied_rule(&self.id());
+            state.add_result(result);
+            return Ok(());
+        }
 
-        // Second, check if can convert mark join to semi join
+        // Second, try to convert outer join to inner join
+        let (s_expr, outer_to_inner) =
+            outer_join_to_inner_join(s_expr, self.metadata.clone(), &self.stat_context)?;
+
+        // Third, check if can convert mark join to semi join
         let (s_expr, mark_to_semi) = convert_mark_to_semi_join(&s_expr, self.metadata.clone())?;
         if s_expr.plan().rel_op() != RelOp::Filter {
             state.add_result(s_expr);
@@ -94,12 +106,16 @@ impl Rule for RulePushDownFilterJoin {
         }
 
         // Finally, push down filter to join.
-        let (need_push, mut result) = try_push_down_filter_join(&s_expr, self.metadata.clone())?;
+        let (need_push, mut result) = try_push_down_filter_join(
+            &s_expr,
+            self.metadata.clone(),
+            &self.stat_context.function_context,
+        )?;
         if !need_push && !outer_to_inner && !mark_to_semi {
             return Ok(());
         }
 
-        result.set_applied_rule(&self.id);
+        result.set_applied_rule(&self.id());
         state.add_result(result);
 
         Ok(())
@@ -110,7 +126,11 @@ impl Rule for RulePushDownFilterJoin {
     }
 }
 
-fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(bool, SExpr)> {
+fn try_push_down_filter_join(
+    s_expr: &SExpr,
+    metadata: MetadataRef,
+    func_ctx: &FunctionContext,
+) -> Result<(bool, SExpr)> {
     // Extract or predicates from Filter to push down them to join.
     // For example: `select * from t1, t2 where (t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)`
     // The predicate will be rewritten to `((t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)) and (t1.a=1 or t1.a=2) and (t2.b=2 or t2.b=1)`
@@ -161,6 +181,7 @@ fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(b
                         &left_prop.output_columns,
                         &join.join_type,
                         metadata.clone(),
+                        func_ctx,
                     )? {
                         left_push_down.push(predicate);
                     } else {
@@ -180,6 +201,7 @@ fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(b
                         &right_prop.output_columns,
                         &join.join_type,
                         metadata.clone(),
+                        func_ctx,
                     )? {
                         right_push_down.push(predicate);
                     } else {
@@ -220,11 +242,14 @@ fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(b
         for equi_condition in join.equi_conditions.iter() {
             let left = equi_condition.left.clone();
             let right = equi_condition.right.clone();
+            let return_type =
+                ScalarExpr::passthrough_nullable_type(DataType::Boolean, [&left, &right]);
             push_down_predicates.push(ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
                 func_name: String::from(ComparisonOp::Equal.to_func_name()),
                 params: vec![],
                 arguments: vec![left, right],
+                return_type: Box::new(return_type),
             }));
         }
         join.equi_conditions.clear();

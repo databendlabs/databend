@@ -3,11 +3,13 @@ query T
 select "Engine" as engine from system.engines order by engine
 ----
 DELTA
+DYNAMIC_TABLE
 FUSE
 ICEBERG
+MATERIALIZED_VIEW
 MEMORY
 NULL
-PROXY
+PAIMON
 RANDOM
 STREAM
 VIEW

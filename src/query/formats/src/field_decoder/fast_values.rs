@@ -723,10 +723,8 @@ pub fn skip_to_next_row<R: AsRef<[u8]>>(reader: &mut Cursor<R>, mut balance: i32
                         balance -= 1;
                     }
                 }
-                b'(' => {
-                    if !quoted {
-                        balance += 1;
-                    }
+                b'(' if !quoted => {
+                    balance += 1;
                 }
                 _ => {}
             }

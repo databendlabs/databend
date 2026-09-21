@@ -16,13 +16,14 @@ use std::io::Write;
 
 use databend_common_expression::Domain;
 use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::type_check;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
+use databend_common_expression_test_support::parse_raw_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_sql_test_support::parse_raw_expr;
 use databend_storages_common_index::eliminate_cast;
 use goldenfile::Mint;
 
@@ -30,7 +31,7 @@ pub fn parse_expr(text: &str, columns: &[(&str, DataType)]) -> Expr<String> {
     let raw_expr = parse_raw_expr(text, columns, &BUILTIN_FUNCTIONS);
     let raw_expr = raw_expr.project_column_ref(|i| columns[*i].0.to_string());
     let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
-    type_check::rewrite_function_to_cast(expr)
+    type_check::rewrite_function_to_cast(expr, &BUILTIN_FUNCTIONS)
 }
 
 #[test]
@@ -64,7 +65,7 @@ fn run_text(file: &mut impl Write, text: &str, ctx: &[(&str, DataType, Domain)])
         .iter()
         .map(|(name, _, domain)| (name.to_string(), domain.clone()))
         .collect();
-    match eliminate_cast(&expr, input_domains) {
+    match eliminate_cast(&expr, input_domains, &FunctionContext::default()) {
         Some(new_expr) => {
             writeln!(file, "rewrited  : {new_expr}").unwrap(); // typos:disable-line
         }

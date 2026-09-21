@@ -19,6 +19,7 @@ use std::iter::once;
 use std::sync::Arc;
 
 use bstr::ByteSlice;
+use chrono_tz::Tz;
 use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
 use databend_common_expression::Column;
@@ -64,6 +65,7 @@ use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::timestamp::MICROS_PER_SEC;
+use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
@@ -76,8 +78,7 @@ use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_io::Interval;
-use jiff::Timestamp;
-use jiff::tz::TimeZone;
+use databend_common_timezone::components_from_timestamp;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
 use jsonb::Value as JsonbValue;
@@ -116,7 +117,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                 output.commit_row();
                 return;
             }
-            // Variant value may be an invalid JSON, convert them to string and then parse.
+            if !ctx.func_ctx.enable_parse_json_variant_reparse {
+                output.put_slice(s);
+                output.commit_row();
+                return;
+            }
+            // Legacy behavior: variant value may be an invalid JSONB, convert it to string and
+            // then parse.
             let val = RawJsonb::new(s).to_string();
             if let Err(err) = parse_owned_jsonb_with_buf(val.as_bytes(), &mut output.data)
                 && !ctx.func_ctx.disable_variant_check
@@ -156,7 +163,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                 output.push_null();
                 return;
             }
-            // Variant value may be an invalid JSON, convert them to string and then parse.
+            if !ctx.func_ctx.enable_parse_json_variant_reparse {
+                output.push(s);
+                return;
+            }
+            // Legacy behavior: variant value may be an invalid JSONB, convert it to string and
+            // then parse.
             let val = RawJsonb::new(s).to_string();
             match parse_owned_jsonb_with_buf(val.as_bytes(), &mut output.builder.data) {
                 Ok(_) => {
@@ -1217,7 +1229,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Value::Column(col) => {
                         let validity = match col {
                             Column::Null { len } => Some(Bitmap::new_constant(false, *len)),
-                            Column::Nullable(box nullable_column) => {
+                            Column::Nullable(deref!(nullable_column)) => {
                                 Some(nullable_column.validity.clone())
                             }
                             _ => None,
@@ -1263,7 +1275,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             Value::Column(col) => {
                 let validity = match col {
                     Column::Null { len } => Bitmap::new_constant(false, len),
-                    Column::Nullable(box ref nullable_column) => nullable_column.validity.clone(),
+                    Column::Nullable(deref!(ref nullable_column)) => {
+                        nullable_column.validity.clone()
+                    }
                     _ => Bitmap::new_constant(true, col.len()),
                 };
                 let new_col = cast_scalars_to_variants(col.iter(), &ctx.func_ctx.tz, None);
@@ -3499,7 +3513,7 @@ fn object_pick_or_delete_fn(
 
 fn cast_to_date(
     val: &[u8],
-    tz: &TimeZone,
+    tz: &Tz,
     enable_auto_detect_datetime_format: bool,
 ) -> Result<Option<i32>, jsonb::Error> {
     let value = jsonb::from_slice(val)?;
@@ -3517,16 +3531,16 @@ fn cast_to_date(
 
 fn cast_to_timestamp(
     val: &[u8],
-    tz: &TimeZone,
+    tz: &Tz,
     enable_auto_detect_datetime_format: bool,
 ) -> Result<Option<i64>, jsonb::Error> {
     let value = jsonb::from_slice(val)?;
     match value {
         JsonbValue::Null => Ok(None),
         JsonbValue::Timestamp(ts) => {
-            let mut val = ts.value;
-            clamp_timestamp(&mut val);
-            Ok(Some(val))
+            let mut value = ts.value;
+            clamp_timestamp(&mut value);
+            Ok(Some(value))
         }
         JsonbValue::String(s) => {
             parse_timestamp_with_auto(&s, tz, enable_auto_detect_datetime_format)
@@ -3544,23 +3558,25 @@ fn cast_to_timestamp(
 
 fn cast_to_timestamp_tz(
     val: &[u8],
-    tz: &TimeZone,
+    tz: &Tz,
     enable_auto_detect_datetime_format: bool,
 ) -> Result<Option<timestamp_tz>, jsonb::Error> {
     let value = jsonb::from_slice(val)?;
     match value {
         JsonbValue::Null => Ok(None),
-        JsonbValue::TimestampTz(ts) => Ok(Some(timestamp_tz::new(ts.value, ts.offset))),
+        JsonbValue::TimestampTz(ts) => {
+            check_timestamp(ts.value).map_err(jsonb::Error::Message)?;
+            Ok(Some(timestamp_tz::new(ts.value, ts.offset)))
+        }
         JsonbValue::Timestamp(ts) => {
             let mut value = ts.value;
             clamp_timestamp(&mut value);
-            let timestamp = Timestamp::from_microsecond(value).map_err(|err| {
-                jsonb::Error::Message(format!("unable to cast to type `TIMESTAMP_TZ` {}.", err))
-            })?;
-            let offset = tz.to_offset(timestamp);
+            let components = components_from_timestamp(value, tz);
+            let offset = components.offset_seconds;
             Ok(Some(timestamp_tz::new(
-                value - (offset.seconds() as i64 * MICROS_PER_SEC),
-                offset.seconds(),
+                check_timestamp(value - i64::from(offset) * MICROS_PER_SEC)
+                    .map_err(jsonb::Error::Message)?,
+                offset,
             )))
         }
         JsonbValue::String(s) => {

@@ -28,7 +28,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
-use databend_common_expression::date_helper::DateConverter;
 use databend_common_expression::expr::*;
 use databend_common_expression::filter_helper::FilterHelpers;
 use databend_common_expression::infer_table_schema;
@@ -39,6 +38,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::VariantType;
+use databend_common_expression::types::timestamp::timestamp_to_rfc3339_utc;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -46,7 +46,6 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::plans::task_run_schema;
 use databend_common_storages_system::AsyncOneBlockSystemTable;
 use databend_common_storages_system::AsyncSystemTable;
-use jiff::tz::TimeZone;
 
 pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock> {
     let mut name = Vec::with_capacity(task_runs.len());
@@ -162,16 +161,14 @@ impl AsyncSystemTable for TaskHistoryTable {
                 if col_name == "scheduled_time"
                     && let Scalar::Timestamp(s) = scalar
                 {
-                    scheduled_time_end =
-                        Some(s.to_timestamp(&TimeZone::UTC).timestamp().to_string());
+                    scheduled_time_end = Some(timestamp_to_rfc3339_utc(*s));
                 }
             });
             find_gt_filter(&expr, &mut |col_name, scalar| {
                 if col_name == "scheduled_time"
                     && let Scalar::Timestamp(s) = scalar
                 {
-                    scheduled_time_start =
-                        Some(s.to_timestamp(&TimeZone::UTC).timestamp().to_string());
+                    scheduled_time_start = Some(timestamp_to_rfc3339_utc(*s));
                 }
             });
         }
@@ -313,15 +310,16 @@ fn extract_leveled_strings(
     let leveled_results =
         FilterHelpers::find_leveled_eq_filters(expr, level_names, func_ctx, &BUILTIN_FUNCTIONS)?;
 
-    for (i, scalars) in leveled_results.iter().enumerate() {
-        for r in scalars.iter() {
+    for (i, scalars) in leveled_results.into_iter().enumerate() {
+        for r in scalars {
+            let data_type = r.as_ref().infer_data_type();
             let e = Expr::Constant(Constant {
                 span: None,
-                scalar: r.clone(),
-                data_type: r.as_ref().infer_data_type(),
+                scalar: r,
+                data_type,
             });
 
-            if let Ok(s) = check_string::<usize>(None, func_ctx, &e, &BUILTIN_FUNCTIONS) {
+            if let Ok(s) = check_string::<usize>(None, func_ctx, e, &BUILTIN_FUNCTIONS) {
                 match i {
                     0 => res1.push(s),
                     1 => res2.push(s),

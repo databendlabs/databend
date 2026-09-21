@@ -106,6 +106,7 @@ async fn handle(
     };
     let create_query = ShowCreateTableInterpreter::show_create_query(
         catalog.as_ref(),
+        &tenant,
         db.name(),
         tbl.as_ref(),
         &settings,

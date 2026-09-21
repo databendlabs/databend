@@ -81,7 +81,8 @@ impl AccumulatingTransform for BlockBuilder {
             .unwrap();
         if self.state.file_path != batch.start_pos.path {
             self.state.file_path = batch.start_pos.path.clone();
-            self.state.file_full_path = format!("{}{}", self.ctx.stage_root, batch.start_pos.path)
+            self.state.file_content_key = batch.start_pos.content_key.clone();
+            self.state.file_last_modified = batch.start_pos.last_modified;
         }
         let num_rows = self.state.num_rows;
         self.decoder.add(&mut self.state, batch)?;

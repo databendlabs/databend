@@ -51,8 +51,13 @@ pub type BloomIndexFilterCache = HybridCache<FilterImpl>;
 /// In memory object cache of parquet FileMetaData of bloom index data
 pub type BloomIndexMetaCache = HybridCache<BloomIndexMeta>;
 
+/// Count-limited cache of complete persisted raw-bundle footers.
 pub type InvertedIndexMetaCache = HybridCache<InvertedIndexMeta>;
-pub type InvertedIndexFileCache = HybridCache<InvertedIndexFile>;
+/// Byte-limited cache of term dictionaries and small fieldnorm/fast components.
+/// Large `.fieldnorm` / `.fast` files are stored as payload pages instead.
+pub type InvertedIndexLookupCache = HybridCache<InvertedIndexLookupBytes>;
+/// Byte-limited cache of postings, positions, store, and other payload pages.
+pub type InvertedIndexPayloadCache = HybridCache<InvertedIndexPayloadBytes>;
 
 pub type VectorIndexMetaCache = HybridCache<VectorIndexMeta>;
 pub type VectorIndexFileCache = HybridCache<VectorIndexFile>;
@@ -67,7 +72,46 @@ pub type ParquetMetaDataCache = InMemoryLruCache<ParquetMetaData>;
 
 pub type PrunePartitionsCache = InMemoryLruCache<(PartStatistics, Partitions)>;
 
-pub type IcebergTableCache = InMemoryLruCache<(Arc<dyn Table>, AtomicBool, Instant)>;
+pub struct IcebergTableCacheValue {
+    table: Arc<dyn Table>,
+    refreshing: AtomicBool,
+    loaded_at: Instant,
+    credential_refresh_at: Option<Instant>,
+}
+
+impl IcebergTableCacheValue {
+    pub fn new(table: Arc<dyn Table>, credential_refresh_at: Option<Instant>) -> Self {
+        Self {
+            table,
+            refreshing: AtomicBool::new(false),
+            loaded_at: Instant::now(),
+            credential_refresh_at,
+        }
+    }
+
+    pub fn table(&self) -> Arc<dyn Table> {
+        self.table.clone()
+    }
+
+    pub(crate) fn loaded_at(&self) -> Instant {
+        self.loaded_at
+    }
+
+    pub(crate) fn credential_refresh_at(&self) -> Option<Instant> {
+        self.credential_refresh_at
+    }
+
+    pub(crate) fn is_refreshing(&self) -> bool {
+        self.refreshing.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub(crate) fn set_refreshing(&self) {
+        self.refreshing
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+pub type IcebergTableCache = InMemoryLruCache<IcebergTableCacheValue>;
 
 /// In memory object cache of table column array
 pub type ColumnArrayCache = InMemoryLruCache<SizedColumnArray>;
@@ -105,7 +149,7 @@ impl CachedObject<Vec<Arc<BlockMeta>>> for Vec<Arc<BlockMeta>> {
     }
 }
 
-impl CachedObject<(Arc<dyn Table>, AtomicBool, Instant)> for (Arc<dyn Table>, AtomicBool, Instant) {
+impl CachedObject<IcebergTableCacheValue> for IcebergTableCacheValue {
     type Cache = IcebergTableCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_iceberg_table_cache()
@@ -151,20 +195,6 @@ impl CachedObject<ParquetMetaData> for ParquetMetaData {
     type Cache = ParquetMetaDataCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_parquet_meta_data_cache()
-    }
-}
-
-impl CachedObject<InvertedIndexFile> for InvertedIndexFile {
-    type Cache = InvertedIndexFileCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_inverted_index_file_cache()
-    }
-}
-
-impl CachedObject<InvertedIndexMeta> for InvertedIndexMeta {
-    type Cache = InvertedIndexMetaCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_inverted_index_meta_cache()
     }
 }
 
@@ -230,10 +260,8 @@ impl From<BlockMeta> for CacheValue<BlockMeta> {
     }
 }
 
-impl From<(Arc<dyn Table>, AtomicBool, Instant)>
-    for CacheValue<(Arc<dyn Table>, AtomicBool, Instant)>
-{
-    fn from(value: (Arc<dyn Table>, AtomicBool, Instant)) -> Self {
+impl From<IcebergTableCacheValue> for CacheValue<IcebergTableCacheValue> {
+    fn from(value: IcebergTableCacheValue) -> Self {
         CacheValue {
             inner: Arc::new(value),
             mem_bytes: 0,
@@ -262,8 +290,7 @@ impl From<TableSnapshotStatistics> for CacheValue<TableSnapshotStatistics> {
 impl From<SegmentStatistics> for CacheValue<SegmentStatistics> {
     fn from(value: SegmentStatistics) -> Self {
         CacheValue {
-            mem_bytes: std::mem::size_of::<SegmentStatistics>()
-                + value.block_hlls.iter().map(|v| v.len()).sum::<usize>(),
+            mem_bytes: value.memory_size(),
             inner: Arc::new(value),
         }
     }
@@ -299,16 +326,25 @@ impl From<ColumnData> for CacheValue<ColumnData> {
 impl From<InvertedIndexMeta> for CacheValue<InvertedIndexMeta> {
     fn from(value: InvertedIndexMeta) -> Self {
         CacheValue {
+            mem_bytes: value.memory_size(),
             inner: Arc::new(value),
-            mem_bytes: 0,
         }
     }
 }
 
-impl From<InvertedIndexFile> for CacheValue<InvertedIndexFile> {
-    fn from(value: InvertedIndexFile) -> Self {
+impl From<InvertedIndexLookupBytes> for CacheValue<InvertedIndexLookupBytes> {
+    fn from(value: InvertedIndexLookupBytes) -> Self {
         CacheValue {
-            mem_bytes: std::mem::size_of::<InvertedIndexFile>() + value.data.len(),
+            mem_bytes: std::mem::size_of::<InvertedIndexLookupBytes>() + value.data.len(),
+            inner: Arc::new(value),
+        }
+    }
+}
+
+impl From<InvertedIndexPayloadBytes> for CacheValue<InvertedIndexPayloadBytes> {
+    fn from(value: InvertedIndexPayloadBytes) -> Self {
+        CacheValue {
+            mem_bytes: std::mem::size_of::<InvertedIndexPayloadBytes>() + value.data.len(),
             inner: Arc::new(value),
         }
     }

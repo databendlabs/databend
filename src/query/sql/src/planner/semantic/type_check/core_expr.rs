@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
@@ -20,9 +22,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Scalar;
+use databend_common_expression::aggregate_function::AggregateRegistry;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use smallvec::smallvec;
 
 use super::CoreDisplayExprArg;
@@ -51,19 +54,19 @@ impl<'a> CoreExprArena<'a> {
         Self {
             nodes: Vec::new(),
             week_start,
-            aggregate_function_factory: AggregateFunctionFactory::instance(),
+            aggregate_function_registry: &AGGR_REGISTRY,
             in_lambda_function: false,
         }
     }
 
-    pub(super) fn with_aggregate_function_factory(
+    pub(super) fn with_aggregate_function_registry(
         week_start: u64,
-        aggregate_function_factory: &'static AggregateFunctionFactory,
+        aggregate_function_registry: &'static AggregateRegistry,
     ) -> Self {
         Self {
             nodes: Vec::new(),
             week_start,
-            aggregate_function_factory,
+            aggregate_function_registry,
             in_lambda_function: false,
         }
     }
@@ -322,9 +325,17 @@ impl<'a> CoreExprArena<'a> {
                 results,
                 else_result.as_deref(),
             )?,
-            expr @ Expr::CountAll { span, window, .. } => {
-                self.lower_count_all_expr(format!("{expr:#}"), *span, window.as_ref())?
-            }
+            expr @ Expr::CountAll {
+                span,
+                filter,
+                window,
+                ..
+            } => self.lower_count_all_expr(
+                format!("{expr:#}"),
+                *span,
+                filter.as_deref(),
+                window.as_ref(),
+            )?,
             expr @ Expr::FunctionCall { span, func } => {
                 self.lower_function_call_expr(expr, *span, func)?
             }
@@ -358,12 +369,29 @@ impl<'a> CoreExprArena<'a> {
             return Ok(expr);
         }
 
+        if func.filter.is_some() && !self.aggregate_function_registry.contains(&func_name) {
+            return Err(ErrorCode::SemanticError(
+                "FILTER clause is only supported for aggregate functions",
+            )
+            .set_span(span));
+        }
+
+        if func.distinct
+            && !func.order_by.is_empty()
+            && self.aggregate_function_registry.contains(&func_name)
+        {
+            return Err(
+                ErrorCode::SyntaxException("DISTINCT aggregate ORDER BY is not supported")
+                    .set_span(span),
+            );
+        }
+
         self.ensure_within_group_function_call(span, &func_name, !func.order_by.is_empty())?;
         self.ensure_window_function_call(
             span,
             &func_name,
             func.window.is_some(),
-            self.aggregate_function_factory.contains(&func_name),
+            self.aggregate_function_registry.contains(&func_name),
         )?;
 
         if let Some(expr) =
@@ -505,7 +533,7 @@ where A: TypeCheckAdapter
                 expr,
                 paths,
             } => {
-                let box (scalar, data_type) = self.resolve_core(arena, *expr)?;
+                let deref!((scalar, data_type)) = self.resolve_core(arena, *expr)?;
                 self.resolve_map_access_from_scalar(
                     *span,
                     *expr_span,
@@ -536,7 +564,16 @@ where A: TypeCheckAdapter
                 expr,
                 target_type,
             } => {
-                let box (scalar, data_type) = self.resolve_core(arena, *expr)?;
+                if let Some(result) = self.try_resolve_variant_cast_pushdown(
+                    arena,
+                    *span,
+                    *expr,
+                    target_type,
+                    *is_try,
+                )? {
+                    return Ok(result);
+                }
+                let deref!((scalar, data_type)) = self.resolve_core(arena, *expr)?;
                 self.resolve_cast_expr(*span, scalar, data_type, target_type, *is_try)
             }
             CoreExpr::AggregateFunction {
@@ -565,9 +602,12 @@ where A: TypeCheckAdapter
             }
             CoreExpr::ColumnRef { span, column } => self.resolve_column_ref(*span, column),
             CoreExpr::SpecialFunction { span, function } => function.resolve(self, arena, *span),
-            CoreExpr::UdfCall { span, name, args } => {
-                self.resolve_udf_call(arena, *span, name, args)
-            }
+            CoreExpr::UdfCall {
+                span,
+                name,
+                args,
+                filter,
+            } => self.resolve_udf_call(arena, *span, name, args, *filter),
             CoreExpr::LambdaFunction {
                 span,
                 func_name,
@@ -669,7 +709,7 @@ where A: TypeCheckAdapter
         let mut scalars = Vec::with_capacity(args.len());
         let mut data_types = Vec::with_capacity(args.len());
         for arg in args {
-            let box (scalar, data_type) = self.resolve_core(arena, *arg)?;
+            let deref!((scalar, data_type)) = self.resolve_core(arena, *arg)?;
             scalars.push(scalar);
             data_types.push(data_type);
         }
@@ -685,10 +725,12 @@ where A: TypeCheckAdapter
     ) -> Result<Vec<Scalar>> {
         let mut new_params = Vec::with_capacity(params.len());
         for (display_name, param) in params {
-            let box (scalar, _) = self.resolve_core(arena, *param)?;
+            let deref!((scalar, _)) = self.resolve_core(arena, *param)?;
             let expr = scalar.as_expr()?;
-            let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+            let (expr, _) =
+                ConstantFolder::fold(Cow::Owned(expr), &self.func_ctx, &BUILTIN_FUNCTIONS);
             let constant = expr
+                .into_owned()
                 .into_constant()
                 .map_err(|_| {
                     ErrorCode::SemanticError(format!(
@@ -953,6 +995,10 @@ mod tests {
             assert!(matches!(arena.get(root), CoreExpr::SearchFunction { .. }));
         });
 
+        assert_sql_lowers_to("sleep(0.01)", |arena, root| {
+            assert!(matches!(arena.get(root), CoreExpr::AsyncFunction { .. }));
+        });
+
         assert_sql_lowers_to("nextval(seq)", |arena, root| {
             assert!(matches!(arena.get(root), CoreExpr::AsyncFunction { .. }));
         });
@@ -966,6 +1012,61 @@ mod tests {
 
         assert_sql_lowers_to("abs(DISTINCT 1)", |arena, root| {
             assert!(matches!(arena.get(root), CoreExpr::ScalarFunction { .. }));
+        });
+    }
+
+    #[test]
+    fn lowers_trailing_lambda_through_the_existing_lambda_path() {
+        assert_sql_lowers_to(
+            "json_path_transform(doc, path, value -> value + 1)",
+            |arena, root| {
+                let CoreExpr::LambdaFunction {
+                    args,
+                    lambda_params,
+                    lambda_expr,
+                    ..
+                } = arena.get(root)
+                else {
+                    panic!("json_path_transform should lower as a lambda function");
+                };
+                assert_eq!(args.len(), 2);
+                assert_eq!(lambda_params[0].name, "value");
+                assert!(matches!(arena.get(*lambda_expr), CoreExpr::Call {
+                    func_name: "plus",
+                    ..
+                }));
+            },
+        );
+
+        assert_sql_lowers_to(
+            "json_path_transform(doc, path, value -> value -> 'name')",
+            |arena, root| {
+                let CoreExpr::LambdaFunction { lambda_expr, .. } = arena.get(root) else {
+                    panic!("json_path_transform should lower as a lambda function");
+                };
+                assert!(matches!(arena.get(*lambda_expr), CoreExpr::Call {
+                    func_name: "get",
+                    ..
+                }));
+            },
+        );
+
+        assert_sql_lower_error_contains(
+            "array_transform(arr, (value -> value) + 1)",
+            "must have a lambda expression",
+        );
+        assert_sql_lowers_to("to_string(doc -> 'key')", |arena, root| {
+            assert!(matches!(arena.get(root), CoreExpr::Call { .. }));
+        });
+        assert_sql_lowers_to("concat(a, b, doc -> 'key')", |arena, root| {
+            let CoreExpr::Call { args, .. } = arena.get(root) else {
+                panic!("concat should lower as a scalar function");
+            };
+            assert_eq!(args.len(), 3);
+            assert!(matches!(arena.get(args[2]), CoreExpr::Call {
+                func_name: "get",
+                ..
+            }));
         });
     }
 

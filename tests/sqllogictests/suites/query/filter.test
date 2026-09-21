@@ -239,3 +239,33 @@ drop table if exists t;
 
 statement ok
 drop table if exists t2;
+
+# issue 20359
+
+statement ok
+create or replace table t(v int);
+
+statement ok
+insert into t values (5), (10), (15), (25);
+
+query I
+select v from t where 10 <= cast(v as int32) group by v order by v;
+----
+10
+15
+25
+
+query I
+select v from t where 10 < try_cast(v as int32) group by v order by v;
+----
+15
+25
+
+query I
+select v from t where cast(v as int32) <= 10 group by v order by v;
+----
+5
+10
+
+statement ok
+drop table t;

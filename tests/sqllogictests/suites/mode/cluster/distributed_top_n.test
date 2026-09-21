@@ -1,0 +1,90 @@
+# Distributed EXPLAIN shape tests for the fused TopN operator (`enable_top_n`).
+
+statement ok
+create or replace table t_top_n_dist (a int not null, b string not null);
+
+statement ok
+set enable_top_n = 1;
+
+# The distributed plan splits TopN into a final stage above the merge
+# exchange and a partial stage below it; both stages keep limit + offset
+# candidates and the offset is applied at the final stage only.
+query T
+explain select a, b from t_top_n_dist order by a desc limit 3 offset 1
+----
+RowFetch
+├── output columns: [t_top_n_dist.a (#0), t_top_n_dist._row_id (#2), t_top_n_dist.b (#1)]
+├── columns to fetch: [b]
+├── estimated rows: <slt:ignore>
+└── TopN(Final)
+    ├── output columns: [t_top_n_dist.a (#0), t_top_n_dist._row_id (#2)]
+    ├── sort keys: [a DESC NULLS LAST]
+    ├── limit: 3
+    ├── offset: 1
+    ├── estimated rows: <slt:ignore>
+    └── Exchange
+        ├── output columns: [t_top_n_dist.a (#0), t_top_n_dist._row_id (#2)]
+        ├── exchange type: Merge
+        └── TopN(Partial)
+            ├── output columns: [t_top_n_dist.a (#0), t_top_n_dist._row_id (#2)]
+            ├── sort keys: [a DESC NULLS LAST]
+            ├── limit: 4
+            ├── offset: 0
+            ├── estimated rows: <slt:ignore>
+            └── TableScan
+                ├── table: default.default.t_top_n_dist
+                ├── scan id: 0
+                ├── output columns: [a (#0), _row_id (#2)]
+                ├── read rows: <slt:ignore>
+                ├── read size: <slt:ignore>
+                ├── partitions total: <slt:ignore>
+                ├── partitions scanned: <slt:ignore>
+                ├── push downs: [filters: [], limit: 4]
+                └── estimated rows: <slt:ignore>
+
+# Multi-key ordering appends an order column in the partial stage.
+query T
+explain select a, b from t_top_n_dist order by a desc, b asc limit 5
+----
+TopN(Final)
+├── output columns: [t_top_n_dist.a (#0), t_top_n_dist.b (#1)]
+├── sort keys: [a DESC NULLS LAST, b ASC NULLS LAST]
+├── limit: 5
+├── offset: 0
+├── estimated rows: <slt:ignore>
+└── Exchange
+    ├── output columns: [t_top_n_dist.a (#0), t_top_n_dist.b (#1), #_order_col]
+    ├── exchange type: Merge
+    └── TopN(Partial)
+        ├── output columns: [t_top_n_dist.a (#0), t_top_n_dist.b (#1), #_order_col]
+        ├── sort keys: [a DESC NULLS LAST, b ASC NULLS LAST]
+        ├── limit: 5
+        ├── offset: 0
+        ├── estimated rows: <slt:ignore>
+        └── TableScan
+            ├── table: default.default.t_top_n_dist
+            ├── scan id: 0
+            ├── output columns: [a (#0), b (#1)]
+            ├── read rows: <slt:ignore>
+            ├── read size: <slt:ignore>
+            ├── partitions total: <slt:ignore>
+            ├── partitions scanned: <slt:ignore>
+            ├── push downs: [filters: [], limit: 5]
+            └── estimated rows: <slt:ignore>
+
+# Execution sanity check in cluster mode.
+statement ok
+insert into t_top_n_dist select number, concat('v', to_string(number % 3)) from numbers(50);
+
+query IT
+select a, b from t_top_n_dist order by a desc limit 3 offset 1
+----
+48 v0
+47 v2
+46 v1
+
+statement ok
+unset enable_top_n;
+
+statement ok
+drop table t_top_n_dist;

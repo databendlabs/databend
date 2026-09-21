@@ -752,6 +752,50 @@ async fn test_jwt_auth_mgr_with_management() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_jwt_tenant_override_requires_management_mode() -> anyhow::Result<()> {
+    let kid = "test_kid";
+    let (key_pair, jwks) = get_jwks_file_rs256(kid);
+
+    let server = MockServer::start().await;
+    let json_path = "/jwks.json";
+    let template = ResponseTemplate::new(200).set_body_raw(jwks, "application/json");
+    Mock::given(method("GET"))
+        .and(path(json_path))
+        .respond_with(template)
+        .expect(1..)
+        .mount(&server)
+        .await;
+
+    let mut conf = ConfigBuilder::create().config();
+    conf.query.common.jwt_key_file = format!("http://{}{}", server.address(), json_path);
+    let _fixture = TestFixture::setup_with_config(&conf).await?;
+
+    let custom_claims = CustomClaims::new()
+        .with_tenant_id("other")
+        .with_ensure_user(EnsureUser::default());
+    let claims = Claims::with_custom_claims(custom_claims, Duration::from_hours(2))
+        .with_subject("test".to_string());
+    let token = key_pair.sign(claims)?;
+
+    let mut session = TestFixture::create_dummy_session().await;
+    let res = AuthMgr::instance()
+        .auth(
+            &mut session,
+            &Credential::Jwt {
+                token,
+                client_ip: None,
+            },
+            true,
+        )
+        .await;
+
+    assert!(res.is_err());
+    assert_eq!(session.get_current_tenant().tenant_name(), "test");
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_auth_mgr_ensure_roles() -> anyhow::Result<()> {
     let kid = "test_kid";
     let key_pair = RS256KeyPair::generate(2048)?.with_key_id(kid);

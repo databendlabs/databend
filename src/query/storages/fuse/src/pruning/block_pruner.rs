@@ -25,11 +25,12 @@ use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_expression::types::F32;
 use databend_common_metrics::storage::*;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_pruner::ProjectedVirtualSegmentSchema;
 use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use futures_util::future;
-use log::info;
+use log::debug;
 use tokio::sync::OwnedSemaphorePermit;
 
 use super::SegmentLocation;
@@ -51,6 +52,7 @@ impl BlockPruner {
         &self,
         segment_location: SegmentLocation,
         block_metas: Arc<Vec<Arc<BlockMeta>>>,
+        projected_virtual_schema: Option<Arc<ProjectedVirtualSegmentSchema>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         // Apply internal column pruning.
         let block_meta_indexes = self.internal_column_pruning(&block_metas);
@@ -62,11 +64,23 @@ impl BlockPruner {
             || self.pruning_ctx.virtual_column_pruner.is_some()
         {
             // async pruning with bloom index, inverted index or virtual columns.
-            self.block_pruning(segment_location, block_metas, block_meta_indexes, None)
-                .await
+            self.block_pruning(
+                segment_location,
+                block_metas,
+                block_meta_indexes,
+                projected_virtual_schema,
+                None,
+            )
+            .await
         } else {
             // sync pruning without a bloom index, inverted index and virtual columns.
-            self.block_pruning_sync(segment_location, block_metas, block_meta_indexes, None)
+            self.block_pruning_sync(
+                segment_location,
+                block_metas,
+                block_meta_indexes,
+                projected_virtual_schema,
+                None,
+            )
         }
     }
 
@@ -107,8 +121,8 @@ impl BlockPruner {
                             prune_result,
                             block_meta.clone(),
                             block_meta.row_count,
-                            false,
                             true,
+                            None,
                         )
                         .await?;
 
@@ -138,7 +152,7 @@ impl BlockPruner {
 
         let elapsed = start.elapsed().as_millis() as u64;
         metrics_inc_pruning_milliseconds(elapsed);
-        info!("[FUSE-PRUNER] refine block prune elapsed: {elapsed}");
+        debug!("[FUSE-PRUNER] refine block prune elapsed: {elapsed}");
 
         Ok(result)
     }
@@ -172,6 +186,7 @@ impl BlockPruner {
         segment_location: SegmentLocation,
         block_metas: Arc<Vec<Arc<BlockMeta>>>,
         block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
+        projected_virtual_schema: Option<Arc<ProjectedVirtualSegmentSchema>>,
         runtime_stats_pruner: Option<Arc<RuntimeStatsPruner>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
@@ -181,6 +196,7 @@ impl BlockPruner {
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
         let range_pruner = self.pruning_ctx.range_pruner.clone();
         let pruning_ctx = self.pruning_ctx.clone();
+        let virtual_predicate_refs = self.pruning_ctx.virtual_predicate_refs.clone();
 
         let mut block_meta_indexes = block_meta_indexes.into_iter();
         let pruning_tasks = std::iter::from_fn(|| {
@@ -209,10 +225,15 @@ impl BlockPruner {
                     BlockPruneResult::new(block_idx, block_meta.location.0.clone());
                 let block_meta = block_meta.clone();
                 let row_count = block_meta.row_count;
-                let range_input = RangeIndexInput::from_block_meta(block_meta.as_ref());
+                let range_input = RangeIndexInput::from_block_meta(
+                    block_meta.as_ref(),
+                    projected_virtual_schema.as_deref(),
+                    virtual_predicate_refs.as_deref(),
+                );
                 prune_result.keep = pruning_cost.measure(PruningCostKind::BlocksRange, || {
                     range_pruner.should_keep(&range_input, Some(&block_meta.col_metas))
                 });
+                drop(range_input);
                 if prune_result.keep {
                     // Perf.
                     {
@@ -232,6 +253,7 @@ impl BlockPruner {
                 if prune_result.keep {
                     // not pruned by block zone map index,
                     let pruning_ctx = pruning_ctx.clone();
+                    let projected_virtual_schema = projected_virtual_schema.clone();
                     let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
                         Box::pin(async move {
                             let _permit = permit;
@@ -240,8 +262,8 @@ impl BlockPruner {
                                 prune_result,
                                 block_meta,
                                 row_count,
-                                true,
                                 false,
+                                projected_virtual_schema,
                             )
                             .await
                         })
@@ -283,7 +305,6 @@ impl BlockPruner {
                         segment_idx: segment_location.segment_idx,
                         block_idx: prune_result.block_idx,
                         range: prune_result.range,
-                        page_size: block.page_size() as usize,
                         block_id: block_id_in_segment(block_num, prune_result.block_idx),
                         block_location: prune_result.block_location.clone(),
                         segment_location: segment_location.location.0.clone(),
@@ -303,7 +324,7 @@ impl BlockPruner {
         {
             metrics_inc_pruning_milliseconds(elapsed);
         }
-        info!("[FUSE-PRUNER] block prune elapsed: {elapsed}");
+        debug!("[FUSE-PRUNER] block prune elapsed: {elapsed}");
 
         Ok(result)
     }
@@ -313,8 +334,8 @@ impl BlockPruner {
         mut prune_result: BlockPruneResult,
         block_meta: Arc<BlockMeta>,
         row_count: u64,
-        apply_page_pruner: bool,
         limit_before_bloom: bool,
+        projected_virtual_schema: Option<Arc<ProjectedVirtualSegmentSchema>>,
     ) -> Result<BlockPruneResult> {
         if !prune_result.keep {
             return Ok(prune_result);
@@ -324,7 +345,6 @@ impl BlockPruner {
         let pruning_cost = pruning_ctx.pruning_cost.clone();
         let limit_pruner = pruning_ctx.limit_pruner.clone();
         let bloom_pruner = pruning_ctx.bloom_pruner.clone();
-        let page_pruner = pruning_ctx.page_pruner.clone();
         let inverted_index_pruner = pruning_ctx.inverted_index_pruner.clone();
         let virtual_column_pruner = pruning_ctx.virtual_column_pruner.clone();
         let spatial_index_pruner = pruning_ctx.spatial_index_pruner.clone();
@@ -368,12 +388,6 @@ impl BlockPruner {
             }
         }
 
-        if prune_result.keep && apply_page_pruner {
-            let (keep, range) = page_pruner.should_keep(&block_meta.cluster_stats);
-            prune_result.keep = keep;
-            prune_result.range = range;
-        }
-
         if prune_result.keep {
             if let Some(inverted_index_pruner) = inverted_index_pruner {
                 metrics_inc_blocks_inverted_index_pruning_before(1);
@@ -383,7 +397,11 @@ impl BlockPruner {
                 let matched_rows = pruning_cost
                     .measure_async(
                         PruningCostKind::BlocksInverted,
-                        inverted_index_pruner.should_keep(&block_meta.location.0, row_count),
+                        inverted_index_pruner.should_keep(
+                            &block_meta.location.0,
+                            block_meta.inverted_index_metas.as_deref(),
+                            row_count,
+                        ),
                     )
                     .await?;
 
@@ -433,7 +451,10 @@ impl BlockPruner {
         if prune_result.keep {
             if let Some(virtual_column_pruner) = virtual_column_pruner {
                 prune_result.virtual_block_meta = virtual_column_pruner
-                    .prune_virtual_columns(&block_meta.virtual_block_meta)
+                    .prune_virtual_columns(
+                        &block_meta.virtual_block_meta,
+                        projected_virtual_schema.as_deref(),
+                    )
                     .await?;
             }
         }
@@ -446,13 +467,13 @@ impl BlockPruner {
         segment_location: SegmentLocation,
         block_metas: Arc<Vec<Arc<BlockMeta>>>,
         block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
+        projected_virtual_schema: Option<Arc<ProjectedVirtualSegmentSchema>>,
         runtime_stats_pruner: Option<Arc<RuntimeStatsPruner>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_cost = self.pruning_ctx.pruning_cost.clone();
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
         let range_pruner = self.pruning_ctx.range_pruner.clone();
-        let page_pruner = self.pruning_ctx.page_pruner.clone();
 
         let start = Instant::now();
 
@@ -472,10 +493,15 @@ impl BlockPruner {
                 break;
             }
             let row_count = block_meta.row_count;
-            let range_input = RangeIndexInput::from_block_meta(block_meta.as_ref());
+            let range_input = RangeIndexInput::from_block_meta(
+                block_meta.as_ref(),
+                projected_virtual_schema.as_deref(),
+                self.pruning_ctx.virtual_predicate_refs.as_deref(),
+            );
             let keep_by_range = pruning_cost.measure(PruningCostKind::BlocksRange, || {
                 range_pruner.should_keep(&range_input, Some(&block_meta.col_metas))
             });
+            drop(range_input);
             if keep_by_range && limit_pruner.within_limit(row_count) {
                 // Perf.
                 {
@@ -491,26 +517,22 @@ impl BlockPruner {
                     continue;
                 }
 
-                let (keep, range) = page_pruner.should_keep(&block_meta.cluster_stats);
-                if keep {
-                    result.push((
-                        BlockMetaIndex {
-                            segment_idx: segment_location.segment_idx,
-                            block_idx,
-                            range,
-                            page_size: block_meta.page_size() as usize,
-                            block_id: block_id_in_segment(block_num, block_idx),
-                            block_location: block_meta.as_ref().location.0.clone(),
-                            segment_location: segment_location.location.0.clone(),
-                            snapshot_location: segment_location.snapshot_loc.clone(),
-                            matched_rows: None,
-                            matched_scores: None,
-                            vector_scores: None,
-                            virtual_block_meta: None,
-                        },
-                        block_meta.clone(),
-                    ))
-                }
+                result.push((
+                    BlockMetaIndex {
+                        segment_idx: segment_location.segment_idx,
+                        block_idx,
+                        range: None,
+                        block_id: block_id_in_segment(block_num, block_idx),
+                        block_location: block_meta.as_ref().location.0.clone(),
+                        segment_location: segment_location.location.0.clone(),
+                        snapshot_location: segment_location.snapshot_loc.clone(),
+                        matched_rows: None,
+                        matched_scores: None,
+                        vector_scores: None,
+                        virtual_block_meta: None,
+                    },
+                    block_meta.clone(),
+                ))
             }
         }
 
@@ -519,7 +541,7 @@ impl BlockPruner {
         {
             metrics_inc_pruning_milliseconds(elapsed);
         }
-        info!("[FUSE-PRUNER] sync block prune elapsed: {elapsed}");
+        debug!("[FUSE-PRUNER] sync block prune elapsed: {elapsed}");
 
         Ok(result)
     }

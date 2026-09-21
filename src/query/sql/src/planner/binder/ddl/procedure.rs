@@ -34,6 +34,7 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::resolve_type_name;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -48,10 +49,12 @@ use databend_common_users::UserApiProvider;
 
 use crate::BindContext;
 use crate::Binder;
+use crate::NameResolutionContext;
 use crate::ScalarExpr;
 use crate::TypeChecker;
 use crate::binder::show::get_show_options;
 use crate::meta_service_error;
+use crate::planner::apply_statement_settings;
 use crate::plans::CallProcedurePlan;
 use crate::plans::ConstantExpr;
 use crate::plans::CreateProcedurePlan;
@@ -61,7 +64,6 @@ use crate::plans::ExecuteImmediatePlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
 use crate::plans::SubqueryType;
-use crate::resolve_type_name;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -102,7 +104,13 @@ impl Binder {
                 })))
             }
             ScriptBlockOrStmt::Statement(stmt) => {
-                let binder = self.clone();
+                apply_statement_settings(self.ctx.clone(), &stmt)?;
+                let binder = Self {
+                    name_resolution_ctx: NameResolutionContext::try_from(
+                        self.ctx.get_settings().as_ref(),
+                    )?,
+                    ..self.clone()
+                };
                 binder.bind(&stmt).await
             }
         }
@@ -191,9 +199,9 @@ impl Binder {
         )?;
         let mut arg_types = Vec::with_capacity(arguments.len());
         for argument in arguments {
-            let box (arg, mut arg_type) = type_checker.resolve(argument)?;
+            let deref!((arg, mut arg_type)) = type_checker.resolve(argument)?;
             if let ScalarExpr::SubqueryExpr(subquery) = &arg {
-                if subquery.typ == SubqueryType::Scalar && !arg.data_type()?.is_nullable() {
+                if subquery.typ == SubqueryType::Scalar && !arg.data_type().is_nullable() {
                     arg_type = arg_type.wrap_nullable();
                 }
             }
@@ -257,7 +265,7 @@ impl Binder {
 
         let args = arguments
             .iter()
-            .zip(casts_to_apply.into_iter())
+            .zip(casts_to_apply)
             .map(|(expr, cast)| match cast {
                 Some(target_type) => Expr::Cast {
                     span: expr.span(),
@@ -294,10 +302,7 @@ impl Binder {
         }
         let mut return_types = Vec::with_capacity(return_type.len());
         for arg_type in return_type {
-            return_types.push(DataType::from(&resolve_type_name(
-                &arg_type.data_type,
-                true,
-            )?));
+            return_types.push(resolve_type_name(&arg_type.data_type, true)?);
         }
 
         Ok(ProcedureMeta {

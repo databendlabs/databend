@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
@@ -22,10 +21,8 @@ use databend_common_expression::AggregatePayload;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::BlockProfileStatistics;
-use databend_common_expression::BucketSpilledPayload;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
-use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
 use databend_common_expression::SerializedPayload;
 use databend_common_expression::types::BinaryType;
@@ -36,7 +33,7 @@ use parquet::file::metadata::RowGroupMetaData;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 
-pub struct NewSpilledPayload {
+pub struct SpilledPayload {
     pub bucket: isize,
     pub location: String,
     pub row_group: RowGroupMetaData,
@@ -45,25 +42,19 @@ pub struct NewSpilledPayload {
 pub enum AggregateMeta {
     Serialized(SerializedPayload),
     AggregatePayload(AggregatePayload),
-    AggregateSpilling(PartitionedPayload),
-    BucketSpilled(BucketSpilledPayload),
-    Spilled(Vec<BucketSpilledPayload>),
-
     Partitioned {
         bucket: Option<isize>,
         data: PartitionedData,
     },
-
-    NewBucketSpilled(NewSpilledPayload),
-    NewSpilled(Vec<NewSpilledPayload>),
+    BucketSpilled(SpilledPayload),
+    Spilled(Vec<SpilledPayload>),
 }
 
 pub enum PartitionedData {
     Empty,
     Serialized(Vec<SerializedPayload>),
     AggregatePayload(Vec<AggregatePayload>),
-    BucketSpilled(Vec<BucketSpilledPayload>),
-    NewBucketSpilled(Vec<NewSpilledPayload>),
+    BucketSpilled(Vec<SpilledPayload>),
     Mixed(Vec<PartitionItem>),
 }
 
@@ -79,9 +70,6 @@ impl Debug for PartitionedData {
                 .finish(),
             PartitionedData::BucketSpilled(_) => f
                 .debug_struct("PartitionedAggregateData::BucketSpilled")
-                .finish(),
-            PartitionedData::NewBucketSpilled(_) => f
-                .debug_struct("PartitionedAggregateData::NewBucketSpilled")
                 .finish(),
             PartitionedData::Mixed(_) => f.debug_struct("PartitionedAggregateData::Mixed").finish(),
         }
@@ -100,8 +88,7 @@ impl PartitionedData {
                 rows: payloads.iter().map(|p| p.payload.len()).sum(),
                 bytes: payloads.iter().map(|p| p.payload.memory_size()).sum(),
             }),
-            PartitionedData::BucketSpilled(_) => None,
-            PartitionedData::NewBucketSpilled(payloads) => Some(BlockProfileStatistics {
+            PartitionedData::BucketSpilled(payloads) => Some(BlockProfileStatistics {
                 rows: payloads
                     .iter()
                     .map(|p| p.row_group.num_rows() as usize)
@@ -128,8 +115,7 @@ impl PartitionedData {
 pub enum PartitionItem {
     Serialized(SerializedPayload),
     AggregatePayload(AggregatePayload),
-    BucketSpilled(BucketSpilledPayload),
-    NewBucketSpilled(NewSpilledPayload),
+    BucketSpilled(SpilledPayload),
 }
 
 impl Debug for PartitionItem {
@@ -144,9 +130,6 @@ impl Debug for PartitionItem {
             PartitionItem::BucketSpilled(_) => f
                 .debug_struct("AggregatePartitionItem::BucketSpilled")
                 .finish(),
-            PartitionItem::NewBucketSpilled(_) => f
-                .debug_struct("AggregatePartitionItem::NewBucketSpilled")
-                .finish(),
         }
     }
 }
@@ -157,7 +140,6 @@ impl From<PartitionItem> for AggregateMeta {
             PartitionItem::Serialized(payload) => AggregateMeta::Serialized(payload),
             PartitionItem::AggregatePayload(payload) => AggregateMeta::AggregatePayload(payload),
             PartitionItem::BucketSpilled(payload) => AggregateMeta::BucketSpilled(payload),
-            PartitionItem::NewBucketSpilled(payload) => AggregateMeta::NewBucketSpilled(payload),
         }
     }
 }
@@ -177,8 +159,7 @@ impl PartitionItem {
                 rows: payload.payload.len(),
                 bytes: payload.payload.memory_size(),
             }),
-            PartitionItem::BucketSpilled(_) => None,
-            PartitionItem::NewBucketSpilled(payload) => Some(BlockProfileStatistics {
+            PartitionItem::BucketSpilled(payload) => Some(BlockProfileStatistics {
                 rows: payload.row_group.num_rows() as usize,
                 bytes: payload.row_group.total_byte_size() as usize,
             }),
@@ -190,9 +171,9 @@ impl PartitionItem {
             return Ok(DataBlock::empty());
         }
 
-        let has_new_spilled = data
+        let has_spilled = data
             .iter()
-            .any(|item| matches!(item, PartitionItem::NewBucketSpilled(_)));
+            .any(|item| matches!(item, PartitionItem::BucketSpilled(_)));
         let has_payload = data.iter().any(|item| {
             matches!(
                 item,
@@ -200,20 +181,20 @@ impl PartitionItem {
             )
         });
 
-        if has_new_spilled && has_payload {
+        if has_spilled && has_payload {
             return Err(ErrorCode::Internal(
                 "Partitioned meta cannot serialize mixed payload and spilled batches.",
             ));
         }
 
-        if has_new_spilled {
+        if has_spilled {
             let bucket_num = data.len();
             let mut bucket_column = Vec::with_capacity(bucket_num);
             let mut row_group_column = Vec::with_capacity(bucket_num);
             let mut location_column = Vec::with_capacity(bucket_num);
 
             for item in data {
-                let PartitionItem::NewBucketSpilled(payload) = item else {
+                let PartitionItem::BucketSpilled(payload) = item else {
                     return Err(ErrorCode::Internal(
                         "Partitioned meta cannot serialize mixed spilled batches.",
                     ));
@@ -228,7 +209,7 @@ impl PartitionItem {
                 BinaryType::from_data(row_group_column),
             ]);
 
-            return data_block.add_meta(Some(AggregateSerdeMeta::create_new_spilled(
+            return data_block.add_meta(Some(AggregateSerdeMeta::create_spilled(
                 bucket_num as isize,
             )));
         }
@@ -243,12 +224,7 @@ impl PartitionItem {
                 PartitionItem::AggregatePayload(payload) => {
                     (payload.bucket, payload.payload.aggregate_flush_all()?)
                 }
-                PartitionItem::BucketSpilled(_) => {
-                    return Err(ErrorCode::Internal(
-                        "Partitioned meta cannot serialize legacy spilled batches.",
-                    ));
-                }
-                PartitionItem::NewBucketSpilled(_) => unreachable!(),
+                PartitionItem::BucketSpilled(_) => unreachable!(),
             };
 
             if block.num_rows() == 0 {
@@ -272,19 +248,6 @@ impl PartitionItem {
     }
 }
 
-pub enum AggregateBucketInput {
-    Direct {
-        bucket: isize,
-        max_partition_count: usize,
-        is_empty: bool,
-        meta: PartitionItem,
-    },
-    Spilled {
-        max_partition_count: usize,
-        metas: Vec<(isize, PartitionItem)>,
-    },
-}
-
 impl AggregateMeta {
     pub fn create_agg_payload(
         bucket: isize,
@@ -296,10 +259,6 @@ impl AggregateMeta {
             payload,
             max_partition_count,
         }))
-    }
-
-    pub fn create_agg_spilling(payload: PartitionedPayload) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::AggregateSpilling(payload))
     }
 
     pub fn create_serialized(
@@ -314,159 +273,16 @@ impl AggregateMeta {
         }))
     }
 
-    pub fn create_spilled(buckets_payload: Vec<BucketSpilledPayload>) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::Spilled(buckets_payload))
+    pub fn create_bucket_spilled(payload: SpilledPayload) -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::BucketSpilled(payload))
     }
 
-    pub fn create_bucket_spilled(payload: BucketSpilledPayload) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::BucketSpilled(payload))
+    pub fn create_spilled(payloads: Vec<SpilledPayload>) -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::Spilled(payloads))
     }
 
     pub fn create_partitioned(bucket: Option<isize>, data: PartitionedData) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::Partitioned { bucket, data })
-    }
-
-    pub fn create_new_bucket_spilled(payload: NewSpilledPayload) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::NewBucketSpilled(payload))
-    }
-
-    pub fn create_new_spilled(payloads: Vec<NewSpilledPayload>) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::NewSpilled(payloads))
-    }
-
-    pub fn into_bucket_input(self, default_max_partition_count: usize) -> AggregateBucketInput {
-        match self {
-            AggregateMeta::BucketSpilled(payload) => {
-                let bucket = payload.bucket;
-                let max_partition_count = payload.max_partition_count;
-                AggregateBucketInput::Spilled {
-                    max_partition_count,
-                    metas: vec![(bucket, PartitionItem::BucketSpilled(payload))],
-                }
-            }
-            AggregateMeta::Spilled(buckets_payload) => {
-                let max_partition_count = buckets_payload
-                    .first()
-                    .map(|payload| payload.max_partition_count)
-                    .unwrap_or(default_max_partition_count);
-                let metas = buckets_payload
-                    .into_iter()
-                    .map(|payload| (payload.bucket, PartitionItem::BucketSpilled(payload)))
-                    .collect();
-                AggregateBucketInput::Spilled {
-                    max_partition_count,
-                    metas,
-                }
-            }
-            AggregateMeta::Serialized(payload) => {
-                let bucket = payload.bucket;
-                let max_partition_count = payload.max_partition_count;
-                let is_empty = payload.data_block.is_empty();
-                AggregateBucketInput::Direct {
-                    bucket,
-                    max_partition_count,
-                    is_empty,
-                    meta: PartitionItem::Serialized(payload),
-                }
-            }
-            AggregateMeta::AggregatePayload(payload) => {
-                let bucket = payload.bucket;
-                let max_partition_count = payload.max_partition_count;
-                let is_empty = payload.payload.len() == 0;
-                AggregateBucketInput::Direct {
-                    bucket,
-                    max_partition_count,
-                    is_empty,
-                    meta: PartitionItem::AggregatePayload(payload),
-                }
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    pub fn bucket_spilled_payloads(&self) -> Vec<&BucketSpilledPayload> {
-        match self {
-            AggregateMeta::BucketSpilled(payload) => vec![payload],
-            AggregateMeta::Partitioned {
-                data: PartitionedData::BucketSpilled(payloads),
-                ..
-            } => payloads.iter().collect(),
-            AggregateMeta::Partitioned {
-                data: PartitionedData::Mixed(items),
-                ..
-            } => items
-                .iter()
-                .filter_map(|item| match item {
-                    PartitionItem::BucketSpilled(payload) => Some(payload),
-                    _ => None,
-                })
-                .collect(),
-            _ => vec![],
-        }
-    }
-
-    pub fn deserialize_bucket_spilled(
-        self,
-        mut read_data: VecDeque<Vec<u8>>,
-    ) -> Result<AggregateMeta> {
-        let mut take_read_data = || {
-            read_data.pop_front().ok_or_else(|| {
-                ErrorCode::Internal(
-                    "Internal, missing spilled aggregate data for BucketSpilled meta.",
-                )
-            })
-        };
-
-        let meta = match self {
-            AggregateMeta::BucketSpilled(payload) => {
-                AggregateMeta::Serialized(payload.deserialize(take_read_data()?)?)
-            }
-            AggregateMeta::Partitioned {
-                bucket,
-                data: PartitionedData::BucketSpilled(payloads),
-            } => {
-                let mut new_data = Vec::with_capacity(payloads.len());
-                for payload in payloads {
-                    new_data.push(payload.deserialize(take_read_data()?)?);
-                }
-
-                AggregateMeta::Partitioned {
-                    bucket,
-                    data: PartitionedData::Serialized(new_data),
-                }
-            }
-            AggregateMeta::Partitioned {
-                bucket,
-                data: PartitionedData::Mixed(items),
-            } => {
-                let mut new_items = Vec::with_capacity(items.len());
-                for item in items {
-                    new_items.push(match item {
-                        PartitionItem::BucketSpilled(payload) => {
-                            PartitionItem::Serialized(payload.deserialize(take_read_data()?)?)
-                        }
-                        item => item,
-                    });
-                }
-
-                AggregateMeta::Partitioned {
-                    bucket,
-                    data: PartitionedData::Mixed(new_items),
-                }
-            }
-            AggregateMeta::Partitioned { bucket, data } => {
-                AggregateMeta::Partitioned { bucket, data }
-            }
-            _ => unreachable!(),
-        };
-
-        if !read_data.is_empty() {
-            return Err(ErrorCode::Internal(
-                "Internal, spilled aggregate read data exceeds BucketSpilled metas.",
-            ));
-        }
-
-        Ok(meta)
     }
 
     pub fn into_datablock(self) -> DataBlock {
@@ -499,15 +315,8 @@ impl Debug for AggregateMeta {
             }
             AggregateMeta::Spilled(_) => f.debug_struct("Aggregate::Spilled").finish(),
             AggregateMeta::BucketSpilled(_) => f.debug_struct("Aggregate::BucketSpilled").finish(),
-            AggregateMeta::NewBucketSpilled(_) => {
-                f.debug_struct("Aggregate::NewBucketSpilled").finish()
-            }
-            AggregateMeta::NewSpilled(_) => f.debug_struct("Aggregate::NewSpilled").finish(),
             AggregateMeta::AggregatePayload(_) => {
                 f.debug_struct("AggregateMeta:AggregatePayload").finish()
-            }
-            AggregateMeta::AggregateSpilling(_) => {
-                f.debug_struct("AggregateMeta:AggregateSpilling").finish()
             }
         }
     }
@@ -532,17 +341,12 @@ impl BlockMetaInfo for AggregateMeta {
                 rows: payload.payload.len(),
                 bytes: payload.payload.memory_size(),
             }),
-            AggregateMeta::AggregateSpilling(payload) => Some(BlockProfileStatistics {
-                rows: payload.len(),
-                bytes: payload.memory_size(),
-            }),
-            AggregateMeta::Spilled(_) | AggregateMeta::BucketSpilled(_) => None,
             AggregateMeta::Partitioned { data, .. } => data.output_stats(),
-            AggregateMeta::NewBucketSpilled(payload) => Some(BlockProfileStatistics {
+            AggregateMeta::BucketSpilled(payload) => Some(BlockProfileStatistics {
                 rows: payload.row_group.num_rows() as usize,
                 bytes: payload.row_group.total_byte_size() as usize,
             }),
-            AggregateMeta::NewSpilled(payloads) => Some(BlockProfileStatistics {
+            AggregateMeta::Spilled(payloads) => Some(BlockProfileStatistics {
                 rows: payloads
                     .iter()
                     .map(|p| p.row_group.num_rows() as usize)

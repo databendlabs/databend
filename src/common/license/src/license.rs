@@ -18,7 +18,10 @@ use databend_common_exception::ErrorCode;
 use display_more::DisplayOptionExt;
 use display_more::DisplaySliceExt;
 use serde::Deserialize;
+use serde::Deserializer;
 use serde::Serialize;
+use serde::de::Error;
+use serde_json::Value;
 
 // All enterprise features are defined here.
 #[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -29,10 +32,10 @@ pub enum Feature {
     Vacuum,
     #[serde(alias = "test", alias = "TEST")]
     Test,
-    #[serde(alias = "virtual_column", alias = "VIRTUAL_COLUMN")]
-    VirtualColumn,
     #[serde(alias = "data_mask", alias = "DATA_MASK")]
     DataMask,
+    #[serde(alias = "data_sharing", alias = "DATA_SHARING")]
+    DataSharing,
     #[serde(alias = "computed_column", alias = "COMPUTED_COLUMN")]
     ComputedColumn,
     #[serde(alias = "storage_encryption", alias = "STORAGE_ENCRYPTION")]
@@ -45,8 +48,6 @@ pub enum Feature {
     AttacheTable,
     #[serde(alias = "amend_table", alias = "AMEND_TABLE")]
     AmendTable,
-    #[serde(alias = "hilbert_clustering", alias = "HILBERT_CLUSTERING")]
-    HilbertClustering,
     #[serde(alias = "system_management", alias = "SYSTEM_MANAGEMENT")]
     SystemManagement,
     #[serde(alias = "workload_group", alias = "WORKLOAD_GROUP")]
@@ -61,6 +62,8 @@ pub enum Feature {
     MaxCpuQuota(usize),
     #[serde(alias = "row_access_policy", alias = "ROW_ACCESS_POLICY")]
     RowAccessPolicy,
+    #[serde(alias = "materialized_view", alias = "MATERIALIZED_VIEW")]
+    MaterializedView,
     #[serde(other)]
     Unknown,
 }
@@ -77,8 +80,8 @@ impl fmt::Display for Feature {
             Feature::LicenseInfo => write!(f, "license_info"),
             Feature::Vacuum => write!(f, "vacuum"),
             Feature::Test => write!(f, "test"),
-            Feature::VirtualColumn => write!(f, "virtual_column"),
             Feature::DataMask => write!(f, "data_mask"),
+            Feature::DataSharing => write!(f, "data_sharing"),
             Feature::ComputedColumn => write!(f, "computed_column"),
             Feature::StorageEncryption => write!(f, "storage_encryption"),
             Feature::Stream => write!(f, "stream"),
@@ -86,11 +89,11 @@ impl fmt::Display for Feature {
             Feature::AttacheTable => write!(f, "attach_table"),
             Feature::AmendTable => write!(f, "amend_table"),
             Feature::SystemManagement => write!(f, "system_management"),
-            Feature::HilbertClustering => write!(f, "hilbert_clustering"),
             Feature::WorkloadGroup => write!(f, "workload_group"),
             Feature::SystemHistory => write!(f, "system_history"),
             Feature::PrivateTask => write!(f, "private_task"),
             Feature::RowAccessPolicy => write!(f, "row_access_policy"),
+            Feature::MaterializedView => write!(f, "materialized_view"),
             Feature::Unknown => write!(f, "unknown"),
             Feature::MaxCpuQuota(v) => write!(f, "max_cpu_quota({})", v),
             Feature::MaxNodeQuota(v) => write!(f, "max_node_quota({})", v),
@@ -122,6 +125,82 @@ impl Feature {
             _ => Ok(VerifyResult::MissMatch),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum LicenseAudiences {
+    Single(String),
+    Multiple(std::collections::HashSet<String>),
+}
+
+/// Accepts the integer and floating-point Unix seconds that the previous JWT
+/// verifier allowed, truncating fractions the same way it did.
+///
+/// Routes through `serde_json::Value` rather than `deserialize_any`: the query
+/// build enables `serde_json/arbitrary_precision` through `jsonb`, which hands
+/// numbers to custom deserializers as an internal map instead of calling
+/// `visit_u64` or `visit_f64`.
+fn deserialize_unix_seconds<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<u64>, D::Error> {
+    let Some(value) = Option::<Value>::deserialize(deserializer)? else {
+        return Ok(None);
+    };
+    let number = match &value {
+        Value::Null => return Ok(None),
+        Value::Number(number) => number,
+        _ => return Err(D::Error::custom("Unix timestamp must be a number")),
+    };
+    if let Some(seconds) = number.as_u64() {
+        return Ok(Some(seconds));
+    }
+    let seconds = number
+        .as_f64()
+        .ok_or_else(|| D::Error::custom("Unix timestamp is not representable"))?;
+    if !seconds.is_finite() || seconds < 0.0 || seconds >= u64::MAX as f64 {
+        return Err(D::Error::custom("Unix timestamp is out of range"));
+    }
+    Ok(Some(seconds as u64))
+}
+
+/// JWT timestamps are Unix seconds, not `coarsetime` fixed-point durations.
+/// Keeping them as u64 preserves licenses whose expiry is after February 2106.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct LicenseClaims {
+    #[serde(
+        rename = "iat",
+        default,
+        deserialize_with = "deserialize_unix_seconds",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub issued_at: Option<u64>,
+    #[serde(
+        rename = "exp",
+        default,
+        deserialize_with = "deserialize_unix_seconds",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub expires_at: Option<u64>,
+    #[serde(
+        rename = "nbf",
+        default,
+        deserialize_with = "deserialize_unix_seconds",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub invalid_before: Option<u64>,
+    #[serde(rename = "iss", skip_serializing_if = "Option::is_none")]
+    pub issuer: Option<String>,
+    #[serde(rename = "sub", skip_serializing_if = "Option::is_none")]
+    pub subject: Option<String>,
+    #[serde(rename = "aud", skip_serializing_if = "Option::is_none")]
+    pub audiences: Option<LicenseAudiences>,
+    #[serde(rename = "jti", skip_serializing_if = "Option::is_none")]
+    pub jwt_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nonce: Option<String>,
+    #[serde(flatten)]
+    pub custom: LicenseInfo,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -188,6 +267,87 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_license_claim_timestamps() {
+        for seconds in [u32::MAX as u64, u32::MAX as u64 + 1, 4_891_363_200] {
+            let payload = serde_json::json!({
+                "iat": seconds,
+                "exp": seconds,
+                "nbf": seconds,
+                "type": "enterprise",
+                "org": "Test Organization",
+                "tenants": ["test-tenant"],
+                "features": ["LicenseInfo", {"MaxCpuQuota": 32}]
+            });
+            let claims: LicenseClaims = serde_json::from_value(payload.clone()).unwrap();
+            assert_eq!(claims.issued_at, Some(seconds));
+            assert_eq!(claims.expires_at, Some(seconds));
+            assert_eq!(claims.invalid_before, Some(seconds));
+            assert_eq!(serde_json::to_value(&claims).unwrap(), payload);
+        }
+
+        // The previous verifier accepted and truncated fractional Unix seconds.
+        let claims: LicenseClaims = serde_json::from_str(
+            r#"{"iat":1617757825.8,"exp":4891363200.0,"nbf":1.6e9,"type":"enterprise"}"#,
+        )
+        .unwrap();
+        assert_eq!(claims.issued_at, Some(1_617_757_825));
+        assert_eq!(claims.expires_at, Some(4_891_363_200));
+        assert_eq!(claims.invalid_before, Some(1_600_000_000));
+
+        let claims: LicenseClaims =
+            serde_json::from_str(r#"{"exp":null,"type":"enterprise"}"#).unwrap();
+        assert_eq!(claims.issued_at, None);
+        assert_eq!(claims.expires_at, None);
+        assert_eq!(claims.invalid_before, None);
+
+        for raw in [
+            r#"{"exp":-1}"#,
+            r#"{"exp":-1.5}"#,
+            r#"{"exp":1e30}"#,
+            r#"{"exp":"4891363200"}"#,
+        ] {
+            assert!(
+                serde_json::from_str::<LicenseClaims>(raw).is_err(),
+                "should reject: {raw}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_data_sharing_feature() {
+        for name in ["DataSharing", "data_sharing", "DATA_SHARING"] {
+            assert_eq!(
+                Feature::DataSharing,
+                serde_json::from_value(serde_json::json!(name)).unwrap()
+            );
+        }
+        assert_eq!("data_sharing", Feature::DataSharing.to_string());
+        assert!(matches!(
+            Feature::DataSharing.verify(&Feature::DataSharing).unwrap(),
+            VerifyResult::Success
+        ));
+        assert!(matches!(
+            Feature::Stream.verify(&Feature::DataSharing).unwrap(),
+            VerifyResult::MissMatch
+        ));
+        assert!(
+            Feature::DataSharing
+                .verify_default("license required")
+                .is_err()
+        );
+        let license = LicenseInfo {
+            r#type: None,
+            org: None,
+            tenants: None,
+            features: Some(vec![Feature::Stream, Feature::DataSharing]),
+        };
+        assert_eq!(
+            "data_sharing,stream",
+            license.display_features().to_string()
+        );
+    }
+
+    #[test]
     fn test_deserialize_feature_from_string() {
         assert_eq!(
             Feature::LicenseInfo,
@@ -200,10 +360,6 @@ mod tests {
         assert_eq!(
             Feature::Test,
             serde_json::from_str::<Feature>("\"Test\"").unwrap()
-        );
-        assert_eq!(
-            Feature::VirtualColumn,
-            serde_json::from_str::<Feature>("\"VIRTUAL_COLUMN\"").unwrap()
         );
         assert_eq!(
             Feature::DataMask,
@@ -236,11 +392,6 @@ mod tests {
         );
 
         assert_eq!(
-            Feature::HilbertClustering,
-            serde_json::from_str::<Feature>("\"hilbert_clustering\"").unwrap()
-        );
-
-        assert_eq!(
             Feature::WorkloadGroup,
             serde_json::from_str::<Feature>("\"workload_group\"").unwrap()
         );
@@ -266,6 +417,11 @@ mod tests {
         );
 
         assert_eq!(
+            Feature::MaterializedView,
+            serde_json::from_str::<Feature>("\"materialized_view\"").unwrap()
+        );
+
+        assert_eq!(
             Feature::Unknown,
             serde_json::from_str::<Feature>("\"ssss\"").unwrap()
         );
@@ -281,7 +437,6 @@ mod tests {
                 Feature::LicenseInfo,
                 Feature::Vacuum,
                 Feature::Test,
-                Feature::VirtualColumn,
                 Feature::DataMask,
                 Feature::ComputedColumn,
                 Feature::StorageEncryption,
@@ -289,7 +444,6 @@ mod tests {
                 Feature::TableRef,
                 Feature::AttacheTable,
                 Feature::AmendTable,
-                Feature::HilbertClustering,
                 Feature::WorkloadGroup,
                 Feature::SystemHistory,
                 Feature::PrivateTask,
@@ -298,7 +452,7 @@ mod tests {
         };
 
         assert_eq!(
-            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [amend_table,attach_table,computed_column,data_mask,hilbert_clustering,license_info,private_task,row_access_policy,storage_encryption,stream,system_history,table_ref,vacuum,virtual_column,workload_group] }",
+            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [amend_table,attach_table,computed_column,data_mask,license_info,private_task,row_access_policy,storage_encryption,stream,system_history,table_ref,vacuum,workload_group] }",
             license_info.to_string()
         );
     }
@@ -310,7 +464,6 @@ mod tests {
             Feature::LicenseInfo,
             Feature::Vacuum,
             Feature::Test,
-            Feature::VirtualColumn,
             Feature::DataMask,
             Feature::ComputedColumn,
             Feature::StorageEncryption,
@@ -318,7 +471,6 @@ mod tests {
             Feature::TableRef,
             Feature::AttacheTable,
             Feature::AmendTable,
-            Feature::HilbertClustering,
             Feature::WorkloadGroup,
             Feature::SystemHistory,
             Feature::PrivateTask,

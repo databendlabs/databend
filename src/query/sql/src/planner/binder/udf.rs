@@ -24,8 +24,11 @@ use databend_common_ast::ast::UDFArgs;
 use databend_common_ast::ast::UDFDefinition;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::DataField;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::decimal::ARROW_UDF_DECIMAL_MAX_PRECISION;
+use databend_common_expression::types::decimal::ARROW_UDF_DECIMAL_MAX_SCALE;
 use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_functions::is_builtin_function;
 use databend_common_meta_app::principal::LambdaUDF;
@@ -51,6 +54,63 @@ use crate::plans::CreateUDFPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::Plan;
 use crate::plans::UDFLanguage;
+
+fn table_type_to_data_type(ty: &TableDataType) -> DataType {
+    DataType::from(ty)
+}
+
+fn table_types_to_data_types(tys: &[TableDataType]) -> Vec<DataType> {
+    tys.iter().map(table_type_to_data_type).collect()
+}
+
+fn validate_wasm_udf_type(data_type: &TableDataType) -> Result<()> {
+    match data_type {
+        TableDataType::Decimal(decimal) => {
+            let size = decimal.size();
+            if size.precision() > ARROW_UDF_DECIMAL_MAX_PRECISION
+                || size.scale() > ARROW_UDF_DECIMAL_MAX_SCALE
+            {
+                return Err(ErrorCode::InvalidArgument(format!(
+                    "WASM UDF decimal type {data_type} is not supported: the arrowudf.decimal ABI uses rust_decimal and supports precision up to {ARROW_UDF_DECIMAL_MAX_PRECISION} and scale between 0 and {ARROW_UDF_DECIMAL_MAX_SCALE}"
+                )));
+            }
+        }
+        TableDataType::Interval => {
+            return Err(ErrorCode::InvalidArgument(
+                "WASM UDF type Interval is not supported",
+            ));
+        }
+        TableDataType::TimestampTz => {
+            return Err(ErrorCode::InvalidArgument(
+                "WASM UDF type TimestampTz is not supported",
+            ));
+        }
+        TableDataType::Map(_)
+        | TableDataType::Vector(_)
+        | TableDataType::Opaque(_)
+        | TableDataType::StageLocation => {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "WASM UDF type {data_type} is not supported"
+            )));
+        }
+        TableDataType::Nullable(inner) | TableDataType::Array(inner) => {
+            validate_wasm_udf_type(inner)?;
+        }
+        TableDataType::Tuple { fields_type, .. } => {
+            fields_type.iter().try_for_each(validate_wasm_udf_type)?;
+        }
+        TableDataType::AggregateState {
+            argument_types,
+            state_type,
+            ..
+        } => {
+            argument_types.iter().try_for_each(validate_wasm_udf_type)?;
+            validate_wasm_udf_type(state_type)?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
 
 impl Binder {
     pub(in crate::planner::binder) async fn bind_udf_definition(
@@ -104,7 +164,7 @@ impl Binder {
                                     "StageLocation must have a corresponding variable name",
                                 ));
                             }
-                            arg_datatypes.push(DataType::from(&resolve_type_name_udf(arg_type)?));
+                            arg_datatypes.push(resolve_type_name_udf(arg_type)?);
                         }
                     }
                     UDFArgs::NameWithTypes(name_with_types) => {
@@ -112,11 +172,11 @@ impl Binder {
                             arg_names.push(
                                 normalize_identifier(arg_name, &self.name_resolution_ctx).name,
                             );
-                            arg_datatypes.push(DataType::from(&resolve_type_name_udf(arg_type)?));
+                            arg_datatypes.push(resolve_type_name_udf(arg_type)?);
                         }
                     }
                 }
-                let return_type = DataType::from(&resolve_type_name_udf(return_type)?);
+                let return_type = resolve_type_name_udf(return_type)?;
 
                 let connect_timeout = self
                     .ctx
@@ -146,8 +206,10 @@ impl Binder {
                         .with_handler_name(handler)?
                         .with_query_id(&self.ctx.get_id())?
                         .with_headers(headers.iter())?;
+                let schema_arg_types = table_types_to_data_types(&arg_datatypes);
+                let schema_return_type = table_type_to_data_type(&return_type);
                 client
-                    .check_schema(handler, &arg_datatypes, &return_type)
+                    .check_schema(handler, &schema_arg_types, &schema_return_type)
                     .await?;
 
                 Ok(UserDefinedFunction {
@@ -240,7 +302,7 @@ impl Binder {
                     .iter()
                     .map(|(name, arg_type)| {
                         let column = normalize_identifier(name, &self.name_resolution_ctx).name;
-                        let ty = DataType::from(&resolve_type_name_udf(arg_type)?);
+                        let ty = resolve_type_name_udf(arg_type)?;
                         Ok((column, ty))
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -249,7 +311,7 @@ impl Binder {
                     .iter()
                     .map(|(name, arg_type)| {
                         let column = normalize_identifier(name, &self.name_resolution_ctx).name;
-                        let ty = DataType::from(&resolve_type_name_udf(arg_type)?);
+                        let ty = resolve_type_name_udf(arg_type)?;
                         Ok((column, ty))
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -282,14 +344,14 @@ impl Binder {
 
                 for (arg_name, arg_type) in arg_types {
                     arg_names.push(normalize_identifier(arg_name, &self.name_resolution_ctx).name);
-                    arg_datatypes.push(DataType::from(&resolve_type_name_udf(arg_type)?));
+                    arg_datatypes.push(resolve_type_name_udf(arg_type)?);
                 }
 
                 let return_types = return_types
                     .iter()
                     .map(|(name, arg_type)| {
                         let column = normalize_identifier(name, &self.name_resolution_ctx).name;
-                        let ty = DataType::from(&resolve_type_name_udf(arg_type)?);
+                        let ty = resolve_type_name_udf(arg_type)?;
                         Ok((column, ty))
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -320,11 +382,11 @@ impl Binder {
                     .iter()
                     .map(|(name, arg_type)| {
                         let column = normalize_identifier(name, &self.name_resolution_ctx).name;
-                        let ty = DataType::from(&resolve_type_name_udf(arg_type)?);
+                        let ty = resolve_type_name_udf(arg_type)?;
                         Ok((column, ty))
                     })
                     .collect::<Result<Vec<_>>>()?;
-                let return_type = DataType::from(&resolve_type_name_udf(return_type)?);
+                let return_type = resolve_type_name_udf(return_type)?;
 
                 Ok(UserDefinedFunction {
                     name,
@@ -441,10 +503,15 @@ fn create_udf_definition_script(
 
     let arg_types = arg_types
         .types_iter()
-        .map(|arg_type| Ok(DataType::from(&resolve_type_name_udf(arg_type)?)))
+        .map(resolve_type_name_udf)
         .collect::<Result<Vec<_>>>()?;
 
-    let return_type = DataType::from(&resolve_type_name_udf(return_type)?);
+    let return_type = resolve_type_name_udf(return_type)?;
+
+    if language == UDFLanguage::WebAssembly {
+        arg_types.iter().try_for_each(validate_wasm_udf_type)?;
+        validate_wasm_udf_type(&return_type)?;
+    }
 
     let mut runtime_version = runtime_version.to_string();
     if runtime_version.is_empty() && language == UDFLanguage::Python {
@@ -456,9 +523,9 @@ fn create_udf_definition_script(
             let state_fields = fields
                 .iter()
                 .map(|field| {
-                    Ok(DataField::new(
+                    Ok(TableField::new(
                         &field.name.name,
-                        DataType::from(&resolve_type_name_udf(&field.type_name)?),
+                        resolve_type_name_udf(&field.type_name)?,
                     ))
                 })
                 .collect::<Result<Vec<_>>>()?;
@@ -495,5 +562,51 @@ fn create_udf_definition_script(
             runtime_version,
             immutable,
         })),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::decimal::DecimalDataType;
+    use databend_common_expression::types::decimal::DecimalSize;
+
+    use super::*;
+
+    #[test]
+    fn test_validate_wasm_udf_decimal_types() {
+        let decimal64 =
+            TableDataType::Decimal(DecimalDataType::Decimal64(DecimalSize::new(18, 2).unwrap()));
+        assert!(validate_wasm_udf_type(&decimal64).is_ok());
+
+        let decimal128 = TableDataType::Decimal(DecimalDataType::Decimal128(
+            DecimalSize::new(28, 28).unwrap(),
+        ));
+        assert!(validate_wasm_udf_type(&decimal128).is_ok());
+
+        let wide_decimal = TableDataType::Decimal(DecimalDataType::Decimal256(
+            DecimalSize::new(76, 30).unwrap(),
+        ));
+        assert!(validate_wasm_udf_type(&wide_decimal).is_err());
+
+        let nested_wide_decimal = TableDataType::Array(Box::new(wide_decimal));
+        assert!(validate_wasm_udf_type(&nested_wide_decimal).is_err());
+        assert!(validate_wasm_udf_type(&TableDataType::Interval).is_err());
+        assert!(validate_wasm_udf_type(&TableDataType::TimestampTz).is_err());
+        assert!(
+            validate_wasm_udf_type(&TableDataType::Vector(
+                databend_common_expression::types::VectorDataType::Float32(3),
+            ))
+            .is_err()
+        );
+
+        let map = TableDataType::Map(Box::new(TableDataType::Tuple {
+            fields_name: vec!["key".to_string(), "value".to_string()],
+            fields_type: vec![
+                TableDataType::String,
+                TableDataType::Number(databend_common_expression::types::NumberDataType::Int32),
+            ],
+        }));
+        assert!(validate_wasm_udf_type(&map).is_err());
+        assert!(validate_wasm_udf_type(&TableDataType::Array(Box::new(map))).is_err());
     }
 }

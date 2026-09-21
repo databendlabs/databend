@@ -31,15 +31,26 @@
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::collapsible_if)]
 #![allow(clippy::let_unit_value)]
-#![feature(box_patterns)]
+#![allow(incomplete_features)]
+#![feature(deref_patterns)]
+// OpenDAL layers produce deeply nested async future types.
+#![recursion_limit = "256"]
 
 mod auth;
 pub use auth::RefreshableToken;
 pub use auth::TokenFile;
 
 mod config;
+mod endpoint_policy;
+pub use config::EndpointPolicyScope;
+pub use config::EndpointUrlPolicy;
+pub use config::EndpointUrlPolicyConfig;
 pub use config::ShareTableConfig;
+pub use config::StagePathTraversalPolicy;
 pub use config::StorageConfig;
+pub use endpoint_policy::EndpointUrlPolicyRegistry;
+pub use endpoint_policy::check_storage_endpoint_url;
+pub use endpoint_policy::check_storage_params_endpoints;
 
 mod concurrent_limit_layer;
 pub use concurrent_limit_layer::ConcurrentLimitLayer;
@@ -53,6 +64,7 @@ pub use operator::IcebergFileIO;
 pub use operator::OperatorRegistry;
 pub use operator::check_operator;
 pub use operator::init_operator;
+pub use operator::init_operator_with_policy_scope;
 
 mod operator_cache;
 
@@ -84,7 +96,6 @@ mod copy;
 mod merge;
 mod meta_hll;
 mod metrics_layer;
-mod multi_table_insert;
 
 pub use copy::CopyStatus;
 pub use copy::FileParseError;
@@ -93,4 +104,3 @@ pub use copy::FileStatus;
 pub use merge::MutationStatus;
 pub use meta_hll::MetaHLL;
 pub use meta_hll::MetaHLL12;
-pub use multi_table_insert::MultiTableInsertStatus;

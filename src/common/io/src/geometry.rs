@@ -39,6 +39,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use wkt::TryFromWkt;
 
+pub const UNKNOWN_SRID: i32 = 0;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum GeometryDataType {
     WKB,
@@ -109,27 +111,15 @@ pub fn parse_bytes_to_ewkb(buf: &[u8], srid: Option<i32>) -> Result<Vec<u8>> {
 /// # Example
 ///
 /// ```
-/// let geo_json = r#"
-///         {
-///           "type": "Feature",
-///           "geometry": {
-///             "type": "Point",
-///             "coordinates": [125.6, 10.1]
-///           },
-///           "properties": {
-///             "name": "Dinagat Islands"
-///           }
-///         }
-///     "#;
+/// use databend_common_io::geometry::geometry_from_str;
 ///
-/// let wkt: &[u8] = "LINESTRING(0 0 1, 1 1 1, 2 1 2)".as_bytes();
-/// let wkb: &[u8] = "0101000020797f000066666666a9cb17411f85ebc19e325641".as_bytes();
-/// println!(
-///     "wkt:{ } wkb:{ } json: { }",
-///     geometry_from_str(wkt).unwrap(),
-///     geometry_from_str(wkb).unwrap(),
-///     geometry_from_str(geo_json.as_bytes()).unwrap()
-/// );
+/// // WKT input without SRID
+/// let ewkb = geometry_from_str("POINT(125.6 10.1)", None).unwrap();
+/// assert_eq!(ewkb.len(), 21); // endian(1) + type(4) + x/y(16)
+///
+/// // EWKT input with SRID
+/// let ewkb = geometry_from_str("SRID=4326;POINT(125.6 10.1)", None).unwrap();
+/// assert_eq!(ewkb.len(), 25); // endian(1) + type(4) + srid(4) + x/y(16)
 /// ```
 pub fn geometry_from_str(input: &str, srid: Option<i32>) -> Result<Vec<u8>> {
     let input = input.trim();
@@ -191,7 +181,7 @@ pub(crate) fn ewkt_str_to_geo(input: &str) -> Result<(Geometry, Option<i32>)> {
 
 pub fn geometry_format(ewkb: &[u8], format_type: GeometryDataType) -> Result<String> {
     let (geo, srid) = ewkb_to_geo(&mut Ewkb(ewkb))?;
-    let srid = srid.unwrap_or(0);
+    let srid = srid.unwrap_or(UNKNOWN_SRID);
     match format_type {
         GeometryDataType::WKB => geo_to_wkb(geo).map(encode_upper),
         GeometryDataType::EWKB => geo_to_ewkb(geo, Some(srid)).map(encode_upper),

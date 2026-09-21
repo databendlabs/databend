@@ -43,8 +43,11 @@ use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterNotificationPlan;
 use crate::plans::AlterPasswordPolicyPlan;
 use crate::plans::AlterRolePlan;
+use crate::plans::AlterSharePlan;
 use crate::plans::AlterStagePlan;
 use crate::plans::AlterTableClusterKeyPlan;
+use crate::plans::AlterTablePartitionByPlan;
+use crate::plans::AlterTableTtlPlan;
 use crate::plans::AlterTaskPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
@@ -57,17 +60,20 @@ use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
 use crate::plans::CreateCatalogPlan;
 use crate::plans::CreateConnectionPlan;
+use crate::plans::CreateDatabaseFromSharePlan;
 use crate::plans::CreateDatabasePlan;
 use crate::plans::CreateDatamaskPolicyPlan;
 use crate::plans::CreateDynamicTablePlan;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateIndexPlan;
+use crate::plans::CreateMaterializedViewPlan;
 use crate::plans::CreateNetworkPolicyPlan;
 use crate::plans::CreateNotificationPlan;
 use crate::plans::CreatePasswordPolicyPlan;
 use crate::plans::CreateProcedurePlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::CreateSequencePlan;
+use crate::plans::CreateSharePlan;
 use crate::plans::CreateStagePlan;
 use crate::plans::CreateStreamPlan;
 use crate::plans::CreateTableBranchPlan;
@@ -90,6 +96,7 @@ use crate::plans::DescPasswordPolicyPlan;
 use crate::plans::DescProcedurePlan;
 use crate::plans::DescRowAccessPolicyPlan;
 use crate::plans::DescSequencePlan;
+use crate::plans::DescSharePlan;
 use crate::plans::DescUserPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
@@ -101,6 +108,7 @@ use crate::plans::DropDatabasePlan;
 use crate::plans::DropDatamaskPolicyPlan;
 use crate::plans::DropFileFormatPlan;
 use crate::plans::DropIndexPlan;
+use crate::plans::DropMaterializedViewPlan;
 use crate::plans::DropNetworkPolicyPlan;
 use crate::plans::DropNotificationPlan;
 use crate::plans::DropPasswordPolicyPlan;
@@ -108,6 +116,7 @@ use crate::plans::DropProcedurePlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropRowAccessPolicyPlan;
 use crate::plans::DropSequencePlan;
+use crate::plans::DropSharePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropStreamPlan;
 use crate::plans::DropTableBranchPlan;
@@ -133,6 +142,7 @@ use crate::plans::ExecuteTaskPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
+use crate::plans::GrantSharePlan;
 use crate::plans::Insert;
 use crate::plans::InsertMultiTable;
 use crate::plans::InspectWarehousePlan;
@@ -140,11 +150,13 @@ use crate::plans::KillPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
 use crate::plans::OptimizeCompactSegmentPlan;
-use crate::plans::OptimizePurgePlan;
 use crate::plans::PresignPlan;
 use crate::plans::ReclusterPlan;
 use crate::plans::RefreshDatabaseCachePlan;
+use crate::plans::RefreshDynamicTablePlan;
 use crate::plans::RefreshIndexPlan;
+use crate::plans::RefreshLineagePlan;
+use crate::plans::RefreshMaterializedViewPlan;
 use crate::plans::RefreshTableCachePlan;
 use crate::plans::RefreshTableIndexPlan;
 use crate::plans::RefreshVirtualColumnPlan;
@@ -161,6 +173,7 @@ use crate::plans::ResumeWarehousePlan;
 use crate::plans::RevertTablePlan;
 use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
+use crate::plans::RevokeSharePlan;
 use crate::plans::SetObjectTagsPlan;
 use crate::plans::SetOptionsPlan;
 use crate::plans::SetPlan;
@@ -171,10 +184,12 @@ use crate::plans::SetWorkloadGroupQuotasPlan;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowCreateCatalogPlan;
 use crate::plans::ShowCreateDatabasePlan;
+use crate::plans::ShowCreateMaterializedViewPlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowNetworkPoliciesPlan;
 use crate::plans::ShowPublicKeysPlan;
+use crate::plans::ShowSharesPlan;
 use crate::plans::ShowTasksPlan;
 use crate::plans::SuspendWarehousePlan;
 use crate::plans::SwapTablePlan;
@@ -190,8 +205,10 @@ use crate::plans::UnsetWorkloadGroupQuotasPlan;
 use crate::plans::UseCatalogPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::UseWarehousePlan;
+use crate::plans::VacuumAllPlan;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
+use crate::plans::VacuumTablesPlan;
 use crate::plans::VacuumTemporaryFilesPlan;
 use crate::plans::VacuumVirtualColumnPlan;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
@@ -279,12 +296,22 @@ pub enum Plan {
     // Databases
     ShowCreateDatabase(Box<ShowCreateDatabasePlan>),
     CreateDatabase(Box<CreateDatabasePlan>),
+    CreateDatabaseFromShare(Box<CreateDatabaseFromSharePlan>),
     DropDatabase(Box<DropDatabasePlan>),
     UndropDatabase(Box<UndropDatabasePlan>),
     RenameDatabase(Box<RenameDatabasePlan>),
     UseDatabase(Box<UseDatabasePlan>),
     RefreshDatabaseCache(Box<RefreshDatabaseCachePlan>),
     AlterDatabase(Box<AlterDatabasePlan>),
+
+    // Shares
+    CreateShare(Box<CreateSharePlan>),
+    DropShare(Box<DropSharePlan>),
+    AlterShare(Box<AlterSharePlan>),
+    GrantShare(Box<GrantSharePlan>),
+    RevokeShare(Box<RevokeSharePlan>),
+    ShowShares(Box<ShowSharesPlan>),
+    DescShare(Box<DescSharePlan>),
 
     // Tables
     ShowCreateTable(Box<ShowCreateTablePlan>),
@@ -302,11 +329,15 @@ pub enum Plan {
     AddTableConstraint(Box<AddTableConstraintPlan>),
     DropTableConstraint(Box<DropTableConstraintPlan>),
     AlterTableClusterKey(Box<AlterTableClusterKeyPlan>),
+    AlterTablePartitionBy(Box<AlterTablePartitionByPlan>),
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
+    AlterTableTtl(Box<AlterTableTtlPlan>),
     ReclusterTable(Box<ReclusterPlan>),
     RevertTable(Box<RevertTablePlan>),
     TruncateTable(Box<TruncateTablePlan>),
     VacuumTable(Box<VacuumTablePlan>),
+    VacuumTables(Box<VacuumTablesPlan>),
+    VacuumAll(Box<VacuumAllPlan>),
     VacuumDropTable(Box<VacuumDropTablePlan>),
     VacuumTemporaryFiles(Box<VacuumTemporaryFilesPlan>),
     AnalyzeTable(Box<AnalyzeTablePlan>),
@@ -324,11 +355,9 @@ pub enum Plan {
     DropTableTag(Box<DropTableTagPlan>),
 
     // Optimize
-    OptimizePurge(Box<OptimizePurgePlan>),
     OptimizeCompactSegment(Box<OptimizeCompactSegmentPlan>),
     OptimizeCompactBlock {
         s_expr: Box<SExpr>,
-        need_purge: bool,
     },
 
     // Insert
@@ -349,6 +378,13 @@ pub enum Plan {
     AlterView(Box<AlterViewPlan>),
     DropView(Box<DropViewPlan>),
     DescribeView(Box<DescribeViewPlan>),
+    RefreshLineage(Box<RefreshLineagePlan>),
+
+    // Materialized Views
+    CreateMaterializedView(Box<CreateMaterializedViewPlan>),
+    ShowCreateMaterializedView(Box<ShowCreateMaterializedViewPlan>),
+    DropMaterializedView(Box<DropMaterializedViewPlan>),
+    RefreshMaterializedView(Box<RefreshMaterializedViewPlan>),
 
     // Streams
     CreateStream(Box<CreateStreamPlan>),
@@ -454,6 +490,7 @@ pub enum Plan {
     ExecuteTask(Box<ExecuteTaskPlan>),
 
     CreateDynamicTable(Box<CreateDynamicTablePlan>),
+    RefreshDynamicTable(Box<RefreshDynamicTablePlan>),
 
     // Txn
     Begin,
@@ -502,6 +539,7 @@ pub enum RewriteKind {
     ShowDatabases,
     ShowDropDatabases,
     ShowTables(String, String),
+    ShowMaterializedViews,
     ShowColumns(String, String, String),
     ShowTablesStatus,
     ShowVirtualColumns,
@@ -543,7 +581,6 @@ impl Plan {
             Plan::Insert(_) => QueryKind::Insert,
             Plan::Replace(_)
             | Plan::DataMutation { .. }
-            | Plan::OptimizePurge(_)
             | Plan::OptimizeCompactSegment(_)
             | Plan::OptimizeCompactBlock { .. } => QueryKind::Update,
             _ => QueryKind::Other,
@@ -576,14 +613,20 @@ impl Plan {
             Plan::DataMutation { schema, .. } => schema.clone(),
             Plan::ShowCreateCatalog(plan) => plan.schema(),
             Plan::ShowCreateDatabase(plan) => plan.schema(),
+            Plan::ShowShares(plan) => plan.schema(),
+            Plan::DescShare(plan) => plan.schema(),
             Plan::ShowCreateDictionary(plan) => plan.schema(),
             Plan::ShowCreateTable(plan) => plan.schema(),
+            Plan::ShowCreateMaterializedView(plan) => plan.schema(),
             Plan::DescribeTable(plan) => plan.schema(),
             Plan::VacuumTable(plan) => plan.schema(),
+            Plan::VacuumTables(plan) => plan.schema(),
+            Plan::VacuumAll(plan) => plan.schema(),
             Plan::VacuumDropTable(plan) => plan.schema(),
             Plan::VacuumTemporaryFiles(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
             Plan::DescribeView(plan) => plan.schema(),
+            Plan::RefreshLineage(plan) => plan.schema(),
             Plan::ShowFileFormats(plan) => plan.schema(),
             Plan::Replace(plan) => plan.schema(),
             Plan::Presign(plan) => plan.schema(),
@@ -709,5 +752,54 @@ impl Plan {
             formatted_ast: formatted_ast.clone(),
             ignore_result: *ignore_result,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vacuum_plans_have_no_result_set() {
+        let plans = [
+            Plan::VacuumTable(Box::new(VacuumTablePlan {
+                catalog: "default".to_string(),
+                database: "default".to_string(),
+                table: "t".to_string(),
+            })),
+            Plan::VacuumTables(Box::new(VacuumTablesPlan {
+                catalog: "default".to_string(),
+                database: None,
+            })),
+            Plan::VacuumAll(Box::new(VacuumAllPlan {
+                catalog: "default".to_string(),
+            })),
+            Plan::VacuumDropTable(Box::new(VacuumDropTablePlan {
+                catalog: "default".to_string(),
+                database: String::new(),
+            })),
+            Plan::VacuumTemporaryFiles(Box::new(VacuumTemporaryFilesPlan {
+                limit: None,
+                retain: None,
+            })),
+        ];
+
+        for plan in plans {
+            assert!(plan.schema().fields().is_empty());
+            assert!(!plan.has_result_set());
+        }
+    }
+
+    #[test]
+    fn virtual_column_vacuum_has_removed_files_result() {
+        let plan = Plan::VacuumVirtualColumn(Box::new(VacuumVirtualColumnPlan {
+            catalog: "default".to_string(),
+            database: "default".to_string(),
+            table: "t".to_string(),
+        }));
+
+        assert_eq!(plan.schema().fields().len(), 1);
+        assert_eq!(plan.schema().field(0).name(), "removed_files");
+        assert!(plan.has_result_set());
     }
 }

@@ -90,11 +90,11 @@ out stats     :
 
 expr          : s like 'a\_b'
 cardinality   : 100
-estimated     : 12.5
+estimated     : 0
 in stats      :
 0 ColumnStat { min: Bytes([97, 97]), max: Bytes([122, 122]), ndv: 40.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: Bytes([97, 97]), max: Bytes([122, 122]), ndv: ~11.352935632512011[..12.5], null_count: 0, histogram: None }
+0 ColumnStat { min: Bytes([97, 97]), max: Bytes([122, 122]), ndv: 0.0, null_count: 0, histogram: None }
 
 expr          : s like '%%%%'
 cardinality   : 100

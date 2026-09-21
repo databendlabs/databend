@@ -328,11 +328,7 @@ impl AuthInfo {
 
     pub fn get_password(&self) -> Option<Vec<u8>> {
         match self {
-            AuthInfo::Password {
-                hash_value: p,
-                hash_method: _,
-                ..
-            } => Some(p.to_vec()),
+            AuthInfo::Password { hash_value: p, .. } => Some(p.to_vec()),
             _ => None,
         }
     }

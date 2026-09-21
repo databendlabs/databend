@@ -18,6 +18,8 @@ use std::sync::Arc;
 use arrow_array::RecordBatch;
 use arrow_ipc::reader::FileReaderBuilder;
 use arrow_ipc::reader::StreamReader;
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
@@ -292,22 +294,41 @@ fn add_arrow_internal_columns(
     path: String,
     block: &mut DataBlock,
     start_row: &mut u64,
+    content_key: Option<&str>,
+    last_modified: Option<DateTime<Utc>>,
 ) {
+    let num_rows = block.num_rows();
     for column_type in internal_columns {
         match column_type {
-            InternalColumnType::FileName => {
+            InternalColumnType::FileName | InternalColumnType::FilePath => {
                 block.add_const_column(Scalar::String(path.clone()), DataType::String);
             }
+            InternalColumnType::FileBasename => {
+                let basename = path.rsplit('/').next().unwrap_or(&path).to_string();
+                block.add_const_column(Scalar::String(basename), DataType::String);
+            }
             InternalColumnType::FileRowNumber => {
-                let end_row = *start_row + block.num_rows() as u64;
+                let end_row = *start_row + num_rows as u64;
                 block.add_column(Column::Number(
                     NumberColumnBuilder::UInt64((*start_row..end_row).collect()).build(),
                 ));
                 *start_row = end_row;
             }
-            _ => unreachable!(
-                "except InternalColumnType::FileName or InternalColumnType::FileRowNumber"
-            ),
+            InternalColumnType::FileContentKey => {
+                let scalar = match content_key {
+                    Some(key) => Scalar::String(key.to_string()),
+                    None => Scalar::Null,
+                };
+                block.add_const_column(scalar, DataType::Nullable(Box::new(DataType::String)));
+            }
+            InternalColumnType::FileLastModified => {
+                let scalar = match last_modified {
+                    Some(ts) => Scalar::Timestamp(ts.timestamp_micros()),
+                    None => Scalar::Null,
+                };
+                block.add_const_column(scalar, DataType::Nullable(Box::new(DataType::Timestamp)));
+            }
+            _ => unreachable!("unexpected InternalColumnType in stage file reader"),
         }
     }
 }
@@ -319,26 +340,32 @@ impl AccumulatingTransform for ArrowBlockBuilder {
         let meta = data
             .get_owned_meta()
             .ok_or_else(|| ErrorCode::Internal("ArrowBlockBuilder expects file data meta"))?;
-        let (path, data) = match BytesBatch::downcast_from_err(meta) {
-            Ok(data) => (data.path, data.data),
+        let (path, data, content_key, last_modified) = match BytesBatch::downcast_from_err(meta) {
+            Ok(data) => (data.path, data.data, data.content_key, data.last_modified),
             Err(meta) => {
                 let data = WholeFileData::downcast_from(meta).ok_or_else(|| {
                     ErrorCode::Internal("ArrowBlockBuilder expects Arrow file data")
                 })?;
-                (data.path, data.data)
+                (data.path, data.data, data.content_key, data.last_modified)
             }
         };
 
         if self.ctx.is_select {
-            return self.transform_for_select(path, data);
+            return self.transform_for_select(path, data, content_key.as_deref(), last_modified);
         }
 
-        self.transform_for_copy(path, data)
+        self.transform_for_copy(path, data, content_key.as_deref(), last_modified)
     }
 }
 
 impl ArrowBlockBuilder {
-    fn transform_for_select(&mut self, path: String, data: Vec<u8>) -> Result<Vec<DataBlock>> {
+    fn transform_for_select(
+        &mut self,
+        path: String,
+        data: Vec<u8>,
+        content_key: Option<&str>,
+        last_modified: Option<DateTime<Utc>>,
+    ) -> Result<Vec<DataBlock>> {
         let mut blocks = Vec::new();
         let mut rows_start = 0;
         for batch in self.read_batches(&path, data)? {
@@ -351,13 +378,21 @@ impl ArrowBlockBuilder {
                 path.clone(),
                 &mut block,
                 &mut rows_start,
+                content_key,
+                last_modified,
             );
             blocks.push(block);
         }
         Ok(blocks)
     }
 
-    fn transform_for_copy(&mut self, path: String, data: Vec<u8>) -> Result<Vec<DataBlock>> {
+    fn transform_for_copy(
+        &mut self,
+        path: String,
+        data: Vec<u8>,
+        content_key: Option<&str>,
+        last_modified: Option<DateTime<Utc>>,
+    ) -> Result<Vec<DataBlock>> {
         let mut file_status = FileStatus::default();
         let batches = match self.read_batches(&path, data) {
             Ok(batches) => batches,
@@ -406,6 +441,8 @@ impl ArrowBlockBuilder {
                 path.clone(),
                 &mut block,
                 &mut rows_start,
+                content_key,
+                last_modified,
             );
             rows_loaded += block.num_rows();
             blocks.push(block);

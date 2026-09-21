@@ -17,14 +17,13 @@ extern crate afl;
 
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::Backtrace;
+use databend_common_ast::parser::Dialect;
 
 fn main() {
     loop {
         fuzz!(|text: String| {
-            let backtrace = Backtrace::new();
             let tokens = tokenize_sql(&text).unwrap();
-            let _ = parse_expr(&tokens, &backtrace);
+            let _ = parse_expr(&tokens, Dialect::PostgreSQL);
         });
     }
 }

@@ -17,11 +17,60 @@ use databend_common_expression::Scalar;
 use databend_common_expression::converts::meta::IndexScalar;
 use databend_common_expression::converts::meta::LegacyColumn;
 use databend_common_expression::converts::meta::LegacyScalar;
+use databend_common_expression::types::DecimalScalar;
+use databend_common_expression::types::NumberScalar;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_io::prelude::bincode_serialize_into_buf;
 
 use crate::DataTypeFilter;
 use crate::rand_block_for_all_types;
+
+#[allow(dead_code)]
+#[derive(serde::Serialize)]
+enum OldLegacyScalar {
+    Null,
+    EmptyArray,
+    EmptyMap,
+    Number(NumberScalar),
+    Decimal(DecimalScalar),
+    Timestamp(i64),
+    Date(i32),
+    Boolean(bool),
+    String(Vec<u8>),
+    Array(()),
+    Map(()),
+    Bitmap(Vec<u8>),
+    Tuple(Vec<Scalar>),
+    Variant(Vec<u8>),
+}
+
+#[test]
+pub fn test_legacy_scalar_reads_old_bincode_layout() -> databend_common_exception::Result<()> {
+    let old_scalars = vec![
+        OldLegacyScalar::Boolean(true),
+        OldLegacyScalar::String(b"abc".to_vec()),
+        OldLegacyScalar::Tuple(vec![Scalar::String("tuple".to_string())]),
+        OldLegacyScalar::Variant(vec![1, 2, 3]),
+    ];
+
+    let mut data = vec![];
+    bincode_serialize_into_buf(&mut data, &old_scalars)?;
+    let new_scalars: Vec<LegacyScalar> = bincode_deserialize_from_slice(&data)?;
+
+    let decoded = new_scalars
+        .into_iter()
+        .map(Scalar::from)
+        .collect::<Vec<_>>();
+    assert_eq!(decoded[0], Scalar::Boolean(true));
+    assert_eq!(decoded[1], Scalar::String("abc".to_string()));
+    assert_eq!(
+        decoded[2],
+        Scalar::Tuple(vec![Scalar::String("tuple".to_string())])
+    );
+    assert!(matches!(&decoded[3], Scalar::Variant(bytes) if bytes == &[1, 2, 3]));
+
+    Ok(())
+}
 
 #[test]
 pub fn test_legacy_converts() -> databend_common_exception::Result<()> {
@@ -59,7 +108,7 @@ pub fn test_legacy_converts() -> databend_common_exception::Result<()> {
             bincode_serialize_into_buf(&mut data, &v3_scalars).unwrap();
             let new_scalars: Vec<LegacyScalar> = bincode_deserialize_from_slice(&data).unwrap();
 
-            for (a, b) in v3_scalars.into_iter().zip(new_scalars.into_iter()) {
+            for (a, b) in v3_scalars.into_iter().zip(new_scalars) {
                 let a: Scalar = a.into();
                 let b: Scalar = b.into();
 

@@ -3,7 +3,7 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-echo "create or replace database test" | $BENDSQL_CLIENT_CONNECT
+echo "create or replace database test" | bendsql_connect_root
 
 
 stmt """

@@ -1,0 +1,111 @@
+# Cluster-only regression: this external-Parquet REPLACE path can trigger the bug only in a
+# multi-node deployment.
+#
+# Reproduced query shape:
+#
+#   REPLACE INTO replace_target ON (a, constant_key, c, e, b)
+#   SELECT a, b, c, d, 42::uint64 AS constant_key, e
+#   FROM (SELECT a, b, c, d, e FROM 'fs:///tmp/replace_into_external_parquet/');
+#
+#   file 1 --> node A --> projection: constant_key = Scalar(42)
+#   file 2 --> node B --> projection: constant_key = Scalar(42)
+#                         |
+#                  broadcast exchange
+#                    /              \
+#   local path keeps Scalar(42)   remote path serializes the block:
+#                                  Scalar(42) --> Column([42, ...])
+#
+# Before this fix, on a node responsible for a target block:
+#
+#   local:  constant_key is Scalar; other Bloom keys are Columns -> Scalar dropped -> 3 hashes
+#   remote: all four Bloom keys are Columns -> 4 hashes
+#   same DeletionAccumulator entry -> panic: 3 != 4
+#
+# This test case requires exactly three query nodes to reproduce the pre-fix panic reliably.
+query I
+select count() from system.clusters;
+----
+3
+
+statement ok
+create or replace table replace_target (
+    a uint64,
+    b uint64,
+    c uint64,
+    d uint64,
+    constant_key uint64,
+    e uint64
+) cluster by (a) row_per_block = 2;
+
+statement ok
+drop stage if exists replace_files;
+
+statement ok
+create stage replace_files
+url = 'fs:///tmp/replace_into_external_parquet/'
+file_format = (type = parquet);
+
+statement ok
+remove @replace_files;
+
+# Make each external Parquet file a separate scan partition in the REPLACE source subquery.
+statement ok
+set parquet_fast_read_bytes = 0;
+
+# a ranges from 1 to 18. This maps rows 1-9 to partition 0 and rows 10-18 to partition 1,
+# producing exactly two external Parquet files.
+statement ok
+copy into @replace_files from (
+    select
+        number + 1 as a,
+        number + 11 as b,
+        number + 21 as c,
+        number + 31 as d,
+        number + 41 as e
+    from numbers(18)
+) partition by (to_string(floor((a - 1) / 9)));
+
+# With row_per_block = 2, these six rows form three target blocks, one per query node. Their ranges
+# cover the source rows, and constant_key has the highest NDV so it is selected for Bloom pruning.
+# The first target row conflicts with source row a = 1. Its old d is 10; the source d is 31.
+statement ok
+insert into replace_target values
+    (1, 11, 21, 10, 42, 41), (100, 1000, 1000, 30, 101, 1000),
+    (1, 0, 0, 10, 2, 0), (100, 1000, 1000, 30, 102, 1000),
+    (1, 0, 0, 10, 3, 0), (100, 1000, 1000, 30, 103, 1000);
+
+statement ok
+set enable_distributed_replace_into = 1;
+
+statement ok
+replace into replace_target
+on (a, constant_key, c, e, b)
+select a, b, c, d, 42::uint64 as constant_key, e
+from (
+    select a, b, c, d, e
+    from 'fs:///tmp/replace_into_external_parquet/'
+);
+
+# REPLACE deletes the one conflicting target row, then inserts all 18 source rows.
+# The result has 6 initial rows - 1 deleted row + 18 inserted rows = 23.
+query I
+select count() from replace_target;
+----
+23
+
+# In this data set, a = 1 and constant_key = 42 uniquely identify the conflicting row.
+# It now has the source value d = 31 instead of the old target value d = 10.
+query I
+select d from replace_target
+where a = 1 and constant_key = 42;
+----
+31
+
+statement ok
+remove @replace_files;
+
+statement ok
+drop stage replace_files;
+
+statement ok
+drop table replace_target;

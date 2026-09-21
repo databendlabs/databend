@@ -182,13 +182,13 @@ where A: super::TypeCheckAdapter
         let (query_display, query_arg) = &args[1];
         let option_arg = if args.len() == 3 {
             let (display, arg) = &args[2];
-            let box (scalar, _) = self.resolve_core(arena, *arg)?;
+            let deref!((scalar, _)) = self.resolve_core(arena, *arg)?;
             Some((display.as_str(), scalar))
         } else {
             None
         };
 
-        let box (field_scalar, _) = self.resolve_core(arena, *field_arg)?;
+        let deref!((field_scalar, _)) = self.resolve_core(arena, *field_arg)?;
         let column_refs = match field_scalar {
             // single field without boost
             ScalarExpr::BoundColumnRef(column_ref) => {
@@ -227,7 +227,7 @@ where A: super::TypeCheckAdapter
                             )),
                         },
                     };
-                    let box (field_scalar, _) = self.resolve(&column_expr)?;
+                    let deref!((field_scalar, _)) = self.resolve(&column_expr)?;
                     let Ok(column_ref) = BoundColumnRef::try_from(field_scalar) else {
                         return Err(ErrorCode::SemanticError(
                             "invalid arguments for search function, field must be a column"
@@ -261,7 +261,7 @@ where A: super::TypeCheckAdapter
             }
         };
 
-        let box (query_scalar, _) = self.resolve_core(arena, *query_arg)?;
+        let deref!((query_scalar, _)) = self.resolve_core(arena, *query_arg)?;
         let Ok(query_expr) = ConstantExpr::try_from(query_scalar.clone()) else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, query text must be a constant string, but got {}",
@@ -315,13 +315,13 @@ where A: super::TypeCheckAdapter
         let (query_display, query_arg) = &args[0];
         let option_arg = if args.len() == 2 {
             let (display, arg) = &args[1];
-            let box (scalar, _) = self.resolve_core(arena, *arg)?;
+            let deref!((scalar, _)) = self.resolve_core(arena, *arg)?;
             Some((display.as_str(), scalar))
         } else {
             None
         };
 
-        let box (query_scalar, _) = self.resolve_core(arena, *query_arg)?;
+        let deref!((query_scalar, _)) = self.resolve_core(arena, *query_arg)?;
         let Ok(query_expr) = ConstantExpr::try_from(query_scalar.clone()) else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, query text must be a constant string, but got {}",
@@ -408,7 +408,7 @@ where A: super::TypeCheckAdapter
                     column: ColumnID::Name(Identifier::from_name(query_scalar.span(), field)),
                 },
             };
-            let box (field_scalar, _) = self.resolve(&column_expr)?;
+            let deref!((field_scalar, _)) = self.resolve(&column_expr)?;
             let Ok(column_ref) = BoundColumnRef::try_from(field_scalar) else {
                 return Err(ErrorCode::SemanticError(
                     "invalid arguments for search function, field must be a column".to_string(),
@@ -484,15 +484,13 @@ where A: super::TypeCheckAdapter
                             }
                         }
                     }
-                    "lenient" => {
-                        if lenient.is_none() {
-                            if option_val == "false" {
-                                lenient = Some(false);
-                                continue;
-                            } else if option_val == "true" {
-                                lenient = Some(true);
-                                continue;
-                            }
+                    "lenient" if lenient.is_none() => {
+                        if option_val == "false" {
+                            lenient = Some(false);
+                            continue;
+                        } else if option_val == "true" {
+                            lenient = Some(true);
+                            continue;
                         }
                     }
                     _ => {}

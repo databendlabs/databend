@@ -116,7 +116,7 @@ impl GlobalHistoryLog {
             _runtime: runtime.clone(),
         });
         GlobalInstance::set(instance);
-        if cfg.log.history.log_only {
+        if !cfg.log.history.transforms_enabled() {
             info!("History tables transform is disabled, only logging is enabled.");
             return Ok(());
         }
@@ -206,6 +206,9 @@ impl GlobalHistoryLog {
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         let query_id = Uuid::new_v4().to_string();
         tracking_payload.query_id = Some(query_id.clone());
+        tracking_payload.io_stats = Some(std::sync::Arc::new(
+            databend_common_base::runtime::IoStats::default(),
+        ));
         tracking_payload.mem_stat = Some(MemStat::create(format!("Query-{}", query_id)));
         // prevent log table from logging its own logs
         tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
@@ -240,7 +243,7 @@ impl GlobalHistoryLog {
         let create_stage = if let Some(connection) = &self.connection {
             connection.to_create_stage_sql(&self.stage_name)
         } else {
-            format!("CREATE STAGE IF NOT EXISTS {}", &self.stage_name)
+            format!("CREATE STAGE IF NOT EXISTS {}", self.stage_name)
         };
         self.execute_sql(&create_stage).await?;
 
@@ -294,8 +297,8 @@ impl GlobalHistoryLog {
             .get_u64_from_meta(&format!("{}/{}/batch_number", meta_key, table.name))
             .await?
             .unwrap_or(0);
-        let sql = if table.name == "log_history" {
-            table.assemble_log_history_transform(&self.stage_name, batch_number_begin)
+        let sqls = if table.name == "log_history" {
+            table.assemble_log_history_transforms(&self.stage_name, batch_number_begin)
         } else {
             batch_number_end = self
                 .meta_handle
@@ -305,9 +308,13 @@ impl GlobalHistoryLog {
             if batch_number_begin >= batch_number_end {
                 return Ok(());
             }
-            table.assemble_normal_transform(batch_number_begin, batch_number_end)
+            table.assemble_normal_transforms(batch_number_begin, batch_number_end)
         };
-        self.execute_sql(&sql).await?;
+        // Advance the batch checkpoint only after every phase succeeds. Tables that configure
+        // additional phases must keep them replay-safe so a partial failure can retry the batch.
+        for sql in sqls {
+            self.execute_sql(&sql).await?;
+        }
         if table.name == "log_history" {
             self.meta_handle
                 .set_u64_to_meta(
@@ -354,10 +361,11 @@ impl GlobalHistoryLog {
             .await?;
         if got_permit {
             let start = Instant::now();
-            let sql = &table.delete;
-            self.execute_sql(sql).await?;
-            let context = self.create_context().await?;
+            if let Some(delete) = &table.delete {
+                self.execute_sql(delete).await?;
+            }
             let delete_elapsed = start.elapsed().as_secs();
+            let context = self.create_context().await?;
             if LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(context.get_license_key(), Feature::Vacuum)
                 .is_ok()
@@ -450,7 +458,7 @@ impl GlobalHistoryLog {
                         // only around every 30 seconds; this check enables faster failover.
                         if e.code() == ErrorCode::DUPLICATED_UPSERT_FILES
                             || e.code() == ErrorCode::TABLE_ALREADY_LOCKED
-                            || e.code() == ErrorCode::TABLE_LOCK_EXPIRED
+                            || e.code() == ErrorCode::LEASE_EXPIRED
                             || e.code() == ErrorCode::TABLE_VERSION_MISMATCHED
                         {
                             if let Ok(valid) =
@@ -501,7 +509,7 @@ impl GlobalHistoryLog {
 
         let cluster_id = dummy_cluster.get_cluster_id()?;
         let session = create_session(&self.tenant_id, &cluster_id).await?;
-        session.create_query_context_with_cluster(dummy_cluster, self.version)
+        session.create_query_context_with_cluster(dummy_cluster, self.version, None)
     }
 }
 

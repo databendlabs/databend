@@ -37,6 +37,7 @@ use crate::types::DateType;
 use crate::types::DecimalDataKind;
 use crate::types::DecimalScalar;
 use crate::types::DecimalView;
+use crate::types::IntervalType;
 use crate::types::NumberColumn;
 use crate::types::NumberScalar;
 use crate::types::NumberType;
@@ -77,6 +78,7 @@ pub(super) fn rowformat_size(data_type: &DataType) -> usize {
         DataType::Array(_) | DataType::Map(_) | DataType::Tuple(_) | DataType::Vector(_) => 4 + 8,
         DataType::Generic(_) | DataType::StageLocation => unreachable!(),
         DataType::Opaque(size) => size * 8,
+        DataType::AggregateState(state) => rowformat_size(state.physical_type()),
     }
 }
 
@@ -183,6 +185,13 @@ pub(super) unsafe fn serialize_column_to_rowformat(
                 }
             }
         }
+        Column::Interval(buffer) => {
+            for row in select_vector {
+                unsafe {
+                    address[*row].write(offset, &buffer[*row]);
+                }
+            }
+        }
         Column::Nullable(c) => unsafe {
             serialize_column_to_rowformat(arena, &c.column, select_vector, address, offset, scratch)
         },
@@ -215,7 +224,7 @@ pub(super) unsafe fn serialize_const_column_to_rowformat(
     unsafe {
         match scalar {
             Scalar::Null => {
-                if let Some(box data_type) = data_type.as_nullable() {
+                if let Some(deref!(data_type)) = data_type.as_nullable() {
                     serialize_const_column_to_rowformat(
                         arena,
                         &Scalar::default_value(data_type),
@@ -439,6 +448,9 @@ impl<'s> CompareState<'s> {
             Column::Date(buffer) => {
                 self.match_column_type::<DateType>(buffer, col_offset, validity, counts)
             }
+            Column::Interval(buffer) => {
+                self.match_column_type::<IntervalType>(buffer, col_offset, validity, counts)
+            }
             Column::String(str_view) => {
                 self.match_validity_with(counts, validity, |row, row_ptr| unsafe {
                     row_ptr.eq_string_view(col_offset, str_view, *row)
@@ -496,6 +508,9 @@ impl<'s> CompareState<'s> {
                 self.match_scalar_type::<TimestampType>(value, col_offset, counts)
             }
             Scalar::Date(value) => self.match_scalar_type::<DateType>(value, col_offset, counts),
+            Scalar::Interval(value) => {
+                self.match_scalar_type::<IntervalType>(value, col_offset, counts)
+            }
             Scalar::String(value) => self.match_with(counts, |_, row_ptr| unsafe {
                 row_ptr.is_bytes_eq(col_offset, value.as_bytes())
             }),

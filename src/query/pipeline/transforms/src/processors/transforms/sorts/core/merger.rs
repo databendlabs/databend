@@ -32,12 +32,6 @@ pub trait SortedStream {
     fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)>;
 }
 
-#[async_trait::async_trait]
-pub trait AsyncSortedStream {
-    /// The async version of [`SortedStream::next`].
-    async fn async_next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)>;
-}
-
 struct BufferState {
     buffer: DataBlockVec,
     stream_to_buffer: Vec<Option<usize>>,
@@ -307,68 +301,6 @@ where
         while self.evaluate_cursor() {
             if self.has_pending_stream() {
                 self.poll_pending_stream()?;
-                if self.has_pending_stream() {
-                    return Ok(None);
-                }
-            }
-        }
-
-        Ok(Some(self.build_output()?))
-    }
-}
-
-impl<A, S> Merger<A, S>
-where
-    A: SortAlgorithm,
-    S: AsyncSortedStream + Send,
-{
-    // This method can only be called when there is no data of the stream in the sorted_cursors.
-    pub async fn async_poll_pending_stream(&mut self) -> Result<()> {
-        let mut continue_pendings = Vec::new();
-        while let Some(i) = self.pending_streams.pop_front() {
-            debug_assert!(self.buffers.stream_to_buffer[i].is_none());
-            let (input, pending) = self.unsorted_streams[i].async_next().await?;
-            if pending {
-                continue_pendings.push(i);
-                continue;
-            }
-            if let Some((block, col)) = input {
-                let rows = A::Rows::from_column(&col)?;
-                self.buffers.attach_stream_block(i, block)?;
-                let cursor = Cursor::new(i, rows);
-                self.sorted_cursors.push(i, Reverse(cursor));
-            }
-        }
-        self.sorted_cursors.rebuild();
-        self.pending_streams.extend(continue_pendings);
-        Ok(())
-    }
-
-    /// The async version of `next_block`.
-    pub async fn async_next_block(&mut self) -> Result<Option<DataBlock>> {
-        if self.is_finished() {
-            return Ok(None);
-        }
-
-        if self.has_pending_stream() {
-            self.async_poll_pending_stream().await?;
-            if self.has_pending_stream() {
-                return Ok(None);
-            }
-        }
-
-        // No pending streams now.
-        if self.sorted_cursors.is_empty() {
-            return if self.buffers.has_output() {
-                Ok(Some(self.build_output()?))
-            } else {
-                Ok(None)
-            };
-        }
-
-        while self.evaluate_cursor() {
-            if self.has_pending_stream() {
-                self.async_poll_pending_stream().await?;
                 if self.has_pending_stream() {
                     return Ok(None);
                 }

@@ -28,7 +28,9 @@ pub enum DatumKind {
     Bytes,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash,
+)]
 pub enum Datum {
     Bool(bool),
     Int(i64),

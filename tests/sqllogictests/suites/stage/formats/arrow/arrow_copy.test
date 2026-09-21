@@ -61,3 +61,18 @@ select metadata$filename, metadata$file_row_number, id, name from @data/arrow/ (
 ----
 arrow/sample.arrow_stream 0 1 alice
 arrow/sample.arrow_stream 1 2 bob
+
+statement ok
+CREATE OR REPLACE TABLE vector(id int, embeddings vector(4));
+
+statement ok
+COPY INTO vector FROM @data/arrow/ FILES = ('list.arrow') FILE_FORMAT = (TYPE = arrow);
+
+query IT
+SELECT * FROM vector ORDER BY id;
+----
+1 [-0.0029487917,0.035842653,-0.046431996,-0.036314666]
+2 [-0.0071870354,-0.059680913,0.034321904,0.029986938]
+3 [0.010190959,0.01149214,0.023494562,0.008591366]
+4 [0.024801085,0.012556179,0.025798246,0.018770922]
+

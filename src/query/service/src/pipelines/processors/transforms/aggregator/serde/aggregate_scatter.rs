@@ -102,7 +102,6 @@ impl AggregateRowScatter {
                     params.group_data_types.clone(),
                     params.aggregate_functions.clone(),
                     params.num_states(),
-                    params.enable_experiment_hash_index,
                     Arc::new(Bump::new()),
                 )?;
                 Ok(payload
@@ -169,7 +168,7 @@ impl AggregateRowScatter {
                         })
                         .collect())
                 }
-                PartitionedData::NewBucketSpilled(payloads) => {
+                PartitionedData::BucketSpilled(payloads) => {
                     let mut partitions = Vec::with_capacity(self.buckets);
                     partitions.resize_with(self.buckets, Vec::new);
 
@@ -182,7 +181,7 @@ impl AggregateRowScatter {
                         .into_iter()
                         .map(|payloads| AggregateMeta::Partitioned {
                             bucket,
-                            data: PartitionedData::NewBucketSpilled(payloads),
+                            data: PartitionedData::BucketSpilled(payloads),
                         })
                         .collect())
                 }
@@ -212,16 +211,13 @@ impl AggregateRowScatter {
                                         .push(PartitionItem::AggregatePayload(payload));
                                 }
                             }
-                            PartitionItem::NewBucketSpilled(payload) => {
+                            PartitionItem::BucketSpilled(payload) => {
                                 // we will restore it after sending to the target node
                                 // so we just use bucket id to scatter here
                                 let bucket = payload.bucket as usize;
                                 partitions[bucket % self.buckets]
-                                    .push(PartitionItem::NewBucketSpilled(payload));
+                                    .push(PartitionItem::BucketSpilled(payload));
                             }
-                            _ => unreachable!(
-                                "Internal, AggregateRowScatter only recv AggregatePayload/Serialized in Partitioned"
-                            ),
                         }
                     }
 
@@ -233,15 +229,7 @@ impl AggregateRowScatter {
                         })
                         .collect())
                 }
-                PartitionedData::BucketSpilled(_) => unreachable!(
-                    "Internal, AggregateRowScatter only recv AggregatePayload/Serialized in Partitioned"
-                ),
             },
-            AggregateMeta::AggregateSpilling(payload) => Ok(payload
-                .scatter_into_buckets(self.buckets)
-                .into_iter()
-                .map(AggregateMeta::AggregateSpilling)
-                .collect()),
             AggregateMeta::AggregatePayload(p) => Ok(self
                 .scatter_payload(p.bucket, p.payload, p.max_partition_count)
                 .into_iter()
@@ -279,7 +267,6 @@ impl AggregateRowScatter {
             params.group_data_types.clone(),
             params.aggregate_functions.clone(),
             params.num_states(),
-            params.enable_experiment_hash_index,
             Arc::new(Bump::new()),
         )?;
         Ok(self.scatter_payload(bucket, payload, max_partition_count))
@@ -372,7 +359,7 @@ impl AggregateBucketScatter {
                         })
                         .collect()
                 }
-                PartitionedData::NewBucketSpilled(payloads) => {
+                PartitionedData::BucketSpilled(payloads) => {
                     let mut chunks = (0..self.buckets).map(|_| vec![]).collect::<Vec<_>>();
                     for mut spilled_payload in payloads {
                         let bucket = spilled_payload.bucket as usize;
@@ -386,7 +373,7 @@ impl AggregateBucketScatter {
                         .map(|payload| {
                             AggregateMeta::Partitioned {
                                 bucket: None,
-                                data: PartitionedData::NewBucketSpilled(payload),
+                                data: PartitionedData::BucketSpilled(payload),
                             }
                             .into_datablock()
                         })
@@ -412,17 +399,14 @@ impl AggregateBucketScatter {
                                 chunks[bucket % self.buckets]
                                     .push(PartitionItem::AggregatePayload(payload));
                             }
-                            PartitionItem::NewBucketSpilled(mut payload) => {
+                            PartitionItem::BucketSpilled(mut payload) => {
                                 let bucket = payload.bucket as usize;
                                 if !is_local {
                                     payload.bucket /= self.buckets as isize;
                                 }
                                 chunks[bucket % self.buckets]
-                                    .push(PartitionItem::NewBucketSpilled(payload));
+                                    .push(PartitionItem::BucketSpilled(payload));
                             }
-                            PartitionItem::BucketSpilled(_) => unreachable!(
-                                "Internal, AggregateBucketScatter only recv AggregatePayload/SerializedPayload in Partitioned"
-                            ),
                         }
                     }
 
@@ -437,9 +421,6 @@ impl AggregateBucketScatter {
                         })
                         .collect()
                 }
-                PartitionedData::BucketSpilled(_) => unreachable!(
-                    "Internal, AggregateBucketScatter only recv AggregatePayload/SerializedPayload in Partitioned"
-                ),
             },
             _ => {
                 unreachable!("Internal, AggregateBucketScatter only recv Partitioned AggregateMeta")

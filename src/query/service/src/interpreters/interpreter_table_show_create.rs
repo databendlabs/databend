@@ -14,10 +14,17 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
+use databend_common_ast::ast::Engine;
+use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::ast::quote::display_ident;
+use databend_common_ast::ast::quote::ident_opt_quote;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_cluster_key_exprs;
+use databend_common_ast::parser::parse_expr;
+use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
@@ -26,24 +33,33 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::types::StringType;
+use databend_common_meta_app::schema::DYNAMIC_TABLE_ENGINE;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_sql::ClusterKeyNormalizer;
+use databend_common_meta_app::schema::is_materialized_view_engine;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::plans::ShowCreateTablePlan;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_stream::stream_table::StreamTable;
+use databend_enterprise_materialized_view::get_materialized_view_handler;
+use databend_storages_common_table_meta::table::LINEAR_CLUSTER_TYPE;
+use databend_storages_common_table_meta::table::OPT_KEY_AS_QUERY;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table::StreamMode;
 use databend_storages_common_table_meta::table::is_internal_opt_key;
 use derive_visitor::DriveMut;
+use derive_visitor::VisitorMut;
 use itertools::Itertools;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::table_option_validation::is_valid_create_opt;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
@@ -66,6 +82,14 @@ impl ShowCreateTableInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: ShowCreateTablePlan) -> Result<Self> {
         Ok(ShowCreateTableInterpreter { ctx, plan })
     }
+
+    fn format_table_options<'a>(options: impl Iterator<Item = (&'a String, &'a String)>) -> String {
+        options
+            .filter(|(key, _)| !is_internal_opt_key(key))
+            .sorted_by_key(|(key, _)| *key)
+            .map(|(key, value)| format!(" {}={}", key.to_uppercase(), QuotedString(value, '\'')))
+            .join("")
+    }
 }
 
 #[async_trait::async_trait]
@@ -79,19 +103,49 @@ impl Interpreter for ShowCreateTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            let tenant = self.ctx.get_tenant();
+            let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
 
-        let table = catalog
-            .get_table(&tenant, &self.plan.database, &self.plan.table)
-            .await?;
+            let table = catalog
+                .get_table(&tenant, &self.plan.database, &self.plan.table)
+                .await?;
 
-        let settings = self.ctx.get_settings();
+            if is_materialized_view_engine(table.engine()) {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{}.{} is a MATERIALIZED VIEW, use `SHOW CREATE MATERIALIZED VIEW {}.{}` instead",
+                    self.plan.database, self.plan.table, self.plan.database, self.plan.table
+                )));
+            }
+
+            Self::build_result(
+                self.ctx.as_ref(),
+                catalog.as_ref(),
+                &tenant,
+                &self.plan.database,
+                table.as_ref(),
+                self.plan.with_quoted_ident,
+            )
+            .await
+        })
+    }
+}
+
+impl ShowCreateTableInterpreter {
+    pub(crate) async fn build_result(
+        ctx: &QueryContext,
+        catalog: &dyn Catalog,
+        tenant: &Tenant,
+        database: &str,
+        table: &dyn Table,
+        force_quoted_ident: bool,
+    ) -> Result<PipelineBuildResult> {
+        let settings = ctx.get_settings();
 
         let settings = ShowCreateQuerySettings {
             sql_dialect: settings.get_sql_dialect()?,
-            force_quoted_ident: self.plan.with_quoted_ident,
+            force_quoted_ident,
             unquoted_ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
             quoted_ident_case_sensitive: settings.get_quoted_ident_case_sensitive()?,
             hide_options_in_show_create_table: settings
@@ -99,13 +153,8 @@ impl Interpreter for ShowCreateTableInterpreter {
                 .unwrap_or(false),
         };
 
-        let create_query = Self::show_create_query(
-            catalog.as_ref(),
-            &self.plan.database,
-            table.as_ref(),
-            &settings,
-        )
-        .await?;
+        let create_query =
+            Self::show_create_query(catalog, tenant, database, table, &settings).await?;
 
         let block = DataBlock::new(
             vec![
@@ -122,13 +171,23 @@ impl Interpreter for ShowCreateTableInterpreter {
 impl ShowCreateTableInterpreter {
     pub async fn show_create_query(
         catalog: &dyn Catalog,
+        tenant: &Tenant,
         database: &str,
         table: &dyn Table,
         settings: &ShowCreateQuerySettings,
     ) -> Result<String> {
         match table.engine() {
-            STREAM_ENGINE => Self::show_create_stream_query(catalog, table).await,
+            STREAM_ENGINE => Self::show_create_stream_query(catalog, tenant, table).await,
             VIEW_ENGINE => Self::show_create_view_query(table, database),
+            MATERIALIZED_VIEW_ENGINE => {
+                Self::show_create_materialized_view_query(
+                    catalog, tenant, table, database, settings,
+                )
+                .await
+            }
+            DYNAMIC_TABLE_ENGINE => {
+                Self::show_create_dynamic_table_query(table, database, settings)
+            }
             _ => match table.options().get(OPT_KEY_STORAGE_PREFIX) {
                 Some(_) => Ok(Self::show_attach_table_query(table, database)),
                 None => Self::show_create_table_query(table.get_table_info(), settings),
@@ -140,6 +199,14 @@ impl ShowCreateTableInterpreter {
         table_info: &TableInfo,
         settings: &ShowCreateQuerySettings,
     ) -> Result<String> {
+        Self::format_create_table_query(table_info, settings, None)
+    }
+
+    fn format_create_table_query(
+        table_info: &TableInfo,
+        settings: &ShowCreateQuerySettings,
+        qualified_name: Option<&str>,
+    ) -> Result<String> {
         let name = &table_info.name;
         let engine = table_info.engine();
         let schema = table_info.schema();
@@ -147,42 +214,31 @@ impl ShowCreateTableInterpreter {
         let options = table_info.options();
         let sql_dialect = settings.sql_dialect;
         let force_quoted_ident = settings.force_quoted_ident;
-        let unquoted_ident_case_sensitive = settings.unquoted_ident_case_sensitive;
         let quoted_ident_case_sensitive = settings.quoted_ident_case_sensitive;
         let hide_options_in_show_create_table = settings.hide_options_in_show_create_table;
 
-        let mut table_create_sql = format!(
-            "CREATE TABLE {} (\n",
+        let name = qualified_name.map(str::to_owned).unwrap_or_else(|| {
             display_ident(
                 name,
                 force_quoted_ident,
                 quoted_ident_case_sensitive,
-                sql_dialect
+                sql_dialect,
             )
-        );
-
-        if options.contains_key("TRANSIENT") {
-            table_create_sql = format!(
-                "CREATE TRANSIENT TABLE {} (\n",
-                display_ident(
-                    name,
-                    force_quoted_ident,
-                    quoted_ident_case_sensitive,
-                    sql_dialect
-                )
-            )
-        }
+        });
+        let transient = if options.contains_key("TRANSIENT") {
+            "TRANSIENT "
+        } else {
+            ""
+        };
+        let dynamic = if engine == DYNAMIC_TABLE_ENGINE {
+            "DYNAMIC "
+        } else {
+            ""
+        };
+        let mut table_create_sql = format!("CREATE {transient}{dynamic}TABLE {name} (\n");
 
         if options.contains_key(OPT_KEY_TEMP_PREFIX) {
-            table_create_sql = format!(
-                "CREATE TEMP TABLE {} (\n",
-                display_ident(
-                    name,
-                    force_quoted_ident,
-                    quoted_ident_case_sensitive,
-                    sql_dialect
-                )
-            )
+            table_create_sql = format!("CREATE TEMP TABLE {name} (\n");
         }
 
         // Append columns and indexes.
@@ -284,46 +340,67 @@ impl ShowCreateTableInterpreter {
             let create_defs_str = format!("{}\n", create_defs.join(",\n"));
             table_create_sql.push_str(&create_defs_str);
         }
-        let table_engine = format!(") ENGINE={}", engine);
-        table_create_sql.push_str(table_engine.as_str());
+        table_create_sql.push(')');
+        if engine != DYNAMIC_TABLE_ENGINE {
+            table_create_sql.push_str(&format!(" ENGINE={engine}"));
+        }
+
+        let mut key_formatter =
+            StoredKeyFormatter::new(force_quoted_ident, quoted_ident_case_sensitive, sql_dialect);
+        if let Some(partition_keys_str) = table_info.options().get(OPT_KEY_PARTITION_BY) {
+            let mut exprs = parse_cluster_key_exprs(partition_keys_str)?;
+            for expr in exprs.iter_mut() {
+                expr.drive_mut(&mut key_formatter);
+            }
+            let partition_keys_str = exprs.into_iter().map(|e| format!("{e:#}")).join(", ");
+            table_create_sql.push_str(format!(" PARTITION BY ({partition_keys_str})").as_str());
+        }
 
         if let Some(cluster_keys_str) = table_info.meta.cluster_key_str() {
-            let cluster_type = table_info
-                .options()
-                .get(OPT_KEY_CLUSTER_TYPE)
-                .cloned()
-                .unwrap_or("".to_string());
             let mut exprs = parse_cluster_key_exprs(cluster_keys_str)?;
-            let mut normalizer = ClusterKeyNormalizer {
-                force_quoted_ident,
-                unquoted_ident_case_sensitive,
-                quoted_ident_case_sensitive,
-                sql_dialect,
-            };
             for expr in exprs.iter_mut() {
-                expr.drive_mut(&mut normalizer);
+                expr.drive_mut(&mut key_formatter);
             }
             let cluster_keys_str = format!(
                 "({})",
                 exprs.into_iter().map(|e| format!("{:#}", e)).join(", ")
             );
-            table_create_sql
-                .push_str(format!(" CLUSTER BY {}{}", cluster_type, cluster_keys_str).as_str());
+            let cluster_type = table_info
+                .options()
+                .get(OPT_KEY_CLUSTER_TYPE)
+                .map(String::as_str)
+                .unwrap_or(LINEAR_CLUSTER_TYPE);
+            if cluster_type.eq_ignore_ascii_case(LINEAR_CLUSTER_TYPE) {
+                table_create_sql.push_str(format!(" CLUSTER BY {cluster_keys_str}").as_str());
+            } else {
+                table_create_sql.push_str(
+                    format!(
+                        " CLUSTER BY {}{cluster_keys_str}",
+                        cluster_type.to_uppercase()
+                    )
+                    .as_str(),
+                );
+            }
+        }
+
+        if let Some(ttl_str) = &table_info.meta.ttl {
+            let mut expr = parse_expr(&tokenize_sql(ttl_str)?, Dialect::default())?;
+            expr.drive_mut(&mut key_formatter);
+            table_create_sql.push_str(format!(" TTL {expr:#}").as_str());
         }
 
         if !hide_options_in_show_create_table || engine == "ICEBERG" || engine == "DELTA" {
-            let mut opts = table_info.options().iter().collect::<Vec<_>>();
-            opts.sort_by_key(|(k, _)| *k);
-            let s = opts
-                .iter()
-                .filter(|(k, _)| !is_internal_opt_key(k))
-                .map(|(k, v)| format!(" {}='{}'", k.to_uppercase(), v))
-                .collect::<Vec<_>>()
-                .join("");
-            table_create_sql.push_str(&s);
+            // Dynamic tables are recreated from their query, not an existing snapshot.
+            // Only emit options accepted by CREATE DYNAMIC TABLE.
+            let options = table_info.options().iter().filter(|(key, _)| {
+                engine != DYNAMIC_TABLE_ENGINE
+                    || (is_valid_create_opt(key, &Engine::DynamicTable)
+                        && !key.eq_ignore_ascii_case("transient"))
+            });
+            table_create_sql.push_str(&Self::format_table_options(options));
         }
 
-        if engine != "ICEBERG" && engine != "DELTA" {
+        if engine != "ICEBERG" && engine != "DELTA" && !table_info.is_shared() {
             if let Some(sp) = &table_info.meta.storage_params {
                 table_create_sql.push_str(format!(" '{}' ", sp).as_str());
             }
@@ -341,6 +418,26 @@ impl ShowCreateTableInterpreter {
         Ok(table_create_sql)
     }
 
+    fn show_create_dynamic_table_query(
+        table: &dyn Table,
+        database: &str,
+        settings: &ShowCreateQuerySettings,
+    ) -> Result<String> {
+        let query = table
+            .options()
+            .get(OPT_KEY_AS_QUERY)
+            .ok_or_else(|| ErrorCode::InvalidOperation("dynamic table definition is missing"))?;
+        let name = format!(
+            "{}.{}",
+            QuotedIdent(database, '`'),
+            QuotedIdent(table.name(), '`')
+        );
+        let mut sql =
+            Self::format_create_table_query(table.get_table_info(), settings, Some(&name))?;
+        sql.push_str(&format!(" AS {query}"));
+        Ok(sql)
+    }
+
     fn show_create_view_query(table: &dyn Table, database: &str) -> Result<String> {
         let name = table.name();
         let view_create_sql = if let Some(query) = table.options().get(QUERY) {
@@ -356,9 +453,66 @@ impl ShowCreateTableInterpreter {
         Ok(view_create_sql)
     }
 
-    async fn show_create_stream_query(catalog: &dyn Catalog, table: &dyn Table) -> Result<String> {
+    async fn show_create_materialized_view_query(
+        catalog: &dyn Catalog,
+        tenant: &Tenant,
+        table: &dyn Table,
+        database: &str,
+        settings: &ShowCreateQuerySettings,
+    ) -> Result<String> {
+        let name = table.name();
+        let definition = get_materialized_view_handler()
+            .get_mv_definition(catalog, tenant, table.get_id())
+            .await?
+            .ok_or_else(|| {
+                ErrorCode::Internal(
+                    "Logical error, Materialized View must have a query definition.",
+                )
+            })?
+            .data;
+
+        let table_info = table.get_table_info();
+        let mut create_sql = format!(
+            "CREATE MATERIALIZED VIEW {}.{}",
+            QuotedIdent(database, '`'),
+            QuotedIdent(name, '`')
+        );
+
+        let columns = definition
+            .logical_schema
+            .fields()
+            .iter()
+            .map(|field| QuotedIdent(field.name(), '`').to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        create_sql.push_str(&format!(" ({columns})"));
+
+        if let Some(cluster_key) = table_info.meta.cluster_key_str() {
+            create_sql.push_str(&format!(" CLUSTER BY {}", cluster_key));
+        }
+
+        if !table_info.meta.comment.is_empty() {
+            create_sql.push_str(&format!(
+                " COMMENT = {}",
+                QuotedString(&table_info.meta.comment, '\'')
+            ));
+        }
+
+        if !settings.hide_options_in_show_create_table {
+            create_sql.push_str(&Self::format_table_options(table_info.options().iter()));
+        }
+
+        create_sql.push_str(&format!(" AS {}", definition.original_query));
+        Ok(create_sql)
+    }
+
+    async fn show_create_stream_query(
+        catalog: &dyn Catalog,
+        tenant: &Tenant,
+        table: &dyn Table,
+    ) -> Result<String> {
         let stream_table = StreamTable::try_from_table(table)?;
-        let source_database_name = stream_table.source_database_name(catalog).await?;
+        let source_database_name = stream_table.source_database_name(catalog, tenant).await?;
         let source_table_name = stream_table.source_table_name(catalog).await?;
         let mode = stream_table.mode();
 
@@ -414,5 +568,40 @@ impl ShowCreateTableInterpreter {
             table.name(),
             table_data_location,
         )
+    }
+}
+
+/// Re-quote already-resolved identifiers for SHOW CREATE. Does not fold case.
+#[derive(VisitorMut)]
+#[visitor(ColumnRef(enter))]
+struct StoredKeyFormatter {
+    force_quoted_ident: bool,
+    quoted_ident_case_sensitive: bool,
+    sql_dialect: Dialect,
+}
+
+impl StoredKeyFormatter {
+    fn new(
+        force_quoted_ident: bool,
+        quoted_ident_case_sensitive: bool,
+        sql_dialect: Dialect,
+    ) -> Self {
+        Self {
+            force_quoted_ident,
+            quoted_ident_case_sensitive,
+            sql_dialect,
+        }
+    }
+
+    fn enter_column_ref(&mut self, column: &mut ColumnRef) {
+        let ColumnID::Name(ident) = &mut column.column else {
+            return;
+        };
+        ident.quote = ident_opt_quote(
+            &ident.name,
+            self.force_quoted_ident,
+            self.quoted_ident_case_sensitive,
+            self.sql_dialect,
+        );
     }
 }

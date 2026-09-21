@@ -453,7 +453,29 @@ impl TransformRecursiveCteSource {
 impl AsyncSource for TransformRecursiveCteSource {
     const NAME: &'static str = "TransformRecursiveCteSource";
 
-    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+    fn generate<'life0, 'async_trait>(
+        &'life0 mut self,
+    ) -> futures::future::BoxFuture<'async_trait, Result<Option<DataBlock>>>
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        self.generate_boxed()
+    }
+
+    async fn on_finish(&mut self) -> Result<()> {
+        self.finish_owned_cache_population(false);
+        Ok(())
+    }
+}
+impl TransformRecursiveCteSource {
+    fn generate_boxed<'a>(
+        &'a mut self,
+    ) -> futures::future::BoxFuture<'a, Result<Option<DataBlock>>> {
+        Box::pin(self.generate_inner())
+    }
+
+    async fn generate_inner(&mut self) -> Result<Option<DataBlock>> {
         loop {
             if let Some(replay_blocks) = self.replay_blocks.as_mut() {
                 if let Some(block) = replay_blocks.pop_front() {
@@ -549,11 +571,6 @@ impl AsyncSource for TransformRecursiveCteSource {
             return Ok(None);
         }
     }
-
-    async fn on_finish(&mut self) -> Result<()> {
-        self.finish_owned_cache_population(false);
-        Ok(())
-    }
 }
 
 async fn create_memory_table_for_cte_scan(
@@ -615,6 +632,7 @@ async fn create_memory_table_for_cte_scan(
                     field_comments: vec![],
                     field_stats_truncate_len: vec![],
                     cluster_key: None,
+                    ttl: None,
                     as_select: None,
                     table_indexes: None,
                     table_constraints: None,

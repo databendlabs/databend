@@ -63,6 +63,7 @@ use crate::types::bitmap::BitmapType;
 use crate::types::boolean::BooleanDomain;
 use crate::types::date::DATE_MAX;
 use crate::types::date::DATE_MIN;
+use crate::types::date::check_date;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalColumnBuilder;
@@ -94,6 +95,7 @@ use crate::types::string::StringColumn;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::TIMESTAMP_MAX;
 use crate::types::timestamp::TIMESTAMP_MIN;
+use crate::types::timestamp::check_timestamp;
 use crate::types::timestamp::clamp_timestamp;
 use crate::types::timestamp_tz::TimestampTzType;
 use crate::types::variant::JSONB_NULL;
@@ -115,6 +117,8 @@ use crate::with_number_type;
 use crate::with_opaque_size;
 use crate::with_opaque_size_mapped;
 use crate::with_opaque_type;
+
+pub const LARGE_STRING_BYTES_THRESHOLD: usize = 256;
 
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
 pub enum Value<T: AccessType> {
@@ -407,7 +411,7 @@ impl Value<AnyType> {
     pub fn remove_nullable(self) -> (Self, bool) {
         match self {
             Value::Scalar(Scalar::Null) => (Value::Scalar(Scalar::Null), true),
-            Value::Column(Column::Nullable(box nullable_column)) => (
+            Value::Column(Column::Nullable(deref!(nullable_column))) => (
                 Value::Column(nullable_column.column),
                 nullable_column.validity.null_count() > 0,
             ),
@@ -511,6 +515,7 @@ impl Scalar {
             DataType::Geometry => Scalar::Geometry(vec![]),
             DataType::Geography => Scalar::Geography(Geography::default()),
             DataType::Vector(ty) => Scalar::Vector(ty.default_value()),
+            DataType::AggregateState(state) => Scalar::default_value(state.physical_type()),
             _ => unimplemented!(),
         }
     }
@@ -567,6 +572,47 @@ impl Scalar {
             },
             _ => None,
         }
+    }
+
+    // Convert a scalar distance into a conservative f64 upper bound.
+    //
+    // Decimal values and large integers may lose precision when converted to f64,
+    // so those cases are rounded upward to the next representable f64.
+    pub fn to_distance_threshold(&self) -> Option<f64> {
+        let (threshold, needs_upper_bound) = match self {
+            Scalar::Number(number) => match number {
+                NumberScalar::Int8(v) => (*v as f64, false),
+                NumberScalar::Int16(v) => (*v as f64, false),
+                NumberScalar::Int32(v) => (*v as f64, false),
+                NumberScalar::Int64(v) => (*v as f64, *v > (1_i64 << 53)),
+                NumberScalar::UInt8(v) => (*v as f64, false),
+                NumberScalar::UInt16(v) => (*v as f64, false),
+                NumberScalar::UInt32(v) => (*v as f64, false),
+                NumberScalar::UInt64(v) => (*v as f64, *v > (1_u64 << 53)),
+                NumberScalar::Float32(v) => (v.0 as f64, false),
+                NumberScalar::Float64(v) => (v.0, false),
+            },
+            Scalar::Decimal(decimal) => (
+                match decimal {
+                    DecimalScalar::Decimal64(_, _)
+                    | DecimalScalar::Decimal128(_, _)
+                    | DecimalScalar::Decimal256(_, _) => decimal.to_float64(),
+                },
+                true,
+            ),
+            _ => return None,
+        };
+
+        if !threshold.is_finite() || threshold < 0.0 {
+            return None;
+        }
+
+        let threshold = if needs_upper_bound && threshold != f64::MAX {
+            threshold.next_up()
+        } else {
+            threshold
+        };
+        Some(threshold)
     }
 
     pub fn as_bytes(&self) -> Option<&[u8]> {
@@ -848,6 +894,9 @@ impl ScalarRef<'_> {
             (ScalarRef::Null, DataType::Null) => true,
             (ScalarRef::Null, DataType::Nullable(_)) => true,
             _ => match (self, data_type.remove_nullable()) {
+                (_, DataType::AggregateState(state)) => {
+                    self.is_value_of_type(state.physical_type())
+                }
                 (ScalarRef::EmptyArray, DataType::EmptyArray) => true,
                 (ScalarRef::EmptyMap, DataType::EmptyMap) => true,
                 (ScalarRef::Number(_), DataType::Number(_)) => true,
@@ -1756,6 +1805,7 @@ impl Column {
                     _ => unreachable!("Unsupported Opaque size: {}", size),
                 })
             }
+            DataType::AggregateState(state) => Self::random(state.physical_type(), len, options),
         }
     }
 
@@ -1872,7 +1922,7 @@ impl Column {
         }
     }
 
-    /// Checks if the average length of a string column exceeds 256 bytes.
+    /// Checks if the average length of a string column exceeds LARGE_STRING_BYTES_THRESHOLD bytes.
     /// If it does, the bloom index for the column will not be established.
     pub fn check_large_string(&self) -> bool {
         let (inner, len) = if let Column::Nullable(c) = self {
@@ -1882,7 +1932,7 @@ impl Column {
         };
         if let Column::String(v) = inner {
             let bytes_per_row = v.total_bytes_len() / len.max(1);
-            if bytes_per_row > 256 {
+            if bytes_per_row > LARGE_STRING_BYTES_THRESHOLD {
                 return true;
             }
         }
@@ -1959,14 +2009,14 @@ impl ColumnBuilder {
             Column::TimestampTz(col) => ColumnBuilder::TimestampTz(buffer_into_mut(col)),
             Column::Date(col) => ColumnBuilder::Date(buffer_into_mut(col)),
             Column::Interval(col) => ColumnBuilder::Interval(buffer_into_mut(col)),
-            Column::Array(box col) => {
+            Column::Array(deref!(col)) => {
                 ColumnBuilder::Array(Box::new(ArrayColumnBuilder::from_column(col)))
             }
-            Column::Map(box col) => {
+            Column::Map(deref!(col)) => {
                 ColumnBuilder::Map(Box::new(ArrayColumnBuilder::from_column(col)))
             }
             Column::Bitmap(col) => ColumnBuilder::Bitmap(BinaryColumnBuilder::from_column(col)),
-            Column::Nullable(box col) => {
+            Column::Nullable(deref!(col)) => {
                 ColumnBuilder::Nullable(Box::new(NullableColumnBuilder::from_column(col)))
             }
             Column::Tuple(fields) => ColumnBuilder::Tuple(
@@ -1988,6 +2038,9 @@ impl ColumnBuilder {
     }
 
     pub fn repeat(scalar: &ScalarRef, n: usize, data_type: &DataType) -> ColumnBuilder {
+        if let DataType::AggregateState(state) = data_type {
+            return Self::repeat(scalar, n, state.physical_type());
+        }
         if !scalar.is_null() {
             if let DataType::Nullable(ty) = data_type {
                 let mut builder = ColumnBuilder::with_capacity(ty, 1);
@@ -2264,6 +2317,9 @@ impl ColumnBuilder {
             DataType::StageLocation => {
                 unreachable!("unable to initialize column builder for stage location type")
             }
+            DataType::AggregateState(state) => {
+                Self::with_capacity_hint(state.physical_type(), capacity, enable_datasize_hint)
+            }
         }
     }
 
@@ -2342,6 +2398,7 @@ impl ColumnBuilder {
             DataType::StageLocation => {
                 unreachable!("unable to initialize column builder for stage location type")
             }
+            DataType::AggregateState(state) => Self::repeat_default(state.physical_type(), len),
         }
     }
 
@@ -2390,7 +2447,7 @@ impl ColumnBuilder {
             }
             (ColumnBuilder::Tuple(fields), ScalarRef::Tuple(value)) => {
                 assert_eq!(fields.len(), value.len());
-                for (field, scalar) in fields.iter_mut().zip(value.into_iter()) {
+                for (field, scalar) in fields.iter_mut().zip(value) {
                     field.push(scalar);
                 }
             }
@@ -2576,11 +2633,12 @@ impl ColumnBuilder {
             }
             ColumnBuilder::TimestampTz(builder) => {
                 let value = timestamp_tz(i128::de_binary(reader));
+                check_timestamp(value.timestamp()).map_err(ErrorCode::BadArguments)?;
                 builder.push(value);
             }
             ColumnBuilder::Date(builder) => {
                 let value: i32 = reader.read_scalar()?;
-                builder.push(value);
+                builder.push(check_date(i64::from(value)).map_err(ErrorCode::BadArguments)?);
             }
             ColumnBuilder::Interval(builder) => {
                 let value = months_days_micros(i128::de_binary(reader));
@@ -2706,14 +2764,16 @@ impl ColumnBuilder {
             ColumnBuilder::TimestampTz(builder) => {
                 for row in 0..rows {
                     let mut reader = &reader[step * row..];
-                    builder.push(timestamp_tz(i128::de_binary(&mut reader)));
+                    let value = timestamp_tz(i128::de_binary(&mut reader));
+                    check_timestamp(value.timestamp()).map_err(ErrorCode::BadArguments)?;
+                    builder.push(value);
                 }
             }
             ColumnBuilder::Date(builder) => {
                 for row in 0..rows {
                     let mut reader = &reader[step * row..];
                     let value: i32 = reader.read_scalar()?;
-                    builder.push(value);
+                    builder.push(check_date(i64::from(value)).map_err(ErrorCode::BadArguments)?);
                 }
             }
             ColumnBuilder::Interval(builder) => {

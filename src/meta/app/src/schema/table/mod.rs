@@ -42,6 +42,7 @@ use super::DatabaseId;
 use super::MarkedDeletedIndexMeta;
 use crate::schema::constraint::Constraint;
 use crate::schema::database_name_ident::DatabaseNameIdent;
+use crate::schema::materialized_view::CreateMaterializedViewMeta;
 use crate::schema::table_niv::TableNIV;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
@@ -58,6 +59,9 @@ pub use refs::*;
 pub enum DatabaseType {
     #[default]
     NormalDB,
+    /// A consumer's read-only view of a provider table. This is runtime table
+    /// information, not part of the provider's persisted TableMeta.
+    SharedDB,
 }
 
 impl Display for DatabaseType {
@@ -66,6 +70,7 @@ impl Display for DatabaseType {
             DatabaseType::NormalDB => {
                 write!(f, "normal database")
             }
+            DatabaseType::SharedDB => write!(f, "shared database"),
         }
     }
 }
@@ -100,6 +105,10 @@ pub struct TableInfo {
 }
 
 impl TableInfo {
+    pub fn is_shared(&self) -> bool {
+        matches!(self.db_type, DatabaseType::SharedDB)
+    }
+
     pub fn database_name(&self) -> Result<&str> {
         if self.engine() != "FUSE" {
             return Err(ErrorCode::Internal(format!(
@@ -176,6 +185,11 @@ pub struct TableMeta {
     /// Global monotonically increasing sequence for cluster key changes, to
     /// ensuring a unique identifier for each version of cluster key.
     pub cluster_key_seq: u32,
+    /// Row-level TTL expression, e.g. `event_time + INTERVAL 30 DAY`.
+    ///
+    /// Only the definition text is stored. Referenced columns and result type
+    /// are derived on demand, mirroring how `cluster_key` is handled.
+    pub ttl: Option<String>,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub comment: String,
@@ -400,6 +414,7 @@ impl Default for TableMeta {
             cluster_key: None,
             cluster_key_v2: None,
             cluster_key_seq: 0,
+            ttl: None,
             created_on: Utc::now(),
             updated_on: Utc::now(),
             comment: "".to_string(),
@@ -519,6 +534,16 @@ pub struct CreateTableReq {
     pub name_ident: TableNameIdent,
     pub table_meta: TableMeta,
 
+    /// An optional update to another table's options that must be committed atomically with this
+    /// table creation.
+    ///
+    /// This is used by `CREATE STREAM` and `CREATE MATERIALIZED VIEW`: publishing the new object
+    /// and enabling change tracking on its source table must be one metadata transaction. The
+    /// update is applied only when the target is actually created or replaced; `CREATE IF NOT
+    /// EXISTS` that finds an existing target leaves the source table unchanged. It is `None` for
+    /// ordinary table creation and when change tracking is already enabled.
+    pub source_table_option: Option<UpsertTableOptionReq>,
+
     /// Set it to true if a dropped table needs to be created,
     ///
     /// since [CreateOption] is used by various scenarios, we use
@@ -526,6 +551,13 @@ pub struct CreateTableReq {
     ///
     /// currently used in atomic CTAS.
     pub as_dropped: bool,
+
+    /// Definition and source binding for a materialized-view table.
+    ///
+    /// `create_table` persists only the definition. The source-index sequence
+    /// validates that the definition is still bound to the source metadata
+    /// recorded in the CREATE plan. It is `None` for non-MV tables.
+    pub materialized_view: Option<CreateMaterializedViewMeta>,
 
     /// Iceberg table properties
     pub table_properties: Option<BTreeMap<String, String>>,

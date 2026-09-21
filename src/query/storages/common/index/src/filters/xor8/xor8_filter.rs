@@ -93,11 +93,15 @@ impl FilterBuilder for Xor8Builder {
         self.builder.populate(keys)
     }
 
+    fn add_digest(&mut self, digest: u64) {
+        self.builder.populate_digests(std::iter::once(&digest))
+    }
+
     fn add_digests<'i, I: IntoIterator<Item = &'i u64>>(&mut self, digests: I) {
         self.builder.populate_digests(digests)
     }
 
-    fn build(&mut self) -> Result<Self::Filter, Self::Error> {
+    fn build(mut self) -> Result<Self::Filter, Self::Error> {
         let f = self
             .builder
             .build()
@@ -157,7 +161,7 @@ impl Filter for Xor8Filter {
 impl Index for Xor8Filter {
     fn supported_type(data_type: &DataType) -> bool {
         let inner_type = data_type.remove_nullable();
-        if let DataType::Map(box inner_ty) = inner_type {
+        if let DataType::Map(deref!(inner_ty)) = inner_type {
             match inner_ty {
                 DataType::Tuple(kv_tys) => {
                     return matches!(

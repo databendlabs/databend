@@ -32,7 +32,6 @@ use crate::plan::FullParquetMeta;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default)]
 pub struct StageTableInfo {
     // common
-    pub stage_root: String,
     pub stage_info: StageInfo,
 
     // copy into table only
@@ -58,7 +57,7 @@ pub struct StageTableInfo {
 
 impl PartialEq for StageTableInfo {
     fn eq(&self, other: &Self) -> bool {
-        self.stage_root == other.stage_root && self.stage_info == other.stage_info
+        self.stage_info == other.stage_info
     }
 }
 

@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
+use databend_common_pipeline::core::check_interrupt;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
 
@@ -136,10 +137,12 @@ impl HybridHashJoin {
     fn do_transition_work(&mut self, finished: bool) -> Result<()> {
         if let HybridJoinMode::Grace(grace_join) = &mut self.mode {
             while let Ok(memory_block) = self.state.transition_queue.pop() {
+                check_interrupt()?;
                 grace_join.add_block(Some(memory_block))?;
             }
 
             if finished {
+                check_interrupt()?;
                 grace_join.add_block(None)?;
             }
         }
@@ -169,6 +172,10 @@ impl HybridHashJoin {
 
 impl Join for HybridHashJoin {
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
+        if let Some(block) = data.as_ref() {
+            self.state.add_build_input_rows(block.num_rows());
+        }
+
         // 1. Check if another processor has already triggered spill
         if self.state.check_spilled() {
             self.switch_to_grace_mode(false)?;
@@ -220,14 +227,27 @@ impl Join for HybridHashJoin {
     }
 
     fn build_runtime_filter(&self) -> Result<JoinRuntimeFilterPacket> {
-        match &self.mode {
+        let mut packet = match &self.mode {
             HybridJoinMode::Memory(join) => join.build_runtime_filter(),
             HybridJoinMode::Grace(join) => join.build_runtime_filter(),
-        }
+        }?;
+        packet.build_rows = self.state.build_input_rows();
+        Ok(packet)
     }
 
     fn is_spill_happened(&self) -> bool {
         self.state.has_spilled_once()
+    }
+
+    fn can_skip_probe(&self) -> bool {
+        matches!(
+            self.join_type,
+            JoinType::Inner
+                | JoinType::LeftSemi
+                | JoinType::Right
+                | JoinType::RightSemi
+                | JoinType::RightAnti
+        )
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {

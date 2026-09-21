@@ -21,5 +21,45 @@ SHOW FUNCTIONS WHERE name='to_day_of_year' LIMIT 1
 ----
 to_day_of_year 0 (empty)
 
+query TBT
+SHOW FUNCTIONS LIKE 'sleep'
+----
+sleep 0 (empty)
+
+query TBT
+SHOW FUNCTIONS WHERE name IN ('dict_get', 'nextval', 'read_file')
+----
+dict_get 0 (empty)
+nextval 0 (empty)
+read_file 0 (empty)
+
 statement error
 SHOW FUNCTIONS WHERE mu='err' LIMIT 1
+
+# Aggregate functions are documented from AggregateFeatures.documentation.
+query TBT
+SHOW FUNCTIONS WHERE name IN ('avg', 'count', 'sum')
+----
+avg 1 averages non-null numeric values
+count 1 counts input rows or non-null argument values
+sum 1 sums non-null numeric or interval values
+
+# The syntax and example columns are populated for aggregates too.
+query TTT
+SELECT name, syntax, example FROM system.functions WHERE name = 'avg'
+----
+avg avg(expr) select avg(number) from numbers(10)
+
+# Combinator-derived variants are not published: they would inherit the base
+# name's syntax and example and describe the wrong signature.
+query I
+SELECT count(*) FROM system.functions WHERE name IN ('avg_if', 'avg_state', 'avg_merge', 'avg_merge_state', 'avg_distinct')
+----
+0
+
+# Aliases are kept, matching how the scalar registry reports its own names.
+query TBT
+SHOW FUNCTIONS WHERE name IN ('list', 'std')
+----
+list 1 aggregates values into an array
+std 1 calculates population standard deviation

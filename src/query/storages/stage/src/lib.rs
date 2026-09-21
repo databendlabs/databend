@@ -14,8 +14,8 @@
 
 #![allow(internal_features)]
 #![feature(core_intrinsics)]
-#![feature(impl_trait_in_assoc_type)]
-#![feature(box_patterns)]
+#![allow(incomplete_features)]
+#![feature(deref_patterns)]
 #![feature(iter_intersperse)]
 #![allow(
     clippy::collapsible_if,
@@ -24,6 +24,7 @@
 )]
 
 mod append;
+mod avro_utils;
 mod compression;
 mod infer_schema;
 mod read;

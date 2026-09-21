@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
@@ -95,7 +97,7 @@ impl<'a> CoreExprArena<'a> {
         func_name: &str,
         func: &'a ASTFunctionCall,
     ) -> Result<Option<CoreExprId>> {
-        if func.lambda.is_some() {
+        if func.has_explicit_lambda() {
             return Ok(None);
         }
         let func_name = Ascii::new(func_name);
@@ -107,6 +109,13 @@ impl<'a> CoreExprArena<'a> {
         else {
             return Ok(None);
         };
+
+        if func.filter.is_some() {
+            return Err(ErrorCode::SemanticError(
+                "FILTER clause is only supported for aggregate functions",
+            )
+            .set_span(span));
+        }
 
         let Some(window) = func.window.as_ref() else {
             return Err(ErrorCode::SemanticError(format!(
@@ -424,13 +433,13 @@ where A: TypeCheckAdapter
         self.in_window_function = true;
         let mut partitions = Vec::with_capacity(spec.partition_by.len());
         for p in &spec.partition_by {
-            let box (part, _part_type) = self.resolve_core(arena, *p)?;
+            let deref!((part, _part_type)) = self.resolve_core(arena, *p)?;
             partitions.push(part);
         }
 
         let mut order_by = Vec::with_capacity(spec.order_by.len());
         for o in &spec.order_by {
-            let box (order, _) = self.resolve_core(arena, o.expr)?;
+            let deref!((order, _)) = self.resolve_core(arena, o.expr)?;
 
             if matches!(order, ScalarExpr::ConstantExpr(_)) {
                 continue;
@@ -549,10 +558,13 @@ where A: TypeCheckAdapter
         match bound {
             CoreWindowFrameBound::Following(Some(expr))
             | CoreWindowFrameBound::Preceding(Some(expr)) => {
-                let box (expr, _) = self.resolve_core(arena, *expr)?;
-                let (expr, _) =
-                    ConstantFolder::fold(&expr.as_expr()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                match expr.into_constant() {
+                let deref!((expr, _)) = self.resolve_core(arena, *expr)?;
+                let (expr, _) = ConstantFolder::fold(
+                    Cow::Owned(expr.as_expr()?),
+                    &self.func_ctx,
+                    &BUILTIN_FUNCTIONS,
+                );
+                match expr.into_owned().into_constant() {
                     Ok(expr::Constant { scalar, .. }) => Ok(Some(scalar)),
                     Err(expr) => Err(ErrorCode::SemanticError(
                         "Only constant is allowed in RANGE offset".to_string(),
@@ -694,7 +706,7 @@ where A: TypeCheckAdapter
                 EExpr::Constant(_) => Some(check_number::<i64, _>(
                     off.span(),
                     &self.func_ctx,
-                    &off,
+                    off,
                     &BUILTIN_FUNCTIONS,
                 )?),
                 _ => {
@@ -793,7 +805,7 @@ where A: TypeCheckAdapter
                     EExpr::Constant(_) => check_number::<u64, _>(
                         n_expr.span(),
                         &self.func_ctx,
-                        &n_expr,
+                        n_expr,
                         &BUILTIN_FUNCTIONS,
                     )?,
                     _ => {
@@ -831,7 +843,7 @@ where A: TypeCheckAdapter
         let return_type = DataType::Number(NumberDataType::UInt64);
         let n = match n_expr {
             EExpr::Constant(_) => {
-                check_number::<u64, _>(n_expr.span(), &self.func_ctx, &n_expr, &BUILTIN_FUNCTIONS)?
+                check_number::<u64, _>(n_expr.span(), &self.func_ctx, n_expr, &BUILTIN_FUNCTIONS)?
             }
             _ => {
                 return Err(ErrorCode::InvalidArgument(

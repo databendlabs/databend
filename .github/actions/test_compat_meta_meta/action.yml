@@ -13,8 +13,8 @@ runs:
       # test-*.py <leader-meta-ver> <follower-meta-ver>
       # 1.2.288 is the first version after 1.2.212 that has built a binary.
       run: |
-        python ./tests/compat/meta_meta/test_meta_meta.py         1.2.547  current
-        python ./tests/compat/meta_meta/test_meta_meta.py         current  1.2.547
+        python ./tests/compat/meta_meta/test_meta_meta.py         1.2.818  current
+        python ./tests/compat/meta_meta/test_meta_meta.py         current  1.2.818
 
     - name: Upload failure
       if: failure()

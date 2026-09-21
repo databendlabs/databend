@@ -15,6 +15,7 @@
 use std::fmt;
 use std::time::Duration;
 
+use databend_common_meta_app::KeyExistsBuilder;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::tenant_key::ident::TIdent;

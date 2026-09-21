@@ -12,39 +12,57 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
+use databend_common_meta_app::KeyExistsBuilder;
 use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::AppErrorMessage;
 use databend_common_meta_app::schema::CreateDictionaryReply;
 use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
-use databend_common_meta_app::schema::UpdateDictionaryReply;
-use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::dictionary_id_ident::DictionaryId;
+use databend_common_meta_app::schema::dictionary_id_ident::DictionaryIdIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameRsc;
 use databend_common_meta_app::tenant_key::errors::ExistError;
+use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
-use databend_meta_client::types::ConditionResult::Eq;
+use databend_meta_client::types::Change;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
-use databend_meta_client::types::TxnRequest;
 use fastrace::func_name;
 use log::debug;
 
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
-use crate::name_id_value_api::CreateIdValueMode;
 use crate::name_id_value_api::CreateIdValueResult;
 use crate::name_id_value_api::NameIdValueApi;
-use crate::txn_backoff::txn_backoff;
-use crate::txn_condition_util::txn_cond_seq;
-use crate::txn_core_util::send_txn;
-use crate::txn_del;
-use crate::txn_op_builder_util::txn_put_pb_with_ttl;
+use crate::txn::meta_txn;
+
+pub type DictionaryMoveKeyError = meta_txn::MoveKeyError<
+    MetaError,
+    UnknownError<DictionaryNameRsc, DictionaryIdentity>,
+    ExistError<DictionaryNameRsc, DictionaryIdentity>,
+>;
+
+impl From<DictionaryMoveKeyError> for ErrorCode {
+    fn from(error: DictionaryMoveKeyError) -> Self {
+        match error {
+            meta_txn::MoveKeyError::KvApi(error) => ErrorCode::MetaServiceError(error.to_string()),
+            meta_txn::MoveKeyError::TxnRetryMaxTimes(error) => {
+                ErrorCode::TxnRetryMaxTimes(error.message())
+            }
+            meta_txn::MoveKeyError::Unknown(error) => ErrorCode::UnknownDictionary(error.message()),
+            meta_txn::MoveKeyError::Exists(error) => {
+                ErrorCode::DictionaryAlreadyExists(error.message())
+            }
+        }
+    }
+}
 
 /// DictionaryApi defines APIs for dictionary management.
 ///
@@ -72,7 +90,7 @@ where
             .create_id_value(
                 name_ident,
                 &req.dictionary_meta,
-                CreateIdValueMode::CreateOnly,
+                false,
                 |_| vec![],
                 |_, _| Ok(vec![]),
                 |_, _| {},
@@ -89,21 +107,26 @@ where
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn update_dictionary(
+    async fn get_dictionary_id(
         &self,
-        req: UpdateDictionaryReq,
-    ) -> Result<UpdateDictionaryReply, KVAppError> {
-        debug!(req :? = (&req); "DictionaryApi: {}", func_name!());
+        name_ident: &DictionaryNameIdent,
+    ) -> Result<Option<SeqV<DictionaryId>>, MetaError> {
+        debug!(dict_ident :? =(name_ident); "DictionaryApi: {}", func_name!());
 
-        let res = self
-            .update_id_value(&req.dictionary_ident, req.dictionary_meta)
-            .await?;
+        self.get_pb(name_ident).await
+    }
 
-        if let Some((id, _meta)) = res {
-            Ok(UpdateDictionaryReply { dictionary_id: *id })
-        } else {
-            Err(AppError::from(req.dictionary_ident.unknown_error(func_name!())).into())
-        }
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn update_dictionary_by_id(
+        &self,
+        id_ident: DictionaryIdIdent,
+        dictionary_meta: DictionaryMeta,
+    ) -> Result<Change<DictionaryMeta>, MetaError> {
+        debug!(id_ident :? =(&id_ident); "DictionaryApi: {}", func_name!());
+
+        NameIdValueApi::<DictionaryNameIdent, _>::update_by_id(self, id_ident, dictionary_meta)
+            .await
     }
 
     #[logcall::logcall]
@@ -135,7 +158,7 @@ where
     async fn list_dictionaries(
         &self,
         req: ListDictionaryReq,
-    ) -> Result<Vec<(String, DictionaryMeta)>, KVAppError> {
+    ) -> Result<Vec<(String, DictionaryMeta)>, MetaError> {
         debug!(req :? =(&req); "DictionaryApi: {}", func_name!());
 
         let dictionary_ident = DictionaryNameIdent::new(
@@ -151,67 +174,17 @@ where
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<(), KVAppError> {
+    async fn rename_dictionary(
+        &self,
+        req: RenameDictionaryReq,
+    ) -> Result<(), DictionaryMoveKeyError> {
         debug!(req :? =(&req); "DictionaryApi: {}", func_name!());
 
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap()?.await;
-
-            let dict_id = self
-                .get_pb(&req.name_ident)
-                .await?
-                .ok_or_else(|| AppError::from(req.name_ident.unknown_error(func_name!())))?;
-
-            let new_name_ident = DictionaryNameIdent::new(req.tenant(), req.new_dict_ident.clone());
-            let new_dict_id_seq = self.get_seq(&new_name_ident).await?;
-            let _ = dict_has_to_not_exist(new_dict_id_seq, &new_name_ident, "rename_dictionary")
-                .map_err(|_| AppError::from(new_name_ident.exist_error(func_name!())))?;
-
-            let condition = vec![
-                txn_cond_seq(&req.name_ident, Eq, dict_id.seq),
-                txn_cond_seq(&new_name_ident, Eq, 0),
-            ];
-            let if_then = vec![
-                txn_del(&req.name_ident), // del old dict name
-                txn_put_pb_with_ttl(&new_name_ident, &dict_id.data, None)?, // put new dict name
-            ];
-
-            let txn_req = TxnRequest::new(condition, if_then);
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                name :? =(req.name_ident),
-                to :? =(&new_name_ident),
-                succ = succ;
-                "rename_dictionary"
-            );
-
-            if succ {
-                return Ok(());
-            }
-        }
-    }
-}
-
-/// Check dictionary does not exist by checking the seq number.
-///
-/// seq == 0 means does not exist.
-/// seq > 0 means exist.
-///
-/// If dict does not exist, return Ok(());
-/// Otherwise returns DictionaryAlreadyExists error
-fn dict_has_to_not_exist(
-    seq: u64,
-    name_ident: &DictionaryNameIdent,
-    _ctx: impl std::fmt::Display,
-) -> Result<(), ExistError<DictionaryNameRsc, DictionaryIdentity>> {
-    if seq == 0 {
-        Ok(())
-    } else {
-        debug!(seq = seq, name_ident :? =(name_ident); "exist");
-        Err(name_ident.exist_error(func_name!()))
+        let ctx = func_name!();
+        let new_name_ident = DictionaryNameIdent::new(req.tenant(), req.new_dict_ident.clone());
+        meta_txn::MetaTxnManager::new(self, ctx)
+            .move_key(req.name_ident, new_name_ident)
+            .await
     }
 }
 

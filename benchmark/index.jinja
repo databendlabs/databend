@@ -292,7 +292,41 @@
 
         const queries = {{ queries | tojson }};
 
-        const data =  {{ results | tojson }};
+        const dataGzipBase64 = "{{ results_gzip_base64 }}";
+        let dataPlainText = "";
+        let data = [];
+
+        function base64ToBytes(encoded) {
+            const binary = atob(encoded);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            return bytes;
+        }
+
+        async function gunzipBase64(encoded) {
+            if (!("DecompressionStream" in globalThis)) {
+                throw new Error("This browser does not support gzip decompression.");
+            }
+
+            const stream = new Blob([base64ToBytes(encoded)])
+                .stream()
+                .pipeThrough(new DecompressionStream("gzip"));
+            return await new Response(stream).text();
+        }
+
+        async function loadData() {
+            dataPlainText = await gunzipBase64(dataGzipBase64);
+            data = JSON.parse(dataPlainText);
+
+            const download = document.getElementById("download-data");
+            if (download) {
+                download.href = URL.createObjectURL(
+                    new Blob([dataPlainText], { type: "application/json" })
+                );
+            }
+        }
 
         const additional_data_size_points = [
         ];
@@ -306,7 +340,8 @@
         <h1>{{ title }}</h1>
         <a href="https://github.com/ClickHouse/ClickBench/">Clickbench</a> |
         <a href="https://benchmark.databend.com/clickbench/release/{{ dataset }}.html">Release Versions</a> |
-        <a href="{{ url }}">Changeset Detail</a>
+        <a href="{{ url }}">Changeset Detail</a> |
+        <a id="download-data" download="{{ dataset }}-data.json" href="">Download Plaintext Data</a>
     </div>
 
     <table class="selectors-container stick-left">
@@ -376,6 +411,7 @@
     </table>
 
     <script type="text/javascript">
+        loadData().then(() => {
 
         const constant_time_add = 0.01;
         const missing_result_penalty = 2;
@@ -935,6 +971,13 @@
 
         render();
         updateSelectors();
+        }).catch(error => {
+            console.error("Failed to load benchmark data:", error);
+            const message = document.getElementById('nothing-selected');
+            message.textContent = `Failed to load benchmark data: ${error.message}`;
+            message.style.display = 'block';
+            [...document.querySelectorAll('.comparison')].map(e => e.style.display = 'none');
+        });
 
     </script>
 </body>

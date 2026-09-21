@@ -27,8 +27,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::aggregate_function::AggregateRegistry;
 use databend_common_expression::types::DataType;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::StageInfo;
@@ -62,6 +63,7 @@ use crate::BindContext;
 use crate::DefaultExprBinder;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
+use crate::binder::AliasLookup;
 use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
 use crate::plans::DictGetFunctionArgument;
@@ -119,7 +121,7 @@ impl FullTypeCheckAdapterDependencies {
 
         Self {
             async_runtime_handle: current_async_runtime_handle,
-            aggregate_function_factory: AggregateFunctionFactory::instance(),
+            aggregate_function_registry: &AGGR_REGISTRY,
             license_manager: LicenseManagerSwitch::instance(),
             catalog_manager: CatalogManager::instance(),
             user_api_provider: UserApiProvider::instance(),
@@ -141,8 +143,8 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
         self.ctx.get_settings()
     }
 
-    fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory {
-        self.dependencies.aggregate_function_factory
+    fn aggregate_function_registry(&self) -> &'static AggregateRegistry {
+        self.dependencies.aggregate_function_registry
     }
 
     fn udf_adapter(&self) -> Result<Self::UdfAdapter> {
@@ -299,7 +301,7 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
                     return Err(ErrorCode::PermissionDenied(format!(
                         "Permission denied: privilege READ is required on stage {} for user {}",
                         stage_info.stage_name.clone(),
-                        &self.ctx.get_current_user()?.identity().display(),
+                        self.ctx.get_current_user()?.identity().display(),
                     ))
                     .set_span(span));
                 }
@@ -463,8 +465,8 @@ impl<'a> TypeChecker<'a, FullTypeCheckAdapter> {
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
-        aliases: &'a [(String, ScalarExpr)],
-        fallback_aliases: Option<&'a [(String, ScalarExpr)]>,
+        aliases: AliasLookup<'a>,
+        fallback_aliases: Option<AliasLookup<'a>>,
         forbid_udf: bool,
     ) -> Result<Self> {
         Self::try_create_with_adapter_and_alias_fallback(

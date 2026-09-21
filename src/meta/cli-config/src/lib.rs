@@ -45,13 +45,16 @@ use databend_common_version::VERGEN_BUILD_TIMESTAMP;
 use databend_common_version::VERGEN_GIT_SHA;
 use databend_common_version::VERGEN_RUSTC_SEMVER;
 use databend_meta::configs::AdminConfig;
+use databend_meta::configs::GrpcAuthConfig as InnerGrpcAuthConfig;
 use databend_meta::configs::GrpcConfig;
+use databend_meta::configs::GrpcCredential as InnerGrpcCredential;
 use databend_meta::configs::MetaServiceConfig;
 use databend_meta::configs::TlsConfig;
-use databend_meta::raft_store::MetaStartupError;
-use databend_meta::raft_store::config::RaftConfig as InnerRaftConfig;
-use databend_meta::raft_store::config::get_default_raft_advertise_host;
-use databend_meta::raft_store::ondisk::DATA_VERSION;
+use databend_meta::raft_config::MetaStartupError;
+use databend_meta::raft_config::Secret;
+use databend_meta::raft_config::config::RaftConfig as InnerRaftConfig;
+use databend_meta::raft_config::config::get_default_raft_advertise_host;
+use databend_meta::raft_config::data_version::DATA_VERSION;
 use databend_meta_ver::MIN_QUERY_VER_FOR_METASRV;
 use serde::Deserialize;
 use serde::Serialize;
@@ -76,6 +79,27 @@ static FULL_VERSION: LazyLock<String> = LazyLock::new(|| {
         first_line, *MIN_QUERY_VER_FOR_METASRV, DATA_VERSION
     )
 });
+
+/// Authentication configuration loaded from the meta-server config file.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct GrpcAuthConfig {
+    /// Accepted username and password pairs.
+    pub credentials: Vec<GrpcCredential>,
+
+    /// Whether to reject a missing or incorrect password.
+    pub strict: bool,
+}
+
+/// One accepted username and password pair.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GrpcCredential {
+    /// Username sent by the gRPC client.
+    pub username: String,
+
+    /// Plaintext password converted to a redacting `Secret` after config merge.
+    pub password: String,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
 #[clap(about, author, version = &**FULL_VERSION)]
@@ -138,6 +162,10 @@ pub struct Config {
     #[clap(long)]
     pub grpc_api_max_message_size: Option<usize>,
 
+    /// Authentication policy for the gRPC server handshake.
+    #[clap(skip)]
+    pub grpc_auth: Option<GrpcAuthConfig>,
+
     #[clap(flatten)]
     pub raft_config: RaftConfig,
 }
@@ -189,6 +217,48 @@ fn parse_host_port(addr: &str) -> (String, Option<u16>) {
     }
 }
 
+impl From<GrpcCredential> for InnerGrpcCredential {
+    fn from(credential: GrpcCredential) -> Self {
+        Self {
+            username: credential.username,
+            password: Secret::new(credential.password),
+        }
+    }
+}
+
+impl From<InnerGrpcCredential> for GrpcCredential {
+    fn from(credential: InnerGrpcCredential) -> Self {
+        Self {
+            username: credential.username,
+            password: credential.password.expose().to_string(),
+        }
+    }
+}
+
+impl From<GrpcAuthConfig> for InnerGrpcAuthConfig {
+    fn from(config: GrpcAuthConfig) -> Self {
+        let credentials = config.credentials.into_iter();
+        let credentials = credentials.map(InnerGrpcCredential::from);
+        let credentials = credentials.collect();
+        Self {
+            credentials,
+            strict: config.strict,
+        }
+    }
+}
+
+impl From<InnerGrpcAuthConfig> for GrpcAuthConfig {
+    fn from(config: InnerGrpcAuthConfig) -> Self {
+        let credentials = config.credentials.into_iter();
+        let credentials = credentials.map(GrpcCredential::from);
+        let credentials = credentials.collect();
+        Self {
+            credentials,
+            strict: config.strict,
+        }
+    }
+}
+
 impl TryFrom<Config> for MetaConfig {
     type Error = String;
 
@@ -202,6 +272,8 @@ impl TryFrom<Config> for MetaConfig {
         }
 
         let (listen_host, listen_port) = parse_host_port(&outer.grpc_api_address);
+        let grpc_auth = outer.grpc_auth;
+        let grpc_auth = grpc_auth.map(Into::into);
 
         Ok(MetaConfig {
             cmd: outer.cmd,
@@ -219,6 +291,7 @@ impl TryFrom<Config> for MetaConfig {
                     listen_host,
                     listen_port,
                     advertise_host: outer.grpc_api_advertise_host,
+                    auth: grpc_auth,
                     tls: TlsConfig {
                         cert: outer.grpc_tls_server_cert,
                         key: outer.grpc_tls_server_key,
@@ -238,6 +311,8 @@ impl From<MetaConfig> for Config {
             .grpc
             .api_address()
             .unwrap_or_else(|| inner.service.grpc.listen_host.clone());
+        let grpc_auth = inner.service.grpc.auth;
+        let grpc_auth = grpc_auth.map(Into::into);
 
         Self {
             cmd: inner.cmd,
@@ -250,6 +325,7 @@ impl From<MetaConfig> for Config {
             admin_tls_server_key: inner.admin.tls.key,
             grpc_api_address,
             grpc_api_advertise_host: inner.service.grpc.advertise_host,
+            grpc_auth,
             grpc_tls_server_cert: inner.service.grpc.tls.cert,
             grpc_tls_server_key: inner.service.grpc.tls.key,
             grpc_api_max_message_size: inner.service.grpc.max_message_size,
@@ -455,6 +531,58 @@ pub struct RaftConfig {
     /// Default: 32MB (33554432).
     #[clap(long)]
     pub raft_grpc_max_message_size: Option<usize>,
+
+    /// The secret this node attaches to the raft RPCs it sends.
+    ///
+    /// Unset sends nothing, which is how a not yet configured node behaves.
+    /// Peers that are not strict still accept such a node, so a cluster can
+    /// adopt the secret without downtime.
+    ///
+    /// Held as a plain `String` rather than the inner `Secret`, because
+    /// `serfig` merges the config sources by serializing this struct, and
+    /// `Secret` serializes to `***` on purpose: it would overwrite the real
+    /// value with the redaction. The conversion to `Secret` happens on the way
+    /// to `InnerRaftConfig`, which is the only form that outlives loading and
+    /// the only one ever logged.
+    #[clap(long)]
+    pub raft_secret: Option<String>,
+
+    /// The secrets this node accepts on the raft RPCs it receives.
+    ///
+    /// Accepting more than one is what makes rotation possible without
+    /// downtime: add the new secret here on every node first, then move
+    /// `raft_secret` over node by node, then drop the old one from here.
+    #[clap(long)]
+    pub raft_accepted_secrets: Vec<String>,
+
+    /// Whether to reject a received raft RPC carrying no or an unaccepted
+    /// secret.
+    ///
+    /// Must stay off until every node of the cluster sends a secret: turning
+    /// it on earlier makes the nodes declare each other unreachable.
+    /// Default: false.
+    #[clap(long)]
+    pub raft_secret_strict: Option<bool>,
+
+    /// Path to the certificate chain presented by the Raft TLS listener.
+    #[clap(long)]
+    pub raft_tls_server_cert: Option<String>,
+
+    /// Path to the private key for `raft_tls_server_cert`.
+    #[clap(long)]
+    pub raft_tls_server_key: Option<String>,
+
+    /// Path to the CA used to verify Raft peers.
+    #[clap(long)]
+    pub raft_tls_client_root_ca_cert: Option<String>,
+
+    /// Name expected in each Raft peer certificate.
+    #[clap(long)]
+    pub raft_tls_client_domain_name: Option<String>,
+
+    /// Port for the Raft TLS listener. Unset disables the listener.
+    #[clap(long)]
+    pub raft_tls_port: Option<u16>,
 }
 
 // TODO(rotbl): should not be used.
@@ -498,6 +626,18 @@ impl From<RaftConfig> for InnerRaftConfig {
             cluster_name: x.cluster_name,
             wait_leader_timeout: x.wait_leader_timeout,
             raft_grpc_max_message_size: x.raft_grpc_max_message_size,
+            raft_secret: x.raft_secret.map(Secret::new),
+            raft_accepted_secrets: x
+                .raft_accepted_secrets
+                .into_iter()
+                .map(Secret::new)
+                .collect(),
+            raft_secret_strict: x.raft_secret_strict,
+            raft_tls_server_cert: x.raft_tls_server_cert,
+            raft_tls_server_key: x.raft_tls_server_key,
+            raft_tls_client_root_ca_cert: x.raft_tls_client_root_ca_cert,
+            raft_tls_client_domain_name: x.raft_tls_client_domain_name,
+            raft_tls_port: x.raft_tls_port,
         }
     }
 }
@@ -535,6 +675,18 @@ impl From<InnerRaftConfig> for RaftConfig {
             cluster_name: inner.cluster_name,
             wait_leader_timeout: inner.wait_leader_timeout,
             raft_grpc_max_message_size: inner.raft_grpc_max_message_size,
+            raft_secret: inner.raft_secret.map(|s| s.expose().to_string()),
+            raft_accepted_secrets: inner
+                .raft_accepted_secrets
+                .iter()
+                .map(|s| s.expose().to_string())
+                .collect(),
+            raft_secret_strict: inner.raft_secret_strict,
+            raft_tls_server_cert: inner.raft_tls_server_cert,
+            raft_tls_server_key: inner.raft_tls_server_key,
+            raft_tls_client_root_ca_cert: inner.raft_tls_client_root_ca_cert,
+            raft_tls_client_domain_name: inner.raft_tls_client_domain_name,
+            raft_tls_port: inner.raft_tls_port,
         }
     }
 }
@@ -817,10 +969,17 @@ mod tests {
     use std::fs::File;
     use std::io::Write;
 
+    use databend_meta::configs::GrpcAuthConfig as InnerGrpcAuthConfig;
+    use databend_meta::configs::GrpcCredential as InnerGrpcCredential;
+    use databend_meta::raft_config::Secret;
+    use databend_meta::raft_config::config::RaftConfig as InnerRaftConfig;
     use tempfile::tempdir;
 
     use crate::Config;
+    use crate::GrpcAuthConfig;
+    use crate::GrpcCredential;
     use crate::MetaConfig;
+    use crate::RaftConfig;
 
     #[test]
     fn test_load_config() -> anyhow::Result<()> {
@@ -842,6 +1001,17 @@ grpc_api_address = "127.0.0.1:10000"
 grpc_tls_server_cert = "grpc server cert"
 grpc_tls_server_key = "grpc server key"
 
+[grpc_auth]
+strict = true
+
+[[grpc_auth.credentials]]
+username = "meta-current"
+password = "current-password"
+
+[[grpc_auth.credentials]]
+username = "meta-next"
+password = "next-password"
+
 [raft_config]
 config_id = "raft config id"
 raft_api_host = "127.0.0.1"
@@ -858,6 +1028,11 @@ join = ["j1", "j2"]
 id = 20
 sled_tree_prefix = "sled_foo"
 cluster_name = "foo_cluster"
+raft_tls_server_cert = "raft server cert"
+raft_tls_server_key = "raft server key"
+raft_tls_client_root_ca_cert = "raft root ca cert"
+raft_tls_client_domain_name = "meta.internal"
+raft_tls_port = 12000
              "#
         )?;
 
@@ -873,6 +1048,31 @@ cluster_name = "foo_cluster"
             assert_eq!(cfg.admin.tls.key, "admin tls key");
             assert_eq!(cfg.service.grpc.listen_host, "127.0.0.1");
             assert_eq!(cfg.service.grpc.listen_port, Some(10000));
+            let expected_auth = InnerGrpcAuthConfig {
+                credentials: vec![
+                    InnerGrpcCredential {
+                        username: "meta-current".to_string(),
+                        password: Secret::new("current-password"),
+                    },
+                    InnerGrpcCredential {
+                        username: "meta-next".to_string(),
+                        password: Secret::new("next-password"),
+                    },
+                ],
+                strict: true,
+            };
+            let actual_auth = cfg.service.grpc.auth.as_ref();
+            assert_eq!(actual_auth, Some(&expected_auth));
+
+            let dumped = serde_json::to_string(&cfg).unwrap();
+            let contains_current_password = dumped.contains("current-password");
+            assert!(!contains_current_password);
+
+            let contains_next_password = dumped.contains("next-password");
+            assert!(!contains_next_password);
+
+            let contains_redaction = dumped.contains("***");
+            assert!(contains_redaction);
             assert_eq!(cfg.service.grpc.tls.cert, "grpc server cert");
             assert_eq!(cfg.service.grpc.tls.key, "grpc server key");
             assert_eq!(cfg.service.raft_config.raft_listen_host, "127.0.0.1");
@@ -886,7 +1086,111 @@ cluster_name = "foo_cluster"
             assert_eq!(cfg.service.raft_config.join, vec!["j1", "j2"]);
             assert_eq!(cfg.service.raft_config.id, 20);
             assert_eq!(cfg.service.raft_config.cluster_name, "foo_cluster");
+            let raft_config = &cfg.service.raft_config;
+            let server_cert = raft_config.raft_tls_server_cert.as_deref();
+            assert_eq!(server_cert, Some("raft server cert"));
+            let server_key = raft_config.raft_tls_server_key.as_deref();
+            assert_eq!(server_key, Some("raft server key"));
+            let root_ca = raft_config.raft_tls_client_root_ca_cert.as_deref();
+            assert_eq!(root_ca, Some("raft root ca cert"));
+            let domain_name = raft_config.raft_tls_client_domain_name.as_deref();
+            assert_eq!(domain_name, Some("meta.internal"));
+            let tls_port = raft_config.raft_tls_port;
+            assert_eq!(tls_port, Some(12000));
+
+            let expected_raft_config = raft_config.clone();
+            let outer = Config::from(cfg);
+            let expected_auth = GrpcAuthConfig {
+                credentials: vec![
+                    GrpcCredential {
+                        username: "meta-current".to_string(),
+                        password: "current-password".to_string(),
+                    },
+                    GrpcCredential {
+                        username: "meta-next".to_string(),
+                        password: "next-password".to_string(),
+                    },
+                ],
+                strict: true,
+            };
+            assert_eq!(outer.grpc_auth, Some(expected_auth));
+            let actual_raft_config: InnerRaftConfig = outer.raft_config.into();
+            assert_eq!(actual_raft_config, expected_raft_config);
         });
+
+        Ok(())
+    }
+
+    /// The config file is mid-rotation: the node still sends the old secret
+    /// while already accepting both.
+    #[test]
+    fn test_load_raft_secret_from_file() -> anyhow::Result<()> {
+        let d = tempdir()?;
+        let file_path = d.path().join("secret.toml");
+        let mut file = File::create(&file_path)?;
+        write!(
+            file,
+            r#"
+[raft_config]
+raft_secret = "old-secret"
+raft_accepted_secrets = ["old-secret", "new-secret"]
+raft_secret_strict = true
+             "#
+        )?;
+
+        temp_env::with_var("METASRV_CONFIG_FILE", Some(file_path.clone()), || {
+            let cfg: MetaConfig = Config::load(false)
+                .expect("load must success")
+                .try_into()
+                .expect("conversion must success");
+
+            let raft = &cfg.service.raft_config;
+            assert_eq!(
+                raft.raft_secret.as_ref().map(|s| s.expose()),
+                Some("old-secret")
+            );
+            assert_eq!(
+                raft.raft_accepted_secrets
+                    .iter()
+                    .map(|s| s.expose())
+                    .collect::<Vec<_>>(),
+                vec!["old-secret", "new-secret"],
+                "a rotation keeps both the old and the new secret accepted"
+            );
+            assert_eq!(raft.raft_secret_strict, Some(true));
+        });
+
+        Ok(())
+    }
+
+    /// `Secret` redacts itself, so a config dump must not contain the value.
+    /// Both places that log the config serialize `MetaConfig`, not the CLI
+    /// `Config`, which is why the CLI layer may hold a plain `String`.
+    #[test]
+    fn test_logged_config_redacts_the_raft_secret() -> anyhow::Result<()> {
+        let cli = Config {
+            raft_config: RaftConfig {
+                raft_secret: Some("hunter2".to_string()),
+                raft_accepted_secrets: vec!["hunter2".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        // The CLI struct itself does leak, which is the whole reason it must
+        // not be the one that gets logged, and the reason `serfig` can merge
+        // it faithfully.
+        assert!(serde_json::to_string(&cli)?.contains("hunter2"));
+
+        let inner: MetaConfig = cli.try_into().expect("conversion must success");
+        let dumped = serde_json::to_string(&inner)?;
+
+        assert!(
+            !dumped.contains("hunter2"),
+            "the secret must not reach a config dump: {}",
+            dumped
+        );
+        assert!(dumped.contains("***"), "and it must be visibly redacted");
 
         Ok(())
     }

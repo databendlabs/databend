@@ -154,11 +154,11 @@ pub async fn get_ranges(
     location: &str,
     op: &Operator,
 ) -> Result<(Vec<Bytes>, bool)> {
-    let range_merger = RangeMerger::from_iter(
+    let range_merger = RangeMerger::from_iter_with_whole_read(
         ranges.iter().cloned(),
         read_settings.max_gap_size,
         read_settings.max_range_size,
-        Some(read_settings.parquet_fast_read_bytes),
+        read_settings.parquet_fast_read_bytes,
     );
     let merged_ranges = range_merger.ranges();
     let merged = merged_ranges.len() < ranges.len();
@@ -328,7 +328,7 @@ impl<T: AsMetaRef> RowGroupCore<T> {
 
                 *chunk = Some(Arc::new(ColumnChunkData::Sparse {
                     length: self.metadata.meta().column(idx).byte_range().1 as usize,
-                    data: offsets.into_iter().zip(chunks.into_iter()).collect(),
+                    data: offsets.into_iter().zip(chunks).collect(),
                 }))
             }
         }

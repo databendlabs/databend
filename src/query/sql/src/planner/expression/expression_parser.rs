@@ -15,8 +15,10 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr as AExpr;
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_cluster_key_exprs;
 use databend_common_ast::parser::parse_comma_separated_exprs;
+use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::Filters;
@@ -25,6 +27,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::ComputedExpr;
 use databend_common_expression::Constant;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
@@ -39,24 +42,138 @@ use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_table_meta::table::ClusterType;
+use databend_storages_common_table_meta::table::HILBERT_CLUSTER_DIMENSIONS;
+use databend_storages_common_table_meta::table::cluster_type_from_options;
 use derive_visitor::DriveMut;
 use parking_lot::RwLock;
 
 use crate::BaseTableColumn;
 use crate::Binder;
-use crate::ClusterKeyNormalizer;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IdentifierNormalizer;
 use crate::Metadata;
 use crate::MetadataRef;
 use crate::ScalarExpr;
+use crate::StoredKeyNormalizer;
 use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
+use crate::binder::ScalarBinder;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
+use crate::plans::LambdaFunc;
+use crate::plans::Visitor as ScalarVisitor;
+
+const TABLE_KEY_STRING_PREFIX_LEN: u64 = 8;
+
+/// Parsed and bound cluster keys, encoded by their mutually exclusive layout.
+#[derive(Clone, Debug)]
+pub enum ClusterKeys {
+    /// Ordinary lexicographic cluster keys.
+    Linear(Vec<Expr<usize>>),
+    /// Lexicographic keys containing one vector key at `vector_index`.
+    Vector {
+        keys: Vec<Expr<usize>>,
+        vector_index: usize,
+    },
+    /// Dimensions used for Hilbert clustering and MBR statistics.
+    Hilbert(Vec<Expr<usize>>),
+}
+
+impl ClusterKeys {
+    pub fn into_keys(self) -> Vec<Expr<usize>> {
+        match self {
+            Self::Linear(keys) | Self::Vector { keys, .. } => keys,
+            Self::Hilbert(dimensions) => dimensions,
+        }
+    }
+
+    /// Return expressions persisted in `ClusterStatistics`.
+    pub fn into_stats_keys(self) -> Vec<Expr<usize>> {
+        match self {
+            Self::Vector {
+                mut keys,
+                vector_index,
+            } => {
+                debug_assert!(vector_index < keys.len());
+                keys.remove(vector_index);
+                keys
+            }
+            Self::Linear(keys) => keys,
+            Self::Hilbert(dimensions) => dimensions,
+        }
+    }
+
+    pub fn is_hilbert(&self) -> bool {
+        matches!(self, Self::Hilbert(_))
+    }
+}
+
+fn normalize_key_expr(expr: Expr<usize>) -> Result<Expr<usize>> {
+    let is_substr = matches!(
+        &expr,
+        Expr::FunctionCall(FunctionCall { function, .. })
+            if function.signature.name == "substr"
+    );
+    if expr.data_type().remove_nullable() != DataType::String || is_substr {
+        return Ok(expr);
+    }
+
+    check_function(
+        None,
+        "substr",
+        &[],
+        &[
+            expr,
+            Constant {
+                span: None,
+                scalar: Scalar::Number(1i64.into()),
+                data_type: DataType::Number(NumberDataType::Int64),
+            }
+            .into(),
+            Constant {
+                span: None,
+                scalar: Scalar::Number(TABLE_KEY_STRING_PREFIX_LEN.into()),
+                data_type: DataType::Number(NumberDataType::UInt64),
+            }
+            .into(),
+        ],
+        &BUILTIN_FUNCTIONS,
+    )
+}
+
+/// Build a schema-backed context, preserving virtual expressions so CREATE and
+/// schema-change revalidation resolve computed columns identically.
+pub(crate) fn bind_context_from_schema(
+    schema: &TableSchemaRef,
+    metadata: &MetadataRef,
+) -> BindContext {
+    let mut bind_context = BindContext::new();
+    for field in schema.fields() {
+        let data_type = DataType::from(field.data_type());
+        let column_index = metadata
+            .write()
+            .add_derived_column(field.name().clone(), data_type.clone());
+        let virtual_expr = match field.computed_expr() {
+            Some(ComputedExpr::Virtual(expr)) => Some(expr.clone()),
+            Some(ComputedExpr::Stored(_)) | None => None,
+        };
+        bind_context.add_column_binding(
+            ColumnBindingBuilder::new(
+                field.name().clone(),
+                column_index,
+                Box::new(data_type),
+                Visibility::Visible,
+            )
+            .virtual_expr(virtual_expr)
+            .build(),
+        );
+    }
+    bind_context
+}
 
 pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRef)> {
     let mut bind_context = BindContext::new();
@@ -69,45 +186,46 @@ pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRe
         None,
         false,
         false,
-        false,
         None,
     );
 
-    let columns = metadata.read().columns_by_table_index(table_index);
-    let table = metadata.read().table(table_index).clone();
-    for column in columns.iter() {
-        let column_binding = match column {
-            ColumnEntry::BaseTableColumn(BaseTableColumn {
-                column_index,
-                column_name,
-                data_type,
-                path_indices,
-                virtual_expr,
-                ..
-            }) => {
-                let visibility = if path_indices.is_some() {
-                    Visibility::InVisible
-                } else {
-                    Visibility::Visible
-                };
-                ColumnBindingBuilder::new(
-                    column_name.clone(),
-                    *column_index,
-                    Box::new(data_type.into()),
-                    visibility,
-                )
-                .database_name(Some("default".to_string()))
-                .table_name(Some(table.name().to_string()))
-                .table_index(Some(table.index()))
-                .virtual_expr(virtual_expr.clone())
-                .build()
-            }
-            _ => {
-                return Err(ErrorCode::Internal("Invalid column entry"));
-            }
-        };
+    {
+        let metadata = metadata.read();
+        let table = metadata.table(table_index);
+        for column in metadata.columns_by_table_index(table_index) {
+            let column_binding = match column {
+                ColumnEntry::BaseTableColumn(BaseTableColumn {
+                    column_index,
+                    column_name,
+                    data_type,
+                    path_indices,
+                    virtual_expr,
+                    ..
+                }) => {
+                    let visibility = if path_indices.is_some() {
+                        Visibility::InVisible
+                    } else {
+                        Visibility::Visible
+                    };
+                    ColumnBindingBuilder::new(
+                        column_name.clone(),
+                        *column_index,
+                        Box::new(data_type.into()),
+                        visibility,
+                    )
+                    .database_name(Some("default".to_string()))
+                    .table_name(Some(table.name().to_string()))
+                    .table_index(Some(table.index()))
+                    .virtual_expr(virtual_expr.clone())
+                    .build()
+                }
+                _ => {
+                    return Err(ErrorCode::Internal("Invalid column entry"));
+                }
+            };
 
-        bind_context.add_column_binding(column_binding);
+            bind_context.add_column_binding(column_binding);
+        }
     }
     Ok((bind_context, metadata))
 }
@@ -120,7 +238,8 @@ pub fn parse_exprs(
     let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
     let tokens = tokenize_sql(sql)?;
     let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
-    parse_ast_exprs(ctx, table_meta, ast_exprs)
+    let names = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
+    parse_ast_exprs_with_context(ctx, table_meta, ast_exprs, &names)
 }
 
 pub fn parse_exprs_to_field_index(
@@ -134,34 +253,23 @@ pub fn parse_exprs_to_field_index(
         .collect()
 }
 
-fn parse_ast_exprs(
+fn parse_ast_exprs_with_context(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
     ast_exprs: Vec<AExpr>,
+    names: &NameResolutionContext,
 ) -> Result<Vec<Expr<ColumnBinding>>> {
     let (mut bind_context, metadata) = bind_table(table_meta)?;
-    let settings = ctx.get_settings();
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let mut type_checker =
+        TypeChecker::try_create(&mut bind_context, ctx, names, metadata, &[], false)?;
 
-    let mut type_checker = TypeChecker::try_create(
-        &mut bind_context,
-        ctx,
-        &name_resolution_ctx,
-        metadata,
-        &[],
-        false,
-    )?;
-
-    let exprs = ast_exprs
+    ast_exprs
         .iter()
         .map(|ast| {
             let (scalar, _) = *type_checker.resolve(ast)?;
-            let expr = scalar.as_expr()?;
-            Ok(expr)
+            scalar.as_expr()
         })
-        .collect::<Result<_>>()?;
-
-    Ok(exprs)
+        .collect()
 }
 
 pub fn parse_to_filters(
@@ -382,102 +490,80 @@ pub fn parse_cluster_keys(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
     ast_exprs: Vec<AExpr>,
-) -> Result<Vec<Expr>> {
-    let schema = table_meta.schema();
-    let (mut bind_context, metadata) = bind_table(table_meta)?;
-    let settings = ctx.get_settings();
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let mut type_checker = TypeChecker::try_create(
-        &mut bind_context,
-        ctx,
-        &name_resolution_ctx,
-        metadata,
-        &[],
-        false,
-    )?;
-
-    let exprs: Vec<Expr> = ast_exprs
-        .iter()
-        .map(|ast| {
-            let (scalar, _) = *type_checker.resolve(ast)?;
-            let expr = scalar
-                .as_expr()?
-                .project_column_ref(|col| schema.index_of(&col.column_name))?;
-            Ok(expr)
-        })
-        .collect::<Result<_>>()?;
-
-    let mut res = Vec::with_capacity(exprs.len());
-    for expr in exprs {
-        let inner_type = expr.data_type().remove_nullable();
-        let mut should_wrapper = false;
-        if inner_type == DataType::String {
-            if let Expr::FunctionCall(FunctionCall { function, .. }) = &expr {
-                should_wrapper = function.signature.name != "substr";
-            } else {
-                should_wrapper = true;
-            }
-        }
-
-        // If the cluster key type is string, use substr to truncate the first 8 digits.
-        let expr = if should_wrapper {
-            check_function(
-                None,
-                "substr",
-                &[],
-                &[
-                    expr,
-                    Constant {
-                        span: None,
-                        scalar: Scalar::Number(1i64.into()),
-                        data_type: DataType::Number(NumberDataType::Int64),
-                    }
-                    .into(),
-                    Constant {
-                        span: None,
-                        scalar: Scalar::Number(8u64.into()),
-                        data_type: DataType::Number(NumberDataType::UInt64),
-                    }
-                    .into(),
-                ],
-                &BUILTIN_FUNCTIONS,
-            )?
-        } else {
-            expr
-        };
-        res.push(expr);
+) -> Result<ClusterKeys> {
+    let cluster_type = cluster_type_from_options(table_meta.options());
+    if cluster_type == ClusterType::Hilbert && ast_exprs.len() != HILBERT_CLUSTER_DIMENSIONS {
+        return Err(ErrorCode::InvalidClusterKeys(format!(
+            "Hilbert clustering requires exactly {HILBERT_CLUSTER_DIMENSIONS} dimensions"
+        )));
     }
-    Ok(res)
+
+    let mut vector_index = None;
+    let keys = bind_normalized_key_exprs(ctx, table_meta, ast_exprs)?;
+    for (index, key) in keys.iter().enumerate() {
+        if !matches!(key.data_type().remove_nullable(), DataType::Vector(_)) {
+            continue;
+        }
+        if cluster_type == ClusterType::Hilbert {
+            return Err(ErrorCode::InvalidClusterKeys(
+                "Hilbert clustering does not support vector dimensions",
+            ));
+        }
+        if vector_index.replace(index).is_some() {
+            return Err(ErrorCode::InvalidClusterKeys(
+                "Only one vector column is supported in cluster by",
+            ));
+        }
+    }
+
+    match (cluster_type, vector_index) {
+        (ClusterType::Hilbert, _) => Ok(ClusterKeys::Hilbert(keys)),
+        (ClusterType::Linear, Some(vector_index)) => Ok(ClusterKeys::Vector { keys, vector_index }),
+        (ClusterType::Linear, None) => Ok(ClusterKeys::Linear(keys)),
+    }
 }
 
+/// Bind and normalize persisted partition or cluster key expressions.
+pub fn bind_normalized_key_exprs(
+    ctx: Arc<dyn TableContext>,
+    table_meta: Arc<dyn Table>,
+    ast_exprs: Vec<AExpr>,
+) -> Result<Vec<Expr<usize>>> {
+    let schema = table_meta.schema();
+    let names = NameResolutionContext::preserve_identifier_case();
+    parse_ast_exprs_with_context(ctx, table_meta, ast_exprs, &names)?
+        .into_iter()
+        .map(|expr| {
+            expr.project_column_ref(|col| schema.index_of(&col.column_name))
+                .and_then(normalize_key_expr)
+        })
+        .collect()
+}
+
+/// Bind and normalize cluster-key SQL using the caller-provided name rules.
 pub fn analyze_cluster_keys(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
     sql: &str,
+    name_resolution_ctx: &NameResolutionContext,
 ) -> Result<(String, Vec<Expr<Symbol>>)> {
     let ast_exprs = parse_cluster_key_exprs(sql)?;
     let (mut bind_context, metadata) = bind_table(table_meta)?;
-    let name_resolution_ctx = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
-        ctx.clone(),
-        &name_resolution_ctx,
+        ctx,
+        name_resolution_ctx,
         metadata,
         &[],
         true,
     )?;
 
-    let settings = ctx.get_settings();
-    let mut normalizer = ClusterKeyNormalizer {
-        force_quoted_ident: false,
-        unquoted_ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
-        quoted_ident_case_sensitive: settings.get_quoted_ident_case_sensitive()?,
-        sql_dialect: settings.get_sql_dialect()?,
-    };
+    let mut normalizer = StoredKeyNormalizer::new(name_resolution_ctx);
     let mut exprs = Vec::with_capacity(ast_exprs.len());
-    let mut cluster_keys = Vec::with_capacity(exprs.len());
-    for ast in ast_exprs {
-        let (scalar, _) = *type_checker.resolve(&ast)?;
+    let mut cluster_keys = Vec::with_capacity(ast_exprs.len());
+    let mut vector_cluster_key_num = 0;
+    for ast in &ast_exprs {
+        let (scalar, _) = *type_checker.resolve(ast)?;
         if scalar.used_columns().len() != 1 || !scalar.evaluable() {
             return Err(ErrorCode::InvalidClusterKeys(format!(
                 "Cluster by expression `{:#}` is invalid",
@@ -494,20 +580,115 @@ pub fn analyze_cluster_keys(
         }
 
         let data_type = expr.data_type();
-        if !Binder::valid_cluster_key_type(data_type) {
+        let (is_valid_type, is_vector_type) = Binder::valid_cluster_key_type(data_type);
+        if !is_valid_type {
             return Err(ErrorCode::InvalidClusterKeys(format!(
                 "Unsupported data type '{}' for cluster by expression `{:#}`",
                 data_type, ast
             )));
+        }
+        if is_vector_type {
+            vector_cluster_key_num += 1;
+            if vector_cluster_key_num > 1 {
+                return Err(ErrorCode::InvalidClusterKeys(
+                    "Only one vector column is supported in cluster by",
+                ));
+            }
         }
 
         exprs.push(expr);
 
         let mut cluster_by = ast.clone();
         cluster_by.drive_mut(&mut normalizer);
-        cluster_keys.push(format!("{:#}", &cluster_by));
+        cluster_keys.push(format!("{:#}", cluster_by));
     }
 
     let cluster_by_str = format!("({})", cluster_keys.join(", "));
     Ok((cluster_by_str, exprs))
+}
+
+/// Reject lambda functions in a bound TTL expression.
+///
+/// A TTL is persisted as expression text and later rewritten at the AST level
+/// by `DROP COLUMN` / `RENAME COLUMN`, where lambda parameters cannot be told
+/// apart from table columns. Supporting them would require a second scope
+/// resolution implementation next to the binder's.
+///
+/// Validate after binding because `LambdaArgument::Ambiguous` may represent
+/// either a lambda or a JSON arrow expression; only semantic analysis can
+/// distinguish them.
+fn reject_ttl_lambda(scalar: &ScalarExpr, display: &str) -> Result<()> {
+    struct LambdaRejector<'a> {
+        display: &'a str,
+        found: bool,
+    }
+
+    impl<'a> ScalarVisitor<'a> for LambdaRejector<'_> {
+        fn visit_lambda_function(&mut self, _: &'a LambdaFunc) -> Result<()> {
+            self.found = true;
+            Ok(())
+        }
+    }
+
+    let mut rejector = LambdaRejector {
+        display,
+        found: false,
+    };
+    rejector.visit(scalar)?;
+    if rejector.found {
+        return Err(ErrorCode::SemanticError(format!(
+            "TTL expression `{}` must not use a lambda function",
+            rejector.display
+        )));
+    }
+    Ok(())
+}
+
+/// Validate the rules shared by new TTL definitions and schema revalidation.
+/// Column-reference admission is checked separately for new definitions.
+pub(crate) fn validate_ttl_expr(scalar: &ScalarExpr, display: &str) -> Result<()> {
+    reject_ttl_lambda(scalar, display)?;
+    if !scalar.evaluable() {
+        return Err(ErrorCode::SemanticError(format!(
+            "TTL expression `{display}` is invalid"
+        )));
+    }
+    let expr = scalar.as_expr()?;
+    if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+        return Err(ErrorCode::SemanticError(format!(
+            "TTL expression `{display}` is not deterministic"
+        )));
+    }
+
+    let data_type = expr.data_type();
+    // TIMESTAMP_TZ is an absolute instant plus a display offset, which is what
+    // retention needs; excluding it would be an artificial restriction.
+    if !matches!(
+        data_type.remove_nullable(),
+        DataType::Timestamp | DataType::TimestampTz | DataType::Date
+    ) {
+        return Err(ErrorCode::SemanticError(format!(
+            "TTL expression `{display}` must be of type TIMESTAMP, TIMESTAMP_TZ or DATE, but got '{data_type}'"
+        )));
+    }
+    Ok(())
+}
+
+/// Re-validate a persisted TTL expression against `table_meta`'s current schema.
+///
+/// Used by schema-changing DDL to reject a target schema on which the stored
+/// TTL can no longer be evaluated.
+pub fn validate_stored_ttl_expr(
+    ctx: Arc<dyn TableContext>,
+    schema: TableSchemaRef,
+    sql: &str,
+) -> Result<()> {
+    let ast = parse_expr(&tokenize_sql(sql)?, Dialect::default())?;
+    let metadata = Arc::new(RwLock::new(Metadata::default()));
+    let mut bind_context = bind_context_from_schema(&schema, &metadata);
+    let names = NameResolutionContext::preserve_identifier_case();
+    let mut binder = ScalarBinder::new(&mut bind_context, ctx, &names, metadata, &[]);
+    binder.forbid_udf();
+    let (scalar, _) = binder.bind(&ast)?;
+    validate_ttl_expr(&scalar, &format!("{ast:#}"))
 }

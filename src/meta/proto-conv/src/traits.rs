@@ -29,7 +29,7 @@ pub trait FromToProto {
     where Self: Sized;
 
     /// Convert from rust type to protobuf type.
-    fn to_pb(&self) -> Result<Self::PB, Incompatible>;
+    fn to_pb(&self) -> Self::PB;
 }
 
 /// Defines API to convert from/to protobuf Enumeration.
@@ -42,7 +42,7 @@ pub trait FromToProtoEnum {
     where Self: Sized;
 
     /// Convert from rust type to protobuf type.
-    fn to_pb_enum(&self) -> Result<Self::PBEnum, Incompatible>;
+    fn to_pb_enum(&self) -> Self::PBEnum;
 }
 
 impl<T> FromToProto for Arc<T>
@@ -58,7 +58,7 @@ where T: FromToProto
         Ok(Arc::new(T::from_pb(p)?))
     }
 
-    fn to_pb(&self) -> Result<T::PB, Incompatible> {
+    fn to_pb(&self) -> T::PB {
         let s = self.as_ref();
         s.to_pb()
     }
@@ -77,20 +77,20 @@ where T: FromToProto
         Ok(Box::new(T::from_pb(p)?))
     }
 
-    fn to_pb(&self) -> Result<T::PB, Incompatible> {
+    fn to_pb(&self) -> T::PB {
         self.as_ref().to_pb()
     }
 }
 
 pub trait ToProtoOptionExt {
     type PB;
-    fn to_pb_opt(&self) -> Result<Option<Self::PB>, Incompatible>;
+    fn to_pb_opt(&self) -> Option<Self::PB>;
 }
 
 impl<T: FromToProto> ToProtoOptionExt for Option<T> {
     type PB = T::PB;
-    fn to_pb_opt(&self) -> Result<Option<T::PB>, Incompatible> {
-        self.as_ref().map(FromToProto::to_pb).transpose()
+    fn to_pb_opt(&self) -> Option<T::PB> {
+        self.as_ref().map(FromToProto::to_pb)
     }
 }
 

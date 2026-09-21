@@ -14,7 +14,11 @@
 
 use std::sync::Arc;
 
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::runtime_filter_info::RuntimeScanFilters;
+use databend_common_catalog::runtime_filter_info::RuntimeScanStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -25,17 +29,17 @@ use databend_common_expression::TableSchema;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_pipeline_transforms::processors::AsyncTransform;
-use databend_common_pipeline_transforms::processors::AsyncTransformer;
+use databend_common_pipeline_transforms::processors::AsyncBlockingTransform;
+use databend_common_pipeline_transforms::processors::AsyncBlockingTransformer;
 use databend_common_sql::IndexType;
 
 use super::read_block_context::ReadBlockContext;
+use crate::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::pruning::ExprRuntimePruner;
 use crate::pruning::RuntimeFilterExpr;
-use crate::pruning::SpatialRuntimePruner;
 
 pub struct ReadDataTransform {
     func_ctx: FunctionContext,
@@ -44,6 +48,10 @@ pub struct ReadDataTransform {
     table_schema: Arc<TableSchema>,
     scan_id: IndexType,
     context: Arc<dyn TableContext>,
+    runtime_scan_filters: RuntimeScanFilters,
+    expr_runtime_pruner: Option<ExprRuntimePruner>,
+    record_partitions: bool,
+    parts: std::vec::IntoIter<PartInfoPtr>,
 }
 
 impl ReadDataTransform {
@@ -54,11 +62,13 @@ impl ReadDataTransform {
         table_schema: Arc<TableSchema>,
         block_reader: Arc<BlockReader>,
         read_block_context: Arc<ReadBlockContext>,
+        record_partitions: bool,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         let func_ctx = ctx.get_function_context()?;
-        Ok(ProcessorPtr::create(AsyncTransformer::create(
+        let runtime_scan_filters = ctx.get_runtime_scan_filters(scan_id);
+        Ok(ProcessorPtr::create(AsyncBlockingTransformer::create(
             input,
             output,
             ReadDataTransform {
@@ -68,11 +78,15 @@ impl ReadDataTransform {
                 table_schema,
                 scan_id,
                 context: ctx,
+                runtime_scan_filters,
+                expr_runtime_pruner: None,
+                record_partitions,
+                parts: Vec::new().into_iter(),
             },
         )))
     }
 
-    fn create_runtime_pruners(&self) -> Result<(ExprRuntimePruner, Option<SpatialRuntimePruner>)> {
+    fn create_runtime_pruners(&self) -> Result<ExprRuntimePruner> {
         let read_settings = self.read_block_context.read_settings();
         let inlist_bloom_prune_threshold =
             self.context
@@ -91,62 +105,79 @@ impl ReadDataTransform {
                 .flat_map(RuntimeFilterExpr::from_entry)
                 .collect(),
         );
-        let spatial_runtime_pruner = SpatialRuntimePruner::try_create(
-            self.table_schema.clone(),
-            self.block_reader.operator(),
-            read_settings,
-            &runtime_filters,
-        )?;
 
-        Ok((runtime_filter, spatial_runtime_pruner))
-    }
-
-    async fn read_parts(&self, parts: Vec<PartInfoPtr>) -> Result<DataBlock> {
-        let mut read_tasks = Vec::with_capacity(parts.len());
-        let mut parts_to_read = Vec::with_capacity(parts.len());
-        let (expr_runtime_pruner, spatial_runtime_pruner) = self.create_runtime_pruners()?;
-
-        for part in parts {
-            if expr_runtime_pruner.prune(&part).await? {
-                continue;
-            }
-
-            if let Some(spatial_runtime_pruner) = &spatial_runtime_pruner {
-                if spatial_runtime_pruner.prune(&part).await? {
-                    continue;
-                }
-            }
-
-            parts_to_read.push(part.clone());
-            let read_block_context = self.read_block_context.clone();
-
-            read_tasks.push(async move {
-                databend_common_base::runtime::spawn(async move {
-                    read_block_context.read_data(part).await
-                })
-                .await
-                .unwrap()
-            });
-        }
-
-        Ok(DataBlock::empty_with_meta(DataSourceWithMeta::create(
-            parts_to_read,
-            futures::future::try_join_all(read_tasks).await?,
-        )))
+        Ok(runtime_filter)
     }
 }
 
 #[async_trait::async_trait]
-impl AsyncTransform for ReadDataTransform {
+impl AsyncBlockingTransform for ReadDataTransform {
     const NAME: &'static str = "AsyncReadDataTransform";
 
-    async fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
-        let parts = data
-            .get_meta()
-            .and_then(BlockPartitionMeta::downcast_ref_from)
-            .and_then(|meta| (!meta.part_ptr.is_empty()).then(|| meta.part_ptr.clone()))
+    async fn consume(&mut self, mut data: DataBlock) -> Result<()> {
+        let meta = data
+            .take_meta()
+            .and_then(BlockPartitionMeta::downcast_from)
+            .filter(|meta| !meta.part_ptr.is_empty())
             .ok_or_else(|| ErrorCode::Internal("AsyncReadDataTransform got wrong meta data"))?;
 
-        self.read_parts(parts).await
+        if self.record_partitions {
+            Profile::record_usize_profile(
+                ProfileStatisticsName::ScanPartitions,
+                meta.part_ptr.len(),
+            );
+        }
+
+        self.expr_runtime_pruner = Some(self.create_runtime_pruners()?);
+        self.parts = meta.part_ptr.into_iter();
+        Ok(())
+    }
+
+    async fn transform(&mut self) -> Result<Option<DataBlock>> {
+        let expr_runtime_pruner = self.expr_runtime_pruner.as_ref().unwrap();
+
+        // Batch only the metadata. Return each block before reading the next one so downstream
+        // backpressure bounds both the read concurrency and the buffered block data.
+        'parts: for part in self.parts.by_ref() {
+            let part_info = FuseBlockPartInfo::from_part(&part)?;
+            let virtual_stats = part_info
+                .block_meta_index
+                .as_ref()
+                .and_then(|index| index.virtual_block_meta.as_ref())
+                .map(|meta| &meta.virtual_column_stats);
+            let stats = RuntimeScanStatistics::new(part_info.columns_stat.as_ref(), virtual_stats);
+            if self.runtime_scan_filters.should_prune(stats)
+                || expr_runtime_pruner.prune(&part).await?
+            {
+                continue;
+            }
+
+            let source = if self.runtime_scan_filters.is_empty() {
+                self.read_block_context.read_data(part.clone()).await?
+            } else {
+                let read = self.read_block_context.read_data(part.clone());
+                tokio::pin!(read);
+                loop {
+                    // Subscribe before checking so a boundary update cannot be missed.
+                    let rechecks = self.runtime_scan_filters.recheck_notified();
+                    debug_assert!(!rechecks.is_empty());
+                    if self.runtime_scan_filters.should_prune(stats) {
+                        continue 'parts;
+                    }
+
+                    tokio::select! {
+                        result = &mut read => break result?,
+                        _ = futures::future::select_all(rechecks) => {}
+                    }
+                }
+            };
+
+            return Ok(Some(DataBlock::empty_with_meta(
+                DataSourceWithMeta::create(vec![part], vec![source]),
+            )));
+        }
+
+        self.expr_runtime_pruner = None;
+        Ok(None)
     }
 }

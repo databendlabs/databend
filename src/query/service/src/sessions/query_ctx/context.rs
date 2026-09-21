@@ -44,10 +44,6 @@ impl TableContext for QueryContext {
         &self.written_segment_locs
     }
 
-    fn selected_segment_locations(&self) -> &SegmentLocationsState {
-        &self.shared.selected_segment_locs
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -246,6 +242,10 @@ impl TableContextQueryState for QueryContext {
         self.shared.get_error()
     }
 
+    fn get_nodes_memory_usage(&self) -> usize {
+        self.shared.get_nodes_memory_usage()
+    }
+
     fn push_warning(&self, warn: String) {
         self.shared.push_warning(warn)
     }
@@ -282,13 +282,14 @@ impl TableContextSettings for QueryContext {
         let settings = self.get_settings();
 
         let tz_string = settings.get_timezone()?;
-        let tz = TimeZone::get(&tz_string).map_err(|e| {
+        let tz = tz_string.parse::<Tz>().map_err(|e| {
             ErrorCode::InvalidTimezone(format!("Timezone validation failed: {}", e))
         })?;
-        let now = Zoned::now().with_time_zone(TimeZone::UTC);
+        let now = self.get_query_created_time().into();
         let numeric_cast_option = settings.get_numeric_cast_option()?;
         let rounding_mode = numeric_cast_option.as_str() == "rounding";
         let disable_variant_check = settings.get_disable_variant_check()?;
+        let enable_parse_json_variant_reparse = settings.get_enable_parse_json_variant_reparse()?;
         let geometry_output_format = settings.get_geometry_output_format()?;
         let binary_input_format = settings.get_binary_input_format()?;
         let binary_output_format = settings.get_binary_output_format()?;
@@ -305,6 +306,7 @@ impl TableContextSettings for QueryContext {
             tz,
             rounding_mode,
             disable_variant_check,
+            enable_parse_json_variant_reparse,
             enable_selector_executor: settings.get_enable_selector_executor()?,
             geometry_output_format,
             binary_input_format,

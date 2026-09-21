@@ -1,0 +1,37 @@
+Sequence
+├── MaterializedCTE: queries
+│   └── EvalScalar
+│       ├── output columns: [start_time (#0), end_time (#1)]
+│       ├── expressions: ['2026-01-01 00:00:01.000000', '2026-01-01 00:00:02.000000']
+│       ├── estimated rows: 1.00
+│       └── DummyTableScan
+└── Window
+    ├── output columns: [ts (#8), delta (#9), sum(delta) OVER (ORDER BY ts) (#10)]
+    ├── aggregate function: [sum(delta)]
+    ├── partition by: []
+    ├── order by: [ts]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort(Single)
+        ├── output columns: [ts (#8), delta (#9)]
+        ├── sort keys: [ts ASC NULLS LAST]
+        ├── estimated rows: 2.00
+        └── UnionAll
+            ├── output columns: [ts (#8), delta (#9)]
+            ├── estimated rows: 2.00
+            ├── EvalScalar
+            │   ├── output columns: [start_time (#2), delta (#4)]
+            │   ├── expressions: [1]
+            │   ├── estimated rows: 1.00
+            │   └── MaterializeCTERef
+            │       ├── cte_name: queries
+            │       ├── cte_schema: [start_time (#2), end_time (#3)]
+            │       └── estimated rows: 1.00
+            └── EvalScalar
+                ├── output columns: [end_time (#6), delta (#7)]
+                ├── expressions: [-1]
+                ├── estimated rows: 1.00
+                └── MaterializeCTERef
+                    ├── cte_name: queries
+                    ├── cte_schema: [start_time (#5), end_time (#6)]
+                    └── estimated rows: 1.00
+

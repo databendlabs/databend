@@ -2,7 +2,8 @@
 
 import subprocess
 import tempfile
-import os
+from pathlib import Path
+
 from metactl_utils import metactl_bin
 from utils import print_title
 
@@ -54,10 +55,46 @@ def test_lua_stdin():
     print("✓ Lua stdin execution test passed")
 
 
+def test_lua_sources_in_order():
+    """Test interleaved Lua files and inline scripts."""
+    print_title("Test Lua source execution order")
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        first = Path(temp_dir, "first.lua")
+        second = Path(temp_dir, "second.lua")
+        first.write_text('order = "file-1"\n')
+        second.write_text('print(order .. ", file-2")\n')
+
+        result = subprocess.run(
+            [
+                metactl_bin,
+                "lua",
+                "--file",
+                str(first),
+                "--script",
+                'order = order .. ", inline-1"',
+                "--file",
+                str(second),
+                "--script",
+                'print(order .. ", inline-2")',
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+    assert result.stdout.strip().splitlines() == [
+        "file-1, inline-1, file-2",
+        "file-1, inline-1, inline-2",
+    ]
+    print("✓ Lua source execution order test passed")
+
+
 def main():
     """Main function to run all lua tests."""
     test_lua_file()
     test_lua_stdin()
+    test_lua_sources_in_order()
 
 
 if __name__ == "__main__":

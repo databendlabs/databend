@@ -21,6 +21,7 @@ use crate::ColumnSet;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -36,9 +37,9 @@ pub struct Udaf {
 impl Udaf {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
-        for item in self.items.iter() {
+        for item in &self.items {
             used_columns.insert(item.index);
-            used_columns.extend(item.scalar.used_columns());
+            item.scalar.collect_used_columns(&mut used_columns);
         }
         Ok(used_columns)
     }
@@ -60,19 +61,14 @@ impl Operator for Udaf {
 
         // Derive outer columns
         let mut outer_columns = input_prop.outer_columns.clone();
-        for item in self.items.iter() {
-            let used_columns = item.scalar.used_columns();
-            let outer = used_columns
-                .difference(&output_columns)
-                .cloned()
-                .collect::<ColumnSet>();
-            outer_columns = outer_columns.union(&outer).cloned().collect();
+        for item in &self.items {
+            item.scalar.collect_used_columns(&mut outer_columns);
         }
-        outer_columns = outer_columns.difference(&output_columns).cloned().collect();
+        outer_columns.retain(|column| !output_columns.contains(column));
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
-        used_columns.extend(input_prop.used_columns.clone());
+        used_columns.extend(input_prop.used_columns.iter().copied());
 
         // Derive orderings
         let orderings = input_prop.orderings.clone();
@@ -87,8 +83,8 @@ impl Operator for Udaf {
         }))
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        rel_expr.derive_cardinality_child(0)
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        rel_expr.derive_cardinality_child(0, stat_ctx)
     }
 
     fn compute_required_prop_children(

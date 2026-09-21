@@ -24,16 +24,18 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_sql::plans::MaintenanceTarget;
 use databend_common_sql::plans::SetOptionsPlan;
 use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FuseSegmentFormat;
-use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
+use databend_common_storages_fuse::operations::AnalyzeHistogramInfo;
 use databend_common_storages_fuse::segment_format_from_location;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -42,17 +44,34 @@ use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegmentBuilder;
 use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
+use databend_storages_common_table_meta::meta::column_oriented_segment::VirtualBlockInput;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
+use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+use databend_storages_common_table_meta::table::OPT_KEY_WRITE_DISTRIBUTION_MODE;
+use databend_storages_common_table_meta::table::TableCompression;
+use databend_storages_common_table_meta::table::WriteDistributionMode;
+use databend_storages_common_table_meta::table::is_reserved_opt_key;
 use log::error;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::check_maintenance_target;
+use crate::interpreters::common::table_option_validation::analyze_count_min_sketch_error_rate_from_options;
+use crate::interpreters::common::table_option_validation::analyze_top_n_size_from_options;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_count_min_sketch_error_rate;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_frequency_columns;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_histogram_algorithm;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_histogram_kll_relative_error;
+use crate::interpreters::common::table_option_validation::is_valid_analyze_top_n_size;
 use crate::interpreters::common::table_option_validation::is_valid_approx_distinct_columns;
 use crate::interpreters::common::table_option_validation::is_valid_block_per_segment;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
@@ -66,6 +85,7 @@ use crate::interpreters::common::table_option_validation::is_valid_fuse_virtual_
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
+use crate::interpreters::common::table_option_validation::is_valid_virtual_column_layout_options;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -96,128 +116,177 @@ impl Interpreter for SetOptionsInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // valid_options_check and do request to meta_srv
-        let mut options_map = HashMap::new();
-        // check block_per_segment
-        is_valid_block_per_segment(&self.plan.set_options)?;
-        // check row_per_block
-        is_valid_row_per_block(&self.plan.set_options)?;
-        is_valid_recluster_depth(&self.plan.set_options)?;
-        // check data_retention_period
-        is_valid_data_retention_period(&self.plan.set_options)?;
-        // check enable_parquet_encoding
-        is_valid_fuse_parquet_dictionary_opt(&self.plan.set_options)?;
-        is_valid_data_page_rows(&self.plan.set_options)?;
-        is_valid_data_page_bytes(&self.plan.set_options)?;
+    fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
+        Box::pin(async move {
+            // valid_options_check and do request to meta_srv
+            let mut options_map = HashMap::new();
+            // check block_per_segment
+            is_valid_block_per_segment(&self.plan.set_options)?;
+            // check row_per_block
+            is_valid_row_per_block(&self.plan.set_options)?;
+            is_valid_recluster_depth(&self.plan.set_options)?;
+            // check data_retention_period
+            is_valid_data_retention_period(&self.plan.set_options)?;
+            // check enable_parquet_encoding
+            is_valid_fuse_parquet_dictionary_opt(&self.plan.set_options)?;
+            is_valid_data_page_rows(&self.plan.set_options)?;
+            is_valid_data_page_bytes(&self.plan.set_options)?;
+            is_valid_analyze_histogram_algorithm(&self.plan.set_options)?;
+            is_valid_analyze_histogram_kll_relative_error(&self.plan.set_options)?;
+            is_valid_analyze_top_n_size(&self.plan.set_options)?;
+            is_valid_analyze_count_min_sketch_error_rate(&self.plan.set_options)?;
+            if let Some(compression) = self.plan.set_options.get(OPT_KEY_TABLE_COMPRESSION) {
+                let _: TableCompression = compression.as_str().try_into()?;
+            }
 
-        // check storage_format
-        let error_str = "invalid opt for fuse table in alter table statement";
-        if self.plan.set_options.contains_key(OPT_KEY_STORAGE_FORMAT) {
-            error!("{}", &error_str);
-            return Err(ErrorCode::TableOptionInvalid(format!(
-                "can't change {} for alter table statement",
-                OPT_KEY_STORAGE_FORMAT
-            )));
-        }
-
-        if self.plan.set_options.contains_key(OPT_KEY_DATABASE_ID) {
-            error!("{}", &error_str);
-            return Err(ErrorCode::TableOptionInvalid(format!(
-                "can't change {} for alter table statement",
-                OPT_KEY_DATABASE_ID
-            )));
-        }
-        if self.plan.set_options.contains_key(OPT_KEY_TEMP_PREFIX) {
-            error!("{}", &error_str);
-            return Err(ErrorCode::TableOptionInvalid(format!(
-                "can't change {} for alter table statement",
-                OPT_KEY_TEMP_PREFIX
-            )));
-        }
-        if self.plan.set_options.contains_key(OPT_KEY_CLUSTER_TYPE) {
-            error!("{}", &error_str);
-            return Err(ErrorCode::TableOptionInvalid(format!(
-                "can't change {} for alter table statement",
-                OPT_KEY_CLUSTER_TYPE
-            )));
-        }
-
-        // Same as settings of FUSE_OPT_KEY_ENABLE_AUTO_VACUUM, expect value type is unsigned integer
-        is_valid_option_of_type::<u32>(&self.plan.set_options, FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)?;
-        is_valid_option_of_type::<u64>(
-            &self.plan.set_options,
-            FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD,
-        )?;
-
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
-        let database = self.plan.database.as_str();
-        let table_name = self.plan.table.as_str();
-        let table = catalog
-            .get_table(&self.ctx.get_tenant(), database, table_name)
-            .await?;
-
-        let engine = Engine::from(table.engine());
-        for table_option in self.plan.set_options.iter() {
-            let key = table_option.0.to_lowercase();
-            if !is_valid_create_opt(&key, &engine) {
-                error!("{}", &error_str);
+            // check storage_format
+            let error_str = "invalid opt for fuse table in alter table statement";
+            if self.plan.set_options.contains_key(OPT_KEY_STORAGE_FORMAT) {
+                error!("{}", error_str);
                 return Err(ErrorCode::TableOptionInvalid(format!(
-                    "table option {key} is invalid for alter table statement",
+                    "can't change {} for alter table statement",
+                    OPT_KEY_STORAGE_FORMAT
                 )));
             }
-            options_map.insert(key, Some(table_option.1.clone()));
-        }
 
-        let storage_format = match table.get_table_info().options().get(OPT_KEY_STORAGE_FORMAT) {
-            Some(storage_format) => FuseStorageFormat::from_str(storage_format)?,
-            None => FuseStorageFormat::Parquet,
-        };
-        // check enable_virtual_column
-        is_valid_fuse_virtual_column_opt(&self.plan.set_options, storage_format)?;
-
-        let table = analyze_table(self.ctx.clone(), table, &self.plan.set_options).await?;
-
-        let table_version = table.get_table_info().ident.seq;
-        if let Some(value) = self.plan.set_options.get(OPT_KEY_CHANGE_TRACKING) {
-            let change_tracking = value.to_lowercase().parse::<bool>()?;
-            if table.change_tracking_enabled() != change_tracking {
-                let begin_version = if change_tracking {
-                    Some(table_version.to_string())
-                } else {
-                    None
-                };
-                options_map.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER.to_string(), begin_version);
+            if self.plan.set_options.contains_key(OPT_KEY_DATABASE_ID) {
+                error!("{}", error_str);
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "can't change {} for alter table statement",
+                    OPT_KEY_DATABASE_ID
+                )));
             }
-        }
+            if self.plan.set_options.contains_key(OPT_KEY_TEMP_PREFIX) {
+                error!("{}", error_str);
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "can't change {} for alter table statement",
+                    OPT_KEY_TEMP_PREFIX
+                )));
+            }
+            if self.plan.set_options.contains_key(OPT_KEY_CLUSTER_TYPE) {
+                error!("{}", error_str);
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "can't change {} for alter table statement",
+                    OPT_KEY_CLUSTER_TYPE
+                )));
+            }
+            if self.plan.set_options.contains_key(OPT_KEY_PARTITION_BY) {
+                error!("{}", error_str);
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "can't change {} for alter table statement",
+                    OPT_KEY_PARTITION_BY
+                )));
+            }
 
-        // check mutability
-        table.check_mutable()?;
+            for key in self.plan.set_options.keys() {
+                if is_reserved_opt_key(key) {
+                    return Err(ErrorCode::TableOptionInvalid(format!(
+                        "table option '{}' is reserved and cannot be modified",
+                        key
+                    )));
+                }
+            }
 
-        // check bloom_index_columns.
-        is_valid_bloom_index_columns(&self.plan.set_options, table.schema())?;
-        is_valid_bloom_index_type(&self.plan.set_options)?;
-        is_valid_approx_distinct_columns(&self.plan.set_options, table.schema())?;
+            // Same as settings of FUSE_OPT_KEY_ENABLE_AUTO_VACUUM, expect value type is unsigned integer
+            is_valid_option_of_type::<u32>(
+                &self.plan.set_options,
+                FUSE_OPT_KEY_ENABLE_AUTO_VACUUM,
+            )?;
+            is_valid_option_of_type::<u32>(
+                &self.plan.set_options,
+                FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER,
+            )?;
+            is_valid_option_of_type::<u64>(
+                &self.plan.set_options,
+                FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD,
+            )?;
 
-        if let Some(new_snapshot_location) =
-            set_segment_format(self.ctx.clone(), table.clone(), &self.plan.set_options).await?
-        {
-            options_map.insert(
-                OPT_KEY_SNAPSHOT_LOCATION.to_string(),
-                Some(new_snapshot_location),
-            );
-        }
+            let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
+            let database = self.plan.database.as_str();
+            let table_name = self.plan.table.as_str();
+            let table = catalog
+                .get_table(&self.ctx.get_tenant(), database, table_name)
+                .await?;
+            check_maintenance_target(table.as_ref(), &self.plan.target)?;
 
-        let req = UpsertTableOptionReq {
-            table_id: table.get_id(),
-            seq: MatchSeq::Exact(table_version),
-            options: options_map,
-        };
+            if let Some(mode) = self.plan.set_options.get(OPT_KEY_WRITE_DISTRIBUTION_MODE) {
+                let mode = mode.parse::<WriteDistributionMode>()?;
+                if mode == WriteDistributionMode::Hash
+                    && !table.options().contains_key(OPT_KEY_PARTITION_BY)
+                {
+                    return Err(ErrorCode::TableOptionInvalid(format!(
+                        "{OPT_KEY_WRITE_DISTRIBUTION_MODE}='hash' requires PARTITION BY"
+                    )));
+                }
+            }
 
-        let _resp = catalog
-            .upsert_table_option(&self.ctx.get_tenant(), database, req)
-            .await?;
-        Ok(PipelineBuildResult::create())
+            let engine = Engine::from(table.engine());
+            for table_option in self.plan.set_options.iter() {
+                let key = table_option.0.to_lowercase();
+                if matches!(
+                    &self.plan.target,
+                    MaintenanceTarget::MaterializedView { .. }
+                ) && key == OPT_KEY_COMMENT
+                {
+                    return Err(ErrorCode::TableOptionInvalid(format!(
+                        "table option {key} is invalid for alter materialized view statement; use COMMENT = ... instead",
+                    )));
+                }
+                if !is_valid_create_opt(&key, &engine) {
+                    error!("{}", error_str);
+                    return Err(ErrorCode::TableOptionInvalid(format!(
+                        "table option {key} is invalid for alter table statement",
+                    )));
+                }
+                options_map.insert(key, Some(table_option.1.clone()));
+            }
+
+            // check enable_virtual_column
+            is_valid_fuse_virtual_column_opt(&self.plan.set_options)?;
+            is_valid_virtual_column_layout_options(&self.plan.set_options)?;
+
+            let table = analyze_table(self.ctx.clone(), table, &self.plan.set_options).await?;
+
+            let table_version = table.get_table_info().ident.seq;
+            if let Some(value) = self.plan.set_options.get(OPT_KEY_CHANGE_TRACKING) {
+                let change_tracking = value.to_lowercase().parse::<bool>()?;
+                if table.change_tracking_enabled() != change_tracking {
+                    let begin_version = if change_tracking {
+                        Some(table_version.to_string())
+                    } else {
+                        None
+                    };
+                    options_map
+                        .insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER.to_string(), begin_version);
+                }
+            }
+
+            // check bloom_index_columns.
+            is_valid_bloom_index_columns(&self.plan.set_options, table.schema())?;
+            is_valid_bloom_index_type(&self.plan.set_options)?;
+            is_valid_approx_distinct_columns(&self.plan.set_options, table.schema())?;
+            is_valid_analyze_frequency_columns(&self.plan.set_options, table.schema())?;
+
+            if let Some(new_snapshot_location) =
+                set_segment_format(self.ctx.clone(), table.clone(), &self.plan.set_options).await?
+            {
+                options_map.insert(
+                    OPT_KEY_SNAPSHOT_LOCATION.to_string(),
+                    Some(new_snapshot_location),
+                );
+            }
+
+            let req = UpsertTableOptionReq {
+                table_id: table.get_id(),
+                seq: MatchSeq::Exact(table_version),
+                options: options_map,
+            };
+
+            let _resp = catalog
+                .upsert_table_option(&self.ctx.get_tenant(), database, req)
+                .await?;
+            Ok(PipelineBuildResult::create())
+        })
     }
 }
 
@@ -273,14 +342,22 @@ async fn set_segment_format(
                     .await?;
                 for segment in segments {
                     let segment = segment?;
+                    let virtual_schema =
+                        segment.summary.virtual_segment_schema.clone().map(Arc::new);
                     for block in segment.blocks {
-                        segment_builder.add_block(block.as_ref().clone())?;
+                        segment_builder.add_block(
+                            block.as_ref().clone(),
+                            VirtualBlockInput::Existing {
+                                schema: virtual_schema.clone(),
+                            },
+                        )?;
                     }
                     let additional_stats_meta = segment.summary.additional_stats_meta;
+                    let cluster_key_info = fuse_table.cluster_key_info();
                     let segment = segment_builder
                         .build(
                             fuse_table.get_block_thresholds(),
-                            fuse_table.cluster_key_id(),
+                            cluster_key_info.as_ref(),
                             additional_stats_meta,
                         )?
                         .serialize()?;
@@ -299,8 +376,7 @@ async fn set_segment_format(
         table.schema().as_ref().clone(),
         table_snapshot.summary.clone(),
         new_segment_locations,
-        fuse_table.cluster_key_meta(),
-        fuse_table.cluster_type(),
+        fuse_table.cluster_key_info(),
         table_snapshot.table_statistics_location(),
         table_meta_timestamps,
     )?;
@@ -346,12 +422,23 @@ async fn analyze_table(
         return Ok(table);
     };
 
+    let mut effective_options = fuse_table.get_table_info().options().clone();
+    effective_options.extend(options.clone());
+    let top_n_size = analyze_top_n_size_from_options(&effective_options)?;
+    let count_min_sketch_error_rate =
+        analyze_count_min_sketch_error_rate_from_options(&effective_options)?;
+    let frequency_columns = effective_options
+        .get(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS)
+        .cloned();
     let mut pipeline = Pipeline::create();
     fuse_table.do_analyze(
         ctx.clone(),
         table_snapshot,
         &mut pipeline,
-        HashMap::new(),
+        AnalyzeHistogramInfo::None,
+        top_n_size,
+        frequency_columns,
+        count_min_sketch_error_rate,
         false,
         true,
     )?;

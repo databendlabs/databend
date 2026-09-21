@@ -183,7 +183,9 @@ where A: TypeCheckAdapter
                 let data_type = *column.data_type.clone();
                 (BoundColumnRef { span, column }.into(), data_type)
             }
-            NameResolutionResult::Alias { scalar, .. } => (scalar.clone(), scalar.data_type()?),
+            NameResolutionResult::Alias { scalar, .. } => {
+                (scalar.clone(), scalar.data_type().into_owned())
+            }
         };
 
         Ok(Box::new((scalar, data_type)))

@@ -47,7 +47,7 @@ impl BlocksWriter {
         assert!(!block.is_empty());
 
         let mut block_encoder = BlocksEncoder::new(true, Alignment::MIN, 8 * 1024 * 1024);
-        block_encoder.add_blocks(vec![block]);
+        block_encoder.add_blocks(vec![block])?;
 
         let buf = block_encoder
             .buf

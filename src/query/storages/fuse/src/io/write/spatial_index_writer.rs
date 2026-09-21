@@ -31,7 +31,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::geometry::extract_bbox_and_srid;
-use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_generate_milliseconds;
@@ -45,17 +44,24 @@ use geo_index::rtree::RTreeBuilder;
 use geo_index::rtree::sort::HilbertSort;
 use log::debug;
 use log::info;
+use opendal::Buffer;
 use opendal::Operator;
 use parquet::file::metadata::KeyValue;
 
 use crate::io::read::load_spatial_index_files;
+use crate::io::write::block_index::BlockIndexSpec;
+use crate::io::write::block_index::BlockIndexWriteContext;
+use crate::io::write::block_index::BlockIndexWriter;
+use crate::io::write::block_index::PendingBlockIndexOutput;
+use crate::io::write::block_index::PendingIndexFile;
+use crate::io::write::block_index::PendingSpatialIndex;
 use crate::statistics::SpatialStatsBuilder;
 
 #[derive(Debug, Clone)]
 pub struct SpatialIndexState {
     pub location: Location,
     pub size: u64,
-    pub data: Vec<u8>,
+    pub data: Buffer,
 }
 
 #[derive(Debug, Clone)]
@@ -84,7 +90,53 @@ pub struct SpatialIndexBuilder {
     spatial_stats: HashMap<ColumnId, SpatialStatsBuilder>,
 }
 
+pub(crate) struct SpatialIndexWriteSpec {
+    builder: SpatialIndexBuilder,
+    location: Location,
+}
+
+impl BlockIndexSpec for SpatialIndexWriteSpec {
+    fn new_writer(&self, _context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
+        Ok(Box::new(SpatialIndexBlockWriter {
+            builder: self.builder.clone(),
+            location: self.location.clone(),
+        }))
+    }
+}
+
+struct SpatialIndexBlockWriter {
+    builder: SpatialIndexBuilder,
+    location: Location,
+}
+
+impl BlockIndexWriter for SpatialIndexBlockWriter {
+    fn write(&mut self, block: &DataBlock) -> Result<()> {
+        self.builder.add_block(block)
+    }
+
+    fn finish(mut self: Box<Self>) -> Result<PendingBlockIndexOutput> {
+        let result = self.builder.finalize(&self.location)?;
+        Ok(PendingBlockIndexOutput {
+            spatial: Some(PendingSpatialIndex {
+                file: result.index_state.map(|index_state| PendingIndexFile {
+                    location: index_state.location,
+                    data: index_state.data,
+                }),
+                statistics: result.spatial_stats,
+            }),
+            ..Default::default()
+        })
+    }
+}
+
 impl SpatialIndexBuilder {
+    pub(crate) fn into_write_spec(self, location: Location) -> SpatialIndexWriteSpec {
+        SpatialIndexWriteSpec {
+            builder: self,
+            location,
+        }
+    }
+
     pub fn try_create(
         table_indexes: &BTreeMap<String, TableIndex>,
         schema: TableSchemaRef,
@@ -430,17 +482,16 @@ impl SpatialIndexBuilder {
         let index_schema = TableSchemaRefExt::create(index_fields);
         let index_block = DataBlock::new(index_columns, 1);
 
-        let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
-        let _ = blocks_to_parquet(
+        let serialized = blocks_to_parquet(
             index_schema.as_ref(),
             vec![index_block],
-            &mut data,
             TableCompression::Zstd,
             false,
             Some(metadata),
         )?;
+        let size = serialized.len() as u64;
+        let data = Buffer::from(serialized.payload);
 
-        let size = data.len() as u64;
         Ok(SpatialIndexState {
             location: location.clone(),
             size,

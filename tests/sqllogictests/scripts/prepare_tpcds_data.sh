@@ -36,10 +36,10 @@ tables=(
 
 force=${2:-"1"}
 if [ "$force" == "0" ]; then
-	table_exists=$(echo "SELECT COUNT() FROM system.tables WHERE database = '${db}' AND name = 'call_center'" | $BENDSQL_CLIENT_CONNECT --output tsv)
+	table_exists=$(echo "SELECT COUNT() FROM system.tables WHERE database = '${db}' AND name = 'call_center'" | bendsql_connect_root --output tsv)
 	table_exists=$(echo "$table_exists" | tr -d '\r\n[:space:]')
 	if [ -n "$table_exists" ] && [ "$table_exists" -gt 0 ]; then
-		res=$(echo "SELECT COUNT() from ${db}.call_center" | $BENDSQL_CLIENT_CONNECT --output tsv)
+		res=$(echo "SELECT COUNT() from ${db}.call_center" | bendsql_connect_root --output tsv)
 		res=$(echo "$res" | tr -d '\r\n[:space:]')
 		if [ -n "$res" ] && [ "$res" -gt 0 ]; then
 			echo "Table $db.call_center already exists and is not empty, size: ${res}. Use force=1 to override it."
@@ -48,11 +48,11 @@ if [ "$force" == "0" ]; then
 	fi
 fi
 
-echo "CREATE OR REPLACE DATABASE tpcds" | $BENDSQL_CLIENT_CONNECT
+echo "CREATE OR REPLACE DATABASE tpcds" | bendsql_connect_root
 
 # Create Tables;
 # shellcheck disable=SC2002
-cat ${target_dir}/scripts/tpcds.sql | $BENDSQL_CLIENT_CONNECT
+cat ${target_dir}/scripts/tpcds.sql | bendsql_connect_root
 python ${target_dir}/scripts/prepare_duckdb_tpcds_data.py 1
 
 stmt "drop stage if exists s1"

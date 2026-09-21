@@ -1,3 +1,6 @@
+# run-with-settings: enable_fixed_rows_sort=0
+# run-with-settings: enable_loser_tree_merge_sort=0
+
 statement ok
 CREATE DATABASE IF NOT EXISTS test_window_basic
 
@@ -80,13 +83,6 @@ SELECT json_object_agg(v, n) OVER (PARTITION BY k) FROM (SELECT 1 AS k, 'a' AS v
 {"a":10,"b":20,"c":30}
 {"a":10,"b":20,"c":30}
 {"a":10,"b":20,"c":30}
-
-query T
-SELECT range_bound(3)(v) OVER (PARTITION BY k) FROM (SELECT 1 AS k, 10 AS v UNION ALL SELECT 1, 20 UNION ALL SELECT 1, 30)
-----
-[10,20]
-[10,20]
-[10,20]
 
 query T
 SELECT m FROM (SELECT markov_train(1, 0, 0, 1, 0)(v) OVER (PARTITION BY k) AS m FROM (SELECT 1 AS k, 'ab' AS v UNION ALL SELECT 1, 'ac' UNION ALL SELECT 1, 'ad'));

@@ -22,6 +22,7 @@ use databend_common_ast::ast::CreateUserStmt;
 use databend_common_ast::ast::GrantObjectName;
 use databend_common_ast::ast::GrantStmt;
 use databend_common_ast::ast::PrincipalIdentity as AstPrincipalIdentity;
+use databend_common_ast::ast::ProcedureIdentity as AstProcedureIdentity;
 use databend_common_ast::ast::RevokeStmt;
 use databend_common_ast::ast::ShowGranteesOfRoleStmt;
 use databend_common_ast::ast::ShowObjectPrivilegesStmt;
@@ -55,6 +56,7 @@ use crate::Binder;
 use crate::binder::show::get_show_options;
 use crate::binder::util::illegal_ident_name;
 use crate::meta_service_error;
+use crate::planner::binder::ddl::procedure::generate_procedure_name_ident;
 use crate::plans::AlterUserPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::GrantPrivilegePlan;
@@ -210,25 +212,8 @@ impl Binder {
             AccountMgrLevel::Connection(c) => Ok(GrantObject::Connection(c.clone())),
             AccountMgrLevel::Sequence(s) => Ok(GrantObject::Sequence(s.clone())),
             AccountMgrLevel::Procedure(p) => {
-                let procedure = UserApiProvider::instance()
-                    .procedure_api(&tenant)
-                    .get_procedure(&GetProcedureReq {
-                        inner: ProcedureNameIdent::new(
-                            tenant.clone(),
-                            ProcedureIdentity::from(p.clone()),
-                        ),
-                    })
-                    .await
-                    .map_err(meta_service_error)?;
-
-                if let Some(p) = procedure {
-                    Ok(GrantObject::Procedure(p.id))
-                } else {
-                    Err(ErrorCode::UnknownProcedure(format!(
-                        "Unknown procedure {}",
-                        p
-                    )))
-                }
+                let procedure_id = self.resolve_procedure_id(p).await?;
+                Ok(GrantObject::Procedure(procedure_id))
             }
             AccountMgrLevel::MaskingPolicy(policy) => {
                 let policy_id = self.resolve_masking_policy_id(policy).await?;
@@ -303,25 +288,8 @@ impl Binder {
             AccountMgrLevel::Connection(c) => Ok(vec![GrantObject::Connection(c.clone())]),
             AccountMgrLevel::Sequence(s) => Ok(vec![GrantObject::Sequence(s.clone())]),
             AccountMgrLevel::Procedure(p) => {
-                let procedure = UserApiProvider::instance()
-                    .procedure_api(&tenant)
-                    .get_procedure(&GetProcedureReq {
-                        inner: ProcedureNameIdent::new(
-                            tenant.clone(),
-                            ProcedureIdentity::from(p.clone()),
-                        ),
-                    })
-                    .await
-                    .map_err(meta_service_error)?;
-
-                if let Some(p) = procedure {
-                    Ok(vec![GrantObject::Procedure(p.id)])
-                } else {
-                    Err(ErrorCode::UnknownProcedure(format!(
-                        "Unknown procedure {}",
-                        p
-                    )))
-                }
+                let procedure_id = self.resolve_procedure_id(p).await?;
+                Ok(vec![GrantObject::Procedure(procedure_id)])
             }
             AccountMgrLevel::MaskingPolicy(policy) => {
                 let policy_id = self.resolve_masking_policy_id(policy).await?;
@@ -332,6 +300,35 @@ impl Binder {
                 Ok(vec![GrantObject::RowAccessPolicy(policy_id)])
             }
         }
+    }
+
+    async fn resolve_procedure_id(&self, identity: &AstProcedureIdentity) -> Result<u64> {
+        let tenant = self.ctx.get_tenant();
+        let normalized_ident = generate_procedure_name_ident(&tenant, identity)?;
+        let legacy_ident =
+            ProcedureNameIdent::new(&tenant, ProcedureIdentity::from(identity.clone()));
+        let should_try_legacy = normalized_ident != legacy_ident;
+        let procedure_api = UserApiProvider::instance().procedure_api(&tenant);
+
+        let mut procedure = procedure_api
+            .get_procedure(&GetProcedureReq {
+                inner: normalized_ident,
+            })
+            .await
+            .map_err(meta_service_error)?;
+
+        if procedure.is_none() && should_try_legacy {
+            procedure = procedure_api
+                .get_procedure(&GetProcedureReq {
+                    inner: legacy_ident,
+                })
+                .await
+                .map_err(meta_service_error)?;
+        }
+
+        procedure
+            .map(|p| p.id)
+            .ok_or_else(|| ErrorCode::UnknownProcedure(format!("Unknown procedure {}", identity)))
     }
 
     async fn resolve_masking_policy_id(&self, policy: &str) -> Result<u64> {
@@ -747,26 +744,11 @@ impl Binder {
                 )
             }
             GrantObjectName::Procedure(p) => {
-                let procedure_ident = ProcedureIdentity::from(p.clone());
-                let tenant = self.ctx.get_tenant();
-                let procedure = UserApiProvider::instance()
-                    .procedure_api(&tenant)
-                    .get_procedure(&GetProcedureReq {
-                        inner: ProcedureNameIdent::new(tenant, procedure_ident),
-                    })
-                    .await
-                    .map_err(meta_service_error)?;
-                if let Some(procedure) = procedure {
-                    format!(
-                        "SELECT * FROM show_grants('procedure', {})",
-                        QuotedString(procedure.id.to_string(), '\'')
-                    )
-                } else {
-                    return Err(ErrorCode::UnknownProcedure(format!(
-                        "Unknown procedure {}",
-                        p
-                    )));
-                }
+                let procedure_id = self.resolve_procedure_id(p).await?;
+                format!(
+                    "SELECT * FROM show_grants('procedure', {})",
+                    QuotedString(procedure_id.to_string(), '\'')
+                )
             }
             GrantObjectName::MaskingPolicy(policy) => {
                 let policy_id = self.resolve_masking_policy_id(policy).await?;

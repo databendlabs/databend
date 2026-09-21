@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -20,9 +21,16 @@ use databend_common_ast::Span;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::function_stat::DomainStatBounds;
+use databend_common_expression::stat_distribution::NdvEstimate;
+use databend_common_expression::stat_distribution::StatCardinality;
+use databend_common_expression::stat_distribution::StatCount;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -34,11 +42,15 @@ use crate::ColumnSet;
 use crate::ScalarExpr;
 use crate::Symbol;
 use crate::binder::WindowOrderByInfo;
+use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
+use crate::optimizer::ir::cap_stat_info_by_rows;
+use crate::plans::EvalScalar;
 use crate::plans::LagLeadFunction;
 use crate::plans::NtileFunction;
 use crate::plans::Operator;
@@ -81,11 +93,11 @@ impl WindowGroup {
 
         for item in &self.scalar_items {
             used_columns.insert(item.index);
-            used_columns.extend(item.scalar.used_columns());
+            item.scalar.collect_used_columns(&mut used_columns);
         }
 
         for window in &self.windows {
-            used_columns.extend(window.used_columns()?);
+            window.collect_used_columns(&mut used_columns)?;
         }
 
         Ok(used_columns)
@@ -127,21 +139,34 @@ impl WindowGroup {
 impl Window {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
-
-        used_columns.insert(self.index);
-        used_columns.extend(self.function.used_columns());
-        used_columns.extend(self.arguments_columns()?);
-        used_columns.extend(self.partition_by_columns()?);
-        used_columns.extend(self.order_by_columns()?);
-
+        self.collect_used_columns(&mut used_columns)?;
         Ok(used_columns)
+    }
+
+    pub fn collect_used_columns(&self, used_columns: &mut ColumnSet) -> Result<()> {
+        used_columns.insert(self.index);
+        self.function.collect_used_columns(used_columns);
+        for arg in &self.arguments {
+            used_columns.insert(arg.index);
+            arg.scalar.collect_used_columns(used_columns);
+        }
+        for part in &self.partition_by {
+            used_columns.insert(part.index);
+            part.scalar.collect_used_columns(used_columns);
+        }
+        for sort in &self.order_by {
+            used_columns.insert(sort.order_by_item.index);
+            sort.order_by_item.scalar.collect_used_columns(used_columns);
+        }
+
+        Ok(())
     }
 
     pub fn arguments_columns(&self) -> Result<ColumnSet> {
         let mut col_set = ColumnSet::new();
         for arg in self.arguments.iter() {
             col_set.insert(arg.index);
-            col_set.extend(arg.scalar.used_columns())
+            arg.scalar.collect_used_columns(&mut col_set);
         }
         Ok(col_set)
     }
@@ -152,7 +177,7 @@ impl Window {
         let mut col_set = ColumnSet::new();
         for part in self.partition_by.iter() {
             col_set.insert(part.index);
-            col_set.extend(part.scalar.used_columns())
+            part.scalar.collect_used_columns(&mut col_set);
         }
         Ok(col_set)
     }
@@ -161,10 +186,301 @@ impl Window {
         let mut col_set = ColumnSet::new();
         for sort in self.order_by.iter() {
             col_set.insert(sort.order_by_item.index);
-            col_set.extend(sort.order_by_item.scalar.used_columns())
+            sort.order_by_item.scalar.collect_used_columns(&mut col_set);
         }
         Ok(col_set)
     }
+
+    fn derive_output_stat(
+        &self,
+        stat_info: &StatInfo,
+        func_ctx: &FunctionContext,
+    ) -> Result<Option<ColumnStat>> {
+        if stat_info.cardinality == 0.0 {
+            return Ok(None);
+        }
+
+        match &self.function {
+            WindowFuncType::RowNumber => Ok(Some(self.derive_row_number_stat(stat_info))),
+            WindowFuncType::Rank | WindowFuncType::DenseRank => {
+                Ok(Some(self.derive_rank_stat(stat_info)))
+            }
+            WindowFuncType::Ntile(ntile) => Ok(Some(self.derive_ntile_stat(stat_info, ntile.n))),
+            WindowFuncType::LagLead(lag_lead) => {
+                self.derive_lag_lead_stat(stat_info, lag_lead, func_ctx)
+            }
+            _ => Ok(None),
+        }
+    }
+
+    fn derive_row_number_stat(&self, stat_info: &StatInfo) -> ColumnStat {
+        let upper = self.ranking_upper(stat_info);
+        let partitions = self.estimated_partition_count(stat_info);
+        let expected = (stat_info.cardinality / partitions)
+            .ceil()
+            .clamp(1.0, upper as f64);
+        ColumnStat::UInt {
+            min: 1,
+            max: upper,
+            ndv: NdvEstimate::new(expected, upper as f64),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }
+    }
+
+    fn derive_rank_stat(&self, stat_info: &StatInfo) -> ColumnStat {
+        let upper = self.ranking_upper(stat_info);
+        ColumnStat::UInt {
+            min: 1,
+            max: upper,
+            ndv: NdvEstimate::upper_bound(upper as f64),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }
+    }
+
+    fn derive_ntile_stat(&self, stat_info: &StatInfo, buckets: u64) -> ColumnStat {
+        let upper = buckets.min(cardinality_upper(stat_info.cardinality)).max(1);
+        ColumnStat::UInt {
+            min: 1,
+            max: upper,
+            ndv: NdvEstimate::upper_bound(upper as f64),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }
+    }
+
+    fn derive_lag_lead_stat(
+        &self,
+        stat_info: &StatInfo,
+        lag_lead: &LagLeadFunction,
+        func_ctx: &FunctionContext,
+    ) -> Result<Option<ColumnStat>> {
+        let cardinality = stat_cardinality(stat_info);
+        let Some(mut output) =
+            self.derive_scalar_stat(lag_lead.arg.as_ref(), stat_info, func_ctx, cardinality)?
+        else {
+            return Ok(None);
+        };
+
+        if lag_lead.offset == 0 {
+            return Ok(Some(output));
+        }
+
+        let boundary_rows = (self.estimated_partition_count(stat_info) * lag_lead.offset as f64)
+            .min(stat_info.cardinality);
+        let source_rows = (stat_info.cardinality - boundary_rows).max(0.0);
+        let argument_may_be_null = output.null_count().upper() > 0.0;
+        let argument_null_rate = output.null_count().expected() / stat_info.cardinality;
+        let expected_nulls_from_argument = argument_null_rate * source_rows;
+
+        let (expected_null_count, default_may_be_null) = if let Some(default) = &lag_lead.default {
+            match self.derive_default_stat(default.as_ref(), stat_info, func_ctx, cardinality)? {
+                Some(FoldedConstantStat::Value(default_stat)) => {
+                    let default_may_be_null = default_stat.null_count().upper() > 0.0;
+                    let default_null_rate =
+                        default_stat.null_count().expected() / stat_info.cardinality;
+                    output = merge_column_stats(output, default_stat, stat_info.cardinality)?;
+                    (
+                        expected_nulls_from_argument + default_null_rate * boundary_rows,
+                        default_may_be_null,
+                    )
+                }
+                Some(FoldedConstantStat::Null) => {
+                    (expected_nulls_from_argument + boundary_rows, true)
+                }
+                None => return Ok(None),
+            }
+        } else {
+            (expected_nulls_from_argument + boundary_rows, true)
+        };
+
+        let nullable = argument_may_be_null || default_may_be_null;
+        output.set_null_count(if nullable {
+            StatCount::estimate(
+                expected_null_count.min(stat_info.cardinality),
+                stat_info.cardinality,
+            )
+        } else {
+            StatCount::exact(0)
+        });
+        output.set_ndv(output.ndv().reduce(stat_info.cardinality));
+        output.clear_histogram();
+        Ok(Some(output))
+    }
+
+    fn derive_scalar_stat(
+        &self,
+        scalar: &ScalarExpr,
+        stat_info: &StatInfo,
+        func_ctx: &FunctionContext,
+        cardinality: StatCardinality,
+    ) -> Result<Option<ColumnStat>> {
+        if let Some(stat) =
+            EvalScalar::derive_item_stat(scalar, &stat_info.statistics, func_ctx, cardinality)?
+        {
+            return Ok(Some(stat));
+        }
+
+        let source = self.scalar_source(scalar);
+        if let Some(stat) =
+            EvalScalar::derive_item_stat(source, &stat_info.statistics, func_ctx, cardinality)?
+        {
+            return Ok(Some(stat));
+        }
+
+        Ok(match fold_constant_stat(source, func_ctx)? {
+            Some(FoldedConstantStat::Value(stat)) => Some(stat),
+            Some(FoldedConstantStat::Null) | None => None,
+        })
+    }
+
+    fn derive_default_stat(
+        &self,
+        scalar: &ScalarExpr,
+        stat_info: &StatInfo,
+        func_ctx: &FunctionContext,
+        cardinality: StatCardinality,
+    ) -> Result<Option<FoldedConstantStat>> {
+        if let Some(stat) =
+            EvalScalar::derive_item_stat(scalar, &stat_info.statistics, func_ctx, cardinality)?
+        {
+            return Ok(Some(FoldedConstantStat::Value(stat)));
+        }
+
+        let source = self.scalar_source(scalar);
+        if let Some(stat) =
+            EvalScalar::derive_item_stat(source, &stat_info.statistics, func_ctx, cardinality)?
+        {
+            return Ok(Some(FoldedConstantStat::Value(stat)));
+        }
+
+        fold_constant_stat(source, func_ctx)
+    }
+
+    fn scalar_source<'a>(&'a self, scalar: &'a ScalarExpr) -> &'a ScalarExpr {
+        let ScalarExpr::BoundColumnRef(column) = scalar else {
+            return scalar;
+        };
+
+        self.arguments
+            .iter()
+            .find(|item| item.index == column.column.index)
+            .map(|item| &item.scalar)
+            .unwrap_or(scalar)
+    }
+
+    fn ranking_upper(&self, stat_info: &StatInfo) -> u64 {
+        self.top
+            .map(|top| top as u64)
+            .unwrap_or_else(|| cardinality_upper(stat_info.cardinality))
+            .min(cardinality_upper(stat_info.cardinality))
+            .max(1)
+    }
+
+    fn estimated_partition_count(&self, stat_info: &StatInfo) -> f64 {
+        if self.partition_by.is_empty() {
+            return 1.0;
+        }
+
+        let cardinality_upper = stat_info.cardinality.max(1.0);
+
+        self.partition_by
+            .iter()
+            .try_fold(1.0, |partitions, item| {
+                let ndv = stat_info
+                    .statistics
+                    .column_stats
+                    .get(&item.index)?
+                    .ndv()
+                    .expected?;
+                Some((partitions * ndv.max(1.0)).min(cardinality_upper))
+            })
+            .unwrap_or(1.0)
+            .clamp(1.0, cardinality_upper)
+    }
+}
+
+fn cardinality_upper(cardinality: f64) -> u64 {
+    cardinality.ceil().max(1.0) as u64
+}
+
+enum FoldedConstantStat {
+    Null,
+    Value(ColumnStat),
+}
+
+fn fold_constant_stat(
+    expr: &ScalarExpr,
+    func_ctx: &FunctionContext,
+) -> Result<Option<FoldedConstantStat>> {
+    let expr = expr.as_expr()?;
+    let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), func_ctx, &BUILTIN_FUNCTIONS);
+    let Ok(constant) = expr.into_owned().into_constant() else {
+        return Ok(None);
+    };
+    if constant.scalar == Scalar::Null {
+        return Ok(Some(FoldedConstantStat::Null));
+    }
+    let DomainStatBounds::Bounds(bounds) = constant
+        .scalar
+        .as_ref()
+        .domain(&constant.data_type)
+        .stat_bounds()
+    else {
+        return Ok(None);
+    };
+    let stat = ColumnStat::new(bounds, NdvEstimate::exact(1.0), StatCount::exact(0), None)
+        .map_err(ErrorCode::Internal)?;
+    Ok(Some(FoldedConstantStat::Value(stat)))
+}
+
+fn stat_cardinality(stat_info: &StatInfo) -> StatCardinality {
+    stat_info
+        .statistics
+        .precise_cardinality
+        .map(StatCardinality::exact)
+        .unwrap_or_else(|| StatCardinality::estimate(stat_info.cardinality))
+}
+
+fn merge_column_stats(left: ColumnStat, right: ColumnStat, cardinality: f64) -> Result<ColumnStat> {
+    let left_bounds = left.bounds();
+    let right_bounds = right.bounds();
+    let (left_bounds, right_bounds) = match (left_bounds, right_bounds) {
+        (None, None) => {
+            return Ok(ColumnStat::AllNull {
+                null_count: StatCount::sum(left.null_count(), right.null_count()),
+            });
+        }
+        (None, Some(_)) => {
+            return Ok(merge_all_null_with_values(right, cardinality));
+        }
+        (Some(_), None) => {
+            return Ok(merge_all_null_with_values(left, cardinality));
+        }
+        (Some(left), Some(right)) => (left, right),
+    };
+    let left_ndv = left.ndv();
+    let right_ndv = right.ndv();
+    let ndv_upper = (left_ndv.upper + right_ndv.upper).min(cardinality);
+    let ndv = match (left_ndv.expected, right_ndv.expected) {
+        (Some(left), Some(right)) => NdvEstimate::new((left + right).min(ndv_upper), ndv_upper),
+        _ => NdvEstimate::upper_bound(ndv_upper),
+    };
+    ColumnStat::new(
+        left_bounds.union(right_bounds)?,
+        ndv,
+        StatCount::exact(0),
+        None,
+    )
+    .map_err(ErrorCode::Internal)
+}
+
+fn merge_all_null_with_values(mut values: ColumnStat, cardinality: f64) -> ColumnStat {
+    values.set_null_count(StatCount::exact(0));
+    values.set_ndv(values.ndv().reduce(cardinality));
+    values.clear_histogram();
+    values
 }
 
 impl Operator for WindowGroup {
@@ -221,11 +537,18 @@ impl Operator for WindowGroup {
             output_columns.insert(window.index);
         }
 
-        let outer_columns = input_prop
-            .outer_columns
-            .difference(&output_columns)
-            .cloned()
-            .collect();
+        let mut available_columns = input_prop.output_columns.clone();
+        for item in &self.scalar_items {
+            available_columns.insert(item.index);
+        }
+        for window in &self.windows {
+            available_columns.insert(window.index);
+            available_columns.extend(window.arguments.iter().map(|item| item.index));
+            available_columns.extend(window.partition_by.iter().map(|item| item.index));
+            available_columns.extend(window.order_by.iter().map(|item| item.order_by_item.index));
+        }
+        let outer_columns =
+            self.derive_outer_columns(input_prop.outer_columns.clone(), &available_columns);
 
         let mut used_columns = self.used_columns()?;
         used_columns.extend(input_prop.used_columns.clone());
@@ -239,8 +562,26 @@ impl Operator for WindowGroup {
         }))
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        rel_expr.derive_cardinality_child(0)
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        let input = rel_expr.derive_cardinality_child(0, stat_ctx)?;
+        let mut stat_info = input.as_ref().clone();
+        let cardinality = stat_cardinality(&stat_info);
+        for item in &self.scalar_items {
+            if let Some(stat) = EvalScalar::derive_item_stat(
+                &item.scalar,
+                &stat_info.statistics,
+                &stat_ctx.function_context,
+                cardinality,
+            )? {
+                stat_info.statistics.column_stats.insert(item.index, stat);
+            }
+        }
+        for window in &self.windows {
+            if let Some(stat) = window.derive_output_stat(&stat_info, &stat_ctx.function_context)? {
+                stat_info.statistics.column_stats.insert(window.index, stat);
+            }
+        }
+        Ok(Arc::new(stat_info))
     }
 }
 
@@ -301,11 +642,13 @@ impl Operator for Window {
         output_columns.insert(self.index);
 
         // Derive outer columns
-        let outer_columns = input_prop
-            .outer_columns
-            .difference(&output_columns)
-            .cloned()
-            .collect();
+        let mut available_columns = input_prop.output_columns.clone();
+        available_columns.insert(self.index);
+        available_columns.extend(self.arguments.iter().map(|item| item.index));
+        available_columns.extend(self.partition_by.iter().map(|item| item.index));
+        available_columns.extend(self.order_by.iter().map(|item| item.order_by_item.index));
+        let outer_columns =
+            self.derive_outer_columns(input_prop.outer_columns.clone(), &available_columns);
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
@@ -324,8 +667,16 @@ impl Operator for Window {
         }))
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        rel_expr.derive_cardinality_child(0)
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        let input = rel_expr.derive_cardinality_child(0, stat_ctx)?;
+        let mut stat_info = input.as_ref().clone();
+        if let Some(stat) = self.derive_output_stat(&stat_info, &stat_ctx.function_context)? {
+            stat_info.statistics.column_stats.insert(self.index, stat);
+        }
+        if let Some(limit) = self.limit {
+            stat_info = cap_stat_info_by_rows(stat_info, limit);
+        }
+        Ok(Arc::new(stat_info))
     }
 }
 
@@ -407,22 +758,75 @@ impl WindowFuncType {
         }
     }
 
+    pub fn replace_column(&mut self, old: Symbol, new: Symbol) {
+        let _ = self.replace_columns(|column| Ok(if column == old { new } else { column }));
+    }
+
+    pub fn replace_columns<F>(&mut self, mut replace: F) -> Result<()>
+    where F: FnMut(Symbol) -> Result<Symbol> {
+        match self {
+            WindowFuncType::Aggregate(aggregate) => {
+                for expr in aggregate.exprs_mut() {
+                    expr.replace_columns(&mut replace)?;
+                }
+            }
+            WindowFuncType::LagLead(function) => {
+                function.arg.replace_columns(&mut replace)?;
+                if let Some(default) = &mut function.default {
+                    default.replace_columns(&mut replace)?;
+                }
+            }
+            WindowFuncType::NthValue(function) => {
+                function.arg.replace_columns(&mut replace)?;
+            }
+            WindowFuncType::RowNumber
+            | WindowFuncType::Rank
+            | WindowFuncType::DenseRank
+            | WindowFuncType::PercentRank
+            | WindowFuncType::Ntile(_)
+            | WindowFuncType::CumeDist => {}
+        }
+        Ok(())
+    }
+
+    pub fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        match self {
+            WindowFuncType::Aggregate(aggregate) => Box::new(aggregate.exprs()),
+            WindowFuncType::LagLead(function) => Box::new(
+                std::iter::once(function.arg.as_ref())
+                    .chain(function.default.iter().map(|expr| expr.as_ref())),
+            ),
+            WindowFuncType::NthValue(function) => Box::new(std::iter::once(function.arg.as_ref())),
+            WindowFuncType::RowNumber
+            | WindowFuncType::Rank
+            | WindowFuncType::DenseRank
+            | WindowFuncType::PercentRank
+            | WindowFuncType::Ntile(_)
+            | WindowFuncType::CumeDist => Box::new(std::iter::empty()),
+        }
+    }
+
     pub fn used_columns(&self) -> ColumnSet {
+        let mut used_columns = ColumnSet::new();
+        self.collect_used_columns(&mut used_columns);
+        used_columns
+    }
+
+    pub fn collect_used_columns(&self, used_columns: &mut ColumnSet) {
         match self {
             WindowFuncType::Aggregate(agg) => {
-                agg.exprs().flat_map(|expr| expr.used_columns()).collect()
+                for expr in agg.exprs() {
+                    expr.collect_used_columns(used_columns);
+                }
             }
-            WindowFuncType::LagLead(func) => match &func.default {
-                None => func.arg.used_columns(),
-                Some(d) => func
-                    .arg
-                    .used_columns()
-                    .union(&d.used_columns())
-                    .cloned()
-                    .collect(),
-            },
-            WindowFuncType::NthValue(func) => func.arg.used_columns(),
-            _ => ColumnSet::new(),
+            WindowFuncType::LagLead(func) => {
+                func.arg.collect_used_columns(used_columns);
+                if let Some(default) = &func.default {
+                    default.collect_used_columns(used_columns);
+                }
+            }
+            WindowFuncType::NthValue(func) => func.arg.collect_used_columns(used_columns),
+            _ => {}
         }
     }
 

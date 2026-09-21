@@ -22,6 +22,7 @@ use super::display::IdHumanizer;
 use super::display::MetadataIdHumanizer;
 use super::display::TreeHumanizer;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatContext;
 use crate::plans::CreateTablePlan;
 use crate::plans::Plan;
 
@@ -37,17 +38,21 @@ impl SExpr {
 }
 
 impl Plan {
-    pub fn format_indent(&self, options: FormatOptions) -> Result<String> {
+    pub fn format_indent(
+        &self,
+        options: FormatOptions,
+        stat_context: &StatContext,
+    ) -> Result<String> {
         match self {
             Plan::Query {
                 s_expr, metadata, ..
             } => {
                 let metadata = &*metadata.read();
-                let humanizer = MetadataIdHumanizer::new(metadata, options);
+                let humanizer = MetadataIdHumanizer::new(metadata, options, stat_context);
                 Ok(s_expr.to_format_tree(&humanizer)?.format_pretty()?)
             }
             Plan::Explain { kind, plan, .. } => {
-                let result = plan.format_indent(options)?;
+                let result = plan.format_indent(options, stat_context)?;
                 Ok(format!("{:?}:\n{}", kind, result))
             }
             Plan::ExplainAst { .. } => Ok("ExplainAst".to_string()),
@@ -69,13 +74,23 @@ impl Plan {
             // Databases
             Plan::ShowCreateDatabase(_) => Ok("ShowCreateDatabase".to_string()),
             Plan::CreateDatabase(_) => Ok("CreateDatabase".to_string()),
+            Plan::CreateDatabaseFromShare(_) => Ok("CreateDatabaseFromShare".to_string()),
             Plan::DropDatabase(_) => Ok("DropDatabase".to_string()),
             Plan::UndropDatabase(_) => Ok("UndropDatabase".to_string()),
             Plan::RenameDatabase(_) => Ok("RenameDatabase".to_string()),
             Plan::RefreshDatabaseCache(_) => Ok("RefreshDatabaseCache".to_string()),
+            Plan::CreateShare(_) => Ok("CreateShare".to_string()),
+            Plan::DropShare(_) => Ok("DropShare".to_string()),
+            Plan::AlterShare(_) => Ok("AlterShare".to_string()),
+            Plan::GrantShare(_) => Ok("GrantShare".to_string()),
+            Plan::RevokeShare(_) => Ok("RevokeShare".to_string()),
+            Plan::ShowShares(_) => Ok("ShowShares".to_string()),
+            Plan::DescShare(_) => Ok("DescShare".to_string()),
 
             // Tables
-            Plan::CreateTable(create_table) => format_create_table(create_table, options),
+            Plan::CreateTable(create_table) => {
+                format_create_table(create_table, options, stat_context)
+            }
             Plan::ShowCreateTable(_) => Ok("ShowCreateTable".to_string()),
             Plan::DropTable(_) => Ok("DropTable".to_string()),
             Plan::UndropTable(_) => Ok("UndropTable".to_string()),
@@ -93,14 +108,17 @@ impl Plan {
             Plan::AddTableConstraint(_) => Ok("AddTableConstraint".to_string()),
             Plan::DropTableConstraint(_) => Ok("DropTableConstraint".to_string()),
             Plan::AlterTableClusterKey(_) => Ok("AlterTableClusterKey".to_string()),
+            Plan::AlterTablePartitionBy(_) => Ok("AlterTablePartitionBy".to_string()),
             Plan::DropTableClusterKey(_) => Ok("DropTableClusterKey".to_string()),
+            Plan::AlterTableTtl(_) => Ok("AlterTableTtl".to_string()),
             Plan::RefreshTableCache(_) => Ok("RefreshTableCache".to_string()),
             Plan::ReclusterTable(_) => Ok("ReclusterTable".to_string()),
             Plan::TruncateTable(_) => Ok("TruncateTable".to_string()),
-            Plan::OptimizePurge(_) => Ok("OptimizePurge".to_string()),
             Plan::OptimizeCompactSegment(_) => Ok("OptimizeCompactSegment".to_string()),
             Plan::OptimizeCompactBlock { .. } => Ok("OptimizeCompactBlock".to_string()),
             Plan::VacuumTable(_) => Ok("VacuumTable".to_string()),
+            Plan::VacuumTables(_) => Ok("VacuumTables".to_string()),
+            Plan::VacuumAll(_) => Ok("VacuumAll".to_string()),
             Plan::VacuumDropTable(_) => Ok("VacuumDropTable".to_string()),
             Plan::VacuumTemporaryFiles(_) => Ok("VacuumTemporaryFiles".to_string()),
             Plan::AnalyzeTable(_) => Ok("AnalyzeTable".to_string()),
@@ -120,6 +138,13 @@ impl Plan {
             Plan::AlterView(_) => Ok("AlterView".to_string()),
             Plan::DropView(_) => Ok("DropView".to_string()),
             Plan::DescribeView(_) => Ok("DescribeView".to_string()),
+            Plan::RefreshLineage(_) => Ok("RefreshLineage".to_string()),
+
+            // Materialized Views
+            Plan::CreateMaterializedView(_) => Ok("CreateMaterializedView".to_string()),
+            Plan::ShowCreateMaterializedView(_) => Ok("ShowCreateMaterializedView".to_string()),
+            Plan::DropMaterializedView(_) => Ok("DropMaterializedView".to_string()),
+            Plan::RefreshMaterializedView(_) => Ok("RefreshMaterializedView".to_string()),
 
             // Streams
             Plan::CreateStream(_) => Ok("CreateStream".to_string()),
@@ -127,6 +152,7 @@ impl Plan {
 
             // Dynamic Tables
             Plan::CreateDynamicTable(_) => Ok("CreateDynamicTable".to_string()),
+            Plan::RefreshDynamicTable(_) => Ok("RefreshDynamicTable".to_string()),
 
             // Indexes
             Plan::CreateIndex(_) => Ok("CreateIndex".to_string()),
@@ -148,7 +174,7 @@ impl Plan {
                 s_expr, metadata, ..
             } => {
                 let metadata = &*metadata.read();
-                let humanizer = MetadataIdHumanizer::new(metadata, options);
+                let humanizer = MetadataIdHumanizer::new(metadata, options, stat_context);
                 Ok(format!(
                     "MergeInto:\n{}",
                     s_expr.to_format_tree(&humanizer)?.format_pretty()?
@@ -296,14 +322,18 @@ impl Plan {
     }
 }
 
-fn format_create_table(create_table: &CreateTablePlan, options: FormatOptions) -> Result<String> {
+fn format_create_table(
+    create_table: &CreateTablePlan,
+    options: FormatOptions,
+    stat_context: &StatContext,
+) -> Result<String> {
     match &create_table.as_select {
         Some(plan) => match plan.as_ref() {
             Plan::Query {
                 s_expr, metadata, ..
             } => {
                 let metadata = &*metadata.read();
-                let humanizer = MetadataIdHumanizer::new(metadata, options);
+                let humanizer = MetadataIdHumanizer::new(metadata, options, stat_context);
                 let res = s_expr.to_format_tree(&humanizer)?;
                 Ok(
                     FormatTreeNode::with_children("CreateTableAsSelect".to_string(), vec![res])

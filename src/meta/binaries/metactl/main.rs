@@ -33,6 +33,7 @@ use databend_common_meta_control::args::ImportArgs;
 use databend_common_meta_control::args::KeysLayoutArgs;
 use databend_common_meta_control::args::ListFeatures;
 use databend_common_meta_control::args::LuaArgs;
+use databend_common_meta_control::args::LuaScript;
 use databend_common_meta_control::args::MemberListArgs;
 use databend_common_meta_control::args::MetricsArgs;
 use databend_common_meta_control::args::SetFeature;
@@ -44,6 +45,8 @@ use databend_common_meta_control::args::WatchArgs;
 use databend_common_meta_control::export_from_disk;
 use databend_common_meta_control::export_from_grpc;
 use databend_common_meta_control::filter_tenant;
+use databend_common_meta_control::grpc_client_auth::GrpcClientAuth;
+use databend_common_meta_control::grpc_client_auth::GrpcClientAuthArgs;
 use databend_common_meta_control::import;
 use databend_common_meta_control::keys_layout_from_grpc;
 use databend_common_meta_control::lua_support;
@@ -72,6 +75,9 @@ struct App {
 
     #[clap(flatten)]
     globals: GlobalArgs,
+
+    #[clap(flatten)]
+    grpc_auth: GrpcClientAuthArgs,
 }
 
 impl App {
@@ -81,12 +87,12 @@ impl App {
         Ok(())
     }
 
-    async fn show_status(&self, args: &StatusArgs) -> anyhow::Result<()> {
+    async fn show_status(&self, args: &StatusArgs, auth: &GrpcClientAuth) -> anyhow::Result<()> {
         let addr = args.grpc_api_address.clone();
         let client = MetaGrpcClient::<DatabendRuntime>::try_create(
             vec![addr],
-            "root",
-            "xxx",
+            auth.username(),
+            auth.expose_password(),
             None,
             None,
             None,
@@ -155,7 +161,11 @@ impl App {
         Ok(())
     }
 
-    async fn bench_client_num_conn(&self, args: &BenchArgs) -> anyhow::Result<()> {
+    async fn bench_client_num_conn(
+        &self,
+        args: &BenchArgs,
+        auth: &GrpcClientAuth,
+    ) -> anyhow::Result<()> {
         let addr = args.grpc_api_address.clone();
         println!(
             "loop: connect to metasrv {}, get_kv('foo'), do not drop the connection, num={}",
@@ -165,8 +175,8 @@ impl App {
         for i in 1..=args.num {
             let client = MetaGrpcClient::<DatabendRuntime>::try_create(
                 vec![addr.clone()],
-                "root",
-                "xxx",
+                auth.username(),
+                auth.expose_password(),
                 None,
                 None,
                 None,
@@ -198,10 +208,10 @@ impl App {
         Ok(())
     }
 
-    async fn export(&self, args: &ExportArgs) -> anyhow::Result<()> {
+    async fn export(&self, args: &ExportArgs, auth: &GrpcClientAuth) -> anyhow::Result<()> {
         match args.raft_dir {
             None => {
-                export_from_grpc::export_from_running_node(args).await?;
+                export_from_grpc::export_from_running_node(args, auth).await?;
             }
             Some(ref _dir) => {
                 export_from_disk::export_from_dir::<DatabendRuntime>(args).await?;
@@ -220,14 +230,18 @@ impl App {
         Ok(())
     }
 
-    async fn keys_layout(&self, args: &KeysLayoutArgs) -> anyhow::Result<()> {
-        keys_layout_from_grpc::keys_layout_from_running_node(args).await?;
+    async fn keys_layout(
+        &self,
+        args: &KeysLayoutArgs,
+        auth: &GrpcClientAuth,
+    ) -> anyhow::Result<()> {
+        keys_layout_from_grpc::keys_layout_from_running_node(args, auth).await?;
         Ok(())
     }
 
-    async fn watch(&self, args: &WatchArgs) -> anyhow::Result<()> {
+    async fn watch(&self, args: &WatchArgs, auth: &GrpcClientAuth) -> anyhow::Result<()> {
         let addresses = vec![args.grpc_api_address.clone()];
-        let client = self.new_grpc_client(addresses)?;
+        let client = self.new_grpc_client(addresses, auth)?;
 
         let watch = WatchRequest::new_dir(&args.prefix).with_initial_flush(true);
 
@@ -238,9 +252,9 @@ impl App {
         Ok(())
     }
 
-    async fn upsert(&self, args: &UpsertArgs) -> anyhow::Result<()> {
+    async fn upsert(&self, args: &UpsertArgs, auth: &GrpcClientAuth) -> anyhow::Result<()> {
         let addresses = vec![args.grpc_api_address.clone()];
-        let client = self.new_grpc_client(addresses)?;
+        let client = self.new_grpc_client(addresses, auth)?;
 
         let upsert = UpsertKV::update(args.key.clone(), args.value.as_bytes());
 
@@ -254,41 +268,42 @@ impl App {
         Ok(())
     }
 
-    async fn get(&self, args: &GetArgs) -> anyhow::Result<()> {
+    async fn get(&self, args: &GetArgs, auth: &GrpcClientAuth) -> anyhow::Result<()> {
         let addresses = vec![args.grpc_api_address.clone()];
-        let client = self.new_grpc_client(addresses)?;
+        let client = self.new_grpc_client(addresses, auth)?;
 
         let res = client.get_kv(&args.key).await?;
         println!("{}", serde_json::to_string(&res)?);
         Ok(())
     }
 
-    async fn run_lua(&self, args: &LuaArgs) -> anyhow::Result<()> {
+    async fn run_lua(&self, args: &LuaArgs, auth: &GrpcClientAuth) -> anyhow::Result<()> {
         let lua = Lua::new();
 
         // Setup Lua environment with gRPC client support
-        lua_support::setup_lua_environment(&lua)?;
-
-        let script = match &args.file {
-            Some(path) => std::fs::read_to_string(path)?,
-            None => {
-                let mut buffer = String::new();
-                io::stdin().read_to_string(&mut buffer)?;
-                buffer
-            }
-        };
+        lua_support::setup_lua_environment(&lua, auth)?;
 
         #[allow(clippy::disallowed_types)]
         let local = tokio::task::LocalSet::new();
-        let res = local.run_until(lua.load(&script).exec_async()).await;
 
-        if let Err(e) = res {
-            return Err(anyhow::anyhow!("Lua execution error: {}", e));
+        if args.scripts.is_empty() {
+            let mut script = String::new();
+            io::stdin().read_to_string(&mut script)?;
+            return execute_lua_script(&lua, &local, &script).await;
         }
+
+        for source in &args.scripts {
+            let script = match source {
+                LuaScript::File(path) => std::fs::read_to_string(path)?,
+                LuaScript::Inline(script) => script.clone(),
+            };
+            execute_lua_script(&lua, &local, &script).await?;
+        }
+
         Ok(())
     }
 
-    async fn get_metrics(&self, args: &MetricsArgs) -> anyhow::Result<()> {
+    async fn get_metrics(&self, args: &MetricsArgs, auth: &GrpcClientAuth) -> anyhow::Result<()> {
         let lua_script = format!(
             r#"
 local admin_client = metactl.new_admin_client("{}")
@@ -302,15 +317,19 @@ return metrics, nil
             args.admin_api_address
         );
 
-        match lua_support::run_lua_script_with_result(&lua_script).await? {
+        match lua_support::run_lua_script_with_result(&lua_script, auth).await? {
             Ok(_result) => Ok(()),
             Err(error_msg) => Err(anyhow::anyhow!("Failed to get metrics: {}", error_msg)),
         }
     }
 
-    async fn member_list(&self, args: &MemberListArgs) -> anyhow::Result<()> {
+    async fn member_list(
+        &self,
+        args: &MemberListArgs,
+        auth: &GrpcClientAuth,
+    ) -> anyhow::Result<()> {
         let addresses = vec![args.grpc_api_address.clone()];
-        let client = self.new_grpc_client(addresses)?;
+        let client = self.new_grpc_client(addresses, auth)?;
 
         let res = client.get_member_list().await?;
         for member in res.data {
@@ -322,9 +341,22 @@ return metrics, nil
     fn new_grpc_client(
         &self,
         addresses: Vec<String>,
+        auth: &GrpcClientAuth,
     ) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
-        lua_support::new_grpc_client(addresses)
+        lua_support::new_grpc_client(addresses, auth)
     }
+}
+
+#[allow(clippy::disallowed_types)]
+async fn execute_lua_script(
+    lua: &Lua,
+    local: &tokio::task::LocalSet,
+    script: &str,
+) -> anyhow::Result<()> {
+    local
+        .run_until(lua.load(script).exec_async())
+        .await
+        .map_err(|e| anyhow::anyhow!("Lua execution error: {}", e))
 }
 
 #[derive(Debug, Clone, Deserialize, Subcommand)]
@@ -546,12 +578,18 @@ enum CtlCommand {
     /// Example (from file):
     ///   metactl lua --file script.lua
     ///
+    /// Example (inline):
+    ///   metactl lua --script 'print("hello")'
+    ///
+    /// Sources run in command-line order:
+    ///   metactl lua --file define.lua --script 'callit()' --file cleanup.lua
+    ///
     /// Example (from stdin):
     ///   echo 'print("hello")' | metactl lua
     ///
     /// Sample Lua script:
     ///   local client = metactl.new_grpc_client("127.0.0.1:9191")
-    ///   local result, err = client:get_kv("mykey")
+    ///   local result, err = client:get("mykey")
     ///   if err then print("error:", err) else print(result) end
     Lua(LuaArgs),
 
@@ -613,6 +651,7 @@ enum CtlCommand {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let app = App::parse();
+    let grpc_auth = app.grpc_auth.load()?;
 
     let log_config = LogConfig {
         file: FileConfig {
@@ -631,10 +670,10 @@ async fn main() -> anyhow::Result<()> {
     match app.command {
         Some(ref cmd) => match cmd {
             CtlCommand::Status(args) => {
-                app.show_status(args).await?;
+                app.show_status(args, &grpc_auth).await?;
             }
             CtlCommand::BenchClientNumConn(args) => {
-                app.bench_client_num_conn(args).await?;
+                app.bench_client_num_conn(args, &grpc_auth).await?;
             }
             CtlCommand::TransferLeader(args) => {
                 app.transfer_leader(args).await?;
@@ -656,7 +695,7 @@ async fn main() -> anyhow::Result<()> {
                 println!("{}", serde_json::to_string_pretty(&res)?);
             }
             CtlCommand::Export(args) => {
-                app.export(args).await?;
+                app.export(args, &grpc_auth).await?;
             }
             CtlCommand::Import(args) => {
                 app.import(args).await?;
@@ -665,25 +704,25 @@ async fn main() -> anyhow::Result<()> {
                 app.filter_tenant(args)?;
             }
             CtlCommand::KeysLayout(args) => {
-                app.keys_layout(args).await?;
+                app.keys_layout(args, &grpc_auth).await?;
             }
             CtlCommand::Watch(args) => {
-                app.watch(args).await?;
+                app.watch(args, &grpc_auth).await?;
             }
             CtlCommand::Upsert(args) => {
-                app.upsert(args).await?;
+                app.upsert(args, &grpc_auth).await?;
             }
             CtlCommand::Get(args) => {
-                app.get(args).await?;
+                app.get(args, &grpc_auth).await?;
             }
             CtlCommand::Lua(args) => {
-                app.run_lua(args).await?;
+                app.run_lua(args, &grpc_auth).await?;
             }
             CtlCommand::MemberList(args) => {
-                app.member_list(args).await?;
+                app.member_list(args, &grpc_auth).await?;
             }
             CtlCommand::Metrics(args) => {
-                app.get_metrics(args).await?;
+                app.get_metrics(args, &grpc_auth).await?;
             }
             CtlCommand::DumpRaftLogWal(args) => {
                 databend_common_meta_control::dump_raft_log_wal::dump_raft_log_wal(args)?;
@@ -699,7 +738,7 @@ async fn main() -> anyhow::Result<()> {
                     id: app.globals.id,
                     chunk_size: app.globals.export_chunk_size,
                 };
-                app.export(&args).await?;
+                app.export(&args, &grpc_auth).await?;
             } else if app.globals.import {
                 let args = ImportArgs {
                     raft_dir: app.globals.raft_dir.clone(),

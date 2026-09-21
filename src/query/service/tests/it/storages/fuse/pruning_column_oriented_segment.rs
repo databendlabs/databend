@@ -79,6 +79,7 @@ async fn apply_snapshot_pruning(
         op,
         schema.clone(),
         push_down,
+        None,
         bloom_index_cols,
         vec![],
         HashSet::new(),
@@ -97,6 +98,7 @@ async fn apply_snapshot_pruning(
         res_tx,
         cache_key,
         schema.clone(),
+        HashSet::new(),
     )?;
     prune_pipeline.set_max_threads(1);
     prune_pipeline.set_on_init(move || {
@@ -181,6 +183,7 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
         field_stats_truncate_len: vec![],
         as_select: None,
         cluster_key: None,
+        ttl: None,
         table_indexes: None,
         table_constraints: None,
         attached_columns: None,

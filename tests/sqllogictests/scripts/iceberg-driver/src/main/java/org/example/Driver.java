@@ -56,6 +56,8 @@ public class Driver {
 
                 .getOrCreate();
 
+        spark.sql("CREATE NAMESPACE IF NOT EXISTS iceberg.test");
+
         spark.sql("CREATE OR REPLACE TABLE iceberg.test.test_merge_on_read_deletes (\n" +
                 "    dt     date,\n" +
                 "    number integer,\n" +

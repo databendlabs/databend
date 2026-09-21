@@ -29,7 +29,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
-use databend_common_expression::FILE_ROW_NUMBER_COLUMN_ID;
+use databend_common_expression::FILE_LAST_MODIFIED_COLUMN_ID;
 use databend_common_expression::FILENAME_COLUMN_ID;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
@@ -120,9 +120,12 @@ impl StageTable {
             .into_iter()
             .filter(|f| f.size > 0)
             .map(|v| {
+                let content_key = v.etag.clone().or_else(|| v.md5.clone());
                 let part = SingleFilePartition {
                     path: v.path.clone(),
                     size: v.size as usize,
+                    content_key,
+                    last_modified: v.last_modified,
                 };
                 let part_info: Box<dyn PartInfo> = Box::new(part);
                 Arc::new(part_info)
@@ -148,7 +151,7 @@ impl Table for StageTable {
     }
 
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {
-        (FILE_ROW_NUMBER_COLUMN_ID..=FILENAME_COLUMN_ID).contains(&column_id)
+        (FILE_LAST_MODIFIED_COLUMN_ID..=FILENAME_COLUMN_ID).contains(&column_id)
     }
 
     fn get_data_source_info(&self) -> DataSourceInfo {
@@ -186,13 +189,9 @@ impl Table for StageTable {
             | FileFormatParams::Arrow(_)
             | FileFormatParams::ArrowStream(_)
             | FileFormatParams::Avro(_) => self.read_partitions_simple(ctx, stage_table_info).await,
-            FileFormatParams::Lance(_) => Err(ErrorCode::Unimplemented(
-                "LANCE stage table read is not supported".to_string(),
-            )),
-            _ => unreachable!(
-                "unexpected format {} in StageTable::read_partition",
-                stage_table_info.stage_info.file_format_params
-            ),
+            format => Err(ErrorCode::Unimplemented(format!(
+                "Unsupported file format in stage table read: {format}"
+            ))),
         }
     }
 
@@ -265,13 +264,9 @@ impl Table for StageTable {
                 }
                 .read_data(ctx, plan, pipeline, internal_columns)
             }
-            FileFormatParams::Lance(_) => Err(ErrorCode::Unimplemented(
-                "LANCE stage table read is not supported".to_string(),
-            )),
-            _ => unreachable!(
-                "unexpected format {} in StageTable::read_partition",
-                stage_table_info.stage_info.file_format_params
-            ),
+            format => Err(ErrorCode::Unimplemented(format!(
+                "Unsupported file format in stage table read: {format}"
+            ))),
         }
     }
     // Truncate the stage file.

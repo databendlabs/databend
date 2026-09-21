@@ -57,18 +57,12 @@ pub enum StorageParams {
     Http(StorageHttpConfig),
     Ipfs(StorageIpfsConfig),
     Memory,
-    Moka(StorageMokaConfig),
     Obs(StorageObsConfig),
     Oss(StorageOssConfig),
     S3(StorageS3Config),
     Webhdfs(StorageWebhdfsConfig),
     Cos(StorageCosConfig),
     Huggingface(StorageHuggingfaceConfig),
-
-    /// None means this storage type is none.
-    ///
-    /// This type is mostly for cache which mean bypass the cache logic.
-    None,
 }
 
 impl Default for StorageParams {
@@ -89,14 +83,12 @@ impl StorageParams {
             StorageParams::Http(_) => "http",
             StorageParams::Ipfs(_) => "ipfs",
             StorageParams::Memory => "memory",
-            StorageParams::Moka(_) => "moka",
             StorageParams::Obs(_) => "obs",
             StorageParams::Oss(_) => "oss",
             StorageParams::S3(_) => "s3",
             StorageParams::Webhdfs(_) => "webhdfs",
             StorageParams::Cos(_) => "cos",
             StorageParams::Huggingface(_) => "huggingface",
-            StorageParams::None => "none",
         }
     }
 
@@ -170,7 +162,6 @@ impl StorageParams {
             StorageParams::Http(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Ipfs(c) => c.endpoint_url.starts_with("https://"),
             StorageParams::Memory => false,
-            StorageParams::Moka(_) => false,
             StorageParams::Obs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Oss(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::S3(v) => v.endpoint_url.starts_with("https://"),
@@ -178,7 +169,6 @@ impl StorageParams {
             StorageParams::Webhdfs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Cos(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Huggingface(_) => true,
-            StorageParams::None => false,
         }
     }
 
@@ -192,7 +182,6 @@ impl StorageParams {
             StorageParams::Http(_) => {}
             StorageParams::Ipfs(v) => v.root = f(&v.root),
             StorageParams::Memory => {}
-            StorageParams::Moka(_) => {}
             StorageParams::Obs(v) => v.root = f(&v.root),
             StorageParams::Oss(v) => v.root = f(&v.root),
             StorageParams::S3(v) => v.root = f(&v.root),
@@ -200,7 +189,6 @@ impl StorageParams {
             StorageParams::Webhdfs(v) => v.root = f(&v.root),
             StorageParams::Cos(v) => v.root = f(&v.root),
             StorageParams::Huggingface(v) => v.root = f(&v.root),
-            StorageParams::None => {}
         };
 
         self
@@ -292,7 +280,7 @@ impl StorageParams {
             }
             (s1, s2) => Err(ErrorCode::StorageOther(format!(
                 "Cannot apply update from {:?} to {:?}",
-                &s1, &s2
+                s1, s2
             ))),
         }
     }
@@ -304,7 +292,7 @@ impl StorageParams {
     /// OSS, OBS, COS, Azblob), file-like backends (FS, WebHDFS, HDFS), as well as HuggingFace
     /// and IPFS locations. HTTP locations render the expanded glob patterns (if any), so the
     /// output can differ from the original shorthand. Backends that don't carry enough context
-    /// (Memory, Moka, None) return `None`.
+    /// (Memory, None) return `None`.
     pub fn url(&self) -> Option<String> {
         match self {
             StorageParams::Azblob(cfg) => bucket_style_url("azblob", &cfg.container, &cfg.root),
@@ -351,7 +339,6 @@ impl StorageParams {
                 Some(format!("ipfs://ipfs{}", normalized_dir_path(suffix, true)))
             }
             StorageParams::Memory => None,
-            StorageParams::Moka(_) => None,
             StorageParams::Obs(cfg) => bucket_style_url("obs", &cfg.bucket, &cfg.root),
             StorageParams::Oss(cfg) => bucket_style_url("oss", &cfg.bucket, &cfg.root),
             StorageParams::S3(cfg) => bucket_style_url("s3", &cfg.bucket, &cfg.root),
@@ -377,7 +364,6 @@ impl StorageParams {
                     normalized_dir_path(&cfg.root, true)
                 ))
             }
-            StorageParams::None => None,
         }
     }
 
@@ -435,10 +421,61 @@ impl StorageParams {
             | StorageParams::Hdfs(_)
             | StorageParams::Http(_)
             | StorageParams::Ipfs(_)
-            | StorageParams::Memory
-            | StorageParams::Moka(_)
-            | StorageParams::None => false,
+            | StorageParams::Memory => false,
         }
+    }
+
+    /// Return a clone that retains the storage location but removes credentials
+    /// and user-provided encryption key material.
+    ///
+    /// This is suitable for persisting a provider table location in data-share
+    /// metadata. A share connection supplies the credentials at query time.
+    pub fn without_credentials(&self) -> Self {
+        let mut params = self.clone();
+        match &mut params {
+            StorageParams::Azblob(cfg) => {
+                cfg.account_name.clear();
+                cfg.account_key.clear();
+            }
+            StorageParams::Ftp(cfg) => {
+                cfg.username.clear();
+                cfg.password.clear();
+            }
+            StorageParams::Gcs(cfg) => cfg.credential.clear(),
+            StorageParams::Obs(cfg) => {
+                cfg.access_key_id.clear();
+                cfg.secret_access_key.clear();
+            }
+            StorageParams::Oss(cfg) => {
+                cfg.access_key_id.clear();
+                cfg.access_key_secret.clear();
+                cfg.role_arn.clear();
+                cfg.server_side_encryption.clear();
+                cfg.server_side_encryption_key_id.clear();
+            }
+            StorageParams::S3(cfg) => {
+                cfg.access_key_id.clear();
+                cfg.secret_access_key.clear();
+                cfg.security_token.clear();
+                cfg.master_key.clear();
+                cfg.role_arn.clear();
+                cfg.external_id.clear();
+                cfg.disable_credential_loader = false;
+                cfg.allow_credential_chain = None;
+            }
+            StorageParams::Webhdfs(cfg) => cfg.delegation.clear(),
+            StorageParams::Cos(cfg) => {
+                cfg.secret_id.clear();
+                cfg.secret_key.clear();
+            }
+            StorageParams::Huggingface(cfg) => cfg.token.clear(),
+            StorageParams::Fs(_)
+            | StorageParams::Hdfs(_)
+            | StorageParams::Http(_)
+            | StorageParams::Ipfs(_)
+            | StorageParams::Memory => {}
+        }
+        params
     }
 
     /// Return true if this storage params has any user-provided encryption key material.
@@ -459,8 +496,6 @@ impl Display for StorageParams {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             StorageParams::Memory => write!(f, "memory"),
-            StorageParams::Moka(v) => write!(f, "moka | max_capacity={}", v.max_capacity),
-            StorageParams::None => write!(f, "none"),
             StorageParams::Azblob(v) => write!(
                 f,
                 "azblob | container={},root={},endpoint={}",
@@ -504,7 +539,7 @@ impl Display for StorageParams {
                     v.bucket,
                     v.root,
                     v.endpoint_url,
-                    &mask_string(&v.access_key_id, 3),
+                    mask_string(&v.access_key_id, 3),
                     v.role_arn,
                 )
             }
@@ -970,27 +1005,6 @@ impl Debug for StorageOssConfig {
     }
 }
 
-/// config for Moka Object Storage Service
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct StorageMokaConfig {
-    pub max_capacity: u64,
-    pub time_to_live: i64,
-    pub time_to_idle: i64,
-}
-
-impl Default for StorageMokaConfig {
-    fn default() -> Self {
-        Self {
-            // Use 1G as default.
-            max_capacity: 1024 * 1024 * 1024,
-            // Use 1 hour as default time to live
-            time_to_live: 3600,
-            // Use 10 minutes as default time to idle.
-            time_to_idle: 600,
-        }
-    }
-}
-
 /// config for WebHDFS Storage Service
 #[derive(Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StorageWebhdfsConfig {
@@ -1100,4 +1114,46 @@ pub struct StorageNetworkParams {
     pub connect_timeout: u64,
     pub pool_max_idle_per_host: usize,
     pub max_concurrent_io_requests: usize,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn without_credentials_preserves_s3_location() {
+        let params = StorageParams::S3(StorageS3Config {
+            endpoint_url: "http://provider.example:9000".to_string(),
+            region: "provider-region".to_string(),
+            bucket: "provider-bucket".to_string(),
+            root: "provider/root".to_string(),
+            enable_virtual_host_style: true,
+            access_key_id: "provider-key".to_string(),
+            secret_access_key: "provider-secret".to_string(),
+            security_token: "provider-token".to_string(),
+            master_key: "provider-master-key".to_string(),
+            role_arn: "provider-role".to_string(),
+            external_id: "provider-external-id".to_string(),
+            disable_credential_loader: true,
+            allow_credential_chain: Some(true),
+            ..Default::default()
+        });
+
+        let StorageParams::S3(location) = params.without_credentials() else {
+            unreachable!("S3 params must remain S3");
+        };
+        assert_eq!("http://provider.example:9000", location.endpoint_url);
+        assert_eq!("provider-region", location.region);
+        assert_eq!("provider-bucket", location.bucket);
+        assert_eq!("provider/root", location.root);
+        assert!(location.enable_virtual_host_style);
+        assert!(location.access_key_id.is_empty());
+        assert!(location.secret_access_key.is_empty());
+        assert!(location.security_token.is_empty());
+        assert!(location.master_key.is_empty());
+        assert!(location.role_arn.is_empty());
+        assert!(location.external_id.is_empty());
+        assert!(!location.disable_credential_loader);
+        assert_eq!(None, location.allow_credential_chain);
+    }
 }

@@ -69,7 +69,7 @@ Sort(Final)
             │                   ├── read size: < 1 KiB
             │                   ├── partitions total: <slt:ignore>
             │                   ├── partitions scanned: <slt:ignore>
-            │                   ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: <slt:ignore> to <slt:ignore> cost: <slt:ignore>>]
+            │                   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: <slt:ignore> to <slt:ignore> cost: <slt:ignore>>]
             │                   ├── push downs: [filters: [], limit: NONE]
             │                   └── estimated rows: 14.00
             └── Exchange(Probe)
@@ -83,7 +83,7 @@ Sort(Final)
                     ├── read size: < 1 KiB
                     ├── partitions total: <slt:ignore>
                     ├── partitions scanned: <slt:ignore>
-                    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: <slt:ignore> to <slt:ignore> cost: <slt:ignore>>]
+                    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: <slt:ignore> to <slt:ignore> cost: <slt:ignore>>]
                     ├── push downs: [filters: [], limit: NONE]
                     ├── apply join filters: [#0]
                     └── estimated rows: 5.00

@@ -1239,7 +1239,7 @@ async fn test_rename_warehouses() -> anyhow::Result<()> {
 
     let warehouse_node_key = format!(
         "__fd_clusters_v6/test%2dtenant%2did/online_clusters/test_warehouse/default/{}",
-        &nodes[0]
+        nodes[0]
     );
 
     let create_warehouse = warehouse_manager
@@ -1564,7 +1564,7 @@ async fn nodes(lift: Duration, size: usize) -> Result<(MetaStore, WarehouseMgr, 
 
 async fn new_cluster_api(lift: Duration) -> Result<(MetaStore, WarehouseMgr)> {
     let test_api = MetaStore::L(Arc::new(
-        LocalMetaService::new::<DatabendRuntime>("management-test")
+        LocalMetaService::new_testing::<DatabendRuntime>("management-test")
             .await
             .unwrap(),
     ));

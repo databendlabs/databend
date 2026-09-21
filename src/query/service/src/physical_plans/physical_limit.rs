@@ -37,6 +37,7 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanCast;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::physical_row_fetch::RowFetch;
+use crate::physical_plans::runtime_scan_filter::register_runtime_limit_filter;
 use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -111,20 +112,24 @@ impl IPhysicalPlan for Limit {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        let runtime_limit_filter = self
+            .limit
+            .and_then(|_| register_runtime_limit_filter(&builder.ctx, &self.input));
+
         self.input.build_pipeline(builder)?;
 
         if self.limit.is_some() || self.offset != 0 {
             builder.main_pipeline.try_resize(1)?;
-            return builder.main_pipeline.add_transform(|input, output| {
+            builder.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(TransformLimit::try_create(
                     self.limit,
                     self.offset,
                     input,
                     output,
+                    runtime_limit_filter.clone(),
                 )?))
-            });
+            })?;
         }
-
         Ok(())
     }
 }
@@ -153,24 +158,28 @@ impl PhysicalPlanBuilder {
 
         // 2. Build physical plan.
         let input_plan = self.build(s_expr.child(0)?, required).await?;
-        if limit.before_exchange || limit.lazy_columns.is_empty() || !support_lazy_materialize {
-            return Ok(PhysicalPlan::new(Limit {
-                input: input_plan,
-                limit: limit.limit,
-                offset: limit.offset,
-                stat_info: Some(stat_info),
-                meta: PhysicalPlanMeta::new("Limit"),
-            }));
-        }
-
-        // If `lazy_columns` is not empty, build a `RowFetch` plan on top of the `Limit` plan.
-        let mut plan = PhysicalPlan::new(Limit {
-            meta: PhysicalPlanMeta::new("Limit"),
+        let plan = PhysicalPlan::new(Limit {
             input: input_plan,
             limit: limit.limit,
             offset: limit.offset,
             stat_info: Some(stat_info.clone()),
+            meta: PhysicalPlanMeta::new("Limit"),
         });
+        if limit.before_exchange || limit.lazy_columns.is_empty() || !support_lazy_materialize {
+            return Ok(plan);
+        }
+
+        self.build_row_fetch_for_lazy_columns(plan, &limit.lazy_columns, stat_info)
+    }
+
+    /// Build the `RowFetch` chain shared by row-limiting operators after lazy
+    /// columns have been excluded from their input plans.
+    pub(crate) fn build_row_fetch_for_lazy_columns(
+        &self,
+        mut plan: PhysicalPlan,
+        lazy_columns: &ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
         let input_schema = plan.output_schema()?;
 
         // Lazy materialization is enabled.
@@ -180,7 +189,7 @@ impl PhysicalPlanBuilder {
         // See the case in tests/sqllogictests/suites/crdb/limit:
         // SELECT * FROM (SELECT * FROM t_47283 ORDER BY k LIMIT 4) WHERE a > 5 LIMIT 1
         let mut lazy_columns_by_table: HashMap<IndexType, Vec<Symbol>> = HashMap::new();
-        for index in limit.lazy_columns.iter() {
+        for index in lazy_columns.iter() {
             if input_schema.has_field(&index.to_string()) {
                 continue;
             }
@@ -203,7 +212,13 @@ impl PhysicalPlanBuilder {
             plan: &PhysicalPlan,
             sources: &mut HashMap<IndexType, DataSourcePlan>,
         ) {
-            if let Some(scan) = crate::physical_plans::TableScan::from_physical_plan(plan) {
+            if let Some(scan) = crate::physical_plans::FuseBlockRead::from_physical_plan(plan) {
+                if let Some(table_index) = scan.table_index {
+                    sources
+                        .entry(table_index)
+                        .or_insert_with(|| (*scan.source).clone());
+                }
+            } else if let Some(scan) = crate::physical_plans::TableScan::from_physical_plan(plan) {
                 if let Some(table_index) = scan.table_index {
                     sources
                         .entry(table_index)
@@ -296,6 +311,7 @@ impl PhysicalPlanBuilder {
                 cols_to_fetch,
                 fetched_fields,
                 need_wrap_nullable: false,
+                populate_cache: true,
                 enable_block_id_repartition: false,
                 stat_info: Some(stat_info.clone()),
             });

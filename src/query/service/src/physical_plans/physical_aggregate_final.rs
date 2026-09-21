@@ -150,11 +150,6 @@ impl IPhysicalPlan for AggregateFinal {
         let max_block_rows = builder.settings.get_max_block_size()? as usize;
         let max_block_bytes = builder.settings.get_max_block_bytes()? as usize;
 
-        let max_spill_io_requests = builder.settings.get_max_spill_io_requests()?;
-        let max_restore_worker = builder.settings.get_max_aggregate_restore_worker()?;
-        let enable_experiment_aggregate = builder.settings.get_enable_experiment_aggregate()?;
-        let enable_experiment_hash_index = builder.settings.get_enable_experiment_hash_index()?;
-
         let mut is_cluster_aggregate = false;
         if ExchangeSource::check_physical_plan(&self.input) {
             is_cluster_aggregate = true;
@@ -165,9 +160,6 @@ impl IPhysicalPlan for AggregateFinal {
             &self.group_by,
             &self.agg_funcs,
             is_cluster_aggregate,
-            max_spill_io_requests as usize,
-            enable_experiment_aggregate,
-            enable_experiment_hash_index,
             max_block_rows,
             max_block_bytes,
         )?;
@@ -188,19 +180,11 @@ impl IPhysicalPlan for AggregateFinal {
         let old_inject = builder.exchange_injector.clone();
 
         if ExchangeSource::check_physical_plan(&self.input) {
-            builder.exchange_injector = if params.enable_experiment_aggregate {
-                AggregateInjector::<true>::create(
-                    builder.ctx.clone(),
-                    params.clone(),
-                    self.shuffle_mode.clone(),
-                )
-            } else {
-                AggregateInjector::<false>::create(
-                    builder.ctx.clone(),
-                    params.clone(),
-                    self.shuffle_mode.clone(),
-                )
-            };
+            builder.exchange_injector = AggregateInjector::create(
+                builder.ctx.clone(),
+                params.clone(),
+                self.shuffle_mode.clone(),
+            );
         }
 
         self.input.build_pipeline(builder)?;
@@ -216,7 +200,6 @@ impl IPhysicalPlan for AggregateFinal {
         build_partition_bucket(
             &mut builder.main_pipeline,
             params.clone(),
-            max_restore_worker,
             after_group_parallel,
             builder.ctx.clone(),
             self.shuffle_mode.clone(),
@@ -236,7 +219,7 @@ impl PhysicalPlanBuilder {
         let mut used = vec![];
         for item in &agg.aggregate_functions {
             if required.contains(&item.index) {
-                required.extend(item.scalar.used_columns());
+                item.scalar.collect_used_columns(&mut required);
                 used.push(item.clone());
             }
         }
@@ -573,20 +556,6 @@ fn build_aggregate_function(
                         }
                     })
                     .collect::<Result<Vec<_>>>()?;
-                let sort_desc_indices = agg
-                    .sort_descs
-                    .iter()
-                    .map(|desc| {
-                        if let ScalarExpr::BoundColumnRef(col) = &desc.expr {
-                            Ok(col.column.index)
-                        } else {
-                            Err(ErrorCode::Internal(
-                                "Aggregate function sort description must be a BoundColumnRef"
-                                    .to_string(),
-                            ))
-                        }
-                    })
-                    .collect::<Result<_>>()?;
                 let args = arg_indices
                     .iter()
                     .map(|i| {
@@ -596,11 +565,6 @@ fn build_aggregate_function(
                             .clone())
                     })
                     .collect::<Result<_>>()?;
-                let sort_descs = agg
-                    .sort_descs
-                    .iter()
-                    .map(|desc| desc.try_into())
-                    .collect::<Result<_>>()?;
                 Ok(AggregateFunctionDesc {
                     sig: AggregateFunctionSignature {
                         name: agg.func_name.clone(),
@@ -608,11 +572,10 @@ fn build_aggregate_function(
                         return_type: *agg.return_type.clone(),
                         args,
                         params: agg.params.clone(),
-                        sort_descs,
+                        order_by: agg.bound_order_by()?,
                     },
                     output_column: v.index,
                     arg_indices,
-                    sort_desc_indices,
                     display: v.scalar.as_expr()?.sql_display(),
                 })
             }
@@ -647,11 +610,10 @@ fn build_aggregate_function(
                         return_type: *udaf.return_type.clone(),
                         args,
                         params: vec![],
-                        sort_descs: vec![],
+                        order_by: vec![],
                     },
                     output_column: v.index,
                     arg_indices,
-                    sort_desc_indices: vec![],
                     display: v.scalar.as_expr()?.sql_display(),
                 })
             }

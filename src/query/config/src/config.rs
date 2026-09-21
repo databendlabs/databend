@@ -18,6 +18,7 @@ use std::env;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::str::FromStr;
 
 use clap::ArgAction;
 use clap::Args;
@@ -35,7 +36,6 @@ use databend_common_meta_app::storage::StorageCosConfig as InnerStorageCosConfig
 use databend_common_meta_app::storage::StorageFsConfig as InnerStorageFsConfig;
 use databend_common_meta_app::storage::StorageGcsConfig as InnerStorageGcsConfig;
 use databend_common_meta_app::storage::StorageHdfsConfig as InnerStorageHdfsConfig;
-use databend_common_meta_app::storage::StorageMokaConfig as InnerStorageMokaConfig;
 use databend_common_meta_app::storage::StorageNetworkParams;
 use databend_common_meta_app::storage::StorageObsConfig as InnerStorageObsConfig;
 use databend_common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig;
@@ -44,6 +44,9 @@ use databend_common_meta_app::storage::StorageS3Config as InnerStorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig as InnerStorageWebhdfsConfig;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_storage::EndpointUrlPolicy;
+use databend_common_storage::EndpointUrlPolicyConfig;
+use databend_common_storage::StagePathTraversalPolicy;
 use databend_common_storage::StorageConfig as InnerStorageConfig;
 use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
 use databend_common_tracing::Config as InnerLogConfig;
@@ -90,6 +93,10 @@ fn default_telemetry_enabled() -> bool {
     true
 }
 
+fn default_stage_path_traversal_policy() -> String {
+    "disable".to_string()
+}
+
 impl Default for TelemetryConfig {
     fn default() -> Self {
         Self {
@@ -132,6 +139,9 @@ pub struct Config {
     // Query engine config.
     #[clap(flatten)]
     pub query: QueryConfig,
+
+    #[clap(flatten)]
+    pub lineage: LineageConfig,
 
     #[clap(flatten)]
     pub log: LogConfig,
@@ -228,7 +238,7 @@ impl Config {
 
             if !final_config_file.is_empty() {
                 let toml = TomlIgnored::new(Box::new(|path| {
-                    log::warn!("unknown field in config: {}", &path);
+                    log::warn!("unknown field in config: {}", path);
                 }));
                 builder = builder.collect(from_file(toml, &final_config_file));
             }
@@ -262,7 +272,7 @@ impl Config {
 
             if !config_file.is_empty() {
                 let toml = TomlIgnored::new(Box::new(|path| {
-                    log::warn!("unknown field in config: {}", &path);
+                    log::warn!("unknown field in config: {}", path);
                 }));
                 builder = builder.collect(from_file(toml, &config_file));
             }
@@ -362,6 +372,39 @@ pub struct StorageConfig {
     #[clap(long = "storage-allow-insecure")]
     pub allow_insecure: bool,
 
+    /// Policy for validating external storage endpoint_url targets.
+    ///
+    /// `permissive` preserves backward compatibility. `strict` rejects
+    /// high-risk targets such as loopback, private, link-local and metadata
+    /// addresses unless explicitly allowed.
+    #[clap(
+        long = "storage-endpoint-url-policy",
+        value_name = "VALUE",
+        default_value_t,
+        value_enum
+    )]
+    pub endpoint_url_policy: EndpointUrlPolicyConfigValue,
+
+    /// Hostnames allowed by the storage endpoint_url policy.
+    ///
+    /// Supports exact hosts and subdomain-only wildcard patterns such as `*.example.com`.
+    #[clap(long = "storage-endpoint-url-allowed-hosts", value_name = "VALUE")]
+    pub endpoint_url_allowed_hosts: Vec<String>,
+
+    /// IP addresses or CIDR blocks allowed by the storage endpoint_url policy.
+    #[clap(long = "storage-endpoint-url-allowed-cidrs", value_name = "VALUE")]
+    pub endpoint_url_allowed_cidrs: Vec<String>,
+
+    /// Hostnames rejected by the storage endpoint_url policy.
+    ///
+    /// Supports exact hosts and subdomain-only wildcard patterns such as `*.example.com`.
+    #[clap(long = "storage-endpoint-url-blocked-hosts", value_name = "VALUE")]
+    pub endpoint_url_blocked_hosts: Vec<String>,
+
+    /// IP addresses or CIDR blocks rejected by the storage endpoint_url policy.
+    #[clap(long = "storage-endpoint-url-blocked-cidrs", value_name = "VALUE")]
+    pub endpoint_url_blocked_cidrs: Vec<String>,
+
     /// Disable loading credentials from env/shared config/web identity files globally.
     #[clap(long = "storage-disable-config-load")]
     pub disable_config_load: bool,
@@ -369,6 +412,20 @@ pub struct StorageConfig {
     /// Disable all instance-profile based credential providers globally.
     #[clap(long = "storage-disable-instance-profile")]
     pub disable_instance_profile: bool,
+
+    /// Controls whether stage paths containing parent directory components
+    /// (`../`) are allowed.
+    ///
+    /// `disable` rejects traversal paths for both read and write.
+    /// `enable` allows traversal paths for both read and write.
+    /// `readonly` allows reading existing traversal paths but rejects writes.
+    #[clap(
+        long = "storage-stage-path-traversal-policy",
+        value_name = "VALUE",
+        default_value = "disable"
+    )]
+    #[serde(default = "default_stage_path_traversal_policy")]
+    pub stage_path_traversal_policy: String,
 
     #[clap(long, value_name = "VALUE", default_value_t)]
     pub storage_retry_timeout: u64,
@@ -431,14 +488,49 @@ impl Default for StorageConfig {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "lowercase")]
+pub enum EndpointUrlPolicyConfigValue {
+    #[default]
+    Permissive,
+    Strict,
+    Allowlist,
+}
+
+impl From<EndpointUrlPolicyConfigValue> for EndpointUrlPolicy {
+    fn from(value: EndpointUrlPolicyConfigValue) -> Self {
+        match value {
+            EndpointUrlPolicyConfigValue::Permissive => EndpointUrlPolicy::Permissive,
+            EndpointUrlPolicyConfigValue::Strict => EndpointUrlPolicy::Strict,
+            EndpointUrlPolicyConfigValue::Allowlist => EndpointUrlPolicy::Allowlist,
+        }
+    }
+}
+
+impl From<&EndpointUrlPolicy> for EndpointUrlPolicyConfigValue {
+    fn from(value: &EndpointUrlPolicy) -> Self {
+        match value {
+            EndpointUrlPolicy::Permissive => EndpointUrlPolicyConfigValue::Permissive,
+            EndpointUrlPolicy::Strict => EndpointUrlPolicyConfigValue::Strict,
+            EndpointUrlPolicy::Allowlist => EndpointUrlPolicyConfigValue::Allowlist,
+        }
+    }
+}
+
 impl From<InnerStorageConfig> for StorageConfig {
     fn from(inner: InnerStorageConfig) -> Self {
         let mut cfg = Self {
             storage_num_cpus: inner.num_cpus,
             typ: "".to_string(),
             allow_insecure: inner.allow_insecure,
+            endpoint_url_policy: (&inner.endpoint_url_policy.policy).into(),
+            endpoint_url_allowed_hosts: inner.endpoint_url_policy.allowed_hosts,
+            endpoint_url_allowed_cidrs: inner.endpoint_url_policy.allowed_cidrs,
+            endpoint_url_blocked_hosts: inner.endpoint_url_policy.blocked_hosts,
+            endpoint_url_blocked_cidrs: inner.endpoint_url_policy.blocked_cidrs,
             disable_config_load: inner.disable_config_load,
             disable_instance_profile: inner.disable_instance_profile,
+            stage_path_traversal_policy: inner.stage_path_traversal_policy.to_string(),
             // use default for each config instead of using `..Default::default`
             // using `..Default::default` is calling `Self::default`
             // and `Self::default` relies on `InnerStorage::into()`
@@ -576,6 +668,17 @@ impl StorageConfig {
             max_concurrent_io_requests: self.storage_max_concurrent_io_requests,
         }
     }
+
+    fn create_endpoint_url_policy_config(&self) -> EndpointUrlPolicyConfig {
+        EndpointUrlPolicyConfig {
+            policy: self.endpoint_url_policy.clone().into(),
+            allowed_hosts: self.endpoint_url_allowed_hosts.clone(),
+            allowed_cidrs: self.endpoint_url_allowed_cidrs.clone(),
+            blocked_hosts: self.endpoint_url_blocked_hosts.clone(),
+            blocked_cidrs: self.endpoint_url_blocked_cidrs.clone(),
+            protected_sockets: vec![],
+        }
+    }
 }
 
 impl TryInto<InnerStorageConfig> for StorageConfig {
@@ -594,11 +697,15 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
         }
 
         let storage_network_params = self.create_storage_network_params();
+        let stage_path_traversal_policy =
+            StagePathTraversalPolicy::from_str(&self.stage_path_traversal_policy)?;
         Ok(InnerStorageConfig {
             num_cpus: self.storage_num_cpus,
             allow_insecure: self.allow_insecure,
+            endpoint_url_policy: self.create_endpoint_url_policy_config(),
             disable_config_load: self.disable_config_load,
             disable_instance_profile: self.disable_instance_profile,
+            stage_path_traversal_policy,
             params: {
                 match self.typ.as_str() {
                     "azblob" => {
@@ -1294,42 +1401,6 @@ impl TryInto<InnerStorageOssConfig> for OssStorageConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default)]
-pub struct MokaStorageConfig {
-    pub max_capacity: u64,
-    pub time_to_live: i64,
-    pub time_to_idle: i64,
-}
-
-impl Default for MokaStorageConfig {
-    fn default() -> Self {
-        InnerStorageMokaConfig::default().into()
-    }
-}
-
-impl From<InnerStorageMokaConfig> for MokaStorageConfig {
-    fn from(v: InnerStorageMokaConfig) -> Self {
-        Self {
-            max_capacity: v.max_capacity,
-            time_to_live: v.time_to_live,
-            time_to_idle: v.time_to_idle,
-        }
-    }
-}
-
-impl TryInto<InnerStorageMokaConfig> for MokaStorageConfig {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<InnerStorageMokaConfig> {
-        Ok(InnerStorageMokaConfig {
-            max_capacity: self.max_capacity,
-            time_to_live: self.time_to_live,
-            time_to_idle: self.time_to_idle,
-        })
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct WebhdfsStorageConfig {
@@ -1563,6 +1634,10 @@ pub struct QueryConfig {
     /// Tenant id for get the information from the MetaSrv.
     #[clap(long, value_name = "VALUE", default_value = "admin")]
     pub tenant_id: String,
+
+    /// Product name used in user-visible server version strings.
+    #[clap(long, value_name = "VALUE", default_value = "Databend Query")]
+    pub product_name: String,
 
     /// ID for construct the cluster.
     #[clap(long, value_name = "VALUE", default_value_t)]
@@ -2095,7 +2170,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
                     "`dir` or `file.dir` must be set when `query.dir` is empty".to_string(),
                 ));
             } else {
-                query.dir = format!("{}/query-details", &file.dir);
+                query.dir = format!("{}/query-details", file.dir);
             }
         }
 
@@ -2106,7 +2181,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
                     "`dir` or `file.dir` must be set when `profile.dir` is empty".to_string(),
                 ));
             } else {
-                profile.dir = format!("{}/profiles", &file.dir);
+                profile.dir = format!("{}/profiles", file.dir);
             }
         }
 
@@ -2117,7 +2192,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
                     "`dir` or `file.dir` must be set when `structlog.on` is true".to_string(),
                 ));
             } else {
-                structlog.dir = format!("{}/structlogs", &file.dir);
+                structlog.dir = format!("{}/structlogs", file.dir);
             }
         }
 
@@ -2172,6 +2247,28 @@ pub struct TaskConfig {
         long = "private-task-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
     )]
     pub on: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct LineageConfig {
+    /// Enables query lineage capture and persistence.
+    #[clap(
+        long = "lineage-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
+    #[serde(rename = "on")]
+    pub lineage_on: bool,
+
+    /// Retention period in hours for DML lineage. When omitted, lineage is retained permanently.
+    #[clap(long = "lineage-retention", value_name = "HOURS")]
+    #[serde(rename = "retention")]
+    pub lineage_retention: Option<usize>,
+}
+
+impl LineageConfig {
+    pub fn enabled(&self) -> bool {
+        self.lineage_on
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
@@ -2653,8 +2750,9 @@ pub struct HistoryLogTableConfig {
     pub table_name: String,
 
     /// The retention period (in hours) for history logs.
-    /// Data older than this period will be deleted during retention tasks.
-    pub retention: usize,
+    /// Data older than this period will be deleted during retention tasks. When omitted, the
+    /// predefined table policy applies.
+    pub retention: Option<usize>,
 
     /// Whether this history table is invisible for querying.
     /// Default is false.
@@ -2716,6 +2814,7 @@ impl TryInto<InnerHistoryConfig> for HistoryLogConfig {
                 .into_iter()
                 .map(|cfg| cfg.try_into())
                 .collect::<Result<Vec<_>>>()?,
+            internal_tables: vec![],
             storage_params: storage_params.map(|cfg| cfg.params),
         })
     }
@@ -3114,29 +3213,41 @@ pub struct CacheConfig {
     )]
     pub disk_cache_inverted_index_meta_size: u64,
 
-    /// Max bytes of cached inverted index filters used. Set it to 0 to disable it.
+    /// Max bytes of cached inverted-index term dictionaries and small fieldnorm/fast components
+    /// in memory.
     #[clap(
-        long = "cache-inverted-index-filter-size",
+        long = "cache-inverted-index-lookup-size",
         value_name = "VALUE",
-        default_value = "64424509440"
+        default_value = "8589934592"
     )]
-    pub inverted_index_filter_size: u64,
+    pub inverted_index_lookup_size: u64,
 
-    /// Max bytes of cached inverted index filters on disk. Set it to 0 to disable it.
+    /// Max bytes of cached inverted-index term dictionaries and small fieldnorm/fast components
+    /// on disk.
+    /// Set it to 0 to disable it.
     #[clap(
-        long = "disk-cache-inverted-index-data-size",
+        long = "disk-cache-inverted-index-lookup-size",
         value_name = "VALUE",
         default_value = "0"
     )]
-    pub disk_cache_inverted_index_data_size: u64,
+    pub disk_cache_inverted_index_lookup_size: u64,
 
-    /// Max percentage of in memory inverted index filter cache relative to whole memory. By default it is 0 (disabled).
+    /// Max bytes of cached inverted-index postings, positions, store, large fieldnorm/fast, and other
+    /// payload pages in memory.
     #[clap(
-        long = "cache-inverted-index-filter-memory-ratio",
+        long = "cache-inverted-index-payload-size",
+        value_name = "VALUE",
+        default_value = "8589934592"
+    )]
+    pub inverted_index_payload_size: u64,
+
+    /// Max bytes of cached inverted-index payload pages on disk. Set it to 0 to disable it.
+    #[clap(
+        long = "disk-cache-inverted-index-payload-size",
         value_name = "VALUE",
         default_value = "0"
     )]
-    pub inverted_index_filter_memory_ratio: u64,
+    pub disk_cache_inverted_index_payload_size: u64,
 
     /// Max number of cached vector index meta objects. Set it to 0 to disable it.
     #[clap(
@@ -3352,9 +3463,10 @@ impl Default for CacheConfig {
             disk_cache_table_bloom_index_data_size: 0,
             inverted_index_meta_count: 30000,
             disk_cache_inverted_index_meta_size: 0,
-            inverted_index_filter_size: 64424509440,
-            disk_cache_inverted_index_data_size: 0,
-            inverted_index_filter_memory_ratio: 0,
+            inverted_index_lookup_size: 8589934592,
+            disk_cache_inverted_index_lookup_size: 0,
+            inverted_index_payload_size: 8589934592,
+            disk_cache_inverted_index_payload_size: 0,
             vector_index_meta_count: 30000,
             disk_cache_vector_index_meta_size: 0,
             vector_index_filter_size: 64424509440,
@@ -3545,6 +3657,7 @@ mod config_converters {
         fn from(inner: InnerConfig) -> Self {
             Self {
                 query: inner.query.into(),
+                lineage: inner.lineage,
                 log: inner.log.into(),
                 task: inner.task,
                 meta: inner.meta,
@@ -3565,6 +3678,7 @@ mod config_converters {
         fn try_into(self) -> Result<InnerConfig> {
             let Config {
                 query,
+                lineage,
                 log,
                 task,
                 meta,
@@ -3596,10 +3710,33 @@ mod config_converters {
             }
 
             let spill = convert_local_spill_config(spill)?;
+            let mut log: InnerLogConfig = log.try_into()?;
+
+            const LINEAGE_HISTORY_TABLE: &str = "lineage_history";
+            if log
+                .history
+                .tables
+                .iter()
+                .any(|table| table.table_name.eq_ignore_ascii_case(LINEAGE_HISTORY_TABLE))
+            {
+                return Err(ErrorCode::InvalidConfig(
+                    "`lineage_history` is internal; configure lineage with `[lineage]` instead"
+                        .to_string(),
+                ));
+            }
+
+            if lineage.lineage_on {
+                log.history.internal_tables.push(InnerHistoryTableConfig {
+                    table_name: LINEAGE_HISTORY_TABLE.to_string(),
+                    retention: lineage.lineage_retention,
+                    invisible: false,
+                });
+            }
 
             Ok(InnerConfig {
                 query: query.try_into()?,
-                log: log.try_into()?,
+                lineage,
+                log,
                 task,
                 meta,
                 storage: storage.try_into()?,
@@ -3695,6 +3832,93 @@ mod test {
     }
 
     #[test]
+    fn test_history_table_retention_is_optional() {
+        let omitted: HistoryLogTableConfig =
+            toml::from_str("table_name = 'query_history'").unwrap();
+        assert_eq!(omitted.retention, None);
+        let inner: InnerHistoryTableConfig = omitted.try_into().unwrap();
+        assert_eq!(inner.retention, None);
+
+        let explicit: HistoryLogTableConfig =
+            toml::from_str("table_name = 'query_history'\nretention = 0").unwrap();
+        assert_eq!(explicit.retention, Some(0));
+
+        let inner: InnerHistoryTableConfig = explicit.try_into().unwrap();
+        assert_eq!(inner.retention, Some(0));
+    }
+
+    #[test]
+    fn test_lineage_config_enables_history_backend() {
+        let config: Config = toml::from_str("[lineage]\non = true").unwrap();
+        let inner: InnerConfig = config.try_into().unwrap();
+
+        assert!(inner.lineage.enabled());
+        assert!(!inner.log.history.on);
+        assert!(inner.log.history.enabled());
+        assert!(inner.log.history.tables.is_empty());
+        assert_eq!(inner.log.history.internal_tables.len(), 1);
+        let lineage = &inner.log.history.internal_tables[0];
+        assert_eq!(lineage.table_name, "lineage_history");
+        assert_eq!(lineage.retention, None);
+    }
+
+    #[test]
+    fn test_lineage_config_preserves_disabled_history_tables() {
+        let config: Config = toml::from_str(
+            "[lineage]\non = true\nretention = 24\n\
+             [log.history]\non = false\nlog_only = true\n\
+             [[log.history.tables]]\ntable_name = 'query_history'\nretention = 12",
+        )
+        .unwrap();
+        let inner: InnerConfig = config.try_into().unwrap();
+
+        let lineage = inner
+            .log
+            .history
+            .internal_tables
+            .iter()
+            .find(|table| table.table_name == "lineage_history")
+            .unwrap();
+        assert_eq!(lineage.retention, Some(24));
+        let query = inner
+            .log
+            .history
+            .tables
+            .iter()
+            .find(|table| table.table_name == "query_history")
+            .unwrap();
+        assert_eq!(query.retention, Some(12));
+        assert_eq!(
+            inner
+                .log
+                .history
+                .enabled_tables()
+                .map(|table| table.table_name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["lineage_history"]
+        );
+        assert!(inner.log.history.transforms_enabled());
+        assert_eq!(
+            inner
+                .log
+                .history
+                .transform_tables()
+                .map(|table| table.table_name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["lineage_history"]
+        );
+
+        let outer = inner.into_config();
+        assert!(!outer.log.history.log_history_on);
+        assert!(outer.log.history.log_history_log_only);
+        assert_eq!(outer.log.history.log_history_tables.len(), 1);
+        assert_eq!(
+            outer.log.history.log_history_tables[0].table_name,
+            "query_history"
+        );
+    }
+
+    #[test]
     fn test_env() {
         with_vars(
             vec![
@@ -3725,5 +3949,35 @@ mod test {
                 assert!(!cfg.cache.enable_table_index_bloom);
             },
         );
+    }
+
+    #[test]
+    fn test_endpoint_url_policy_round_trips_through_inner() {
+        let args = vec![
+            "databend-query",
+            "--storage-endpoint-url-policy=strict",
+            "--storage-endpoint-url-allowed-hosts=s3.us-east-1.amazonaws.com",
+            "--storage-endpoint-url-allowed-hosts=*.storage.googleapis.com",
+            "--storage-endpoint-url-allowed-cidrs=10.0.0.0/8",
+            "--storage-endpoint-url-blocked-hosts=evil.example.com",
+            "--storage-endpoint-url-blocked-cidrs=192.168.99.0/24",
+        ];
+        let cmd = Cmd::parse_from(args);
+        let inner: InnerConfig = cmd.config.try_into().expect("must parse");
+
+        let policy = &inner.storage.endpoint_url_policy;
+        assert_eq!(
+            policy.policy,
+            databend_common_storage::EndpointUrlPolicy::Strict
+        );
+        assert_eq!(policy.allowed_hosts, vec![
+            "s3.us-east-1.amazonaws.com",
+            "*.storage.googleapis.com"
+        ]);
+        assert_eq!(policy.allowed_cidrs, vec!["10.0.0.0/8"]);
+        assert_eq!(policy.blocked_hosts, vec!["evil.example.com"]);
+        assert_eq!(policy.blocked_cidrs, vec!["192.168.99.0/24"]);
+        // protected_sockets is runtime-only and must not be set from CLI
+        assert!(policy.protected_sockets.is_empty());
     }
 }

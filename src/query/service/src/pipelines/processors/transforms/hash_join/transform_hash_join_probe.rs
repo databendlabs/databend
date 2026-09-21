@@ -195,7 +195,7 @@ impl TransformHashJoinProbe {
     }
 
     fn probe(&mut self) -> Result<Event> {
-        if self.output_port.is_finished() {
+        if self.output_port.is_finished() && !self.is_spill_happened {
             if self.need_final_scan() {
                 return self.next_step(Step::Async(AsyncStep::WaitProbe));
             } else {
@@ -203,14 +203,20 @@ impl TransformHashJoinProbe {
             }
         }
 
-        if !self.output_port.can_push() {
-            self.input_port.set_not_need_data();
-            return Ok(Event::NeedConsume);
-        }
+        if self.output_port.is_finished() {
+            // Spilled probes must still consume their input and join every round's
+            // barrier, even when downstream no longer needs this worker's output.
+            self.output_data_blocks.clear();
+        } else {
+            if !self.output_port.can_push() {
+                self.input_port.set_not_need_data();
+                return Ok(Event::NeedConsume);
+            }
 
-        if let Some(data_block) = self.output_data_block() {
-            self.output_port.push_data(Ok(data_block));
-            return Ok(Event::NeedConsume);
+            if let Some(data_block) = self.output_data_block() {
+                self.output_port.push_data(Ok(data_block));
+                return Ok(Event::NeedConsume);
+            }
         }
 
         if !self.data_blocks_need_to_spill.is_empty() {
@@ -258,6 +264,12 @@ impl TransformHashJoinProbe {
 
     fn final_scan(&mut self) -> Result<Event> {
         if self.output_port.is_finished() {
+            if self.is_spill_happened {
+                // Leave shared scan tasks to peers that still need output, but
+                // participate in the next spill round with them.
+                self.output_data_blocks.clear();
+                return self.next_round();
+            }
             return self.next_step(Step::Finish);
         }
 
@@ -318,21 +330,11 @@ impl Processor for TransformHashJoinProbe {
             },
             Step::Async(step) => match step {
                 AsyncStep::WaitBuild | AsyncStep::NextRound => self.wait_build(),
-                AsyncStep::WaitProbe => {
-                    if self.output_port.is_finished() {
-                        self.next_step(Step::Finish)
-                    } else {
-                        self.final_scan()
-                    }
-                }
+                AsyncStep::WaitProbe => self.final_scan(),
                 AsyncStep::Spill | AsyncStep::Restore => self.probe(),
             },
             Step::Finish => self.next_step(Step::Finish),
         }
-    }
-
-    fn interrupt(&self) {
-        self.join_probe_state.hash_join_state.interrupt()
     }
 
     fn process(&mut self) -> Result<()> {

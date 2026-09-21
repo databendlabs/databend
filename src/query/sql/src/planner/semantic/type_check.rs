@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::ColumnRef;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Query;
@@ -29,8 +30,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::aggregate_function::AggregateRegistry;
 use databend_common_expression::types::DataType;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::UDFScript;
@@ -46,10 +47,10 @@ use tokio::runtime::Handle;
 use super::name_resolution::NameResolutionContext;
 use crate::BindContext;
 use crate::MetadataRef;
+use crate::binder::AliasLookup;
 use crate::optimizer::ir::SExpr;
 use crate::planner::expression::UdfValidationConfig;
 use crate::plans::DictGetFunctionArgument;
-use crate::plans::ScalarExpr;
 
 const DEFAULT_DECIMAL_PRECISION: i64 = 38;
 const DEFAULT_DECIMAL_SCALE: i64 = 0;
@@ -93,7 +94,7 @@ type CoreUdfCallArgs = SmallVec<[(String, CoreExprId); 4]>;
 pub struct CoreExprArena<'a> {
     nodes: Vec<CoreExpr<'a>>,
     week_start: u64,
-    pub(super) aggregate_function_factory: &'static AggregateFunctionFactory,
+    pub(super) aggregate_function_registry: &'static AggregateRegistry,
     pub(super) in_lambda_function: bool,
 }
 
@@ -133,6 +134,9 @@ enum CoreExpr<'a> {
         span: Span,
         name: &'a Identifier,
         args: CoreUdfCallArgs,
+        // Carried through to UDF resolution, where scalar UDFs and UDAFs are
+        // distinguished before a FILTER clause can be handled or rejected.
+        filter: Option<&'a Expr>,
     },
     LambdaFunction {
         span: Span,
@@ -282,7 +286,7 @@ pub struct FullTypeCheckAdapter {
 #[derive(Clone)]
 struct FullTypeCheckAdapterDependencies {
     async_runtime_handle: fn() -> Result<Handle>,
-    aggregate_function_factory: &'static AggregateFunctionFactory,
+    aggregate_function_registry: &'static AggregateRegistry,
     license_manager: Arc<LicenseManagerSwitch>,
     catalog_manager: Arc<CatalogManager>,
     user_api_provider: Arc<UserApiProvider>,
@@ -339,7 +343,7 @@ pub trait TypeCheckAdapter: Clone + Sized {
 
     fn settings(&self) -> Arc<Settings>;
 
-    fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory;
+    fn aggregate_function_registry(&self) -> &'static AggregateRegistry;
 
     fn udf_adapter(&self) -> Result<Self::UdfAdapter>;
 
@@ -425,8 +429,8 @@ pub struct TypeChecker<'a, A> {
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
 
-    aliases: &'a [(String, ScalarExpr)],
-    fallback_aliases: Option<&'a [(String, ScalarExpr)]>,
+    aliases: AliasLookup<'a>,
+    fallback_aliases: Option<AliasLookup<'a>>,
 
     // true if current expr is inside an aggregate function.
     // This is used to check if there is nested aggregate function.

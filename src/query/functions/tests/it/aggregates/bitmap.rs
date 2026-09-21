@@ -1,0 +1,179 @@
+use std::io::Write;
+
+use databend_common_exception::Result;
+use databend_common_expression::FromData;
+use databend_common_expression::types::UInt64Type;
+use databend_common_functions::aggregates::eval_aggr;
+use goldenfile::Mint;
+
+use super::support::AggregationSimulator;
+use super::support::Case;
+use super::support::bitmap_column;
+use super::support::eval_aggregate;
+use super::support::simulate_two_groups_group_by;
+use super::support::write_aggregate_expr_case;
+
+fn run_bitmap_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    let columns = [
+        (
+            "b",
+            databend_common_expression::types::number::UInt64Type::from_data(vec![1u64, 2, 2, 3])
+                .into(),
+        ),
+        ("bm", bitmap_column().into()),
+    ];
+    let columns = columns.as_slice();
+
+    write_aggregate_expr_case(file, "bitmap_union(bm)", columns, simulator, vec![]);
+    write_aggregate_expr_case(
+        file,
+        "bitmap_union_distinct(bm)",
+        columns,
+        simulator,
+        vec![],
+    );
+    write_aggregate_expr_case(file, "bitmap_intersect(bm)", columns, simulator, vec![]);
+    write_aggregate_expr_case(
+        file,
+        "bitmap_intersect_distinct(bm)",
+        columns,
+        simulator,
+        vec![],
+    );
+    write_aggregate_expr_case(file, "bitmap_xor_agg(bm)", columns, simulator, vec![]);
+    write_aggregate_expr_case(file, "bitmap_construct_agg(b)", columns, simulator, vec![]);
+    write_aggregate_expr_case(
+        file,
+        "bitmap_construct_agg_distinct(b)",
+        columns,
+        simulator,
+        vec![],
+    );
+    write_aggregate_expr_case(file, "group_bitmap(b)", columns, simulator, vec![]);
+    write_aggregate_expr_case(file, "group_bitmap_distinct(b)", columns, simulator, vec![]);
+}
+
+#[test]
+fn test_bitmap() {
+    let mut mint = Mint::new("tests/it/aggregates/testdata");
+    let file = &mut mint.new_goldenfile("bitmap.txt").unwrap();
+    run_bitmap_cases(file, eval_aggregate);
+}
+
+#[test]
+fn test_bitmap_group_by() {
+    let mut mint = Mint::new("tests/it/aggregates/testdata");
+    let file = &mut mint.new_goldenfile("bitmap_group_by.txt").unwrap();
+    run_bitmap_cases(file, simulate_two_groups_group_by);
+}
+
+#[test]
+fn test_bitmap_construct_agg_accepts_nullable_input() -> Result<()> {
+    let entries = [UInt64Type::from_opt_data(vec![Some(1), None, Some(3)]).into()];
+    eval_aggr("bitmap_construct_agg", vec![], &entries, 3, vec![])?;
+    Ok(())
+}
+
+#[test]
+fn test_state_baselines() {
+    // bitmap.rs: retain operation and result-kind branches (bitmap versus count),
+    // plus group_bitmap construction; omit duplicate spelling aliases.
+    super::support::check_state_baselines(vec![
+        Case::Metadata {
+            expression: "bitmap_and_agg(x0)",
+            arguments: vec!["Bitmap"],
+            result: "Nullable(Bitmap)",
+            state: "Tuple(Binary, Boolean)",
+        },
+        Case::Metadata {
+            expression: "bitmap_and_agg(x0)",
+            arguments: vec!["Nullable(Bitmap)"],
+            result: "Nullable(Bitmap)",
+            state: "Tuple(Binary, Boolean, Boolean)",
+        },
+        Case::Metadata {
+            expression: "bitmap_and_count(x0)",
+            arguments: vec!["Bitmap"],
+            result: "Nullable(UInt64)",
+            state: "Tuple(Binary, Boolean)",
+        },
+        Case::Metadata {
+            expression: "bitmap_and_count(x0)",
+            arguments: vec!["Nullable(Bitmap)"],
+            result: "Nullable(UInt64)",
+            state: "Tuple(Binary, Boolean, Boolean)",
+        },
+        Case::Metadata {
+            expression: "bitmap_not_count(x0)",
+            arguments: vec!["Bitmap"],
+            result: "Nullable(UInt64)",
+            state: "Tuple(Binary, Boolean)",
+        },
+        Case::Metadata {
+            expression: "bitmap_not_count(x0)",
+            arguments: vec!["Nullable(Bitmap)"],
+            result: "Nullable(UInt64)",
+            state: "Tuple(Binary, Boolean, Boolean)",
+        },
+        Case::Metadata {
+            expression: "bitmap_or_agg(x0)",
+            arguments: vec!["Bitmap"],
+            result: "Nullable(Bitmap)",
+            state: "Tuple(Binary, Boolean)",
+        },
+        Case::Metadata {
+            expression: "bitmap_or_agg(x0)",
+            arguments: vec!["Nullable(Bitmap)"],
+            result: "Nullable(Bitmap)",
+            state: "Tuple(Binary, Boolean, Boolean)",
+        },
+        Case::Metadata {
+            expression: "bitmap_or_count(x0)",
+            arguments: vec!["Bitmap"],
+            result: "Nullable(UInt64)",
+            state: "Tuple(Binary, Boolean)",
+        },
+        Case::Metadata {
+            expression: "bitmap_or_count(x0)",
+            arguments: vec!["Nullable(Bitmap)"],
+            result: "Nullable(UInt64)",
+            state: "Tuple(Binary, Boolean, Boolean)",
+        },
+        Case::Metadata {
+            expression: "bitmap_xor_agg(x0)",
+            arguments: vec!["Bitmap"],
+            result: "Nullable(Bitmap)",
+            state: "Tuple(Binary, Boolean)",
+        },
+        Case::Metadata {
+            expression: "bitmap_xor_agg(x0)",
+            arguments: vec!["Nullable(Bitmap)"],
+            result: "Nullable(Bitmap)",
+            state: "Tuple(Binary, Boolean, Boolean)",
+        },
+        Case::Metadata {
+            expression: "bitmap_xor_count(x0)",
+            arguments: vec!["Bitmap"],
+            result: "Nullable(UInt64)",
+            state: "Tuple(Binary, Boolean)",
+        },
+        Case::Metadata {
+            expression: "bitmap_xor_count(x0)",
+            arguments: vec!["Nullable(Bitmap)"],
+            result: "Nullable(UInt64)",
+            state: "Tuple(Binary, Boolean, Boolean)",
+        },
+        Case::Metadata {
+            expression: "group_bitmap(x0)",
+            arguments: vec!["UInt64"],
+            result: "Bitmap",
+            state: "Tuple(Binary)",
+        },
+        Case::Metadata {
+            expression: "group_bitmap(x0)",
+            arguments: vec!["Nullable(UInt64)"],
+            result: "Bitmap",
+            state: "Tuple(Binary)",
+        },
+    ]);
+}

@@ -15,11 +15,15 @@
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
+use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
+use databend_common_expression::aggregate_function::EagerAggregation;
+use databend_common_expression::type_check::infer_function_return_type;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::number::NumberDataType;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::aggregates::AGGR_REGISTRY;
 
 use crate::ColumnSet;
 use crate::MetadataRef;
@@ -45,6 +49,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::JoinType;
+use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 
 /// Rule to push aggregation past a join to reduces the number of input rows to the join.
@@ -145,6 +150,8 @@ impl RuleEagerAggregation {
                 match_op!(EvalScalar -> Aggregate -> Aggregate -> EvalScalar -> Join[*, *]),
                 match_op!(EvalScalar -> Sort -> Aggregate -> Aggregate -> Join[*, *]),
                 match_op!(EvalScalar -> Sort -> Aggregate -> Aggregate -> EvalScalar -> Join[*, *]),
+                match_op!(EvalScalar -> TopN -> Aggregate -> Aggregate -> Join[*, *]),
+                match_op!(EvalScalar -> TopN -> Aggregate -> Aggregate -> EvalScalar -> Join[*, *]),
             ],
             metadata,
         }
@@ -191,7 +198,7 @@ impl Rule for RuleEagerAggregation {
 #[derive(Clone)]
 struct EagerInput<'a> {
     eval_scalar: &'a EvalScalar,
-    sort_expr: Option<&'a SExpr>,
+    ordering_expr: Option<&'a SExpr>,
     join_expr: &'a SExpr,
     extra_eval_scalar: EvalScalar,
     final_agg: Aggregate,
@@ -202,11 +209,14 @@ impl<'a> EagerInput<'a> {
         let eval_scalar = s_expr.plan().as_eval_scalar()?;
 
         let mut current = s_expr.unary_child();
-        let sort_expr = current.plan().as_sort().map(|_| {
-            let sort_expr = current;
-            current = sort_expr.unary_child();
-            sort_expr
-        });
+        let ordering_expr = match current.plan() {
+            RelOperator::Sort(_) | RelOperator::TopN(_) => {
+                let ordering_expr = current;
+                current = ordering_expr.unary_child();
+                Some(ordering_expr)
+            }
+            _ => None,
+        };
 
         let final_agg = current.plan().as_aggregate()?.clone();
         current = current.unary_child();
@@ -228,7 +238,7 @@ impl<'a> EagerInput<'a> {
 
         Some(Self {
             eval_scalar,
-            sort_expr,
+            ordering_expr,
             join_expr: current,
             extra_eval_scalar,
             final_agg,
@@ -262,13 +272,8 @@ impl<'a> EagerInput<'a> {
             return Ok(vec![]);
         }
 
-        let function_factory = AggregateFunctionFactory::instance();
-        let eager_candidates = EagerCandidates::collect(
-            &self.final_agg,
-            &join_columns,
-            &eval_scalar_used_columns,
-            function_factory,
-        );
+        let eager_candidates =
+            EagerCandidates::collect(&self.final_agg, &join_columns, &eval_scalar_used_columns);
 
         if eager_candidates.by_side[Side::Left].len()
             + eager_candidates.by_side[Side::Right].len()
@@ -372,9 +377,9 @@ impl<'a> EagerInput<'a> {
                 continue;
             };
 
-            match aggregate_function.func_name.as_str() {
-                "sum" => has_sum = true,
-                "count" => has_count = true,
+            match eager_aggregation(aggregate_function) {
+                EagerAggregation::Sum => has_sum = true,
+                EagerAggregation::Count => has_count = true,
                 _ => {}
             }
 
@@ -483,7 +488,7 @@ impl<'a> EagerInput<'a> {
             matches!(
                 &agg.scalar,
                 ScalarExpr::AggregateFunction(aggregate_function)
-                    if aggregate_function.func_name == "sum"
+                    if eager_aggregation(aggregate_function) == EagerAggregation::Sum
             )
         })
     }
@@ -499,7 +504,7 @@ impl<'a> EagerInput<'a> {
                 matches!(
                     &final_agg.aggregate_functions[candidate.agg_index].scalar,
                     ScalarExpr::AggregateFunction(aggregate_function)
-                        if aggregate_function.func_name == "count"
+                        if eager_aggregation(aggregate_function) == EagerAggregation::Count
                 )
             })
     }
@@ -542,6 +547,19 @@ impl<'a> EagerInput<'a> {
     }
 }
 
+fn eager_aggregation(aggregate: &AggregateFunction) -> EagerAggregation {
+    // Modifiers can change the scalar combination law even when the base name
+    // supports eager aggregation.
+    if aggregate.distinct || !aggregate.sort_descs.is_empty() {
+        return EagerAggregation::Unsupported;
+    }
+    AGGR_REGISTRY
+        .descriptor(&aggregate.func_name)
+        .map_or(EagerAggregation::Unsupported, |descriptor| {
+            descriptor.features().eager_aggregation
+        })
+}
+
 struct EagerCandidates {
     by_side: Pair<Vec<EagerAggregationCandidate>>,
     any_side: Vec<EagerAggregationCandidate>,
@@ -556,7 +574,7 @@ impl EagerCandidates {
     // In the current implementation, if an aggregation function can be eager,
     // then it needs to satisfy the following constraints:
     // (1) The args.len() must equal to 1 if func_name is not "count".
-    // (2) The aggregate function can be decomposed.
+    // (2) The aggregate declares a supported strategy for combining final results.
     // (3) The output index of the aggregate function is referenced by the top eval scalar.
     // (4) The data type of the aggregate column is either Number or Nullable(Number).
     // Return eager aggregation candidates grouped by side, plus the count(*) candidates that can
@@ -565,7 +583,6 @@ impl EagerCandidates {
         agg_final: &Aggregate,
         join_columns: &Pair<ColumnSet>,
         eval_scalar_used_columns: &ColumnSet,
-        function_factory: &AggregateFunctionFactory,
     ) -> Self {
         let mut candidates = Self {
             by_side: Pair::new_with(|_| vec![]),
@@ -576,7 +593,8 @@ impl EagerCandidates {
             let ScalarExpr::AggregateFunction(aggregate_function) = &func.scalar else {
                 continue;
             };
-            if !function_factory.is_decomposable(&aggregate_function.func_name)
+            let strategy = eager_aggregation(aggregate_function);
+            if strategy == EagerAggregation::Unsupported
                 || !eval_scalar_used_columns.contains(&func.index)
             {
                 continue;
@@ -587,7 +605,7 @@ impl EagerCandidates {
                 output_index: func.index,
             };
 
-            if aggregate_function.func_name == "count" && aggregate_function.args.is_empty() {
+            if strategy == EagerAggregation::Count && aggregate_function.args.is_empty() {
                 candidates.any_side.push(candidate);
                 continue;
             }
@@ -597,7 +615,7 @@ impl EagerCandidates {
             };
             match &*column.column.data_type {
                 DataType::Number(_) | DataType::Decimal(_) => (),
-                DataType::Nullable(box DataType::Number(_) | box DataType::Decimal(_)) => {}
+                DataType::Nullable(deref!(DataType::Number(_)) | deref!(DataType::Decimal(_))) => {}
                 _ => continue,
             }
 
@@ -752,7 +770,7 @@ impl EagerAnalysis {
 
         for agg in final_eager_split.aggregate_functions.iter_mut() {
             if let ScalarExpr::AggregateFunction(aggregate_function) = &mut agg.scalar {
-                if aggregate_function.func_name != "sum" {
+                if eager_aggregation(aggregate_function) != EagerAggregation::Sum {
                     continue;
                 }
                 let Some(agg_side) = rewrites.source_side(agg.index) else {
@@ -835,7 +853,7 @@ impl EagerAnalysis {
         let mut eager_groupby_count_count_sum = EvalScalar { items: vec![] };
         for agg in final_eager_groupby_count.aggregate_functions.iter_mut() {
             if let ScalarExpr::AggregateFunction(aggregate_function) = &mut agg.scalar {
-                if aggregate_function.func_name != "sum"
+                if eager_aggregation(aggregate_function) != EagerAggregation::Sum
                     || rewrites.source_side(agg.index) == Some(d)
                 {
                     continue;
@@ -932,7 +950,7 @@ impl EagerAnalysis {
         let mut eager_count_sum = EvalScalar { items: vec![] };
         for agg in final_eager_count.aggregate_functions.iter_mut() {
             if let ScalarExpr::AggregateFunction(aggregate_function) = &mut agg.scalar
-                && aggregate_function.func_name == "sum"
+                && eager_aggregation(aggregate_function) == EagerAggregation::Sum
             {
                 eager_count_sum
                     .items
@@ -1002,7 +1020,7 @@ impl EagerAnalysis {
         let mut double_eager_count_sum = EvalScalar { items: vec![] };
         for agg in final_double_eager.aggregate_functions.iter_mut() {
             if let ScalarExpr::AggregateFunction(aggregate_function) = &mut agg.scalar
-                && aggregate_function.func_name == "sum"
+                && eager_aggregation(aggregate_function) == EagerAggregation::Sum
             {
                 double_eager_count_sum
                     .items
@@ -1061,8 +1079,8 @@ impl EagerAnalysis {
                 ..final_aggr.clone()
             })
             .build_unary(final_aggr);
-        let plan = match input.sort_expr {
-            Some(sort_expr) => plan.build_unary(sort_expr.plan.clone()),
+        let plan = match input.ordering_expr {
+            Some(ordering_expr) => plan.build_unary(ordering_expr.plan.clone()),
             None => plan,
         };
         plan.build_unary(eval_scalar)
@@ -1123,7 +1141,7 @@ impl EagerAnalysis {
         let ScalarExpr::AggregateFunction(agg) = &mut aggr_function.scalar else {
             unreachable!()
         };
-        let was_count = agg.func_name == "count";
+        let was_count = eager_aggregation(agg) == EagerAggregation::Count;
 
         let old_index = aggr_function.index;
         let new_index = metadata.write().add_derived_column(
@@ -1162,7 +1180,7 @@ impl EagerAnalysis {
     }
 
     fn modify_final_aggregate_function(agg: &mut AggregateFunction, old_index: Symbol) {
-        if agg.func_name.as_str() == "count" {
+        if eager_aggregation(agg) == EagerAggregation::Count {
             agg.func_name = "sum".to_string();
             agg.return_type = Box::new(UInt64Type::data_type().wrap_nullable());
         }
@@ -1221,6 +1239,15 @@ impl EagerAnalysis {
             unreachable!()
         };
 
+        let new_scalar_type = new_scalar.data_type();
+        let count_type = DataType::Number(NumberDataType::UInt64);
+        let return_type = infer_function_return_type(
+            None,
+            "multiply",
+            &[],
+            [new_scalar_type.as_ref(), &count_type].into_iter(),
+            &BUILTIN_FUNCTIONS,
+        )?;
         let multiplied_scalar = ScalarExpr::FunctionCall(FunctionCall {
             span: None,
             func_name: "multiply".to_string(),
@@ -1243,8 +1270,17 @@ impl EagerAnalysis {
                     &DataType::Number(NumberDataType::UInt64),
                 ),
             ],
+            return_type: Box::new(return_type),
         });
-        let multiplied_type = multiplied_scalar.data_type()?;
+        let multiplied_scalar = if matches!(
+            aggregate_function.return_type.remove_nullable(),
+            DataType::Decimal(_)
+        ) {
+            wrap_cast(&multiplied_scalar, &aggregate_function.return_type)
+        } else {
+            multiplied_scalar
+        };
+        let multiplied_type = multiplied_scalar.data_type().into_owned();
         let new_index = metadata.write().add_derived_column(
             format!("{} * _eager_count", aggregate_function.display_name),
             multiplied_type.clone(),
@@ -1255,14 +1291,17 @@ impl EagerAnalysis {
             index: new_index,
         };
         aggregate_function.return_type = Box::new(
-            AggregateFunctionFactory::instance()
-                .get(
-                    &aggregate_function.func_name,
-                    aggregate_function.params.clone(),
-                    vec![multiplied_type.clone()],
-                    vec![],
-                )?
-                .return_type()?,
+            AGGR_REGISTRY
+                .resolve(RawAggregateCall {
+                    name: &aggregate_function.func_name,
+                    params: &aggregate_function.params.clone(),
+                    args_type: std::slice::from_ref(&multiplied_type),
+                    distinct: false,
+                    order_by: &[],
+                })?
+                .signature()
+                .return_type
+                .clone(),
         );
         if let ScalarExpr::BoundColumnRef(column) = &mut aggregate_function.args[0] {
             column.column.index = new_index;
@@ -1384,8 +1423,8 @@ impl Optimizer for RuleEagerAggregation {
         "RuleEagerAggregationOptimizer".to_string()
     }
 
-    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr, ErrorCode> {
-        self.optimize_sync(s_expr)
+    async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr, ErrorCode> {
+        self.optimize_sync(&s_expr)
     }
 }
 

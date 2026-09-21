@@ -14,8 +14,6 @@
 
 use std::any::Any;
 use std::sync::Arc;
-use std::sync::atomic;
-use std::sync::atomic::AtomicBool;
 
 use bytesize::ByteSize;
 use databend_common_exception::Result;
@@ -57,8 +55,6 @@ pub struct TransformSortCollect<A: SortAlgorithm, S: SortSpiller> {
     base: Base<S>,
     inner: Inner<A, S>,
 
-    aborting: AtomicBool,
-
     enable_restore_prefetch: bool,
     enable_sort_spill_stream_regroup: bool,
 }
@@ -94,7 +90,6 @@ where
             order_col_converter,
             base,
             inner,
-            aborting: AtomicBool::new(false),
             max_block_size,
             default_num_merge,
             enable_restore_prefetch,
@@ -166,7 +161,6 @@ where
             bytes,
             rows,
             ByteSize(self.base.spiller.memory_settings().spill_unit_size as _),
-            self.max_block_size,
             self.enable_restore_prefetch,
             self.enable_sort_spill_stream_regroup,
         )
@@ -238,7 +232,6 @@ where
     }
 }
 
-#[async_trait::async_trait]
 impl<A, S> Processor for TransformSortCollect<A, S>
 where
     A: SortAlgorithm + 'static,
@@ -273,12 +266,7 @@ where
         }
 
         if self.input.has_data() {
-            return if self.check_spill() {
-                // delay the handle of input until the next call.
-                Ok(Event::Async)
-            } else {
-                Ok(Event::Sync)
-            };
+            return Ok(Event::Sync);
         }
 
         if self.input.is_finished() {
@@ -288,7 +276,7 @@ where
                         self.output.finish();
                         Ok(Event::Finished)
                     } else {
-                        Ok(Event::Async)
+                        Ok(Event::Sync)
                     }
                 }
                 Inner::Collect(input_data) => {
@@ -296,10 +284,10 @@ where
                         self.output.finish();
                         Ok(Event::Finished)
                     } else {
-                        Ok(Event::Async)
+                        Ok(Event::Sync)
                     }
                 }
-                Inner::Spill(_, _) => Ok(Event::Async),
+                Inner::Spill(_, _) => Ok(Event::Sync),
                 Inner::None => unreachable!(),
             };
         }
@@ -309,17 +297,14 @@ where
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(block) = self.input.pull_data().transpose()? {
+        if self.input.has_data() && !self.check_spill() {
+            let block = self.input.pull_data().unwrap()?;
             self.input.set_need_data();
             if !block.is_empty() {
                 self.collect_block(block)?;
             }
+            return Ok(());
         }
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
-    async fn async_process(&mut self) -> Result<()> {
         let finished = self.input.is_finished();
         self.trans_to_spill(finished)?;
 
@@ -332,18 +317,12 @@ where
         if incoming > 0 {
             let total_rows = spill_sort.collect_total_rows();
             log::debug!(incoming_block, incoming_rows = incoming, total_rows, finished; "sort_input_data");
-            spill_sort
-                .sort_input_data(std::mem::take(input_data), !finished, &self.aborting)
-                .await?;
+            spill_sort.sort_input_data(std::mem::take(input_data), !finished)?;
         }
         if finished {
             self.create_output()
         } else {
             Ok(())
         }
-    }
-
-    fn interrupt(&self) {
-        self.aborting.store(true, atomic::Ordering::Release);
     }
 }

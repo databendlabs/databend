@@ -47,12 +47,27 @@ task:join()
 Asynchronously sleeps for the specified duration.
 
 **Parameters:**
-- `seconds` (number): Duration to sleep in seconds (supports fractional values)
+- `seconds` (number): Finite, non-negative duration in seconds (supports fractional values)
 
 **Example:**
 ```lua
 metactl.sleep(0.5)  -- Sleep for 500ms
 metactl.sleep(2.0)  -- Sleep for 2 seconds
+```
+
+### metactl.now_ms()
+
+Returns a monotonic clock reading in milliseconds, for timing and benchmarks.
+
+**Returns:**
+- A number of milliseconds (fractional). The value never decreases between calls; only the difference between two readings is meaningful (the origin is when the Lua environment was created).
+
+**Example:**
+```lua
+local t0 = metactl.now_ms()
+client:upsert("my_key", "my_value")
+local elapsed_ms = metactl.now_ms() - t0
+print(string.format("upsert took %.3f ms", elapsed_ms))
 ```
 
 ### metactl.to_string(value)
@@ -67,16 +82,16 @@ Converts any Lua value to a human-readable string representation.
 
 **Features:**
 - Handles nested tables recursively
-- Detects and converts byte vectors to strings
+- Detects and converts byte vectors to escaped strings
 - Sorts table keys for consistent output
 - Handles NULL values from meta service
-- Escapes quotes in strings
+- Escapes quotes, backslashes, control bytes, and non-ASCII bytes in strings
 - Single-line output format
 
 **Example:**
 ```lua
-print(metactl.to_string({key="value", data={1,2,3}}))
--- Output: {"data"={1,2,3},"key"="value"}
+print(metactl.to_string({key="value", data={count=3}}))
+-- Output: {"data"={"count"=3},"key"="value"}
 
 print(metactl.to_string(metactl.NULL))
 -- Output: NULL
@@ -128,7 +143,7 @@ Inserts or updates a key-value pair in the meta service.
 
 **Parameters:**
 - `key` (string): The key to upsert
-- `value` (string): The value to store
+- `value` (string): The binary-safe Lua string to store
 
 **Returns:**
 - `result`: Operation result containing sequence number and other metadata
@@ -143,6 +158,84 @@ if err then
 else
     print("Upsert result:", metactl.to_string(result))
 end
+```
+
+### client:transaction(transaction)
+
+Executes a transaction atomically.
+
+**Parameters:**
+- `transaction` (table): Conditions and operations in the format described below
+
+**Returns:**
+- `result`: Transaction reply with `success`, `execution_path`, and `responses` fields
+- `error`: Validation or gRPC error message, nil otherwise
+
+A false condition is not an error. In that case, the client executes the `else` operations and returns a reply with `success = false`.
+
+**Example:**
+```lua
+local client = metactl.new_grpc_client("127.0.0.1:9191")
+local transaction = {
+    conditions = {
+        {key = "my_key", op = "eq_seq", value = 0}
+    },
+    ["then"] = {
+        {op = "put", key = "my_key", value = "my_value", ttl = 60},
+        {op = "get", key = "my_key"}
+    },
+    ["else"] = {
+        {op = "get", key = "my_key"}
+    }
+}
+
+local result, err = client:transaction(transaction)
+if err then
+    print("Transaction failed:", err)
+else
+    print("Transaction result:", metactl.to_string(result))
+end
+```
+
+## Transaction Tables
+
+A transaction table accepts these optional fields:
+
+- `conditions`: A dense array of conditions. All conditions must match to run the `then` operations.
+- `["then"]`: A dense array of operations to run when all conditions match.
+- `["else"]`: A dense array of operations to run when a condition does not match.
+
+Each condition has `key`, `op`, and `value` fields. Supported condition operations are:
+
+- `eq_seq`: The key's sequence must equal the non-negative integer `value`. Sequence 0 means the key must not exist.
+- `ge_seq`: The key's sequence must be greater than or equal to the non-negative integer `value`.
+- `eq_value`: The key's bytes must equal the binary-safe Lua string `value`.
+
+Each operation has `op` and `key` fields. Supported operations are:
+
+- `put`: Stores the binary-safe Lua string `value`. The optional numeric `ttl` sets the lifetime in seconds.
+- `get`: Returns the current value.
+- `delete`: Deletes the key.
+
+The `metactl` namespace provides helpers that create the same tables:
+
+- `metactl.eq_seq(key, seq)`
+- `metactl.ge_seq(key, seq)`
+- `metactl.eq_value(key, value)`
+- `metactl.put_op(key, value, ttl)`
+- `metactl.get_op(key)`
+- `metactl.delete_op(key)`
+- `metactl.new_txn(conditions, then_ops, else_ops)`
+
+```lua
+local transaction = metactl.new_txn(
+    {metactl.eq_seq("my_key", 0)},
+    {
+        metactl.put_op("my_key", "my_value", 60),
+        metactl.get_op("my_key")
+    },
+    {metactl.get_op("my_key")}
+)
 ```
 
 ## Task Handling
@@ -162,6 +255,47 @@ end)
 
 local result = task:join()
 print(result)  -- Output: task result
+```
+
+## Load Generation
+
+### metactl.ZipfGenerator:new(num_keys, alpha)
+
+Creates a Zipf-distribution load generator. A Zipf distribution models realistic key-access skew, where a small set of keys receives most of the traffic (see [Zipf's law](https://en.wikipedia.org/wiki/Zipf%27s_law)).
+
+**Parameters:**
+- `num_keys` (integer): Number of distinct keys in the dataset. Defaults to `1000`.
+- `alpha` (number): Zipf exponent; higher values skew the distribution more toward low indices. Defaults to `1.0`.
+
+**Returns:**
+- A generator object exposing the `generate_key_index` method, plus the readable fields `num_keys` and `alpha`.
+
+**Example:**
+```lua
+local zipf = metactl.ZipfGenerator:new(1000000, 1.2)
+```
+
+### zipf:generate_key_index(x)
+
+Maps a uniform sample to a Zipf-distributed key index using an O(1) transformation (no lookup table).
+
+**Parameters:**
+- `x` (number): A uniform sample in `[0, 1)`, typically from `math.random()`.
+
+**Returns:**
+- An integer key index, biased toward low values. `x = 0` returns `1`, and the index increases monotonically with `x`.
+
+For `x` close to `1` the result can exceed `num_keys`. Clamp with `math.min` when a strict upper bound is required.
+
+**Example:**
+```lua
+local zipf = metactl.ZipfGenerator:new(1000000, 1.2)
+
+-- Generate a Zipf-distributed access sequence
+for i = 1, 10 do
+    local index = math.min(zipf.num_keys, zipf:generate_key_index(math.random()))
+    print(index)
+end
 ```
 
 ## Usage Patterns
@@ -248,7 +382,7 @@ The meta service returns structured data that can be processed using `metactl.to
 
 ## Best Practices
 
-1. **Always check for errors**: Both `get` and `upsert` operations can fail
+1. **Always check for errors**: `get`, `upsert`, and `transaction` operations can fail
 2. **Handle NULL values**: Use `metactl.NULL` comparison for missing keys
 3. **Use concurrent operations**: Leverage `metactl.spawn()` for parallel processing
 4. **Format output**: Use `metactl.to_string()` for readable data display
@@ -256,7 +390,13 @@ The meta service returns structured data that can be processed using `metactl.to
 
 ## Examples
 
-See the test files in `tests/metactl/subcommands/` for comprehensive usage examples:
-- `cmd_lua_grpc.py` - Basic gRPC operations
-- `cmd_lua_spawn_grpc.py` - Concurrent gRPC operations
-- `cmd_lua_spawn_concurrent.py` - Task spawning patterns
+See the Lua test scripts in `src/meta/control/tests/it/lua/` for comprehensive
+usage examples:
+- `test_grpc_kv.lua` - Basic gRPC operations
+- `test_transaction.lua` - Atomic conditional transactions
+- `test_spawn.lua` - Task spawning and concurrent gRPC operations
+- `test_sleep.lua` - Async sleep
+- `test_to_string.lua` - `metactl.to_string` rendering rules
+
+The CLI surface of `databend-metactl lua` (file and stdin input) is covered by
+`tests/metactl/subcommands/cmd_lua.py`.

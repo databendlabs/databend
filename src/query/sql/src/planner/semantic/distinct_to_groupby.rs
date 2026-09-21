@@ -47,21 +47,22 @@ impl DistinctToGroupBy {
         if group_by.is_none() && select_list.len() == 1 && from.len() == 1 {
             if let databend_common_ast::ast::SelectTarget::AliasedExpr {
                 expr:
-                    box Expr::FunctionCall {
+                    deref!(Expr::FunctionCall {
                         span,
-                        func:
-                            FunctionCall {
-                                distinct,
-                                name,
-                                args,
-                                window,
-                                ..
-                            },
-                    },
+                        func: FunctionCall {
+                            distinct,
+                            name,
+                            args,
+                            order_by,
+                            filter,
+                            window,
+                            ..
+                        },
+                    }),
                 alias,
             } = &select_list[0]
             {
-                if window.is_some() {
+                if filter.is_some() || !order_by.is_empty() || window.is_some() {
                     return;
                 }
                 let sub_query_name = "_distinct_group_by_subquery";
@@ -146,6 +147,7 @@ impl DistinctToGroupBy {
                                     }],
                                     params: vec![],
                                     order_by: vec![],
+                                    filter: None,
                                     window: None,
                                     lambda: None,
                                 },

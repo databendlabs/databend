@@ -31,6 +31,7 @@ use crate::physical_plans::DeriveHandle;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::ExchangeSink;
 use crate::physical_plans::ExchangeSource;
+use crate::physical_plans::FusePrune;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MaterializedCTE;
 use crate::physical_plans::MutationSource;
@@ -59,18 +60,13 @@ use crate::sessions::TableContextSettings;
 pub struct Fragmenter {
     ctx: Arc<QueryContext>,
     query_id: String,
-    fragments: Vec<PlanFragment>,
 }
 
 impl Fragmenter {
     pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
         let query_id = ctx.get_id();
 
-        Ok(Self {
-            ctx,
-            fragments: vec![],
-            query_id,
-        })
+        Ok(Self { ctx, query_id })
     }
 
     /// Get ids of executor nodes.
@@ -111,12 +107,22 @@ impl Fragmenter {
             fragment_id: self.ctx.fragment_id().next_fragment_id(),
             exchange: None,
             query_id: self.query_id.clone(),
-            source_fragments: self.fragments,
+            has_merge_input: false,
         });
 
         let edges = Self::collect_fragments_edge(fragments.values());
 
         for (source, target) in edges {
+            let has_merge_input = fragments
+                .get(&source)
+                .is_some_and(|fragment| matches!(fragment.exchange, Some(DataExchange::Merge(_))));
+
+            if has_merge_input {
+                if let Some(fragment) = fragments.get_mut(&target) {
+                    fragment.has_merge_input = true;
+                }
+            }
+
             let Some(fragment) = fragments.get_mut(&source) else {
                 continue;
             };
@@ -174,7 +180,7 @@ impl Fragmenter {
             let mut visitor = EdgeVisitor::create(fragment.fragment_id);
             fragment.plan.visit(&mut visitor).unwrap();
             if let Some(v) = visitor.as_any().downcast_mut::<EdgeVisitor>() {
-                edges.extend(v.take().into_iter())
+                edges.extend(v.take())
             }
         }
 
@@ -317,9 +323,9 @@ impl DeriveHandle for FragmentDeriveHandle {
                 plan,
                 exchange,
                 fragment_type,
-                source_fragments: vec![],
                 fragment_id: source_fragment_id,
                 query_id: self.query_id.clone(),
+                has_merge_input: false,
             };
 
             self.fragments.insert(source_fragment_id, source_fragment);
@@ -354,7 +360,7 @@ impl DeriveHandle for FragmentDeriveHandle {
                 fragment_id,
                 exchange: None,
                 query_id: self.query_id.clone(),
-                source_fragments: vec![],
+                has_merge_input: false,
             };
 
             self.fragments.insert(fragment_id, fragment);
@@ -388,6 +394,10 @@ impl PhysicalPlanVisitor for FragmentTypeVisitor {
         }
 
         if TableScan::check_physical_plan(v) {
+            self.fragment_type = FragmentType::Source;
+        }
+
+        if FusePrune::check_physical_plan(v) {
             self.fragment_type = FragmentType::Source;
         }
 

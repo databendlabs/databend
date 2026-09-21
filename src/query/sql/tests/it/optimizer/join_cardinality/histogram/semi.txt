@@ -1,0 +1,60 @@
+=== semi_join_cardinality_and_histogram_finish ===
+description: SEMI joins cap cardinality with the preserved side and keep only that side's usable histogram.
+
+case          : left_semi_join_overlap
+description   : Join-key histograms overlap, so the inner estimate has non-zero matches when this join type uses it.
+left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=present
+right stats   : rows=26, min=1, max=5, ndv=4, histogram_input=present
+query         : right_semi_join
+sql           : SELECT * FROM l RIGHT SEMI JOIN r ON l.k = r.k
+join          : LEFT SEMI cardinality=19.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=19.000, ndv=3.000, buckets=[1..1:5.000/1.000, 3..3:6.000/1.000, 5..5:8.000/1.000]
+
+case          : left_semi_join_selective_overlap
+description   : A selective point histogram preserves the matched row mass of the points present on both sides.
+left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=present
+right stats   : rows=1614, min=3, max=9, ndv=4, histogram_input=present
+query         : right_semi_join
+sql           : SELECT * FROM l RIGHT SEMI JOIN r ON l.k = r.k
+join          : LEFT SEMI cardinality=14.000
+stat          : l.k (#0) min=3, max=5, ndv=2.000, null=0.000, histogram=none
+stat          : r.k (#2) min=3, max=5, ndv=2.000, null=0.000, histogram=rows=14.000, ndv=2.000, buckets=[3..3:6.000/1.000, 5..5:8.000/1.000]
+
+case          : left_semi_join_large_synthetic_partial_overlap
+description   : A dense partial overlap combines histogram row mass with full support occupancy in the overlapping range.
+left stats    : rows=1000000, min=0, max=9999, ndv=10000, histogram_input=missing
+right stats   : rows=1000000, min=5000, max=14999, ndv=10000, histogram_input=missing
+query         : right_semi_join
+sql           : SELECT * FROM l RIGHT SEMI JOIN r ON l.k = r.k
+join          : LEFT SEMI cardinality=500000.000
+stat          : l.k (#0) min=5000, max=9999, ndv=5000.000, null=0.000, histogram=none
+stat          : r.k (#2) min=5000, max=9999, ndv=5000.000, null=0.000, histogram=rows=500000.000, ndv=5000.000, bucket_count=50, buckets=[5000..5099:10000.000/100.000, 5100..5199:10000.000/100.000, 5200..5299:10000.000/100.000, ..., 9700..9799:10000.000/100.000, 9800..9899:10000.000/100.000, 9900..9999:10000.000/100.000]
+
+case          : left_semi_join_no_overlap
+description   : Join-key histograms do not overlap, so the inner estimate is zero before join-type rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=present
+right stats   : rows=26, min=20, max=23, ndv=4, histogram_input=present
+query         : right_semi_join
+sql           : SELECT * FROM l RIGHT SEMI JOIN r ON l.k = r.k
+join          : LEFT SEMI cardinality=0.000
+
+case          : right_semi_join_overlap
+description   : Join-key histograms overlap, so the inner estimate has non-zero matches when this join type uses it.
+left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=present
+right stats   : rows=26, min=1, max=5, ndv=4, histogram_input=present
+query         : left_semi_join
+sql           : SELECT * FROM l LEFT SEMI JOIN r ON l.k = r.k
+join          : RIGHT SEMI cardinality=9.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=9.000, ndv=3.000, buckets=[1..1:2.000/1.000, 3..3:4.000/1.000, 5..5:3.000/1.000]
+stat          : r.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+
+case          : exists_no_overlap
+description   : Join-key histograms do not overlap, so the inner estimate is zero before join-type rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3, histogram_input=present
+right stats   : rows=26, min=20, max=23, ndv=4, histogram_input=present
+query         : exists
+sql           : SELECT * FROM l WHERE EXISTS (SELECT 1 FROM r WHERE l.k = r.k)
+join          : RIGHT SEMI cardinality=0.000
+
+

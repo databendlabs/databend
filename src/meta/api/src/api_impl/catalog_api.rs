@@ -33,7 +33,6 @@ use log::debug;
 
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
-use crate::name_id_value_api::CreateIdValueMode;
 use crate::name_id_value_api::CreateIdValueResult;
 use crate::name_id_value_api::NameIdValueApi;
 use crate::serialize_struct;
@@ -59,13 +58,13 @@ where
     ) -> Result<Result<CatalogId, SeqV<CatalogId>>, KVAppError> {
         debug!(name_ident :? =(&name_ident), meta :? = meta; "SchemaApi: {}", func_name!());
 
-        let name_ident_raw = serialize_struct(&CatalogNameIdentRaw::from(name_ident))?;
+        let name_ident_raw = serialize_struct(&CatalogNameIdentRaw::from(name_ident));
 
         let res = match self
             .create_id_value(
                 name_ident,
                 meta,
-                CreateIdValueMode::CreateOnly,
+                false,
                 |id| {
                     vec![(
                         CatalogIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key(),

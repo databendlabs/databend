@@ -18,42 +18,40 @@ databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-common-io = { workspace = true }
+databend-common-vector = { workspace = true }
+databend-storages-common-io = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 
 anyerror = { workspace = true }
 arrow-ipc = { workspace = true }
 arrow-schema = { workspace = true }
+async-trait = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
 bitvec = { workspace = true }
 bytemuck = { workspace = true }
 bytes = { workspace = true }
 cbordata = { workspace = true }
-crc32fast = { workspace = true }
 fastrace = { workspace = true }
 feistel-permutation-rs = { workspace = true }
 geo = { workspace = true }
-geozero = { workspace = true }
-goldenfile = { workspace = true }
 itertools = { workspace = true }
 jsonb = { workspace = true }
-levenshtein_automata = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }
 num-traits = { workspace = true }
 num_cpus = { workspace = true }
+opendal = { workspace = true }
 ordered-float = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
 rand = { workspace = true }
 rayon = { workspace = true }
-roaring = { workspace = true }
 self_cell = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tantivy = { workspace = true }
 tantivy-common = { workspace = true }
-tantivy-fst = { workspace = true }
 thiserror = { workspace = true }
 unicase = { workspace = true }
 xorf = { workspace = true }
@@ -62,14 +60,18 @@ zerocopy = { workspace = true }
 
 [dev-dependencies]
 databend-common-base = { workspace = true }
-databend-common-sql-test-support = { workspace = true }
+databend-common-expression-test-support = { workspace = true }
 
 anyhow = { workspace = true }
 divan = { workspace = true }
-rand = { workspace = true }
+goldenfile = { workspace = true }
 
 [[bench]]
 name = "build_from_block"
+harness = false
+
+[[bench]]
+name = "range_index_apply"
 harness = false
 
 [lints]

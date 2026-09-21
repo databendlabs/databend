@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Query futures contain deeply nested async binder and executor calls.
+#![recursion_limit = "256"]
 #![allow(
     clippy::collapsible_if,
     clippy::let_and_return,
@@ -20,10 +22,11 @@
 
 pub mod attach_table;
 pub mod data_mask;
+pub mod data_sharing;
 pub mod enterprise_services;
 pub mod fail_safe;
-pub mod hilbert_clustering;
 pub mod license;
+pub mod materialized_view;
 pub mod resource_management;
 pub mod row_access_policy;
 pub mod storage_encryption;
@@ -31,7 +34,6 @@ pub mod storages;
 pub mod stream;
 pub mod table_ref;
 pub mod test_kits;
-pub mod virtual_column;
 
 /// Convert a meta service error to an ErrorCode.
 pub(crate) fn meta_service_error(

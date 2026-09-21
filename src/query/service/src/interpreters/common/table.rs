@@ -48,11 +48,32 @@ pub fn check_referenced_computed_columns(
                     return Err(ErrorCode::ColumnReferencedByComputedColumn(format!(
                         "column `{}` is referenced by computed column `{}`",
                         column,
-                        &f.name()
+                        f.name()
                     )));
                 }
             }
         }
     }
     Ok(())
+}
+
+pub fn stored_computed_column_references(
+    ctx: Arc<dyn TableContext>,
+    schema: DataSchemaRef,
+    column: &str,
+) -> Result<bool> {
+    for field in schema.fields() {
+        let Some(ComputedExpr::Stored(sql)) = field.computed_expr() else {
+            continue;
+        };
+        let expr = parse_computed_expr(ctx.clone(), schema.clone(), sql)?;
+        if expr
+            .column_refs()
+            .keys()
+            .any(|binding| binding.column_name == column)
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }

@@ -13,8 +13,10 @@
 // limitations under the License.
 
 mod arrow_file;
+mod avro_file;
 mod column_based;
-mod lance_dataset;
+mod file_size;
+mod orc_file;
 mod output;
 mod parquet_file;
 mod partition;
@@ -23,6 +25,7 @@ mod row_based_file;
 mod stage_sink_table;
 
 pub(crate) use arrow_file::append_data_to_arrow_files;
-pub(crate) use lance_dataset::append_data_to_lance_dataset;
+pub(crate) use avro_file::append_data_to_avro_files;
+pub(crate) use orc_file::append_data_to_orc_files;
 pub use output::UnloadOutput;
 pub use stage_sink_table::StageSinkTable;

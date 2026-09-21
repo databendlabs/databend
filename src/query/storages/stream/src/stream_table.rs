@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::sync::Arc;
-use std::time::Instant;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::StorageDescription;
@@ -31,36 +30,31 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BASE_BLOCK_IDS_COLUMN_ID;
-use databend_common_expression::BASE_ROW_ID_COLUMN_ID;
+use databend_common_expression::CHANGE_ROW_ID_COLUMN_ID;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::io::MetaReaders;
-use databend_common_storages_fuse::io::SnapshotHistoryReader;
-use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::operations::StreamBacklog;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_SHARED_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 use databend_storages_common_table_meta::table::StreamMode;
-use futures::TryStreamExt;
 
 pub const STREAM_ENGINE: &str = "STREAM";
-
-pub enum StreamStatus {
-    MayHaveData,
-    NoData,
-}
 
 pub struct StreamTable {
     info: TableInfo,
@@ -108,12 +102,18 @@ impl StreamTable {
     }
 
     pub async fn source_table(&self, ctx: Arc<dyn TableContext>) -> Result<Arc<dyn Table>> {
+        if self.source_shared_database_id()?.is_some() {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(ctx.get_license_key(), Feature::DataSharing)?;
+        }
         let source = if let Some(source) = &self.source_table {
             source.clone()
         } else {
             let catalog = ctx.get_catalog(self.info.catalog()).await?;
             let source_table_name = self.source_table_name(catalog.as_ref()).await?;
-            let source_database_name = self.source_database_name(catalog.as_ref()).await?;
+            let source_database_name = self
+                .source_database_name(catalog.as_ref(), &ctx.get_tenant())
+                .await?;
             ctx.get_table(
                 self.info.catalog(),
                 &source_database_name,
@@ -142,6 +142,7 @@ impl StreamTable {
         source_db_name: &str,
         source_tb_name: &str,
         batch_limit: Option<u64>,
+        enable_snapshot_forward_scan: bool,
         s3_storage_class: S3StorageClass,
     ) -> Result<Arc<dyn Table>> {
         let stream_desc = &self.info.desc;
@@ -149,6 +150,12 @@ impl StreamTable {
             .get_table(tenant, source_db_name, source_tb_name)
             .await
             .map_err(|err| {
+                if matches!(
+                    err.code(),
+                    ErrorCode::LICENSE_KEY_INVALID | ErrorCode::LICENSE_KEY_EXPIRED
+                ) {
+                    return err;
+                }
                 ErrorCode::IllegalStream(format!(
                     "Cannot get base table '{}'.'{}' from stream {}, cause: {}",
                     source_db_name,
@@ -173,57 +180,20 @@ impl StreamTable {
         let fuse_table = FuseTable::try_from_table(source.as_ref())?;
         fuse_table.check_changes_valid(source_desc, self.offset()?)?;
 
-        let (base_row_count, base_timsestamp) = if let Some(base_loc) = self.snapshot_loc() {
-            let base = fuse_table.changes_read_offset_snapshot(&base_loc).await?;
-            (base.summary.row_count, base.timestamp)
-        } else {
-            (0, None)
-        };
-
-        let Some(location) = fuse_table.snapshot_loc() else {
+        let Some((batch_table, _)) = fuse_table
+            .find_stream_batch_snapshot(
+                self.snapshot_loc().as_ref(),
+                &self.mode(),
+                batch_limit,
+                enable_snapshot_forward_scan,
+                s3_storage_class,
+            )
+            .await?
+        else {
             return Ok(source);
         };
-        let snapshot_version = TableMetaLocationGenerator::snapshot_version(location.as_str());
-        let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
-        let mut snapshot_stream = reader.snapshot_history(
-            location,
-            snapshot_version,
-            fuse_table.meta_location_generator().clone(),
-        );
 
-        let mut instant = None;
-        let start = Instant::now();
-        while let Some(snapshot_with_version) = snapshot_stream.try_next().await? {
-            if snapshot_with_version.0.timestamp <= base_timsestamp {
-                break;
-            }
-
-            let change_row_count = snapshot_with_version
-                .0
-                .summary
-                .row_count
-                .abs_diff(base_row_count);
-            instant = Some(snapshot_with_version);
-            if change_row_count <= batch_limit {
-                break;
-            }
-        }
-        log::info!(
-            "Stream {} traversed the snapshot history of source table {}, cost:{:?}",
-            stream_desc,
-            source_desc,
-            start.elapsed(),
-        );
-
-        if let Some((snapshot, format_version)) = instant {
-            Ok(fuse_table.load_table_by_snapshot(
-                snapshot.as_ref(),
-                format_version,
-                s3_storage_class,
-            )?)
-        } else {
-            Ok(source)
-        }
+        Ok(batch_table)
     }
 
     pub fn max_batch_size(&self) -> Option<u64> {
@@ -274,7 +244,18 @@ impl StreamTable {
             })
     }
 
+    pub fn source_shared_database_id(&self) -> Result<Option<u64>> {
+        self.info
+            .options()
+            .get(OPT_KEY_SOURCE_SHARED_DATABASE_ID)
+            .map(|id| id.parse::<u64>().map_err(ErrorCode::from))
+            .transpose()
+    }
+
     pub async fn source_database_id(&self, catalog: &dyn Catalog) -> Result<u64> {
+        if let Some(id) = self.source_shared_database_id()? {
+            return Ok(id);
+        }
         let source_db_id_opt = self
             .info
             .options()
@@ -306,9 +287,25 @@ impl StreamTable {
         Ok(source_db_id)
     }
 
-    pub async fn source_database_name(&self, catalog: &dyn Catalog) -> Result<String> {
+    pub async fn source_database_name(
+        &self,
+        catalog: &dyn Catalog,
+        tenant: &Tenant,
+    ) -> Result<String> {
         let source_db_id = self.source_database_id(catalog).await?;
-        catalog.get_db_name_by_id(source_db_id).await
+        let name = catalog.get_db_name_by_id(source_db_id).await?;
+        if self.source_shared_database_id()?.is_some() {
+            // Dropped database IDs retain their name mapping. A same-name replacement
+            // can expose the same provider table, so checking the table ID is insufficient.
+            let database = catalog.get_database(tenant, &name).await?;
+            if database.get_db_info().database_id.db_id != source_db_id {
+                return Err(ErrorCode::IllegalStream(format!(
+                    "Base database '{}' (id: {}) dropped, cannot read from stream {}",
+                    name, source_db_id, self.info.desc,
+                )));
+            }
+        }
+        Ok(name)
     }
 
     #[async_backtrace::framed]
@@ -327,15 +324,30 @@ impl StreamTable {
             .await
     }
 
-    #[fastrace::trace]
-    pub async fn check_stream_status(&self, ctx: Arc<dyn TableContext>) -> Result<StreamStatus> {
-        let base_table = self.source_table(ctx).await?;
-        let status = if base_table.get_table_info().ident.seq == self.offset()? {
+    pub fn check_stream_status(
+        &self,
+        source_seq: u64,
+        source_snapshot_loc: Option<&str>,
+    ) -> Result<StreamStatus> {
+        // Enabling change tracking may advance only the source metadata sequence. Equal snapshot
+        // locations still represent the same data boundary and must not report pending data.
+        let at_same_data_boundary =
+            source_seq == self.offset()? || source_snapshot_loc == self.snapshot_loc().as_deref();
+        let status = if at_same_data_boundary {
             StreamStatus::NoData
         } else {
             StreamStatus::MayHaveData
         };
         Ok(status)
+    }
+
+    #[fastrace::trace]
+    pub async fn stream_backlog(&self, ctx: Arc<dyn TableContext>) -> Result<StreamBacklog> {
+        let table = self.source_table(ctx.clone()).await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        fuse_table
+            .stream_backlog(ctx, &self.mode(), &self.snapshot_loc(), self.offset()?)
+            .await
     }
 }
 
@@ -353,8 +365,14 @@ impl Table for StreamTable {
         &self.info
     }
 
+    fn stream_source_table_info(&self) -> Option<&TableInfo> {
+        self.source_table
+            .as_ref()
+            .map(|table| table.get_table_info())
+    }
+
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {
-        (BASE_BLOCK_IDS_COLUMN_ID..=BASE_ROW_ID_COLUMN_ID).contains(&column_id)
+        (BASE_BLOCK_IDS_COLUMN_ID..=CHANGE_ROW_ID_COLUMN_ID).contains(&column_id)
     }
 
     /// whether column prune(projection) can help in table read
@@ -435,7 +453,7 @@ impl Table for StreamTable {
         let quote = ctx.get_settings().get_sql_dialect()?.default_ident_quote();
         let table_desc =
             format!("{quote}{database_name}{quote}.{quote}{table_name}{quote}{with_options}");
-        fuse_table
+        let changes_query = fuse_table
             .get_changes_query(
                 ctx,
                 &self.mode(),
@@ -443,6 +461,38 @@ impl Table for StreamTable {
                 table_desc,
                 self.offset()?,
             )
-            .await
+            .await?;
+        Ok(changes_query.query)
     }
+}
+
+pub enum StreamStatus {
+    MayHaveData,
+    NoData,
+}
+
+pub(crate) fn extract_fully_qualified_stream_name(
+    ctx: &dyn TableContext,
+    target: &str,
+) -> Result<(String, String, String)> {
+    let stream_name_vec: Vec<&str> = target.split('.').collect();
+    let (catalog, database, stream) = match stream_name_vec.as_slice() {
+        [stream] => (
+            ctx.get_current_catalog(),
+            ctx.get_current_database(),
+            (*stream).to_owned(),
+        ),
+        [db, stream] => (
+            ctx.get_current_catalog(),
+            (*db).to_owned(),
+            (*stream).to_owned(),
+        ),
+        [cat, db, stream] => ((*cat).to_owned(), (*db).to_owned(), (*stream).to_owned()),
+        _ => {
+            return Err(ErrorCode::BadArguments(
+                "Invalid stream name. Use the format '[catalog.][database.]stream'",
+            ));
+        }
+    };
+    Ok((catalog, database, stream))
 }

@@ -24,13 +24,13 @@ use std::time::Instant;
 use backoff::ExponentialBackoff;
 use backoff::backoff::Backoff;
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::VirtualDataSchema;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableInfo;
@@ -46,11 +46,13 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::TruncateMode;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 use databend_storages_common_table_meta::meta::BlockHLL;
-use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::BlockTopN;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use log::debug;
 use log::error;
@@ -60,18 +62,18 @@ use opendal::Operator;
 use crate::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use crate::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use crate::FuseTable;
+use crate::io::MetaWriter;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::AppendGenerator;
 use crate::operations::CommitMeta;
 use crate::operations::ConflictResolveContext;
 use crate::operations::MutationGenerator;
 use crate::operations::SnapshotGenerator;
-use crate::operations::TransformMergeCommitMeta;
 use crate::operations::TruncateGenerator;
-use crate::operations::VirtualSchemaMode;
 use crate::operations::set_backoff;
 use crate::operations::set_compaction_num_block_hint;
 use crate::statistics::TableStatsGenerator;
+use crate::statistics::stamp_table_statistics_with_snapshot_predecessor;
 
 enum State {
     None,
@@ -80,13 +82,15 @@ enum State {
     GenerateSnapshot {
         previous: Option<Arc<TableSnapshot>>,
         table_stats_gen: TableStatsGenerator,
-        cluster_key_meta: Option<ClusterKey>,
+        cluster_key_info: Option<ClusterKeyInfo>,
         table_info: TableInfo,
     },
     TryCommit {
+        logical_delta: (u64, u64),
         data: Vec<u8>,
         snapshot: TableSnapshot,
         table_info: TableInfo,
+        table_statistics: Option<TableSnapshotStatistics>,
     },
     Abort(ErrorCode),
     Finish,
@@ -111,12 +115,11 @@ pub struct CommitSink<F: SnapshotGenerator> {
     backoff: ExponentialBackoff,
 
     new_segment_locs: Vec<Location>,
-    new_virtual_schema: Option<VirtualDataSchema>,
-    new_virtual_schema_mode: VirtualSchemaMode,
     start_time: Instant,
     prev_snapshot_id: Option<SnapshotId>,
-    insert_hll: BlockHLL,
-    insert_rows: u64,
+    statistics_hll: BlockHLL,
+    insert_top_n: BlockTopN,
+    statistics_rows: u64,
     enable_auto_analyze: bool,
 
     change_tracking: bool,
@@ -128,6 +131,9 @@ pub struct CommitSink<F: SnapshotGenerator> {
     // We still need to read the previous snapshot before deciding to skip the commit,
     // because new tables must record their first snapshot even for empty writes.
     pending_noop_commit: bool,
+    // Recluster may rewrite disjoint segment sets concurrently. Serialize only the final
+    // refresh, sequence validation, and metadata CAS.
+    acquire_commit_lock: bool,
 }
 
 #[derive(Debug)]
@@ -151,6 +157,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
         prev_snapshot_id: Option<SnapshotId>,
         deduplicated_label: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
+        acquire_commit_lock: bool,
     ) -> Result<ProcessorPtr> {
         let purge_mode = Self::purge_mode(ctx.as_ref(), table, &snapshot_gen)?;
         let enable_auto_analyze = Self::enable_auto_analyze(ctx.clone(), table, &snapshot_gen);
@@ -178,10 +185,9 @@ where F: SnapshotGenerator + Send + Sync + 'static
             max_retry_elapsed,
             input,
             new_segment_locs: vec![],
-            new_virtual_schema: None,
-            new_virtual_schema_mode: VirtualSchemaMode::Merge,
-            insert_hll: HashMap::new(),
-            insert_rows: 0,
+            statistics_hll: HashMap::new(),
+            insert_top_n: HashMap::new(),
+            statistics_rows: 0,
             start_time: Instant::now(),
             enable_auto_analyze,
             prev_snapshot_id,
@@ -191,6 +197,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
             table_meta_timestamps,
             vacuum_handler,
             pending_noop_commit: false,
+            acquire_commit_lock,
         })))
     }
 
@@ -201,7 +208,9 @@ where F: SnapshotGenerator + Send + Sync + 'static
     ) -> Result<Option<PurgeMode>> {
         let mode = if Self::need_to_purge_all_history(table, snapshot_gen) {
             Some(PurgeMode::PurgeAllHistory)
-        } else if Self::is_auto_vacuum_enabled(ctx, table)? {
+        } else if snapshot_gen.skip_auto_vacuum() {
+            None
+        } else if is_auto_vacuum_enabled(ctx, table)? {
             Some(PurgeMode::PurgeAccordingToRetention)
         } else {
             None
@@ -239,23 +248,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         | MutationKind::Replace
                 )
             })
-    }
-
-    fn is_auto_vacuum_enabled(ctx: &dyn TableContext, table: &FuseTable) -> Result<bool> {
-        // Priority for auto vacuum:
-        // - If table-level option `FUSE_OPT_KEY_ENABLE_AUTO_VACUUM` is set, it takes precedence
-        // - If table-level option is not set, fall back to the setting
-        match table
-            .table_info
-            .options()
-            .get(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)
-        {
-            Some(v) => {
-                let enabled = v.parse::<u32>()? != 0;
-                Ok(enabled)
-            }
-            None => ctx.get_settings().get_enable_auto_vacuum(),
-        }
     }
 
     fn is_error_recoverable(&self, e: &ErrorCode) -> bool {
@@ -298,27 +290,28 @@ where F: SnapshotGenerator + Send + Sync + 'static
         let CommitMeta {
             conflict_resolve_context,
             new_segment_locs,
-            virtual_schema,
-            virtual_schema_mode,
+            logical_updated_rows,
+            logical_deleted_rows,
             hll,
+            top_n,
             ..
         } = meta;
 
         let has_new_segments = !new_segment_locs.is_empty();
-        let has_virtual_schema =
-            virtual_schema.is_some() || matches!(virtual_schema_mode, VirtualSchemaMode::Replace);
-        let has_hll = !hll.is_empty();
+        let statistics_rows = conflict_resolve_context.logical_insert_rows(logical_deleted_rows)
+            + logical_updated_rows;
+        let has_hll = statistics_rows > 0 && !hll.is_empty();
+        let has_top_n = !top_n.is_empty();
+        let is_append_only_txn = self.is_append_only_txn();
+        let should_preserve_statistics_rows =
+            has_hll || has_top_n || (has_new_segments && is_append_only_txn);
 
         self.new_segment_locs = new_segment_locs;
 
-        self.new_virtual_schema = virtual_schema;
-        self.new_virtual_schema_mode = virtual_schema_mode;
-
-        if has_hll {
-            let binding = self.ctx.mutation_state().mutation_status();
-            let status = binding.read().unwrap();
-            self.insert_rows = status.insert_rows + status.update_rows;
-            self.insert_hll = hll;
+        if should_preserve_statistics_rows {
+            self.statistics_rows = statistics_rows;
+            self.statistics_hll = hll;
+            self.insert_top_n = top_n;
         }
 
         self.backoff = set_backoff(None, None, self.max_retry_elapsed);
@@ -329,13 +322,15 @@ where F: SnapshotGenerator + Send + Sync + 'static
         self.pending_noop_commit = Self::should_skip_commit(
             &conflict_resolve_context,
             has_new_segments,
-            has_virtual_schema,
             has_hll,
+            has_top_n,
             self.allow_append_only_skip(),
         );
 
         self.snapshot_gen
             .set_conflict_resolve_context(conflict_resolve_context);
+        self.snapshot_gen
+            .set_logical_change_delta(logical_updated_rows, logical_deleted_rows);
 
         self.state = State::FillDefault;
 
@@ -356,11 +351,11 @@ where F: SnapshotGenerator + Send + Sync + 'static
     fn should_skip_commit(
         ctx: &ConflictResolveContext,
         has_new_segments: bool,
-        has_virtual_schema: bool,
         has_new_hll: bool,
+        has_new_top_n: bool,
         allow_append_only_skip: bool,
     ) -> bool {
-        if has_new_segments || has_virtual_schema || has_new_hll {
+        if has_new_segments || has_new_hll || has_new_top_n {
             return false;
         }
 
@@ -389,6 +384,16 @@ where F: SnapshotGenerator + Send + Sync + 'static
             .as_any()
             .downcast_ref::<AppendGenerator>()
             .is_some()
+    }
+
+    fn has_insert_top_n_input(&self) -> bool {
+        // Transaction commits may collapse intermediate snapshot lineage, so keep append TopN
+        // refresh to autocommit inserts until transaction stats invalidation is defined.
+        self.snapshot_gen
+            .as_any()
+            .downcast_ref::<AppendGenerator>()
+            .is_some_and(|g| !g.is_overwrite())
+            && !self.ctx.txn_mgr().lock().is_active()
     }
 
     /// Append-only inserts (e.g. `INSERT INTO t SELECT ...`) may skip committing if nothing was
@@ -472,8 +477,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
         match std::mem::replace(&mut self.state, State::None) {
             State::GenerateSnapshot {
                 previous,
-                table_stats_gen,
-                cluster_key_meta,
+                mut table_stats_gen,
+                cluster_key_info,
                 table_info,
             } => {
                 let change_tracking_enabled_during_commit = {
@@ -504,20 +509,27 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 //    in this case, we only need standard conflict resolution.
                 // therefore, we can safely proceed.
 
+                let mut table_statistics = table_stats_gen.take_table_statistics();
+                let logical_delta = self.snapshot_gen.logical_change_delta(&previous);
                 match self.snapshot_gen.generate_new_snapshot(
                     &table_info,
-                    cluster_key_meta,
-                    self.table.cluster_type(),
+                    cluster_key_info,
                     previous,
                     self.ctx.txn_mgr(),
                     self.table_meta_timestamps,
                     table_stats_gen,
                 ) {
                     Ok(snapshot) => {
+                        stamp_table_statistics_with_snapshot_predecessor(
+                            &mut table_statistics,
+                            &snapshot,
+                        );
                         self.state = State::TryCommit {
+                            logical_delta,
                             data: snapshot.to_bytes()?,
                             snapshot,
                             table_info,
+                            table_statistics,
                         };
                     }
                     Err(e) => {
@@ -579,15 +591,14 @@ where F: SnapshotGenerator + Send + Sync + 'static
 
                 // save current table info when commit to meta server
                 // if table_id not match, update table meta will fail
-                let mut table_info = fuse_table.table_info.clone();
-                // merge virtual schema
-                let old_virtual_schema = std::mem::take(&mut table_info.meta.virtual_schema);
-                let merged_virtual_schema = TransformMergeCommitMeta::apply_virtual_schema(
-                    old_virtual_schema,
-                    self.new_virtual_schema.clone(),
-                    self.new_virtual_schema_mode,
-                );
-                table_info.meta.virtual_schema = merged_virtual_schema;
+                let table_info = if fuse_table.table_info.meta.virtual_schema.is_some() {
+                    let mut table_info = fuse_table.table_info.clone();
+                    // The virtual schema in table meta has been deprecated
+                    table_info.meta.virtual_schema = None;
+                    table_info
+                } else {
+                    fuse_table.table_info.clone()
+                };
 
                 // check if snapshot has been changed
                 let snapshot_has_changed = self.prev_snapshot_id.is_some_and(|prev_snapshot_id| {
@@ -605,26 +616,42 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         .fill_default_values(&schema, &previous)
                         .await?;
                     let table_stats_gen = fuse_table
-                        .generate_table_stats(&previous, &self.insert_hll, self.insert_rows)
+                        .generate_table_stats(
+                            &previous,
+                            &self.statistics_hll,
+                            self.statistics_rows,
+                            &self.insert_top_n,
+                            self.has_insert_top_n_input(),
+                        )
                         .await?;
                     self.state = State::GenerateSnapshot {
                         previous,
                         table_stats_gen,
-                        cluster_key_meta: fuse_table.cluster_key_meta(),
+                        cluster_key_info: fuse_table.cluster_key_info(),
                         table_info,
                     };
                 }
             }
             State::TryCommit {
+                logical_delta,
                 data,
                 snapshot,
                 table_info,
+                table_statistics,
             } => {
                 snapshot.ensure_segments_unique()?;
                 let location = self
                     .location_gen
                     .gen_snapshot_location(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
                 self.dal.write(&location, data).await?;
+                let table_statistics_location = snapshot.table_statistics_location();
+                if let (Some(table_statistics), Some(table_statistics_location)) =
+                    (&table_statistics, &table_statistics_location)
+                {
+                    table_statistics
+                        .write_meta(&self.dal, table_statistics_location)
+                        .await?;
+                }
                 let imperfect_count =
                     snapshot.summary.block_count - snapshot.summary.perfect_block_count;
 
@@ -641,23 +668,70 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 }
 
                 let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
-                let fuse_table = FuseTable::try_from_table(self.table.as_ref())?;
-                match fuse_table
-                    .update_table_meta(
-                        self.ctx.as_ref(),
-                        catalog.clone(),
-                        &table_info,
-                        &self.location_gen,
-                        snapshot,
-                        location,
-                        &self.copied_files,
-                        &self.update_stream_meta,
-                        &self.dal,
-                        self.deduplicated_label.clone(),
-                    )
-                    .await
-                {
+                let commit_guard = if self.acquire_commit_lock {
+                    let wait_start = Instant::now();
+                    let guard = self
+                        .ctx
+                        .clone()
+                        .acquire_table_lock_by_id(
+                            table_info.catalog(),
+                            table_info.ident.table_id,
+                            &LockTableOption::LockWithRetry,
+                        )
+                        .await?;
+                    metrics_observe_maintenance_commit_gate_wait_milliseconds(
+                        wait_start.elapsed().as_millis() as u64,
+                    );
+                    guard
+                } else {
+                    None
+                };
+
+                let commit_result = async {
+                    if self.acquire_commit_lock {
+                        self.table = self.table.refresh(self.ctx.as_ref()).await?;
+                        let latest_info = self.table.get_table_info();
+                        if latest_info.meta.drop_on.is_some() {
+                            return Err(ErrorCode::InvalidOperation(format!(
+                                "table {} was dropped before maintenance commit",
+                                latest_info.ident.table_id
+                            )));
+                        }
+                        if latest_info.ident.table_id != table_info.ident.table_id
+                            || latest_info.ident.seq != table_info.ident.seq
+                        {
+                            return Err(ErrorCode::TableVersionMismatched(format!(
+                                "table changed before maintenance commit: expected {}, actual {}",
+                                table_info.ident, latest_info.ident
+                            )));
+                        }
+                    }
+
+                    FuseTable::try_from_table(self.table.as_ref())?
+                        .update_table_meta(
+                            self.ctx.as_ref(),
+                            catalog.clone(),
+                            &table_info,
+                            &self.location_gen,
+                            snapshot,
+                            location,
+                            &self.copied_files,
+                            &self.update_stream_meta,
+                            &self.dal,
+                            self.deduplicated_label.clone(),
+                        )
+                        .await
+                }
+                .await;
+                // Do not hold the commit gate during vacuum, retry backoff, or snapshot rebase.
+                drop(commit_guard);
+
+                match commit_result {
                     Ok(_) => {
+                        self.ctx
+                            .txn_mgr()
+                            .lock()
+                            .add_logical_change_delta(table_info.ident.table_id, logical_delta);
                         set_compaction_num_block_hint(
                             self.ctx.as_ref(),
                             &table_info,
@@ -734,6 +808,9 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         self.state = State::Finish;
                     }
                     Err(e) if self.is_error_recoverable(&e) => {
+                        if self.acquire_commit_lock {
+                            metrics_inc_maintenance_occ_retries();
+                        }
                         let table_info = self.table.get_table_info();
                         match self.backoff.next_backoff() {
                             Some(d) => {
@@ -781,30 +858,48 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
                 let previous = fuse_table.read_table_snapshot().await?;
                 let table_stats_gen = fuse_table
-                    .generate_table_stats(&previous, &self.insert_hll, self.insert_rows)
+                    .generate_table_stats(
+                        &previous,
+                        &self.statistics_hll,
+                        self.statistics_rows,
+                        &self.insert_top_n,
+                        self.has_insert_top_n_input(),
+                    )
                     .await?;
 
                 // save current table info when commit to meta server
                 // if table_id not match, update table meta will fail
-                let mut table_info = fuse_table.table_info.clone();
-                // merge virtual schema
-                let old_virtual_schema = std::mem::take(&mut table_info.meta.virtual_schema);
-                let merged_virtual_schema = TransformMergeCommitMeta::apply_virtual_schema(
-                    old_virtual_schema,
-                    self.new_virtual_schema.clone(),
-                    self.new_virtual_schema_mode,
-                );
-                table_info.meta.virtual_schema = merged_virtual_schema;
-
+                let table_info = if fuse_table.table_info.meta.virtual_schema.is_some() {
+                    let mut table_info = fuse_table.table_info.clone();
+                    // The virtual schema in table meta has been deprecated
+                    table_info.meta.virtual_schema = None;
+                    table_info
+                } else {
+                    fuse_table.table_info.clone()
+                };
                 self.state = State::GenerateSnapshot {
                     previous,
                     table_stats_gen,
-                    cluster_key_meta: fuse_table.cluster_key_meta(),
+                    cluster_key_info: fuse_table.cluster_key_info(),
                     table_info,
                 };
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
         Ok(())
+    }
+}
+
+pub fn is_auto_vacuum_enabled(ctx: &dyn TableContext, table: &FuseTable) -> Result<bool> {
+    // Priority for auto vacuum:
+    // - If table-level option `FUSE_OPT_KEY_ENABLE_AUTO_VACUUM` is set, it takes precedence.
+    // - If table-level option is not set, fall back to the setting.
+    match table
+        .table_info
+        .options()
+        .get(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)
+    {
+        Some(value) => Ok(value.parse::<u32>()? != 0),
+        None => ctx.get_settings().get_enable_auto_vacuum(),
     }
 }

@@ -15,6 +15,7 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use databend_base::uniq_id::GlobalUniq;
@@ -45,6 +46,7 @@ pub enum SpillerType {
     Aggregation,
     MaterializedCTE,
     ResultSet,
+    Recluster,
 }
 
 impl Display for SpillerType {
@@ -57,6 +59,7 @@ impl Display for SpillerType {
             SpillerType::Aggregation => write!(f, "Aggregation"),
             SpillerType::MaterializedCTE => write!(f, "MaterializedCTE"),
             SpillerType::ResultSet => write!(f, "ResultSet"),
+            SpillerType::Recluster => write!(f, "Recluster"),
         }
     }
 }
@@ -112,7 +115,7 @@ pub struct SpillerInner<A> {
     // for dio disabled
     pub(super) local_operator: Option<Operator>,
     pub(super) use_parquet: bool,
-    pub(super) writer_pool_bytes: usize,
+    _writer_pool_bytes: usize,
     _spiller_type: SpillerType,
 }
 
@@ -141,7 +144,7 @@ impl<A> SpillerInner<A> {
             temp_dir,
             local_operator,
             use_parquet,
-            writer_pool_bytes,
+            _writer_pool_bytes: writer_pool_bytes,
             _spiller_type: spiller_type,
         })
     }
@@ -155,7 +158,7 @@ impl<A> SpillerInner<A> {
 
         // Spill data to storage.
         let mut encoder = self.block_encoder();
-        encoder.add_blocks(data_block);
+        encoder.add_blocks(data_block)?;
         let data_size = encoder.size();
         let BlocksEncoder {
             buf,
@@ -166,7 +169,7 @@ impl<A> SpillerInner<A> {
         let location = self.write_encodes(data_size, buf).await?;
 
         // Record statistics.
-        record_write_profile(&location, &instant, data_size);
+        record_write_profile(&location, instant.elapsed(), data_size);
         let layout = columns_layout.pop().unwrap();
         Ok((location, layout, data_size))
     }
@@ -208,7 +211,7 @@ impl<A> SpillerInner<A> {
             Location::Remote(loc) => self.operator.read(loc).await?,
         };
 
-        record_read_profile(location, &instant, data.len());
+        record_read_profile(location, instant.elapsed(), data.len());
 
         deserialize_block(columns_layout, data)
     }
@@ -300,7 +303,7 @@ impl From<Location> for SpillTarget {
 
 fn record_spill_profile(
     locality: SpillTarget,
-    start: &Instant,
+    elapsed: Duration,
     bytes: usize,
     local_count: ProfileStatisticsName,
     local_bytes: ProfileStatisticsName,
@@ -313,24 +316,24 @@ fn record_spill_profile(
         SpillTarget::Local => {
             Profile::record_usize_profile(local_count, 1);
             Profile::record_usize_profile(local_bytes, bytes);
-            Profile::record_usize_profile(local_time, start.elapsed().as_millis() as usize);
+            Profile::record_usize_profile(local_time, elapsed.as_millis() as usize);
         }
         SpillTarget::Remote => {
             Profile::record_usize_profile(remote_count, 1);
             Profile::record_usize_profile(remote_bytes, bytes);
-            Profile::record_usize_profile(remote_time, start.elapsed().as_millis() as usize);
+            Profile::record_usize_profile(remote_time, elapsed.as_millis() as usize);
         }
     }
 }
 
 pub fn record_write_profile<T: Into<SpillTarget>>(
     locality: T,
-    start: &Instant,
+    elapsed: Duration,
     write_bytes: usize,
 ) {
     record_spill_profile(
         locality.into(),
-        start,
+        elapsed,
         write_bytes,
         ProfileStatisticsName::LocalSpillWriteCount,
         ProfileStatisticsName::LocalSpillWriteBytes,
@@ -341,10 +344,14 @@ pub fn record_write_profile<T: Into<SpillTarget>>(
     );
 }
 
-pub fn record_read_profile<T: Into<SpillTarget>>(locality: T, start: &Instant, read_bytes: usize) {
+pub fn record_read_profile<T: Into<SpillTarget>>(
+    locality: T,
+    elapsed: Duration,
+    read_bytes: usize,
+) {
     record_spill_profile(
         locality.into(),
-        start,
+        elapsed,
         read_bytes,
         ProfileStatisticsName::LocalSpillReadCount,
         ProfileStatisticsName::LocalSpillReadBytes,

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(
+    clippy::arc_with_non_send_sync,
     clippy::cloned_ref_to_slice_refs,
     clippy::collapsible_if,
     clippy::let_and_return,
@@ -20,12 +21,8 @@
     clippy::uninlined_format_args
 )]
 #![allow(clippy::useless_asref)]
-#![feature(type_alias_impl_trait)]
-#![feature(iter_order_by)]
-#![feature(impl_trait_in_assoc_type)]
-#![feature(int_roundings)]
-#![feature(iterator_try_reduce)]
-#![feature(box_patterns)]
+#![allow(incomplete_features)]
+#![feature(deref_patterns)]
 #![allow(clippy::large_enum_variant)]
 #![recursion_limit = "256"]
 #![feature(try_blocks)]
@@ -66,7 +63,6 @@ pub mod statistics;
 pub mod table_functions;
 
 pub use constants::*;
-use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
 pub use databend_common_catalog::table_context::TableContext;
@@ -79,6 +75,7 @@ pub use fuse_type::FuseSegmentFormat;
 pub use fuse_type::FuseStorageFormat;
 pub use fuse_type::FuseTableType;
 pub use fuse_type::segment_format_from_location;
+pub use fuse_type::unsupported_storage_format_error;
 pub use io::BlockReadResult;
 pub use pruning::SegmentLocation;
 pub use retry::commit_with_backoff;

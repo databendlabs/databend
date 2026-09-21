@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 export TEST_USER_NAME="owner"
 export TEST_USER_PASSWORD="password"
-export TEST_USER_CONNECT="bendsql_query_http_user_connect owner password -A"
+export TEST_USER_CONNECT="bendsql_connect_user owner password -A"
 
 run_root_sql "
 drop table if exists d20_0014.table2;
@@ -27,14 +27,14 @@ echo "insert into d20_0014.table1 values(1),(2),(3);" | $TEST_USER_CONNECT
 echo "select * from d20_0014.table1;" | $TEST_USER_CONNECT
 
 echo "=== test drop role ==="
-echo "select name, owner from system.tables where name in ('table1', 'table2') and database='d20_0014' order by name" | $BENDSQL_CLIENT_CONNECT
-echo "select name, owner from system.databases where name='d20_0014'" | $BENDSQL_CLIENT_CONNECT
-echo "drop role 'd20_0014_owner'" | $BENDSQL_CLIENT_CONNECT
-echo "select name, owner from system.tables where name in ('table1', 'table2') and database='d20_0014' order by name" | $BENDSQL_CLIENT_CONNECT
-echo "select name, owner from system.databases where name='d20_0014'" | $BENDSQL_CLIENT_CONNECT
-echo "create role 'd20_0014_owner'" | $BENDSQL_CLIENT_CONNECT
-echo "select name, owner from system.tables where name in ('table1', 'table2') and database='d20_0014' order by name" | $BENDSQL_CLIENT_CONNECT
-echo "select name, owner from system.databases where name='d20_0014'" | $BENDSQL_CLIENT_CONNECT
+echo "select name, owner from system.tables where name in ('table1', 'table2') and database='d20_0014' order by name" | bendsql_connect_root
+echo "select name, owner from system.databases where name='d20_0014'" | bendsql_connect_root
+echo "drop role 'd20_0014_owner'" | bendsql_connect_root
+echo "select name, owner from system.tables where name in ('table1', 'table2') and database='d20_0014' order by name" | bendsql_connect_root
+echo "select name, owner from system.databases where name='d20_0014'" | bendsql_connect_root
+echo "create role 'd20_0014_owner'" | bendsql_connect_root
+echo "select name, owner from system.tables where name in ('table1', 'table2') and database='d20_0014' order by name" | bendsql_connect_root
+echo "select name, owner from system.databases where name='d20_0014'" | bendsql_connect_root
 
 run_root_sql "
 drop role 'd20_0014_owner';

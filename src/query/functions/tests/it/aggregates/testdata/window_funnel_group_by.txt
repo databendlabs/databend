@@ -1,0 +1,100 @@
+ast: window_funnel(2)(dt, event1, event2, event3)
+evaluation (internal):
++--------+------------------------------------------------------------------+
+| Column | Data                                                             |
++--------+------------------------------------------------------------------+
+| dt     | Column(Timestamp([1, 0, 2, 3]))                                  |
+| event1 | Column(Boolean([0b____0001]))                                    |
+| event2 | Column(Boolean([0b____0000]))                                    |
+| event3 | Column(Boolean([0b____0000]))                                    |
+| Output | NullableColumn { column: UInt8([1, 0]), validity: [0b______11] } |
++--------+------------------------------------------------------------------+
+
+
+ast: window_funnel(2)(dt_uint64, event1_uint64, event2_uint64, event3_uint64)
+evaluation (internal):
++---------------+------------------------------------------------------------------+
+| Column        | Data                                                             |
++---------------+------------------------------------------------------------------+
+| dt_uint64     | Column(UInt64([0, 1, 2, 3, 4]))                                  |
+| event1_uint64 | Column(Boolean([0b___00001]))                                    |
+| event2_uint64 | Column(Boolean([0b___00010]))                                    |
+| event3_uint64 | Column(Boolean([0b___00100]))                                    |
+| Output        | NullableColumn { column: UInt8([1, 0]), validity: [0b______11] } |
++---------------+------------------------------------------------------------------+
+
+
+ast: window_funnel(2)(dt_nullable, event1_nullable, event2, event3_nullable)
+evaluation (internal):
++-----------------+------------------------------------------------------------------------------------+
+| Column          | Data                                                                               |
++-----------------+------------------------------------------------------------------------------------+
+| dt_nullable     | Column(NullableColumn { column: UInt64([0, 1, 2, 3, 4]), validity: [0b___11011] }) |
+| event1_nullable | Column(NullableColumn { column: Boolean([0b___00001]), validity: [0b___10111] })   |
+| event2          | Column(Boolean([0b___00010]))                                                      |
+| event3_nullable | Column(NullableColumn { column: Boolean([0b___10100]), validity: [0b___11011] })   |
+| Output          | NullableColumn { column: UInt8([1, 0]), validity: [0b______11] }                   |
++-----------------+------------------------------------------------------------------------------------+
+
+
+ast: window_funnel(2)(dt_date, date_event1, date_event2, date_event3)
+evaluation (internal):
++-------------+------------------------------------------------------------------+
+| Column      | Data                                                             |
++-------------+------------------------------------------------------------------+
+| dt_date     | Column(Date([0, 1, 2, 3]))                                       |
+| date_event1 | Column(Boolean([0b____0001]))                                    |
+| date_event2 | Column(Boolean([0b____0010]))                                    |
+| date_event3 | Column(Boolean([0b____0100]))                                    |
+| Output      | NullableColumn { column: UInt8([1, 0]), validity: [0b______11] } |
++-------------+------------------------------------------------------------------+
+
+
+ast: window_funnel(2)(dt_int64, int64_event1, int64_event2, int64_event3)
+evaluation (internal):
++--------------+------------------------------------------------------------------+
+| Column       | Data                                                             |
++--------------+------------------------------------------------------------------+
+| dt_int64     | Column(Int64([0, 1, 2, 3]))                                      |
+| int64_event1 | Column(Boolean([0b____0001]))                                    |
+| int64_event2 | Column(Boolean([0b____0010]))                                    |
+| int64_event3 | Column(Boolean([0b____0100]))                                    |
+| Output       | NullableColumn { column: UInt8([1, 0]), validity: [0b______11] } |
++--------------+------------------------------------------------------------------+
+
+
+ast: window_funnel(2)(dt_unsorted, unsorted_event1, unsorted_event2, unsorted_event3)
+evaluation (internal):
++-----------------+------------------------------------------------------------------+
+| Column          | Data                                                             |
++-----------------+------------------------------------------------------------------+
+| dt_unsorted     | Column(UInt64([2, 0, 1, 3]))                                     |
+| unsorted_event1 | Column(Boolean([0b____0010]))                                    |
+| unsorted_event2 | Column(Boolean([0b____0100]))                                    |
+| unsorted_event3 | Column(Boolean([0b____0001]))                                    |
+| Output          | NullableColumn { column: UInt8([0, 1]), validity: [0b______11] } |
++-----------------+------------------------------------------------------------------+
+
+
+ast: window_funnel(2)(dt_int64, single_event)
+evaluation (internal):
++--------------+------------------------------------------------------------------+
+| Column       | Data                                                             |
++--------------+------------------------------------------------------------------+
+| dt_int64     | Column(Int64([0, 1, 2, 3]))                                      |
+| single_event | Column(Boolean([0b____0010]))                                    |
+| Output       | NullableColumn { column: UInt8([0, 1]), validity: [0b______11] } |
++--------------+------------------------------------------------------------------+
+
+
+ast: window_funnel(2)(dt_int64, no_event)
+evaluation (internal):
++----------+------------------------------------------------------------------+
+| Column   | Data                                                             |
++----------+------------------------------------------------------------------+
+| dt_int64 | Column(Int64([0, 1, 2, 3]))                                      |
+| no_event | Column(Boolean([0b____0000]))                                    |
+| Output   | NullableColumn { column: UInt8([0, 0]), validity: [0b______11] } |
++----------+------------------------------------------------------------------+
+
+

@@ -16,6 +16,12 @@ use std::time::Duration;
 
 use semver::Version;
 
+pub const IN_PROCESS_GRPC_SCHEME: &str = "in-process://";
+
+pub fn is_in_process_grpc_address(addr: &str) -> bool {
+    addr.starts_with(IN_PROCESS_GRPC_SCHEME)
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct RpcClientTlsConfig {
     pub rpc_tls_server_root_ca_cert: String,

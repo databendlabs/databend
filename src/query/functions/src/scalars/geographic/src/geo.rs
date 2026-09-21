@@ -227,22 +227,14 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         let (arg1, arg2) = {
             let arg1 = match args_type.first()? {
-                DataType::Tuple(tys) => {
-                    if tys.len() == 2 {
-                        vec![DataType::Number(NumberDataType::Float64); tys.len()]
-                    } else {
-                        return None;
-                    }
+                DataType::Tuple(tys) if tys.len() == 2 => {
+                    vec![DataType::Number(NumberDataType::Float64); tys.len()]
                 }
                 _ => return None,
             };
             let arg2 = match args_type.get(1)? {
-                DataType::Array(box DataType::Tuple(tys)) => {
-                    if tys.len() == 2 {
-                        vec![DataType::Number(NumberDataType::Float64); tys.len()]
-                    } else {
-                        return None;
-                    }
+                DataType::Array(deref!(DataType::Tuple(tys))) if tys.len() == 2 => {
+                    vec![DataType::Number(NumberDataType::Float64); tys.len()]
                 }
                 _ => return None,
             };
@@ -276,22 +268,16 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         let (arg1, arg2) = {
             let arg1 = match args_type.first()? {
-                DataType::Tuple(tys) => {
-                    if tys.len() == 2 {
-                        vec![DataType::Number(NumberDataType::Float64); tys.len()]
-                    } else {
-                        return None;
-                    }
+                DataType::Tuple(tys) if tys.len() == 2 => {
+                    vec![DataType::Number(NumberDataType::Float64); tys.len()]
                 }
                 _ => return None,
             };
             let arg2 = match args_type.get(1)? {
-                DataType::Array(box DataType::Array(box DataType::Tuple(tys))) => {
-                    if tys.len() == 2 {
-                        vec![DataType::Number(NumberDataType::Float64); tys.len()]
-                    } else {
-                        return None;
-                    }
+                DataType::Array(deref!(DataType::Array(deref!(DataType::Tuple(tys)))))
+                    if tys.len() == 2 =>
+                {
+                    vec![DataType::Number(NumberDataType::Float64); tys.len()]
                 }
                 _ => return None,
             };
@@ -326,24 +312,16 @@ pub fn register(registry: &mut FunctionRegistry) {
         let mut args = vec![];
 
         let arg1 = match args_type.first()? {
-            DataType::Tuple(tys) => {
-                if tys.len() == 2 {
-                    vec![DataType::Number(NumberDataType::Float64); tys.len()]
-                } else {
-                    return None;
-                }
+            DataType::Tuple(tys) if tys.len() == 2 => {
+                vec![DataType::Number(NumberDataType::Float64); tys.len()]
             }
             _ => return None,
         };
         args.push(DataType::Tuple(arg1));
 
         let arg2: Vec<DataType> = match args_type.get(1)? {
-            DataType::Array(box DataType::Tuple(tys)) => {
-                if tys.len() == 2 {
-                    vec![DataType::Number(NumberDataType::Float64); tys.len()]
-                } else {
-                    return None;
-                }
+            DataType::Array(deref!(DataType::Tuple(tys))) if tys.len() == 2 => {
+                vec![DataType::Number(NumberDataType::Float64); tys.len()]
             }
 
             _ => return None,
