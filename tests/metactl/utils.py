@@ -18,6 +18,8 @@ CERTS_DIR = REPO_PATH / "tests" / "certs"
 TEST_SERVER_CERT = CERTS_DIR / "server.pem"
 TEST_SERVER_KEY = CERTS_DIR / "server.key"
 TEST_CA_CERT = CERTS_DIR / "ca.pem"
+# A CA that did not sign server.pem, for negative TLS tests.
+UNRELATED_CA_CERT = CERTS_DIR / "tls" / "cfssl" / "ca" / "ca.pem"
 # server.pem lists localhost and 127.0.0.1 as subject alternative names.
 TEST_TLS_DOMAIN = "localhost"
 
