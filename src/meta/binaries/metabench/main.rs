@@ -28,6 +28,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
+use anyhow::bail;
 use base2histogram::Histogram;
 use chrono::Utc;
 use clap::Parser;
@@ -55,8 +56,8 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_control::grpc_client_auth::GrpcClientAuth;
-use databend_common_meta_control::grpc_client_auth::GrpcClientAuthArgs;
+use databend_common_meta_control::grpc_client_config::GrpcClientConfig;
+use databend_common_meta_control::grpc_client_config::GrpcClientConfigArgs;
 use databend_common_meta_store::MetaStore;
 use databend_common_tracing::FileConfig;
 use databend_common_tracing::LogFormat;
@@ -226,7 +227,7 @@ struct Config {
     pub grpc_api_address: String,
 
     #[clap(flatten)]
-    pub grpc_auth: GrpcClientAuthArgs,
+    pub client_config: GrpcClientConfigArgs,
 
     /// The RPC to benchmark:
     /// "upsert_kv": send kv-api upsert_kv,
@@ -256,7 +257,7 @@ struct Config {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let config = Config::parse();
-    let grpc_auth = config.grpc_auth.load()?;
+    let client_config = config.client_config.load()?;
 
     let log_config = databend_common_tracing::Config {
         file: FileConfig {
@@ -279,14 +280,13 @@ async fn main() -> anyhow::Result<()> {
 
     println!("config: {:?}", config);
     if config.grpc_api_address.is_empty() {
-        println!("grpc_api_address MUST not be empty!");
-        return Ok(());
+        bail!("--grpc-api-address must not be empty");
     }
 
     let client_pool_size = config.client_pool_size.max(1).min(config.client.max(1));
     let clients = (0..client_pool_size)
-        .map(|_| create_remote_meta_store(&config.grpc_api_address, &grpc_auth))
-        .collect::<Vec<_>>();
+        .map(|_| create_remote_meta_store(&config.grpc_api_address, &client_config))
+        .collect::<anyhow::Result<Vec<_>>>()?;
     println!("effective client_pool_size: {}", client_pool_size);
 
     let start = Instant::now();
@@ -371,19 +371,21 @@ async fn main() -> anyhow::Result<()> {
 
 /// `grpc_api_address` is a comma-separated endpoint list; give the client every
 /// node so it can follow leader changes instead of forwarding via one node.
-fn create_remote_meta_store(grpc_api_address: &str, auth: &GrpcClientAuth) -> MetaStore {
+fn create_remote_meta_store(
+    grpc_api_address: &str,
+    client_config: &GrpcClientConfig,
+) -> anyhow::Result<MetaStore> {
     let client_handle = MetaGrpcClient::try_create_with_features(
         grpc_api_address.split(',').map(str::to_string).collect(),
-        auth.username(),
-        auth.expose_password(),
+        client_config.auth.username(),
+        client_config.auth.expose_password(),
         None,
         None,
-        None,
+        client_config.tls.clone(),
         DEFAULT_GRPC_MESSAGE_SIZE,
-    )
-    .unwrap();
+    )?;
 
-    MetaStore::R(client_handle)
+    Ok(MetaStore::R(client_handle))
 }
 
 async fn run_benchmark_once(

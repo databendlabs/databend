@@ -53,10 +53,12 @@ impl GrpcClientAuth {
     }
 }
 
-/// Command-line inputs for administrative gRPC credentials.
-///
-/// The default `root` user and empty password retain compatibility with old
-/// servers and authenticated servers running in permissive mode.
+// Command-line inputs for administrative gRPC credentials. Not a doc comment:
+// clap applies a flattened `Args` struct's doc comment as the binary's `about`
+// text.
+//
+// The default `root` user and empty password retain compatibility with old
+// servers and authenticated servers running in permissive mode.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Args)]
 #[serde(default)]
 pub struct GrpcClientAuthArgs {
