@@ -168,10 +168,14 @@ class LocalMetaCluster:
             flush=True,
         )
 
+    def start_node(self, node_id: int) -> None:
+        """Start a node stopped with `stop_node()` again, then wait until it has rejoined."""
+        self._start_node(self._nodes[node_id], append_log=True)
+
     def restart_node(self, node_id: int) -> None:
         """Stop one node and start it again, then wait until it has rejoined."""
         self.stop_node(node_id)
-        self._start_node(self._nodes[node_id], append_log=True)
+        self.start_node(node_id)
 
     # --- cluster state ---------------------------------------------------
 

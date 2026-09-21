@@ -10,6 +10,7 @@ config_text = render_meta_config(
 """
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from dataclasses import field
 from pathlib import Path
@@ -34,6 +35,7 @@ raft_listen_host    = "127.0.0.1"
 raft_advertise_host = "127.0.0.1"
 {bootstrap_mode}
 {raft_security}
+{raft_settings}
 """
 
 
@@ -179,8 +181,13 @@ def render_meta_config(
     log_dir: Path,
     security: MetaSecurityProfile = MetaSecurityProfile(),
     join_addresses: tuple[str, ...] = (),
+    raft_settings: Mapping[str, object] | None = None,
 ) -> str:
-    """Config text of one node; it bootstraps alone unless `join_addresses` is given."""
+    """Config text of one node; it bootstraps alone unless `join_addresses` is given.
+
+    `raft_settings` are further `[raft_config]` keys, such as
+    `max_applied_log_to_keep`.
+    """
     raft_tls_configured = security.raft_tls_server_cert is not None
     if raft_tls_configured != (ports.raft_tls is not None):
         raise ValueError("Raft TLS settings and ports.raft_tls must be given together")
@@ -201,4 +208,5 @@ def render_meta_config(
         raft_port=ports.raft,
         bootstrap_mode=bootstrap_mode,
         raft_security=security.raft_security_toml(ports.raft_tls),
+        raft_settings=_toml_lines(dict(raft_settings or {})),
     )

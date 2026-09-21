@@ -2,6 +2,7 @@
 
 import dataclasses
 import os
+from collections.abc import Mapping
 import socket
 import subprocess
 import sys
@@ -41,6 +42,7 @@ def build_meta_node(
     ports: MetaNodePorts,
     security: MetaSecurityProfile = MetaSecurityProfile(),
     join_addresses: tuple[str, ...] = (),
+    raft_settings: Mapping[str, object] | None = None,
     meta_bin: Path = META_BINARY,
 ) -> LocalMetaNode:
     """Describe one test node; its files live under `node-{node_id}/` in the work dir."""
@@ -52,6 +54,7 @@ def build_meta_node(
         log_dir=node_dir / "logs",
         security=security,
         join_addresses=join_addresses,
+        raft_settings=raft_settings,
     )
     return LocalMetaNode(
         node_id=node_id,
@@ -90,6 +93,20 @@ STRICT_AUTH_TLS = dataclasses.replace(
     STRICT_AUTH,
     grpc_tls_server_cert=TEST_SERVER_CERT,
     grpc_tls_server_key=TEST_SERVER_KEY,
+)
+
+RAFT_SECRET = "raft-secret"
+
+# Raft TLS between the nodes with the certificate under tests/certs, and a
+# strict shared Raft secret. gRPC stays plain and unauthenticated.
+RAFT_TLS_STRICT = MetaSecurityProfile(
+    raft_tls_server_cert=TEST_SERVER_CERT,
+    raft_tls_server_key=TEST_SERVER_KEY,
+    raft_tls_client_root_ca_cert=TEST_CA_CERT,
+    raft_tls_client_domain_name=TEST_TLS_DOMAIN,
+    raft_secret=RAFT_SECRET,
+    raft_accepted_secrets=(RAFT_SECRET,),
+    raft_secret_strict=True,
 )
 
 
