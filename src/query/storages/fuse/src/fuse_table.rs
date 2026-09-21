@@ -810,14 +810,6 @@ impl FuseTable {
         ))
     }
 
-    pub fn get_data_retention_period(&self, ctx: &dyn TableContext) -> Result<Duration> {
-        if let Some(retention_period) = self.try_get_table_option_retention_period()? {
-            Ok(retention_period)
-        } else {
-            self.get_data_retention_period_from_settings(ctx)
-        }
-    }
-
     pub fn get_storage_format(&self) -> FuseStorageFormat {
         self.storage_format
     }

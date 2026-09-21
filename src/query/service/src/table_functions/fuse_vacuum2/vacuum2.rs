@@ -179,7 +179,6 @@ mod tests {
             &self,
             _threads_nums: usize,
             _tables: Vec<Arc<dyn Table>>,
-            _dry_run_limit: Option<usize>,
         ) -> VacuumDropTablesResult {
             unreachable!("batch vacuum must not vacuum dropped tables")
         }

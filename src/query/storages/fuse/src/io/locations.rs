@@ -46,8 +46,6 @@ use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX;
 use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX_V1;
 use crate::index::filters::BlockFilter;
 
-const LEGACY_INVERTED_INDEX_FILE_FORMAT_VERSION: u64 = 0;
-
 static SNAPSHOT_V0: SnapshotVersion = SnapshotVersion::V0(PhantomData);
 static SNAPSHOT_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
 static SNAPSHOT_V2: SnapshotVersion = SnapshotVersion::V2(PhantomData);
@@ -347,30 +345,6 @@ impl TableMetaLocationGenerator {
             "{}{}/",
             self.inverted_index_v2_location_prefix(),
             index_version,
-        )
-    }
-
-    // Historical V1 container location. New indexes use
-    // `gen_inverted_index_v2_location`.
-    pub fn gen_inverted_index_location_from_block_location(
-        loc: &str,
-        index_name: &str,
-        index_version: &str,
-    ) -> String {
-        let splits = loc.split('/').collect::<Vec<_>>();
-        let len = splits.len();
-        let prefix = splits[..len - 2].join("/");
-        let block_name = trim_object_prefix(splits[len - 1]);
-        let id: String = block_name.chars().take(32).collect();
-        let short_ver: String = index_version.chars().take(7).collect();
-        format!(
-            "{}/{}/{}/{}/{}_v{}.index",
-            prefix,
-            FUSE_TBL_INVERTED_INDEX_PREFIX,
-            index_name,
-            short_ver,
-            id,
-            LEGACY_INVERTED_INDEX_FILE_FORMAT_VERSION,
         )
     }
 

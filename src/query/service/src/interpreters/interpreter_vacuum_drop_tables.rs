@@ -234,9 +234,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
 
             let handler = get_vacuum_handler();
             let threads_nums = self.ctx.get_settings().get_max_vacuum_threads()? as usize;
-            let (_, failed_tables) = handler
-                .do_vacuum_drop_tables(threads_nums, tables, None)
-                .await?;
+            let failed_tables = handler.do_vacuum_drop_tables(threads_nums, tables).await?;
 
             let failed_db_ids = failed_tables
                 .iter()
