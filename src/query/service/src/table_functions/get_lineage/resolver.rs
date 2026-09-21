@@ -317,7 +317,7 @@ impl ObjectResolver {
                 return Ok(None);
             };
             let mut planner = Planner::new(self.ctx.clone());
-            let (plan, _) = match planner.plan_sql(query).await {
+            let plan = match planner.bind_sql(query).await {
                 Ok(result) => result,
                 Err(error) => {
                     warn!(

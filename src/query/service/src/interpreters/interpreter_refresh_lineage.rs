@@ -184,8 +184,10 @@ impl RefreshLineageInterpreter {
                 view.database, view.name
             ))
         })?;
+        // Bind only: lineage must describe the stored definition, not an optimized plan
+        // that may have been folded or routed through a materialized view.
         let mut planner = Planner::new(self.ctx.clone());
-        let (query_plan, _) = planner.plan_sql(query).await?;
+        let query_plan = planner.bind_sql(query).await?;
         let lineage = query_plan.query_lineage_for_view(QueryLineageRelation {
             catalog: DEFAULT_CATALOG.to_string(),
             database: view.database.clone(),

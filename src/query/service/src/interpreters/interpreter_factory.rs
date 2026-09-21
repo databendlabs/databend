@@ -158,6 +158,8 @@ impl InterpreterFactory {
         access_logger.output();
 
         if lineage_enabled() {
+            // The planner captures lineage from the bound plan; this reads that snapshot rather
+            // than re-deriving it from the optimized plan.
             match plan.query_lineage() {
                 Ok(lineage) => ctx.attach_query_lineage(lineage),
                 Err(err) => {
