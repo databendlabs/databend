@@ -305,6 +305,11 @@ impl Settings {
         self.try_get_u64("flight_client_timeout")
     }
 
+    // Get the timeout for a distributed query that never receives the start command.
+    pub fn get_flight_query_leak_timeout_secs(&self) -> Result<u64> {
+        self.try_get_u64("flight_query_leak_timeout_secs")
+    }
+
     pub fn get_flight_keep_alive_params(&self) -> Result<FlightKeepAliveParams> {
         fn secs_to_duration(value: u64) -> Option<Duration> {
             if value == 0 {
