@@ -32,6 +32,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::TableSchema;
 use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
@@ -50,14 +51,19 @@ use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 use databend_storages_common_table_meta::table::get_change_type;
 use log::info;
+use log::warn;
 
 use crate::BindContext;
+use crate::LineageSourceRelation;
 use crate::Metadata;
+use crate::QueryLineageRelationKind;
 use crate::ScalarExpr;
+use crate::ViewLineageSourceColumn;
 use crate::Visibility;
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;
 use crate::binder::ddl::materialized_view::find_materialized_view_aggregate;
+use crate::binder::lineage_enabled;
 use crate::optimizer::ir::SExpr;
 use crate::parse_materialized_view_query;
 use crate::plans::Aggregate;
@@ -67,6 +73,15 @@ use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::ScalarItem;
 use crate::validate_materialized_view_source;
+
+/// Result of binding a materialized view reference, including the definition that was
+/// used so callers can describe the logical output without re-reading metadata.
+pub(crate) struct MaterializedViewBindResult {
+    pub(crate) s_expr: SExpr,
+    pub(crate) bind_context: BindContext,
+    pub(crate) read_mode: MaterializedViewReadMode,
+    pub(crate) mv_definition: MVDefinition,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum MaterializedViewReadMode {
@@ -611,7 +626,7 @@ impl Binder {
         cte_suffix_name: Option<String>,
         source_override: Option<(Arc<dyn Table>, String)>,
         record_cache_dependency: bool,
-    ) -> Result<(SExpr, BindContext, MaterializedViewReadMode)> {
+    ) -> Result<MaterializedViewBindResult> {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::MaterializedView)?;
 
@@ -774,7 +789,12 @@ impl Binder {
                         table_name,
                         alias,
                     )?;
-                    return Ok((s_expr, context, MaterializedViewReadMode::LiveFallback));
+                    return Ok(MaterializedViewBindResult {
+                        s_expr,
+                        bind_context: context,
+                        read_mode: MaterializedViewReadMode::LiveFallback,
+                        mv_definition: mv_definition.data,
+                    });
                 }
             };
             if checkpoint_seq > source_seq {
@@ -811,7 +831,12 @@ impl Binder {
                         "materialized view {} uses append-only hybrid read",
                         table_meta.name()
                     );
-                    return Ok((s_expr, *context, MaterializedViewReadMode::Hybrid));
+                    return Ok(MaterializedViewBindResult {
+                        s_expr,
+                        bind_context: *context,
+                        read_mode: MaterializedViewReadMode::Hybrid,
+                        mv_definition: mv_definition.data,
+                    });
                 }
                 Some(MaterializedViewHybridBindResult::EmptyDelta) => {
                     info!(
@@ -835,7 +860,12 @@ impl Binder {
                         table_name,
                         alias,
                     )?;
-                    return Ok((s_expr, context, MaterializedViewReadMode::LiveFallback));
+                    return Ok(MaterializedViewBindResult {
+                        s_expr,
+                        bind_context: context,
+                        read_mode: MaterializedViewReadMode::LiveFallback,
+                        mv_definition: mv_definition.data,
+                    });
                 }
             }
         }
@@ -871,7 +901,12 @@ impl Binder {
                 column.table_name = Some(table_name.to_string());
             }
         }
-        Ok((s_expr, logical_context, MaterializedViewReadMode::Fresh))
+        Ok(MaterializedViewBindResult {
+            s_expr,
+            bind_context: logical_context,
+            read_mode: MaterializedViewReadMode::Fresh,
+            mv_definition: mv_definition.data,
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -887,7 +922,8 @@ impl Binder {
         sample: &Option<SampleConfig>,
         cte_suffix_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
-        let (s_expr, context, _) = self.bind_materialized_view_with_mode(
+        let mv_table_id = table_meta.get_id();
+        let result = self.bind_materialized_view_with_mode(
             bind_context,
             catalog_name,
             database,
@@ -900,6 +936,57 @@ impl Binder {
             None,
             true,
         )?;
-        Ok((s_expr, context))
+        if lineage_enabled() {
+            // The user referenced the materialized view, so lineage stops at its logical
+            // columns regardless of whether this read was served from storage, merged with a
+            // source delta, or recomputed from the source. Names and ids come from the
+            // persisted logical schema, which an outer table alias cannot rename.
+            self.add_materialized_view_lineage_source_columns(
+                &result.bind_context,
+                catalog_name,
+                database,
+                table_name,
+                mv_table_id,
+                &result.mv_definition.logical_schema,
+            );
+        }
+        Ok((result.s_expr, result.bind_context))
+    }
+
+    fn add_materialized_view_lineage_source_columns(
+        &mut self,
+        bind_context: &BindContext,
+        catalog: &str,
+        database: &str,
+        view_name: &str,
+        mv_table_id: u64,
+        logical_schema: &TableSchema,
+    ) {
+        if bind_context.columns.len() != logical_schema.num_fields() {
+            // Lineage is best effort and must not fail the query. Without the boundary the
+            // read is attributed to whatever the expansion scanned.
+            warn!(
+                "materialized view {} bound {} columns but its logical schema has {}; skipping lineage boundary",
+                view_name,
+                bind_context.columns.len(),
+                logical_schema.num_fields()
+            );
+            return;
+        }
+        let relation = LineageSourceRelation {
+            catalog: catalog.to_string(),
+            database: database.to_string(),
+            name: view_name.to_string(),
+            id: mv_table_id,
+        };
+        let mut metadata = self.metadata.write();
+        for (column, field) in bind_context.columns.iter().zip(logical_schema.fields()) {
+            metadata.add_view_lineage_source_column(column.index, ViewLineageSourceColumn {
+                relation: relation.clone(),
+                kind: QueryLineageRelationKind::MaterializedView,
+                name: field.name().clone(),
+                id: field.column_id(),
+            });
+        }
     }
 }

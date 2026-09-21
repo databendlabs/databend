@@ -67,7 +67,18 @@ impl Interpreter for CreateMaterializedViewInterpreter {
             req.materialized_view = Some(materialized_view);
             // MV tables deliberately have no independent ownership. Reuse table
             // validation/request construction, then publish directly through the catalog.
-            catalog.create_table(req).await?;
+            let reply = catalog.create_table(req).await?;
+            if !reply.new_table && !self.plan.table_plan.create_option.is_overriding() {
+                // CREATE ... IF NOT EXISTS on an existing view defined nothing.
+                self.ctx.attach_query_lineage(None);
+            } else {
+                self.ctx.update_query_lineage_target_id(
+                    &self.plan.table_plan.catalog,
+                    &self.plan.table_plan.database,
+                    &self.plan.table_plan.table,
+                    reply.table_id,
+                );
+            }
 
             Ok(PipelineBuildResult::create())
         })

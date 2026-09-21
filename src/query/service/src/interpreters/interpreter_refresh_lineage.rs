@@ -26,10 +26,12 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::TableSchema;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_sql::Planner;
 use databend_common_sql::QueryLineage;
 use databend_common_sql::QueryLineageRelation;
@@ -38,6 +40,7 @@ use databend_common_sql::plans::RefreshLineagePlan;
 use databend_common_sql::plans::RefreshLineageSelector;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
+use databend_enterprise_materialized_view::get_materialized_view_handler;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::LineageEdgeIdentity;
@@ -61,12 +64,61 @@ pub struct RefreshLineageInterpreter {
     plan: RefreshLineagePlan,
 }
 
+/// Both object kinds define themselves by a stored query, so REFRESH LINEAGE handles them
+/// together and only differs in how the target is described.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ViewKind {
+    View,
+    MaterializedView,
+}
+
+impl ViewKind {
+    fn object_type(self) -> &'static str {
+        match self {
+            Self::View => "VIEW",
+            Self::MaterializedView => "MATERIALIZED_VIEW",
+        }
+    }
+
+    fn lineage_kind(self) -> &'static str {
+        match self {
+            Self::View => "CREATE_VIEW",
+            Self::MaterializedView => "CREATE_MATERIALIZED_VIEW",
+        }
+    }
+
+    fn relation_kind(self) -> QueryLineageRelationKind {
+        match self {
+            Self::View => QueryLineageRelationKind::View,
+            Self::MaterializedView => QueryLineageRelationKind::MaterializedView,
+        }
+    }
+
+    fn matches_engine(self, engine: &str) -> bool {
+        match self {
+            Self::View => engine.eq_ignore_ascii_case(VIEW_ENGINE),
+            Self::MaterializedView => is_materialized_view_engine(engine),
+        }
+    }
+}
+
 struct ViewEntry {
+    kind: ViewKind,
     database: String,
     name: String,
     table_id: u64,
     created_on: i64,
+    /// The stored definition: the View query, or the original (logical) query of a
+    /// materialized view.
     query: Option<String>,
+    /// Persisted logical output schema; only materialized views have one.
+    logical_schema: Option<TableSchema>,
+}
+
+impl ViewEntry {
+    fn target_key(&self) -> String {
+        format!("{}::ID::{}", self.kind.object_type(), self.table_id)
+    }
 }
 
 struct RefreshResult {
@@ -151,19 +203,40 @@ impl RefreshLineageInterpreter {
                 continue;
             }
             for table in catalog.list_tables(&tenant, &database_name).await? {
-                if !table.engine().eq_ignore_ascii_case(VIEW_ENGINE) {
+                let kind = if table.engine().eq_ignore_ascii_case(VIEW_ENGINE) {
+                    ViewKind::View
+                } else if is_materialized_view_engine(table.engine()) {
+                    ViewKind::MaterializedView
+                } else {
                     continue;
-                }
+                };
                 let table_info = table.get_table_info();
                 if table_info.db_type != DatabaseType::NormalDB {
                     continue;
                 }
+                let (query, logical_schema) = match kind {
+                    ViewKind::View => (table_info.meta.options.get(QUERY).cloned(), None),
+                    ViewKind::MaterializedView => {
+                        match get_materialized_view_handler()
+                            .get_mv_definition(catalog, &tenant, table_info.ident.table_id)
+                            .await?
+                        {
+                            Some(definition) => (
+                                Some(definition.data.original_query),
+                                Some(definition.data.logical_schema),
+                            ),
+                            None => (None, None),
+                        }
+                    }
+                };
                 views.push(ViewEntry {
+                    kind,
                     database: database_name.clone(),
                     name: table.name().to_string(),
                     table_id: table_info.ident.table_id,
                     created_on: table_info.meta.created_on.timestamp_micros(),
-                    query: table_info.meta.options.get(QUERY).cloned(),
+                    query,
+                    logical_schema,
                 });
             }
         }
@@ -180,41 +253,57 @@ impl RefreshLineageInterpreter {
     ) -> Result<QueryLineage> {
         let query = view.query.as_deref().ok_or_else(|| {
             ErrorCode::Internal(format!(
-                "View '{}.{}' has no stored query",
-                view.database, view.name
+                "{} '{}.{}' has no stored query",
+                view.kind.object_type(),
+                view.database,
+                view.name
             ))
         })?;
         // Bind only: lineage must describe the stored definition, not an optimized plan
         // that may have been folded or routed through a materialized view.
         let mut planner = Planner::new(self.ctx.clone());
         let query_plan = planner.bind_sql(query).await?;
-        let lineage = query_plan.query_lineage_for_view(QueryLineageRelation {
+        let target = QueryLineageRelation {
             catalog: DEFAULT_CATALOG.to_string(),
             database: view.database.clone(),
             name: view.name.clone(),
             id: Some(view.table_id),
             catalog_type: Some(CatalogType::Default),
-            kind: QueryLineageRelationKind::View,
-        })?;
+            kind: view.kind.relation_kind(),
+        };
+        let lineage = match view.kind {
+            ViewKind::View => query_plan.query_lineage_for_view(target)?,
+            ViewKind::MaterializedView => {
+                let logical_schema = view.logical_schema.as_ref().ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "MATERIALIZED_VIEW '{}.{}' has no stored logical schema",
+                        view.database, view.name
+                    ))
+                })?;
+                query_plan.query_lineage_for_materialized_view(target, logical_schema)?
+            }
+        };
 
         let current = catalog
             .get_table(&self.ctx.get_tenant(), &view.database, &view.name)
             .await?;
-        if !current.engine().eq_ignore_ascii_case(VIEW_ENGINE)
+        if !view.kind.matches_engine(current.engine())
             || current.get_table_info().ident.table_id != view.table_id
         {
             return Err(ErrorCode::Internal(format!(
-                "View '{}.{}' was replaced while refreshing lineage",
-                view.database, view.name
+                "{} '{}.{}' was replaced while refreshing lineage",
+                view.kind.object_type(),
+                view.database,
+                view.name
             )));
         }
 
         Ok(lineage)
     }
 
-    fn existing_edge(edge: &RawLineageEdge) -> Option<ExistingLineageEdge> {
+    fn existing_edge(kind: ViewKind, edge: &RawLineageEdge) -> Option<ExistingLineageEdge> {
         let lineage_kind = edge.lineage_kind.clone()?;
-        (lineage_kind == "CREATE_VIEW").then(|| ExistingLineageEdge {
+        (lineage_kind == kind.lineage_kind()).then(|| ExistingLineageEdge {
             identity: LineageEdgeIdentity {
                 source_lineage_key: edge.source.lineage_key.clone(),
                 target_lineage_key: edge.target.lineage_key.clone(),
@@ -289,7 +378,11 @@ impl RefreshLineageInterpreter {
     fn canonical_create_view(view: &ViewEntry) -> String {
         let quote = |name: &str| format!("`{}`", name.replace('`', "``"));
         format!(
-            "CREATE VIEW {}.{}.{} AS {}",
+            "CREATE {} {}.{}.{} AS {}",
+            match view.kind {
+                ViewKind::View => "VIEW",
+                ViewKind::MaterializedView => "MATERIALIZED VIEW",
+            },
             quote(DEFAULT_CATALOG),
             quote(&view.database),
             quote(&view.name),
@@ -387,7 +480,7 @@ impl Interpreter for RefreshLineageInterpreter {
             };
             let target_keys = views
                 .iter()
-                .map(|view| format!("VIEW::ID::{}", view.table_id))
+                .map(ViewEntry::target_key)
                 .collect::<BTreeSet<_>>();
             let mut reader: LineageEdgeReader =
                 LineageEdgeReader::try_create(self.ctx.clone()).await?;
@@ -411,12 +504,11 @@ impl Interpreter for RefreshLineageInterpreter {
             for view in views {
                 match self.extract_view_lineage(catalog.as_ref(), &view).await {
                     Ok(lineage) => {
-                        let target_key = format!("VIEW::ID::{}", view.table_id);
                         let existing = existing_by_target
-                            .get(&target_key)
+                            .get(&view.target_key())
                             .into_iter()
                             .flatten()
-                            .filter_map(Self::existing_edge)
+                            .filter_map(|edge| Self::existing_edge(view.kind, edge))
                             .collect();
                         let reconciliation =
                             Self::reconcile(build_semantic_edges(lineage), existing);
@@ -447,7 +539,7 @@ impl Interpreter for RefreshLineageInterpreter {
                         }
 
                         results.push(RefreshResult {
-                            object_domain: "VIEW",
+                            object_domain: view.kind.object_type(),
                             catalog: Some(DEFAULT_CATALOG.to_string()),
                             database: Some(view.database),
                             object_name: view.name,
@@ -463,7 +555,7 @@ impl Interpreter for RefreshLineageInterpreter {
                         });
                     }
                     Err(error) => results.push(RefreshResult {
-                        object_domain: "VIEW",
+                        object_domain: view.kind.object_type(),
                         catalog: Some(DEFAULT_CATALOG.to_string()),
                         database: Some(view.database),
                         object_name: view.name,

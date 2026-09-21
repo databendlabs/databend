@@ -37,6 +37,7 @@ use jsonb::keypath::OwnedKeyPaths;
 use parking_lot::RwLock;
 
 use crate::BoundQueryLineage;
+use crate::QueryLineageRelationKind;
 use crate::optimizer::ir::SExpr;
 
 /// Planner use [`usize`] as its index type.
@@ -680,9 +681,13 @@ pub(crate) struct LineageSourceRelation {
     pub(crate) id: u64,
 }
 
+/// A logical output column of a view-like relation that lineage must not look through.
+/// `kind` is `View` or `MaterializedView`; both expand to a query at bind time, but the
+/// user referenced the object, not the tables behind it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ViewLineageSourceColumn {
     pub(crate) relation: LineageSourceRelation,
+    pub(crate) kind: QueryLineageRelationKind,
     pub(crate) name: String,
     pub(crate) id: ColumnId,
 }

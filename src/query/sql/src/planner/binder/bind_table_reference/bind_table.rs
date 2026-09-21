@@ -39,6 +39,7 @@ use crate::ColumnEntry;
 use crate::LineageSourceRelation;
 use crate::MaterializedCteLineageSource;
 use crate::Metadata;
+use crate::QueryLineageRelationKind;
 use crate::Symbol;
 use crate::ViewLineageSourceColumn;
 use crate::Visibility;
@@ -465,6 +466,7 @@ impl Binder {
         for (idx, column) in bind_context.columns.iter().enumerate() {
             metadata.add_view_lineage_source_column(column.index, ViewLineageSourceColumn {
                 relation: relation.clone(),
+                kind: QueryLineageRelationKind::View,
                 // View TableMeta has no persisted schema. The bound view query (including an
                 // explicit view column list) is the source of truth for output column names.
                 name: column.column_name.clone(),

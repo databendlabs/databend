@@ -24,7 +24,9 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::infer_table_schema;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
+use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
 use databend_common_meta_app::schema::TableIdToName;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_sql::Planner;
 use databend_common_sql::planner::NameResolutionContext;
 use databend_common_sql::planner::normalize_identifier;
@@ -34,6 +36,7 @@ use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
+use databend_enterprise_materialized_view::get_materialized_view_handler;
 use log::warn;
 
 use super::ObjectDomain;
@@ -123,29 +126,22 @@ impl ObjectResolver {
         let expected = match domain {
             ObjectDomain::Table => LineageObjectType::Table,
             ObjectDomain::View => LineageObjectType::View,
+            ObjectDomain::MaterializedView => LineageObjectType::MaterializedView,
             ObjectDomain::Column => {
                 let (catalog, database, table_name) = parse_object_name(&self.ctx, value)?;
-                if let Some(table) = self
-                    .resolve_table_by_name(
-                        &catalog,
-                        &database,
-                        &table_name,
-                        LineageObjectType::Table,
-                        None,
-                    )
-                    .await?
-                {
-                    return Ok(Some(table));
+                for expected in [
+                    LineageObjectType::Table,
+                    LineageObjectType::View,
+                    LineageObjectType::MaterializedView,
+                ] {
+                    if let Some(table) = self
+                        .resolve_table_by_name(&catalog, &database, &table_name, expected, None)
+                        .await?
+                    {
+                        return Ok(Some(table));
+                    }
                 }
-                return self
-                    .resolve_table_by_name(
-                        &catalog,
-                        &database,
-                        &table_name,
-                        LineageObjectType::View,
-                        None,
-                    )
-                    .await;
+                return Ok(None);
             }
             ObjectDomain::Stage => unreachable!(),
         };
@@ -308,28 +304,44 @@ impl ObjectResolver {
             table_name,
             id,
         );
-        let schema = if object_type == LineageObjectType::View {
-            let Some(query) = table.options().get(QUERY) else {
-                warn!(
-                    "Skipping lineage view without stored query: {}.{}.{}",
-                    catalog_name, database_name, table_name
-                );
-                return Ok(None);
-            };
-            let mut planner = Planner::new(self.ctx.clone());
-            let plan = match planner.bind_sql(query).await {
-                Ok(result) => result,
-                Err(error) => {
+        let schema = match object_type {
+            LineageObjectType::View => {
+                let Some(query) = table.options().get(QUERY) else {
                     warn!(
-                        "Skipping lineage view whose query cannot be resolved: {}.{}.{}, error: {}",
-                        catalog_name, database_name, table_name, error
+                        "Skipping lineage view without stored query: {}.{}.{}",
+                        catalog_name, database_name, table_name
                     );
                     return Ok(None);
-                }
-            };
-            Some(infer_table_schema(&plan.schema())?)
-        } else {
-            Some(table.schema())
+                };
+                let mut planner = Planner::new(self.ctx.clone());
+                let plan = match planner.bind_sql(query).await {
+                    Ok(result) => result,
+                    Err(error) => {
+                        warn!(
+                            "Skipping lineage view whose query cannot be resolved: {}.{}.{}, error: {}",
+                            catalog_name, database_name, table_name, error
+                        );
+                        return Ok(None);
+                    }
+                };
+                Some(infer_table_schema(&plan.schema())?)
+            }
+            LineageObjectType::MaterializedView => {
+                // The stored TableMeta schema is the physical storage layout (aggregate states,
+                // row-id column). Lineage columns are the persisted logical schema.
+                let definition = get_materialized_view_handler()
+                    .get_mv_definition(catalog.as_ref(), &self.ctx.get_tenant(), table_id)
+                    .await?;
+                let Some(definition) = definition else {
+                    warn!(
+                        "Skipping lineage materialized view without stored definition: {}.{}.{}",
+                        catalog_name, database_name, table_name
+                    );
+                    return Ok(None);
+                };
+                Some(Arc::new(definition.data.logical_schema))
+            }
+            LineageObjectType::Table | LineageObjectType::Stage => Some(table.schema()),
         };
         Ok(Some(ResolvedObject {
             object_type,
@@ -398,6 +410,9 @@ fn matches_expected_type(table: &dyn Table, expected: LineageObjectType) -> bool
         LineageObjectType::View => {
             !table.is_temp() && table.engine().eq_ignore_ascii_case(VIEW_ENGINE)
         }
+        LineageObjectType::MaterializedView => {
+            !table.is_temp() && is_materialized_view_engine(table.engine())
+        }
         LineageObjectType::Table => is_lineage_table_endpoint(table.engine(), table.is_temp()),
         LineageObjectType::Stage => false,
     }
@@ -405,7 +420,7 @@ fn matches_expected_type(table: &dyn Table, expected: LineageObjectType) -> bool
 
 fn is_lineage_table_endpoint(engine: &str, is_temporary: bool) -> bool {
     !is_temporary
-        && ![VIEW_ENGINE, STREAM_ENGINE, "MEMORY"]
+        && ![VIEW_ENGINE, MATERIALIZED_VIEW_ENGINE, STREAM_ENGINE, "MEMORY"]
             .iter()
             .any(|unsupported| engine.eq_ignore_ascii_case(unsupported))
 }
