@@ -105,12 +105,6 @@ impl Interpreter for ReplaceInterpreter {
             let (physical_plan, purge_info) = self.build_physical_plan().await?;
             let mut pipeline =
                 build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-            let lock_guard = self
-                .plan
-                .lock_guard
-                .as_ref()
-                .and_then(|holder| holder.try_take());
-            pipeline.main_pipeline.add_lock_guard(lock_guard);
 
             // purge
             if let Some((files, stage_info, options)) = purge_info {
@@ -123,7 +117,9 @@ impl Interpreter for ReplaceInterpreter {
                 )?;
             }
 
-            // Execute hook.
+            // Execute hook. The table lock acquired by the binder is handed over to the hook
+            // chain, which keeps it for the main pipeline and the compact hook and releases it
+            // before analyze.
             {
                 let hook_operator = HookOperator::create(
                     self.ctx.clone(),
@@ -132,7 +128,8 @@ impl Interpreter for ReplaceInterpreter {
                     self.plan.table.clone(),
                     MutationKind::Replace,
                     LockTableOption::NoLock,
-                );
+                )
+                .with_lock_guard(self.plan.lock_guard.clone());
                 hook_operator.execute(&mut pipeline.main_pipeline).await;
             }
 

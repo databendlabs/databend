@@ -21,6 +21,8 @@ use std::time::Instant;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::SharedLockGuard;
+use databend_common_pipeline::core::always_callback;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use log::warn;
 
@@ -38,6 +40,26 @@ use crate::interpreters::hook::table_hook_scheduler::TableHookTaskSettings;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
 
+/// Register the release point of a handed-over table lock on the finished-callback chain.
+///
+/// The release is a normal callback so it runs in chain order: callbacks registered before it
+/// still run under the lock, callbacks registered after it run without the lock. An always
+/// callback is added as a safety net in case an earlier callback failed and interrupted the
+/// normal chain. Both are no-ops once the guard has been taken.
+pub(crate) fn register_lock_release(pipeline: &mut Pipeline, lock_guard: &SharedLockGuard) {
+    let guard = lock_guard.clone();
+    pipeline.set_on_finished(move |_info: &ExecutionInfo| {
+        drop(guard.try_take());
+        Ok(())
+    });
+
+    let guard = lock_guard.clone();
+    pipeline.set_on_finished(always_callback(move |_info: &ExecutionInfo| {
+        drop(guard.try_take());
+        Ok(())
+    }));
+}
+
 /// Hook operator.
 pub struct HookOperator {
     ctx: Arc<QueryContext>,
@@ -46,6 +68,12 @@ pub struct HookOperator {
     table: String,
     mutation_kind: MutationKind,
     lock_opt: LockTableOption,
+    /// The table lock acquired by the main operation, if any.
+    ///
+    /// The main pipeline and the compact/refresh hooks run under this lock. It is released
+    /// before the analyze hook, which only reads snapshots and commits statistics through a
+    /// sequence CAS, so it must not extend the lock hold time.
+    lock_guard: Option<SharedLockGuard>,
 }
 
 impl HookOperator {
@@ -64,7 +92,19 @@ impl HookOperator {
             table,
             mutation_kind,
             lock_opt,
+            lock_guard: None,
         }
+    }
+
+    /// Hand the main operation's table lock over to the hook chain.
+    ///
+    /// The caller must not also register the guard on the pipeline; the hook chain owns its
+    /// release point. Callers that hand over a lock should pass `LockTableOption::NoLock` as
+    /// `lock_opt`, otherwise the compact hook would queue a second lock revision behind the
+    /// one it already holds.
+    pub fn with_lock_guard(mut self, lock_guard: Option<SharedLockGuard>) -> Self {
+        self.lock_guard = lock_guard;
+        self
     }
 
     /// Execute the hook operator.
@@ -82,12 +122,25 @@ impl HookOperator {
 
         self.execute_compact(pipeline).await;
         self.execute_refresh(pipeline).await;
+        // Compaction and reclustering mutate the table and rely on the main operation's lock.
+        // Analyze only reads snapshots and commits statistics with a sequence CAS, so the lock
+        // is released here to keep other maintenance jobs from waiting on it.
+        self.release_lock_guard(pipeline);
         self.execute_analyze(pipeline).await;
+    }
+
+    fn release_lock_guard(&self, pipeline: &mut Pipeline) {
+        if let Some(lock_guard) = &self.lock_guard {
+            register_lock_release(pipeline, lock_guard);
+        }
     }
 
     #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn execute_async(&self, pipeline: &mut Pipeline) {
+        // Async hooks acquire their own lock with retry, so the main operation's lock is
+        // released as soon as the main pipeline finishes.
+        self.release_lock_guard(pipeline);
         if pipeline.is_empty() {
             return;
         }
@@ -192,5 +245,103 @@ impl HookOperator {
         };
 
         hook_analyze(self.ctx.clone(), pipeline, desc).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use std::sync::Mutex;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
+
+    use databend_common_exception::ErrorCode;
+    use databend_common_pipeline::core::ExecutionInfo;
+    use databend_common_pipeline::core::LockGuard;
+    use databend_common_pipeline::core::Pipeline;
+    use databend_common_pipeline::core::SharedLockGuard;
+    use databend_common_pipeline::core::UnlockApi;
+
+    use super::register_lock_release;
+
+    struct RecordingUnlocker {
+        unlocked: Arc<AtomicBool>,
+    }
+
+    impl UnlockApi for RecordingUnlocker {
+        fn unlock(&self, _revision: u64) {
+            self.unlocked.store(true, Ordering::SeqCst);
+        }
+    }
+
+    fn locked_guard() -> (SharedLockGuard, Arc<AtomicBool>) {
+        let unlocked = Arc::new(AtomicBool::new(false));
+        let unlocker = Arc::new(RecordingUnlocker {
+            unlocked: unlocked.clone(),
+        });
+        let guard = SharedLockGuard::new(Arc::new(LockGuard::new(unlocker, 1)));
+        (guard, unlocked)
+    }
+
+    fn ok_info() -> ExecutionInfo {
+        ExecutionInfo::create(Ok(()), HashMap::new())
+    }
+
+    #[test]
+    fn lock_is_released_between_callbacks_in_chain_order() {
+        let (guard, unlocked) = locked_guard();
+        let observed = Arc::new(Mutex::new(Vec::new()));
+        let mut pipeline = Pipeline::create();
+
+        // A hook registered before the release point still runs under the lock.
+        let before = observed.clone();
+        let seen = unlocked.clone();
+        pipeline.set_on_finished(move |_info: &ExecutionInfo| {
+            before
+                .lock()
+                .unwrap()
+                .push(("compact", seen.load(Ordering::SeqCst)));
+            Ok(())
+        });
+
+        register_lock_release(&mut pipeline, &guard);
+
+        // A hook registered after the release point runs without the lock.
+        let after = observed.clone();
+        let seen = unlocked.clone();
+        pipeline.set_on_finished(move |_info: &ExecutionInfo| {
+            after
+                .lock()
+                .unwrap()
+                .push(("analyze", seen.load(Ordering::SeqCst)));
+            Ok(())
+        });
+
+        pipeline.take_on_finished().apply(ok_info()).unwrap();
+
+        assert_eq!(*observed.lock().unwrap(), vec![
+            ("compact", false),
+            ("analyze", true)
+        ]);
+        assert!(guard.try_take().is_none());
+    }
+
+    #[test]
+    fn lock_is_released_when_normal_chain_is_interrupted() {
+        let (guard, unlocked) = locked_guard();
+        let mut pipeline = Pipeline::create();
+
+        // A failing callback before the release point interrupts the normal chain, so the
+        // normal release callback is skipped and the always callback must release the lock.
+        pipeline.set_on_finished(|_info: &ExecutionInfo| {
+            Err(ErrorCode::Internal("earlier callback failed"))
+        });
+        register_lock_release(&mut pipeline, &guard);
+
+        let res = pipeline.take_on_finished().apply(ok_info());
+
+        assert!(res.is_err());
+        assert!(unlocked.load(Ordering::SeqCst));
     }
 }
