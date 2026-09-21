@@ -67,31 +67,8 @@ impl BlocksEncoder {
         }
     }
 
-    pub(super) fn add_blocks(&mut self, mut blocks: Vec<DataBlock>) -> Result<()> {
-        let layout = if self.use_parquet {
-            // Currently we splice multiple complete parquet files into one,
-            // so that the file contains duplicate headers/footers and metadata,
-            // which can lead to file bloat. A better approach would be for the entire file to be ONE parquet,
-            // with each group of blocks (i.e. Chunk) corresponding to one or more row groupsx
-            bare_blocks_to_parquet(blocks, &mut self.buf)?;
-            Layout::Parquet
-        } else {
-            let block = if blocks.len() == 1 {
-                blocks.remove(0)
-            } else {
-                DataBlock::concat(&std::mem::take(&mut blocks))?
-            };
-            let mut columns_layout = Vec::with_capacity(block.num_columns());
-            let mut last_size = self.size();
-            for entry in block.take_columns() {
-                let column = entry.to_column();
-                write_column(&column, &mut self.buf)?;
-                let current_size = self.size();
-                columns_layout.push(current_size - last_size);
-                last_size = current_size;
-            }
-            Layout::ArrowIpc(columns_layout.into_boxed_slice())
-        };
+    pub(super) fn add_blocks(&mut self, blocks: Vec<DataBlock>) -> Result<()> {
+        let (layout, _) = serialize_blocks(blocks, self.use_parquet, &mut self.buf)?;
 
         self.columns_layout.push(layout);
         self.offsets.push(self.size());
@@ -100,6 +77,52 @@ impl BlocksEncoder {
 
     pub(super) fn size(&self) -> usize {
         self.buf.size()
+    }
+}
+
+pub(super) fn serialize_blocks(
+    mut blocks: Vec<DataBlock>,
+    use_parquet: bool,
+    writer: &mut (impl Write + Send),
+) -> Result<(Layout, usize)> {
+    let mut writer = CountingWriter {
+        inner: writer,
+        bytes: 0,
+    };
+    let layout = if use_parquet {
+        bare_blocks_to_parquet(blocks, &mut writer)?;
+        Layout::Parquet
+    } else {
+        let block = if blocks.len() == 1 {
+            blocks.pop().unwrap()
+        } else {
+            DataBlock::concat(&blocks)?
+        };
+        let mut columns_layout = Vec::with_capacity(block.num_columns());
+        for entry in block.take_columns() {
+            let start = writer.bytes;
+            write_column(&entry.to_column(), &mut writer)?;
+            columns_layout.push(writer.bytes - start);
+        }
+        Layout::ArrowIpc(columns_layout.into_boxed_slice())
+    };
+    Ok((layout, writer.bytes))
+}
+
+struct CountingWriter<W> {
+    inner: W,
+    bytes: usize,
+}
+
+impl<W: Write> Write for CountingWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let written = self.inner.write(buf)?;
+        self.bytes += written;
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
     }
 }
 
@@ -181,6 +204,7 @@ fn bare_blocks_to_parquet<W: Write + Send>(
         .set_offset_index_disabled(true)
         .set_statistics_enabled(EnabledStatistics::None)
         .set_bloom_filter_enabled(false)
+        .set_dictionary_enabled(false)
         .build();
     let batches = blocks
         .into_iter()
