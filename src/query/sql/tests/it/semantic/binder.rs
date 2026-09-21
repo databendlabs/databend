@@ -64,6 +64,12 @@ export function add_one(v) {
 $$
 "#;
 
+const TEST_LAMBDA_WRAPPING_SCRIPT_UDF_SQL: &str =
+    "CREATE OR REPLACE FUNCTION wrap_add_one AS (x) -> add_one(x)";
+
+const TEST_SCALAR_WRAPPING_SCRIPT_UDF_SQL: &str =
+    "CREATE OR REPLACE FUNCTION scalar_wrap_add_one (x INT) RETURNS INT AS $$ add_one(x) $$";
+
 async fn bind_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
     let ctx = setup_context(case).await?;
     let outcome = match ctx.bind_sql(case.sql).await {
@@ -274,6 +280,75 @@ async fn test_binder_mutation_udf() -> Result<()> {
     ];
 
     run_binder_cases("binder_mutation_udf.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_binder_nested_udf_rewrite() -> Result<()> {
+    let cases = [
+        SqlTestCase {
+            name: "lambda_udf_wrapping_script_udf_is_rewritten",
+            description: "A script UDF called from a lambda UDF body must still be rewritten into a UdfScript node.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                TEST_SCRIPT_UDF_SQL,
+                TEST_LAMBDA_WRAPPING_SCRIPT_UDF_SQL,
+            ],
+            sql: "SELECT wrap_add_one(a) FROM t",
+        },
+        SqlTestCase {
+            name: "sql_scalar_udf_wrapping_script_udf_is_rewritten",
+            description: "A script UDF called from a SQL scalar UDF body must still be rewritten into a UdfScript node.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                TEST_SCRIPT_UDF_SQL,
+                TEST_SCALAR_WRAPPING_SCRIPT_UDF_SQL,
+            ],
+            sql: "SELECT scalar_wrap_add_one(a) FROM t",
+        },
+        SqlTestCase {
+            name: "lambda_udf_wrapping_script_udf_in_filter_is_rewritten",
+            description: "A script UDF reached through a lambda UDF inside WHERE must be rewritten before the filter is evaluated.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                TEST_SCRIPT_UDF_SQL,
+                TEST_LAMBDA_WRAPPING_SCRIPT_UDF_SQL,
+            ],
+            sql: "SELECT a FROM t WHERE wrap_add_one(a) > 1",
+        },
+        SqlTestCase {
+            name: "script_udf_inside_sql_lambda_body_is_rejected",
+            description: "A script UDF cannot be lifted out of a SQL lambda body, so it must be rejected with a clear error instead of leaking an internal column id.",
+            setup_sqls: &["CREATE TABLE t(a INT, b INT)", TEST_SCRIPT_UDF_SQL],
+            sql: "SELECT array_transform([a], x -> add_one(x)) FROM t",
+        },
+        SqlTestCase {
+            name: "lambda_udf_wrapping_script_udf_inside_sql_lambda_body_is_rejected",
+            description: "The same rejection must apply when the script UDF is reached indirectly through a lambda UDF.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                TEST_SCRIPT_UDF_SQL,
+                TEST_LAMBDA_WRAPPING_SCRIPT_UDF_SQL,
+            ],
+            sql: "SELECT array_transform([a], x -> wrap_add_one(x)) FROM t",
+        },
+        SqlTestCase {
+            name: "udaf_script_inside_sql_lambda_body_is_rejected",
+            description: "A UDAF script is built outside the aggregate resolution path, so the lambda body check must reject it too.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
+            sql: "SELECT array_transform([a], x -> weighted_avg(x, b)) FROM t",
+        },
+        SqlTestCase {
+            name: "pure_sql_lambda_udf_inside_sql_lambda_body_is_allowed",
+            description: "A lambda UDF whose body is pure SQL is inlined, so it must remain usable inside a SQL lambda body.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE OR REPLACE FUNCTION sql_add_one AS (x) -> x + 1",
+            ],
+            sql: "SELECT array_transform([a], x -> sql_add_one(x)) FROM t",
+        },
+    ];
+
+    run_binder_cases("binder_nested_udf.txt", &cases).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

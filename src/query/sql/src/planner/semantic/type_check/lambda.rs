@@ -53,6 +53,8 @@ use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
+use crate::plans::UDAFCall;
+use crate::plans::UDFCall;
 use crate::plans::Visitor;
 
 impl<'a> CoreExprArena<'a> {
@@ -129,6 +131,8 @@ where A: super::TypeCheckAdapter
     fn resolve_core_lambda_expr(
         &mut self,
         arena: &CoreExprArena<'_>,
+        func_name: &str,
+        span: Span,
         lambda_context: &mut BindContext,
         lambda_columns: &[(String, DataType)],
         lambda_expr: CoreExprId,
@@ -168,7 +172,53 @@ where A: super::TypeCheckAdapter
             self.metadata.clone(),
             &[],
         )?;
-        type_checker.resolve_core(arena, lambda_expr)
+        let resolved = type_checker.resolve_core(arena, lambda_expr)?;
+        Self::reject_runtime_udf_in_lambda_body(func_name, span, &resolved.0)?;
+        Ok(resolved)
+    }
+
+    /// A lambda body is compiled into a `RemoteExpr` and evaluated per element by
+    /// the expression evaluator, so it cannot host a script or server UDF: those
+    /// are executed by a separate `Udf` plan node that `UdfRewriter` lifts out of
+    /// the enclosing `EvalScalar`/`Filter`. Without this check the unrewritten
+    /// call is lowered into a dummy column reference and later fails with a
+    /// confusing "Unable to get field named <internal column id>" error.
+    fn reject_runtime_udf_in_lambda_body(
+        func_name: &str,
+        span: Span,
+        lambda_body: &ScalarExpr,
+    ) -> Result<()> {
+        struct RuntimeUdfVisitor {
+            found: Option<(Span, String)>,
+        }
+
+        impl<'b> Visitor<'b> for RuntimeUdfVisitor {
+            fn visit_udf_call(&mut self, udf: &'b UDFCall) -> Result<()> {
+                if self.found.is_none() {
+                    self.found = Some((udf.span, udf.name.clone()));
+                }
+                Ok(())
+            }
+
+            fn visit_udaf_call(&mut self, udaf: &'b UDAFCall) -> Result<()> {
+                if self.found.is_none() {
+                    self.found = Some((udaf.span, udaf.name.clone()));
+                }
+                Ok(())
+            }
+        }
+
+        let mut visitor = RuntimeUdfVisitor { found: None };
+        visitor.visit(lambda_body)?;
+
+        match visitor.found {
+            None => Ok(()),
+            Some((udf_span, udf_name)) => Err(ErrorCode::SemanticError(format!(
+                "UDF {udf_name:?} is not supported in the lambda body of {func_name}, \
+                 because script and server UDFs are evaluated by a separate plan node"
+            ))
+            .set_span(udf_span.or(span))),
+        }
     }
 
     fn transform_to_max_type(&self, ty: &DataType) -> Result<DataType> {
@@ -335,6 +385,8 @@ where A: super::TypeCheckAdapter
         let mut lambda_context = self.bind_context.clone();
         let deref!((lambda_expr, lambda_type)) = self.resolve_core_lambda_expr(
             arena,
+            func_name,
+            span,
             &mut lambda_context,
             &lambda_columns,
             lambda_expr,
@@ -585,6 +637,8 @@ where A: super::TypeCheckAdapter
         let mut lambda_context = self.bind_context.clone();
         let deref!((lambda_scalar, lambda_type)) = self.resolve_core_lambda_expr(
             arena,
+            func_name,
+            span,
             &mut lambda_context,
             &lambda_columns,
             lambda_expr,

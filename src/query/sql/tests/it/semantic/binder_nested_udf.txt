@@ -1,0 +1,87 @@
+=== lambda_udf_wrapping_script_udf_is_rewritten ===
+description: A script UDF called from a lambda UDF body must still be rewritten into a UdfScript node.
+sql: SELECT wrap_add_one(a) FROM t
+status: ok
+EvalScalar
+├── scalars: [wrap_add_one(add_one(x) (#3)) AS (#2)]
+└── UdfScript
+    ├── scalars: [add_one(t.a (#0)) AS (#3)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== sql_scalar_udf_wrapping_script_udf_is_rewritten ===
+description: A script UDF called from a SQL scalar UDF body must still be rewritten into a UdfScript node.
+sql: SELECT scalar_wrap_add_one(a) FROM t
+status: ok
+EvalScalar
+├── scalars: [scalar_wrap_add_one(CAST(add_one(x) (#3) AS Int32 NULL)) AS (#2)]
+└── UdfScript
+    ├── scalars: [add_one(t.a (#0)) AS (#3)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== lambda_udf_wrapping_script_udf_in_filter_is_rewritten ===
+description: A script UDF reached through a lambda UDF inside WHERE must be rewritten before the filter is evaluated.
+sql: SELECT a FROM t WHERE wrap_add_one(a) > 1
+status: ok
+EvalScalar
+├── scalars: [t.a (#0) AS (#0)]
+└── Filter
+    ├── filters: [gt(wrap_add_one(add_one(x) (#2)), 1)]
+    └── UdfScript
+        ├── scalars: [add_one(t.a (#0)) AS (#2)]
+        └── EvalScalar
+            ├── scalars: [t.a (#0) AS (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== script_udf_inside_sql_lambda_body_is_rejected ===
+description: A script UDF cannot be lifted out of a SQL lambda body, so it must be rejected with a clear error instead of leaking an internal column id.
+sql: SELECT array_transform([a], x -> add_one(x)) FROM t
+status: error
+code: 1065
+message: UDF "add_one" is not supported in the lambda body of array_transform, because script and server UDFs are evaluated by a separate plan node
+
+=== lambda_udf_wrapping_script_udf_inside_sql_lambda_body_is_rejected ===
+description: The same rejection must apply when the script UDF is reached indirectly through a lambda UDF.
+sql: SELECT array_transform([a], x -> wrap_add_one(x)) FROM t
+status: error
+code: 1065
+message: UDF "add_one" is not supported in the lambda body of array_transform, because script and server UDFs are evaluated by a separate plan node
+
+=== udaf_script_inside_sql_lambda_body_is_rejected ===
+description: A UDAF script is built outside the aggregate resolution path, so the lambda body check must reject it too.
+sql: SELECT array_transform([a], x -> weighted_avg(x, b)) FROM t
+status: error
+code: 1065
+message: UDF "weighted_avg" is not supported in the lambda body of array_transform, because script and server UDFs are evaluated by a separate plan node
+
+=== pure_sql_lambda_udf_inside_sql_lambda_body_is_allowed ===
+description: A lambda UDF whose body is pure SQL is inlined, so it must remain usable inside a SQL lambda body.
+sql: SELECT array_transform([a], x -> sql_add_one(x)) FROM t
+status: ok
+EvalScalar
+├── scalars: [array_transform(array(t.a (#0)), ["x"] -> x (#2) + 1) AS (#2)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+
