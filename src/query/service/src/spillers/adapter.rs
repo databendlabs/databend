@@ -26,10 +26,7 @@ use databend_common_base::base::dma_buffer_to_bytes;
 use databend_common_base::base::dma_read_file_range;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::traits::DataBlockSpill;
-use databend_common_pipeline_transforms::traits::SortSpiller;
-use databend_storages_common_cache::TempPath;
 use opendal::Buffer;
 use opendal::Operator;
 
@@ -38,7 +35,6 @@ use super::block_reader::BlocksReader;
 use super::block_writer::BlocksWriter;
 use super::inner::*;
 use super::serialize::*;
-use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSpillProgress;
 
@@ -379,79 +375,6 @@ impl SpillAdapter for Arc<QueryContext> {
 
     fn get_spill_layout(&self, location: &Location) -> Option<Layout> {
         self.as_ref().get_spill_layout(location)
-    }
-}
-
-pub struct SortAdapter {
-    ctx: Arc<QueryContext>,
-    local_files: Arc<RwLock<HashMap<TempPath, Layout>>>,
-    memory_settings: MemorySettings,
-}
-
-impl SpillAdapter for SortAdapter {
-    fn add_spill_file(&self, location: Location, layout: Layout, size: usize) {
-        match location {
-            Location::Remote(_) => {
-                // Remote spill files are tracked in QueryContext for cleanup
-                // and contribute to the total spill progress.
-                self.ctx.as_ref().incr_spill_progress(1, size);
-                self.ctx.as_ref().add_spill_file(location, layout);
-            }
-            Location::Local(temp_path) => {
-                // Local spill files are tracked only in-memory for sort, but
-                // should still be counted in SpillTotalStats so that progress
-                // reflects total (local + remote) spilled bytes/files.
-                self.ctx.as_ref().incr_spill_progress(1, size);
-                self.local_files.write().unwrap().insert(temp_path, layout);
-            }
-        }
-    }
-
-    fn get_spill_layout(&self, location: &Location) -> Option<Layout> {
-        match location {
-            Location::Remote(_) => self.ctx.as_ref().get_spill_layout(location),
-            Location::Local(temp_path) => self.local_files.read().unwrap().get(temp_path).cloned(),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct SortSpillerImpl(Arc<SpillerInner<SortAdapter>>);
-
-#[async_trait::async_trait]
-impl SortSpiller for SortSpillerImpl {
-    async fn spill(&self, data_block: DataBlock) -> Result<Location> {
-        self.0.spill(vec![data_block]).await
-    }
-
-    async fn restore(&self, location: &Location) -> Result<DataBlock> {
-        self.0.read_spilled_file(location).await
-    }
-
-    fn remove_local_file(&self, local: &TempPath) {
-        SortSpillerImpl::remove_local_file(self, local);
-    }
-
-    fn memory_settings(&self) -> &MemorySettings {
-        &self.0.adapter.memory_settings
-    }
-}
-
-impl SortSpillerImpl {
-    pub fn new(ctx: Arc<QueryContext>, operator: Operator, config: SpillerConfig) -> Result<Self> {
-        Ok(SortSpillerImpl(Arc::new(SpillerInner::new(
-            SortAdapter {
-                memory_settings: MemorySettings::from_sort_settings(&ctx)?,
-                ctx,
-                local_files: Default::default(),
-            },
-            operator,
-            config,
-        )?)))
-    }
-
-    pub fn remove_local_file(&self, local: &TempPath) -> Option<Layout> {
-        self.0.adapter.local_files.write().unwrap().remove(local)
     }
 }
 
