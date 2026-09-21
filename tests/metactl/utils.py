@@ -14,6 +14,9 @@ SCRIPT_PATH = Path(__file__).parent.absolute()
 REPO_PATH = SCRIPT_PATH.parent.parent
 META_BINARY = REPO_PATH / "target" / BUILD_PROFILE / "databend-meta"
 METACTL_BINARY = REPO_PATH / "target" / BUILD_PROFILE / "databend-metactl"
+METABENCH_BINARY = REPO_PATH / "target" / BUILD_PROFILE / "databend-metabench"
+METAVERIFIER_BINARY = REPO_PATH / "target" / BUILD_PROFILE / "databend-metaverifier"
+QUERY_BINARY = REPO_PATH / "target" / BUILD_PROFILE / "databend-query"
 
 CERTS_DIR = REPO_PATH / "tests" / "certs"
 TEST_SERVER_CERT = CERTS_DIR / "server.pem"
