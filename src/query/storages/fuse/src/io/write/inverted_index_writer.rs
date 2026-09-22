@@ -230,6 +230,8 @@ const INDEX_WRITER_TABLE_SIZING_HINT: usize = 16 * 1024 * 1024;
 
 pub struct InvertedIndexWriter {
     schema: DataSchemaRef,
+    /// Tantivy fields in `schema` order, as assigned by `create_index_schema`.
+    index_fields: Vec<Field>,
     operator: Operator,
     location: String,
     directory: InvertedIndexOutputDirectory,
@@ -273,7 +275,7 @@ impl InvertedIndexWriter {
         location: String,
         directory: InvertedIndexOutputDirectory,
     ) -> Result<InvertedIndexWriter> {
-        let (index_schema, _) = create_index_schema(schema.clone(), index_options)?;
+        let (index_schema, index_fields) = create_index_schema(schema.clone(), index_options)?;
 
         // No field is stored, so the doc store only holds empty documents; compressing them
         // inline is negligible and avoids one compression thread per block index.
@@ -294,6 +296,7 @@ impl InvertedIndexWriter {
 
         Ok(Self {
             schema,
+            index_fields,
             operator,
             location,
             directory,
@@ -311,8 +314,8 @@ impl InvertedIndexWriter {
 
         for i in 0..block.num_rows() {
             let mut doc = TantivyDocument::new();
-            for (j, (field_index, ty)) in field_indexes.iter().enumerate() {
-                let field = Field::from_field_id(j as u32);
+            for (field, (field_index, ty)) in self.index_fields.iter().zip(&field_indexes) {
+                let field = *field;
                 let column = block.get_by_offset(*field_index);
                 match unsafe { column.index_unchecked(i) } {
                     ScalarRef::String(text) => doc.add_text(field, text),
