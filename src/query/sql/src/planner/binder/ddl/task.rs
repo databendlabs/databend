@@ -15,6 +15,8 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use chrono_tz;
 use cron;
@@ -40,12 +42,14 @@ use databend_common_ast::visit::Visitor;
 use databend_common_ast::visit::Walk;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 use databend_common_script::compile_block;
 use databend_common_script::ir::ScriptIR;
 use parking_lot::RwLock;
 
 use crate::Binder;
 use crate::Metadata;
+use crate::planner::QueryExecutor;
 use crate::planner::statement_changes_settings;
 use crate::plans::AlterTaskPlan;
 use crate::plans::CreateTaskPlan;
@@ -54,6 +58,36 @@ use crate::plans::DropTaskPlan;
 use crate::plans::ExecuteTaskPlan;
 use crate::plans::Plan;
 use crate::plans::ShowTasksPlan;
+
+/// A per-statement probe, never an executing interface. The error only unwinds binding;
+/// the private flag (not an error code or message) identifies an execution dependency.
+#[derive(Default)]
+struct TaskValidationProbe {
+    execution_required: AtomicBool,
+}
+
+#[async_trait::async_trait]
+impl QueryExecutor for TaskValidationProbe {
+    async fn execute_query_with_sql_string(&self, _sql: &str) -> Result<Vec<DataBlock>> {
+        self.execution_required.store(true, Ordering::Relaxed);
+        Err(ErrorCode::Internal(
+            "Task validation stopped at an execution dependency",
+        ))
+    }
+}
+
+impl TaskValidationProbe {
+    fn finish<T>(&self, result: Result<T>) -> Result<()> {
+        if self.execution_required.load(Ordering::Relaxed) {
+            return Ok(());
+        }
+        match result {
+            Ok(_) => Ok(()),
+            Err(e) if is_deferrable_bind_error(e.code()) => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
+}
 
 /// Stop at a runtime script variable rather than passing an unbound template to SQL binding.
 struct ScriptVariableFinder;
@@ -215,11 +249,14 @@ fn parse_sql_dialect(value: &str) -> Dialect {
 impl Binder {
     /// Validate the SQL carried by a task at CREATE/ALTER time.
     ///
-    /// Best-effort bind statements and compile constant `EXECUTE IMMEDIATE` blocks,
-    /// including binding their static SQL and expressions in the current planning context.
+    /// Best-effort bind queries and compile constant `EXECUTE IMMEDIATE` blocks,
+    /// including binding their static queries and expressions in the current planning context.
+    /// DML and other statements are checked for syntax only.
     /// This pass does not reproduce every runtime setting or planning facility. Known
     /// inconclusive failures are deferred (see [`is_deferrable_bind_error`]), and accepted
     /// task SQL is bound again in its runtime context. No task statement is executed here.
+    /// This is not a simulation of script execution: preceding SET/USE or DDL statements
+    /// are not applied when checking subsequent statements.
     async fn verify_task_sql(&self, sql: &TaskSql, check: TaskSqlCheck) -> Result<()> {
         match sql {
             TaskSql::SingleStatement(stmt) => self.verify_task_statement(stmt, check).await,
@@ -263,24 +300,25 @@ impl Binder {
             // Applying statement settings here would mutate the outer CREATE/ALTER context,
             // while binding without applying them can reject valid task SQL. Syntax has
             // already been checked, so leave these statements to runtime planning.
-            if matches!(&stmt, Statement::StatementWithSettings { .. }) {
+            if statement_changes_settings(&stmt) {
                 continue;
             }
 
             // Isolate metadata from both the outer CREATE/ALTER TASK and other script
             // statements. Avoid materialized-view catalog work irrelevant to validation.
-            // Keep the outer subquery executor: task execution plans with
-            // `Planner::new_with_query_executor`, and SQL such as dynamic `PIVOT` values,
-            // `MATERIALIZED` CTEs or subquery table-function arguments cannot be bound
-            // without one.
+            // Never attach the outer executor: dynamic PIVOT, materialized CTEs and
+            // subquery table arguments must be deferred, not executed during CREATE TASK.
+            // Never reuse a probe across statements: one deferred statement must not
+            // suppress an independent error in another statement of the same script.
+            let probe = Arc::new(TaskValidationProbe::default());
             let mut binder = Binder::new(
                 self.ctx.clone(),
                 self.catalogs.clone(),
                 self.name_resolution_ctx.clone(),
                 Arc::new(RwLock::new(Metadata::default())),
             )
-            .with_subquery_executor(self.subquery_executor.clone())
-            .with_materialized_view_rewrite(false);
+            .with_materialized_view_rewrite(false)
+            .with_subquery_executor(Some(probe.clone()));
 
             // Do not route `EXECUTE IMMEDIATE` through `bind()`: for a single-statement
             // script it applies the nested statement's settings to the shared context.
@@ -301,13 +339,14 @@ impl Binder {
                 continue;
             }
 
-            match binder.bind(&stmt).await {
-                Ok(_) => {}
-                Err(e) if !is_deferrable_bind_error(e.code()) => return Err(e),
-                // Deferrable failures, such as objects that do not exist yet, stay
-                // best-effort: the task may still bind successfully when it runs.
-                Err(_) => {}
+            // Bind only queries. Mutation binders can acquire table locks, and other
+            // statements can perform external work (for example CREATE FUNCTION checks
+            // a remote UDF server). Leave their semantic validation to runtime.
+            if !matches!(&stmt, Statement::Query(_)) {
+                continue;
             }
+
+            probe.finish(binder.bind(&stmt).await)?;
         }
         Ok(())
     }

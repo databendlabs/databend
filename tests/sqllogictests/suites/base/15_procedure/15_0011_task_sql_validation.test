@@ -66,11 +66,9 @@ CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS SELECT b.number FROM nu
 statement error 1065
 CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS SELECT v FROM static_validation_t ORDER BY 5
 
-# Validation binds with the same subquery executor as task execution, so SQL that runs a
-# subquery while binding (dynamic PIVOT values, MATERIALIZED CTE, subquery table-function
-# arguments) is planned fully rather than rejected as an internal error. Each case pairs
-# such a statement with a later deterministic error to stay independent of whether cloud
-# control is reachable: 1065 is only reported if the first statement bound successfully.
+# Execution-dependent planning is deferred, never executed during task validation.
+# Each case pairs such a statement with a later deterministic error: validation must
+# continue checking independent statements after an unavailable planning facility.
 statement ok
 CREATE OR REPLACE TABLE static_validation_sales (empid INT, month STRING, amount INT)
 
@@ -89,9 +87,35 @@ CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BE
 statement error 1065
 CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN SELECT * FROM numbers((SELECT COUNT(*) FROM static_validation_sales)); SELECT [1][true]; END; $$
 
-# Errors inside a dynamic PIVOT are still detected, because the values are resolved.
 statement error 1065
-CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS SELECT * FROM static_validation_sales PIVOT(SUM(no_such_col) FOR month IN (ANY))
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN SELECT * FROM static_validation_sales AT(SNAPSHOT => (SELECT month FROM static_validation_sales LIMIT 1)); SELECT [1][true]; END; $$
+
+statement error 1065
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN WITH m AS (SELECT month FROM static_validation_sales) SELECT * FROM m UNION ALL SELECT * FROM m; SELECT [1][true]; END; $$
+
+# Non-DML must not enter the server-UDAF binder's unimplemented branch.
+statement error 1065
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN CREATE FUNCTION f (INT) STATE {s INT} RETURNS INT LANGUAGE python ADDRESS='http://127.0.0.1:8815'; SELECT [1][true]; END; $$
+
+# A statement hint must neither cause a false rejection nor change outer settings.
+statement ok
+SET unquoted_ident_case_sensitive = 1
+
+# Reach the interpreter's cloud-control check, not a missing-column error (1065).
+statement error 1702
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS SELECT /*+ SET_VAR(unquoted_ident_case_sensitive=0) */ MONTH FROM static_validation_sales
+
+query I
+SELECT value FROM system.settings WHERE name = 'unquoted_ident_case_sensitive'
+----
+1
+
+statement ok
+SET unquoted_ident_case_sensitive = 0
+
+# Static PIVOT values still allow column checking without executing a source query.
+statement error 1065
+CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS SELECT * FROM static_validation_sales PIVOT(SUM(no_such_col) FOR month IN ('jan'))
 
 statement ok
 DROP TABLE static_validation_sales

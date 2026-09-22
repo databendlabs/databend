@@ -217,8 +217,8 @@ statement ok
 CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh'
 AS SELECT task_validation_udf_not_created_yet(1)
 
-# Dynamic PIVOT values (subquery / ANY) run a subquery while binding. Validation uses the
-# same subquery executor as task execution, so such definitions are accepted.
+# Dynamic PIVOT values need execution while binding. The definition-time probe rejects
+# execution requests, so these forms are deferred without executing their source queries.
 statement ok
 CREATE OR REPLACE TABLE task_validation_sales (empid INT, month STRING, amount INT)
 
@@ -237,6 +237,20 @@ SELECT * FROM task_validation_sales PIVOT(SUM(amount) FOR month IN (SELECT DISTI
 statement ok
 CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh'
 AS SELECT * FROM task_validation_sales PIVOT(SUM(amount) FOR month IN (ANY ORDER BY month))
+
+# These source expressions fail if evaluated on the stored rows. Defining the task
+# must succeed, proving neither PIVOT source queries nor materialized CTAS are run.
+statement ok
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh'
+AS SELECT * FROM task_validation_sales PIVOT(SUM(amount) FOR month IN (SELECT to_int64(month) FROM task_validation_sales))
+
+statement ok
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh'
+AS SELECT * FROM (SELECT to_int64(month) AS month, amount FROM task_validation_sales) s PIVOT(SUM(amount) FOR month IN (ANY))
+
+statement ok
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh'
+AS WITH m AS MATERIALIZED (SELECT to_int64(month) FROM task_validation_sales) SELECT * FROM m
 
 statement ok
 ALTER TASK task_validation_deferred MODIFY AS SELECT * FROM task_validation_sales PIVOT(SUM(amount) FOR month IN (ANY))
