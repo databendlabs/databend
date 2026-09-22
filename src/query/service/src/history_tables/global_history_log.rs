@@ -57,8 +57,7 @@ use crate::clusters::ClusterDiscovery;
 use crate::history_tables::alter_table::get_alter_table_sql;
 use crate::history_tables::alter_table::get_log_table;
 use crate::history_tables::alter_table::should_reset;
-use crate::history_tables::error_handling::ErrorCounters;
-use crate::history_tables::error_handling::is_temp_error;
+use crate::history_tables::error_handling::RetryBackoff;
 use crate::history_tables::external::ExternalStorageConnection;
 use crate::history_tables::external::get_external_storage_connection;
 use crate::history_tables::meta::HistoryMetaHandle;
@@ -121,8 +120,14 @@ impl GlobalHistoryLog {
             return Ok(());
         }
         runtime.spawn(async move {
-            if let Err(e) = GlobalHistoryLog::instance().work().await {
-                error!("System history tables exit with {}", e);
+            let mut backoff = RetryBackoff::default();
+            while let Err(e) = GlobalHistoryLog::instance().work().await {
+                let delay = backoff.next_delay();
+                error!(
+                    "System history tables initialization failed with {}, retry count {}, next retry in {} seconds",
+                    e, backoff.failures(), delay.as_secs()
+                );
+                sleep(delay).await;
             }
         });
         Ok(())
@@ -137,7 +142,15 @@ impl GlobalHistoryLog {
     /// GlobalHistoryLog rely on other services, so we need to wait
     /// for all services to be initialized before starting the work.
     pub async fn initialized(&self, log_only: bool) -> Result<()> {
-        let _ = should_reset(self.create_context().await?, &self.connection).await?;
+        match async { should_reset(self.create_context().await?, &self.connection).await }.await {
+            // Preserve startup rejection of incompatible storage configurations.
+            Err(e) if log_only || e.code() == ErrorCode::INVALID_CONFIG => return Err(e),
+            Err(e) => warn!(
+                "System history tables startup check failed with {}, background initialization will retry",
+                e
+            ),
+            Ok(_) => {}
+        }
         self.initialized.store(true, Ordering::SeqCst);
         // if log_only is true, this node will not have reset operation,
         // so we can set up operator here.
@@ -389,7 +402,7 @@ impl GlobalHistoryLog {
     }
 
     async fn run_table_transform_loop(&self, table: Arc<HistoryTable>, meta_key: String) {
-        let mut error_counters = ErrorCounters::new();
+        let mut backoff = RetryBackoff::default();
         loop {
             // 1. Acquire heartbeat
             let heartbeat_key = format!("{}/{}", meta_key, table.name);
@@ -404,8 +417,15 @@ impl GlobalHistoryLog {
                     continue;
                 }
                 Err(e) => {
-                    error!("{} failed to create heartbeat, retry: {}", table.name, e);
-                    sleep(self.transform_sleep_duration()).await;
+                    let delay = backoff.next_delay();
+                    error!(
+                        "{} failed to create heartbeat with {}, retry count {}, next retry in {} seconds",
+                        table.name,
+                        e,
+                        backoff.failures(),
+                        delay.as_secs()
+                    );
+                    sleep(delay).await;
                     continue;
                 }
             };
@@ -423,34 +443,20 @@ impl GlobalHistoryLog {
                 }
                 match self.transform(&table, &meta_key).await {
                     Ok(()) => {
-                        error_counters.reset();
+                        backoff.reset();
                         transform_cnt += 1;
                         sleep(self.transform_sleep_duration()).await;
                     }
                     Err(e) => {
-                        if is_temp_error(&e) {
-                            let temp_count = error_counters.increment_temporary();
-                            let backoff_second = error_counters.calculate_temp_backoff();
-                            warn!(
-                                "{} log transform failed with temporary error {}, count {}, next retry in {} seconds",
-                                table.name, e, temp_count, backoff_second
-                            );
-                            sleep(Duration::from_secs(backoff_second)).await;
-                        } else {
-                            let persistent_count = error_counters.increment_persistent();
-                            error!(
-                                "{} log transform failed with persistent error {}, retry count {}",
-                                table.name, e, persistent_count
-                            );
-                            if error_counters.persistent_exceeded_limit() {
-                                error!(
-                                    "{} log transform failed too many times, giving up",
-                                    table.name
-                                );
-                                break;
-                            }
-                            sleep(self.transform_sleep_duration()).await;
-                        }
+                        let delay = backoff.next_delay();
+                        error!(
+                            "{} log transform failed with {}, retry count {}, next retry in {} seconds",
+                            table.name,
+                            e,
+                            backoff.failures(),
+                            delay.as_secs()
+                        );
+                        sleep(delay).await;
 
                         // On error(e.g. DUPLICATED_UPSERT_FILES), verify that our heartbeat is still valid (from this node).
                         // Purpose: avoid two nodes performing the same work concurrently.
@@ -479,10 +485,6 @@ impl GlobalHistoryLog {
                 }
             }
             debug!("{} released heartbeat", table.name);
-
-            if error_counters.persistent_exceeded_limit() {
-                return;
-            }
         }
     }
 
