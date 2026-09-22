@@ -107,7 +107,9 @@ echo "Query ID: $drop_query_id"
 echo "Running test queries to test inner history tables"
 ./tests/logging/history_table/run_all_tests.sh
 
-response1=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select * from system_history.log_history where query_id = '${drop_query_id}'\"}")
+# Check query events only: HTTP cleanup can emit new diagnostic logs with the same
+# query_id after the storage reset. Those are not records retained from the old table.
+response1=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select * from system_history.log_history where query_id = '${drop_query_id}' and target = 'databend::log::query'\"}")
 
 meta_count_response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select count(*) from system_history.log_history where message like 'Databend Meta version%'\"}")
 
@@ -167,9 +169,17 @@ echo "Running test queries to test external history tables"
 ./tests/logging/history_table/run_all_tests.sh
 
 
-response2=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select * from system_history.log_history where query_id = '${drop_query_id}'\"}")
+response2=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select * from system_history.log_history where query_id = '${drop_query_id}' and target = 'databend::log::query'\"}")
 
 echo "Validating responses..."
+
+for response in "$response1" "$response2"; do
+    if ! echo "$response" | jq -e '.state == "Succeeded" and .error == null' > /dev/null; then
+        echo "ERROR: failed to query history records for the storage reset check"
+        echo "$response"
+        exit 1
+    fi
+done
 
 # Check response1 data field is not empty
 response1_data=$(echo "$response1" | jq -r '.data')
