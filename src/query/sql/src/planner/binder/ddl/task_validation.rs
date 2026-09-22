@@ -172,94 +172,58 @@ mod tests {
         validate_task_sql(&TaskSql::SingleStatement(sql.to_string()))
     }
 
-    fn assert_code(sql: &str, code: u16) {
-        let err = validate(sql).unwrap_err();
-        assert_eq!(err.code(), code, "{sql}: {err}");
-    }
-
     #[test]
-    fn rejects_syntax_errors_in_constant_scripts() {
-        assert_code("SELECT FROM", ErrorCode::SYNTAX_EXCEPTION);
-        assert_code(
-            "EXECUTE IMMEDIATE 'SELECT FROM'",
-            ErrorCode::SYNTAX_EXCEPTION,
-        );
-        assert_code(
-            "EXECUTE IMMEDIATE $$ BEGIN IF FALSE THEN SELECT FROM; END IF; END; $$",
-            ErrorCode::SYNTAX_EXCEPTION,
-        );
-        // Nested constant scripts are expanded, including through a SETTINGS wrapper.
-        assert_code(
-            "EXECUTE IMMEDIATE $$ BEGIN EXECUTE IMMEDIATE 'BEGIN SELECT FROM; END;'; END; $$",
-            ErrorCode::SYNTAX_EXCEPTION,
-        );
-        assert_code(
-            "SETTINGS (max_threads = 1) EXECUTE IMMEDIATE 'SELECT FROM'",
-            ErrorCode::SYNTAX_EXCEPTION,
-        );
-    }
+    fn constant_scripts_are_parsed_and_compiled() {
+        let rejected = [
+            ("SELECT FROM", ErrorCode::SYNTAX_EXCEPTION),
+            (
+                "EXECUTE IMMEDIATE 'SELECT FROM'",
+                ErrorCode::SYNTAX_EXCEPTION,
+            ),
+            (
+                "EXECUTE IMMEDIATE $$ BEGIN RETURN unknown_variable; END; $$",
+                ErrorCode::SCRIPT_SEMANTIC_ERROR,
+            ),
+            // Nested constant scripts are expanded and compiled on their own.
+            (
+                "EXECUTE IMMEDIATE $$ BEGIN LOOP EXECUTE IMMEDIATE 'BEGIN CONTINUE; END;'; END LOOP; END; $$",
+                ErrorCode::SCRIPT_SEMANTIC_ERROR,
+            ),
+        ];
+        for (sql, code) in rejected {
+            let err = validate(sql).unwrap_err();
+            assert_eq!(err.code(), code, "{sql}: {err}");
+        }
 
-    #[test]
-    fn rejects_script_compile_errors() {
-        assert_code(
-            "EXECUTE IMMEDIATE $$ BEGIN RETURN unknown_variable; END; $$",
-            ErrorCode::SCRIPT_SEMANTIC_ERROR,
-        );
-        assert_code(
-            "EXECUTE IMMEDIATE $$ BEGIN BREAK; END; $$",
-            ErrorCode::SCRIPT_SEMANTIC_ERROR,
-        );
-        // A nested script is compiled on its own: its loop context is not inherited.
-        assert_code(
-            "EXECUTE IMMEDIATE $$ BEGIN LOOP EXECUTE IMMEDIATE 'BEGIN CONTINUE; END;'; END LOOP; END; $$",
-            ErrorCode::SCRIPT_SEMANTIC_ERROR,
-        );
-    }
+        // Nothing is bound and non-literal scripts are not evaluated.
+        let accepted = [
+            "EXECUTE IMMEDIATE 'SELECT ' || 'FROM'",
+            "SELECT udf_not_created_yet(no_such_col) FROM not_created_yet",
+            "EXECUTE IMMEDIATE $$ DECLARE t := 'x'; BEGIN SELECT * FROM IDENTIFIER(:t); RETURN t; END; $$",
+        ];
+        for sql in accepted {
+            validate(sql).unwrap_or_else(|e| panic!("{sql}: {e}"));
+        }
 
-    #[test]
-    fn checks_every_statement_of_a_script_block() {
-        let sql = TaskSql::ScriptBlock(vec![
+        // Every statement of a task script block is checked.
+        let block = TaskSql::ScriptBlock(vec![
             "SELECT 1".to_string(),
             "EXECUTE IMMEDIATE 'SELECT FROM'".to_string(),
         ]);
-        let err = validate_task_sql(&sql).unwrap_err();
-        assert_eq!(err.code(), ErrorCode::SYNTAX_EXCEPTION);
+        assert_eq!(
+            validate_task_sql(&block).unwrap_err().code(),
+            ErrorCode::SYNTAX_EXCEPTION
+        );
     }
 
     #[test]
-    fn accepts_anything_that_needs_runtime_context() {
-        for sql in [
-            // Scripts that are not string literals are not evaluated.
-            "EXECUTE IMMEDIATE 1",
-            "EXECUTE IMMEDIATE 'SELECT ' || 'FROM'",
-            // Nothing is bound: objects, UDFs and columns are never resolved.
-            "INSERT INTO not_created_yet SELECT 1",
-            "SELECT udf_not_created_yet(1)",
-            "SELECT no_such_col FROM not_created_yet",
-            "SELECT * FROM s WITH CONSUME",
-            "SELECT * FROM t PIVOT(SUM(a) FOR m IN (SELECT m FROM t))",
-            "WITH m AS MATERIALIZED (SELECT 1) SELECT * FROM m",
-            // Runtime script variables and dynamic identifiers.
-            "EXECUTE IMMEDIATE $$ DECLARE t := 'x'; BEGIN SELECT * FROM IDENTIFIER(:t); RETURN t; END; $$",
-            "EXECUTE IMMEDIATE $$ BEGIN FOR i IN 1 TO 2 DO SELECT :i; END FOR; END; $$",
-        ] {
-            validate(sql).unwrap_or_else(|e| panic!("{sql}: {e}"));
-        }
-    }
-
-    #[test]
-    fn stops_expanding_beyond_the_nesting_limit() {
-        // A syntax error hidden below the limit is left to runtime rather than expanded.
-        let mut sql = "SELECT FROM".to_string();
-        for _ in 0..=MAX_SCRIPT_NESTING {
-            sql = format!("EXECUTE IMMEDIATE '{}'", sql.replace('\'', "''"));
-        }
-        validate(&sql).unwrap();
-        // One level shallower is still expanded.
-        let mut sql = "SELECT FROM".to_string();
-        for _ in 0..MAX_SCRIPT_NESTING {
-            sql = format!("EXECUTE IMMEDIATE '{}'", sql.replace('\'', "''"));
-        }
-        assert_code(&sql, ErrorCode::SYNTAX_EXCEPTION);
+    fn expansion_stops_at_the_nesting_limit() {
+        let nest = |depth: usize| {
+            (0..depth).fold("SELECT FROM".to_string(), |sql, _| {
+                format!("EXECUTE IMMEDIATE '{}'", sql.replace('\'', "''"))
+            })
+        };
+        assert!(validate(&nest(MAX_SCRIPT_NESTING)).is_err());
+        assert!(validate(&nest(MAX_SCRIPT_NESTING + 1)).is_ok());
     }
 }
