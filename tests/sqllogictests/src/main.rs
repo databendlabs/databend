@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::future::Future;
 use std::path::Path;
+use std::path::PathBuf;
 use std::time::Instant;
 
 use clap::Parser;
@@ -43,21 +43,20 @@ use crate::client::QueryResultFormat;
 use crate::diagnostics::capture_failure_diagnostics;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
+use crate::hook::Hooks;
 use crate::report::ErrorRecord;
 use crate::report::RunReport;
 use crate::settings_matrix::SettingsGroup;
 use crate::settings_matrix::collect_settings_passes;
 use crate::util::ColumnType;
-use crate::util::collect_files;
-use crate::util::collect_lazy_dir;
-use crate::util::lazy_prepare_data;
-use crate::util::lazy_run_dictionary_containers;
+use crate::util::collect_test_files;
 use crate::util::run_ttc_container;
 
 mod arg;
 mod client;
 mod diagnostics;
 mod error;
+mod hook;
 mod report;
 mod settings_matrix;
 mod util;
@@ -134,65 +133,98 @@ pub async fn main() -> Result<()> {
         Some(hs) => hs.iter().map(|s| s.as_str()).collect(),
         None => vec![HANDLER_MYSQL, HANDLER_HTTP],
     };
-    let mut containers = vec![];
-    for handler in handlers.iter() {
-        match *handler {
-            HANDLER_MYSQL => {
-                run_mysql_client(args.clone()).await?;
-            }
-            HANDLER_HTTP => {
-                run_http_client(args.clone()).await?;
-            }
-            HANDLER_HYBRID => {
-                run_hybrid_client(args.clone(), &mut containers).await?;
-            }
-            handler if handler.starts_with("ttc") => {
-                if handler != "ttc_dev" {
-                    let image = format!("ghcr.io/databendlabs/{handler}:latest");
-                    run_ttc_container(
-                        &image,
-                        TTC_PORT_START,
-                        args.port,
-                        &mut containers,
-                        QueryResultFormat::Json,
-                    )
+    let files = collect_test_files(&args)?;
+    let hooks = Hooks::discover(Path::new(&args.suites), &files)?;
+    let hook_env = vec![(
+        "DATABEND_SQLLOGICTEST_FORCE_LOAD",
+        if args.force_load {
+            "1".to_string()
+        } else {
+            "0".to_string()
+        },
+    )];
+    let prepared_hooks = if args.bench {
+        0
+    } else {
+        hooks.prepare(&hook_env)?
+    };
+
+    let test_result = async {
+        let mut containers = vec![];
+        for handler in handlers.iter() {
+            match *handler {
+                HANDLER_MYSQL => {
+                    run_mysql_client(args.clone(), &files).await?;
+                }
+                HANDLER_HTTP => {
+                    run_http_client(args.clone(), &files).await?;
+                }
+                HANDLER_HYBRID => {
+                    run_hybrid_client(args.clone(), &files, &mut containers).await?;
+                }
+                handler if handler.starts_with("ttc") => {
+                    if handler != "ttc_dev" {
+                        let image = format!("ghcr.io/databendlabs/{handler}:latest");
+                        run_ttc_container(
+                            &image,
+                            TTC_PORT_START,
+                            args.port,
+                            &mut containers,
+                            QueryResultFormat::Json,
+                        )
+                        .await?;
+                    }
+                    run_ttc_client(args.clone(), &files, ClientType::Ttc {
+                        image: handler.to_string(),
+                        port: TTC_PORT_START,
+                        query_result_format: QueryResultFormat::Json,
+                    })
                     .await?;
                 }
-                run_ttc_client(args.clone(), ClientType::Ttc {
-                    image: handler.to_string(),
-                    port: TTC_PORT_START,
-                    query_result_format: QueryResultFormat::Json,
-                })
-                .await?;
-            }
-            _ => {
-                return Err(format!("Unknown test handler: {handler}").into());
+                _ => {
+                    return Err(format!("Unknown test handler: {handler}").into());
+                }
             }
         }
+        Ok::<(), DSqlLogicTestError>(())
     }
+    .await;
 
-    Ok(())
+    let cleanup_result = hooks.cleanup(prepared_hooks, &hook_env);
+    match (test_result, cleanup_result) {
+        (Err(test_error), Err(cleanup_error)) => Err(DSqlLogicTestError::SelfError(format!(
+            "{test_error}; hook cleanup failed: {cleanup_error}"
+        ))),
+        (Err(test_error), Ok(())) => Err(test_error),
+        (Ok(()), Err(cleanup_error)) => Err(cleanup_error),
+        (Ok(()), Ok(())) => Ok(()),
+    }
 }
 
-async fn run_mysql_client(args: SqlLogicTestArgs) -> Result<()> {
+async fn run_mysql_client(args: SqlLogicTestArgs, files: &[PathBuf]) -> Result<()> {
     println!("MySQL client starts to run with: {:?}", args);
-    run_suits(args, ClientType::MySQL).await?;
+    run_suits(args, files, ClientType::MySQL).await?;
     Ok(())
 }
 
-async fn run_http_client(args: SqlLogicTestArgs) -> Result<()> {
+async fn run_http_client(args: SqlLogicTestArgs, files: &[PathBuf]) -> Result<()> {
     println!("Http client starts to run with: {:?}", args);
-    run_suits(args, ClientType::Http).await?;
+    run_suits(args, files, ClientType::Http).await?;
     Ok(())
 }
-async fn run_ttc_client(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()> {
+async fn run_ttc_client(
+    args: SqlLogicTestArgs,
+    files: &[PathBuf],
+    client_type: ClientType,
+) -> Result<()> {
     println!("Http client starts to run with: {:?}", args);
-    run_suits(args, client_type).await?;
+    run_suits(args, files, client_type).await?;
     Ok(())
 }
 
 async fn run_hybrid_client(
     args: SqlLogicTestArgs,
+    files: &[PathBuf],
     cs: &mut Vec<ContainerAsync<GenericImage>>,
 ) -> Result<()> {
     println!("Hybird client starts to run with: {:?}", args);
@@ -211,7 +243,7 @@ async fn run_hybrid_client(
         }
     }
 
-    if let Err(e) = run_suits(args, ClientType::Hybird).await {
+    if let Err(e) = run_suits(args, files, ClientType::Hybird).await {
         for c in cs {
             println!("{}", c.id());
             println!("{}", c.image().name());
@@ -312,44 +344,30 @@ async fn create_databend(
     Ok(Databend::create(client))
 }
 
-async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()> {
+async fn run_suits(
+    args: SqlLogicTestArgs,
+    selected_paths: &[PathBuf],
+    client_type: ClientType,
+) -> Result<()> {
     // Todo: set validator to process regex
     let mut num_of_tests = 0;
-    let mut lazy_dirs = HashSet::new();
     let mut files = vec![];
     let start = Instant::now();
-    for suit_file in collect_files(&args)?.into_iter() {
-        let file_name = suit_file.file_name().unwrap().to_str().unwrap().to_string();
-
-        if !file_name.ends_with(".test") {
-            continue;
-        }
-        if let Some(ref specific_file) = args.file
-            && !specific_file.split(',').any(|f| f.eq(&file_name))
-        {
-            continue;
-        }
-        if let Some(ref skip_file) = args.skipped_file
-            && skip_file.split(',').any(|f| f.eq(&file_name))
-        {
-            continue;
-        }
-        let records_in_file = parse_file::<ColumnType>(&suit_file).unwrap().len();
+    for suit_file in selected_paths.iter().cloned() {
+        let records_in_file = parse_file::<ColumnType>(&suit_file)
+            .map_err(|error| {
+                DSqlLogicTestError::SelfError(format!(
+                    "failed to parse {}: {error}",
+                    suit_file.display()
+                ))
+            })?
+            .len();
         // Each `# run-with-settings:` directive reruns the whole file once more.
         let settings_passes = collect_settings_passes(&suit_file)?;
         num_of_tests += records_in_file * (1 + settings_passes.len());
-
-        collect_lazy_dir(&suit_file, &mut lazy_dirs)?;
         files.push((suit_file, settings_passes));
     }
     let selected_files = files.len();
-
-    if !args.bench {
-        // lazy load test data
-        lazy_prepare_data(&lazy_dirs, args.force_load)?;
-    }
-    // lazy run dictionaries containers
-    let _dict_container = lazy_run_dictionary_containers(&lazy_dirs).await?;
 
     if args.complete {
         for (file, _) in files {
@@ -371,7 +389,12 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
                     |actual, expected| actual == expected,
                 )
                 .await
-                .unwrap();
+                .map_err(|error| {
+                    DSqlLogicTestError::SelfError(format!(
+                        "failed to update {}: {error}",
+                        file.display()
+                    ))
+                })?;
         }
     } else {
         // Every file runs once with default settings, plus once per
