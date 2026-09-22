@@ -99,6 +99,9 @@ impl Binder {
             ));
         }
         verify_scheduler_option(schedule_opts)?;
+        // Syntax and script structure only. The body is not bound here, so semantic
+        // errors (unknown tables or columns, type mismatches, missing UDFs, ...) are
+        // reported when the task runs, not when it is defined.
         validate_task_sql(sql)?;
 
         let tenant = self.ctx.get_tenant();
@@ -157,6 +160,7 @@ impl Binder {
         }
 
         if let AlterTaskOptions::ModifyAs(sql) = options {
+            // Same as CREATE TASK: syntax and script structure only, no semantic check.
             validate_task_sql(sql)?;
         }
 

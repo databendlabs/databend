@@ -19,6 +19,9 @@
 //! compiles script blocks. It never binds statements, never resolves catalog objects or
 //! UDFs, never executes anything and never touches the session context, so the task body
 //! is rejected only for errors that are certain regardless of the runtime environment.
+//!
+//! This is *not* a semantic check. Unknown tables or columns, type errors, missing UDFs
+//! and anything else that needs a catalog or schema are only detected when the task runs.
 
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Literal;
