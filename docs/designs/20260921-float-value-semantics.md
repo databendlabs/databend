@@ -37,19 +37,33 @@ buckets, join hash tables, in-memory `DISTINCT` sets, conflict digests
 exchanged between nodes of the same query.
 
 **Persisted digest.** A hash written to storage or table metadata and read back
-by a later query or a later Databend version: bloom filters built from SQL hash
-functions, count-min sketch and TopN entries in table metadata, ngram digests,
-and any new hash that is serialized.
+by a later query or a later Databend version. See the inventory in R7.
 
 ## Rules
 
 ### R1. Value preservation
 
-The bits of a float that Databend stores, transports, or returns are never
-rewritten. `-0.0` written by the user is `-0.0` on read; a NaN payload survives
-a round trip through storage and the wire. Canonicalization happens only when a
-key boundary derives a comparison, order, hash, or key from the value, and it
-operates on a copy.
+Canonicalization happens only when a key boundary derives a comparison, order,
+hash, or key from a float, and it operates on a copy. No key boundary rewrites
+the value it reads.
+
+What is preserved depends on the encoding of the path the value travels
+through:
+
+- **Binary encodings** (column data files, block/segment metadata, binary
+  serde, inter-node exchange, binary result formats such as Arrow) preserve the
+  exact bit pattern. `-0.0` written by the user is `-0.0` on read; a NaN sign
+  and payload survive a round trip.
+- **Human-readable encodings** (JSON serde with `is_human_readable()`, textual
+  result formats, CSV/TSV, `to_string`) preserve the equality class, the sign
+  of zero, and the sign of infinity. They are not required to preserve NaN sign
+  or payload: every NaN may be emitted as a single token and decoded as the
+  canonical NaN. A human-readable encoding must never turn a NaN into a
+  non-NaN value, a zero into a non-zero value, or `-0.0` into `+0.0`.
+
+A path that mixes both (for example a binary value encoded to JSON for a
+session variable and decoded again) is a human-readable path for the purpose
+of this rule.
 
 ### R2. Equality
 
@@ -125,29 +139,86 @@ needs a semantic key must either make `Hash` and `Eq` agree for all variants or
 introduce a dedicated key type whose `Hash` and `Eq` are both defined on the
 canonical form.
 
-### R7. Persisted digests are wire formats
+### R7. Persisted digests
 
-A persisted digest may not change for any input value without, in the same
-change:
+**Inventory.** At the time of writing, the following digests are persisted.
+Every one of them hashes a single scalar leaf value; none hashes a composite
+(Array, Map, Tuple, Vector) key.
 
-1. a new format version for the structure that stores it;
-2. reader compatibility for the previous version, either by probing every
-   representative of the class against the old digest, or by returning
-   `Uncertain`/no-prune for values the old digest could misplace;
-3. golden-vector tests that pin the exact digest of a fixed input set including
-   `+0.0`, `-0.0`, `f64::NAN`, a negative-signed NaN, `-inf`, `+inf`, and the
-   corresponding `f32` values.
+| Structure | Hash path | Float input | Status |
+|---|---|---|---|
+| Bloom filter (Xor8 / BinaryFuse) in block index files | `DFHash` via `siphash` / `city64`; Map columns hash each value element as a scalar | raw bits | migration governed by this rule |
+| Ngram filter in block index files | `DFHash` on `&str` | none | not affected |
+| Count-min sketch and TopN in snapshot statistics | `std::hash::Hash` of `ScalarRef` over `supported_stat_type` columns | `OrderedFloat::hash` (canonical) | already compliant |
+| HLL NDV (`MetaHLL`) in block and segment statistics | `std::hash::Hash` of `F32` / `F64` | `OrderedFloat::hash` (canonical) | already compliant |
 
-Query-local digests are exempt from versioning and may change freely, but must
-satisfy R4.
+Group-by, join, `DISTINCT`, `REPLACE INTO`/`MERGE INTO` conflict digests, and
+the row encoding used for sorting are query-local. Composite-key hashes occur
+only on those query-local paths, so R5 changes to composite hashing are not a
+persisted-format compatibility problem today. Adding a persisted digest over a
+composite key, or extending an existing persisted structure to composite
+columns, brings it under this rule. Changing `ScalarRef::hash` for any variant
+in `supported_stat_type` changes the count-min sketch digest and is a
+wire-format change; changing it for other variants (for example to satisfy R6
+for Bitmap or Geometry) is not.
+
+A persisted digest is read from structures written before the current code
+existed. Writers follow R4 and hash the canonical representative. Readers must
+not assume that a stored digest was produced from the canonical representative,
+because structures written before R4 was applied hold digests of whatever bit
+pattern the writer received.
+
+**Raw-bit digest.** For every persisted digest, the reader has access to a
+digest function that operates on the raw bit pattern of a float without
+canonicalization. It is distinct from the R4 key-boundary hash, exists only to
+probe persisted structures, and is not used on any other key boundary. Because
+the R4 hash of a canonical representative equals the raw-bit digest of that
+same bit pattern, the raw-bit digest is sufficient to probe both legacy and
+current structures.
+
+**Probe set.** When a reader probes a persisted digest with a float value, it
+proceeds per equality class of the probe value:
+
+- zero class: compute the raw-bit digest of both `+0.0` and `-0.0` and treat
+  the structure as matching if either probe matches;
+- singleton classes: compute the raw-bit digest of the value;
+- NaN class: do not probe the digest; return `Uncertain`/no-prune.
+
+The zero class and singleton classes are covered exactly, for structures of
+any age. The NaN class cannot be covered by a digest probe, because a legacy
+structure may hold a digest of any NaN payload. Equality pruning for NaN is
+instead served by range statistics: under R3, NaN is the greatest value, so a
+block contains a NaN if and only if its maximum bound is NaN. Column min/max
+statistics have always been computed through this order, so the property holds
+for statistics written before R4 as well.
+
+**Changing a digest.** Changing the digest for any input value in a way not
+covered by the probe set above is a wire-format change and requires a new
+format version with reader compatibility for every previous version.
+
+**Tests.** Each persisted digest has golden-vector tests that pin the exact
+raw-bit digest of `+0.0`, `-0.0`, `f64::NAN`, a negative-signed NaN, `-inf`,
+`+inf`, and the corresponding `f32` values, and a compatibility test that
+builds the structure with the pre-R4 writer from a column containing `-0.0`
+and a NaN of payload A, then probes it through the current reader, asserting
+that:
+
+- probing with `+0.0` and with `-0.0` does not prune the block and goes
+  through the raw-bit digest path;
+- probing with a NaN of payload B, where B differs from A in sign or mantissa
+  bits, returns `Uncertain` from the digest and the block is retained by range
+  pruning; probing with payload A itself is not sufficient coverage.
+
+Query-local digests are not persisted and may change freely, but must satisfy
+R4.
 
 ### R8. Index soundness
 
 An index or pruning structure may over-approximate (report `Uncertain`, or keep
 a block that does not match) but must never under-approximate the predicate's
-equality class. Probing with the canonical representative must find every block
-that contains any member of the class. A range bound of `-0.0` covers `+0.0`
-and vice versa.
+equality class. Probing with the probe set of R7 must find every block that
+contains any member of the class. A range bound of `-0.0` covers `+0.0` and
+vice versa, and a maximum bound of NaN means the block may contain any NaN.
 
 ### R9. Non-finite bounds
 
@@ -166,6 +237,7 @@ range.
 - SQL-level coverage in the sqllogictest suites exercises, for the same inputs:
   `=`, `<>`, `ORDER BY`, `GROUP BY`, `DISTINCT`, `COUNT(DISTINCT)`, hash join,
   `IN`, `REPLACE INTO`, `MERGE INTO`, and bloom/range pruning of a Fuse table.
-- Every persisted digest has the golden-vector test required by R7.
+- Every persisted digest has the golden-vector and compatibility tests
+  required by R7.
 - Ordering tests do not assert a specific relative order of `-0.0` and `+0.0`,
   or of distinct NaN payloads.
