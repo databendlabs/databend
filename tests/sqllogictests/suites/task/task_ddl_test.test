@@ -205,10 +205,20 @@ $$
 statement ok
 CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE 'SELECT ' || 'FROM'
 
+statement ok
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS SETTINGS (enable_auto_materialize_cte = 1) EXECUTE IMMEDIATE 'SELECT 1'
+
 # Syntax errors inside constant scripts, including nested ones and every statement of a
 # task script block.
 statement error 1005
 CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE 'SELECT FROM'
+
+# SETTINGS wraps the statement; it must not bypass literal-script validation.
+statement error 1005
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS SETTINGS (enable_auto_materialize_cte = 1) EXECUTE IMMEDIATE 'SELECT FROM'
+
+statement error 1005
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS SETTINGS (enable_auto_materialize_cte = 1) EXECUTE IMMEDIATE $$ BEGIN IF FALSE THEN SELECT FROM; END IF; END; $$
 
 statement error 1005
 CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN IF FALSE THEN SELECT FROM; END IF; END; $$
@@ -218,6 +228,12 @@ CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IM
 
 statement error 1005
 CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS BEGIN SELECT 1; EXECUTE IMMEDIATE 'SELECT FROM'; END;
+
+statement error 1005
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS BEGIN SELECT 1; SETTINGS (enable_auto_materialize_cte = 1) EXECUTE IMMEDIATE 'SELECT FROM'; END;
+
+statement error 1005
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN IF TRUE THEN SETTINGS (enable_auto_materialize_cte = 1) EXECUTE IMMEDIATE 'SELECT FROM'; END IF; END; $$
 
 # Script compilation: undeclared variables and control flow outside a loop.
 statement error 3128
@@ -232,6 +248,12 @@ ALTER TASK task_validation_deferred MODIFY AS SELECT * FROM task_validation_defe
 
 statement error 1005
 ALTER TASK task_validation_deferred MODIFY AS EXECUTE IMMEDIATE 'SELECT FROM'
+
+statement error 1005
+ALTER TASK task_validation_deferred MODIFY AS SETTINGS (enable_auto_materialize_cte = 1) EXECUTE IMMEDIATE 'SELECT FROM'
+
+statement error 1005
+ALTER TASK task_validation_deferred MODIFY AS BEGIN SELECT 1; SETTINGS (enable_auto_materialize_cte = 1) EXECUTE IMMEDIATE 'SELECT FROM'; END;
 
 statement error 3128
 ALTER TASK task_validation_deferred MODIFY AS EXECUTE IMMEDIATE $$ BEGIN BREAK; END; $$

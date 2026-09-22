@@ -25,7 +25,6 @@ use databend_common_ast::ast::ExecuteTaskStmt;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::ScheduleOptions;
-use databend_common_ast::ast::ScriptBlock;
 use databend_common_ast::ast::ShowTasksStmt;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TaskSql;
@@ -88,52 +87,38 @@ fn verify_scheduler_option(schedule_opts: &Option<ScheduleOptions>) -> Result<()
     Ok(())
 }
 
-/// Task bodies are normalised to PostgreSQL-dialect SQL when the `CREATE TASK` statement
-/// is parsed, so that is the dialect they are re-parsed with here.
-const TASK_SQL_DIALECT: Dialect = Dialect::PostgreSQL;
-
-/// Validate every statement of a task body.
+/// Validate every statement of a task body for `CREATE TASK` and `ALTER TASK ... MODIFY AS`.
 ///
-/// `CREATE TASK` and `ALTER TASK ... MODIFY AS` run this pass over the task body. It is
-/// deliberately static: it parses SQL, expands constant `EXECUTE IMMEDIATE` scripts and
-/// compiles script blocks, recursively for nested constant scripts. It never binds statements, never resolves catalog objects or
-/// UDFs, never executes anything and never touches the session context, so the task body
-/// is rejected only for errors that are certain regardless of the runtime environment.
+/// This is a syntax check only: statements are parsed, and string-literal `EXECUTE IMMEDIATE`
+/// scripts are parsed and compiled as well, recursively. Nothing is bound, resolved or
+/// executed, so unknown tables or columns, type errors, missing UDFs and anything else that
+/// needs a catalog or schema are only detected when the task runs.
 ///
-/// This is *not* a semantic check. Unknown tables or columns, type errors, missing UDFs
-/// and anything else that needs a catalog or schema are only detected when the task runs.
-///
-/// Binding the task body here to catch those errors early was tried and dropped, because
-/// the production `Binder` cannot be used as a side-effect-free checker:
+/// Binding the body here to catch those errors early was tried and dropped, because the
+/// production `Binder` cannot be used as a side-effect-free checker:
 ///
 /// - It executes things. Constant arguments of immutable server UDFs are folded by
 ///   calling the UDF server, sandboxed script UDFs provision a cloud worker, dynamic
 ///   `PIVOT` and `MATERIALIZED` CTEs run subqueries, and DML binding takes table locks.
-///   A `CREATE TASK` must not do any of this.
 /// - It mutates the shared `QueryContext`. For example `WITH CONSUME` registers a stream
 ///   ref that the outer `CREATE TASK` binding then rejects as its own stream consumption.
 /// - The runtime environment differs from the definition-time one. Tasks run in a fresh
-///   session with their own session parameters, current database and role, and
-///   frequently reference tables, UDFs or streams that do not exist yet. Deciding which
-///   bind errors are "real" therefore needs an allowlist of error codes, which is fragile
-///   and still rejects valid tasks.
+///   session with their own session parameters, current database and role, and often
+///   reference objects that do not exist yet. Telling "real" bind errors apart needs an
+///   allowlist of error codes, which is fragile and still rejects valid tasks.
 ///
 /// Until the binder offers an explicit validation mode that guarantees none of the above,
 /// definition-time validation stays purely syntactic.
 fn validate_task_sql(sql: &TaskSql) -> Result<()> {
     match sql {
-        TaskSql::SingleStatement(stmt) => validate_statement_sql(stmt),
+        TaskSql::SingleStatement(stmt) => validate_statement(parse_statement(stmt)?),
         TaskSql::ScriptBlock(stmts) => stmts
             .iter()
-            .try_for_each(|stmt| validate_statement_sql(stmt)),
+            .try_for_each(|stmt| validate_statement(parse_statement(stmt)?)),
     }
 }
 
-fn validate_statement_sql(sql: &str) -> Result<()> {
-    let stmt = parse_statement(sql)?;
-    validate_statement(stmt)
-}
-
+/// Task bodies are stored as PostgreSQL-dialect SQL.
 fn parse_statement(sql: &str) -> Result<Statement> {
     let syntax_error = |e: ParseError| {
         ErrorCode::SyntaxException(format!(
@@ -142,74 +127,53 @@ fn parse_statement(sql: &str) -> Result<Statement> {
         ))
     };
     let tokens = tokenize_sql(sql).map_err(syntax_error)?;
-    let (stmt, _) = parse_sql(&tokens, TASK_SQL_DIALECT).map_err(syntax_error)?;
+    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).map_err(syntax_error)?;
     Ok(stmt)
 }
 
-/// Walk a statement and, recursively, the constant scripts it carries.
-///
-/// Only `EXECUTE IMMEDIATE` with a string literal is expanded. Any other script
-/// expression needs evaluation, which is out of scope for a static check, so those
-/// statements are accepted here and planned at runtime.
+/// Expand string-literal `EXECUTE IMMEDIATE` scripts, recursively. Any other script
+/// expression needs evaluation and is left to runtime planning.
 fn validate_statement(stmt: Statement) -> Result<()> {
     // Each level is a string literal inside the previous one, so the input strictly
     // shrinks and the expansion always terminates.
     let mut pending = vec![stmt];
     while let Some(stmt) = pending.pop() {
-        let Some(script) = constant_execute_immediate(&stmt) else {
+        let stmt = match stmt {
+            Statement::StatementWithSettings { stmt, .. } => *stmt,
+            stmt => stmt,
+        };
+        let Statement::ExecuteImmediate(execute) = &stmt else {
             continue;
         };
-        match parse_script(script)? {
+        let Expr::Literal {
+            value: Literal::String(script),
+            ..
+        } = &execute.script
+        else {
+            continue;
+        };
+        let tokens = tokenize_sql(script)?;
+        let parsed = run_parser(
+            &tokens,
+            Dialect::PostgreSQL,
+            ParseMode::Template,
+            false,
+            script_block_or_stmt,
+        )?;
+        match parsed {
             ScriptBlockOrStmt::Statement(nested) => pending.push(nested),
             ScriptBlockOrStmt::ScriptBlock(block) => {
-                pending.extend(compile_script_block(block, script)?);
+                // Compiling checks declarations, scopes and control flow, and lowers the
+                // SQL of every branch to `Query` instructions. The IR is never run.
+                let compiled = compile_block(block).map_err(|e| e.display_with_sql(script))?;
+                pending.extend(compiled.into_iter().filter_map(|ir| match ir {
+                    ScriptIR::Query { stmt, .. } => Some(stmt.stmt),
+                    _ => None,
+                }));
             }
         }
     }
     Ok(())
-}
-
-fn parse_script(script: &str) -> Result<ScriptBlockOrStmt> {
-    let tokens = tokenize_sql(script)?;
-    Ok(run_parser(
-        &tokens,
-        TASK_SQL_DIALECT,
-        ParseMode::Template,
-        false,
-        script_block_or_stmt,
-    )?)
-}
-
-/// The script of a constant `EXECUTE IMMEDIATE`, looking through a `SETTINGS` wrapper.
-fn constant_execute_immediate(stmt: &Statement) -> Option<&str> {
-    match stmt {
-        Statement::StatementWithSettings { stmt, .. } => constant_execute_immediate(stmt),
-        Statement::ExecuteImmediate(execute) => match &execute.script {
-            Expr::Literal {
-                value: Literal::String(script),
-                ..
-            } => Some(script),
-            _ => None,
-        },
-        _ => None,
-    }
-}
-
-/// Compile a script block and collect the SQL statements it lowers to.
-///
-/// Compilation checks declarations, scopes and control flow (for example `BREAK` outside
-/// a loop or a `RETURN` of an undeclared variable). Expressions and SQL in every branch
-/// are lowered to `Query` instructions; the resulting IR is never run. The statements may
-/// still contain `:var` holes that are only filled at runtime.
-fn compile_script_block(block: ScriptBlock, script: &str) -> Result<Vec<Statement>> {
-    let compiled = compile_block(block).map_err(|e| e.display_with_sql(script))?;
-    Ok(compiled
-        .into_iter()
-        .filter_map(|instruction| match instruction {
-            ScriptIR::Query { stmt, .. } => Some(stmt.stmt),
-            _ => None,
-        })
-        .collect())
 }
 
 impl Binder {
@@ -237,9 +201,6 @@ impl Binder {
             ));
         }
         verify_scheduler_option(schedule_opts)?;
-        // Syntax and script structure only. The body is deliberately not bound here, so
-        // semantic errors (unknown tables or columns, type mismatches, missing UDFs, ...)
-        // are reported when the task runs. See `validate_task_sql` for why.
         validate_task_sql(sql)?;
 
         let tenant = self.ctx.get_tenant();
@@ -298,7 +259,6 @@ impl Binder {
         }
 
         if let AlterTaskOptions::ModifyAs(sql) = options {
-            // Same as CREATE TASK: syntax and script structure only, no semantic check.
             validate_task_sql(sql)?;
         }
 
