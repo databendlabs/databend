@@ -99,9 +99,9 @@ impl Binder {
             ));
         }
         verify_scheduler_option(schedule_opts)?;
-        // Syntax and script structure only. The body is not bound here, so semantic
-        // errors (unknown tables or columns, type mismatches, missing UDFs, ...) are
-        // reported when the task runs, not when it is defined.
+        // Syntax and script structure only. The body is deliberately not bound here, so
+        // semantic errors (unknown tables or columns, type mismatches, missing UDFs, ...)
+        // are reported when the task runs. See `task_validation` for why.
         validate_task_sql(sql)?;
 
         let tenant = self.ctx.get_tenant();

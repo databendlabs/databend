@@ -22,6 +22,24 @@
 //!
 //! This is *not* a semantic check. Unknown tables or columns, type errors, missing UDFs
 //! and anything else that needs a catalog or schema are only detected when the task runs.
+//!
+//! Binding the task body here to catch those errors early was tried and dropped, because
+//! the production `Binder` cannot be used as a side-effect-free checker:
+//!
+//! - It executes things. Constant arguments of immutable server UDFs are folded by
+//!   calling the UDF server, sandboxed script UDFs provision a cloud worker, dynamic
+//!   `PIVOT` and `MATERIALIZED` CTEs run subqueries, and DML binding takes table locks.
+//!   A `CREATE TASK` must not do any of this.
+//! - It mutates the shared `QueryContext`. For example `WITH CONSUME` registers a stream
+//!   ref that the outer `CREATE TASK` binding then rejects as its own stream consumption.
+//! - The runtime environment differs from the definition-time one. Tasks run in a fresh
+//!   session with their own session parameters, current database and role, and
+//!   frequently reference tables, UDFs or streams that do not exist yet. Deciding which
+//!   bind errors are "real" therefore needs an allowlist of error codes, which is fragile
+//!   and still rejects valid tasks.
+//!
+//! Until the binder offers an explicit validation mode that guarantees none of the above,
+//! definition-time validation stays purely syntactic.
 
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Literal;
