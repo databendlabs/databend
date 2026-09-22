@@ -131,7 +131,6 @@ pub struct RowGroupReader {
     pub(super) schema_desc_from: Option<String>,
     pub(super) schema_desc_from_arrow_fallback: bool,
     pub(super) arrow_schema: Option<arrow_schema::Schema>,
-    pub(super) partition_columns: Vec<String>,
     pub(super) transformer: Option<RecordBatchTransformer>,
     // Options
     pub(super) batch_size: usize,
@@ -247,7 +246,6 @@ impl RowGroupReader {
                 &prewhere_info,
                 &self.table_schema,
                 &self.schema_desc,
-                &self.partition_columns,
                 self.arrow_schema.as_ref(),
             )?;
             *delete_filter = Some(DeleteFilter {
@@ -322,7 +320,7 @@ impl RowGroupReader {
         .with_push_downs(Some(info));
         let reader = builder.build_full_reader(ParquetSourceType::Iceberg, false)?;
         let mut stream = reader
-            .prepare_data_stream(path, meta.content_length(), None)
+            .prepare_data_stream(path, meta.content_length())
             .await?;
         let mut positional_deletes = Vec::new();
 

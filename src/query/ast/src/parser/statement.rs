@@ -5978,7 +5978,6 @@ pub fn engine(i: Input) -> IResult<Engine> {
         value(Engine::View, rule! { VIEW }),
         value(Engine::Random, rule! { RANDOM }),
         value(Engine::Iceberg, rule! { ICEBERG }),
-        value(Engine::Delta, rule! { DELTA }),
         value(Engine::Paimon, rule! { PAIMON }),
     ));
 
