@@ -650,8 +650,6 @@ pub enum TokenKind {
     DOW,
     #[token("WEEK", ignore(ascii_case))]
     WEEK,
-    #[token("DELTA", ignore(ascii_case))]
-    DELTA,
     #[token("DOY", ignore(ascii_case))]
     DOY,
     #[token("DOWNLOAD", ignore(ascii_case))]

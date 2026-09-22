@@ -1128,12 +1128,7 @@ fn relation_info_from_table_index(
     }
     let table_object = table.table();
     let table_info = table_object.get_table_info();
-    if table_object.is_temp()
-        || matches!(
-            table_info.engine().to_ascii_uppercase().as_str(),
-            "MEMORY" | "DELTA"
-        )
-    {
+    if table_object.is_temp() || table_info.engine().eq_ignore_ascii_case("MEMORY") {
         return Ok(None);
     }
     let catalog_type = table_info.catalog_info.catalog_type();
@@ -1553,19 +1548,17 @@ mod tests {
             assert_eq!(relation.catalog_type, Some(catalog_type));
         }
 
-        for engine in ["MEMORY", "DELTA"] {
-            let metadata = MetadataRef::new(RwLock::new(Metadata::default()));
-            let table_index = add_fake_table_with_engine(&metadata, 10, "src", &["a"], engine);
-            assert_eq!(
-                relation_info_from_table_index(
-                    &metadata.read(),
-                    table_index,
-                    QueryLineageRelationKind::Table,
-                )?,
-                None,
-                "engine={engine}"
-            );
-        }
+        let metadata = MetadataRef::new(RwLock::new(Metadata::default()));
+        let table_index = add_fake_table_with_engine(&metadata, 10, "src", &["a"], "MEMORY");
+        assert_eq!(
+            relation_info_from_table_index(
+                &metadata.read(),
+                table_index,
+                QueryLineageRelationKind::Table,
+            )?,
+            None,
+            "engine=MEMORY"
+        );
         Ok(())
     }
 

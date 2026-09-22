@@ -389,7 +389,7 @@ impl ShowCreateTableInterpreter {
             table_create_sql.push_str(format!(" TTL {expr:#}").as_str());
         }
 
-        if !hide_options_in_show_create_table || engine == "ICEBERG" || engine == "DELTA" {
+        if !hide_options_in_show_create_table || engine == "ICEBERG" {
             // Dynamic tables are recreated from their query, not an existing snapshot.
             // Only emit options accepted by CREATE DYNAMIC TABLE.
             let options = table_info.options().iter().filter(|(key, _)| {
@@ -400,7 +400,7 @@ impl ShowCreateTableInterpreter {
             table_create_sql.push_str(&Self::format_table_options(options));
         }
 
-        if engine != "ICEBERG" && engine != "DELTA" && !table_info.is_shared() {
+        if engine != "ICEBERG" && !table_info.is_shared() {
             if let Some(sp) = &table_info.meta.storage_params {
                 table_create_sql.push_str(format!(" '{}' ", sp).as_str());
             }

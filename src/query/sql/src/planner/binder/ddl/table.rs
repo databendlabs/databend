@@ -107,7 +107,6 @@ use databend_storages_common_table_meta::meta::VectorDistanceType;
 use databend_storages_common_table_meta::table::OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
@@ -698,7 +697,7 @@ impl Binder {
             )));
         }
 
-        let mut engine_options: BTreeMap<String, String> = BTreeMap::new();
+        let engine_options: BTreeMap<String, String> = BTreeMap::new();
         // Table-specific options override database defaults
         for table_option in table_options.iter() {
             self.insert_table_option_with_validation(
@@ -754,7 +753,7 @@ impl Binder {
             None
         };
 
-        let mut storage_params = match (uri_location_to_use.as_ref(), engine) {
+        let storage_params = match (uri_location_to_use.as_ref(), engine) {
             (Some(uri), Engine::Fuse) => {
                 let mut uri = UriLocation {
                     protocol: uri.protocol.clone(),
@@ -869,67 +868,23 @@ impl Binder {
                 Self::validate_create_table_schema(&result.schema)?;
                 (result, Some(Box::new(as_query_plan)))
             }
-            _ => {
-                let as_query_plan = if let Some(query) = as_query {
-                    let as_query_plan = self.as_query_plan(query).await?;
-                    Some(Box::new(as_query_plan))
-                } else {
-                    None
-                };
-                match engine {
-                    Engine::Iceberg => {
-                        let sp = stage_resolver
-                            .resolve_storage_params_from_options(&options)
-                            .await?;
-                        let (table_schema, _) =
-                            self.ctx.load_datalake_schema("iceberg", &sp).await?;
-                        // the first version of current iceberg table do not need to persist the storage_params,
-                        // since we get it from table options location and connection when load table each time.
-                        // we do this in case we change this idea.
-                        storage_params = Some(sp);
-                        (
-                            AnalyzeCreateTableResult {
-                                schema: Arc::new(table_schema),
-                                field_comments: vec![],
-                                field_stats_truncate_len: vec![],
-                                table_indexes: None,
-                                table_constraints: None,
-                            },
-                            as_query_plan,
-                        )
-                    }
-                    Engine::Delta => {
-                        let sp = stage_resolver
-                            .resolve_storage_params_from_options(&options)
-                            .await?;
-                        let (table_schema, meta) =
-                            self.ctx.load_datalake_schema("delta", &sp).await?;
-                        // the first version of current iceberg table do not need to persist the storage_params,
-                        // since we get it from table options location and connection when load table each time.
-                        // we do this in case we change this idea.
-                        storage_params = Some(sp);
-                        engine_options.insert(OPT_KEY_ENGINE_META.to_lowercase().to_string(), meta);
-                        (
-                            AnalyzeCreateTableResult {
-                                schema: Arc::new(table_schema),
-                                field_comments: vec![],
-                                field_stats_truncate_len: vec![],
-                                table_indexes: None,
-                                table_constraints: None,
-                            },
-                            as_query_plan,
-                        )
-                    }
-                    Engine::Paimon => {
-                        return Err(ErrorCode::StorageUnsupported(
-                            "CREATE TABLE with PAIMON engine is not supported".to_string(),
-                        ));
-                    }
-                    _ => Err(ErrorCode::BadArguments(
-                        "Incorrect CREATE query: required list of column descriptions or AS section or SELECT or ICEBERG/DELTA table engine",
-                    ))?,
+            (None, None) => match engine {
+                Engine::Iceberg => {
+                    return Err(ErrorCode::StorageUnsupported(
+                        "CREATE TABLE with ICEBERG engine is not supported".to_string(),
+                    ));
                 }
-            }
+                Engine::Paimon => {
+                    return Err(ErrorCode::StorageUnsupported(
+                        "CREATE TABLE with PAIMON engine is not supported".to_string(),
+                    ));
+                }
+                _ => {
+                    return Err(ErrorCode::BadArguments(
+                        "Incorrect CREATE query: required list of column descriptions or AS section or SELECT",
+                    ));
+                }
+            },
         };
 
         if engine == Engine::Memory {
