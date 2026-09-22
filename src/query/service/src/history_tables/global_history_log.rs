@@ -456,6 +456,7 @@ impl GlobalHistoryLog {
                             backoff.failures(),
                             delay.as_secs()
                         );
+                        self.meta_handle.record_error(&heartbeat_key, &e).await;
                         sleep(delay).await;
 
                         // On error(e.g. DUPLICATED_UPSERT_FILES), verify that our heartbeat is still valid (from this node).

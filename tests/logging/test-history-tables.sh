@@ -83,6 +83,23 @@ python3 scripts/ci/wait_tcp.py --timeout 50 --port 9092
 
 echo "Started 2-node cluster with history tables enabled..."
 
+# A tenant-level observer must see ETL state without joining the workers' cluster.
+sed -e 's/:9093"/:9094"/' -e 's/:8083"/:8084"/' -e 's/:7073"/:7074"/' \
+    -e 's/mysql_handler_port = 3309/mysql_handler_port = 3310/' \
+    -e 's/http_handler_port = 8003/http_handler_port = 8004/' \
+    -e 's/flight_sql_handler_port = 8903/flight_sql_handler_port = 8904/' \
+    -e 's/cluster_id = "test_cluster"/cluster_id = "history_etl_observer"/' \
+    -e 's/warehouse_id = "test_warehouse"/warehouse_id = "history_etl_observer"/' \
+    -e 's/logs_3/logs_observer/' -e 's/structlog_3/structlog_observer/' \
+    scripts/ci/deploy/config/databend-query-node-3.toml > ./.databend/config/history-etl-observer.toml
+# The base config has history logging disabled; only the other nodes run ETL.
+nohup target/${BUILD_PROFILE}/databend-query -c ./.databend/config/history-etl-observer.toml \
+    --internal-enable-sandbox-tenant > ./.databend/query-observer.out 2>&1 &
+observer_pid=$!
+trap 'kill "$observer_pid" 2>/dev/null || true' EXIT
+python3 scripts/ci/wait_tcp.py --timeout 50 --port 8004
+
+
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "select 123"}')
 drop_query_id=$(echo $response | jq -r '.id')
 echo "Query ID: $drop_query_id"
