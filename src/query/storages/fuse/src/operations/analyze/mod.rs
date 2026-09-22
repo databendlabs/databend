@@ -12,13 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod analyze_ndv_meta;
+mod accumulator;
 mod analyze_state_sink;
-mod collect_ndv_source;
+mod collect_source;
 mod histogram_info_sink;
+mod options;
+mod segment_analyzer;
 
-pub use analyze_ndv_meta::AnalyzeNDVMeta;
-pub use analyze_state_sink::AnalyzeHistogramInfo;
-pub use collect_ndv_source::AnalyzeCollectHistogramInfo;
-pub use collect_ndv_source::AnalyzeCollectNDVSource;
+pub use accumulator::AnalyzeAccumulator;
+pub use collect_source::AnalyzeCollectSource;
+pub use collect_source::AnalyzeSegmentProgress;
 pub use histogram_info_sink::HistogramInfoSink;
+pub use options::AnalyzeHistogramInfo;
+pub use options::AnalyzeOptions;
+pub use options::FrequencyOptions;
+pub use segment_analyzer::SegmentAnalyzer;

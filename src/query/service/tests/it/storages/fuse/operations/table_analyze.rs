@@ -12,23 +12,32 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_io::prelude::borsh_deserialize_from_slice;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_storage::MetaHLL12;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::MetaWriter;
+use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::operations::AnalyzeHistogramInfo;
+use databend_common_storages_fuse::operations::AnalyzeOptions;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
+use databend_query::pipelines::executor::ExecutorSettings;
+use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::sessions::TableContextTableManagement;
 use databend_query::sql::Planner;
@@ -328,6 +337,263 @@ async fn test_table_analyze_without_prev_table_seq() -> anyhow::Result<()> {
     let table = table.refresh(ctx.as_ref()).await?;
     let expected = HashMap::from([(0, 4_u64)]);
     check_column_ndv_statistics(ctx.clone(), table.clone(), expected.clone()).await?;
+    Ok(())
+}
+
+fn no_scan_options() -> AnalyzeOptions {
+    AnalyzeOptions::from_table_options(&BTreeMap::new())
+        .unwrap()
+        .no_scan()
+}
+
+/// Run ANALYZE with `snapshot` as the collection baseline, whatever the table's current
+/// snapshot is. This is how a stale baseline is reproduced deterministically.
+async fn execute_analyze_from_snapshot(
+    ctx: Arc<QueryContext>,
+    table: &FuseTable,
+    snapshot: Arc<TableSnapshot>,
+    options: AnalyzeOptions,
+) -> Result<()> {
+    let mut pipeline = Pipeline::create();
+    table.do_analyze(ctx.clone(), snapshot, &mut pipeline, options)?;
+    pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
+    let settings = ExecutorSettings::try_create(ctx.clone())?;
+    let executor = PipelineCompleteExecutor::from_pipelines(vec![pipeline], settings)?;
+    ctx.set_executor(executor.get_inner())?;
+    executor.execute().await
+}
+
+async fn latest_fuse_table(ctx: &Arc<QueryContext>, name: &str) -> Result<FuseTable> {
+    ctx.evict_table_from_cache("default", "default", name)?;
+    let table = ctx
+        .get_catalog("default")
+        .await?
+        .get_table(&ctx.get_tenant(), "default", name)
+        .await?;
+    Ok(FuseTable::try_from_table(table.as_ref())?.clone())
+}
+
+/// The table's current snapshot and the statistics file it points to.
+async fn latest_statistics(
+    ctx: &Arc<QueryContext>,
+    name: &str,
+) -> Result<(FuseTable, Arc<TableSnapshot>, TableSnapshotStatistics)> {
+    let table = latest_fuse_table(ctx, name).await?;
+    let snapshot = table.read_table_snapshot().await?.unwrap();
+    let location = snapshot.table_statistics_location.as_ref().unwrap();
+    let statistics = MetaReaders::table_snapshot_statistics_reader(table.get_operator())
+        .read(&LoadParams {
+            location: location.clone(),
+            len_hint: None,
+            ver: TableMetaLocationGenerator::table_statistics_version(location),
+            put_cache: false,
+        })
+        .await?;
+    Ok((table, snapshot, statistics.as_ref().clone()))
+}
+
+/// Final content of the table built by `setup_stale_baseline`.
+const STALE_BASELINE_ROWS: u64 = 28;
+const STALE_BASELINE_NDV: u64 = 20;
+
+/// True frequency of a value in the table built by `setup_stale_baseline`.
+fn stale_baseline_frequency(value: i32) -> u64 {
+    match value {
+        0 => 5,
+        1 | 2 => 3,
+        _ => 1,
+    }
+}
+
+/// Build a table whose statistics snapshot is `base`, then append rows so that the table
+/// moves ahead of `base` before ANALYZE commits. Returns the stale table handle and baseline.
+///
+/// Final content: 10 + 5 + 10 + 3 = 28 rows, values 0..20, with 0 -> 5 copies and 1, 2 -> 3
+/// copies each so Top-N has a clear order.
+async fn setup_stale_baseline(
+    fixture: &TestFixture,
+    ctx: &Arc<QueryContext>,
+    name: &str,
+) -> Result<(FuseTable, Arc<TableSnapshot>)> {
+    fixture
+        .execute_command(&format!(
+            "create table {name}(c int) approx_distinct_columns = 'c' \
+             analyze_frequency_columns = 'c' analyze_top_n_size = 3 \
+             analyze_count_min_sketch_error_rate = '0.01'"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {name} select number::int from numbers(10)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {name} values (0), (0), (0), (1), (1)"
+        ))
+        .await?;
+
+    let table = latest_fuse_table(ctx, name).await?;
+    let base = table.read_table_snapshot().await?.unwrap();
+
+    // The table moves on before the statistics are committed.
+    fixture
+        .execute_command(&format!(
+            "insert into {name} select number::int + 10 from numbers(10)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!("insert into {name} values (0), (2), (2)"))
+        .await?;
+    Ok((table, base))
+}
+
+/// Frequency statistics as configured on the table, plus the given histogram.
+fn table_options_with_histogram(
+    table: &FuseTable,
+    histogram: AnalyzeHistogramInfo,
+) -> Result<AnalyzeOptions> {
+    Ok(
+        AnalyzeOptions::from_table_options(table.get_table_info().options())?
+            .with_histogram(histogram),
+    )
+}
+
+/// The hook path: NOSCAN, HLL and column statistics only.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_analyze_rebases_append_only_snapshot() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_enable_table_snapshot_stats(1)?;
+    let (stale_table, base) = setup_stale_baseline(&fixture, &ctx, "t_rebase").await?;
+
+    execute_analyze_from_snapshot(ctx.clone(), &stale_table, base, no_scan_options()).await?;
+
+    let (table, snapshot, statistics) = latest_statistics(&ctx, "t_rebase").await?;
+    assert_eq!(snapshot.summary.row_count, STALE_BASELINE_ROWS);
+    let col_stats = snapshot.summary.col_stats.get(&0).unwrap();
+    assert_eq!(col_stats.min(), &Scalar::Number(NumberScalar::Int32(0)));
+    assert_eq!(col_stats.max(), &Scalar::Number(NumberScalar::Int32(19)));
+    assert_eq!(
+        snapshot
+            .summary
+            .additional_stats_meta
+            .as_ref()
+            .map(|meta| meta.row_count),
+        Some(STALE_BASELINE_ROWS)
+    );
+    assert!(statistics.is_fresh_for(&snapshot));
+    check_column_ndv_statistics(
+        ctx,
+        Arc::new(table),
+        HashMap::from([(0, STALE_BASELINE_NDV)]),
+    )
+    .await?;
+    Ok(())
+}
+
+/// The manual path: Top-N, count-min sketch and KLL sketches all follow the appended
+/// segments.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_analyze_rebases_frequency_and_kll_fast_statistics() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let (stale_table, base) = setup_stale_baseline(&fixture, &ctx, "t_rebase_freq").await?;
+    let options = table_options_with_histogram(&stale_table, AnalyzeHistogramInfo::KllFast {
+        relative_error: 0.01,
+    })?;
+
+    execute_analyze_from_snapshot(ctx.clone(), &stale_table, base, options).await?;
+
+    let (_, snapshot, statistics) = latest_statistics(&ctx, "t_rebase_freq").await?;
+    assert!(statistics.is_fresh_for(&snapshot));
+    assert_eq!(statistics.row_count, STALE_BASELINE_ROWS);
+    // HLL is an estimate; 20 distinct values merged from four block sketches.
+    let ndv = statistics.hll.get(&0).unwrap().count() as u64;
+    assert!(
+        (STALE_BASELINE_NDV - 1..=STALE_BASELINE_NDV + 2).contains(&ndv),
+        "unexpected NDV estimate {ndv}"
+    );
+
+    // Top-N is a space-saving style summary: counts are upper bounds whose exact values
+    // depend on the block merge order, so check the guarantees rather than exact counts.
+    let top_n = statistics.top_n.get(&0).unwrap();
+    assert_eq!(top_n.capacity, 3);
+    assert_eq!(
+        top_n.values.first().map(|entry| &entry.scalar),
+        Some(&Scalar::Number(NumberScalar::Int32(0)))
+    );
+    for entry in &top_n.values {
+        let value = *entry.scalar.as_number().unwrap().as_int32().unwrap();
+        let truth = stale_baseline_frequency(value);
+        assert!(
+            entry.count.saturating_sub(entry.error) <= truth && truth <= entry.count,
+            "top-n entry {entry:?} does not bound the true frequency {truth}"
+        );
+    }
+
+    // Count-min sketch merges exactly under the same parameters; with 20 distinct values
+    // and a 1% error rate these estimates are exact.
+    let cms = statistics.count_min_sketch.get(&0).unwrap();
+    for value in [0, 1, 2, 15, 19] {
+        assert_eq!(
+            cms.estimate(&Scalar::Number(NumberScalar::Int32(value))),
+            Some(stale_baseline_frequency(value))
+        );
+    }
+
+    // KLL fast: buckets are derived from the merged sketch and cover every row.
+    assert_eq!(
+        statistics.histograms.get(&0).unwrap().num_values(),
+        STALE_BASELINE_ROWS as f64
+    );
+    Ok(())
+}
+
+/// KLL full keeps the bucket boundaries fixed from the baseline but counts appended rows
+/// into them, so the histogram still covers the whole table.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_analyze_rebases_kll_full_histogram() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let (stale_table, base) = setup_stale_baseline(&fixture, &ctx, "t_rebase_full").await?;
+    let options = table_options_with_histogram(&stale_table, AnalyzeHistogramInfo::KllFull {
+        relative_error: 0.01,
+    })?;
+
+    execute_analyze_from_snapshot(ctx.clone(), &stale_table, base, options).await?;
+
+    let (_, snapshot, statistics) = latest_statistics(&ctx, "t_rebase_full").await?;
+    assert!(statistics.is_fresh_for(&snapshot));
+    assert_eq!(statistics.row_count, STALE_BASELINE_ROWS);
+    assert_eq!(
+        statistics.histograms.get(&0).unwrap().num_values(),
+        STALE_BASELINE_ROWS as f64
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_analyze_rejects_non_append_snapshot_change() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    fixture
+        .execute_command("create table t_rebase_delete(c int) approx_distinct_columns = 'c'")
+        .await?;
+    fixture
+        .execute_command("insert into t_rebase_delete select number::int from numbers(10)")
+        .await?;
+    let table = latest_fuse_table(&ctx, "t_rebase_delete").await?;
+    let base = table.read_table_snapshot().await?.unwrap();
+
+    fixture
+        .execute_command("delete from t_rebase_delete where c < 5")
+        .await?;
+
+    let err = execute_analyze_from_snapshot(ctx, &table, base, no_scan_options())
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), ErrorCode::UNRESOLVABLE_CONFLICT);
     Ok(())
 }
 
