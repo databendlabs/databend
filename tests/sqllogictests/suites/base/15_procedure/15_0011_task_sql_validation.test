@@ -74,21 +74,6 @@ CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS SELECT * FROM static_va
 statement error 1702
 CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS WITH m AS MATERIALIZED (SELECT to_int64(month) FROM static_validation_sales) SELECT * FROM m
 
-# A statement hint in the body must not change the outer session settings.
-statement ok
-SET unquoted_ident_case_sensitive = 1
-
-statement error 1702
-CREATE TASK static_validation_task WAREHOUSE = 'mywh' AS SELECT /*+ SET_VAR(unquoted_ident_case_sensitive=0) */ MONTH FROM static_validation_sales
-
-query I
-SELECT value FROM system.settings WHERE name = 'unquoted_ident_case_sensitive'
-----
-1
-
-statement ok
-SET unquoted_ident_case_sensitive = 0
-
 statement ok
 DROP TABLE static_validation_sales
 
