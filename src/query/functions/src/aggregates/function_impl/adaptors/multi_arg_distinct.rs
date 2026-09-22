@@ -34,7 +34,7 @@ use databend_common_expression::types::ValueType;
 use super::*;
 
 pub(in crate::aggregates::function_impl) struct RowUniqSet {
-    keys: HashSet<Vec<u8>>,
+    keys: HashSet<Vec<Scalar>>,
 }
 
 impl RowUniqSet {
@@ -59,7 +59,7 @@ impl RowUniqSet {
     ) -> Result<()> {
         let mut builder = ArrayType::<BinaryType>::downcast_builder(builder);
         for key in &self.keys {
-            builder.put_item(key);
+            builder.put_item(&borsh::to_vec(key)?);
         }
         builder.commit_row();
         Ok(())
@@ -72,8 +72,9 @@ impl RowUniqSet {
             unreachable!()
         };
         let values = BinaryType::try_downcast_column(&values).unwrap();
-        self.keys
-            .extend(BinaryType::iter_column(&values).map(<[u8]>::to_vec));
+        for value in BinaryType::iter_column(&values) {
+            self.keys.insert(borsh::from_slice(value)?);
+        }
         Ok(())
     }
 
@@ -86,8 +87,7 @@ impl RowUniqSet {
             .map(|ty| ColumnBuilder::with_capacity(ty, self.keys.len()))
             .collect::<Vec<_>>();
         for key in &self.keys {
-            let values: Vec<Scalar> = borsh::from_slice(key)?;
-            for (builder, value) in builders.iter_mut().zip(values) {
+            for (builder, value) in builders.iter_mut().zip(key) {
                 builder.push(value.as_ref());
             }
         }
@@ -106,7 +106,7 @@ impl RowUniqSet {
             .iter()
             .map(|column| column.index(row).unwrap().to_owned())
             .collect::<Vec<Scalar>>();
-        self.keys.insert(borsh::to_vec(&values)?);
+        self.keys.insert(values);
         Ok(())
     }
 }

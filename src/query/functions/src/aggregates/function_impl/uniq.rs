@@ -299,14 +299,12 @@ impl UniqSet for StringUniqSet {
 // Scalar fallback retains the v1 single-element row encoding on the wire.
 
 pub(super) struct ScalarUniqSet {
-    keys: HashSet<Vec<u8>>,
+    keys: HashSet<Scalar>,
 }
 impl UniqSet for ScalarUniqSet {
     type Type = AnyType;
     fn insert(&mut self, value: ScalarRef<'_>) -> Result<bool> {
-        Ok(self
-            .keys
-            .insert(borsh::to_vec(std::slice::from_ref(&value.to_owned()))?))
+        Ok(self.keys.insert(value.to_owned()))
     }
 
     fn new() -> Self {
@@ -331,7 +329,7 @@ impl UniqSet for ScalarUniqSet {
     fn serialize(&self, builder: &mut ColumnBuilder) -> Result<()> {
         let mut builder = ArrayType::<BinaryType>::downcast_builder(builder);
         for key in &self.keys {
-            builder.put_item(key);
+            builder.put_item(&borsh::to_vec(std::slice::from_ref(key))?);
         }
         builder.commit_row();
         Ok(())
@@ -343,7 +341,9 @@ impl UniqSet for ScalarUniqSet {
         };
         let values = BinaryType::try_downcast_column(&values).unwrap();
         for value in BinaryType::iter_column(&values) {
-            changed |= self.keys.insert(value.to_vec());
+            let row: Vec<Scalar> = borsh::from_slice(value)?;
+            debug_assert_eq!(row.len(), 1);
+            changed |= self.keys.insert(row.into_iter().next().unwrap());
         }
         Ok(changed)
     }
@@ -372,9 +372,7 @@ impl DistinctSet for ScalarUniqSet {
     fn build_column(&self, data_type: &DataType) -> Result<Column> {
         let mut builder = ColumnBuilder::with_capacity(data_type, self.keys.len());
         for key in &self.keys {
-            let row = Vec::<Scalar>::deserialize(&mut key.as_slice())?;
-            debug_assert_eq!(row.len(), 1);
-            builder.push(row[0].as_ref());
+            builder.push(key.as_ref());
         }
         Ok(builder.build())
     }
@@ -566,12 +564,15 @@ mod tests {
     #[test]
     fn scalar_distinct_row_format_round_trip() -> Result<()> {
         round_trip::<ScalarUniqSet>(BooleanType::from_data(vec![true, false, true]), 2)?;
-        let mut set = ScalarUniqSet::new();
-        assert!(set.insert(ScalarRef::Boolean(true))?);
-        assert!(
-            set.keys
-                .contains(&borsh::to_vec(&vec![Scalar::Boolean(true)])?)
-        );
+        // Array elements follow float equality classes: signed zeros and NaN
+        // payloads collapse, so five rows hold three distinct values.
+        round_trip::<ScalarUniqSet>(
+            Column::Array(Box::new(ArrayColumn::new(
+                Float64Type::from_data(vec![-0.0f64, 0.0, f64::NAN, -f64::NAN, 1.0]),
+                vec![0, 1, 2, 3, 4, 5].into(),
+            ))),
+            3,
+        )?;
         Ok(())
     }
 
