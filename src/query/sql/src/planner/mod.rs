@@ -53,4 +53,3 @@ pub use plans::ScalarExpr;
 pub use plans::UPDATE_NAME;
 pub use semantic::*;
 pub use statement_settings::apply_statement_settings;
-pub(crate) use statement_settings::statement_changes_settings;

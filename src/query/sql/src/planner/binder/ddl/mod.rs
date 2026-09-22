@@ -35,6 +35,7 @@ mod stream;
 pub mod table;
 mod tag;
 mod task;
+mod task_validation;
 mod view;
 mod warehouse;
 mod worker;

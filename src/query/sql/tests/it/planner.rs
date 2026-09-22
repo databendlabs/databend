@@ -479,7 +479,7 @@ async fn test_execute_immediate_applies_statement_settings() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_task_validation_defers_statements_with_settings() -> Result<()> {
+async fn test_task_validation_does_not_apply_statement_settings() -> Result<()> {
     let ctx = LiteTableContext::create().await?;
     ctx.get_settings()
         .set_setting("enable_experimental_procedure".to_string(), "0".to_string())?;
@@ -491,7 +491,7 @@ async fn test_task_validation_defers_statements_with_settings() -> Result<()> {
         "ALTER TASK task_settings_validation MODIFY AS \
          SETTINGS (enable_experimental_procedure = 1) \
          CALL PROCEDURE task_proc_not_created_yet()",
-        // Nested single-statement scripts must not apply their settings either.
+        // Constant single-statement scripts are expanded; their settings must stay unapplied.
         "CREATE TASK task_settings_validation WAREHOUSE = 'w' AS \
          EXECUTE IMMEDIATE 'SETTINGS (enable_experimental_procedure = 1) \
          CALL PROCEDURE task_proc_not_created_yet()'",

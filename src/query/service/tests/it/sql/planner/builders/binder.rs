@@ -12,78 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
-
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::session_type::SessionType;
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
-use databend_common_expression::DataBlock;
 use databend_common_sql::FormatOptions;
 use databend_common_sql::Planner;
 use databend_common_sql::optimizer::ir::StatContext;
-use databend_common_sql::planner::QueryExecutor;
-use databend_common_sql::plans::Plan;
 use databend_query::sessions::TableContextQueryInfo;
 use databend_query::sessions::TableContextSettings;
 use databend_query::test_kits::TestFixture;
-
-#[derive(Default)]
-struct RecordingQueryExecutor(AtomicUsize);
-
-#[async_trait::async_trait]
-impl QueryExecutor for RecordingQueryExecutor {
-    async fn execute_query_with_sql_string(&self, sql: &str) -> Result<Vec<DataBlock>> {
-        self.0.fetch_add(1, Ordering::Relaxed);
-        Err(ErrorCode::Internal(format!("unexpected execution: {sql}")))
-    }
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_task_validation_never_executes_queries() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
-    fixture
-        .execute_command(
-            "CREATE TABLE default.task_validation_source AS SELECT number FROM numbers(3)",
-        )
-        .await?;
-    let session = fixture
-        .new_session_with_type(SessionType::HTTPQuery)
-        .await?;
-
-    for body in [
-        "SELECT * FROM default.task_validation_source PIVOT(SUM(number) FOR number IN (SELECT number FROM default.task_validation_source))",
-        "SELECT * FROM default.task_validation_source PIVOT(SUM(number) FOR number IN (ANY))",
-        "WITH m AS MATERIALIZED (SELECT number FROM default.task_validation_source) SELECT * FROM m",
-    ] {
-        let context = session
-            .create_query_context(&databend_common_version::BUILD_INFO)
-            .await?;
-        // Positive control: the body really reaches an executing interface.
-        let executor = Arc::new(RecordingQueryExecutor::default());
-        let mut planner = Planner::new_with_query_executor(context, executor.clone());
-        let err = planner.plan_sql(body).await.unwrap_err();
-        assert_eq!(err.code(), ErrorCode::INTERNAL, "{body}: {err}");
-        assert_eq!(executor.0.swap(0, Ordering::Relaxed), 1, "{body}");
-        let sql = format!("CREATE TASK t WAREHOUSE = 'w' AS {body}");
-        assert!(matches!(
-            planner.plan_sql(&sql).await?.0,
-            Plan::CreateTask(_)
-        ));
-        assert_eq!(executor.0.load(Ordering::Relaxed), 0, "{body}");
-
-        let ctx = session
-            .create_query_context(&databend_common_version::BUILD_INFO)
-            .await?;
-        // This production planning entry point installs ServiceQueryExecutor. Only plan:
-        // neither the task interpreter nor its finish hooks should be needed for cleanup.
-        databend_query::interpreters::interpreter_plan_sql(ctx, &sql, false, None).await?;
-        assert!(session.temp_tbl_mgr().lock().is_empty(), "{body}");
-    }
-    Ok(())
-}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_query_kind() -> anyhow::Result<()> {

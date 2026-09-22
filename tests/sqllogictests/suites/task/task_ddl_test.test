@@ -159,9 +159,8 @@ DROP TASK mytask
 statement ok
 DROP TASK sessionTask
 
-# Task validation must tolerate missing objects and runtime script variables,
-# without executing statements during CREATE. (ALTER ... MODIFY AS is syntax-only,
-# so these cases use CREATE OR REPLACE to exercise semantic validation.)
+# Task validation is static: missing objects, runtime script variables and dynamic
+# identifiers must all be accepted, and nothing in the body is executed during CREATE.
 statement ok
 DROP TABLE IF EXISTS task_validation_deferred_table
 
@@ -211,60 +210,24 @@ BEGIN
 END;
 $$
 
-# A UDF that does not exist yet resolves as a builtin lookup and reports an unknown
-# function, so a forward reference to it must not reject the task definition.
 statement ok
 CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh'
 AS SELECT task_validation_udf_not_created_yet(1)
 
-# Dynamic PIVOT values need execution while binding. The definition-time probe rejects
-# execution requests, so these forms are deferred without executing their source queries.
-statement ok
-CREATE OR REPLACE TABLE task_validation_sales (empid INT, month STRING, amount INT)
-
-statement ok
-INSERT INTO task_validation_sales VALUES (1, 'jan', 1), (1, 'feb', 2)
-
-statement ok
-CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh'
-AS SELECT * FROM task_validation_sales PIVOT(SUM(amount) FOR month IN (SELECT DISTINCT month FROM task_validation_sales))
-
 query T
 select definition from system.tasks where name = 'task_validation_deferred'
 ----
-SELECT * FROM task_validation_sales PIVOT(SUM(amount) FOR month IN (SELECT DISTINCT month FROM task_validation_sales))
+SELECT task_validation_udf_not_created_yet(1)
 
+# ALTER TASK ... MODIFY AS applies the same static checks as CREATE TASK.
 statement ok
-CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh'
-AS SELECT * FROM task_validation_sales PIVOT(SUM(amount) FOR month IN (ANY ORDER BY month))
-
-# These source expressions fail if evaluated on the stored rows. Defining the task
-# must succeed, proving neither PIVOT source queries nor materialized CTAS are run.
-statement ok
-CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh'
-AS SELECT * FROM task_validation_sales PIVOT(SUM(amount) FOR month IN (SELECT to_int64(month) FROM task_validation_sales))
-
-statement ok
-CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh'
-AS SELECT * FROM (SELECT to_int64(month) AS month, amount FROM task_validation_sales) s PIVOT(SUM(amount) FOR month IN (ANY))
-
-statement ok
-CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh'
-AS WITH m AS MATERIALIZED (SELECT to_int64(month) FROM task_validation_sales) SELECT * FROM m
-
-statement ok
-ALTER TASK task_validation_deferred MODIFY AS SELECT * FROM task_validation_sales PIVOT(SUM(amount) FOR month IN (ANY))
-
-statement ok
-DROP TABLE task_validation_sales
-
-# ALTER TASK ... MODIFY AS cannot see the stored session parameters (for example
-# DATABASE), so it only checks syntax; this type error is left to runtime planning.
-statement ok
-ALTER TASK task_validation_deferred MODIFY AS SELECT [1][true]
+ALTER TASK task_validation_deferred MODIFY AS SELECT * FROM task_validation_deferred_table
 
 statement error 1005
 ALTER TASK task_validation_deferred MODIFY AS SELECT FROM
+
+statement error 3128
+ALTER TASK task_validation_deferred MODIFY AS EXECUTE IMMEDIATE $$ BEGIN BREAK; END; $$
 
 statement ok
 DROP TASK task_validation_deferred

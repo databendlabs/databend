@@ -733,24 +733,16 @@ impl Binder {
             }
 
             Statement::CreatePipe(_) => {
-                return Err(ErrorCode::Unimplemented(
-                    "CREATE PIPE binding is not implemented",
-                ));
+                todo!()
             }
             Statement::DescribePipe(_) => {
-                return Err(ErrorCode::Unimplemented(
-                    "DESCRIBE PIPE binding is not implemented",
-                ));
+                todo!()
             }
             Statement::AlterPipe(_) => {
-                return Err(ErrorCode::Unimplemented(
-                    "ALTER PIPE binding is not implemented",
-                ));
+                todo!()
             }
             Statement::DropPipe(_) => {
-                return Err(ErrorCode::Unimplemented(
-                    "DROP PIPE binding is not implemented",
-                ));
+                todo!()
             }
             Statement::CreateNotification(stmt) => self.bind_create_notification(stmt).await?,
             Statement::DropNotification(stmt) => self.bind_drop_notification(stmt).await?,
