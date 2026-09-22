@@ -22,11 +22,8 @@ use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
-// (TableName, file, file size)
-pub type VacuumDropFileInfo = (String, String, u64);
-
-// (drop_files, failed_tables)
-pub type VacuumDropTablesResult = Result<(Option<Vec<VacuumDropFileInfo>>, HashSet<u64>)>;
+// ids of the tables whose data failed to be removed
+pub type VacuumDropTablesResult = Result<HashSet<u64>>;
 
 #[async_trait::async_trait]
 pub trait VacuumHandler: Sync + Send {
@@ -41,7 +38,6 @@ pub trait VacuumHandler: Sync + Send {
         &self,
         threads_nums: usize,
         tables: Vec<TableInfo>,
-        dry_run_limit: Option<usize>,
     ) -> VacuumDropTablesResult;
 
     async fn do_vacuum_temporary_files(
@@ -86,10 +82,9 @@ impl VacuumHandlerWrapper {
         &self,
         threads_nums: usize,
         tables: Vec<TableInfo>,
-        dry_run_limit: Option<usize>,
     ) -> VacuumDropTablesResult {
         self.handler
-            .do_vacuum_drop_tables(threads_nums, tables, dry_run_limit)
+            .do_vacuum_drop_tables(threads_nums, tables)
             .await
     }
 

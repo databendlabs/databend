@@ -224,8 +224,8 @@ impl Interpreter for VacuumDropTablesInterpreter {
 
             let handler = get_vacuum_handler();
             let threads_nums = self.ctx.get_settings().get_max_vacuum_threads()? as usize;
-            let (_, failed) = handler
-                .do_vacuum_drop_tables(threads_nums, fuse_tables, None)
+            let failed = handler
+                .do_vacuum_drop_tables(threads_nums, fuse_tables)
                 .await?;
             if !failed.is_empty() {
                 let mut ids = failed.iter().copied().collect::<Vec<_>>();

@@ -104,31 +104,8 @@ async fn test_fuse_do_vacuum_drop_tables() -> anyhow::Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     let threads_nums = ctx.get_settings().get_max_threads()? as usize;
 
-    // verify dry run never delete files
     {
-        vacuum_drop_tables(
-            threads_nums,
-            vec![table.get_table_info().clone()],
-            Some(100),
-        )
-        .await?;
-        check_data_dir(
-            &fixture,
-            "test_fuse_do_vacuum_drop_table: verify generate files",
-            1,
-            0,
-            1,
-            1,
-            1,
-            1,
-            None,
-            None,
-        )
-        .await?;
-    }
-
-    {
-        vacuum_drop_tables(threads_nums, vec![table.get_table_info().clone()], None).await?;
+        vacuum_drop_tables(threads_nums, vec![table.get_table_info().clone()]).await?;
 
         // after vacuum drop tables, verify the files number
         check_data_dir(
@@ -254,30 +231,12 @@ mod test_accessor {
     #[derive(Debug)]
     pub(crate) struct AccessorFaultyDeletion {
         hit_delete: AtomicBool,
-        hit_batch: Arc<AtomicBool>,
-        hit_stat: AtomicBool,
-        inject_delete_faulty: bool,
-        inject_stat_faulty: bool,
     }
 
     impl AccessorFaultyDeletion {
         pub(crate) fn with_delete_fault() -> Self {
             AccessorFaultyDeletion {
                 hit_delete: AtomicBool::new(false),
-                hit_batch: Arc::new(AtomicBool::new(false)),
-                hit_stat: AtomicBool::new(false),
-                inject_delete_faulty: true,
-                inject_stat_faulty: false,
-            }
-        }
-
-        pub(crate) fn with_stat_fault() -> Self {
-            AccessorFaultyDeletion {
-                hit_delete: AtomicBool::new(false),
-                hit_batch: Arc::new(AtomicBool::new(false)),
-                hit_stat: AtomicBool::new(false),
-                inject_delete_faulty: false,
-                inject_stat_faulty: true,
             }
         }
 
@@ -305,31 +264,11 @@ mod test_accessor {
         }
     }
 
-    pub struct MockDeleter {
-        size: usize,
-        hit_batch: Arc<AtomicBool>,
-    }
-
-    impl oio::Delete for MockDeleter {
-        fn delete(&mut self, _path: &str, _args: OpDelete) -> opendal::Result<()> {
-            self.size += 1;
-            Ok(())
-        }
-
-        async fn flush(&mut self) -> opendal::Result<usize> {
-            self.hit_batch.store(true, Ordering::Release);
-
-            let n = self.size;
-            self.size = 0;
-            Ok(n)
-        }
-    }
-
     impl Access for AccessorFaultyDeletion {
         type Reader = ();
         type Writer = ();
         type Lister = VecLister;
-        type Deleter = MockDeleter;
+        type Deleter = ();
 
         fn info(&self) -> Arc<AccessorInfo> {
             let info = AccessorInfo::default();
@@ -344,54 +283,30 @@ mod test_accessor {
             info.into()
         }
 
-        async fn stat(&self, _path: &str, _args: OpStat) -> opendal::Result<RpStat> {
-            self.hit_stat.store(true, Ordering::Release);
-            if self.inject_stat_faulty {
-                Err(opendal::Error::new(
-                    opendal::ErrorKind::NotFound,
-                    "does not matter (stat)",
-                ))
+        async fn stat(&self, path: &str, _args: OpStat) -> opendal::Result<RpStat> {
+            let stat = if path.ends_with('/') {
+                RpStat::new(Metadata::new(EntryMode::DIR))
             } else {
-                let stat = if _path.ends_with('/') {
-                    RpStat::new(Metadata::new(EntryMode::DIR))
-                } else {
-                    RpStat::new(Metadata::new(EntryMode::FILE))
-                };
-                Ok(stat)
-            }
+                RpStat::new(Metadata::new(EntryMode::FILE))
+            };
+            Ok(stat)
         }
 
         async fn delete(&self) -> opendal::Result<(RpDelete, Self::Deleter)> {
             self.hit_delete.store(true, Ordering::Release);
-
-            if self.inject_delete_faulty {
-                Err(opendal::Error::new(
-                    opendal::ErrorKind::Unexpected,
-                    "does not matter (delete)",
-                ))
-            } else {
-                Ok((RpDelete::default(), MockDeleter {
-                    size: 0,
-                    hit_batch: self.hit_batch.clone(),
-                }))
-            }
+            Err(opendal::Error::new(
+                opendal::ErrorKind::Unexpected,
+                "does not matter (delete)",
+            ))
         }
 
-        async fn list(&self, path: &str, _args: OpList) -> opendal::Result<(RpList, Self::Lister)> {
-            if self.inject_delete_faulty {
-                // While injecting faulty for delete operation, return an empty list;
-                // otherwise we need to impl other methods.
-                return Ok((RpList::default(), VecLister(vec![])));
-            };
-
-            Ok((
-                RpList::default(),
-                if path.ends_with('/') {
-                    VecLister(vec!["a".to_owned(), "b".to_owned()])
-                } else {
-                    VecLister(vec![])
-                },
-            ))
+        async fn list(
+            &self,
+            _path: &str,
+            _args: OpList,
+        ) -> opendal::Result<(RpList, Self::Lister)> {
+            // Return an empty list; otherwise we need to impl other methods.
+            Ok((RpList::default(), VecLister(vec![])))
         }
     }
 
@@ -500,8 +415,8 @@ async fn test_fuse_do_vacuum_drop_table_deletion_error() -> anyhow::Result<()> {
     let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
 
     let tables = vec![(table_info, operator)];
-    let result = do_vacuum_drop_table(tables, None).await?;
-    assert!(!result.1.is_empty());
+    let failed_tables = do_vacuum_drop_table(tables).await?;
+    assert!(!failed_tables.is_empty());
     // verify that accessor.delete() was called
     assert!(faulty_accessor.hit_delete_operation());
 
@@ -528,12 +443,12 @@ async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> anyho
         // with one table and one thread, `vacuum_drop_tables_by_table_info` will NOT run in parallel
         let tables = vec![table];
         let num_threads = 1;
-        let result = vacuum_drop_tables_by_table_info(num_threads, tables, None).await?;
+        let failed_tables = vacuum_drop_tables_by_table_info(num_threads, tables).await?;
         // verify that accessor.delete() was called
         assert!(faulty_accessor.hit_delete_operation());
 
         // verify that errors of deletions are not swallowed
-        assert!(!result.1.is_empty());
+        assert!(!failed_tables.is_empty());
     }
 
     // Case 2: parallel vacuum dropped tables
@@ -545,53 +460,11 @@ async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> anyho
         // with 2 tables and 2 threads, `vacuum_drop_tables_by_table_info` will run in parallel (one table per thread)
         let tables = vec![table.clone(), table];
         let num_threads = 2;
-        let result = vacuum_drop_tables_by_table_info(num_threads, tables, None).await?;
+        let failed_tables = vacuum_drop_tables_by_table_info(num_threads, tables).await?;
         // verify that accessor.delete() was called
         assert!(faulty_accessor.hit_delete_operation());
         // verify that errors of deletions are not swallowed
-        assert!(!result.1.is_empty());
-    }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> anyhow::Result<()> {
-    let mut table_info = TableInfo::default();
-    table_info
-        .meta
-        .options
-        .insert(OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned());
-
-    use test_accessor::AccessorFaultyDeletion;
-
-    // Case 1: non-parallel vacuum dry-run dropped tables
-    {
-        let faulty_accessor = Arc::new(AccessorFaultyDeletion::with_stat_fault());
-        let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
-
-        let table = (table_info.clone(), operator);
-
-        // with one table and one thread, `vacuum_drop_tables_by_table_info` will NOT run in parallel
-        let tables = vec![table];
-        let num_threads = 1;
-        let result = vacuum_drop_tables_by_table_info(num_threads, tables, Some(usize::MAX)).await;
-        // verify that errors of NotFound are swallowed
-        assert!(result.is_ok());
-    }
-
-    // Case 2: parallel vacuum dry-run dropped tables
-    {
-        let faulty_accessor = Arc::new(AccessorFaultyDeletion::with_stat_fault());
-        let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
-
-        let table = (table_info, operator);
-        // with 2 tables and 2 threads, `vacuum_drop_tables_by_table_info` will run in parallel (one table per thread)
-        let tables = vec![table.clone(), table];
-        let num_threads = 2;
-        let result = vacuum_drop_tables_by_table_info(num_threads, tables, Some(usize::MAX)).await;
-        // verify that errors of NotFound are swallowed
-        assert!(result.is_ok());
+        assert!(!failed_tables.is_empty());
     }
 
     Ok(())
@@ -612,16 +485,16 @@ async fn test_fuse_do_vacuum_drop_table_external_storage() -> anyhow::Result<()>
     };
 
     // Accessor passed in does NOT matter in this case, `do_vacuum_drop_table` should
-    // return Ok(None) before accessor is used.
+    // mark the table as failed before accessor is used.
     use test_accessor::AccessorFaultyDeletion;
     let accessor = std::sync::Arc::new(AccessorFaultyDeletion::with_delete_fault());
     let operator = OperatorBuilder::new(accessor.clone()).finish();
 
     let tables = vec![(table_info, operator)];
-    let result = do_vacuum_drop_table(tables, None).await?;
-    assert!(!result.1.is_empty());
+    let failed_tables = do_vacuum_drop_table(tables).await?;
+    assert!(!failed_tables.is_empty());
 
-    // verify that accessor.delete() was called
+    // verify that accessor.delete() was NOT called
     assert!(!accessor.hit_delete_operation());
 
     Ok(())
