@@ -269,12 +269,17 @@ impl Binder {
 
             // Isolate metadata from both the outer CREATE/ALTER TASK and other script
             // statements. Avoid materialized-view catalog work irrelevant to validation.
+            // Keep the outer subquery executor: task execution plans with
+            // `Planner::new_with_query_executor`, and SQL such as dynamic `PIVOT` values,
+            // `MATERIALIZED` CTEs or subquery table-function arguments cannot be bound
+            // without one.
             let mut binder = Binder::new(
                 self.ctx.clone(),
                 self.catalogs.clone(),
                 self.name_resolution_ctx.clone(),
                 Arc::new(RwLock::new(Metadata::default())),
             )
+            .with_subquery_executor(self.subquery_executor.clone())
             .with_materialized_view_rewrite(false);
 
             // Do not route `EXECUTE IMMEDIATE` through `bind()`: for a single-statement
