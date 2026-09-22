@@ -101,6 +101,7 @@ impl<'a, A> TypeChecker<'a, A> {
             Ascii::new("current_role"),
             Ascii::new("current_secondary_roles"),
             Ascii::new("current_available_roles"),
+            Ascii::new("current_tenant_id"),
             Ascii::new("is_role_in_session"),
             Ascii::new("connection_id"),
             Ascii::new("client_session_id"),
@@ -186,6 +187,10 @@ impl<'a> CoreExprArena<'a> {
             "current_available_roles" => {
                 check_function_arity(span, func_name, args.len(), 0, Some(0))?;
                 SpecialFunction::Auth(AuthFunction::CurrentAvailableRoles)
+            }
+            "current_tenant_id" => {
+                check_function_arity(span, func_name, args.len(), 0, Some(0))?;
+                SpecialFunction::Auth(AuthFunction::CurrentTenantId)
             }
             "is_role_in_session" => {
                 check_function_arity(span, func_name, args.len(), 1, Some(1))?;

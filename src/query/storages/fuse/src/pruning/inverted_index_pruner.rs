@@ -24,7 +24,6 @@ use opendal::Operator;
 use tantivy::query::Query;
 use tantivy::query::QueryClone;
 use tantivy::query::QueryParser;
-use tantivy::schema::Field;
 use tantivy::tokenizer::TokenizerManager;
 
 use crate::io::create_index_schema;
@@ -132,12 +131,19 @@ impl InvertedIndexPruner {
 pub fn create_inverted_index_query(
     inverted_index_info: &InvertedIndexInfo,
 ) -> Result<PreparedInvertedIndexQuery> {
+    // Rebuild the tantivy schema the writer used; it hands back the tantivy field for each
+    // index column, so the reader never has to assume how field ids were assigned.
+    let (index_schema, index_fields) = create_index_schema(
+        Arc::new(inverted_index_info.index_schema.clone()),
+        &inverted_index_info.index_options,
+    )?;
+
     // collect query fields and optional boosts
     let mut query_fields = Vec::with_capacity(inverted_index_info.query_fields.len());
     let mut query_field_boosts = Vec::with_capacity(inverted_index_info.query_fields.len());
     for (field_name, boost) in &inverted_index_info.query_fields {
         let i = inverted_index_info.index_schema.index_of(field_name)?;
-        let field = Field::from_field_id(i as u32);
+        let field = index_fields[i];
         query_fields.push(field);
         if let Some(boost) = boost {
             query_field_boosts.push((field, boost.0));
@@ -145,10 +151,6 @@ pub fn create_inverted_index_query(
     }
 
     // parse query text to check whether has phrase terms need position file.
-    let (index_schema, _) = create_index_schema(
-        Arc::new(inverted_index_info.index_schema.clone()),
-        &inverted_index_info.index_options,
-    )?;
     let tokenizer_manager = create_tokenizer_manager(&inverted_index_info.index_options);
     let mut query_parser = QueryParser::new(
         index_schema,

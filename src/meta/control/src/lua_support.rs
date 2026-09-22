@@ -39,7 +39,7 @@ use serde::Serialize;
 use tokio::time;
 
 use crate::admin::MetaAdminClient;
-use crate::grpc_client_auth::GrpcClientAuth;
+use crate::grpc_client_config::GrpcClientConfig;
 
 const LUA_UTIL: &str = include_str!("../lua/lua_util.lua");
 const ZIPF_LOAD_GENERATOR: &str = include_str!("../lua/zipf_load_generator.lua");
@@ -380,18 +380,18 @@ impl UserData for LuaTask {
     }
 }
 
-pub fn setup_lua_environment(lua: &Lua, auth: &GrpcClientAuth) -> anyhow::Result<()> {
+pub fn setup_lua_environment(lua: &Lua, client_config: &GrpcClientConfig) -> anyhow::Result<()> {
     // Create metactl table to namespace all functions
     let metactl_table = lua
         .create_table()
         .map_err(|e| anyhow::anyhow!("Failed to create metactl table: {}", e))?;
 
     // Register new_grpc_client function
-    let auth = auth.clone();
+    let client_config = client_config.clone();
     let new_grpc_client = lua
         .create_function(move |_lua, address: String| {
             let addresses = vec![address];
-            let client = new_grpc_client(addresses, &auth).map_err(|e| {
+            let client = new_grpc_client(addresses, &client_config).map_err(|e| {
                 mlua::Error::external(format!("Failed to create gRPC client: {}", e))
             })?;
 
@@ -496,7 +496,7 @@ pub fn setup_lua_environment(lua: &Lua, auth: &GrpcClientAuth) -> anyhow::Result
 
 pub fn new_grpc_client(
     addresses: Vec<String>,
-    auth: &GrpcClientAuth,
+    client_config: &GrpcClientConfig,
 ) -> Result<Arc<ClientHandle<DatabendRuntime>>, CreationError> {
     eprintln!(
         "Using gRPC API address: {}",
@@ -504,11 +504,11 @@ pub fn new_grpc_client(
     );
     MetaGrpcClient::try_create(
         addresses,
-        auth.username(),
-        auth.expose_password(),
+        client_config.auth.username(),
+        client_config.auth.expose_password(),
         Some(Duration::from_secs(2)),
         Some(Duration::from_secs(1)),
-        None,
+        client_config.tls.clone(),
         DEFAULT_GRPC_MESSAGE_SIZE,
     )
 }
@@ -517,10 +517,10 @@ pub fn new_admin_client(addr: &str) -> MetaAdminClient {
     MetaAdminClient::new(addr)
 }
 
-pub async fn run_lua_script(script: &str, auth: &GrpcClientAuth) -> anyhow::Result<()> {
+pub async fn run_lua_script(script: &str, client_config: &GrpcClientConfig) -> anyhow::Result<()> {
     let lua = Lua::new();
 
-    setup_lua_environment(&lua, auth)?;
+    setup_lua_environment(&lua, client_config)?;
 
     #[allow(clippy::disallowed_types)]
     let local = tokio::task::LocalSet::new();
@@ -534,11 +534,11 @@ pub async fn run_lua_script(script: &str, auth: &GrpcClientAuth) -> anyhow::Resu
 
 pub async fn run_lua_script_with_result(
     script: &str,
-    auth: &GrpcClientAuth,
+    client_config: &GrpcClientConfig,
 ) -> anyhow::Result<Result<Option<String>, String>> {
     let lua = Lua::new();
 
-    setup_lua_environment(&lua, auth)?;
+    setup_lua_environment(&lua, client_config)?;
 
     #[allow(clippy::disallowed_types)]
     let local = tokio::task::LocalSet::new();
@@ -637,8 +637,8 @@ mod tests {
     #[test]
     fn test_transaction_helpers() {
         let lua = Lua::new();
-        let auth = GrpcClientAuth::default();
-        setup_lua_environment(&lua, &auth).unwrap();
+        let client_config = GrpcClientConfig::default();
+        setup_lua_environment(&lua, &client_config).unwrap();
         let actual = parse(
             &lua,
             r#"
@@ -767,8 +767,8 @@ mod tests {
     #[test]
     fn test_to_string_escapes_strings_and_bytes() {
         let lua = Lua::new();
-        let auth = GrpcClientAuth::default();
-        setup_lua_environment(&lua, &auth).unwrap();
+        let client_config = GrpcClientConfig::default();
+        setup_lua_environment(&lua, &client_config).unwrap();
         let string = lua
             .load(r#"return metactl.to_string("a\n\"\\\000\127\128\255")"#)
             .eval::<String>()
@@ -790,8 +790,8 @@ mod tests {
     #[test]
     fn test_zipf_generator_registered() {
         let lua = Lua::new();
-        let auth = GrpcClientAuth::default();
-        setup_lua_environment(&lua, &auth).unwrap();
+        let client_config = GrpcClientConfig::default();
+        setup_lua_environment(&lua, &client_config).unwrap();
         let index = lua
             .load(
                 r#"
@@ -807,8 +807,8 @@ mod tests {
     #[test]
     fn test_now_ms_is_monotonic() {
         let lua = Lua::new();
-        let auth = GrpcClientAuth::default();
-        setup_lua_environment(&lua, &auth).unwrap();
+        let client_config = GrpcClientConfig::default();
+        setup_lua_environment(&lua, &client_config).unwrap();
         let (a, b) = lua
             .load(
                 r#"

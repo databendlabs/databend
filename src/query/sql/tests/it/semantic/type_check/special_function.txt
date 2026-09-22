@@ -33,6 +33,20 @@ status: ok
 scalar: ''
 type: String
 
+=== current_tenant_id_rewrites_to_literal ===
+description: current_tenant_id() should resolve the session tenant through the type-check adapter.
+sql: current_tenant_id()
+status: ok
+scalar: 'test_tenant'
+type: String
+
+=== current_tenant_id_rejects_arguments ===
+description: current_tenant_id() takes no arguments and must not allow tenant lookup by argument.
+sql: current_tenant_id('other')
+status: error
+code: 1065
+message: current_tenant_id expects 0 arguments, but got 1
+
 === is_role_in_session_matches_effective_role ===
 description: is_role_in_session should compare its argument against effective roles through the type-check adapter.
 sql: is_role_in_session('reader')
