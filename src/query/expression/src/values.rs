@@ -43,6 +43,9 @@ use geo::Geometry;
 use geo::Point;
 use geozero::CoordDimensions;
 use geozero::ToWkb;
+use geozero::wkb::FromWkb;
+use geozero::wkb::WkbDialect;
+use geozero::wkt::Ewkt;
 use itertools::Itertools;
 use jsonb::RawJsonb;
 use serde::Deserialize;
@@ -1140,12 +1143,30 @@ impl Hash for ScalarRef<'_> {
                     value.hash(state);
                 }
             }
-            ScalarRef::Bitmap(v) => v.hash(state),
+            // `Scalar::eq` compares bitmaps by their decoded members, so the
+            // hash must not depend on the encoding. Undecodable payloads only
+            // compare equal bytewise and fall back to hashing the bytes.
+            ScalarRef::Bitmap(v) => match deserialize_bitmap(v) {
+                Ok(bitmap) => {
+                    bitmap.len().hash(state);
+                    for member in bitmap.iter() {
+                        member.hash(state);
+                    }
+                }
+                Err(_) => v.hash(state),
+            },
             ScalarRef::Tuple(v) => {
                 v.hash(state);
             }
             ScalarRef::Variant(v) => v.hash(state),
-            ScalarRef::Geometry(v) => v.hash(state),
+            // Mirrors `compare_geometry`: decodable geometries compare by their
+            // EWKT text, undecodable ones bytewise.
+            ScalarRef::Geometry(v) => {
+                match Ewkt::from_wkb(&mut std::io::Cursor::new(*v), WkbDialect::Ewkb) {
+                    Ok(ewkt) => ewkt.0.hash(state),
+                    Err(_) => v.hash(state),
+                }
+            }
             ScalarRef::Geography(v) => v.hash(state),
             ScalarRef::Vector(v) => v.hash(state),
             ScalarRef::Opaque(v) => v.hash(state),

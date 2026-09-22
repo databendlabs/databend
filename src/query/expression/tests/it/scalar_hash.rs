@@ -25,6 +25,8 @@ use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt8Type;
+use databend_common_io::HybridBitmap;
+use roaring::RoaringTreemap;
 
 fn hash_of(scalar: &Scalar) -> u64 {
     let mut hasher = DefaultHasher::new();
@@ -38,6 +40,14 @@ fn assert_pairwise_distinct(scalars: &[Scalar]) {
             assert_ne!(left, right);
             assert_ne!(hash_of(left), hash_of(right), "{left:?} vs {right:?}");
         }
+    }
+}
+
+fn assert_equal_class(scalars: &[Scalar]) {
+    let (first, rest) = scalars.split_first().unwrap();
+    for other in rest {
+        assert_eq!(first, other);
+        assert_eq!(hash_of(first), hash_of(other), "{first:?} vs {other:?}");
     }
 }
 
@@ -64,4 +74,59 @@ fn test_null_position_hashes_differ() {
     }
 
     assert_pairwise_distinct(&[Scalar::Null, Scalar::EmptyArray, Scalar::EmptyMap]);
+}
+
+#[test]
+fn test_bitmap_hash_ignores_encoding() {
+    let members = [1u64, 7, 1 << 40];
+
+    let mut legacy = Vec::new();
+    members
+        .iter()
+        .copied()
+        .collect::<RoaringTreemap>()
+        .serialize_into(&mut legacy)
+        .unwrap();
+
+    let mut hybrid = Vec::new();
+    members
+        .iter()
+        .copied()
+        .collect::<HybridBitmap>()
+        .serialize_into(&mut hybrid)
+        .unwrap();
+    assert_ne!(legacy, hybrid);
+
+    assert_equal_class(&[Scalar::Bitmap(legacy.clone()), Scalar::Bitmap(hybrid)]);
+
+    let mut other = Vec::new();
+    [1u64, 8]
+        .into_iter()
+        .collect::<HybridBitmap>()
+        .serialize_into(&mut other)
+        .unwrap();
+    assert_pairwise_distinct(&[Scalar::Bitmap(legacy), Scalar::Bitmap(other)]);
+}
+
+#[test]
+fn test_geometry_hash_ignores_byte_order() {
+    // WKB POINT(1 2) in little-endian and big-endian byte order.
+    let mut little = vec![1u8];
+    little.extend_from_slice(&1u32.to_le_bytes());
+    little.extend_from_slice(&1.0f64.to_le_bytes());
+    little.extend_from_slice(&2.0f64.to_le_bytes());
+
+    let mut big = vec![0u8];
+    big.extend_from_slice(&1u32.to_be_bytes());
+    big.extend_from_slice(&1.0f64.to_be_bytes());
+    big.extend_from_slice(&2.0f64.to_be_bytes());
+    assert_ne!(little, big);
+
+    assert_equal_class(&[Scalar::Geometry(little.clone()), Scalar::Geometry(big)]);
+
+    let mut other = vec![1u8];
+    other.extend_from_slice(&1u32.to_le_bytes());
+    other.extend_from_slice(&1.0f64.to_le_bytes());
+    other.extend_from_slice(&3.0f64.to_le_bytes());
+    assert_pairwise_distinct(&[Scalar::Geometry(little), Scalar::Geometry(other)]);
 }
