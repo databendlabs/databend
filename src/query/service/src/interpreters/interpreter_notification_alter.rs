@@ -46,48 +46,37 @@ impl AlterNotificationInterpreter {
         let plan = self.plan.clone();
         // Cloud Control only accepts operation_type "SET" and applies every
         // field that is present as a patch; absent fields are left untouched.
-        let mut req = AlterNotificationRequest {
+        let base = AlterNotificationRequest {
             tenant_id: self.ctx.get_tenant().tenant_name().to_string(),
             name: plan.name,
             operation_type: "SET".to_string(),
-            enabled: None,
-            webhook_url: None,
-            webhook_method: None,
-            webhook_authorization_header: None,
-            webhook_body_template: None,
-            comments: None,
+            ..Default::default()
         };
         match plan.options {
             AlterNotificationOptions::Set(set_options) => {
-                req.enabled = set_options.enabled;
-                req.webhook_url = set_options
-                    .webhook_opts
-                    .as_ref()
-                    .map(|x| x.url.clone())
-                    .unwrap_or_default();
-                req.webhook_method = set_options
-                    .webhook_opts
-                    .as_ref()
-                    .map(|x| x.method.clone())
-                    .unwrap_or_default();
-                req.webhook_authorization_header = set_options
-                    .webhook_opts
-                    .as_ref()
-                    .map(|x| x.authorization_header.clone())
-                    .unwrap_or_default();
-                req.webhook_body_template = set_options.webhook_body_template;
-                req.comments = set_options.comments;
+                let (webhook_url, webhook_method, webhook_authorization_header) =
+                    match set_options.webhook_opts {
+                        Some(opts) => (opts.url, opts.method, opts.authorization_header),
+                        None => Default::default(),
+                    };
+                AlterNotificationRequest {
+                    enabled: set_options.enabled,
+                    webhook_url,
+                    webhook_method,
+                    webhook_authorization_header,
+                    webhook_body_template: set_options.webhook_body_template,
+                    comments: set_options.comments,
+                    ..base
+                }
             }
-            AlterNotificationOptions::Unset(unset_options) => {
+            AlterNotificationOptions::Unset(unset_options) => AlterNotificationRequest {
                 // The wire form of UNSET is a present-but-empty template; Cloud
                 // Control turns it into NULL. Do not send "UNSET" as the
                 // operation_type, Cloud Control rejects it.
-                if unset_options.webhook_body_template {
-                    req.webhook_body_template = Some(String::new());
-                }
-            }
+                webhook_body_template: unset_options.webhook_body_template.then(String::new),
+                ..base
+            },
         }
-        req
     }
 }
 

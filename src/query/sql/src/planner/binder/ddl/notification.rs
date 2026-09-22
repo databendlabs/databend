@@ -20,9 +20,7 @@ use databend_common_ast::ast::DropNotificationStmt;
 use databend_common_ast::ast::NotificationWebhookOptions;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use serde_json::Error as JsonError;
 use serde_json::Value;
-use serde_json::error::Category;
 use serde_json::from_str;
 
 use crate::Binder;
@@ -59,6 +57,22 @@ fn verify_webhook_method(method: &String) -> Result<()> {
 const WEBHOOK_MESSAGE_PLACEHOLDER: &str = "DATABEND_WEBHOOK_MESSAGE";
 /// Upper bound on the raw template size, kept in sync with Cloud Control's
 /// `webhooktemplate.MaxTemplateBytes`.
+///
+/// Why 64 KB: the limit only needs to bound what a template can reasonably
+/// be, and the receiving side already bounds that for us. Notification
+/// webhooks are static-URL, stateless POSTs, which is the incoming-webhook
+/// model of every chat platform (Feishu custom bot, DingTalk, Slack, Teams,
+/// ...). Those endpoints cap the *whole rendered body*, template plus the
+/// substituted `DATABEND_WEBHOOK_MESSAGE`, at tens of KB; Feishu custom bots
+/// for example reject bodies over 20 KB
+/// (<https://open.feishu.cn/document/client-docs/bot-v3/add-custom-bot>).
+/// Any template larger than that is unusable no matter what we accept, so
+/// 64 KB leaves ample headroom for legitimate templates while still keeping
+/// the value small enough to persist in Cloud Control, ship over gRPC and
+/// echo back in `system.notifications` without concern.
+///
+/// This is an abuse guard, not a functional limit. Cloud Control remains the
+/// authority; the check here only fails fast with a clearer error.
 const MAX_WEBHOOK_BODY_TEMPLATE_BYTES: usize = 64 * 1024;
 
 /// Validates a `WEBHOOK_BODY_TEMPLATE` value before it is sent to Cloud Control.
@@ -87,12 +101,11 @@ fn verify_webhook_body_template(template: &str) -> Result<()> {
             MAX_WEBHOOK_BODY_TEMPLATE_BYTES
         )));
     }
+    // Parsing a `&str` into `Value` only yields syntax/EOF errors, whose
+    // messages carry a line/column position but never echo the input.
     let value: Value = from_str(template).map_err(|e| {
         ErrorCode::BadArguments(format!(
-            "WEBHOOK_BODY_TEMPLATE must be a single valid JSON value: {} at line {} column {}",
-            json_error_kind(&e),
-            e.line(),
-            e.column()
+            "WEBHOOK_BODY_TEMPLATE must be a single valid JSON value: {e}"
         ))
     })?;
     if json_has_placeholder_in_key(&value) {
@@ -111,17 +124,6 @@ fn json_has_placeholder_in_key(value: &Value) -> bool {
         }),
         Value::Array(items) => items.iter().any(json_has_placeholder_in_key),
         _ => false,
-    }
-}
-
-/// Coarse error category used instead of `JsonError`'s message, which can
-/// quote fragments of the template.
-fn json_error_kind(e: &JsonError) -> &'static str {
-    match e.classify() {
-        Category::Syntax => "syntax error",
-        Category::Eof => "unexpected end of input",
-        Category::Data => "invalid data",
-        Category::Io => "io error",
     }
 }
 
