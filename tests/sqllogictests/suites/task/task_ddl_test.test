@@ -159,8 +159,9 @@ DROP TASK mytask
 statement ok
 DROP TASK sessionTask
 
-# Task validation is static: missing objects, runtime script variables and dynamic
-# identifiers must all be accepted, and nothing in the body is executed during CREATE.
+# Task SQL is only parsed: string-literal EXECUTE IMMEDIATE scripts are expanded and
+# compiled, nothing is bound or executed. Missing objects, UDFs, runtime script
+# variables and dynamic identifiers are all accepted.
 statement ok
 DROP TABLE IF EXISTS task_validation_deferred_table
 
@@ -169,7 +170,12 @@ DROP TASK IF EXISTS task_validation_deferred
 
 statement ok
 CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh'
-AS SELECT * FROM task_validation_deferred_table
+AS INSERT INTO task_validation_deferred_table SELECT task_validation_udf_not_created_yet(1)
+
+query T
+select definition from system.tasks where name = 'task_validation_deferred'
+----
+INSERT INTO task_validation_deferred_table SELECT task_validation_udf_not_created_yet(1)
 
 statement ok
 CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$
@@ -186,45 +192,46 @@ SELECT count(*) FROM system.tables WHERE database = current_database() AND name 
 
 statement ok
 CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$
-DECLARE x := 1;
-BEGIN
-    SELECT :x + 1;
-    RETURN x;
-END;
-$$
-
-statement ok
-CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$
 DECLARE t := 'task_validation_deferred_table';
 BEGIN
-    SELECT * FROM IDENTIFIER(:t);
-END;
-$$
-
-statement ok
-CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$
-BEGIN
     FOR i IN 1 TO 2 DO
-        SELECT :i;
+        SELECT :i FROM IDENTIFIER(:t);
     END FOR;
+    RETURN t;
 END;
 $$
 
+# Scripts that are not a string literal are left to runtime.
 statement ok
-CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh'
-AS SELECT task_validation_udf_not_created_yet(1)
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE 'SELECT ' || 'FROM'
 
-query T
-select definition from system.tasks where name = 'task_validation_deferred'
-----
-SELECT task_validation_udf_not_created_yet(1)
+# Syntax errors inside constant scripts, including nested ones and every statement of a
+# task script block.
+statement error 1005
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE 'SELECT FROM'
 
-# ALTER TASK ... MODIFY AS applies the same static checks as CREATE TASK.
+statement error 1005
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN IF FALSE THEN SELECT FROM; END IF; END; $$
+
+statement error 1005
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN EXECUTE IMMEDIATE 'BEGIN SELECT FROM; END;'; END; $$
+
+statement error 1005
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS BEGIN SELECT 1; EXECUTE IMMEDIATE 'SELECT FROM'; END;
+
+# Script compilation: undeclared variables and control flow outside a loop.
+statement error 3128
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN RETURN unknown_variable; END; $$
+
+statement error 3128
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN LOOP EXECUTE IMMEDIATE 'BEGIN CONTINUE; END;'; END LOOP; END; $$
+
+# ALTER TASK ... MODIFY AS applies the same checks.
 statement ok
 ALTER TASK task_validation_deferred MODIFY AS SELECT * FROM task_validation_deferred_table
 
 statement error 1005
-ALTER TASK task_validation_deferred MODIFY AS SELECT FROM
+ALTER TASK task_validation_deferred MODIFY AS EXECUTE IMMEDIATE 'SELECT FROM'
 
 statement error 3128
 ALTER TASK task_validation_deferred MODIFY AS EXECUTE IMMEDIATE $$ BEGIN BREAK; END; $$
