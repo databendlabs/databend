@@ -446,6 +446,12 @@ impl GlobalHistoryLog {
                         backoff.reset();
                         transform_cnt += 1;
                         sleep(self.transform_sleep_duration()).await;
+                        // Release heartbeat periodically to allow other nodes in the cluster
+                        // to take over and ensure even task distribution across the cluster.
+                        // Errors keep the heartbeat so retry backoff is not reset by a handover.
+                        if transform_cnt % 200 == 0 {
+                            break;
+                        }
                     }
                     Err(e) => {
                         let delay = backoff.next_delay();
@@ -478,11 +484,6 @@ impl GlobalHistoryLog {
                             }
                         }
                     }
-                }
-                // Release heartbeat periodically to allow other nodes in the cluster
-                // to take over and ensure even task distribution across the cluster
-                if transform_cnt % 200 == 0 {
-                    break;
                 }
             }
             debug!("{} released heartbeat", table.name);
