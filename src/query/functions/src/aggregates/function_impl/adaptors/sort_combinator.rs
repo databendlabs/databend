@@ -74,11 +74,9 @@ impl<I> SortEval<I> {
         self.init_columns(state, rows);
         match validity {
             Some(validity) if validity.null_count() > 0 => {
-                for row in 0..rows {
-                    if validity.get(row).unwrap() {
-                        Self::append_row_to_builders(&mut state.columns, columns, row);
-                    }
-                }
+                for_each_selected(0..rows, Some(validity), |row| {
+                    Self::append_row_to_builders(&mut state.columns, columns, row);
+                });
             }
             _ => {
                 for (entry, builder) in columns.iter().zip(&mut state.columns) {
@@ -251,12 +249,16 @@ where I: AggregateEval
     }
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            let state = Self::state(state);
-            self.init_columns(state, input.states.len());
-            Self::append_row_to_builders(&mut state.columns, input.columns, row);
-        }
-        Ok(())
+        input
+            .states
+            .for_each_first_state_value::<AggregateSortState, _>(
+                0..input.columns.num_rows(),
+                input.validity,
+                |state, row| {
+                    self.init_columns(state, input.states.len());
+                    Self::append_row_to_builders(&mut state.columns, input.columns, row);
+                },
+            )
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
@@ -288,17 +290,19 @@ where I: AggregateEval
 
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         let (sort_builders, inner_builders) = input.builders.split_at_mut(1);
-        for state in input.states.iter() {
-            let state = Self::state(state);
-            let columns = state
-                .columns
-                .iter()
-                .map(|builder| builder.clone().build())
-                .collect::<Vec<_>>();
-            let mut data = Vec::new();
-            columns.serialize(&mut data)?;
-            sort_builders[0].push(ScalarRef::Binary(&data));
-        }
+        input
+            .states
+            .try_for_each_first_state::<AggregateSortState>(None, |state| {
+                let columns = state
+                    .columns
+                    .iter()
+                    .map(|builder| builder.clone().build())
+                    .collect::<Vec<_>>();
+                let mut data = Vec::new();
+                columns.serialize(&mut data)?;
+                sort_builders[0].push(ScalarRef::Binary(&data));
+                Ok(())
+            })?;
         self.nested.serialize(SerializeInput {
             states: input.states.without_first_loc(),
             builders: inner_builders,
@@ -306,14 +310,12 @@ where I: AggregateEval
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
+        input.try_for_each_first_state::<AggregateSortState>(|state, row| {
             let mut data = serialized_binary_at(input.state, row, 0);
             let columns = Vec::<Column>::deserialize(&mut data)?;
-            Self::merge_columns(Self::state(state), columns);
-        }
+            Self::merge_columns(state, columns);
+            Ok(())
+        })?;
 
         let field_count = serialized_field_count(input.state);
         let inner_state = project_serialized_fields(input.state, 1, field_count);

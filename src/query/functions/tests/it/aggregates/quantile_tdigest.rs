@@ -101,31 +101,17 @@ fn simulate_accumulate_matches_rows(
         addrs: vec![batch_addr, rows_addr],
     };
 
-    func.accumulate(AccumulateInput {
-        state: batch_state,
-        columns: entries.into(),
-        validity: None,
-    })?;
+    func.accumulate(batch_state, entries.into())?;
     for row in 0..rows {
-        func.accumulate_row(AccumulateRowInput {
-            state: rows_state,
-            columns: entries.into(),
-            row,
-        })?;
+        func.accumulate_row(rows_state, entries.into(), row)?;
     }
 
     let mut batch_builder = ColumnBuilder::with_capacity(&data_type, 1);
-    func.merge_result(MergeResultInput {
-        state: batch_state,
-        builder: &mut batch_builder,
-    })?;
+    func.merge_result(batch_state, &mut batch_builder)?;
     let batch_column = batch_builder.build();
 
     let mut rows_builder = ColumnBuilder::with_capacity(&data_type, 1);
-    func.merge_result(MergeResultInput {
-        state: rows_state,
-        builder: &mut rows_builder,
-    })?;
+    func.merge_result(rows_state, &mut rows_builder)?;
     let rows_column = rows_builder.build();
 
     assert_eq!(batch_column, rows_column);
@@ -533,40 +519,21 @@ fn simulate_accumulate_keys_matches_rows(
             }
         })
         .collect::<Vec<_>>();
-    func.accumulate_keys(AccumulateKeysInput {
-        states: AggregateStateSet::new(&places, &loc),
-        columns: entries.into(),
-    })?;
+    func.accumulate_keys(AggregateStateSet::new(&places, &loc), entries.into())?;
 
     for row in 0..rows {
         let state = if row % 2 == 0 { rows_left } else { rows_right };
-        func.accumulate_row(AccumulateRowInput {
-            state,
-            columns: entries.into(),
-            row,
-        })?;
+        func.accumulate_row(state, entries.into(), row)?;
     }
 
     let mut keys_builder = ColumnBuilder::with_capacity(&data_type, 2);
-    func.merge_result(MergeResultInput {
-        state: keys_left,
-        builder: &mut keys_builder,
-    })?;
-    func.merge_result(MergeResultInput {
-        state: keys_right,
-        builder: &mut keys_builder,
-    })?;
+    func.merge_result(keys_left, &mut keys_builder)?;
+    func.merge_result(keys_right, &mut keys_builder)?;
     let keys_column = keys_builder.build();
 
     let mut rows_builder = ColumnBuilder::with_capacity(&data_type, 2);
-    func.merge_result(MergeResultInput {
-        state: rows_left,
-        builder: &mut rows_builder,
-    })?;
-    func.merge_result(MergeResultInput {
-        state: rows_right,
-        builder: &mut rows_builder,
-    })?;
+    func.merge_result(rows_left, &mut rows_builder)?;
+    func.merge_result(rows_right, &mut rows_builder)?;
     let rows_column = rows_builder.build();
 
     assert_eq!(keys_column, rows_column);
@@ -635,29 +602,15 @@ fn simulate_v2_merge_split(
     let left = AggregateStateOwner::new(vec![function.clone()])?;
     let right = AggregateStateOwner::new(vec![function.clone()])?;
     for row in 0..right_start {
-        function.accumulate_row(AccumulateRowInput {
-            state: left.state(0),
-            columns: entries.into(),
-            row,
-        })?;
+        function.accumulate_row(left.state(0), entries.into(), row)?;
     }
     for row in right_start..rows {
-        function.accumulate_row(AccumulateRowInput {
-            state: right.state(0),
-            columns: entries.into(),
-            row,
-        })?;
+        function.accumulate_row(right.state(0), entries.into(), row)?;
     }
-    function.merge_states(MergeStatesInput {
-        state: left.state(0),
-        rhs: right.state(0),
-    })?;
+    function.merge_states(left.state(0), right.state(0))?;
 
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
-    function.merge_result(MergeResultInput {
-        state: left.state(0),
-        builder: &mut builder,
-    })?;
+    function.merge_result(left.state(0), &mut builder)?;
     Ok((builder.build(), data_type))
 }
 

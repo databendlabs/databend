@@ -262,13 +262,13 @@ impl GeographicBuilder {
     };
 }
 
-pub struct AggregateGeometryAggState<O> {
+pub struct GeometryAggState<O> {
     value: Option<Geometry<f64>>,
     srid: Option<i32>,
     _p: PhantomData<fn(O)>,
 }
 
-impl<O> Default for AggregateGeometryAggState<O> {
+impl<O> Default for GeometryAggState<O> {
     fn default() -> Self {
         Self {
             value: None,
@@ -278,7 +278,7 @@ impl<O> Default for AggregateGeometryAggState<O> {
     }
 }
 
-impl<O> AggregateGeometryAggState<O> {
+impl<O> GeometryAggState<O> {
     pub fn state_description() -> AggregateStateDescription {
         AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
             StateSerdeItem::Binary(None),
@@ -287,7 +287,7 @@ impl<O> AggregateGeometryAggState<O> {
     }
 }
 
-impl<O> AggregateGeometryAggState<O>
+impl<O> GeometryAggState<O>
 where O: GeoAggOp
 {
     fn add_geo(&mut self, geo: Geometry<f64>, geo_srid: Option<i32>) -> Result<()> {
@@ -537,51 +537,32 @@ impl<O> AggregateEval for GeometryAggEval<O>
 where O: GeoAggOp
 {
     fn init_state(&self, state: AggrState<'_>) {
-        state.write(AggregateGeometryAggState::<O>::default);
+        state.write(GeometryAggState::<O>::default);
     }
 
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
-        let state = input.state.get::<AggregateGeometryAggState<O>>();
+        let state = input.state.get::<GeometryAggState<O>>();
         let (entry, validity) = strip_nullable_geometry_input(input.columns, input.validity);
         if entry.data_type().is_null() {
             return Ok(());
         }
         let values = entry.downcast::<GeometryType>()?;
-        match validity.as_ref() {
-            Some(validity) => {
-                for (value, valid) in values.iter().zip(validity.iter()) {
-                    if valid {
-                        state.add(value)?;
-                    }
-                }
-            }
-            None => {
-                for value in values.iter() {
-                    state.add(value)?;
-                }
-            }
-        }
-        Ok(())
+        try_for_each_selected(values.iter(), validity.as_ref(), |value| state.add(value))
     }
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
-        let (entry, validity) = strip_nullable_geometry_input(input.columns, None);
+        let (entry, validity) = strip_nullable_geometry_input(input.columns, input.validity);
         if entry.data_type().is_null() {
             return Ok(());
         }
         let values = entry.downcast::<GeometryType>()?;
-        for (row, state) in input.states.iter().enumerate() {
-            if validity
-                .as_ref()
-                .is_some_and(|validity| !validity.get(row).unwrap())
-            {
-                continue;
-            }
-            state
-                .get::<AggregateGeometryAggState<O>>()
-                .add(values.index(row).unwrap())?;
-        }
-        Ok(())
+        input
+            .states
+            .try_for_each_state_value::<GeometryAggState<O>, _>(
+                values.iter(),
+                validity.as_ref(),
+                |state, value| state.add(value),
+            )
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
@@ -596,56 +577,49 @@ where O: GeoAggOp
         let values = entry.downcast::<GeometryType>()?;
         input
             .state
-            .get::<AggregateGeometryAggState<O>>()
+            .get::<GeometryAggState<O>>()
             .add(values.index(input.row).unwrap())?;
         Ok(())
     }
 
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
-        for state in input.states.iter() {
-            state
-                .get::<AggregateGeometryAggState<O>>()
-                .serialize(&mut input.builders[0])?;
-        }
-        Ok(())
+        input
+            .states
+            .try_for_each_state::<GeometryAggState<O>>(None, |state| {
+                state.serialize(&mut input.builders[0])
+            })
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
-            state
-                .get::<AggregateGeometryAggState<O>>()
-                .merge_serialized(super::serialized_scalar_at(input.state, row, 0))?;
-        }
-        Ok(())
+        input.try_for_each_state::<GeometryAggState<O>>(|state, row| {
+            state.merge_serialized(super::serialized_scalar_at(input.state, row, 0))
+        })
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         input
             .state
-            .get::<AggregateGeometryAggState<O>>()
-            .merge_owned(input.rhs.get::<AggregateGeometryAggState<O>>())?;
+            .get::<GeometryAggState<O>>()
+            .merge_owned(input.rhs.get::<GeometryAggState<O>>())?;
         Ok(())
     }
 
     fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
         input
             .state
-            .get::<AggregateGeometryAggState<O>>()
+            .get::<GeometryAggState<O>>()
             .merge_result(input.builder)
     }
 
     fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
         input
             .state
-            .get::<AggregateGeometryAggState<O>>()
+            .get::<GeometryAggState<O>>()
             .merge_result_read_only(input.builder)
     }
 
     unsafe fn drop_state(&self, state: AggrState<'_>) {
-        unsafe { std::ptr::drop_in_place(state.get::<AggregateGeometryAggState<O>>()) };
+        unsafe { std::ptr::drop_in_place(state.get::<GeometryAggState<O>>()) };
     }
 }
 
@@ -663,41 +637,23 @@ where O: GeoAggOp
             return Ok(());
         }
         let values = entry.downcast::<GeometryType>()?;
-        match validity.as_ref() {
-            Some(validity) => {
-                for (value, valid) in values.iter().zip(validity.iter()) {
-                    if valid {
-                        state.add(value);
-                    }
-                }
-            }
-            None => {
-                for value in values.iter() {
-                    state.add(value);
-                }
-            }
-        }
+        for_each_selected(values.iter(), validity.as_ref(), |value| state.add(value));
         Ok(())
     }
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
-        let (entry, validity) = strip_nullable_geometry_input(input.columns, None);
+        let (entry, validity) = strip_nullable_geometry_input(input.columns, input.validity);
         if entry.data_type().is_null() {
             return Ok(());
         }
         let values = entry.downcast::<GeometryType>()?;
-        for (row, state) in input.states.iter().enumerate() {
-            if validity
-                .as_ref()
-                .is_some_and(|validity| !validity.get(row).unwrap())
-            {
-                continue;
-            }
-            state
-                .get::<AggregateGeometryCollectState<O>>()
-                .add(values.index(row).unwrap());
-        }
-        Ok(())
+        input
+            .states
+            .for_each_state_value::<AggregateGeometryCollectState<O>, _>(
+                values.iter(),
+                validity.as_ref(),
+                |state, value| state.add(value),
+            )
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
@@ -718,24 +674,17 @@ where O: GeoAggOp
     }
 
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
-        for state in input.states.iter() {
-            state
-                .get::<AggregateGeometryCollectState<O>>()
-                .serialize(&mut input.builders[0])?;
-        }
-        Ok(())
+        input
+            .states
+            .try_for_each_state::<AggregateGeometryCollectState<O>>(None, |state| {
+                state.serialize(&mut input.builders[0])
+            })
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
-            state
-                .get::<AggregateGeometryCollectState<O>>()
-                .merge_serialized(super::serialized_scalar_at(input.state, row, 0))?;
-        }
-        Ok(())
+        input.try_for_each_state::<AggregateGeometryCollectState<O>>(|state, row| {
+            state.merge_serialized(super::serialized_scalar_at(input.state, row, 0))
+        })
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
@@ -772,7 +721,7 @@ impl GeographicBuilder {
 
         build.create_native_nullable(
             DataType::Geometry.wrap_nullable(),
-            AggregateGeometryAggState::<O>::state_description(),
+            GeometryAggState::<O>::state_description(),
             GeometryAggEval::<O>::default(),
         )
     }

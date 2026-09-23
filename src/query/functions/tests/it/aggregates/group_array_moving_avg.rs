@@ -2,9 +2,11 @@ use std::io::Write;
 
 use databend_common_expression::BlockEntry;
 use databend_common_expression::FromData;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::Decimal64Type;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::Float64Type;
+use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::UInt64Type;
 use goldenfile::Mint;
@@ -16,16 +18,8 @@ use super::support::write_aggregate_expr_case;
 
 fn run_group_array_moving_avg_cases(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = [
-        (
-            "a",
-            databend_common_expression::types::number::Int64Type::from_data(vec![4i64, 3, 2, 1])
-                .into(),
-        ),
-        (
-            "b",
-            databend_common_expression::types::number::UInt64Type::from_data(vec![1u64, 2, 3, 4])
-                .into(),
-        ),
+        ("a", Int64Type::from_data(vec![4i64, 3, 2, 1]).into()),
+        ("b", UInt64Type::from_data(vec![1u64, 2, 3, 4]).into()),
         (
             "f",
             Float64Type::from_data(vec![1.0, 2.5, -3.0, 4.5]).into(),
@@ -36,26 +30,23 @@ fn run_group_array_moving_avg_cases(file: &mut impl Write, simulator: impl Aggre
         ),
         (
             "x_null",
-            databend_common_expression::types::number::UInt64Type::from_data_with_validity(
-                vec![1u64, 2, 3, 4],
-                vec![true, true, false, false],
-            )
+            UInt64Type::from_data_with_validity(vec![1u64, 2, 3, 4], vec![
+                true, true, false, false,
+            ])
             .into(),
         ),
         (
             "y_null",
-            databend_common_expression::types::number::UInt64Type::from_data_with_validity(
-                vec![1u64, 2, 3, 4],
-                vec![false, false, true, true],
-            )
+            UInt64Type::from_data_with_validity(vec![1u64, 2, 3, 4], vec![
+                false, false, true, true,
+            ])
             .into(),
         ),
         (
             "all_null",
-            databend_common_expression::types::number::UInt64Type::from_data_with_validity(
-                vec![1u64, 2, 3, 4],
-                vec![false, false, false, false],
-            )
+            UInt64Type::from_data_with_validity(vec![1u64, 2, 3, 4], vec![
+                false, false, false, false,
+            ])
             .into(),
         ),
         (
@@ -73,6 +64,10 @@ fn run_group_array_moving_avg_cases(file: &mut impl Write, simulator: impl Aggre
                 Some(DecimalSize::new_unchecked(15, 2)),
             )
             .into(),
+        ),
+        (
+            "cond",
+            BooleanType::from_data(vec![true, false, true, false]).into(),
         ),
     ];
     let columns = columns.as_slice();
@@ -171,6 +166,34 @@ fn run_group_array_moving_avg_cases(file: &mut impl Write, simulator: impl Aggre
     write_aggregate_expr_case(
         file,
         "group_array_moving_avg(2)(dec_all_null)",
+        columns,
+        simulator,
+        vec![],
+    );
+    write_aggregate_expr_case(
+        file,
+        "group_array_moving_avg_if(2)(b, cond)",
+        columns,
+        simulator,
+        vec![],
+    );
+    write_aggregate_expr_case(
+        file,
+        "group_array_moving_avg_if(2)(x_null, cond)",
+        columns,
+        simulator,
+        vec![],
+    );
+    write_aggregate_expr_case(
+        file,
+        "group_array_moving_avg_if(2)(NULL, cond)",
+        columns,
+        simulator,
+        vec![],
+    );
+    write_aggregate_expr_case(
+        file,
+        "group_array_moving_avg_if(2)(dec, cond)",
         columns,
         simulator,
         vec![],

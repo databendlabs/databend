@@ -295,6 +295,7 @@ impl TypeCheckAdapter for TestTypeCheckAdapter {
                 serde_json::json!({ "roles": "", "value": "ALL" }).to_string(),
             )),
             AuthFunction::CurrentAvailableRoles => Ok(Scalar::String("[]".to_string())),
+            AuthFunction::CurrentTenantId => Ok(Scalar::String("test_tenant".to_string())),
         }
     }
 

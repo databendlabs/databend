@@ -28,6 +28,7 @@ use crate::Symbol;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::FunctionCall;
+use crate::plans::LambdaFunc;
 use crate::plans::Operator;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
@@ -236,6 +237,18 @@ impl ScalarTypeValidator<'_> {
         Ok(())
     }
 
+    fn validate_lambda_function(&mut self, function: &LambdaFunc) -> Result<()> {
+        let mut refreshed = function.clone();
+        refreshed.refresh_return_type()?;
+        if refreshed.return_type != function.return_type {
+            return Err(ErrorCode::Internal(format!(
+                "SExpr lambda return type mismatch for {}: stored {:?}, expected {:?}",
+                function.func_name, function.return_type, refreshed.return_type
+            )));
+        }
+        Ok(())
+    }
+
     fn validate_aggregate_function(&mut self, aggregate: &AggregateFunction) -> Result<()> {
         let argument_types = aggregate
             .args
@@ -283,6 +296,15 @@ impl ScalarExprVisitor<'_> for ScalarTypeValidator<'_> {
         self.validate_function_call(function)?;
 
         for argument in &function.arguments {
+            self.visit(argument)?;
+        }
+        Ok(())
+    }
+
+    fn visit_lambda_function(&mut self, function: &LambdaFunc) -> Result<()> {
+        self.validate_lambda_function(function)?;
+
+        for argument in &function.args {
             self.visit(argument)?;
         }
         Ok(())

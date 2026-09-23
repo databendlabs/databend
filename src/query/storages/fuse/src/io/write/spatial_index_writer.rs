@@ -49,6 +49,12 @@ use opendal::Operator;
 use parquet::file::metadata::KeyValue;
 
 use crate::io::read::load_spatial_index_files;
+use crate::io::write::block_index::BlockIndexSpec;
+use crate::io::write::block_index::BlockIndexWriteContext;
+use crate::io::write::block_index::BlockIndexWriter;
+use crate::io::write::block_index::PendingBlockIndexOutput;
+use crate::io::write::block_index::PendingIndexFile;
+use crate::io::write::block_index::PendingSpatialIndex;
 use crate::statistics::SpatialStatsBuilder;
 
 #[derive(Debug, Clone)]
@@ -84,7 +90,53 @@ pub struct SpatialIndexBuilder {
     spatial_stats: HashMap<ColumnId, SpatialStatsBuilder>,
 }
 
+pub(crate) struct SpatialIndexWriteSpec {
+    builder: SpatialIndexBuilder,
+    location: Location,
+}
+
+impl BlockIndexSpec for SpatialIndexWriteSpec {
+    fn new_writer(&self, _context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
+        Ok(Box::new(SpatialIndexBlockWriter {
+            builder: self.builder.clone(),
+            location: self.location.clone(),
+        }))
+    }
+}
+
+struct SpatialIndexBlockWriter {
+    builder: SpatialIndexBuilder,
+    location: Location,
+}
+
+impl BlockIndexWriter for SpatialIndexBlockWriter {
+    fn write(&mut self, block: &DataBlock) -> Result<()> {
+        self.builder.add_block(block)
+    }
+
+    fn finish(mut self: Box<Self>) -> Result<PendingBlockIndexOutput> {
+        let result = self.builder.finalize(&self.location)?;
+        Ok(PendingBlockIndexOutput {
+            spatial: Some(PendingSpatialIndex {
+                file: result.index_state.map(|index_state| PendingIndexFile {
+                    location: index_state.location,
+                    data: index_state.data,
+                }),
+                statistics: result.spatial_stats,
+            }),
+            ..Default::default()
+        })
+    }
+}
+
 impl SpatialIndexBuilder {
+    pub(crate) fn into_write_spec(self, location: Location) -> SpatialIndexWriteSpec {
+        SpatialIndexWriteSpec {
+            builder: self,
+            location,
+        }
+    }
+
     pub fn try_create(
         table_indexes: &BTreeMap<String, TableIndex>,
         schema: TableSchemaRef,

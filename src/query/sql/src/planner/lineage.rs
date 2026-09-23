@@ -25,6 +25,7 @@ use databend_common_expression::TableField;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::CatalogType;
+use log::warn;
 
 use crate::BindContext;
 use crate::ColumnEntry;
@@ -70,6 +71,15 @@ pub struct QueryLineage {
     pub kind: QueryLineageKind,
     /// Objects written or defined by the query.
     pub targets: Vec<LineageTarget>,
+}
+
+/// Lineage captured from a bound plan before optimization.
+///
+/// `None` records that the bound plan was inspected and produced no lineage (or failed to),
+/// so later readers never fall back to re-extracting from the optimized plan.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BoundQueryLineage {
+    pub lineage: Option<QueryLineage>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -162,8 +172,67 @@ enum SourceExpr {
 }
 
 impl Plan {
+    /// Query lineage for this plan.
+    ///
+    /// Prefers the snapshot captured by [`Plan::capture_bound_query_lineage`] on the bound plan.
+    /// Plans that never went through the planner (or carry no query part) are extracted directly.
     pub fn query_lineage(&self) -> Result<Option<QueryLineage>> {
+        if let Some(metadata) = self.lineage_metadata() {
+            if let Some(captured) = metadata.read().bound_query_lineage() {
+                return Ok(captured.lineage.clone());
+            }
+        }
+        self.extract_query_lineage()
+    }
+
+    /// Extract lineage from the bound plan and store it in the plan's metadata, so that
+    /// `query_lineage()` on the optimized plan still reports what the user wrote.
+    ///
+    /// Plans without a query part (for example COPY from a stage without a transform) have
+    /// nothing the optimizer can rewrite, so they are extracted lazily instead.
+    pub fn capture_bound_query_lineage(&self) {
+        let Some(metadata) = self.lineage_metadata() else {
+            return;
+        };
+        let lineage = match self.extract_query_lineage() {
+            Ok(lineage) => lineage,
+            Err(err) => {
+                warn!("Failed to extract query lineage from bound plan: {:?}", err);
+                None
+            }
+        };
+        metadata
+            .write()
+            .set_bound_query_lineage(BoundQueryLineage { lineage });
+    }
+
+    fn extract_query_lineage(&self) -> Result<Option<QueryLineage>> {
         RelationExtractor::new(self).extract_query_lineage()
+    }
+
+    /// Metadata of the query part whose shape the optimizer may change.
+    fn lineage_metadata(&self) -> Option<&MetadataRef> {
+        let query = match self {
+            Plan::CreateTable(plan) => plan.as_select.as_deref(),
+            Plan::CreateView(plan) => plan.query_plan.as_deref(),
+            Plan::Insert(plan) => match &plan.source {
+                InsertInputSource::SelectPlan(query) => Some(query.as_ref()),
+                _ => None,
+            },
+            Plan::Replace(plan) => match &plan.source {
+                InsertInputSource::SelectPlan(query) => Some(query.as_ref()),
+                _ => None,
+            },
+            Plan::CopyIntoTable(plan) => plan.query.as_deref(),
+            Plan::CopyIntoLocation(plan) => Some(plan.from.as_ref()),
+            Plan::InsertMultiTable(plan) => Some(&plan.input_source),
+            Plan::DataMutation { metadata, .. } => return Some(metadata),
+            _ => None,
+        }?;
+        match query {
+            Plan::Query { metadata, .. } => Some(metadata),
+            _ => None,
+        }
     }
 
     /// Extract CREATE VIEW lineage from a stored View query using its current object identity.
@@ -1059,12 +1128,7 @@ fn relation_info_from_table_index(
     }
     let table_object = table.table();
     let table_info = table_object.get_table_info();
-    if table_object.is_temp()
-        || matches!(
-            table_info.engine().to_ascii_uppercase().as_str(),
-            "MEMORY" | "DELTA"
-        )
-    {
+    if table_object.is_temp() || table_info.engine().eq_ignore_ascii_case("MEMORY") {
         return Ok(None);
     }
     let catalog_type = table_info.catalog_info.catalog_type();
@@ -1484,19 +1548,17 @@ mod tests {
             assert_eq!(relation.catalog_type, Some(catalog_type));
         }
 
-        for engine in ["MEMORY", "DELTA"] {
-            let metadata = MetadataRef::new(RwLock::new(Metadata::default()));
-            let table_index = add_fake_table_with_engine(&metadata, 10, "src", &["a"], engine);
-            assert_eq!(
-                relation_info_from_table_index(
-                    &metadata.read(),
-                    table_index,
-                    QueryLineageRelationKind::Table,
-                )?,
-                None,
-                "engine={engine}"
-            );
-        }
+        let metadata = MetadataRef::new(RwLock::new(Metadata::default()));
+        let table_index = add_fake_table_with_engine(&metadata, 10, "src", &["a"], "MEMORY");
+        assert_eq!(
+            relation_info_from_table_index(
+                &metadata.read(),
+                table_index,
+                QueryLineageRelationKind::Table,
+            )?,
+            None,
+            "engine=MEMORY"
+        );
         Ok(())
     }
 
@@ -1899,6 +1961,7 @@ mod tests {
             field_comments: vec![],
             field_stats_truncate_len: vec![],
             cluster_key: None,
+            ttl: None,
             as_select: as_select.map(Box::new),
             table_indexes: None,
             table_constraints: None,

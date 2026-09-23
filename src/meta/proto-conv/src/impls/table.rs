@@ -212,6 +212,7 @@ impl FromToProto for mt::TableMeta {
                 (id, k)
             }),
             cluster_key_seq,
+            ttl: p.ttl,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             updated_on: DateTime::<Utc>::from_pb(p.updated_on)?,
             drop_on: p.drop_on.from_pb_opt()?,
@@ -278,6 +279,7 @@ impl FromToProto for mt::TableMeta {
             // cluster_keys is deprecated.
             cluster_keys: vec![],
             cluster_key_seq: Some(self.cluster_key_seq),
+            ttl: self.ttl.clone(),
             created_on: self.created_on.to_pb(),
             updated_on: self.updated_on.to_pb(),
             drop_on: self.drop_on.to_pb_opt(),

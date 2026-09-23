@@ -149,6 +149,9 @@ impl Walk for CreateTableStmt {
         if let Some(cluster_by) = &self.cluster_by {
             try_walk!(cluster_by.walk(visitor));
         }
+        if let Some(ttl) = &self.ttl {
+            try_walk!(ttl.walk(visitor));
+        }
         if let Some(partitions) = &self.partition_by {
             for expr in partitions {
                 try_walk!(expr.walk(visitor));
@@ -172,6 +175,9 @@ impl WalkMut for CreateTableStmt {
         }
         if let Some(cluster_by) = &mut self.cluster_by {
             try_walk!(cluster_by.walk_mut(visitor));
+        }
+        if let Some(ttl) = &mut self.ttl {
+            try_walk!(ttl.walk_mut(visitor));
         }
         if let Some(partitions) = &mut self.partition_by {
             for expr in partitions {
@@ -257,10 +263,14 @@ impl Walk for AlterTableAction {
             }
             AlterTableAction::ModifyTableComment { .. }
             | AlterTableAction::DropTableClusterKey
+            | AlterTableAction::RemoveTableTtl
             | AlterTableAction::RefreshTableCache
             | AlterTableAction::SetOptions { .. }
             | AlterTableAction::ModifyConnection { .. }
             | AlterTableAction::DropAllRowAccessPolicies => {}
+            AlterTableAction::SetTableTtl { ttl } => {
+                try_walk!(ttl.walk(visitor));
+            }
             AlterTableAction::ModifyColumn { action } => match action {
                 ModifyColumnAction::SetMaskingPolicy(column, _, using_columns) => {
                     try_walk!(column.walk(visitor));
@@ -365,10 +375,14 @@ impl WalkMut for AlterTableAction {
             }
             AlterTableAction::ModifyTableComment { .. }
             | AlterTableAction::DropTableClusterKey
+            | AlterTableAction::RemoveTableTtl
             | AlterTableAction::RefreshTableCache
             | AlterTableAction::SetOptions { .. }
             | AlterTableAction::ModifyConnection { .. }
             | AlterTableAction::DropAllRowAccessPolicies => {}
+            AlterTableAction::SetTableTtl { ttl } => {
+                try_walk!(ttl.walk_mut(visitor));
+            }
             AlterTableAction::ModifyColumn { action } => match action {
                 ModifyColumnAction::SetMaskingPolicy(column, _, using_columns) => {
                     try_walk!(column.walk_mut(visitor));

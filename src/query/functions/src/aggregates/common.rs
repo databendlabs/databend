@@ -20,11 +20,8 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Constant;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
-use databend_common_expression::aggregate_function::AccumulateInput;
-use databend_common_expression::aggregate_function::AccumulateRowCountInput;
 use databend_common_expression::aggregate_function::AggregateBoundOrderByItem;
 use databend_common_expression::aggregate_function::AggregateStateOwner;
-use databend_common_expression::aggregate_function::MergeResultInput;
 use databend_common_expression::aggregate_function::RawAggregateCall;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
@@ -57,23 +54,13 @@ pub fn eval_aggr(
     let entries = function.input_layout().project(entries)?;
 
     if entries.is_empty() {
-        function.accumulate_row_count(AccumulateRowCountInput {
-            state: owner.state(0),
-            rows,
-        })?;
+        function.accumulate_row_count(owner.state(0), rows)?;
     } else {
-        function.accumulate(AccumulateInput {
-            state: owner.state(0),
-            columns: entries.as_ref().into(),
-            validity: None,
-        })?;
+        function.accumulate(owner.state(0), entries.as_ref().into())?;
     }
 
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
-    function.merge_result(MergeResultInput {
-        state: owner.state(0),
-        builder: &mut builder,
-    })?;
+    function.merge_result(owner.state(0), &mut builder)?;
     Ok((builder.build(), data_type))
 }
 

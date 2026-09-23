@@ -25,6 +25,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::F64;
@@ -67,6 +68,19 @@ struct StatisticsColumn {
     index: Symbol,
     id: ColumnId,
     name: String,
+}
+
+/// Persisted column statistics are collected per *leaf* column, keyed by the leaf's
+/// `ColumnId`. A nested field (array, map, tuple) shares its `ColumnId` with its first
+/// leaf, so looking the field up by id would return the leaf's statistics: the leaf's
+/// `null_count` counts NULL elements, not NULL rows, and its min/max describe element
+/// values. Those must not be attributed to the field, e.g. `count(array_col)` would be
+/// folded to the row count. Only scalar fields have field-level statistics.
+fn has_field_level_statistics(data_type: &TableDataType) -> bool {
+    !matches!(
+        data_type.remove_nullable(),
+        TableDataType::Array(_) | TableDataType::Map(_) | TableDataType::Tuple { .. }
+    )
 }
 
 impl StatisticsTraceCollector {
@@ -188,9 +202,10 @@ impl CollectStatisticsOptimizer {
                                 column_index,
                                 column_id,
                                 column_name,
+                                data_type,
                                 virtual_expr: None,
                                 ..
-                            }) => Some(StatisticsColumn {
+                            }) if has_field_level_statistics(data_type) => Some(StatisticsColumn {
                                 index: *column_index,
                                 id: *column_id,
                                 name: column_name.clone(),

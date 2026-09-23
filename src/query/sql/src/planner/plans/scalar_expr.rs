@@ -1194,6 +1194,54 @@ pub struct LambdaFunc {
     pub return_type: Box<DataType>,
 }
 
+impl LambdaFunc {
+    fn sync_return_type_nullability(&mut self, is_nullable: bool) {
+        if self.return_type.is_nullable() == is_nullable {
+            return;
+        }
+
+        self.return_type = Box::new(if is_nullable {
+            self.return_type.wrap_nullable()
+        } else {
+            self.return_type.remove_nullable()
+        });
+    }
+
+    pub fn with_args(&self, args: Vec<ScalarExpr>) -> Result<Self> {
+        let mut lambda = self.clone();
+        lambda.args = args;
+        lambda.refresh_return_type()?;
+        Ok(lambda)
+    }
+
+    pub fn refresh_return_type(&mut self) -> Result<()> {
+        if self.func_name == "json_path_transform" {
+            let [json, path, ..] = self.args.as_slice() else {
+                return Err(ErrorCode::Internal(
+                    "json_path_transform requires json and path arguments",
+                ));
+            };
+            let is_nullable =
+                json.data_type().is_nullable_or_null() || path.data_type().is_nullable_or_null();
+            self.sync_return_type_nullability(is_nullable);
+            return Ok(());
+        }
+
+        // Captured columns precede the collection argument. Planner rewrites
+        // may change only the collection's outer nullability; its element, key,
+        // and value types remain those used to type-check the lambda body.
+        let collection_type = self
+            .args
+            .last()
+            .ok_or_else(|| ErrorCode::Internal("lambda function requires a collection argument"))?
+            .data_type();
+        if self.func_name != "array_reduce" {
+            self.sync_return_type_nullability(collection_type.is_nullable_or_null());
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Educe)]
 #[educe(Debug, PartialEq, Eq, Hash)]
 pub struct FunctionCall {
@@ -1808,6 +1856,8 @@ impl<'a> Visitor<'a> for IndexPredicateChecker {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use databend_common_expression::types::number::NumberDataType;
 
     use super::*;
@@ -1868,6 +1918,21 @@ mod tests {
             expr.data_type().as_ref(),
             expr.as_expr().unwrap().data_type()
         );
+    }
+
+    #[test]
+    fn test_typed_constant_expr_hash_map_lookup() {
+        let expr = ScalarExpr::TypedConstantExpr(
+            ConstantExpr {
+                span: None,
+                value: Scalar::Number(NumberScalar::Int64(1)),
+            },
+            DataType::Number(NumberDataType::Int64),
+        );
+        let mut expr_index = HashMap::new();
+        expr_index.insert(expr.clone(), 0);
+
+        assert_eq!(expr_index.get(&expr), Some(&0));
     }
 
     #[test]

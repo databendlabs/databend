@@ -40,6 +40,7 @@ use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_blocks::build_parquet_writer_properties;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
+use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::RangeIndex;
@@ -48,6 +49,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Buffer;
+use opendal::Operator;
 
 use crate::FuseStorageFormat;
 use crate::FuseTable;
@@ -63,7 +65,12 @@ use crate::io::VirtualColumnBuilder;
 use crate::io::WriteSettings;
 use crate::io::create_inverted_index_builders;
 use crate::io::write::BlockStatsBuilder;
-use crate::io::write::InvertedIndexState;
+use crate::io::write::block_index::PendingBlockIndexOutput;
+use crate::io::write::block_index::PendingIndexFile;
+use crate::io::write::block_index::PendingSpatialIndex;
+use crate::io::write::block_index::PendingVectorIndex;
+use crate::io::write::block_index::WrittenInvertedIndex;
+use crate::io::write::block_index::collect_inverted_index_metas;
 use crate::io::write::stream::ColumnStatisticsState;
 use crate::io::write::stream::block_builder::ArrowParquetWriter::Initialized;
 use crate::operations::column_parquet_metas;
@@ -171,7 +178,7 @@ impl NdvProvider for ColumnsNdvInfo {
 pub struct StreamBlockBuilder {
     properties: Arc<StreamBlockProperties>,
     block_writer: ArrowParquetWriter,
-    inverted_index_writers: Vec<InvertedIndexWriter>,
+    inverted_index_writers: Vec<(String, InvertedIndexWriter)>,
     bloom_index_builder: BloomIndexBuilder,
     virtual_column_builder: Option<VirtualColumnBuilder>,
     json_path_statistics_builder: Option<JsonPathStatisticsBuilder>,
@@ -197,13 +204,18 @@ impl StreamBlockBuilder {
             }
         };
 
-        let inverted_index_writers = properties
-            .inverted_index_builders
-            .iter()
-            .map(|builder| {
-                InvertedIndexWriter::try_create(Arc::new(builder.schema.clone()), &builder.options)
-            })
-            .collect::<Result<Vec<_>>>()?;
+        let mut inverted_index_writers =
+            Vec::with_capacity(properties.inverted_index_builders.len());
+        for builder in &properties.inverted_index_builders {
+            let location = builder.gen_inverted_index_location(&properties.meta_locations);
+            let writer = InvertedIndexWriter::try_create(
+                Arc::new(builder.schema.clone()),
+                &builder.options,
+                properties.operator.clone(),
+                location.clone(),
+            )?;
+            inverted_index_writers.push((location, writer));
+        }
 
         let bloom_index_builder = BloomIndexBuilder::create(
             properties.ctx.get_function_context()?,
@@ -273,7 +285,7 @@ impl StreamBlockBuilder {
             .add_block(&self.properties.source_schema, &block)?;
         self.bloom_index_builder.add_block(&block)?;
         self.block_stats_builder.add_block(&block)?;
-        for writer in self.inverted_index_writers.iter_mut() {
+        for (_, writer) in self.inverted_index_writers.iter_mut() {
             writer.add_block(&self.properties.source_schema, &block)?;
         }
         if let Some(ref mut virtual_column_builder) = self.virtual_column_builder {
@@ -344,17 +356,19 @@ impl StreamBlockBuilder {
         }
         let col_stats = self.column_stats_state.finalize(column_distinct_count)?;
 
-        let mut inverted_index_states = Vec::with_capacity(self.inverted_index_writers.len());
-        for (i, inverted_index_writer) in std::mem::take(&mut self.inverted_index_writers)
+        let mut written_inverted = Vec::with_capacity(self.inverted_index_writers.len());
+        for (i, (location, writer)) in std::mem::take(&mut self.inverted_index_writers)
             .into_iter()
             .enumerate()
         {
-            let inverted_index_location = self.properties.inverted_index_builders[i]
-                .gen_inverted_index_location(&block_location);
-            let data = inverted_index_writer.finalize()?;
-            let inverted_index_state =
-                InvertedIndexState::try_create(data, inverted_index_location)?;
-            inverted_index_states.push(inverted_index_state);
+            let sizes = writer.finalize()?;
+            written_inverted.push(WrittenInvertedIndex {
+                index_name: self.properties.inverted_index_builders[i].name.clone(),
+                index_version: self.properties.inverted_index_builders[i].version.clone(),
+                location: (location, INVERTED_INDEX_FILE_FORMAT_VERSION),
+                bundle_size: sizes.bundle,
+                total_size: sizes.bundle + sizes.siblings,
+            });
         }
         let virtual_column_state =
             if let Some(ref mut virtual_column_builder) = self.virtual_column_builder {
@@ -408,10 +422,13 @@ impl StreamBlockBuilder {
             self.block_writer.finish(&self.properties.source_schema)?;
 
         let file_size = block_raw_data.len();
-        let inverted_index_size = inverted_index_states
-            .iter()
-            .map(|v| v.size)
-            .reduce(|a, b| a + b);
+        let mut inverted_index_size = None;
+        let mut inverted_index_metas = Vec::with_capacity(written_inverted.len());
+        for inverted in &written_inverted {
+            inverted_index_size = Some(inverted_index_size.unwrap_or(0) + inverted.total_size);
+            inverted_index_metas.push(inverted.to_block_index_meta());
+        }
+        let inverted_index_metas = collect_inverted_index_metas(inverted_index_metas);
         let block_meta = BlockMeta {
             row_count: self.row_count as u64,
             block_size: self.block_size as u64,
@@ -430,6 +447,7 @@ impl StreamBlockBuilder {
                 .unwrap_or_default(),
             compression: self.properties.write_settings.table_compression.into(),
             inverted_index_size,
+            inverted_index_metas: Some(inverted_index_metas),
             vector_index_size,
             vector_index_location,
             spatial_index_size,
@@ -444,15 +462,32 @@ impl StreamBlockBuilder {
             virtual_path_statistics: None,
             virtual_block_meta: None,
         };
+        // Vector/spatial statistics already live in the block meta above; the pending output
+        // only carries payloads awaiting upload.
+        let block_indexes = PendingBlockIndexOutput {
+            bloom: bloom_index_state.map(BloomIndexState::into_pending),
+            inverted: written_inverted,
+            vector: vector_index_state.map(|state| PendingVectorIndex {
+                file: Some(PendingIndexFile {
+                    location: state.location,
+                    data: state.data,
+                }),
+                statistics: None,
+            }),
+            spatial: spatial_index_state.map(|state| PendingSpatialIndex {
+                file: Some(PendingIndexFile {
+                    location: state.location,
+                    data: state.data,
+                }),
+                statistics: None,
+            }),
+        };
         let serialized = BlockSerialization {
             block_raw_data,
             block_meta,
-            bloom_index_state,
-            inverted_index_states,
+            block_indexes,
             virtual_column_state,
             path_statistics,
-            vector_index_state,
-            spatial_index_state,
             column_hlls: column_hlls.map(BlockHLLState::Deserialized),
             column_top_n,
         };
@@ -462,6 +497,7 @@ impl StreamBlockBuilder {
 
 pub struct StreamBlockProperties {
     pub(crate) ctx: Arc<dyn TableContext>,
+    pub(crate) operator: Operator,
     pub(crate) write_settings: WriteSettings,
     pub(crate) block_thresholds: BlockThresholds,
 
@@ -574,6 +610,7 @@ impl StreamBlockProperties {
         let table_indexes = table.table_info.meta.indexes.clone();
         Ok(Arc::new(StreamBlockProperties {
             ctx,
+            operator: table.get_operator(),
             meta_locations: table.meta_location_generator().clone(),
             block_thresholds: table.get_block_thresholds(),
             source_schema,

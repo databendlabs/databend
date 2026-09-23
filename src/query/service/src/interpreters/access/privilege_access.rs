@@ -657,6 +657,14 @@ impl PrivilegeAccess {
             UserPrivilegeType::Alter,
         )?;
 
+        let table = self
+            .ctx
+            .get_table(catalog_name, db_name, table_name)
+            .await?;
+        if is_materialized_view_engine(table.engine()) {
+            return self.validate_mv_source_access(table.as_ref()).await;
+        }
+
         self.validate_table_index_alter_or_super_access(catalog_name, db_name, table_name)
             .await
     }
@@ -673,6 +681,14 @@ impl PrivilegeAccess {
             None,
             UserPrivilegeType::Drop,
         )?;
+
+        let table = self
+            .ctx
+            .get_table(catalog_name, db_name, table_name)
+            .await?;
+        if is_materialized_view_engine(table.engine()) {
+            return self.validate_mv_source_access(table.as_ref()).await;
+        }
 
         match self
             .validate_table_index_alter_or_super_access(catalog_name, db_name, table_name)
@@ -2122,6 +2138,9 @@ impl AccessChecker for PrivilegeAccess {
                         self.validate_mv_source_access(table.as_ref()).await?
                     }
                 }
+            }
+            Plan::AlterTableTtl(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, plan.if_exists, false).await?
             }
             Plan::CreateTableBranch(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?

@@ -317,7 +317,7 @@ impl ObjectResolver {
                 return Ok(None);
             };
             let mut planner = Planner::new(self.ctx.clone());
-            let (plan, _) = match planner.plan_sql(query).await {
+            let plan = match planner.bind_sql(query).await {
                 Ok(result) => result,
                 Err(error) => {
                     warn!(
@@ -405,7 +405,7 @@ fn matches_expected_type(table: &dyn Table, expected: LineageObjectType) -> bool
 
 fn is_lineage_table_endpoint(engine: &str, is_temporary: bool) -> bool {
     !is_temporary
-        && ![VIEW_ENGINE, STREAM_ENGINE, "MEMORY", "DELTA"]
+        && ![VIEW_ENGINE, STREAM_ENGINE, "MEMORY"]
             .iter()
             .any(|unsupported| engine.eq_ignore_ascii_case(unsupported))
 }
@@ -480,7 +480,7 @@ mod tests {
         for engine in ["FUSE", "ICEBERG", "PAIMON"] {
             assert!(is_lineage_table_endpoint(engine, false), "engine={engine}");
         }
-        for engine in [VIEW_ENGINE, STREAM_ENGINE, "MEMORY", "DELTA"] {
+        for engine in [VIEW_ENGINE, STREAM_ENGINE, "MEMORY"] {
             assert!(!is_lineage_table_endpoint(engine, false), "engine={engine}");
         }
         assert!(!is_lineage_table_endpoint("FUSE", true));

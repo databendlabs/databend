@@ -15,10 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::TableSchema;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -35,15 +33,6 @@ pub trait TableContextTableManagement: Send + Sync {
         table: &dyn Table,
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps>;
-
-    async fn load_datalake_schema(
-        &self,
-        kind: &str,
-        sp: &StorageParams,
-    ) -> Result<(TableSchema, String)> {
-        let _ = (kind, sp);
-        unimplemented!()
-    }
 
     async fn create_stage_table(
         &self,

@@ -23,9 +23,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::StateAddr;
-use databend_common_expression::aggregate::aggregate_function::AccumulateRowInput;
 use databend_common_expression::aggregate::aggregate_function::AggregateCallRef;
-use databend_common_expression::aggregate::aggregate_function::MergeResultInput;
 use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
 use databend_common_expression::aggregate_function::AggregateBoundOrderBySource;
 use databend_common_expression::aggregate_function::get_states_layout;
@@ -81,19 +79,14 @@ impl WindowFuncAggImpl {
 
     #[inline]
     pub fn accumulate_row(&self, args: ProjectedBlock, row: usize) -> Result<()> {
-        self.agg.accumulate_row(AccumulateRowInput {
-            state: AggrState::new(self.addr, &self.loc),
-            columns: args,
-            row,
-        })
+        self.agg
+            .accumulate_row(AggrState::new(self.addr, &self.loc), args, row)
     }
 
     #[inline]
     pub fn merge_result(&self, builder: &mut ColumnBuilder) -> Result<()> {
-        self.agg.merge_result_read_only(MergeResultInput {
-            state: AggrState::new(self.addr, &self.loc),
-            builder,
-        })
+        self.agg
+            .merge_result_read_only(AggrState::new(self.addr, &self.loc), builder)
     }
 }
 
@@ -312,21 +305,14 @@ mod tests {
 
     use databend_common_exception::Result;
     use databend_common_expression::AggrStateType;
+    use databend_common_expression::BlockEntry;
     use databend_common_expression::StateSerdeItem;
-    use databend_common_expression::aggregate::aggregate_function::AccumulateInput;
-    use databend_common_expression::aggregate::aggregate_function::AccumulateKeysInput;
-    use databend_common_expression::aggregate::aggregate_function::AccumulateRowCountInput;
-    use databend_common_expression::aggregate::aggregate_function::AccumulateRowCountKeysInput;
-    use databend_common_expression::aggregate::aggregate_function::AccumulateRowInput;
     use databend_common_expression::aggregate::aggregate_function::AggregateCall;
     use databend_common_expression::aggregate::aggregate_function::AggregateCallRef;
     use databend_common_expression::aggregate::aggregate_function::AggregateFeatures;
     use databend_common_expression::aggregate::aggregate_function::AggregateSignature;
     use databend_common_expression::aggregate::aggregate_function::AggregateStateDescription;
-    use databend_common_expression::aggregate::aggregate_function::MergeResultInput;
-    use databend_common_expression::aggregate::aggregate_function::MergeSerializedInput;
-    use databend_common_expression::aggregate::aggregate_function::MergeStatesInput;
-    use databend_common_expression::aggregate::aggregate_function::SerializeInput;
+    use databend_common_expression::aggregate::aggregate_function::AggregateStateSet;
     use databend_common_expression::aggregate_function::EagerAggregation;
     use databend_common_expression::aggregate_function::FunctionInputLayout;
 
@@ -377,6 +363,7 @@ mod tests {
                 description: "",
                 definition: "",
                 example: "",
+                hide_doc: false,
             };
             &FEATURES
         }
@@ -402,44 +389,61 @@ mod tests {
             state.write(|| DropCountingState { drops });
         }
 
-        fn accumulate(&self, _input: AccumulateInput<'_>) -> Result<()> {
+        fn accumulate(&self, _state: AggrState<'_>, _columns: ProjectedBlock<'_>) -> Result<()> {
             Ok(())
         }
 
-        fn accumulate_keys(&self, _input: AccumulateKeysInput<'_>) -> Result<()> {
+        fn accumulate_keys(
+            &self,
+            _states: AggregateStateSet<'_>,
+            _columns: ProjectedBlock<'_>,
+        ) -> Result<()> {
             Ok(())
         }
 
-        fn accumulate_row(&self, _input: AccumulateRowInput<'_>) -> Result<()> {
+        fn accumulate_row(
+            &self,
+            _state: AggrState<'_>,
+            _columns: ProjectedBlock<'_>,
+            _row: usize,
+        ) -> Result<()> {
             Ok(())
         }
 
-        fn accumulate_row_count(&self, _input: AccumulateRowCountInput<'_>) -> Result<()> {
+        fn accumulate_row_count(&self, _state: AggrState<'_>, _rows: usize) -> Result<()> {
             Ok(())
         }
 
-        fn accumulate_row_count_keys(&self, _input: AccumulateRowCountKeysInput<'_>) -> Result<()> {
+        fn serialize(
+            &self,
+            _states: AggregateStateSet<'_>,
+            _builders: &mut [ColumnBuilder],
+        ) -> Result<()> {
             Ok(())
         }
 
-        fn serialize(&self, _input: SerializeInput<'_>) -> Result<()> {
+        fn merge_serialized(
+            &self,
+            _states: AggregateStateSet<'_>,
+            _state: &BlockEntry,
+        ) -> Result<()> {
             Ok(())
         }
 
-        fn merge_serialized(&self, _input: MergeSerializedInput<'_>) -> Result<()> {
+        fn merge_states(&self, _state: AggrState<'_>, _rhs: AggrState<'_>) -> Result<()> {
             Ok(())
         }
 
-        fn merge_states(&self, _input: MergeStatesInput<'_>) -> Result<()> {
+        fn merge_result(&self, _state: AggrState<'_>, _builder: &mut ColumnBuilder) -> Result<()> {
             Ok(())
         }
 
-        fn merge_result(&self, _input: MergeResultInput<'_>) -> Result<()> {
-            Ok(())
-        }
-
-        fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
-            self.merge_result(input)
+        fn merge_result_read_only(
+            &self,
+            state: AggrState<'_>,
+            builder: &mut ColumnBuilder,
+        ) -> Result<()> {
+            self.merge_result(state, builder)
         }
 
         unsafe fn drop_state(&self, state: AggrState) {

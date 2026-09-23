@@ -162,11 +162,11 @@ impl Histogram {
 }
 
 #[derive(Clone, Default, BorshSerialize, BorshDeserialize)]
-pub struct AggregateMarkovTrainState {
+pub struct MarkovTrainState {
     table: BTreeMap<NGramHash, Histogram>,
 }
 
-impl AggregateMarkovTrainState {
+impl MarkovTrainState {
     fn state_description() -> AggregateStateDescription {
         AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<Self>())], vec![
             StateSerdeItem::Binary(None),
@@ -229,7 +229,7 @@ struct MarkovTrainEval {
 impl MarkovTrainEval {
     fn append_model_result(
         &self,
-        model: &AggregateMarkovTrainState,
+        model: &MarkovTrainState,
         builder: &mut ColumnBuilder,
     ) -> Result<()> {
         let ColumnBuilder::Array(array_builder) = builder else {
@@ -263,47 +263,35 @@ impl MarkovTrainEval {
 
 impl UnaryEval<StringType, AnyType> for MarkovTrainEval {
     fn init_state(&self, state: AggrState<'_>) {
-        state.write(AggregateMarkovTrainState::default);
+        state.write(MarkovTrainState::default);
     }
 
     fn accumulate(&self, input: UnaryAccumulateInput<'_>) -> Result<()> {
-        let state = input.state.get::<AggregateMarkovTrainState>();
+        let state = input.state.get::<MarkovTrainState>();
         let values = input.column.downcast::<StringType>().unwrap();
         let mut code_points = Vec::new();
-        match input.validity {
-            Some(validity) => {
-                for (value, valid) in values.iter().zip(validity.iter()) {
-                    if valid {
-                        state.consume(self.params.order, value.as_bytes(), &mut code_points);
-                    }
-                }
-            }
-            None => {
-                for value in values.iter() {
-                    state.consume(self.params.order, value.as_bytes(), &mut code_points);
-                }
-            }
-        }
+        for_each_selected(values.iter(), input.validity, |value| {
+            state.consume(self.params.order, value.as_bytes(), &mut code_points);
+        });
         Ok(())
     }
 
     fn accumulate_keys(&self, input: UnaryAccumulateKeysInput<'_>) -> Result<()> {
         let values = input.column.downcast::<StringType>().unwrap();
         let mut code_points = Vec::new();
-        for (row, state) in input.states.iter().enumerate() {
-            state.get::<AggregateMarkovTrainState>().consume(
-                self.params.order,
-                values.index(row).unwrap().as_bytes(),
-                &mut code_points,
-            );
-        }
-        Ok(())
+        input.states.for_each_state_value::<MarkovTrainState, _>(
+            values.iter(),
+            input.validity,
+            |state, value| {
+                state.consume(self.params.order, value.as_bytes(), &mut code_points);
+            },
+        )
     }
 
     fn accumulate_row(&self, input: UnaryAccumulateRowInput<'_>) -> Result<()> {
         let values = input.column.downcast::<StringType>().unwrap();
         let mut code_points = Vec::new();
-        input.state.get::<AggregateMarkovTrainState>().consume(
+        input.state.get::<MarkovTrainState>().consume(
             self.params.order,
             values.index(input.row).unwrap().as_bytes(),
             &mut code_points,
@@ -313,52 +301,49 @@ impl UnaryEval<StringType, AnyType> for MarkovTrainEval {
 
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
         let binary_builder = input.builders[0].as_binary_mut().unwrap();
-        for state in input.states.iter() {
-            state
-                .get::<AggregateMarkovTrainState>()
-                .serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
+        input
+            .states
+            .try_for_each_state::<MarkovTrainState>(None, |state| {
+                state.serialize(&mut binary_builder.data)?;
+                binary_builder.commit_row();
+                Ok(())
+            })
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
+        input.try_for_each_state::<MarkovTrainState>(|state, row| {
             let ScalarRef::Binary(mut data) = super::serialized_scalar_at(input.state, row, 0)
             else {
                 unreachable!()
             };
-            let mut rhs = AggregateMarkovTrainState::deserialize_reader(&mut data)?;
-            state.get::<AggregateMarkovTrainState>().merge(&mut rhs);
-        }
-        Ok(())
+            let mut rhs = MarkovTrainState::deserialize_reader(&mut data)?;
+            state.merge(&mut rhs);
+            Ok(())
+        })
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
         input
             .state
-            .get::<AggregateMarkovTrainState>()
-            .merge(input.rhs.get::<AggregateMarkovTrainState>());
+            .get::<MarkovTrainState>()
+            .merge(input.rhs.get::<MarkovTrainState>());
         Ok(())
     }
 
     fn merge_result(&self, input: MergeResultInput<'_>) -> Result<()> {
-        let model = input.state.get::<AggregateMarkovTrainState>();
+        let model = input.state.get::<MarkovTrainState>();
         model.finalize(&self.params);
         self.append_model_result(model, input.builder)
     }
 
     fn merge_result_read_only(&self, input: MergeResultInput<'_>) -> Result<()> {
-        let mut model = input.state.get::<AggregateMarkovTrainState>().clone();
+        let mut model = input.state.get::<MarkovTrainState>().clone();
         model.finalize(&self.params);
         self.append_model_result(&model, input.builder)
     }
 
     unsafe fn drop_state(&self, state: AggrState<'_>) {
-        unsafe { std::ptr::drop_in_place(state.get::<AggregateMarkovTrainState>()) };
+        unsafe { std::ptr::drop_in_place(state.get::<MarkovTrainState>()) };
     }
 }
 
@@ -420,7 +405,7 @@ impl MarkovTrainBuilder {
                 MapType::<UInt32Type, UInt32Type>::data_type(),
             ])))
             .wrap_nullable(),
-            AggregateMarkovTrainState::state_description(),
+            MarkovTrainState::state_description(),
             MarkovTrainEval { params },
         )
     }

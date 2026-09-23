@@ -47,6 +47,7 @@ use crate::plans::AlterSharePlan;
 use crate::plans::AlterStagePlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterTablePartitionByPlan;
+use crate::plans::AlterTableTtlPlan;
 use crate::plans::AlterTaskPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
@@ -330,6 +331,7 @@ pub enum Plan {
     AlterTableClusterKey(Box<AlterTableClusterKeyPlan>),
     AlterTablePartitionBy(Box<AlterTablePartitionByPlan>),
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
+    AlterTableTtl(Box<AlterTableTtlPlan>),
     ReclusterTable(Box<ReclusterPlan>),
     RevertTable(Box<RevertTablePlan>),
     TruncateTable(Box<TruncateTablePlan>),

@@ -59,16 +59,9 @@ fn eval_v2_aggr_with_params_and_sort(
 
     let owner = AggregateStateOwner::new(vec![function.clone()])?;
     if entries.is_empty() {
-        function.accumulate_row_count(AccumulateRowCountInput {
-            state: owner.state(0),
-            rows,
-        })?;
+        function.accumulate_row_count(owner.state(0), rows)?;
     } else {
-        function.accumulate(AccumulateInput {
-            state: owner.state(0),
-            columns: entries.into(),
-            validity: None,
-        })?;
+        function.accumulate(owner.state(0), entries.into())?;
     }
 
     let result_owner = if with_serialize {
@@ -82,10 +75,7 @@ fn eval_v2_aggr_with_params_and_sort(
             .iter()
             .map(|data_type| ColumnBuilder::with_capacity(data_type, 1))
             .collect::<Vec<_>>();
-        function.serialize(SerializeInput {
-            states: owner.state_set(0),
-            builders: &mut builders,
-        })?;
+        function.serialize(owner.state_set(0), &mut builders)?;
         let columns = builders
             .into_iter()
             .map(ColumnBuilder::build)
@@ -97,21 +87,14 @@ fn eval_v2_aggr_with_params_and_sort(
         };
 
         let serialized_owner = AggregateStateOwner::new(vec![function.clone()])?;
-        function.merge_serialized(MergeSerializedInput {
-            states: serialized_owner.state_set(0),
-            state: &state,
-            filter: None,
-        })?;
+        function.merge_serialized(serialized_owner.state_set(0), &state)?;
         serialized_owner
     } else {
         owner
     };
 
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
-    function.merge_result(MergeResultInput {
-        state: result_owner.state(0),
-        builder: &mut builder,
-    })?;
+    function.merge_result(result_owner.state(0), &mut builder)?;
     Ok((builder.build(), data_type))
 }
 
@@ -150,29 +133,16 @@ pub fn assert_v2_read_only_matches_final_result(
 
     let owner = AggregateStateOwner::new(vec![function.clone()])?;
     if entries.is_empty() {
-        function.accumulate_row_count(AccumulateRowCountInput {
-            state: owner.state(0),
-            rows,
-        })?;
+        function.accumulate_row_count(owner.state(0), rows)?;
     } else {
-        function.accumulate(AccumulateInput {
-            state: owner.state(0),
-            columns: entries.into(),
-            validity: None,
-        })?;
+        function.accumulate(owner.state(0), entries.into())?;
     }
 
     let mut read_only_builder = ColumnBuilder::with_capacity(&data_type, 1);
-    function.merge_result_read_only(MergeResultInput {
-        state: owner.state(0),
-        builder: &mut read_only_builder,
-    })?;
+    function.merge_result_read_only(owner.state(0), &mut read_only_builder)?;
 
     let mut final_builder = ColumnBuilder::with_capacity(&data_type, 1);
-    function.merge_result(MergeResultInput {
-        state: owner.state(0),
-        builder: &mut final_builder,
-    })?;
+    function.merge_result(owner.state(0), &mut final_builder)?;
 
     let read_only = (read_only_builder.build(), data_type.clone());
     let final_result = (final_builder.build(), data_type);
@@ -202,11 +172,7 @@ pub fn assert_v2_serialized_read_only_matches_final_result(
     let data_type = function.signature().return_type.clone();
 
     let owner = AggregateStateOwner::new(vec![function.clone()])?;
-    function.accumulate(AccumulateInput {
-        state: owner.state(0),
-        columns: entries.into(),
-        validity: None,
-    })?;
+    function.accumulate(owner.state(0), entries.into())?;
 
     let serialized_types = function
         .state()
@@ -218,10 +184,7 @@ pub fn assert_v2_serialized_read_only_matches_final_result(
         .iter()
         .map(|data_type| ColumnBuilder::with_capacity(data_type, 1))
         .collect::<Vec<_>>();
-    function.serialize(SerializeInput {
-        states: owner.state_set(0),
-        builders: &mut serialized_builders,
-    })?;
+    function.serialize(owner.state_set(0), &mut serialized_builders)?;
     let serialized_columns = serialized_builders
         .into_iter()
         .map(ColumnBuilder::build)
@@ -233,23 +196,13 @@ pub fn assert_v2_serialized_read_only_matches_final_result(
     };
 
     let serialized_owner = AggregateStateOwner::new(vec![function.clone()])?;
-    function.merge_serialized(MergeSerializedInput {
-        states: serialized_owner.state_set(0),
-        state: &serialized_state,
-        filter: None,
-    })?;
+    function.merge_serialized(serialized_owner.state_set(0), &serialized_state)?;
 
     let mut read_only_builder = ColumnBuilder::with_capacity(&data_type, 1);
-    function.merge_result_read_only(MergeResultInput {
-        state: serialized_owner.state(0),
-        builder: &mut read_only_builder,
-    })?;
+    function.merge_result_read_only(serialized_owner.state(0), &mut read_only_builder)?;
 
     let mut final_builder = ColumnBuilder::with_capacity(&data_type, 1);
-    function.merge_result(MergeResultInput {
-        state: serialized_owner.state(0),
-        builder: &mut final_builder,
-    })?;
+    function.merge_result(serialized_owner.state(0), &mut final_builder)?;
 
     assert_eq!(
         read_only_builder.build(),

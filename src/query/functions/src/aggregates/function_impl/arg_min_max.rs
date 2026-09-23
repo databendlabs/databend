@@ -117,7 +117,7 @@ impl ArgMinMaxBuilder {
     };
 }
 
-pub struct AggregateArgMinMaxState<A, V, const CMP_TYPE: u8>
+pub struct ArgMinMaxState<A, V, const CMP_TYPE: u8>
 where
     A: ValueType,
     V: ValueType,
@@ -125,7 +125,7 @@ where
     data: Option<(V::Scalar, A::Scalar)>,
 }
 
-impl<A, V, const CMP_TYPE: u8> Default for AggregateArgMinMaxState<A, V, CMP_TYPE>
+impl<A, V, const CMP_TYPE: u8> Default for ArgMinMaxState<A, V, CMP_TYPE>
 where
     A: ValueType,
     V: ValueType,
@@ -135,7 +135,7 @@ where
     }
 }
 
-impl<A, V, const CMP_TYPE: u8> AggregateArgMinMaxState<A, V, CMP_TYPE>
+impl<A, V, const CMP_TYPE: u8> ArgMinMaxState<A, V, CMP_TYPE>
 where
     A: ValueType,
     V: ValueType,
@@ -333,10 +333,8 @@ impl ArgMinMaxBuilder {
         V::Scalar: BorshSerialize + BorshDeserialize,
         for<'a, 'b> V::ScalarRef<'a>: PartialOrd<V::ScalarRef<'b>>,
     {
-        let state = AggregateArgMinMaxState::<A, V, CMP_TYPE>::state_description(
-            arg_type.clone(),
-            value_type,
-        );
+        let state =
+            ArgMinMaxState::<A, V, CMP_TYPE>::state_description(arg_type.clone(), value_type);
         let eval = ArgMinMaxEval::<A, V, CMP_TYPE>::new();
         build.create_multi_arg_or_null(arg_type.wrap_nullable(), state, eval)
     }
@@ -369,7 +367,7 @@ where
     for<'a, 'b> V::ScalarRef<'a>: PartialOrd<V::ScalarRef<'b>>,
 {
     fn init_state(&self, state: AggrState<'_>) {
-        state.write(AggregateArgMinMaxState::<A, V, CMP_TYPE>::default);
+        state.write(ArgMinMaxState::<A, V, CMP_TYPE>::default);
     }
 
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
@@ -377,20 +375,23 @@ where
         let values = input.columns[1].downcast::<V>().unwrap();
         input
             .state
-            .get::<AggregateArgMinMaxState<A, V, CMP_TYPE>>()
+            .get::<ArgMinMaxState<A, V, CMP_TYPE>>()
             .add_batch(args, values, input.validity);
         Ok(())
     }
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            self.accumulate_row(AccumulateRowInput {
-                state,
-                columns: input.columns,
-                row,
-            })?;
-        }
-        Ok(())
+        let args = input.columns[0].downcast::<A>().unwrap();
+        let values = input.columns[1].downcast::<V>().unwrap();
+        input
+            .states
+            .for_each_state_value::<ArgMinMaxState<A, V, CMP_TYPE>, _>(
+                args.iter().zip(values.iter()),
+                input.validity,
+                |state, (arg, value)| {
+                    state.add(value, arg);
+                },
+            )
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
@@ -400,7 +401,7 @@ where
         let value = values.index(input.row).unwrap();
         input
             .state
-            .get::<AggregateArgMinMaxState<A, V, CMP_TYPE>>()
+            .get::<ArgMinMaxState<A, V, CMP_TYPE>>()
             .add(value, arg);
         Ok(())
     }
@@ -411,49 +412,45 @@ where
         let mut flag_builder = BooleanType::downcast_builder(&mut flag_builders[0]);
         let mut value_builder = V::downcast_builder(&mut value_builders[0]);
         let mut arg_builder = A::downcast_builder(&mut arg_builders[0]);
-        for state in input.states.iter() {
-            let state = state.get::<AggregateArgMinMaxState<A, V, CMP_TYPE>>();
-            match &state.data {
-                Some((value, arg)) => {
-                    flag_builder.push_item(true);
-                    value_builder.push_item(V::to_scalar_ref(value));
-                    arg_builder.push_item(A::to_scalar_ref(arg));
+        input
+            .states
+            .try_for_each_state::<ArgMinMaxState<A, V, CMP_TYPE>>(None, |state| {
+                match &state.data {
+                    Some((value, arg)) => {
+                        flag_builder.push_item(true);
+                        value_builder.push_item(V::to_scalar_ref(value));
+                        arg_builder.push_item(A::to_scalar_ref(arg));
+                    }
+                    None => {
+                        flag_builder.push_item(false);
+                        value_builder.push_default();
+                        arg_builder.push_default();
+                    }
                 }
-                None => {
-                    flag_builder.push_item(false);
-                    value_builder.push_default();
-                    arg_builder.push_default();
-                }
-            }
-        }
-        Ok(())
+                Ok(())
+            })
     }
 
     fn merge_serialized(&self, input: MergeSerializedInput<'_>) -> Result<()> {
-        for (row, state) in input.states.iter().enumerate() {
-            if input.filter.is_some_and(|filter| !filter.get(row).unwrap()) {
-                continue;
-            }
+        input.try_for_each_state::<ArgMinMaxState<A, V, CMP_TYPE>>(|state, row| {
             let ScalarRef::Boolean(flag) = serialized_scalar_at(input.state, row, 0) else {
                 unreachable!()
             };
             if !flag {
-                continue;
+                return Ok(());
             }
             let value = serialized_scalar_at(input.state, row, 1);
             let arg = serialized_scalar_at(input.state, row, 2);
             let value = V::try_downcast_scalar(&value)?;
             let arg = A::try_downcast_scalar(&arg)?;
-            state
-                .get::<AggregateArgMinMaxState<A, V, CMP_TYPE>>()
-                .add(value, arg);
-        }
-        Ok(())
+            state.add(value, arg);
+            Ok(())
+        })
     }
 
     fn merge_states(&self, input: MergeStatesInput<'_>) -> Result<()> {
-        let state = input.state.get::<AggregateArgMinMaxState<A, V, CMP_TYPE>>();
-        let rhs = input.rhs.get::<AggregateArgMinMaxState<A, V, CMP_TYPE>>();
+        let state = input.state.get::<ArgMinMaxState<A, V, CMP_TYPE>>();
+        let rhs = input.rhs.get::<ArgMinMaxState<A, V, CMP_TYPE>>();
         state.merge(rhs);
         Ok(())
     }
@@ -462,13 +459,13 @@ where
         let builder = A::downcast_builder(input.builder);
         input
             .state
-            .get::<AggregateArgMinMaxState<A, V, CMP_TYPE>>()
+            .get::<ArgMinMaxState<A, V, CMP_TYPE>>()
             .merge_result(builder);
         Ok(())
     }
 
     unsafe fn drop_state(&self, state: AggrState<'_>) {
-        let state = state.get::<AggregateArgMinMaxState<A, V, CMP_TYPE>>();
+        let state = state.get::<ArgMinMaxState<A, V, CMP_TYPE>>();
         unsafe { std::ptr::drop_in_place(state) };
     }
 }
@@ -481,7 +478,7 @@ mod tests {
     use super::*;
 
     fn check_batch<const CMP: u8>(values: Vec<i64>) {
-        let mut state = AggregateArgMinMaxState::<StringType, Int64Type, CMP>::default();
+        let mut state = ArgMinMaxState::<StringType, Int64Type, CMP>::default();
         let args = StringType::column_from_iter(
             ["filtered", "first", "tie", "worse"]
                 .into_iter()

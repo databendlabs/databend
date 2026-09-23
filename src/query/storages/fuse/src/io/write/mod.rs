@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub(crate) mod block_index;
 mod block_statistics_writer;
 mod block_writer;
 mod bloom_index_writer;
@@ -37,7 +38,6 @@ pub use block_writer::write_data;
 pub use bloom_index_writer::BloomIndexRebuilder;
 pub use bloom_index_writer::BloomIndexState;
 pub use inverted_index_writer::InvertedIndexBuilder;
-pub(crate) use inverted_index_writer::InvertedIndexState;
 pub use inverted_index_writer::InvertedIndexWriter;
 pub(crate) use inverted_index_writer::create_index_schema;
 pub(crate) use inverted_index_writer::create_inverted_index_builders;

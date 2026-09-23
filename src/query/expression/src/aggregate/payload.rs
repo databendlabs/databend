@@ -29,7 +29,6 @@ use super::RowID;
 use super::StateAddr;
 use super::StatesLayout;
 use super::aggregate_function::AggregateCallRef;
-use super::aggregate_function::MergeResultInput;
 use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
 use super::payload_row::serialize_const_column_to_rowformat;
@@ -274,10 +273,7 @@ impl Payload {
                 let return_type = aggr.signature().return_type.clone();
                 let mut builder = ColumnBuilder::with_capacity(&return_type, row_count * 4);
                 for place in &flush_state.state_places.as_slice()[0..row_count] {
-                    aggr.merge_result(MergeResultInput {
-                        state: AggrState::new(*place, &loc),
-                        builder: &mut builder,
-                    })?;
+                    aggr.merge_result(AggrState::new(*place, &loc), &mut builder)?;
                 }
                 flush_state.aggregate_results.push(builder.build().into());
             }

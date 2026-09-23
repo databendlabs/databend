@@ -57,14 +57,39 @@ pub use hnsw_index::VectorIndexMeta;
 pub use index::Index;
 pub use index_common::IndexFile;
 pub use index_common::IndexMeta;
-pub use inverted_index::DocIdsCollector;
-pub use inverted_index::InvertedIndexDirectory;
-pub use inverted_index::InvertedIndexFile;
+pub use inverted_index::BundleExternalFiles;
+pub use inverted_index::BundleFileRanges;
+pub use inverted_index::BundleOpenSlice;
+pub use inverted_index::BundleSizes;
+pub use inverted_index::ExternalFile;
+pub use inverted_index::FooterDirectory;
+pub use inverted_index::INVERTED_INDEX_BUNDLE_INITIAL_FOOTER_READ_SIZE;
+pub use inverted_index::INVERTED_INDEX_BUNDLE_MAX_FOOTER_SIZE;
+pub use inverted_index::INVERTED_INDEX_BUNDLE_OBJECT_SUFFIX;
+pub use inverted_index::INVERTED_INDEX_BUNDLE_TRAILER_LEN;
+pub use inverted_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
+pub use inverted_index::INVERTED_INDEX_STREAM_THRESHOLD;
+pub use inverted_index::InvertedIndexBundleBuilder;
+pub use inverted_index::InvertedIndexBundleFooter;
+pub use inverted_index::InvertedIndexBundleVersion;
+pub use inverted_index::InvertedIndexLookupBytes;
+pub use inverted_index::InvertedIndexMerger;
 pub use inverted_index::InvertedIndexMeta;
-pub use inverted_index::TermReader;
-pub use inverted_index::build_tantivy_footer;
-pub use inverted_index::extract_component_fields;
-pub use inverted_index::extract_fsts;
+pub use inverted_index::InvertedIndexOutputDirectory;
+pub use inverted_index::InvertedIndexPayloadBytes;
+pub use inverted_index::MANAGED_JSON_PATH;
+pub use inverted_index::META_JSON_PATH;
+pub use inverted_index::MergeOutput;
+pub use inverted_index::MergeSource;
+pub use inverted_index::MergeSourceDirectory;
+pub use inverted_index::SEQUENTIAL_WINDOW_SIZE;
+pub use inverted_index::SearchPinDirectory;
+pub use inverted_index::SequentialFileHandle;
+pub use inverted_index::SequentialReadStats;
+pub use inverted_index::SourceRows;
+pub use inverted_index::collect_index_open_slices;
+pub use inverted_index::inverted_index_meta_cache_key;
+pub use inverted_index::json_term_record_option;
 pub use kmeans::KMeans;
 pub use kmeans::KMeansResult;
 pub use range_index::RangeIndex;
@@ -100,3 +125,17 @@ pub use virtual_column::VirtualColumnStatsOfNames;
 pub use virtual_column::encode_compact_virtual_column_nodes;
 pub use virtual_column::encode_compact_virtual_column_shared_ids;
 pub use virtual_column::encode_compact_virtual_column_string_table;
+
+#[cfg(test)]
+pub(crate) fn init_test_runtime() {
+    use std::sync::Once;
+
+    use databend_common_base::base::GlobalInstance;
+    use databend_common_base::runtime::GlobalIORuntime;
+
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        GlobalInstance::init_production();
+        GlobalIORuntime::init(2).unwrap();
+    });
+}

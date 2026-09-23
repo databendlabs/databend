@@ -143,31 +143,16 @@ where I: AggregateEval
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
         if self.strip_nullable_input {
-            let (columns, validity) = Self::strip_nullable_columns(input.columns, None);
+            let (columns, validity) =
+                Self::strip_nullable_columns(input.columns, input.validity.cloned());
             let columns: ProjectedBlock<'_> = (&columns).into();
-            if let Some(validity) = validity {
-                for (row, state) in input.states.iter().enumerate() {
-                    if validity.get(row).unwrap() {
-                        if self.nullable_input_result_flag {
-                            *Self::nullable_input_flag(state) = 1;
-                        }
-                        self.nested.accumulate_row(AccumulateRowInput {
-                            state: self.nested_state(state),
-                            columns,
-                            row,
-                        })?;
-                    }
-                }
-                return Ok(());
-            }
             if self.nullable_input_result_flag {
-                for state in input.states.iter() {
-                    *Self::nullable_input_flag(state) = 1;
-                }
+                input.states.mark_last_flag(validity.as_ref())?;
             }
             return self.nested.accumulate_keys(AccumulateKeysInput {
                 states: self.nested_states(input.states),
                 columns,
+                validity: validity.as_ref(),
             });
         }
         self.nested.accumulate_keys(input)
@@ -209,9 +194,7 @@ where I: AggregateEval
 
     fn accumulate_row_count_keys(&self, input: AccumulateRowCountKeysInput<'_>) -> Result<()> {
         if self.nullable_input_result_flag {
-            for state in input.states.iter() {
-                *Self::nullable_input_flag(state) = 1;
-            }
+            input.states.mark_last_flag(None)?;
             return self
                 .nested
                 .accumulate_row_count_keys(AccumulateRowCountKeysInput {
@@ -225,9 +208,7 @@ where I: AggregateEval
         if self.nullable_input_result_flag {
             let (nested_builders, flag_builder) =
                 input.builders.split_at_mut(input.builders.len() - 1);
-            for state in input.states.iter() {
-                flag_builder[0].push(ScalarRef::Boolean(*Self::nullable_input_flag(state) != 0));
-            }
+            input.states.serialize_last_flag(&mut flag_builder[0])?;
             return self.nested.serialize(SerializeInput {
                 states: self.nested_states(input.states),
                 builders: nested_builders,
@@ -242,14 +223,7 @@ where I: AggregateEval
             let flag_field = field_count - 1;
             let flag_filter =
                 combined_serialized_flag_filter(input.state, input.filter, flag_field);
-            for (row, state) in input.states.iter().enumerate() {
-                if flag_filter
-                    .as_ref()
-                    .is_none_or(|filter| filter.get(row).unwrap())
-                {
-                    *Self::nullable_input_flag(state) = 1;
-                }
-            }
+            input.states.mark_last_flag(flag_filter.as_ref())?;
             let nested_state = project_serialized_fields(input.state, 0, flag_field);
             return self.nested.merge_serialized(MergeSerializedInput {
                 states: self.nested_states(input.states),
@@ -383,7 +357,7 @@ impl AggregateEval for StateNullResultEval {
     }
 
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
-        for _state in input.states.iter() {
+        for _ in 0..input.states.len() {
             self.push_result(&mut input.builders[0]);
         }
         Ok(())

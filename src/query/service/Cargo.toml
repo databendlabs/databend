@@ -93,7 +93,6 @@ databend-common-sql = { workspace = true }
 databend-common-statistics = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-storages-basic = { workspace = true }
-databend-common-storages-delta = { workspace = true }
 databend-common-storages-factory = { workspace = true }
 databend-common-storages-fuse = { workspace = true }
 databend-common-storages-iceberg = { workspace = true }
@@ -199,7 +198,6 @@ paimon = { workspace = true }
 pretty_assertions = { workspace = true }
 proptest = { workspace = true }
 serde_yaml = { workspace = true }
-tantivy = { workspace = true }
 temp-env = { workspace = true }
 tower = { workspace = true }
 wiremock = { workspace = true }

@@ -42,7 +42,6 @@ databend-storages-common-table-meta = { workspace = true }
 ahash = { workspace = true }
 arrow = { workspace = true }
 arrow-array = { workspace = true }
-arrow-ipc = { workspace = true }
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-channel = { workspace = true }
@@ -78,8 +77,6 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 siphasher = { workspace = true }
 tantivy = { workspace = true }
-tantivy-common = { workspace = true }
-tantivy-fst = { workspace = true }
 tantivy-jieba = { workspace = true }
 thrift = { workspace = true }
 tokio = { workspace = true }

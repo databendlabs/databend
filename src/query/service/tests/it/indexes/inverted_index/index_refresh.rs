@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::HashSet;
-use std::sync::Arc;
 
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::table::Table;
@@ -28,20 +26,20 @@ use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::MetaReaders;
-use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::io::read::InvertedIndexReader;
 use databend_common_storages_fuse::pruning::create_inverted_index_query;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::RefreshTableIndexInterpreter;
-use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::append_string_sample_data;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
-use databend_storages_common_io::ReadSettings;
+use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
+use databend_storages_common_index::InvertedIndexBundleFooter;
+use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
+use databend_storages_common_table_meta::meta::trim_object_prefix;
 use futures_util::TryStreamExt;
-use tantivy::schema::IndexRecordOption;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_refresh_inverted_index() -> anyhow::Result<()> {
@@ -60,8 +58,6 @@ async fn test_fuse_do_refresh_inverted_index() -> anyhow::Result<()> {
     let table = fixture.latest_default_table().await?;
 
     let ctx = fixture.new_query_ctx().await?;
-    let table_ctx: Arc<dyn TableContext> = ctx.clone();
-    let settings = ReadSettings::from_ctx(&table_ctx)?;
     let catalog = ctx.get_catalog(&fixture.default_catalog_name()).await?;
     let table_id = table.get_id();
     let index_name = "idx1".to_string();
@@ -148,18 +144,31 @@ async fn test_fuse_do_refresh_inverted_index() -> anyhow::Result<()> {
         DataField::new("content", DataType::String),
     ]);
 
-    let index_loc = TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-        &block_meta.location.0,
-        &index_name,
-        &index_version,
-    );
+    let index_meta = block_meta
+        .inverted_index_metas
+        .as_deref()
+        .and_then(|metas| metas.iter().find(|meta| meta.index_name == index_name))
+        .expect("refreshed block must contain explicit inverted-index metadata");
+    assert_eq!(index_meta.index_version, index_version);
+    assert_eq!(index_meta.location.1, INVERTED_INDEX_FILE_FORMAT_VERSION);
+    let index_loc = &index_meta.location.0;
+    assert!(index_loc.contains(&format!("/_i_i_v2/{index_version}/")));
+    let index_file = index_loc.rsplit('/').next().unwrap();
+    let index_object_id = index_file.strip_suffix(".index").unwrap();
+    assert!(index_object_id.starts_with(VACUUM2_OBJECT_KEY_PREFIX));
+    let index_uuid = trim_object_prefix(index_object_id);
+    assert_eq!(index_uuid.len(), 32);
+    assert!(index_uuid.chars().all(|ch| ch.is_ascii_hexdigit()));
+    let block_file = block_meta.location.0.rsplit('/').next().unwrap();
+    let block_object_id = trim_object_prefix(block_file).split('_').next().unwrap();
+    assert_ne!(index_uuid, block_object_id);
+    let bundle = dal.read(index_loc).await?.to_bytes();
+    assert_eq!(u64::try_from(bundle.len()).unwrap(), index_meta.size);
+    let footer = InvertedIndexBundleFooter::open(bundle.as_ref())?;
+    assert!(!footer.managed_json.is_empty());
+    assert!(!footer.meta_json.is_empty());
 
     let has_score = true;
-    let need_position = false;
-    let mut field_ids = HashSet::new();
-    field_ids.insert(0);
-    field_ids.insert(1);
-    let index_record = IndexRecordOption::WithFreqsAndPositions;
 
     let queries = vec![
         ("rust".to_string(), vec![0, 1]),
@@ -179,25 +188,22 @@ async fn test_fuse_do_refresh_inverted_index() -> anyhow::Result<()> {
             inverted_index_option: None,
         };
 
-        let (query, fuzziness, tokenizer_manager) =
-            create_inverted_index_query(&inverted_index_info)?;
+        let prepared = create_inverted_index_query(&inverted_index_info)?;
 
         let index_reader = InvertedIndexReader::create(
             dal.clone(),
-            need_position,
             has_score,
-            tokenizer_manager,
-            block_meta.row_count,
+            prepared.tokenizer_manager,
+            prepared.warmup,
         );
 
         let matched_rows = index_reader
             .do_filter(
-                &settings,
-                query.box_clone(),
-                &field_ids,
-                &index_record,
-                &fuzziness,
-                &index_loc,
+                prepared.query.box_clone(),
+                index_loc,
+                index_meta.location.1,
+                index_meta.size,
+                block_meta.row_count,
             )
             .await?;
         assert!(matched_rows.is_some());

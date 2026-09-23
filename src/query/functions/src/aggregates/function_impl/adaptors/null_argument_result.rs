@@ -90,7 +90,7 @@ impl AggregateEval for FixedResultEval {
     }
 
     fn serialize(&self, input: SerializeInput<'_>) -> Result<()> {
-        for _state in input.states.iter() {
+        for _ in 0..input.states.len() {
             self.push_result(&mut input.builders[0]);
         }
         Ok(())

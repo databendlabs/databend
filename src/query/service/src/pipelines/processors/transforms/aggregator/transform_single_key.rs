@@ -27,13 +27,8 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::StateAddr;
 use databend_common_expression::StatesLayout;
-use databend_common_expression::aggregate::aggregate_function::AccumulateInput;
-use databend_common_expression::aggregate::aggregate_function::AccumulateRowCountInput;
 use databend_common_expression::aggregate::aggregate_function::AggregateCallRef;
 use databend_common_expression::aggregate::aggregate_function::AggregateStateSet;
-use databend_common_expression::aggregate::aggregate_function::MergeResultInput;
-use databend_common_expression::aggregate::aggregate_function::MergeSerializedInput;
-use databend_common_expression::aggregate::aggregate_function::SerializeInput;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
@@ -113,16 +108,9 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
             .zip(self.funcs.iter())
         {
             if columns.is_empty() {
-                func.accumulate_row_count(AccumulateRowCountInput {
-                    state: place,
-                    rows: block.num_rows(),
-                })?;
+                func.accumulate_row_count(place, block.num_rows())?;
             } else {
-                func.accumulate(AccumulateInput {
-                    state: place,
-                    columns,
-                    validity: None,
-                })?;
+                func.accumulate(place, columns)?;
             }
         }
 
@@ -143,10 +131,10 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                 .zip(builders.iter_mut())
             {
                 let builders = builder.as_tuple_mut().unwrap().as_mut_slice();
-                func.serialize(SerializeInput {
-                    states: AggregateStateSet::new(std::slice::from_ref(&self.addr), loc),
+                func.serialize(
+                    AggregateStateSet::new(std::slice::from_ref(&self.addr), loc),
                     builders,
-                })?;
+                )?;
                 debug_assert!(builders.iter().map(ColumnBuilder::len).all_equal());
             }
 
@@ -253,16 +241,12 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
             .enumerate()
         {
             for block in self.to_merge_data.iter() {
-                func.merge_serialized(MergeSerializedInput {
-                    states: AggregateStateSet::new(std::slice::from_ref(&main_addr), loc),
-                    state: block.get_by_offset(idx),
-                    filter: None,
-                })?;
+                func.merge_serialized(
+                    AggregateStateSet::new(std::slice::from_ref(&main_addr), loc),
+                    block.get_by_offset(idx),
+                )?;
             }
-            func.merge_result(MergeResultInput {
-                state: AggrState::new(main_addr, loc),
-                builder,
-            })?;
+            func.merge_result(AggrState::new(main_addr, loc), builder)?;
         }
 
         let columns = result_builders.into_iter().map(|b| b.build()).collect();

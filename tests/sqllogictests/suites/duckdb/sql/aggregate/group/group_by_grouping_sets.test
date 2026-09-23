@@ -452,3 +452,43 @@ drop table t all;
 
 statement ok
 drop database grouping_alias_test;
+
+# Regression for issue #20381: grouping-set NULLs must propagate through array lambdas.
+statement ok
+use default;
+
+statement ok
+create or replace table grouping_array_lambda(a array(int) not null);
+
+statement ok
+insert into grouping_array_lambda values ([17, 27]), ([46, 14, 34]), ([-23, 37, 9, -20]), ([19]);
+
+query IT rowsort
+select grouping(a), array_filter(a, x -> x <> -42) from grouping_array_lambda group by cube(a);
+----
+0 [-23,37,9,-20]
+0 [17,27]
+0 [19]
+0 [46,14,34]
+1 NULL
+
+query I rowsort
+select grouping(a) from grouping_array_lambda group by cube(a)
+having array_length(array_filter(a, x -> x <> -42)) >= 0;
+----
+0
+0
+0
+0
+
+query I rowsort
+select grouping(a) from grouping_array_lambda group by rollup(a)
+having array_length(array_filter(a, x -> x <> -42)) >= 0;
+----
+0
+0
+0
+0
+
+statement ok
+drop table grouping_array_lambda;

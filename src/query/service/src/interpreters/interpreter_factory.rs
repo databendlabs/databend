@@ -158,6 +158,8 @@ impl InterpreterFactory {
         access_logger.output();
 
         if lineage_enabled() {
+            // The planner captures lineage from the bound plan; this reads that snapshot rather
+            // than re-deriving it from the optimized plan.
             match plan.query_lineage() {
                 Ok(lineage) => ctx.attach_query_lineage(lineage),
                 Err(err) => {
@@ -477,6 +479,9 @@ impl InterpreterFactory {
             }
             Plan::DropTableClusterKey(drop_table_cluster_key) => Ok(Arc::new(
                 DropTableClusterKeyInterpreter::try_create(ctx, *drop_table_cluster_key.clone())?,
+            )),
+            Plan::AlterTableTtl(alter_table_ttl) => Ok(Arc::new(
+                AlterTableTtlInterpreter::try_create(ctx, *alter_table_ttl.clone())?,
             )),
             Plan::RefreshTableCache(refresh_table_cache) => Ok(Arc::new(
                 RefreshTableCacheInterpreter::try_create(ctx, *refresh_table_cache.clone())?,

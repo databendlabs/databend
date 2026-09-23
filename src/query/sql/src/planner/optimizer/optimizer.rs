@@ -236,14 +236,9 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
             }
             Ok(Plan::CreateDynamicTable(plan))
         }
-        Plan::CreateView(mut plan) => {
-            if let Some(p) = &plan.query_plan {
-                let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
-                plan.query_plan = Some(Box::new(optimized_plan));
-            }
-
-            Ok(Plan::CreateView(plan))
-        }
+        // `CreateView.query_plan` only feeds lineage and access checks, both of which work
+        // on the bound plan; it is never executed, so there is nothing to optimize.
+        Plan::CreateView(plan) => Ok(Plan::CreateView(plan)),
         Plan::Set(mut plan) => {
             if let SetScalarsOrQuery::Query(q) = plan.values {
                 let optimized_plan = optimize(opt_ctx.clone(), *q.clone()).await?;

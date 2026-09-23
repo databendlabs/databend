@@ -107,7 +107,6 @@ use databend_storages_common_table_meta::meta::VectorDistanceType;
 use databend_storages_common_table_meta::table::OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
@@ -127,15 +126,13 @@ use parking_lot::RwLock;
 use uuid::Uuid;
 
 use crate::BindContext;
-use crate::ClusterKeyNormalizer;
 use crate::DefaultExprBinder;
 use crate::Planner;
 use crate::SelectBuilder;
+use crate::StoredKeyNormalizer;
 use crate::binder::Binder;
-use crate::binder::ColumnBindingBuilder;
 use crate::binder::ConstraintExprBinder;
 use crate::binder::StageResolver;
-use crate::binder::Visibility;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::util::legacy_table_ref_removed_error;
 use crate::optimizer::ir::SExpr;
@@ -149,6 +146,7 @@ use crate::plans::AddTableConstraintPlan;
 use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterTablePartitionByPlan;
+use crate::plans::AlterTableTtlPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::CreateTableTagPlan;
@@ -187,6 +185,7 @@ use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTablesPlan;
 use crate::plans::VacuumTemporaryFilesPlan;
+use crate::validate_ttl_expr;
 
 #[derive(Visitor)]
 #[visitor(FunctionCall(enter))]
@@ -602,6 +601,7 @@ impl Binder {
             source,
             table_options,
             cluster_by,
+            ttl,
             as_query,
             table_type,
             engine,
@@ -697,7 +697,7 @@ impl Binder {
             )));
         }
 
-        let mut engine_options: BTreeMap<String, String> = BTreeMap::new();
+        let engine_options: BTreeMap<String, String> = BTreeMap::new();
         // Table-specific options override database defaults
         for table_option in table_options.iter() {
             self.insert_table_option_with_validation(
@@ -753,7 +753,7 @@ impl Binder {
             None
         };
 
-        let mut storage_params = match (uri_location_to_use.as_ref(), engine) {
+        let storage_params = match (uri_location_to_use.as_ref(), engine) {
             (Some(uri), Engine::Fuse) => {
                 let mut uri = UriLocation {
                     protocol: uri.protocol.clone(),
@@ -868,67 +868,23 @@ impl Binder {
                 Self::validate_create_table_schema(&result.schema)?;
                 (result, Some(Box::new(as_query_plan)))
             }
-            _ => {
-                let as_query_plan = if let Some(query) = as_query {
-                    let as_query_plan = self.as_query_plan(query).await?;
-                    Some(Box::new(as_query_plan))
-                } else {
-                    None
-                };
-                match engine {
-                    Engine::Iceberg => {
-                        let sp = stage_resolver
-                            .resolve_storage_params_from_options(&options)
-                            .await?;
-                        let (table_schema, _) =
-                            self.ctx.load_datalake_schema("iceberg", &sp).await?;
-                        // the first version of current iceberg table do not need to persist the storage_params,
-                        // since we get it from table options location and connection when load table each time.
-                        // we do this in case we change this idea.
-                        storage_params = Some(sp);
-                        (
-                            AnalyzeCreateTableResult {
-                                schema: Arc::new(table_schema),
-                                field_comments: vec![],
-                                field_stats_truncate_len: vec![],
-                                table_indexes: None,
-                                table_constraints: None,
-                            },
-                            as_query_plan,
-                        )
-                    }
-                    Engine::Delta => {
-                        let sp = stage_resolver
-                            .resolve_storage_params_from_options(&options)
-                            .await?;
-                        let (table_schema, meta) =
-                            self.ctx.load_datalake_schema("delta", &sp).await?;
-                        // the first version of current iceberg table do not need to persist the storage_params,
-                        // since we get it from table options location and connection when load table each time.
-                        // we do this in case we change this idea.
-                        storage_params = Some(sp);
-                        engine_options.insert(OPT_KEY_ENGINE_META.to_lowercase().to_string(), meta);
-                        (
-                            AnalyzeCreateTableResult {
-                                schema: Arc::new(table_schema),
-                                field_comments: vec![],
-                                field_stats_truncate_len: vec![],
-                                table_indexes: None,
-                                table_constraints: None,
-                            },
-                            as_query_plan,
-                        )
-                    }
-                    Engine::Paimon => {
-                        return Err(ErrorCode::StorageUnsupported(
-                            "CREATE TABLE with PAIMON engine is not supported".to_string(),
-                        ));
-                    }
-                    _ => Err(ErrorCode::BadArguments(
-                        "Incorrect CREATE query: required list of column descriptions or AS section or SELECT or ICEBERG/DELTA table engine",
-                    ))?,
+            (None, None) => match engine {
+                Engine::Iceberg => {
+                    return Err(ErrorCode::StorageUnsupported(
+                        "CREATE TABLE with ICEBERG engine is not supported".to_string(),
+                    ));
                 }
-            }
+                Engine::Paimon => {
+                    return Err(ErrorCode::StorageUnsupported(
+                        "CREATE TABLE with PAIMON engine is not supported".to_string(),
+                    ));
+                }
+                _ => {
+                    return Err(ErrorCode::BadArguments(
+                        "Incorrect CREATE query: required list of column descriptions or AS section or SELECT",
+                    ));
+                }
+            },
         };
 
         if engine == Engine::Memory {
@@ -1055,6 +1011,11 @@ impl Binder {
             }
         }
 
+        let ttl = match ttl {
+            Some(ttl_expr) => Some(self.analyze_ttl_expr(ttl_expr, schema.clone()).await?),
+            None => None,
+        };
+
         let plan = CreateTablePlan {
             create_option: create_option.clone().into(),
             tenant: self.ctx.get_tenant(),
@@ -1071,6 +1032,7 @@ impl Binder {
             field_comments,
             field_stats_truncate_len,
             cluster_key,
+            ttl,
             as_select: as_query_plan,
             table_indexes,
             table_constraints,
@@ -1145,6 +1107,7 @@ impl Binder {
             field_comments: vec![],
             field_stats_truncate_len: vec![],
             cluster_key: None,
+            ttl: None,
             as_select: None,
             table_indexes: None,
             table_constraints: None,
@@ -1578,6 +1541,37 @@ impl Binder {
                     branch,
                 },
             ))),
+            AlterTableAction::SetTableTtl { .. } | AlterTableAction::RemoveTableTtl => {
+                let tbl = match self.ctx.get_table(&catalog, &database, &table).await {
+                    Ok(tbl) => Some(tbl),
+                    Err(e)
+                        if *if_exists
+                            && matches!(
+                                e.code(),
+                                ErrorCode::UNKNOWN_CATALOG
+                                    | ErrorCode::UNKNOWN_DATABASE
+                                    | ErrorCode::UNKNOWN_TABLE
+                            ) =>
+                    {
+                        None
+                    }
+                    Err(e) => return Err(e),
+                };
+                let ttl = match (action, &tbl) {
+                    (AlterTableAction::SetTableTtl { ttl }, Some(tbl)) => {
+                        Some(self.analyze_ttl_expr(ttl, tbl.schema()).await?)
+                    }
+                    _ => None,
+                };
+                Ok(Plan::AlterTableTtl(Box::new(AlterTableTtlPlan {
+                    catalog,
+                    database,
+                    table,
+                    if_exists: *if_exists,
+                    table_id: tbl.map(|tbl| tbl.get_id()),
+                    ttl,
+                })))
+            }
             AlterTableAction::ReclusterTable {
                 is_final,
                 selection,
@@ -2465,6 +2459,40 @@ impl Binder {
         }
     }
 
+    /// Validate a row-level TTL expression and normalize it to the text form
+    /// persisted in `TableMeta.ttl`.
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn analyze_ttl_expr(
+        &mut self,
+        ttl_expr: &AstExpr,
+        schema: TableSchemaRef,
+    ) -> Result<String> {
+        let display = format!("{ttl_expr:#}");
+        let metadata = Arc::new(RwLock::new(self.metadata.read().clone()));
+        let mut bind_context = crate::bind_context_from_schema(&schema, &metadata);
+
+        let mut scalar_binder = ScalarBinder::new(
+            &mut bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            metadata,
+            &[],
+        );
+        scalar_binder.forbid_udf();
+        let (scalar, _) = scalar_binder.bind(ttl_expr)?;
+        if scalar.used_columns().is_empty() {
+            return Err(ErrorCode::SemanticError(format!(
+                "TTL expression `{display}` must reference at least one column"
+            )));
+        }
+        validate_ttl_expr(&scalar, &display)?;
+
+        // Resolve names with the defining session, then store them canonically.
+        let mut normalized = ttl_expr.clone();
+        normalized.drive_mut(&mut StoredKeyNormalizer::new(&self.name_resolution_ctx));
+        Ok(format!("{normalized:#}"))
+    }
+
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn analyze_cluster_keys(
         &mut self,
@@ -2506,22 +2534,8 @@ impl Binder {
         let expr_len = key_exprs.len();
 
         // Build a temporary BindContext to resolve the expr
-        let mut bind_context = BindContext::new();
         let metadata = Arc::new(RwLock::new(self.metadata.read().clone()));
-        for field in schema.fields().iter() {
-            let column_index = metadata
-                .write()
-                .add_derived_column(field.name().clone(), DataType::from(field.data_type()));
-            let column = ColumnBindingBuilder::new(
-                field.name().clone(),
-                column_index,
-                Box::new(DataType::from(field.data_type())),
-                Visibility::Visible,
-            )
-            .build();
-
-            bind_context.add_column_binding(column);
-        }
+        let mut bind_context = crate::bind_context_from_schema(&schema, &metadata);
         let mut scalar_binder = ScalarBinder::new(
             &mut bind_context,
             self.ctx.clone(),
@@ -2532,12 +2546,7 @@ impl Binder {
         // Table keys cannot be a UDF expression.
         scalar_binder.forbid_udf();
 
-        let mut normalizer = ClusterKeyNormalizer {
-            force_quoted_ident: false,
-            unquoted_ident_case_sensitive: self.name_resolution_ctx.unquoted_ident_case_sensitive,
-            quoted_ident_case_sensitive: self.name_resolution_ctx.quoted_ident_case_sensitive,
-            sql_dialect: self.dialect,
-        };
+        let mut normalizer = StoredKeyNormalizer::new(&self.name_resolution_ctx);
         let mut table_keys = Vec::with_capacity(expr_len);
         let mut vector_cluster_key_num = 0;
         for key_expr in key_exprs {

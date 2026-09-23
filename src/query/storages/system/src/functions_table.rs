@@ -18,12 +18,13 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::StringType;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::utils::FromData;
 use databend_common_functions::ASYNC_FUNCTIONS;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -76,30 +77,51 @@ impl AsyncSystemTable for FunctionsTable {
                 .map(|name| name.into_inner().to_string()),
         );
         scalar_func_names.sort();
-        let aggr_func_names = AGGR_REGISTRY.registered_names();
 
-        let names: Vec<&str> = scalar_func_names
-            .iter()
-            .chain(&aggr_func_names)
-            .map(|x| x.as_str())
-            .collect();
+        // Combinator-derived names such as `avg_if` or `avg_state` are withheld:
+        // their documentation describes the base name they were derived from.
+        // Aliases are kept, matching how the scalar registry reports its own names;
+        // an alias resolves to its target's documentation.
+        let published_aggregates = AGGR_REGISTRY
+            .registered_names()
+            .into_iter()
+            .filter_map(|name| {
+                let features = AGGR_REGISTRY.descriptor(&name)?.features();
+                (!features.hide_doc).then_some((name, features))
+            })
+            .collect::<Vec<_>>();
 
-        let is_aggregate = (0..names.len())
-            .map(|i| i >= scalar_func_names.len())
-            .collect::<Vec<bool>>();
+        let num_rows = scalar_func_names.len() + published_aggregates.len();
+        let mut names = StringColumnBuilder::with_capacity(num_rows);
+        let mut is_aggregate = Vec::with_capacity(num_rows);
+        let mut descriptions = StringColumnBuilder::with_capacity(num_rows);
+        let mut syntaxes = StringColumnBuilder::with_capacity(num_rows);
+        let mut examples = StringColumnBuilder::with_capacity(num_rows);
 
-        let descriptions = (0..names.len()).map(|_| "").collect::<Vec<&str>>();
+        // Scalar functions carry no documentation in the function registry, so
+        // their documentation rows stay empty.
+        for name in &scalar_func_names {
+            names.put_and_commit(name);
+            is_aggregate.push(false);
+            descriptions.commit_row();
+            syntaxes.commit_row();
+            examples.commit_row();
+        }
 
-        let syntaxes = (0..names.len()).map(|_| "").collect::<Vec<&str>>();
-
-        let examples = (0..names.len()).map(|_| "").collect::<Vec<&str>>();
+        for (name, features) in &published_aggregates {
+            names.put_and_commit(name);
+            is_aggregate.push(true);
+            descriptions.put_and_commit(features.description);
+            syntaxes.put_and_commit(features.definition);
+            examples.put_and_commit(features.example);
+        }
 
         Ok(DataBlock::new_from_columns(vec![
-            StringType::from_data(names),
+            Column::String(names.build()),
             BooleanType::from_data(is_aggregate),
-            StringType::from_data(descriptions),
-            StringType::from_data(syntaxes),
-            StringType::from_data(examples),
+            Column::String(descriptions.build()),
+            Column::String(syntaxes.build()),
+            Column::String(examples.build()),
         ]))
     }
 }

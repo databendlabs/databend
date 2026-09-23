@@ -18,7 +18,6 @@ use databend_common_io::prelude::bincode_deserialize_from_slice;
 use super::BATCH_SIZE;
 use super::StateAddr;
 use super::aggregate_function::AggregateStateSet;
-use super::aggregate_function::SerializeInput;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload::Payload;
 use super::probe_state::ProbeState;
@@ -35,6 +34,7 @@ use crate::types::DataType;
 use crate::types::DateType;
 use crate::types::DecimalDataKind;
 use crate::types::DecimalSize;
+use crate::types::IntervalType;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::ReturnType;
@@ -168,13 +168,10 @@ impl Payload {
                 .zip(builders.iter_mut())
             {
                 let builders = builder.as_tuple_mut().unwrap().as_mut_slice();
-                func.serialize(SerializeInput {
-                    states: AggregateStateSet::new(
-                        &state.state_places.as_slice()[0..row_count],
-                        loc,
-                    ),
+                func.serialize(
+                    AggregateStateSet::new(&state.state_places.as_slice()[0..row_count], loc),
                     builders,
-                })?;
+                )?;
             }
 
             entries.extend(builders.into_iter().map(|builder| builder.build().into()));
@@ -264,6 +261,7 @@ impl Payload {
             },
             DataType::Timestamp => self.flush_type_column::<TimestampType>(col_offset, state),
             DataType::Date => self.flush_type_column::<DateType>(col_offset, state),
+            DataType::Interval => self.flush_type_column::<IntervalType>(col_offset, state),
             DataType::Binary => Column::Binary(self.flush_binary_column(col_offset, state)),
             DataType::String => Column::String(self.flush_string_column(col_offset, state)),
             DataType::Bitmap => Column::Bitmap(self.flush_binary_column(col_offset, state)),

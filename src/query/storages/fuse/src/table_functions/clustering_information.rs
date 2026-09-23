@@ -41,6 +41,7 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::VariantType;
 use databend_common_pipeline_transforms::sorts::core::RowConverter;
 use databend_common_pipeline_transforms::sorts::core::VariableRowConverter;
+use databend_common_sql::NameResolutionContext;
 use databend_common_sql::analyze_cluster_keys;
 use databend_common_sql::parse_cluster_keys;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -257,8 +258,10 @@ impl ClusteringInformationImpl<'_> {
         let table: Arc<dyn Table> = Arc::new(self.table.clone());
         match (self.table.cluster_key_str(), cluster_key) {
             (default_key, Some(custom_key)) => {
+                // User-supplied key: resolve names with this session's settings.
+                let names = NameResolutionContext::try_from(self.ctx.get_settings().as_ref())?;
                 let (normalized_key, custom_exprs) =
-                    analyze_cluster_keys(self.ctx.clone(), table.clone(), custom_key)?;
+                    analyze_cluster_keys(self.ctx.clone(), table.clone(), custom_key, &names)?;
                 if default_key == Some(normalized_key.as_str()) {
                     return self.resolve_default_cluster_key(table, normalized_key);
                 }

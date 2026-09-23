@@ -228,13 +228,11 @@ impl TaskService {
                     ..
                 }) = task_message.warehouse_options()
                 {
-                    if warehouse
-                        != &self
-                            .create_context(None)
-                            .await?
-                            .get_cluster()
-                            .get_warehouse_id()?
-                    {
+                    let current_warehouse = ClusterDiscovery::instance()
+                        .single_node_cluster(&GlobalConfig::instance())
+                        .await?
+                        .get_warehouse_id()?;
+                    if warehouse != &current_warehouse {
                         continue;
                     }
                 }
