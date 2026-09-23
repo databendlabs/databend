@@ -21,10 +21,12 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_io::prelude::borsh_deserialize_from_slice;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_statistics::Datum;
 use databend_common_storage::MetaHLL12;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::MetaReaders;
@@ -50,6 +52,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::testing::TableSnapshotStatisticsV3;
+use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_table_modify_column_ndv_statistics() -> anyhow::Result<()> {
@@ -606,6 +609,111 @@ async fn test_analyze_rebases_kll_full_histogram_over_null_baseline() -> anyhow:
     assert_eq!(statistics.histograms.get(&0).unwrap().num_values(), 10.0);
     // `b`: collector from the baseline, extended with the appended rows.
     assert_eq!(statistics.histograms.get(&1).unwrap().num_values(), 13.0);
+    Ok(())
+}
+
+/// Every value is counted into the first bucket whose routing upper bound is not below it,
+/// so the observed `[lower, upper]` ranges of the buckets are disjoint and each bucket holds
+/// exactly the column values inside its range, whatever order the blocks were counted in.
+async fn assert_kll_full_buckets_match_table(
+    fixture: &TestFixture,
+    ctx: &Arc<QueryContext>,
+    name: &str,
+) -> anyhow::Result<()> {
+    let (_, snapshot, statistics) = latest_statistics(ctx, name).await?;
+    assert!(statistics.is_fresh_for(&snapshot));
+    let histogram = statistics.histograms.get(&0).unwrap();
+    assert!(histogram.num_buckets() > 1);
+
+    let int = |datum: Datum| match datum {
+        Datum::Int(value) => value,
+        other => panic!("unexpected bound {other:?}"),
+    };
+    let buckets: Vec<(i64, i64, f64)> = histogram
+        .bucket_iter()
+        .map(|bucket| {
+            (
+                int(bucket.lower_bound()),
+                int(bucket.upper_bound()),
+                bucket.num_values(),
+            )
+        })
+        .collect();
+    let mut select = vec!["count(a)".to_string()];
+    select.extend(
+        buckets
+            .iter()
+            .map(|(lower, upper, _)| format!("count_if(a between {lower} and {upper})")),
+    );
+    let blocks = fixture
+        .execute_query(&format!("select {} from {name}", select.join(", ")))
+        .await?
+        .try_collect::<Vec<DataBlock>>()
+        .await?;
+    let row = &blocks[0];
+    let count = |offset: usize| -> f64 {
+        row.get_by_offset(offset)
+            .index(0)
+            .unwrap()
+            .to_string()
+            .parse()
+            .unwrap()
+    };
+
+    assert_eq!(histogram.num_values(), count(0));
+    for (offset, (lower, upper, num_values)) in buckets.iter().enumerate() {
+        assert_eq!(
+            *num_values,
+            count(offset + 1),
+            "bucket [{lower}, {upper}] of {name}"
+        );
+    }
+    Ok(())
+}
+
+/// The KLL full bucket scan counts blocks in parallel; the buckets must still hold
+/// exactly the table's values, with and without a rebase over appended blocks.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_analyze_kll_full_histogram_over_many_blocks() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let name = "t_kll_full_blocks";
+    fixture
+        .execute_command(&format!(
+            "create table {name}(a int null) row_per_block = 37 block_per_segment = 3"
+        ))
+        .await?;
+    // Repeated values and NULLs, spread over many blocks and segments.
+    let insert = format!(
+        "insert into {name} select if(number % 10 = 0, null, (number * 7919 % 1000)::int) \
+         from numbers(3000)"
+    );
+    fixture.execute_command(&insert).await?;
+    let table = latest_fuse_table(&ctx, name).await?;
+    let base = table.read_table_snapshot().await?.unwrap();
+    fixture.execute_command(&insert).await?;
+    let snapshot = latest_fuse_table(&ctx, name)
+        .await?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+    // Far more blocks than the scan keeps in flight (2 * max_threads), in both scans below.
+    assert!(base.summary.block_count > 64);
+    assert!(snapshot.summary.block_count - base.summary.block_count > 64);
+
+    let kll_full = AnalyzeHistogramInfo::KllFull {
+        relative_error: 0.01,
+    };
+    for max_threads in [1, 4] {
+        ctx.get_settings().set_max_threads(max_threads)?;
+        // Rebase: buckets from `base`, then the appended blocks are counted into them; and
+        // without rebase: the whole table is counted by the bucket scan.
+        for from in [&base, &snapshot] {
+            let options = table_options_with_histogram(&table, kll_full.clone())?;
+            execute_analyze_from_snapshot(ctx.clone(), &table, from.clone(), options).await?;
+            assert_kll_full_buckets_match_table(&fixture, &ctx, name).await?;
+        }
+    }
     Ok(())
 }
 

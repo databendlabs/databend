@@ -13,15 +13,17 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::sync::Arc;
+use std::time::Instant;
 
 use async_channel::Receiver;
 use backoff::backoff::Backoff;
+use databend_common_base::runtime::JoinHandle;
+use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
@@ -48,6 +50,7 @@ use databend_common_storage::MetaHLL;
 use databend_storages_common_cache::Partitions;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
+use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -57,9 +60,14 @@ use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::analyze_count_min_sketch_error_rate_from_options;
 use databend_storages_common_table_meta::table::analyze_top_n_size_from_options;
+use futures::StreamExt;
+use futures::stream::FuturesUnordered;
+use parking_lot::Mutex;
 
 use crate::FuseLazyPartInfo;
+use crate::FuseStorageFormat;
 use crate::FuseTable;
+use crate::io::BlockReader;
 use crate::io::SegmentsIO;
 use crate::operations::analyze::AnalyzeAccumulator;
 use crate::operations::analyze::AnalyzeCollectSource;
@@ -304,17 +312,21 @@ impl SinkAnalyzeState {
         Ok(finished == receivers.len())
     }
 
-    /// Fix the KLL full bucket boundaries from the sketches gathered over the base snapshot
-    /// and count every block of it into them.
-    async fn collect_kll_full_histograms(&mut self) -> Result<()> {
-        let mut collectors = self.take_new_kll_collectors(&[])?;
-        if collectors.is_empty() {
+    /// Count `segments` into every KLL full collector, first creating collectors for the
+    /// columns that have none yet. Each collector thus counts exactly the segments passed
+    /// since it was created: the whole base snapshot, then the segments of every rebase.
+    async fn extend_kll_full_histograms(&mut self, segments: &[Location]) -> Result<()> {
+        let HistogramState::KllFull { collectors } = &mut self.histogram else {
             return Ok(());
+        };
+        let mut collectors = std::mem::take(collectors);
+        let new_collectors = self.take_new_kll_collectors(&collectors)?;
+        collectors.extend(new_collectors);
+        if let Some(scanner) = KllBucketScanner::try_create(&self.ctx, &self.table, &collectors)? {
+            let scanner = Arc::new(scanner);
+            scanner.scan(&self.ctx, &self.table, segments).await?;
+            scanner.merge_into(&mut collectors)?;
         }
-
-        let segments = self.snapshot.segments.clone();
-        self.scan_kll_histogram_buckets(&mut collectors, &segments)
-            .await?;
         self.histogram = HistogramState::KllFull { collectors };
         Ok(())
     }
@@ -351,53 +363,6 @@ impl SinkAnalyzeState {
             }
         }
         Ok(collectors)
-    }
-
-    async fn scan_kll_histogram_buckets(
-        &self,
-        collectors: &mut [KllHistogramCollector],
-        segments: &[Location],
-    ) -> Result<()> {
-        let table = self.table.as_ref();
-        let mut field_indices = Vec::with_capacity(collectors.len());
-        let mut collector_offsets = HashMap::with_capacity(collectors.len());
-        for (field_index, field) in table.schema().fields().iter().enumerate() {
-            if let Some(collector_index) = collectors
-                .iter()
-                .position(|collector| collector.column_id == field.column_id())
-            {
-                collector_offsets.insert(field_indices.len(), collector_index);
-                field_indices.push(field_index as FieldIndex);
-            }
-        }
-        if field_indices.is_empty() {
-            return Ok(());
-        }
-
-        let projection = Projection::Columns(field_indices);
-        let block_reader = table.create_block_reader(self.ctx.clone(), projection, false)?;
-        let settings = ReadSettings::from_ctx(&self.ctx)?;
-        let storage_format = table.get_storage_format();
-        let segments_io =
-            SegmentsIO::create(self.ctx.clone(), table.operator.clone(), table.schema());
-        let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
-
-        for chunk in segments.chunks(chunk_size) {
-            let segments = segments_io
-                .read_segments::<SegmentInfo>(chunk, true)
-                .await?;
-            for segment in segments {
-                let segment = segment?;
-                for block_meta in segment.block_metas()? {
-                    let block = block_reader
-                        .read_by_meta(&settings, &block_meta, &storage_format)
-                        .await?;
-                    update_kll_histogram_collectors(block, &collector_offsets, collectors)?;
-                }
-            }
-        }
-
-        Ok(())
     }
 
     /// Histogram buckets for the statistics currently accumulated; derived on every commit
@@ -475,16 +440,9 @@ impl SinkAnalyzeState {
         for location in &appended {
             self.analyzer.analyze(location, &mut self.acc).await?;
         }
-        if let HistogramState::KllFull { collectors } = &mut self.histogram {
-            let mut collectors = std::mem::take(collectors);
-            // Columns without a collector were all NULL so far; seed their bounds from the
-            // appended rows, then count the appended blocks into every collector.
-            let new_collectors = self.take_new_kll_collectors(&collectors)?;
-            collectors.extend(new_collectors);
-            self.scan_kll_histogram_buckets(&mut collectors, &appended)
-                .await?;
-            self.histogram = HistogramState::KllFull { collectors };
-        }
+        // Columns without a collector were all NULL so far; their bounds come from the
+        // appended rows.
+        self.extend_kll_full_histograms(&appended).await?;
         log::info!(
             "ANALYZE rebased statistics over {} appended segments",
             appended.len()
@@ -701,7 +659,8 @@ impl Processor for SinkAnalyzeState {
                 let ready = match &self.histogram {
                     HistogramState::Window { .. } => self.receive_window_histograms().await?,
                     HistogramState::KllFull { .. } => {
-                        self.collect_kll_full_histograms().await?;
+                        let segments = self.snapshot.segments.clone();
+                        self.extend_kll_full_histograms(&segments).await?;
                         true
                     }
                     HistogramState::None | HistogramState::KllFast => true,
@@ -789,21 +748,56 @@ impl KllHistogramCollector {
         self.buckets.is_empty()
     }
 
-    fn add_value<T: ?Sized + Hash>(&mut self, value: Datum, ndv_value: &T) -> Result<()> {
-        let bucket_index = self.locate_bucket(&value)?;
-        self.buckets[bucket_index].add_value(value, ndv_value)
+    /// Same bucket bounds, no values recorded.
+    fn empty_like(&self) -> Self {
+        Self {
+            column_id: self.column_id,
+            buckets: self
+                .buckets
+                .iter()
+                .map(KllBucketStats::empty_like)
+                .collect(),
+        }
     }
 
+    /// Fold in a collector built from `empty_like` of this one.
+    fn merge(&mut self, other: KllHistogramCollector) -> Result<()> {
+        debug_assert_eq!(self.column_id, other.column_id);
+        debug_assert_eq!(self.buckets.len(), other.buckets.len());
+        for (bucket, other) in self.buckets.iter_mut().zip(other.buckets) {
+            bucket.merge(other)?;
+        }
+        Ok(())
+    }
+
+    /// Record `count` occurrences of `value`; a constant column is recorded in one call.
+    fn add_value<T: ?Sized + Hash>(
+        &mut self,
+        value: &Datum,
+        ndv_value: &T,
+        count: u64,
+    ) -> Result<()> {
+        let bucket_index = self.locate_bucket(value)?;
+        self.buckets[bucket_index].add_value(value, ndv_value, count)
+    }
+
+    /// The first bucket whose routing upper bound is not less than `value`; values above
+    /// every bound go to the last bucket. The bounds are taken at increasing ranks of one
+    /// sketch, so they are non-decreasing and can be binary searched.
     fn locate_bucket(&self, value: &Datum) -> Result<usize> {
-        for (idx, bucket) in self.buckets.iter().enumerate() {
-            if !matches!(
-                value.compare(&bucket.routing_upper_bound)?,
-                Ordering::Greater
-            ) {
-                return Ok(idx);
+        let (mut low, mut high) = (0, self.buckets.len());
+        while low < high {
+            let mid = low + (high - low) / 2;
+            if value
+                .compare(&self.buckets[mid].routing_upper_bound)?
+                .is_gt()
+            {
+                low = mid + 1;
+            } else {
+                high = mid;
             }
         }
-        Ok(self.buckets.len().saturating_sub(1))
+        Ok(low.min(self.buckets.len().saturating_sub(1)))
     }
 
     fn histogram_buckets(&self) -> Result<Vec<HistogramBucket>> {
@@ -824,8 +818,16 @@ struct KllBucketStats {
 
 impl KllBucketStats {
     fn new(bounds: KllBucketBounds) -> Self {
+        Self::with_routing_upper_bound(bounds.upper)
+    }
+
+    fn empty_like(&self) -> Self {
+        Self::with_routing_upper_bound(self.routing_upper_bound.clone())
+    }
+
+    fn with_routing_upper_bound(routing_upper_bound: Datum) -> Self {
         Self {
-            routing_upper_bound: bounds.upper,
+            routing_upper_bound,
             observed_lower_bound: None,
             observed_upper_bound: None,
             count: 0,
@@ -833,29 +835,40 @@ impl KllBucketStats {
         }
     }
 
-    fn add_value<T: ?Sized + Hash>(&mut self, value: Datum, ndv_value: &T) -> Result<()> {
-        self.observed_lower_bound = match self.observed_lower_bound.take() {
-            Some(lower_bound) => {
-                if value.compare(&lower_bound)?.is_lt() {
-                    Some(value.clone())
-                } else {
-                    Some(lower_bound)
-                }
-            }
-            None => Some(value.clone()),
+    fn merge(&mut self, other: KllBucketStats) -> Result<()> {
+        let (Some(lower), Some(upper)) = (&other.observed_lower_bound, &other.observed_upper_bound)
+        else {
+            return Ok(());
         };
-        self.observed_upper_bound = match self.observed_upper_bound.take() {
-            Some(upper_bound) => {
-                if value.compare(&upper_bound)?.is_gt() {
-                    Some(value.clone())
-                } else {
-                    Some(upper_bound)
-                }
-            }
-            None => Some(value.clone()),
-        };
-        self.count += 1;
+        self.widen_observed_bounds(lower, upper)?;
+        self.count += other.count;
+        self.ndv.merge(&other.ndv);
+        Ok(())
+    }
+
+    fn add_value<T: ?Sized + Hash>(
+        &mut self,
+        value: &Datum,
+        ndv_value: &T,
+        count: u64,
+    ) -> Result<()> {
+        self.widen_observed_bounds(value, value)?;
+        self.count += count;
         self.ndv.add_object(ndv_value);
+        Ok(())
+    }
+
+    /// Widen the observed range to cover `[lower, upper]`, cloning a bound only when it
+    /// changes: this runs once per counted value.
+    fn widen_observed_bounds(&mut self, lower: &Datum, upper: &Datum) -> Result<()> {
+        match &self.observed_lower_bound {
+            Some(bound) if !lower.compare(bound)?.is_lt() => {}
+            _ => self.observed_lower_bound = Some(lower.clone()),
+        }
+        match &self.observed_upper_bound {
+            Some(bound) if !upper.compare(bound)?.is_gt() => {}
+            _ => self.observed_upper_bound = Some(upper.clone()),
+        }
         Ok(())
     }
 
@@ -877,23 +890,185 @@ impl KllBucketStats {
     }
 }
 
+/// Counts table blocks into a set of KLL full collectors: reads only their columns, one
+/// block per task on a scan-scoped runtime, each task counting into a local collector set
+/// borrowed from `pool`. A set is borrowed only while counting, without awaiting, so at
+/// most one exists per runtime worker. Counts, bounds and HLLs merge order-independently,
+/// so the merged result matches a sequential scan.
+struct KllBucketScanner {
+    block_reader: Arc<BlockReader>,
+    settings: ReadSettings,
+    storage_format: FuseStorageFormat,
+    /// Collector index of each projected column.
+    collector_indices: Vec<usize>,
+    empty: Vec<KllHistogramCollector>,
+    pool: Mutex<Vec<Vec<KllHistogramCollector>>>,
+}
+
+impl KllBucketScanner {
+    /// `None` when no collector column exists in the table schema.
+    fn try_create(
+        ctx: &Arc<dyn TableContext>,
+        table: &FuseTable,
+        collectors: &[KllHistogramCollector],
+    ) -> Result<Option<Self>> {
+        let mut field_indices = Vec::with_capacity(collectors.len());
+        let mut collector_indices = Vec::with_capacity(collectors.len());
+        for (field_index, field) in table.schema().fields().iter().enumerate() {
+            if let Some(collector_index) = collectors
+                .iter()
+                .position(|collector| collector.column_id == field.column_id())
+            {
+                field_indices.push(field_index as FieldIndex);
+                collector_indices.push(collector_index);
+            }
+        }
+        if field_indices.is_empty() {
+            return Ok(None);
+        }
+        let projection = Projection::Columns(field_indices);
+        Ok(Some(Self {
+            block_reader: table.create_block_reader(ctx.clone(), projection, false)?,
+            settings: ReadSettings::from_ctx(ctx)?,
+            storage_format: table.get_storage_format(),
+            collector_indices,
+            empty: collectors
+                .iter()
+                .map(KllHistogramCollector::empty_like)
+                .collect(),
+            pool: Mutex::default(),
+        }))
+    }
+
+    /// Count every block of `segments`. One scan-scoped runtime keeps up to `max_in_flight`
+    /// blocks in flight, refilling as each one finishes. Counting is CPU bound, so it runs
+    /// here instead of on the shared IO runtime.
+    async fn scan(
+        self: &Arc<Self>,
+        ctx: &Arc<dyn TableContext>,
+        table: &FuseTable,
+        segments: &[Location],
+    ) -> Result<()> {
+        // A rebase over a snapshot that only replaced statistics appends nothing.
+        if segments.is_empty() {
+            return Ok(());
+        }
+        let max_threads = ctx.get_settings().get_max_threads()?.max(1) as usize;
+        let segments_io = SegmentsIO::create(ctx.clone(), table.operator.clone(), table.schema());
+        let runtime =
+            Runtime::with_worker_threads(max_threads, Some("analyze-kll-histogram".to_owned()))?;
+        // Declared after `runtime` so the outstanding tasks are aborted, on error or
+        // cancellation, before the runtime is dropped.
+        let mut tasks = KllBucketTasks::default();
+        let max_in_flight = max_threads * 2;
+
+        let started = Instant::now();
+        let (mut num_blocks, mut num_rows) = (0, 0);
+        for chunk in segments.chunks(max_threads * 4) {
+            let segments = segments_io
+                .read_segments::<SegmentInfo>(chunk, true)
+                .await?;
+            for segment in segments {
+                for block_meta in segment?.block_metas()? {
+                    ctx.check_aborting()
+                        .map_err(|e| e.with_context("failed to build KLL histogram buckets"))?;
+                    if tasks.pending.len() >= max_in_flight {
+                        if let Some(rows) = tasks.next().await {
+                            num_blocks += 1;
+                            num_rows += rows?;
+                        }
+                    }
+                    let scanner = self.clone();
+                    tasks
+                        .pending
+                        .push(runtime.spawn(async move { scanner.count_block(block_meta).await }));
+                }
+            }
+        }
+        while let Some(rows) = tasks.next().await {
+            num_blocks += 1;
+            num_rows += rows?;
+        }
+        log::info!(
+            "ANALYZE KLL full bucket scan: {} segments, {} blocks, {} rows, {} columns in {:?}",
+            segments.len(),
+            num_blocks,
+            num_rows,
+            self.collector_indices.len(),
+            started.elapsed()
+        );
+        Ok(())
+    }
+
+    /// Count one block; returns its row count.
+    async fn count_block(&self, block_meta: Arc<BlockMeta>) -> Result<usize> {
+        let block = self
+            .block_reader
+            .read_by_meta(&self.settings, &block_meta, &self.storage_format)
+            .await?;
+        let num_rows = block.num_rows();
+        let mut local = self.pool.lock().pop().unwrap_or_else(|| {
+            self.empty
+                .iter()
+                .map(KllHistogramCollector::empty_like)
+                .collect()
+        });
+        let counted = update_kll_histogram_collectors(block, &self.collector_indices, &mut local);
+        self.pool.lock().push(local);
+        counted.map(|_| num_rows)
+    }
+
+    /// Merge the counted local collector sets into `collectors`.
+    fn merge_into(&self, collectors: &mut [KllHistogramCollector]) -> Result<()> {
+        for local in std::mem::take(&mut *self.pool.lock()) {
+            for (collector, local) in collectors.iter_mut().zip(local) {
+                collector.merge(local)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// In-flight block tasks of a KLL bucket scan, aborted when dropped.
+#[derive(Default)]
+struct KllBucketTasks {
+    pending: FuturesUnordered<JoinHandle<Result<usize>>>,
+}
+
+impl KllBucketTasks {
+    async fn next(&mut self) -> Option<Result<usize>> {
+        let joined = self.pending.next().await?;
+        Some(joined.unwrap_or_else(|e| {
+            Err(ErrorCode::Internal(format!(
+                "[ANALYZE-TABLE] KLL histogram bucket task failed: {e}"
+            )))
+        }))
+    }
+}
+
+impl Drop for KllBucketTasks {
+    fn drop(&mut self) {
+        for task in self.pending.iter() {
+            task.abort();
+        }
+    }
+}
+
+/// Count the columns of `block`, projected as for [`KllBucketScanner`], into `collectors`.
 fn update_kll_histogram_collectors(
     block: DataBlock,
-    collector_offsets: &HashMap<usize, usize>,
+    collector_indices: &[usize],
     collectors: &mut [KllHistogramCollector],
 ) -> Result<()> {
-    for (column_offset, entry) in block.take_columns().into_iter().enumerate() {
-        let Some(collector_index) = collector_offsets.get(&column_offset) else {
-            continue;
-        };
+    for (entry, collector_index) in block.take_columns().into_iter().zip(collector_indices) {
         let collector = &mut collectors[*collector_index];
         match entry {
             BlockEntry::Const(scalar, _, num_rows) => {
                 let Some(value) = scalar.clone().to_datum() else {
                     continue;
                 };
-                for _ in 0..num_rows {
-                    collector.add_value(value.clone(), &scalar)?;
+                if num_rows > 0 {
+                    collector.add_value(&value, &scalar, num_rows as u64)?;
                 }
             }
             BlockEntry::Column(column) => {
@@ -901,7 +1076,7 @@ fn update_kll_histogram_collectors(
                     let Some(datum) = value.clone().to_datum() else {
                         continue;
                     };
-                    collector.add_value(datum, &value)?;
+                    collector.add_value(&datum, &value, 1)?;
                 }
             }
         }
@@ -911,9 +1086,11 @@ fn update_kll_histogram_collectors(
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::FromData;
     use databend_common_expression::Scalar;
     use databend_common_expression::types::DecimalScalar;
     use databend_common_expression::types::DecimalSize;
+    use databend_common_expression::types::Int64Type;
 
     use super::*;
 
@@ -953,6 +1130,150 @@ mod tests {
         );
     }
 
+    fn collector_with_upper_bounds(uppers: &[Datum]) -> KllHistogramCollector {
+        KllHistogramCollector::new(
+            0,
+            uppers.iter().map(|upper| {
+                Ok(KllBucketBounds {
+                    lower: upper.clone(),
+                    upper: upper.clone(),
+                    num_values: 1,
+                })
+            }),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn kll_locate_bucket_matches_linear_scan() {
+        fn linear(collector: &KllHistogramCollector, value: &Datum) -> usize {
+            collector
+                .buckets
+                .iter()
+                .position(|bucket| !value.compare(&bucket.routing_upper_bound).unwrap().is_gt())
+                .unwrap_or(collector.buckets.len() - 1)
+        }
+
+        let int = |v: i64| Datum::Int(v);
+        let float = |v: f64| Datum::Float(v.into());
+        let bytes = |v: &str| Datum::Bytes(v.as_bytes().to_vec());
+        let cases: Vec<(Vec<Datum>, Vec<Datum>)> = vec![
+            // Single bucket.
+            (vec![int(5)], (0..=10).map(int).collect()),
+            // Repeated bounds must route to the first of the run.
+            (
+                [1, 3, 3, 3, 7, 7, 9].into_iter().map(int).collect(),
+                (-2..=12).map(int).collect(),
+            ),
+            (
+                (0..100).map(|v| int(v * 10)).collect(),
+                (-5..=1005).map(int).collect(),
+            ),
+            (
+                [-1.5, 0.0, 0.0, 2.25, 8.0].into_iter().map(float).collect(),
+                [-9.0, -1.5, -1.0, 0.0, 1.0, 2.25, 3.0, 8.0, 9.0]
+                    .into_iter()
+                    .map(float)
+                    .collect(),
+            ),
+            (
+                ["b", "d", "d", "f"].into_iter().map(bytes).collect(),
+                ["", "a", "b", "c", "d", "e", "f", "g"]
+                    .into_iter()
+                    .map(bytes)
+                    .collect(),
+            ),
+        ];
+        for (uppers, values) in cases {
+            let collector = collector_with_upper_bounds(&uppers);
+            for value in &values {
+                assert_eq!(
+                    collector.locate_bucket(value).unwrap(),
+                    linear(&collector, value),
+                    "value {value:?} with upper bounds {uppers:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn kll_const_column_counts_like_repeated_values() {
+        use databend_common_expression::types::DataType;
+        use databend_common_expression::types::NumberDataType;
+        use databend_common_expression::types::NumberScalar;
+
+        let uppers: Vec<_> = [10, 20, 30].into_iter().map(Datum::Int).collect();
+        let collector_indices = [0];
+        let buckets = |block: DataBlock| {
+            let mut collectors = vec![collector_with_upper_bounds(&uppers)];
+            update_kll_histogram_collectors(block, &collector_indices, &mut collectors).unwrap();
+            collectors[0].histogram_buckets().unwrap()
+        };
+
+        let rows = 7;
+        let from_const = buckets(DataBlock::new(
+            vec![BlockEntry::new_const_column(
+                DataType::Number(NumberDataType::Int64),
+                Scalar::Number(NumberScalar::Int64(15)),
+                rows,
+            )],
+            rows,
+        ));
+        let from_column = buckets(DataBlock::new_from_columns(vec![Int64Type::from_data(
+            vec![15i64; rows],
+        )]));
+
+        assert_eq!(from_const.len(), 1);
+        assert_eq!(from_const, from_column);
+        assert_eq!(from_const[0].num_values(), rows as f64);
+        assert_eq!(from_const[0].num_distinct(), 1.0);
+    }
+
+    /// Counting blocks into local collectors and merging them, onto a collector that already
+    /// holds values as in a rebase, equals counting every block into one collector.
+    #[test]
+    fn kll_merged_collectors_match_single_collector() {
+        let uppers: Vec<_> = [10, 20, 30, 40].into_iter().map(Datum::Int).collect();
+        let parts = [vec![3, 15, 15, 44], vec![1, 22, 38, 15, 50], vec![39, 12]];
+        let count = |collector: &mut KllHistogramCollector, values: &[i64]| {
+            let block = DataBlock::new_from_columns(vec![Int64Type::from_data(values.to_vec())]);
+            update_kll_histogram_collectors(block, &[0], std::slice::from_mut(collector)).unwrap();
+        };
+
+        let mut single = collector_with_upper_bounds(&uppers);
+        for part in &parts {
+            count(&mut single, part);
+        }
+        let mut merged = collector_with_upper_bounds(&uppers);
+        count(&mut merged, &parts[0]);
+        for part in &parts[1..] {
+            let mut local = merged.empty_like();
+            count(&mut local, part);
+            merged.merge(local).unwrap();
+        }
+
+        let buckets = merged.histogram_buckets().unwrap();
+        assert_eq!(buckets, single.histogram_buckets().unwrap());
+        // Observed bounds, not routing bounds: (-inf, 10] holds {1, 3}; (10, 20] holds
+        // {12, 15}; the last bucket also takes 44 and 50, above every routing bound.
+        let bounds: Vec<_> = buckets
+            .iter()
+            .map(|bucket| {
+                (
+                    bucket.lower_bound(),
+                    bucket.upper_bound(),
+                    bucket.num_values(),
+                )
+            })
+            .collect();
+        assert_eq!(bounds, vec![
+            (Datum::Int(1), Datum::Int(3), 2.0),
+            (Datum::Int(12), Datum::Int(15), 4.0),
+            (Datum::Int(22), Datum::Int(22), 1.0),
+            (Datum::Int(38), Datum::Int(50), 4.0),
+        ]);
+    }
+
     #[test]
     fn kll_bucket_ndv_hashes_original_decimal_value() {
         let size = DecimalSize::new(38, 0).unwrap();
@@ -968,8 +1289,8 @@ mod tests {
             upper: right_datum.clone(),
             num_values: 2,
         });
-        bucket.add_value(left_datum, &left).unwrap();
-        bucket.add_value(right_datum, &right).unwrap();
+        bucket.add_value(&left_datum, &left, 1).unwrap();
+        bucket.add_value(&right_datum, &right, 1).unwrap();
         let histogram_bucket = bucket.to_histogram_bucket().unwrap().unwrap();
 
         assert_eq!(histogram_bucket.num_values(), 2.0);
