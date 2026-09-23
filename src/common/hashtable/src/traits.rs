@@ -390,47 +390,34 @@ impl BloomHash for bool {
     }
 }
 
+// Float keys hash the bits of the canonical class representative so that
+// `-0.0`/`+0.0` and every NaN payload share one hash. See
+// `OrderedFloat::canonicalize`.
 impl FastHash for OrderedFloat<f32> {
     #[inline(always)]
     fn fast_hash(&self) -> u64 {
-        if self.is_nan() {
-            f32::NAN.to_bits().fast_hash()
-        } else {
-            self.to_bits().fast_hash()
-        }
+        self.canonicalize().to_bits().fast_hash()
     }
 }
 
 impl BloomHash for OrderedFloat<f32> {
     #[inline(always)]
     fn bloom_hash(&self) -> u64 {
-        if self.is_nan() {
-            f32::NAN.to_bits().bloom_hash()
-        } else {
-            self.to_bits().bloom_hash()
-        }
+        self.canonicalize().to_bits().bloom_hash()
     }
 }
 
 impl FastHash for OrderedFloat<f64> {
     #[inline(always)]
     fn fast_hash(&self) -> u64 {
-        if self.is_nan() {
-            f64::NAN.to_bits().fast_hash()
-        } else {
-            self.to_bits().fast_hash()
-        }
+        self.canonicalize().to_bits().fast_hash()
     }
 }
 
 impl BloomHash for OrderedFloat<f64> {
     #[inline(always)]
     fn bloom_hash(&self) -> u64 {
-        if self.is_nan() {
-            f64::NAN.to_bits().bloom_hash()
-        } else {
-            self.to_bits().bloom_hash()
-        }
+        self.canonicalize().to_bits().bloom_hash()
     }
 }
 
