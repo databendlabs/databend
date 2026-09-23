@@ -218,7 +218,11 @@ enum AnalyzeStep {
 enum HistogramState {
     None,
     /// Buckets received from the window queries. They describe the collection baseline
-    /// and cannot be extended; consumers scale them by row count anyway.
+    /// and cannot be extended, so after an append rebase they miss the appended values
+    /// while the rest of the statistics cover the latest snapshot. They are still
+    /// published, as they would be after any later append: histograms are not gated by
+    /// statistics freshness, the optimizer scales them by row count, and their accuracy
+    /// flag only records how they were built, not coverage of the current data.
     Window {
         receivers: HashMap<u32, Receiver<DataBlock>>,
         buckets: HashMap<ColumnId, Vec<HistogramBucket>>,
@@ -252,7 +256,8 @@ impl HistogramState {
         !matches!(self, HistogramState::None)
     }
 
-    /// Window buckets come from exact SQL; the KLL variants are sketches.
+    /// Window buckets come from exact SQL; the KLL variants are sketches. This describes
+    /// how the buckets were built and stays true for rebased Window buckets.
     fn accurate(&self) -> bool {
         matches!(self, HistogramState::Window { .. })
     }

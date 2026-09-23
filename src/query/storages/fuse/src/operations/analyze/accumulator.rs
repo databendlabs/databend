@@ -14,6 +14,7 @@
 
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
@@ -43,6 +44,12 @@ pub struct ReducedSegmentStats {
     pub col_stats: StatisticsOfColumns,
     pub virtual_col_stats: Option<StatisticsOfColumns>,
     pub cluster_stats: Option<ClusterStatistics>,
+    /// Virtual columns whose statistics had conflicting types in some pair of inputs.
+    ///
+    /// The virtual column reducer drops such a column from its output, which would let a
+    /// later input with a single type bring it back and publish statistics covering only
+    /// that input. Remember the conflict so the column stays out for the whole run.
+    virtual_type_conflicts: HashSet<ColumnId>,
     /// Number of segments folded in. An empty accumulator must be replaced rather than
     /// reduced, because reducing `None` virtual or cluster statistics with anything yields
     /// `None`.
@@ -55,6 +62,7 @@ impl ReducedSegmentStats {
             col_stats: summary.col_stats.clone(),
             virtual_col_stats: summary.virtual_col_stats.clone(),
             cluster_stats: summary.cluster_stats.clone(),
+            virtual_type_conflicts: HashSet::new(),
             segment_count: 1,
         };
         self.merge(next, cluster_key_info);
@@ -70,13 +78,36 @@ impl ReducedSegmentStats {
         }
 
         self.col_stats = reduce_block_statistics(&[&self.col_stats, &other.col_stats]);
-        self.virtual_col_stats =
-            reduce_virtual_column_statistics(&[&self.virtual_col_stats, &other.virtual_col_stats]);
+        self.merge_virtual_col_stats(other.virtual_col_stats, other.virtual_type_conflicts);
         self.cluster_stats = reduce_cluster_statistics(
             &[&self.cluster_stats, &other.cluster_stats],
             cluster_key_info,
         );
         self.segment_count += other.segment_count;
+    }
+
+    fn merge_virtual_col_stats(
+        &mut self,
+        other_stats: Option<StatisticsOfColumns>,
+        other_conflicts: HashSet<ColumnId>,
+    ) {
+        self.virtual_type_conflicts.extend(other_conflicts);
+        let reduced = reduce_virtual_column_statistics(&[&self.virtual_col_stats, &other_stats]);
+        // With both inputs present, the reducer only drops a column on a type conflict.
+        if let (Some(left), Some(right), Some(reduced)) =
+            (&self.virtual_col_stats, &other_stats, &reduced)
+        {
+            for column_id in left.keys().chain(right.keys()) {
+                if !reduced.contains_key(column_id) {
+                    self.virtual_type_conflicts.insert(*column_id);
+                }
+            }
+        }
+        let conflicts = &self.virtual_type_conflicts;
+        self.virtual_col_stats = reduced.map(|mut stats| {
+            stats.retain(|column_id, _| !conflicts.contains(column_id));
+            stats
+        });
     }
 }
 
@@ -141,3 +172,98 @@ local_block_meta_serde!(AnalyzeAccumulator);
 
 #[typetag::serde(name = "analyze_accumulator")]
 impl BlockMetaInfo for AnalyzeAccumulator {}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::NumberScalar;
+    use databend_storages_common_table_meta::meta::ColumnStatistics;
+
+    use super::*;
+
+    const CONFLICTING: ColumnId = 1;
+    const STABLE: ColumnId = 2;
+
+    fn int_stats(min: i64, max: i64) -> ColumnStatistics {
+        ColumnStatistics::new(
+            Scalar::Number(NumberScalar::Int64(min)),
+            Scalar::Number(NumberScalar::Int64(max)),
+            0,
+            8,
+            None,
+        )
+    }
+
+    fn string_stats(min: &str, max: &str) -> ColumnStatistics {
+        ColumnStatistics::new(
+            Scalar::String(min.to_string()),
+            Scalar::String(max.to_string()),
+            0,
+            8,
+            None,
+        )
+    }
+
+    /// A segment whose virtual column `CONFLICTING` carries `stats`, plus a column with a
+    /// consistent type across all segments.
+    fn summary(stats: ColumnStatistics, stable_value: i64) -> Statistics {
+        Statistics {
+            virtual_col_stats: Some(StatisticsOfColumns::from([
+                (CONFLICTING, stats),
+                (STABLE, int_stats(stable_value, stable_value)),
+            ])),
+            ..Default::default()
+        }
+    }
+
+    fn segments() -> [Statistics; 3] {
+        [
+            summary(int_stats(1, 10), 1),
+            summary(string_stats("a", "z"), 2),
+            summary(int_stats(100, 200), 3),
+        ]
+    }
+
+    fn assert_conflict_kept_out(stats: &ReducedSegmentStats) {
+        let virtual_col_stats = stats.virtual_col_stats.as_ref().unwrap();
+        assert!(!virtual_col_stats.contains_key(&CONFLICTING));
+        let stable = &virtual_col_stats[&STABLE];
+        assert_eq!(stable.min, Scalar::Number(NumberScalar::Int64(1)));
+        assert_eq!(stable.max, Scalar::Number(NumberScalar::Int64(3)));
+    }
+
+    #[test]
+    fn virtual_type_conflict_survives_later_segments() {
+        let mut stats = ReducedSegmentStats::default();
+        for segment in &segments() {
+            stats.fold(segment, None);
+        }
+        assert_conflict_kept_out(&stats);
+    }
+
+    #[test]
+    fn virtual_type_conflict_survives_merging_sources() {
+        // Each source folds one segment; the sink merges them in order.
+        let mut sources = segments().map(|segment| {
+            let mut stats = ReducedSegmentStats::default();
+            stats.fold(&segment, None);
+            stats
+        });
+        let mut merged = std::mem::take(&mut sources[0]);
+        for source in sources.into_iter().skip(1) {
+            merged.merge(source, None);
+        }
+        assert_conflict_kept_out(&merged);
+
+        // The conflict detected inside one source must also hold after merging with a
+        // source that only saw a single type.
+        let [first, second, third] = segments();
+        let mut conflicted = ReducedSegmentStats::default();
+        conflicted.fold(&first, None);
+        conflicted.fold(&second, None);
+        let mut clean = ReducedSegmentStats::default();
+        clean.fold(&third, None);
+        clean.merge(conflicted, None);
+        assert_conflict_kept_out(&clean);
+    }
+}
