@@ -240,9 +240,11 @@ impl SinkAnalyzeState {
     /// Build KLL full collectors from the accumulated sketches for the columns that
     /// `existing` does not cover, and drop all accumulated sketches.
     ///
-    /// A non-empty sketch always yields at least one bucket, so a column only lacks a
-    /// collector while every row seen so far was NULL. The sketch of such a column
-    /// therefore covers exactly the rows the caller is about to scan.
+    /// For segment versions >= 2, a non-empty sketch yields at least one bucket, so a
+    /// missing collector means all previously analyzed rows were NULL. The new sketch
+    /// then covers the rows the caller is about to scan. Legacy segments (version < 2)
+    /// are skipped by `SegmentAnalyzer` and are outside this rebase assumption; a
+    /// collector first created after such segments may not cover their non-NULL rows.
     fn take_new_kll_collectors(
         &mut self,
         existing: &[KllHistogramCollector],
