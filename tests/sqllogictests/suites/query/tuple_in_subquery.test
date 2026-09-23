@@ -1,0 +1,89 @@
+# A multi-column subquery is a row value for tuple IN, even when its
+# SELECT list contains separate columns instead of a tuple expression.
+statement ok
+CREATE OR REPLACE TABLE tuple_in_orders (user_id INT NOT NULL, product_id INT NOT NULL)
+
+statement ok
+INSERT INTO tuple_in_orders VALUES (1, 10), (1, 20), (2, 10), (2, 20), (2, 20)
+
+# The original self-subquery shape; GROUP BY must not require SELECT (a, b).
+query II rowsort
+SELECT user_id, product_id FROM tuple_in_orders
+WHERE (user_id, product_id) IN (
+    SELECT user_id, product_id FROM tuple_in_orders GROUP BY user_id, product_id
+)
+----
+1 10
+1 20
+2 10
+2 20
+2 20
+
+query II rowsort
+SELECT user_id, product_id FROM tuple_in_orders
+WHERE (user_id, product_id) IN (
+    SELECT user_id, product_id FROM tuple_in_orders
+    WHERE user_id = 1 OR product_id = 20
+)
+----
+1 10
+1 20
+2 20
+2 20
+
+# Comparison must respect SELECT-list position, not column names.
+query II rowsort
+SELECT user_id, product_id FROM tuple_in_orders
+WHERE (user_id, product_id) IN (
+    SELECT product_id, user_id FROM tuple_in_orders WHERE user_id = 1
+)
+
+query II rowsort
+SELECT user_id, product_id FROM tuple_in_orders
+WHERE (user_id, product_id) IN (
+    SELECT user_id + 1 AS next_user, product_id FROM tuple_in_orders
+    WHERE user_id = 1
+)
+----
+2 10
+2 20
+2 20
+
+query II rowsort
+SELECT user_id, product_id FROM tuple_in_orders
+WHERE (user_id, product_id) NOT IN (
+    SELECT user_id, product_id FROM tuple_in_orders
+    WHERE user_id = 1 OR product_id = 20
+)
+----
+2 10
+
+query II rowsort
+SELECT o.user_id, o.product_id FROM tuple_in_orders AS o
+WHERE (o.user_id, o.product_id) IN (
+    SELECT i.user_id, i.product_id FROM tuple_in_orders AS i
+    WHERE i.user_id = o.user_id AND i.product_id = 10
+)
+----
+1 10
+2 10
+
+query B
+SELECT (1, 20) IN (SELECT user_id, product_id FROM tuple_in_orders)
+----
+1
+
+statement error Subquery must return only one column
+SELECT user_id FROM tuple_in_orders
+WHERE user_id IN (SELECT user_id, product_id FROM tuple_in_orders)
+
+statement error Subquery must return 2 columns
+SELECT user_id FROM tuple_in_orders
+WHERE (user_id, product_id) IN (SELECT user_id FROM tuple_in_orders)
+
+statement error Subquery must return 2 columns
+SELECT user_id FROM tuple_in_orders
+WHERE (user_id, product_id) IN (SELECT user_id, product_id, user_id FROM tuple_in_orders)
+
+statement ok
+DROP TABLE tuple_in_orders

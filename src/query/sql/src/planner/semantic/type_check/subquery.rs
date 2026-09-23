@@ -38,14 +38,19 @@ use super::FullTypeCheckAdapter;
 use super::TypeCheckSubqueryPlan;
 use super::TypeChecker;
 use crate::BindContext;
+use crate::ColumnBindingBuilder;
 use crate::ColumnSet;
 use crate::MetadataRef;
+use crate::Visibility;
 use crate::binder::Binder;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::NameResolutionContext;
+use crate::plans::BoundColumnRef;
+use crate::plans::EvalScalar;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
+use crate::plans::ScalarItem;
 use crate::plans::SubqueryComparisonOp;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
@@ -369,7 +374,7 @@ where A: super::TypeCheckAdapter
         }
 
         let TypeCheckSubqueryPlan {
-            s_expr,
+            mut s_expr,
             output_context,
         } = self.adapter.bind_subquery(
             self.bind_context,
@@ -381,13 +386,64 @@ where A: super::TypeCheckAdapter
             .cte_context
             .set_cte_context_and_name(output_context.cte_context);
 
+        // IN and = ANY compare row values positionally; other subquery
+        // comparisons retain their existing single-column requirement.
+        // This uses the existing tuple equality semantics; SQL three-valued
+        // comparisons of rows containing NULL require separate support.
+        let tuple_arity = child_expr.as_ref().and_then(|(_, ty)| {
+            match (typ, &compare_op, ty.remove_nullable()) {
+                (SubqueryType::Any, Some(SubqueryComparisonOp::Equal), DataType::Tuple(fields)) => {
+                    Some(fields.len())
+                }
+                _ => None,
+            }
+        });
+        let output_arity = output_context.columns.len();
+        let tuple_column = tuple_arity.is_some_and(|arity| {
+            output_arity == 1
+                && matches!(output_context.columns[0].data_type.as_ref().remove_nullable(), DataType::Tuple(fields) if fields.len() == arity)
+        });
         if (typ == SubqueryType::Scalar || typ == SubqueryType::Any)
-            && output_context.columns.len() > 1
+            && match tuple_arity {
+                Some(arity) => output_arity != arity && !tuple_column,
+                None => output_arity > 1,
+            }
         {
+            let expected = tuple_arity
+                .map_or_else(|| "only one column".to_string(), |n| format!("{n} columns"));
             return Err(ErrorCode::SemanticError(format!(
-                "Subquery must return only one column, but got {} columns",
-                output_context.columns.len()
-            )));
+                "Subquery must return {expected}, but got {output_arity} columns"
+            ))
+            .set_span(span));
+        }
+
+        let mut output_column = output_context.columns[0].clone();
+        if tuple_arity.is_some() && output_arity > 1 {
+            let args = output_context
+                .columns
+                .iter()
+                .cloned()
+                .map(|column| ScalarExpr::BoundColumnRef(BoundColumnRef { span, column }))
+                .collect();
+            let deref!((tuple, tuple_type)) =
+                self.resolve_scalar_function_call(span, "tuple", vec![], args)?;
+            let index = self
+                .metadata
+                .write()
+                .add_derived_column("subquery_tuple".to_string(), tuple_type.clone());
+            output_column = ColumnBindingBuilder::new(
+                "subquery_tuple".to_string(),
+                index,
+                Box::new(tuple_type),
+                Visibility::Visible,
+            )
+            .build();
+            s_expr = s_expr.build_unary(EvalScalar {
+                items: vec![ScalarItem {
+                    scalar: tuple,
+                    index,
+                }],
+            });
         }
 
         let mut contain_agg = None;
@@ -424,7 +480,7 @@ where A: super::TypeCheckAdapter
             }
         }
 
-        let deref!(mut data_type) = output_context.columns[0].data_type.clone();
+        let deref!(mut data_type) = output_column.data_type.clone();
 
         let rel_expr = RelExpr::with_s_expr(&s_expr);
         let rel_prop = rel_expr.derive_relational_prop()?;
@@ -447,7 +503,6 @@ where A: super::TypeCheckAdapter
 
         let mut child_scalar = None;
         if let Some((scalar, expr_ty)) = child_expr {
-            assert_eq!(output_context.columns.len(), 1);
             child_scalar = Some(Box::new(scalar));
             // wrap nullable to make sure expr and list values have common type.
             if expr_ty.is_nullable() {
@@ -463,7 +518,7 @@ where A: super::TypeCheckAdapter
             subquery: Box::new(s_expr),
             child_expr: child_scalar,
             compare_op,
-            output_column: output_context.columns[0].clone(),
+            output_column,
             projection_index: None,
             data_type: Box::new(data_type),
             typ,

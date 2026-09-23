@@ -420,6 +420,30 @@ async fn test_like_escape_preserves_existing_binding_semantics() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_tuple_in_multicolumn_subquery() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    ctx.register_setup_sql("CREATE TABLE orders(user_id INT, product_id INT)")
+        .await?;
+    for sql in [
+        "SELECT * FROM orders WHERE (user_id, product_id) IN (SELECT user_id, product_id FROM orders GROUP BY user_id, product_id)",
+        "SELECT * FROM orders WHERE (user_id, product_id) NOT IN (SELECT user_id, product_id FROM orders)",
+        "SELECT (user_id, product_id) IN (SELECT user_id, product_id FROM orders) FROM orders",
+        "SELECT * FROM orders AS o WHERE (o.user_id, o.product_id) IN (SELECT i.user_id, i.product_id FROM orders AS i WHERE i.user_id = o.user_id)",
+    ] {
+        let plan = ctx.bind_sql(sql).await?;
+        ctx.optimize_plan(plan).await?;
+    }
+    for sql in [
+        "SELECT * FROM orders WHERE user_id IN (SELECT user_id, product_id FROM orders)",
+        "SELECT * FROM orders WHERE (user_id, product_id) IN (SELECT user_id FROM orders)",
+        "SELECT (SELECT user_id, product_id FROM orders) FROM orders",
+    ] {
+        assert!(ctx.bind_sql(sql).await.is_err(), "should reject {sql}");
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_subquery_project_set_keeps_lambda_udf_argument_columns() -> Result<()> {
     let ctx = LiteTableContext::create().await?;
     ctx.register_setup_sql(
