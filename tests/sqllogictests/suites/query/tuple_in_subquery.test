@@ -85,5 +85,36 @@ statement error Subquery must return 2 columns
 SELECT user_id FROM tuple_in_orders
 WHERE (user_id, product_id) IN (SELECT user_id, product_id, user_id FROM tuple_in_orders)
 
+# Multi-column SELECT must agree with the existing single tuple-column
+# subquery, including Databend's tuple NULL comparison behavior.
+statement ok
+CREATE OR REPLACE TABLE tuple_in_nullable (a INT, b INT)
+
+statement ok
+INSERT INTO tuple_in_nullable VALUES (1, NULL), (1, 1), (2, 1)
+
+query IIBB rowsort
+SELECT a, b,
+    (a, b) IN (SELECT a, b FROM tuple_in_nullable),
+    (a, b) IN (SELECT (a, b) FROM tuple_in_nullable)
+FROM tuple_in_nullable
+----
+1 1 1 1
+1 NULL 1 1
+2 1 1 1
+
+query IIBB rowsort
+SELECT a, b,
+    (a, b) NOT IN (SELECT a, b FROM tuple_in_nullable WHERE b IS NULL),
+    (a, b) NOT IN (SELECT (a, b) FROM tuple_in_nullable WHERE b IS NULL)
+FROM tuple_in_nullable
+----
+1 1 1 1
+1 NULL 0 0
+2 1 1 1
+
+statement ok
+DROP TABLE tuple_in_nullable
+
 statement ok
 DROP TABLE tuple_in_orders
