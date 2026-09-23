@@ -556,29 +556,6 @@ async fn test_analyze_rebases_frequency_and_kll_fast_statistics() -> anyhow::Res
     Ok(())
 }
 
-/// KLL full keeps the bucket boundaries fixed from the baseline but counts appended rows
-/// into them, so the histogram still covers the whole table.
-#[tokio::test(flavor = "multi_thread")]
-async fn test_analyze_rebases_kll_full_histogram() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
-    let ctx = fixture.new_query_ctx().await?;
-    let (stale_table, base) = setup_stale_baseline(&fixture, &ctx, "t_rebase_full").await?;
-    let options = table_options_with_histogram(&stale_table, AnalyzeHistogramInfo::KllFull {
-        relative_error: 0.01,
-    })?;
-
-    execute_analyze_from_snapshot(ctx.clone(), &stale_table, base, options).await?;
-
-    let (_, snapshot, statistics) = latest_statistics(&ctx, "t_rebase_full").await?;
-    assert!(statistics.is_fresh_for(&snapshot));
-    assert_eq!(statistics.row_count, STALE_BASELINE_ROWS);
-    assert_eq!(
-        statistics.histograms.get(&0).unwrap().num_values(),
-        STALE_BASELINE_ROWS as f64
-    );
-    Ok(())
-}
-
 /// A column that is all NULL in the baseline has no KLL sketch there, so its bucket
 /// boundaries come from the appended rows instead.
 #[tokio::test(flavor = "multi_thread")]
@@ -642,7 +619,7 @@ async fn assert_kll_full_buckets_match_table(
             )
         })
         .collect();
-    let mut select = vec!["count(a)".to_string()];
+    let mut select = vec!["count(a)".to_string(), "count(*)".to_string()];
     select.extend(
         buckets
             .iter()
@@ -664,10 +641,11 @@ async fn assert_kll_full_buckets_match_table(
     };
 
     assert_eq!(histogram.num_values(), count(0));
+    assert_eq!(statistics.row_count as f64, count(1));
     for (offset, (lower, upper, num_values)) in buckets.iter().enumerate() {
         assert_eq!(
             *num_values,
-            count(offset + 1),
+            count(offset + 2),
             "bucket [{lower}, {upper}] of {name}"
         );
     }
@@ -687,14 +665,22 @@ async fn test_analyze_kll_full_histogram_over_many_blocks() -> anyhow::Result<()
         ))
         .await?;
     // Repeated values and NULLs, spread over many blocks and segments.
-    let insert = format!(
-        "insert into {name} select if(number % 10 = 0, null, (number * 7919 % 1000)::int) \
-         from numbers(3000)"
-    );
-    fixture.execute_command(&insert).await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {name} select if(number % 10 = 0, null, (number * 7919 % 1000)::int) \
+             from numbers(3000)"
+        ))
+        .await?;
     let table = latest_fuse_table(&ctx, name).await?;
     let base = table.read_table_snapshot().await?.unwrap();
-    fixture.execute_command(&insert).await?;
+    // A different distribution, including values outside the baseline range, makes the
+    // rebase validate that appended rows land in the correct fixed-boundary buckets.
+    fixture
+        .execute_command(&format!(
+            "insert into {name} select if(number % 7 = 0, null, (number * 4813 % 1500)::int - 250) \
+             from numbers(3000)"
+        ))
+        .await?;
     let snapshot = latest_fuse_table(&ctx, name)
         .await?
         .read_table_snapshot()
@@ -828,10 +814,9 @@ async fn test_analyze_does_not_publish_virtual_column_statistics() -> anyhow::Re
     let table = latest_fuse_table(&ctx, name).await?;
     let snapshot = table.read_table_snapshot().await?.unwrap();
     assert!(snapshot.summary.virtual_col_stats.is_none());
-    let provider = table.column_statistics_provider(ctx.clone()).await?;
-    let id_stats = provider.column_statistics(0).unwrap();
-    assert_eq!(id_stats.min, Some(Datum::Int(1)));
-    assert_eq!(id_stats.max, Some(Datum::Int(20)));
+    let id_stats = snapshot.summary.col_stats.get(&0).unwrap();
+    assert_eq!(id_stats.min(), &Scalar::Number(NumberScalar::Int32(1)));
+    assert_eq!(id_stats.max(), &Scalar::Number(NumberScalar::Int32(20)));
     Ok(())
 }
 
