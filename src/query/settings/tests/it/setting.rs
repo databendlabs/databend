@@ -338,6 +338,29 @@ async fn test_flight_keep_alive_settings() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_flight_query_leak_timeout_setting() {
+    let settings = Settings::create(Tenant::new_literal("test"));
+
+    // Default keeps the historical hard-coded 180 seconds.
+    assert_eq!(settings.get_flight_query_leak_timeout_secs().unwrap(), 180);
+
+    settings
+        .set_setting(
+            "flight_query_leak_timeout_secs".to_string(),
+            "1800".to_string(),
+        )
+        .unwrap();
+    assert_eq!(settings.get_flight_query_leak_timeout_secs().unwrap(), 1800);
+
+    // 0 would remove leaked queries immediately, so it is rejected.
+    let result = settings.set_setting(
+        "flight_query_leak_timeout_secs".to_string(),
+        "0".to_string(),
+    );
+    assert!(result.is_err());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_http_json_result_mode_settings() {
     let settings = Settings::create(Tenant::new_literal("test"));
 

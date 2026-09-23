@@ -281,6 +281,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("flight_query_leak_timeout_secs", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(180),
+                    desc: "Sets the maximum time in seconds a node waits after a distributed query environment is initialized for the coordinator to start the query. Once exceeded, the query is treated as leaked and cleaned up. Raise it when fragment preparation (e.g. lazy block pruning of a large DELETE across many nodes) takes longer than the default.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
                 ("flight_client_keep_alive_time_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the idle time in seconds before a flight TCP connection sends keepalive probes. 0 disables keepalive.",
