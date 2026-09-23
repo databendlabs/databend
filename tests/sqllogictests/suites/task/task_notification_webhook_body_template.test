@@ -1,0 +1,183 @@
+# Please start the mock Cloud Control server first before running this test:
+#   cd tests/cloud_control_server && uv run python simple_server.py
+#
+# Covers WEBHOOK_BODY_TEMPLATE on notification integrations:
+#   - CREATE / ALTER SET / ALTER UNSET round trips through the mock server
+#   - ALTER is a field-level patch: changing one option never clears another
+#   - template validation errors are raised by the binder without an RPC
+
+statement ok
+DROP NOTIFICATION INTEGRATION IF EXISTS tpl_notify;
+
+# ---------------------------------------------------------------------------
+# CREATE without a template: webhook_options must not carry body_template.
+# ---------------------------------------------------------------------------
+
+statement ok
+CREATE NOTIFICATION INTEGRATION tpl_notify
+  TYPE = WEBHOOK
+  ENABLED = TRUE
+  WEBHOOK = (URL = 'http://localhost:8080/notify', METHOD = 'POST', AUTHORIZATION_HEADER = 'Bearer abc')
+  COMMENT = 'plain';
+
+query TTB?T
+SELECT name, type, enabled, webhook_options, comment FROM system.notifications WHERE name = 'tpl_notify';
+----
+tpl_notify webhook 1 {"url":"http://localhost:8080/notify","method":"POST","authorization_header":"Bearer abc"} plain
+
+# ---------------------------------------------------------------------------
+# ALTER SET template on an existing integration; all other options survive.
+# ---------------------------------------------------------------------------
+
+statement ok
+ALTER NOTIFICATION INTEGRATION tpl_notify
+  SET WEBHOOK_BODY_TEMPLATE = '{"msg_type":"text","content":{"text":"DATABEND_WEBHOOK_MESSAGE"}}';
+
+query TTB?T
+SELECT name, type, enabled, webhook_options, comment FROM system.notifications WHERE name = 'tpl_notify';
+----
+tpl_notify webhook 1 {"url":"http://localhost:8080/notify","method":"POST","authorization_header":"Bearer abc","body_template":"{\"msg_type\":\"text\",\"content\":{\"text\":\"DATABEND_WEBHOOK_MESSAGE\"}}"} plain
+
+# ---------------------------------------------------------------------------
+# Field-level patch semantics: each ALTER touches exactly one thing.
+# ---------------------------------------------------------------------------
+
+statement ok
+ALTER NOTIFICATION INTEGRATION tpl_notify SET COMMENT = 'patched';
+
+query TTB?T
+SELECT name, type, enabled, webhook_options, comment FROM system.notifications WHERE name = 'tpl_notify';
+----
+tpl_notify webhook 1 {"url":"http://localhost:8080/notify","method":"POST","authorization_header":"Bearer abc","body_template":"{\"msg_type\":\"text\",\"content\":{\"text\":\"DATABEND_WEBHOOK_MESSAGE\"}}"} patched
+
+statement ok
+ALTER NOTIFICATION INTEGRATION tpl_notify SET ENABLED = FALSE;
+
+query TTB?T
+SELECT name, type, enabled, webhook_options, comment FROM system.notifications WHERE name = 'tpl_notify';
+----
+tpl_notify webhook 0 {"url":"http://localhost:8080/notify","method":"POST","authorization_header":"Bearer abc","body_template":"{\"msg_type\":\"text\",\"content\":{\"text\":\"DATABEND_WEBHOOK_MESSAGE\"}}"} patched
+
+statement ok
+ALTER NOTIFICATION INTEGRATION tpl_notify SET WEBHOOK = (URL = 'http://localhost:8080/notify/v2');
+
+query TTB?T
+SELECT name, type, enabled, webhook_options, comment FROM system.notifications WHERE name = 'tpl_notify';
+----
+tpl_notify webhook 0 {"url":"http://localhost:8080/notify/v2","method":"POST","authorization_header":"Bearer abc","body_template":"{\"msg_type\":\"text\",\"content\":{\"text\":\"DATABEND_WEBHOOK_MESSAGE\"}}"} patched
+
+statement ok
+ALTER NOTIFICATION INTEGRATION tpl_notify SET WEBHOOK = (METHOD = 'GET');
+
+query TTB?T
+SELECT name, type, enabled, webhook_options, comment FROM system.notifications WHERE name = 'tpl_notify';
+----
+tpl_notify webhook 0 {"url":"http://localhost:8080/notify/v2","method":"GET","authorization_header":"Bearer abc","body_template":"{\"msg_type\":\"text\",\"content\":{\"text\":\"DATABEND_WEBHOOK_MESSAGE\"}}"} patched
+
+# Replacing the template keeps every other option, including non-ASCII text.
+statement ok
+ALTER NOTIFICATION INTEGRATION tpl_notify SET WEBHOOK_BODY_TEMPLATE = '{"text":"告警：DATABEND_WEBHOOK_MESSAGE","tags":["databend"]}';
+
+query TTB?T
+SELECT name, type, enabled, webhook_options, comment FROM system.notifications WHERE name = 'tpl_notify';
+----
+tpl_notify webhook 0 {"url":"http://localhost:8080/notify/v2","method":"GET","authorization_header":"Bearer abc","body_template":"{\"text\":\"告警：DATABEND_WEBHOOK_MESSAGE\",\"tags\":[\"databend\"]}"} patched
+
+# ---------------------------------------------------------------------------
+# Validation errors: rejected by the binder, the stored config is unchanged.
+# ---------------------------------------------------------------------------
+
+# Empty template is not a way to clear it; UNSET is.
+statement error 1006
+ALTER NOTIFICATION INTEGRATION tpl_notify SET WEBHOOK_BODY_TEMPLATE = '';
+
+statement error 1006
+ALTER NOTIFICATION INTEGRATION tpl_notify SET WEBHOOK_BODY_TEMPLATE = 'text';
+
+statement error 1006
+ALTER NOTIFICATION INTEGRATION tpl_notify SET WEBHOOK_BODY_TEMPLATE = '{"text":DATABEND_WEBHOOK_MESSAGE}';
+
+statement error 1006
+ALTER NOTIFICATION INTEGRATION tpl_notify SET WEBHOOK_BODY_TEMPLATE = '{"text":"DATABEND_WEBHOOK_MESSAGE",}';
+
+statement error 1006
+ALTER NOTIFICATION INTEGRATION tpl_notify SET WEBHOOK_BODY_TEMPLATE = '{} {}';
+
+# Placeholder in an object key, at the top level and nested.
+statement error 1006
+ALTER NOTIFICATION INTEGRATION tpl_notify SET WEBHOOK_BODY_TEMPLATE = '{"DATABEND_WEBHOOK_MESSAGE":"x"}';
+
+statement error 1006
+ALTER NOTIFICATION INTEGRATION tpl_notify SET WEBHOOK_BODY_TEMPLATE = '{"a":[{"DATABEND_WEBHOOK_MESSAGE":"x"}]}';
+
+# An empty WEBHOOK patch changes nothing, so it is rejected before any RPC.
+statement error 1005
+ALTER NOTIFICATION INTEGRATION tpl_notify SET WEBHOOK = ();
+
+query ?
+SELECT webhook_options FROM system.notifications WHERE name = 'tpl_notify';
+----
+{"url":"http://localhost:8080/notify/v2","method":"GET","authorization_header":"Bearer abc","body_template":"{\"text\":\"告警：DATABEND_WEBHOOK_MESSAGE\",\"tags\":[\"databend\"]}"}
+
+# ---------------------------------------------------------------------------
+# UNSET clears only the template.
+# ---------------------------------------------------------------------------
+
+statement ok
+ALTER NOTIFICATION INTEGRATION tpl_notify UNSET WEBHOOK_BODY_TEMPLATE;
+
+query TTB?T
+SELECT name, type, enabled, webhook_options, comment FROM system.notifications WHERE name = 'tpl_notify';
+----
+tpl_notify webhook 0 {"url":"http://localhost:8080/notify/v2","method":"GET","authorization_header":"Bearer abc"} patched
+
+# A later patch must not resurrect the cleared template.
+statement ok
+ALTER NOTIFICATION INTEGRATION tpl_notify SET COMMENT = 'after unset';
+
+query TTB?T
+SELECT name, type, enabled, webhook_options, comment FROM system.notifications WHERE name = 'tpl_notify';
+----
+tpl_notify webhook 0 {"url":"http://localhost:8080/notify/v2","method":"GET","authorization_header":"Bearer abc"} after unset
+
+statement ok
+DROP NOTIFICATION INTEGRATION tpl_notify;
+
+# ---------------------------------------------------------------------------
+# CREATE with a template in one statement; invalid templates fail at CREATE.
+# ---------------------------------------------------------------------------
+
+statement error 1006
+CREATE NOTIFICATION INTEGRATION tpl_notify
+  TYPE = WEBHOOK
+  ENABLED = TRUE
+  WEBHOOK = (URL = 'http://localhost:8080/notify', METHOD = 'POST')
+  WEBHOOK_BODY_TEMPLATE = '';
+
+statement error 1006
+CREATE NOTIFICATION INTEGRATION tpl_notify
+  TYPE = WEBHOOK
+  ENABLED = TRUE
+  WEBHOOK = (URL = 'http://localhost:8080/notify', METHOD = 'POST')
+  WEBHOOK_BODY_TEMPLATE = '{"DATABEND_WEBHOOK_MESSAGE":1}';
+
+query I
+SELECT count(*) FROM system.notifications WHERE name = 'tpl_notify';
+----
+0
+
+statement ok
+CREATE NOTIFICATION INTEGRATION tpl_notify
+  TYPE = WEBHOOK
+  ENABLED = TRUE
+  WEBHOOK = (URL = 'http://localhost:8080/notify', METHOD = 'POST')
+  WEBHOOK_BODY_TEMPLATE = '{"text":"DATABEND_WEBHOOK_MESSAGE"}'
+  COMMENT = 'with template';
+
+query TTB?T
+SELECT name, type, enabled, webhook_options, comment FROM system.notifications WHERE name = 'tpl_notify';
+----
+tpl_notify webhook 1 {"url":"http://localhost:8080/notify","method":"POST","authorization_header":"","body_template":"{\"text\":\"DATABEND_WEBHOOK_MESSAGE\"}"} with template
+
+statement ok
+DROP NOTIFICATION INTEGRATION tpl_notify;

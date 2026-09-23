@@ -3313,6 +3313,7 @@ dependencies = [
  "prost-build 0.14.3",
  "semver",
  "serde",
+ "serde_json",
  "tokio",
  "tonic 0.14.5",
  "tonic-prost",
