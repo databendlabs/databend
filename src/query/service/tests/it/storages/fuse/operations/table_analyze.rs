@@ -34,7 +34,10 @@ use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::AnalyzeHistogramInfo;
 use databend_common_storages_fuse::operations::AnalyzeOptions;
+use databend_common_storages_fuse::operations::commit_refresh_virtual_column;
+use databend_common_storages_fuse::operations::prepare_refresh_virtual_column;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
+use databend_query::pipelines::PipelineBuildResult;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::sessions::QueryContext;
@@ -738,6 +741,153 @@ async fn test_analyze_rejects_non_append_snapshot_change() -> anyhow::Result<()>
         .await
         .unwrap_err();
     assert_eq!(err.code(), ErrorCode::UNRESOLVABLE_CONFLICT);
+    Ok(())
+}
+
+/// Virtual column ids are local to each segment, so ANALYZE must not merge them by id into
+/// the snapshot summary, where they would also collide with table column ids.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_analyze_does_not_publish_virtual_column_statistics() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_enable_experimental_virtual_column(1)?;
+    let ctx = fixture.new_query_ctx().await?;
+    let name = "t_analyze_virtual";
+    fixture
+        .execute_command(&format!(
+            "create table {name}(id int, v variant) enable_virtual_column = true"
+        ))
+        .await?;
+    // Two segments whose virtual columns have different paths but the same type.
+    // Type-conflict checks alone cannot detect that their segment-local ids collide.
+    fixture
+        .execute_command(&format!(
+            "insert into {name} select number::int + 1, \
+             parse_json('{{\"a\":\"x' || number::string || '\"}}') from numbers(10)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {name} select number::int + 11, \
+             parse_json('{{\"b\":\"y' || number::string || '\"}}') from numbers(10)"
+        ))
+        .await?;
+
+    // INSERT alone does not materialize the virtual columns. Refresh the blocks first so
+    // the two segment summaries contain virtual stats to exercise the ANALYZE path.
+    let table = latest_fuse_table(&ctx, name).await?;
+    let results = prepare_refresh_virtual_column(ctx.clone(), &table, None, true, None).await?;
+    assert_eq!(results.len(), 2);
+    let mut build_res = PipelineBuildResult::create();
+    commit_refresh_virtual_column(ctx.clone(), &table, &mut build_res.main_pipeline, results)
+        .await?;
+    build_res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
+    let settings = ExecutorSettings::try_create(ctx.clone())?;
+    let executor =
+        PipelineCompleteExecutor::from_pipelines(vec![build_res.main_pipeline], settings)?;
+    ctx.set_executor(executor.get_inner())?;
+    executor.execute().await?;
+
+    let table = latest_fuse_table(&ctx, name).await?;
+    let snapshot = table.read_table_snapshot().await?.unwrap();
+    assert_eq!(snapshot.segments.len(), 2);
+    let segment_reader =
+        MetaReaders::segment_info_reader(table.get_operator(), table.schema_with_stream());
+    let mut segment_virtual_ids = Vec::new();
+    let mut segment_paths = Vec::new();
+    for (location, ver) in snapshot.segments.iter() {
+        let segment = segment_reader
+            .read(&LoadParams {
+                location: location.clone(),
+                len_hint: None,
+                ver: *ver,
+                put_cache: false,
+            })
+            .await?;
+        let summary = SegmentInfo::try_from(segment)?.summary;
+        let schema = summary
+            .virtual_segment_schema
+            .expect("segment virtual schema");
+        let (source_column_id, path) = schema.field_of_column_id(0).unwrap();
+        assert_eq!(source_column_id, 1);
+        segment_paths.push(path.path.clone());
+        let virtual_col_stats = summary.virtual_col_stats.expect("segment virtual stats");
+        segment_virtual_ids.push(virtual_col_stats.keys().copied().collect::<Vec<_>>());
+    }
+    // Different paths share the same segment-local id, which is also the id of `id`.
+    assert_eq!(segment_virtual_ids, vec![vec![0], vec![0]]);
+    segment_paths.sort();
+    assert_eq!(segment_paths, ["a", "b"]);
+
+    fixture
+        .execute_command(&format!("analyze table default.{name}"))
+        .await?;
+
+    let table = latest_fuse_table(&ctx, name).await?;
+    let snapshot = table.read_table_snapshot().await?.unwrap();
+    assert!(snapshot.summary.virtual_col_stats.is_none());
+    let provider = table.column_statistics_provider(ctx.clone()).await?;
+    let id_stats = provider.column_statistics(0).unwrap();
+    assert_eq!(id_stats.min, Some(Datum::Int(1)));
+    assert_eq!(id_stats.max, Some(Datum::Int(20)));
+    Ok(())
+}
+
+/// Old snapshots can still contain virtual stats keyed by a real column id. Verify the
+/// statistics provider ignores them even before ANALYZE replaces the snapshot summary.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_column_statistics_provider_ignores_snapshot_virtual_stats() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let name = "t_snapshot_virtual_stats";
+    fixture
+        .execute_command(&format!("create table {name}(id int)"))
+        .await?;
+    fixture
+        .execute_command(&format!("insert into {name} values (1), (2)"))
+        .await?;
+
+    let table = latest_fuse_table(&ctx, name).await?;
+    let original = table.read_table_snapshot().await?.unwrap();
+    let real_stat = original.summary.col_stats.get(&0).unwrap().clone();
+    let mut conflicting_stat = real_stat.clone();
+    conflicting_stat.min = Scalar::Number(NumberScalar::Int32(-99));
+    conflicting_stat.max = Scalar::Number(NumberScalar::Int32(-99));
+    let mut snapshot = TableSnapshot::try_from_previous(
+        original,
+        table.cluster_key_info(),
+        None,
+        TestFixture::default_table_meta_timestamps(),
+    )?;
+    snapshot.summary.virtual_col_stats = Some(HashMap::from([(0, conflicting_stat)]));
+    table
+        .commit_to_meta_server(
+            ctx.as_ref(),
+            table.get_table_info(),
+            table.meta_location_generator(),
+            snapshot,
+            None,
+            &None,
+            &table.get_operator(),
+        )
+        .await?;
+
+    let table = latest_fuse_table(&ctx, name).await?;
+    assert!(
+        table
+            .read_table_snapshot()
+            .await?
+            .unwrap()
+            .summary
+            .virtual_col_stats
+            .is_some()
+    );
+    let provider = table.column_statistics_provider(ctx.clone()).await?;
+    let id_stats = provider.column_statistics(0).unwrap();
+    assert_eq!(id_stats.min, Some(Datum::Int(1)));
+    assert_eq!(id_stats.max, Some(Datum::Int(2)));
     Ok(())
 }
 

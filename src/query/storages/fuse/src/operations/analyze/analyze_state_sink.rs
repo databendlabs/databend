@@ -221,8 +221,10 @@ enum HistogramState {
     /// and cannot be extended, so after an append rebase they miss the appended values
     /// while the rest of the statistics cover the latest snapshot. They are still
     /// published, as they would be after any later append: histograms are not gated by
-    /// statistics freshness, the optimizer scales them by row count, and their accuracy
-    /// flag only records how they were built, not coverage of the current data.
+    /// statistics freshness and the optimizer scales them by row count. They also stay
+    /// flagged accurate, so the optimizer still caps a column's NDV by the histogram NDV
+    /// and may underestimate it by the distinct values only present in appended rows;
+    /// this is the same drift a later append causes and is accepted.
     Window {
         receivers: HashMap<u32, Receiver<DataBlock>>,
         buckets: HashMap<ColumnId, Vec<HistogramBucket>>,
@@ -256,8 +258,8 @@ impl HistogramState {
         !matches!(self, HistogramState::None)
     }
 
-    /// Window buckets come from exact SQL; the KLL variants are sketches. This describes
-    /// how the buckets were built and stays true for rebased Window buckets.
+    /// Window buckets come from exact SQL; the KLL variants are sketches. Stays true for
+    /// rebased Window buckets, see [`HistogramState::Window`].
     fn accurate(&self) -> bool {
         matches!(self, HistogramState::Window { .. })
     }
@@ -523,7 +525,9 @@ impl SinkAnalyzeState {
             }
         }
         snapshot.summary.col_stats = col_stats;
-        snapshot.summary.virtual_col_stats = self.acc.segment_stats.virtual_col_stats.clone();
+        // Virtual column ids are segment-local and cannot be merged across segments, matching
+        // `merge_statistics_mut` on the write path.
+        snapshot.summary.virtual_col_stats = None;
         snapshot.summary.cluster_stats = self.acc.segment_stats.cluster_stats.clone();
         if let Some(stats) = table_statistics {
             snapshot.table_statistics_location = Some(
