@@ -105,20 +105,23 @@ impl Binder {
         // Check and bind common table expression
         let mut cte_suffix_name = None;
         let mut materialized_cte_lineage = None;
-        let cte_map = bind_context.cte_context.cte_map.clone();
-        if let Some(cte_info) = cte_map.get(&table_name) {
+        // Only clone the matching entry: cloning the whole `cte_map` on every table
+        // reference is expensive for queries with many CTEs.
+        if let Some(cte_info) = bind_context.cte_context.cte_map.get(&table_name).cloned() {
+            let cte_info = &cte_info;
             if let Some(materialized_cte_info) = &cte_info.materialized_cte_info {
                 return self.bind_cte_consumer(
                     bind_context,
                     &table_name,
                     alias,
                     cte_info,
-                    &materialized_cte_info.bound_context.columns,
+                    &materialized_cte_info.bound_columns,
                 );
             } else if cte_info.user_specified_materialized {
                 if lineage_enabled() {
                     // The main query scans a temporary table, so retain a separately bound
                     // producer definition that lineage extraction can follow by output position.
+                    let cte_map = bind_context.cte_context.cte_map.clone();
                     materialized_cte_lineage = Some(self.bind_cte_definition(
                         &table_name,
                         cte_map.as_ref(),
@@ -187,14 +190,15 @@ impl Binder {
                             break;
                         }
                         let bind_context = parent.unwrap().as_mut();
-                        let cte_map = bind_context.cte_context.cte_map.clone();
-                        if let Some(cte_info) = cte_map.get(&table_name) {
+                        if let Some(cte_info) =
+                            bind_context.cte_context.cte_map.get(&table_name).cloned()
+                        {
                             return self.bind_cte(
                                 *span,
                                 bind_context,
                                 &table_name,
                                 alias,
-                                cte_info,
+                                &cte_info,
                             );
                         }
                         parent = bind_context.parent.as_mut();
