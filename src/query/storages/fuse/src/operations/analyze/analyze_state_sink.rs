@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -53,18 +54,99 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::encode_column_hll;
+use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
+use databend_storages_common_table_meta::table::analyze_count_min_sketch_error_rate_from_options;
+use databend_storages_common_table_meta::table::analyze_top_n_size_from_options;
 
 use crate::FuseLazyPartInfo;
 use crate::FuseTable;
 use crate::io::SegmentsIO;
 use crate::operations::analyze::AnalyzeAccumulator;
 use crate::operations::analyze::AnalyzeCollectSource;
-use crate::operations::analyze::AnalyzeHistogramInfo;
-use crate::operations::analyze::AnalyzeOptions;
 use crate::operations::analyze::AnalyzeSegmentProgress;
 use crate::operations::analyze::SegmentAnalyzer;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::util::set_backoff;
+
+/// Which histogram, if any, ANALYZE produces.
+#[derive(Clone)]
+pub enum AnalyzeHistogramInfo {
+    None,
+    /// Buckets computed by window queries running alongside the analyze pipeline, one
+    /// receiver per column id.
+    Window(HashMap<u32, Receiver<DataBlock>>),
+    /// Equal-depth buckets derived from KLL sketches gathered while scanning blocks.
+    KllFast {
+        relative_error: f64,
+    },
+    /// Bucket bounds derived from KLL sketches, then exact counts from a second block scan.
+    KllFull {
+        relative_error: f64,
+    },
+}
+
+impl AnalyzeHistogramInfo {
+    pub fn kll_relative_error(&self) -> Option<f64> {
+        match self {
+            AnalyzeHistogramInfo::KllFast { relative_error }
+            | AnalyzeHistogramInfo::KllFull { relative_error } => Some(*relative_error),
+            AnalyzeHistogramInfo::None | AnalyzeHistogramInfo::Window(_) => None,
+        }
+    }
+}
+
+/// Frequency statistics (Top-N and count-min sketch) requested for a set of columns.
+#[derive(Clone, Debug)]
+pub struct FrequencyOptions {
+    /// Comma separated column list, as written in `analyze_frequency_columns`.
+    pub columns: String,
+    pub top_n_size: Option<usize>,
+    pub count_min_sketch_error_rate: Option<f64>,
+}
+
+/// Everything that shapes one ANALYZE run.
+#[derive(Clone)]
+pub struct AnalyzeOptions {
+    pub histogram: AnalyzeHistogramInfo,
+    pub frequency: Option<FrequencyOptions>,
+    /// Only reuse persisted block statistics; blocks without them count as unanalyzed rows.
+    pub no_scan: bool,
+}
+
+impl AnalyzeOptions {
+    /// Frequency statistics as configured on the table; no histogram, full scan.
+    pub fn from_table_options(options: &BTreeMap<String, String>) -> Result<Self> {
+        let top_n_size = analyze_top_n_size_from_options(options)?;
+        let count_min_sketch_error_rate =
+            analyze_count_min_sketch_error_rate_from_options(options)?;
+        let frequency = options
+            .get(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS)
+            .filter(|columns| !columns.trim().is_empty())
+            .filter(|_| top_n_size.is_some() || count_min_sketch_error_rate.is_some())
+            .map(|columns| FrequencyOptions {
+                columns: columns.clone(),
+                top_n_size,
+                count_min_sketch_error_rate,
+            });
+        Ok(Self {
+            histogram: AnalyzeHistogramInfo::None,
+            frequency,
+            no_scan: false,
+        })
+    }
+
+    pub fn with_histogram(mut self, histogram: AnalyzeHistogramInfo) -> Self {
+        self.histogram = histogram;
+        self
+    }
+
+    /// Frequency statistics need block data, so NOSCAN drops them.
+    pub fn no_scan(mut self) -> Self {
+        self.no_scan = true;
+        self.frequency = None;
+        self
+    }
+}
 
 impl FuseTable {
     /// Build the ANALYZE pipeline for `snapshot`.
@@ -834,6 +916,42 @@ mod tests {
     use databend_common_expression::types::DecimalSize;
 
     use super::*;
+
+    #[test]
+    fn frequency_options_require_columns_and_a_statistic() {
+        let mut options = BTreeMap::new();
+        assert!(
+            AnalyzeOptions::from_table_options(&options)
+                .unwrap()
+                .frequency
+                .is_none()
+        );
+
+        options.insert("analyze_frequency_columns".to_string(), "c".to_string());
+        assert!(
+            AnalyzeOptions::from_table_options(&options)
+                .unwrap()
+                .frequency
+                .is_none()
+        );
+
+        options.insert("analyze_top_n_size".to_string(), "3".to_string());
+        let frequency = AnalyzeOptions::from_table_options(&options)
+            .unwrap()
+            .frequency
+            .unwrap();
+        assert_eq!(frequency.columns, "c");
+        assert_eq!(frequency.top_n_size, Some(3));
+        assert_eq!(frequency.count_min_sketch_error_rate, None);
+
+        assert!(
+            AnalyzeOptions::from_table_options(&options)
+                .unwrap()
+                .no_scan()
+                .frequency
+                .is_none()
+        );
+    }
 
     #[test]
     fn kll_bucket_ndv_hashes_original_decimal_value() {

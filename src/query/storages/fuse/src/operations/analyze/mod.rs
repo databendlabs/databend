@@ -16,14 +16,13 @@ mod accumulator;
 mod analyze_state_sink;
 mod collect_source;
 mod histogram_info_sink;
-mod options;
 mod segment_analyzer;
 
 pub use accumulator::AnalyzeAccumulator;
+pub use analyze_state_sink::AnalyzeHistogramInfo;
+pub use analyze_state_sink::AnalyzeOptions;
+pub use analyze_state_sink::FrequencyOptions;
 pub use collect_source::AnalyzeCollectSource;
 pub use collect_source::AnalyzeSegmentProgress;
 pub use histogram_info_sink::HistogramInfoSink;
-pub use options::AnalyzeHistogramInfo;
-pub use options::AnalyzeOptions;
-pub use options::FrequencyOptions;
 pub use segment_analyzer::SegmentAnalyzer;
