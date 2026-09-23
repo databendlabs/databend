@@ -22,6 +22,7 @@ use crate::Symbol;
 use crate::plans::AggregateMode;
 use crate::plans::Operator;
 use crate::plans::RelOperator;
+use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::Visitor as ScalarExprVisitor;
 
@@ -53,17 +54,13 @@ impl ColumnScopeValidator<'_> {
         let plan = s_expr.plan();
 
         let mut available = ambient.clone();
-        if plan.arity() == 0 {
-            // A leaf operator (e.g. a scan) references its own columns in its predicates.
+        if plan.arity() == 0 && !matches!(plan, RelOperator::ExpressionScan(_)) {
+            // A leaf scan references its own columns in its predicates. ExpressionScan,
+            // however, computes its outputs from values and cannot read those outputs.
             available.extend(s_expr.derive_relational_prop()?.output_columns.iter());
         }
         for child in s_expr.children() {
             available.extend(child.derive_relational_prop()?.output_columns.iter());
-        }
-        if let RelOperator::WindowGroup(group) = plan {
-            // The group evaluates its scalar items (function arguments, partition and order
-            // keys) itself before the window functions read them.
-            available.extend(group.scalar_items.iter().map(|item| item.index));
         }
         if let RelOperator::Aggregate(aggregate) = plan {
             // A `Final` aggregate keeps the same scalar items as the `Partial` one below it
@@ -86,8 +83,57 @@ impl ColumnScopeValidator<'_> {
             }
         }
 
+        if let RelOperator::WindowGroup(group) = plan {
+            // The physical builder evaluates scalar items over the child before evaluating
+            // windows. An item cannot read its own output or another item's output.
+            self.validate_scalars(
+                plan,
+                group.scalar_items.iter().map(|item| &item.scalar),
+                &available,
+            )?;
+            let mut window_available = available.clone();
+            window_available.extend(group.scalar_items.iter().map(|item| item.index));
+            self.validate_scalars(
+                plan,
+                group
+                    .windows
+                    .iter()
+                    .flat_map(|window| window.scalar_expr_iter()),
+                &window_available,
+            )?;
+        } else {
+            self.validate_scalars(plan, plan.scalar_expr_iter(), &available)?;
+        }
+        // The right side of a LATERAL join is correlated to the left side without a
+        // `SubqueryExpr`, so the left outputs become its ambient scope.
+        if let RelOperator::Join(join) = plan
+            && join.is_lateral
+        {
+            let mut lateral_ambient = ambient.clone();
+            lateral_ambient.extend(
+                s_expr
+                    .child(0)?
+                    .derive_relational_prop()?
+                    .output_columns
+                    .iter(),
+            );
+            self.validate(s_expr.child(0)?, ambient)?;
+            return self.validate(s_expr.child(1)?, &lateral_ambient);
+        }
+        for child in s_expr.children() {
+            self.validate(child, ambient)?;
+        }
+        Ok(())
+    }
+
+    fn validate_scalars<'a>(
+        &self,
+        plan: &RelOperator,
+        scalars: impl IntoIterator<Item = &'a ScalarExpr>,
+        available: &ColumnSet,
+    ) -> Result<()> {
         let mut collector = ReferenceCollector::default();
-        for scalar in plan.scalar_expr_iter() {
+        for scalar in scalars {
             collector.visit(scalar)?;
         }
 
@@ -111,28 +157,8 @@ impl ColumnScopeValidator<'_> {
                 self.describe(&available.iter().copied().collect::<Vec<_>>()),
             )));
         }
-
         for subquery in &collector.subqueries {
-            self.validate(&subquery.subquery, &available)?;
-        }
-        // The right side of a LATERAL join is correlated to the left side without a
-        // `SubqueryExpr`, so the left outputs become its ambient scope.
-        if let RelOperator::Join(join) = plan
-            && join.is_lateral
-        {
-            let mut lateral_ambient = ambient.clone();
-            lateral_ambient.extend(
-                s_expr
-                    .child(0)?
-                    .derive_relational_prop()?
-                    .output_columns
-                    .iter(),
-            );
-            self.validate(s_expr.child(0)?, ambient)?;
-            return self.validate(s_expr.child(1)?, &lateral_ambient);
-        }
-        for child in s_expr.children() {
-            self.validate(child, ambient)?;
+            self.validate(&subquery.subquery, available)?;
         }
         Ok(())
     }
@@ -182,6 +208,7 @@ impl<'a> ScalarExprVisitor<'a> for ReferenceCollector<'a> {
 mod tests {
     use std::sync::Arc;
 
+    use databend_common_expression::DataSchemaRefExt;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::NumberDataType;
     use parking_lot::RwLock;
@@ -192,10 +219,15 @@ mod tests {
     use crate::Visibility;
     use crate::plans::BoundColumnRef;
     use crate::plans::EvalScalar;
+    use crate::plans::ExpressionScan;
     use crate::plans::Filter;
     use crate::plans::ScalarExpr;
     use crate::plans::ScalarItem;
     use crate::plans::Scan;
+    use crate::plans::Window;
+    use crate::plans::WindowFuncFrame;
+    use crate::plans::WindowFuncType;
+    use crate::plans::WindowGroup;
 
     fn metadata_with_columns(n: usize) -> MetadataRef {
         let mut metadata = Metadata::default();
@@ -251,5 +283,93 @@ mod tests {
             err.message().contains("EvalScalar") && err.message().contains("2 (c2)"),
             "{err}"
         );
+    }
+
+    #[test]
+    fn window_group_scalar_items_only_read_child_columns() -> Result<()> {
+        let metadata = metadata_with_columns(4);
+        let group = |item_input| WindowGroup {
+            scalar_items: vec![ScalarItem {
+                scalar: column(item_input),
+                index: Symbol::new(2),
+            }],
+            windows: vec![Window {
+                span: None,
+                index: Symbol::new(3),
+                function: WindowFuncType::RowNumber,
+                arguments: vec![ScalarItem {
+                    scalar: column(2),
+                    index: Symbol::new(2),
+                }],
+                partition_by: vec![],
+                order_by: vec![],
+                frame: WindowFuncFrame::default(),
+                limit: None,
+                top: None,
+            }],
+        };
+        let valid = SExpr::create_unary(Arc::new(RelOperator::WindowGroup(group(0))), scan(&[0]));
+        valid.validate_column_scope(&metadata)?;
+
+        // The output of a scalar item must not be available to that item itself.
+        let invalid = SExpr::create_unary(Arc::new(RelOperator::WindowGroup(group(2))), scan(&[0]));
+        let err = invalid.validate_column_scope(&metadata).unwrap_err();
+        assert!(
+            err.message().contains("WindowGroup") && err.message().contains("2 (c2)"),
+            "{err}"
+        );
+
+        // Sibling scalar items are evaluated over the same child, not in sequence.
+        let mut sibling_group = group(0);
+        sibling_group.scalar_items.push(ScalarItem {
+            scalar: column(2),
+            index: Symbol::new(1),
+        });
+        let sibling = SExpr::create_unary(
+            Arc::new(RelOperator::WindowGroup(sibling_group)),
+            scan(&[0]),
+        );
+        let err = sibling.validate_column_scope(&metadata).unwrap_err();
+        assert!(
+            err.message().contains("WindowGroup") && err.message().contains("2 (c2)"),
+            "{err}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn expression_scan_values_read_from_child_not_own_outputs() -> Result<()> {
+        let metadata = metadata_with_columns(3);
+        let expression_scan = |source| ExpressionScan {
+            expression_scan_index: 0,
+            values: vec![vec![column(source)]],
+            num_scalar_columns: 1,
+            cache_index: 0,
+            column_indexes: vec![Symbol::new(1)],
+            data_types: vec![DataType::Number(NumberDataType::Int32)],
+            schema: DataSchemaRefExt::create(vec![]),
+        };
+        let valid = SExpr::create_unary(
+            Arc::new(RelOperator::ExpressionScan(expression_scan(0))),
+            scan(&[0]),
+        );
+        valid.validate_column_scope(&metadata)?;
+        let invalid = SExpr::create_unary(
+            Arc::new(RelOperator::ExpressionScan(expression_scan(2))),
+            scan(&[0]),
+        );
+        let err = invalid.validate_column_scope(&metadata).unwrap_err();
+        assert!(
+            err.message().contains("ExpressionScan") && err.message().contains("2 (c2)"),
+            "{err}"
+        );
+        // A leaf ExpressionScan must not count its own output as a source for values.
+        let self_reference = SExpr::create_leaf(expression_scan(1));
+        let err = self_reference.validate_column_scope(&metadata).unwrap_err();
+        assert!(
+            err.message().contains("ExpressionScan") && err.message().contains("1 (c1)"),
+            "{err}"
+        );
+        Ok(())
     }
 }

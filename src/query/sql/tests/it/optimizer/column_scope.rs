@@ -120,6 +120,12 @@ async fn test_optimizer_accepts_correlated_and_lateral_scopes() -> Result<()> {
             setup_sqls: &[TABLE],
             sql: "SELECT a, (SELECT max(b) FROM scope_t t2 WHERE t2.c = t1.c) FROM scope_t t1",
         },
+        SqlTestCase {
+            name: "window_group_with_scalar_items",
+            description: "",
+            setup_sqls: &[TABLE],
+            sql: "SELECT a, row_number() OVER (PARTITION BY b ORDER BY c) FROM scope_t",
+        },
     ];
     for case in cases {
         let ctx = setup_context(&case).await?;
