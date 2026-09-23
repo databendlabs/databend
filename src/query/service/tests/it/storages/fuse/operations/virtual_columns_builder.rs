@@ -46,11 +46,6 @@ use parquet::file::metadata::ParquetMetaDataReader;
 #[tokio::test(flavor = "multi_thread")]
 async fn test_virtual_column_builder() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
-    fixture
-        .default_session()
-        .get_settings()
-        .set_enable_experimental_virtual_column(1)?;
-
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
 
@@ -926,11 +921,6 @@ async fn test_shared_column_preserves_explicit_json_nulls() -> anyhow::Result<()
 #[tokio::test(flavor = "multi_thread")]
 async fn test_virtual_column_builder_stream_write() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
-    fixture
-        .default_session()
-        .get_settings()
-        .set_enable_experimental_virtual_column(1)?;
-
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
 
@@ -1129,11 +1119,6 @@ async fn test_virtual_column_builder_stream_write() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_virtual_column_builder_multi_schema_typed_paths() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
-    fixture
-        .default_session()
-        .get_settings()
-        .set_enable_experimental_virtual_column(1)?;
-
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
 

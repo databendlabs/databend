@@ -353,8 +353,6 @@ drop table t_top_n_fuse;
 # segments and `row_per_block` creates disjoint block ranges. The always-true
 # filter prevents static value TopN pruning from masking the runtime scan
 # filter, while still allowing Runtime TopN registration through Filter.
-statement ok
-set enable_experimental_virtual_column = 1;
 
 statement ok
 create or replace table t_top_n_virtual (
@@ -411,9 +409,6 @@ settings (enable_top_n = 0) select id from t_top_n_virtual where id >= 0 order b
 
 statement ok
 drop table t_top_n_virtual;
-
-statement ok
-unset enable_experimental_virtual_column;
 
 statement ok
 unset enable_top_n;
