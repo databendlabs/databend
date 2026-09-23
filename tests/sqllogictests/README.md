@@ -39,7 +39,7 @@ databend-sqllogictests --run 'tests/sqllogictests/suites/base/**/*.test' --skip 
 ---
 Run one or more complete suites by paths relative to `--suites`.
 ```shell
-databend-sqllogictests --run-suite query,dictionaries
+databend-sqllogictests --run_suite query,dictionaries
 ```
  It cannot be
 combined with `--run`, `--skip`, `--run_dir`, `--run_file`, `--skip_dir`, or
@@ -69,7 +69,7 @@ databend-sqllogictests --help
 
 A suite is a direct child directory of `--suites`. A suite can contain one
 optional top-level `hook.toml`; hook files are not discovered recursively.
-`--run` and `--run-suite` only filter test files and do not change suite
+`--run` and `--run_suite` only filter test files and do not change suite
 ownership. Files selected outside `--suites` do not run a hook.
 
 ```toml
@@ -92,7 +92,7 @@ than the `bendsql` CLI; TPCH and TPCDS data generation uses the pinned DuckDB
 Python package. Generated CSV data is cached under `tests/nox/cache/` and reused
 when every expected table CSV exists and is non-empty; otherwise it is rebuilt.
 The Dictionaries suite is a top-level suite and can be selected with
-`--run-suite dictionaries`.
+`--run_suite dictionaries`.
 
 ### Parallel
 If you want to run test files in parallel, please add the following args:

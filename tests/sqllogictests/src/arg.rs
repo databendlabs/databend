@@ -33,7 +33,7 @@ pub struct SqlLogicTestArgs {
     pub run: Option<Vec<String>>,
 
     #[arg(
-        long = "run-suite",
+        long = "run_suite",
         use_value_delimiter = true,
         value_delimiter = ',',
         conflicts_with_all = [
