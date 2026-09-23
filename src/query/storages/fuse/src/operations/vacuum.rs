@@ -625,12 +625,16 @@ impl FuseTable {
             self.snapshot_loc().unwrap()
         } else if let Some(lvt) = respect_flash_back {
             let latest_location = self.snapshot_loc().unwrap();
-            let gc_root = self
+            let gc_root = match self
                 .find_location(ctx, latest_location, |snapshot| {
                     is_snapshot_at_or_before_lvt(snapshot.timestamp, lvt)
                 })
                 .await
-                .ok();
+            {
+                Ok(location) => Some(location),
+                Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => None,
+                Err(e) => return Err(e),
+            };
             let Some(gc_root) = gc_root else {
                 info!("no gc_root found, stop vacuuming");
                 return Ok(None);
@@ -725,10 +729,12 @@ impl FuseTable {
                     gc_root_path,
                 }))
             }
-            Err(e) => {
-                info!("read gc_root {} failed: {:?}", gc_root_path, e);
+            Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
+                // Another vacuum has already removed the root after we stat'ed it.
+                info!("gc_root {} was removed concurrently: {:?}", gc_root_path, e);
                 Ok(None)
             }
+            Err(e) => Err(e),
         }
     }
 

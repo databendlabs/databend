@@ -39,6 +39,8 @@ use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::execute_command;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_io::dedup_file_locations;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use futures::TryStreamExt;
@@ -483,6 +485,153 @@ async fn test_vacuum2_respect_flash_back_selects_lvt_snapshot() -> anyhow::Resul
     );
     assert_eq!(selection.gc_root.timestamp, flashback_snapshot.timestamp);
 
+    Ok(())
+}
+
+/// A snapshot may exist in storage but be unreadable. Vacuum must not report
+/// "nothing to do" when it cannot read the gc root.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_gc_root_read_error_is_not_silently_ignored() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+    fixture.create_default_database().await?;
+
+    let db_name = fixture.default_db_name();
+    let tbl_name = "vacuum_gc_root_read_error";
+    fixture
+        .execute_command(&format!("create table {db_name}.{tbl_name} (c int)"))
+        .await?;
+    for value in 1..=3 {
+        fixture
+            .execute_command(&format!(
+                "insert into {db_name}.{tbl_name} values ({value})"
+            ))
+            .await?;
+    }
+
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let table = catalog
+        .get_table(&ctx.get_tenant(), &db_name, tbl_name)
+        .await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let latest_location = fuse_table.snapshot_loc().unwrap();
+    let snapshots: Vec<_> = SnapshotHistoryReader::snapshot_history(
+        MetaReaders::table_snapshot_reader(fuse_table.get_operator()),
+        latest_location,
+        TableMetaLocationGenerator::snapshot_version(fuse_table.snapshot_loc().unwrap().as_str()),
+        fuse_table.meta_location_generator().clone(),
+    )
+    .try_collect()
+    .await?;
+    assert_eq!(snapshots.len(), 3);
+
+    // With two snapshots retained, S2 becomes the gc root. A read error on a
+    // snapshot that still exists must not be reported as "nothing to vacuum".
+    let gc_root_path = fuse_table
+        .meta_location_generator()
+        .gen_snapshot_location(&snapshots[1].0.snapshot_id, snapshots[1].1)?;
+    // Keep two snapshots so the root is S2 rather than the current S3.
+    fixture.default_session().get_settings().set_setting(
+        "data_retention_num_snapshots_to_keep".to_string(),
+        "2".to_string(),
+    )?;
+    let op = fuse_table.get_operator();
+    let mut invalid_snapshot = op.read(&gc_root_path).await?.to_vec();
+    // Preserve the format-version header (a mismatched version currently panics in the
+    // deserializer); make the following encoding byte invalid to exercise its error path.
+    invalid_snapshot[8] = u8::MAX;
+    op.write(&gc_root_path, invalid_snapshot).await?;
+    if let Some(cache) = CacheManager::instance().get_table_snapshot_cache() {
+        cache.evict(&gc_root_path);
+    }
+
+    let table_ctx: Arc<dyn TableContext> = ctx;
+    let result = fuse_table
+        .prepare_snapshot_gc_selection(&table_ctx, false)
+        .await;
+    assert!(
+        result.is_err(),
+        "a corrupt gc root must not silently skip vacuum: result={}, gc_root={gc_root_path}",
+        match &result {
+            Ok(Some(selection)) => format!("gc root {}", selection.gc_root_path),
+            Ok(None) => "no gc root".to_string(),
+            Err(e) => e.to_string(),
+        }
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_flashback_lookup_propagates_corrupt_history() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(1)?;
+    fixture.create_default_database().await?;
+
+    let db_name = fixture.default_db_name();
+    let tbl_name = "vacuum_flashback_lookup_error";
+    fixture
+        .execute_command(&format!("create table {db_name}.{tbl_name} (c int)"))
+        .await?;
+    for value in 1..=3 {
+        fixture
+            .execute_command(&format!(
+                "insert into {db_name}.{tbl_name} values ({value})"
+            ))
+            .await?;
+    }
+
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let table = catalog
+        .get_table(&ctx.get_tenant(), &db_name, tbl_name)
+        .await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let latest_location = fuse_table.snapshot_loc().unwrap();
+    let snapshots: Vec<_> = SnapshotHistoryReader::snapshot_history(
+        MetaReaders::table_snapshot_reader(fuse_table.get_operator()),
+        latest_location.clone(),
+        TableMetaLocationGenerator::snapshot_version(&latest_location),
+        fuse_table.meta_location_generator().clone(),
+    )
+    .try_collect()
+    .await?;
+    assert_eq!(snapshots.len(), 3);
+
+    // Keep the root at S1 so finding it must traverse S2. S2 still exists, but
+    // its encoding is invalid: this is not the normal "no history" outcome.
+    catalog
+        .set_table_lvt(
+            &LeastVisibleTimeIdent::new(ctx.get_tenant(), fuse_table.get_id()),
+            &LeastVisibleTime::new(snapshots[2].0.timestamp.unwrap()),
+        )
+        .await?;
+    let predecessor_path = fuse_table
+        .meta_location_generator()
+        .gen_snapshot_location(&snapshots[1].0.snapshot_id, snapshots[1].1)?;
+    let op = fuse_table.get_operator();
+    let mut invalid_snapshot = op.read(&predecessor_path).await?.to_vec();
+    invalid_snapshot[8] = u8::MAX;
+    op.write(&predecessor_path, invalid_snapshot).await?;
+    if let Some(cache) = CacheManager::instance().get_table_snapshot_cache() {
+        cache.evict(&predecessor_path);
+    }
+
+    let table_ctx: Arc<dyn TableContext> = ctx;
+    let result = fuse_table
+        .prepare_snapshot_gc_selection(&table_ctx, true)
+        .await;
+    assert!(
+        result.is_err(),
+        "corrupt history must not be treated as no gc root"
+    );
     Ok(())
 }
 
