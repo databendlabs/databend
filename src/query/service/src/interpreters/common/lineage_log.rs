@@ -315,6 +315,7 @@ fn lineage_kind_name(kind: QueryLineageKind) -> &'static str {
         QueryLineageKind::Ctas => "CTAS",
         QueryLineageKind::Dml => "DML",
         QueryLineageKind::CreateView => "CREATE_VIEW",
+        QueryLineageKind::CreateMaterializedView => "CREATE_MATERIALIZED_VIEW",
     }
 }
 
@@ -322,6 +323,7 @@ fn object_type_name(kind: &QueryLineageRelationKind) -> &'static str {
     match kind {
         QueryLineageRelationKind::Table => "TABLE",
         QueryLineageRelationKind::View => "VIEW",
+        QueryLineageRelationKind::MaterializedView => "MATERIALIZED_VIEW",
         QueryLineageRelationKind::Stage => "STAGE",
     }
 }
@@ -343,6 +345,12 @@ fn endpoint_from_relation(
     let object_type = object_type_name(&relation.kind);
     // View definitions retain source names. Renaming a referenced object should therefore make
     // the edge inactive until that name resolves again. Other endpoints prefer stable IDs.
+    //
+    // Materialized views are different: the source binding is pinned to the source table id
+    // in metadata. Renaming the source only makes the view temporarily invalid and renaming
+    // it back restores it, while dropping and recreating the source under the same name
+    // invalidates the view permanently. An id-addressed edge follows the binding exactly,
+    // whereas a name-addressed one would report a false active edge in the recreate case.
     let relation_id = if relation.catalog_type != Some(CatalogType::Default)
         || kind == QueryLineageKind::CreateView && is_source
     {
@@ -378,6 +386,8 @@ fn endpoint_from_relation(
 fn column_address_kind(endpoint: &LineageEndpoint) -> &'static str {
     // View output column ids are query-plan ordinals rather than stable schema ids. Keep view
     // columns name-addressed even though the view object itself has a stable table id.
+    // Materialized view columns come from a persisted, immutable logical schema, so they are
+    // id-addressed like table columns.
     if endpoint.object_type == "VIEW" || endpoint.address_kind == "NAME" {
         "NAME"
     } else {

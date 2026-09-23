@@ -4,6 +4,8 @@
 
 set -e
 
+source ./scripts/ci/ci-run-sqllogic-common.sh
+
 export STORAGE_ALLOW_INSECURE=true
 
 echo "Starting Cluster databend-query"
@@ -15,14 +17,15 @@ TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http"}
 TEST_PARALLEL=${TEST_PARALLEL:-8}
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
-RUN_DIR=""
-if [ $# -gt 0 ]; then
-	RUN_DIR="--run_dir $*"
-fi
-echo "Run suites using argument: $RUN_DIR"
 
 echo "Starting databend-sqllogic tests"
-target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --enable_sandbox --parallel ${TEST_PARALLEL} ${TEST_EXT_ARGS}
+if [ -n "${1:-}" ]; then
+	sqllogic_filter "$1"
+else
+	sqllogic_filter all
+fi
+target/${BUILD_PROFILE}/databend-sqllogictests "${SQLLOGIC_FILTER[@]}" --handlers ${TEST_HANDLERS} --enable_sandbox --parallel ${TEST_PARALLEL} ${TEST_EXT_ARGS}
+
 
 echo "Checking query logs for duplicate query_id entries"
 python3 scripts/ci/ci-check-query-log-duplicates.py .databend/logs_1/query-details

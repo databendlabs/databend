@@ -4,6 +4,8 @@
 
 set -e
 
+source ./scripts/ci/ci-run-sqllogic-common.sh
+
 export STORAGE_ALLOW_INSECURE=true
 
 echo "Starting standalone DatabendQuery and DatabendMeta"
@@ -13,17 +15,16 @@ TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http"}
 TEST_PARALLEL=${TEST_PARALLEL:-8}
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
-RUN_DIR=""
-if [ $# -gt 0 ]; then
-	RUN_DIR="--run_dir $*"
-fi
-echo "Run suites using argument: $RUN_DIR"
 
 echo "Starting databend-sqllogic tests"
-if [ -z "$RUN_DIR" ]; then
-	target/${BUILD_PROFILE}/databend-sqllogictests --run_dir temp_table --enable_sandbox --parallel ${TEST_PARALLEL} ${TEST_EXT_ARGS}
+if [ -n "${1:-}" ]; then
+	sqllogic_filter "$1"
+else
+	sqllogic_filter temp-table
+	target/${BUILD_PROFILE}/databend-sqllogictests "${SQLLOGIC_FILTER[@]}" --enable_sandbox --parallel ${TEST_PARALLEL} ${TEST_EXT_ARGS}
+	sqllogic_filter standalone-all
 fi
-target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --skip_dir management,ee,temp_table --enable_sandbox --parallel ${TEST_PARALLEL} ${TEST_EXT_ARGS}
+target/${BUILD_PROFILE}/databend-sqllogictests "${SQLLOGIC_FILTER[@]}" --handlers ${TEST_HANDLERS} --enable_sandbox --parallel ${TEST_PARALLEL} ${TEST_EXT_ARGS}
 
 echo "Checking query logs for duplicate query_id entries"
 python3 scripts/ci/ci-check-query-log-duplicates.py .databend/logs_1/query-details

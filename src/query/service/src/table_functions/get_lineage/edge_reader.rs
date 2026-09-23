@@ -109,6 +109,7 @@ impl AddressKind {
 pub(crate) enum LineageObjectType {
     Table,
     View,
+    MaterializedView,
     Stage,
 }
 
@@ -117,6 +118,7 @@ impl LineageObjectType {
         match value.as_deref() {
             Some("TABLE") => Ok(Self::Table),
             Some("VIEW") => Ok(Self::View),
+            Some("MATERIALIZED_VIEW") => Ok(Self::MaterializedView),
             Some("STAGE") => Ok(Self::Stage),
             other => Err(ErrorCode::Internal(format!(
                 "invalid lineage object type: {other:?}"
@@ -128,6 +130,7 @@ impl LineageObjectType {
         match self {
             Self::Table => "TABLE",
             Self::View => "VIEW",
+            Self::MaterializedView => "MATERIALIZED_VIEW",
             Self::Stage => "STAGE",
         }
     }

@@ -6048,7 +6048,6 @@ dependencies = [
  "mysql_async",
  "rand 0.8.5",
  "recursive",
- "redis",
  "regex",
  "reqwest",
  "serde",
@@ -6056,9 +6055,9 @@ dependencies = [
  "sqllogictest",
  "tempfile",
  "testcontainers",
- "testcontainers-modules",
  "thiserror 1.0.69",
  "tokio",
+ "toml 0.8.22",
  "url",
  "walkdir",
 ]
@@ -16550,15 +16549,6 @@ dependencies = [
  "tokio-tar",
  "tokio-util",
  "url",
-]
-
-[[package]]
-name = "testcontainers-modules"
-version = "0.11.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d43ed4e8f58424c3a2c6c56dbea6643c3c23e8666a34df13c54f0a184e6c707"
-dependencies = [
- "testcontainers",
 ]
 
 [[package]]
