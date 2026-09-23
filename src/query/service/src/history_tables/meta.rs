@@ -24,6 +24,7 @@ use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_base::runtime::spawn_named;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_storages_system::HistoryEtlError;
 use databend_meta_client::ClientHandle;
 use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::Operation;
@@ -336,6 +337,25 @@ impl HistoryMetaHandle {
         Ok(())
     }
 
+    /// Best effort: diagnostic persistence must not replace the ETL error or stop retries.
+    pub async fn record_error(&self, meta_key: &str, error: &ErrorCode) {
+        let error = HistoryEtlError::new(&error.to_string(), chrono::Utc::now().timestamp_micros());
+        if let Err(e) = self.set_last_error(meta_key, &error).await {
+            warn!("Failed to record history ETL error for {}: {}", meta_key, e);
+        }
+    }
+
+    async fn set_last_error(&self, meta_key: &str, error: &HistoryEtlError) -> Result<()> {
+        self.meta_client
+            .upsert_kv(UpsertKV::update(
+                format!("{}/last_error", meta_key),
+                &serde_json::to_vec(error)?,
+            ))
+            .await
+            .map_err(meta_service_error)?;
+        Ok(())
+    }
+
     pub async fn create_heartbeat_task(
         &self,
         meta_key: &str,
@@ -388,6 +408,52 @@ mod tests {
 
     pub async fn setup_meta_client() -> MetaStore {
         MetaStore::new_local_testing::<DatabendRuntime>().await
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_last_error_survives_checkpoint_and_is_overwritten() -> Result<()> {
+        let store = setup_meta_client().await;
+        let client = store.inner().clone();
+        let handle = HistoryMetaHandle::new(client.clone(), "node".to_owned());
+        let table_key = "tenant/history_log_transform/query_history";
+        let error_key = format!("{table_key}/last_error");
+        let first = super::HistoryEtlError::new("first failure", 100);
+        handle.set_last_error(table_key, &first).await?;
+        let before = client
+            .get_kv(&error_key)
+            .await
+            .map_err(meta_service_error)?
+            .unwrap();
+
+        // A successful transform only advances this key, preserving the original diagnostic.
+        handle
+            .set_u64_to_meta(&format!("{table_key}/batch_number"), 42)
+            .await?;
+        let after = client
+            .get_kv(&error_key)
+            .await
+            .map_err(meta_service_error)?
+            .unwrap();
+        assert_eq!(before, after);
+        assert!(after.meta.as_ref().unwrap().expire_at.is_none());
+
+        handle
+            .record_error(
+                table_key,
+                &databend_common_exception::ErrorCode::Internal("next failure"),
+            )
+            .await;
+        let latest = client
+            .get_kv(&error_key)
+            .await
+            .map_err(meta_service_error)?
+            .unwrap();
+        let error: super::HistoryEtlError = serde_json::from_slice(&latest.data)?;
+        assert!(latest.seq > before.seq);
+        assert!(error.message.contains("next failure"));
+        assert!(error.time > first.time);
+        assert!(latest.meta.as_ref().unwrap().expire_at.is_none());
+        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread")]
