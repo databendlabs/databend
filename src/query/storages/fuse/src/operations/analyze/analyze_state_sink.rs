@@ -135,8 +135,9 @@ enum HistogramState {
     },
     /// Buckets are derived at commit time from the KLL sketches in the accumulator.
     KllFast,
-    /// Bucket bounds are fixed from the baseline sketches; counts come from block scans and
-    /// keep accumulating over appended blocks.
+    /// Bucket bounds are fixed from the first sketch seen for a column; counts come from
+    /// block scans and keep accumulating over appended blocks. A column that had no
+    /// non-NULL value in the baseline gets its bounds from the first appended rows.
     KllFull {
         collectors: Vec<KllHistogramCollector>,
     },
@@ -224,19 +225,7 @@ impl SinkAnalyzeState {
     /// Fix the KLL full bucket boundaries from the sketches gathered over the base snapshot
     /// and count every block of it into them.
     async fn collect_kll_full_histograms(&mut self) -> Result<()> {
-        let mut kll_histograms = std::mem::take(&mut self.acc.kll_histograms);
-        let mut collectors = Vec::with_capacity(kll_histograms.len());
-        for field in self.table.schema().fields() {
-            let column_id = field.column_id();
-            let Some(sketch) = kll_histograms.remove(&column_id) else {
-                continue;
-            };
-            let bounds = sketch.into_equal_depth_bounds(DEFAULT_HISTOGRAM_BUCKETS)?;
-            let collector = KllHistogramCollector::new(column_id, bounds)?;
-            if !collector.is_empty() {
-                collectors.push(collector);
-            }
-        }
+        let mut collectors = self.take_new_kll_collectors(&[])?;
         if collectors.is_empty() {
             return Ok(());
         }
@@ -246,6 +235,38 @@ impl SinkAnalyzeState {
             .await?;
         self.histogram = HistogramState::KllFull { collectors };
         Ok(())
+    }
+
+    /// Build KLL full collectors from the accumulated sketches for the columns that
+    /// `existing` does not cover, and drop all accumulated sketches.
+    ///
+    /// A non-empty sketch always yields at least one bucket, so a column only lacks a
+    /// collector while every row seen so far was NULL. The sketch of such a column
+    /// therefore covers exactly the rows the caller is about to scan.
+    fn take_new_kll_collectors(
+        &mut self,
+        existing: &[KllHistogramCollector],
+    ) -> Result<Vec<KllHistogramCollector>> {
+        let mut sketches = std::mem::take(&mut self.acc.kll_histograms);
+        let mut collectors = Vec::new();
+        for field in self.table.schema().fields() {
+            let column_id = field.column_id();
+            if existing
+                .iter()
+                .any(|collector| collector.column_id == column_id)
+            {
+                continue;
+            }
+            let Some(sketch) = sketches.remove(&column_id) else {
+                continue;
+            };
+            let bounds = sketch.into_equal_depth_bounds(DEFAULT_HISTOGRAM_BUCKETS)?;
+            let collector = KllHistogramCollector::new(column_id, bounds)?;
+            if !collector.is_empty() {
+                collectors.push(collector);
+            }
+        }
+        Ok(collectors)
     }
 
     async fn scan_kll_histogram_buckets(
@@ -372,6 +393,10 @@ impl SinkAnalyzeState {
         }
         if let HistogramState::KllFull { collectors } = &mut self.histogram {
             let mut collectors = std::mem::take(collectors);
+            // Columns without a collector were all NULL so far; seed their bounds from the
+            // appended rows, then count the appended blocks into every collector.
+            let new_collectors = self.take_new_kll_collectors(&collectors)?;
+            collectors.extend(new_collectors);
             self.scan_kll_histogram_buckets(&mut collectors, &appended)
                 .await?;
             self.histogram = HistogramState::KllFull { collectors };

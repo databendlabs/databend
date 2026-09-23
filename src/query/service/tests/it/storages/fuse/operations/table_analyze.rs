@@ -573,6 +573,42 @@ async fn test_analyze_rebases_kll_full_histogram() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// A column that is all NULL in the baseline has no KLL sketch there, so its bucket
+/// boundaries come from the appended rows instead.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_analyze_rebases_kll_full_histogram_over_null_baseline() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    fixture
+        .execute_command("create table t_rebase_full_null(a int null, b int)")
+        .await?;
+    fixture
+        .execute_command("insert into t_rebase_full_null values (null, 1), (null, 2), (null, 3)")
+        .await?;
+    let table = latest_fuse_table(&ctx, "t_rebase_full_null").await?;
+    let base = table.read_table_snapshot().await?.unwrap();
+
+    fixture
+        .execute_command(
+            "insert into t_rebase_full_null select number::int, number::int from numbers(10)",
+        )
+        .await?;
+
+    let options = table_options_with_histogram(&table, AnalyzeHistogramInfo::KllFull {
+        relative_error: 0.01,
+    })?;
+    execute_analyze_from_snapshot(ctx.clone(), &table, base, options).await?;
+
+    let (_, snapshot, statistics) = latest_statistics(&ctx, "t_rebase_full_null").await?;
+    assert!(statistics.is_fresh_for(&snapshot));
+    assert_eq!(statistics.row_count, 13);
+    // `a`: collector created during the rebase, covering only the non-NULL appended rows.
+    assert_eq!(statistics.histograms.get(&0).unwrap().num_values(), 10.0);
+    // `b`: collector from the baseline, extended with the appended rows.
+    assert_eq!(statistics.histograms.get(&1).unwrap().num_values(), 13.0);
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_analyze_rejects_non_append_snapshot_change() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
