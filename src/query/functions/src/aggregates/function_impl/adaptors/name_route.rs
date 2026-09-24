@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::aggregate_function::AggregateStateSettings;
+use databend_common_expression::aggregate_function::AggregateStateSettingsSelector;
 use databend_common_expression::aggregate_function::EagerAggregation;
 use databend_common_expression::types::DataType;
 
@@ -41,7 +45,6 @@ use super::UnaryDistinctCombinator;
 use super::merge_combinator;
 use super::merge_combinator::MergeCombinator;
 use super::state_combinator;
-use super::try_create_null_argument_result_function;
 
 mod metadata;
 mod registration;
@@ -61,17 +64,18 @@ pub(crate) struct NameRoute {
     distinct_target: Option<String>,
     null_input: NullInput,
     validate: Option<DirectRouteValidateFn>,
+    state_settings: Option<Arc<dyn AggregateStateSettingsSelector>>,
     routes: Vec<Box<dyn RouteNode>>,
 }
 
 type DirectRouteValidateFn = for<'a> fn(&RawAggregateCall<'a>) -> Result<()>;
-
 pub(crate) struct DirectRouteContext<'request, 'route> {
     request: RawAggregateCall<'request>,
     names: &'route [&'route str],
     arguments: &'route ArgumentsPattern,
     metadata: &'route AggregateMetadata,
     null_input: NullInput,
+    state_settings: AggregateStateSettings,
 }
 
 pub(crate) trait RouteNode: Send + Sync {
@@ -117,12 +121,21 @@ impl NameRoute {
             distinct_target: None,
             null_input,
             validate: None,
+            state_settings: None,
             routes: Vec::new(),
         }
     }
 
     pub(crate) fn with_validator(mut self, validate: DirectRouteValidateFn) -> Self {
         self.validate = Some(validate);
+        self
+    }
+
+    pub(crate) fn with_state_settings(
+        mut self,
+        select: impl AggregateStateSettingsSelector,
+    ) -> Self {
+        self.state_settings = Some(Arc::new(select));
         self
     }
 
@@ -137,6 +150,14 @@ impl NameRoute {
     }
 
     pub(crate) fn build(&self, request: RawAggregateCall<'_>) -> Result<AggregateCallRef> {
+        self.build_with_state_settings(request, AggregateStateSettings::v0_compatibility())
+    }
+
+    pub(crate) fn build_with_state_settings(
+        &self,
+        request: RawAggregateCall<'_>,
+        settings: AggregateStateSettings,
+    ) -> Result<AggregateCallRef> {
         if let Some(validate) = self.validate {
             validate(&request)?;
         }
@@ -146,6 +167,7 @@ impl NameRoute {
             arguments: &self.arguments,
             metadata: &self.metadata,
             null_input: self.null_input,
+            state_settings: settings,
         };
         for route in &self.routes {
             if let Some(function) = route.try_build(&context)? {
@@ -195,31 +217,32 @@ impl<C: Combinator> RouteBuild<C> {
         }
     }
 
-    fn build<'a>(
+    fn build_with_format<'a>(
         &self,
         request: RawAggregateCall<'a>,
         input_types: &'a [DataType],
         metadata: AggregateMetadata,
         combinator: C,
+        settings: AggregateStateSettings,
     ) -> Result<AggregateCallRef> {
         match self {
-            Self::Unary(build) => build(UnaryBuildContext::new(
-                request,
-                input_types,
-                metadata,
-                combinator,
-            )?),
+            Self::Unary(build) => build(
+                UnaryBuildContext::new(request, input_types, metadata, combinator)?
+                    .with_state_settings(settings),
+            ),
             Self::MultiArg(build) => build(MultiArgBuildContext::new(
                 request,
                 input_types,
                 metadata,
                 combinator,
+                settings,
             )),
             Self::Direct(build) => build(DirectBuildContext::new(
                 request,
                 input_types,
                 metadata,
                 combinator,
+                settings,
             )),
         }
     }
@@ -235,14 +258,22 @@ fn null_argument_result(
     request: &RawAggregateCall<'_>,
     metadata: &AggregateMetadata,
     mode: NullArgumentMode,
+    settings: AggregateStateSettings,
 ) -> Result<Option<AggregateCallRef>> {
     let has_null_argument = match mode {
         NullArgumentMode::Only => matches!(request.args_type, [DataType::Null]),
         NullArgumentMode::Any => request.args_type.iter().any(DataType::is_null),
     };
-    has_null_argument
-        .then(|| try_create_null_argument_result_function(request.clone(), *metadata))
-        .transpose()
+    if !has_null_argument {
+        return Ok(None);
+    }
+    super::null_argument_result::create_with_combinator(
+        request.clone(),
+        *metadata,
+        PlainCombinator,
+        settings.state_version,
+    )
+    .map(Some)
 }
 
 fn strip_suffix_ignore_ascii_case<'a>(name: &'a str, suffix: &str) -> Option<&'a str> {
@@ -347,6 +378,7 @@ impl RouteNode for MergeRoute {
                 },
                 metadata: self.metadata(context.metadata),
                 returns_state: self.returns_state,
+                state_settings: context.state_settings,
             };
             let has_null_argument = match null_argument_mode {
                 NullArgumentMode::Only => matches!(args_type, [DataType::Null]),
@@ -357,10 +389,16 @@ impl RouteNode for MergeRoute {
                     nested_request,
                     metadata,
                     combinator,
+                    context.state_settings.state_version,
                 );
             }
-            self.build
-                .build(nested_request, args_type, metadata, combinator)
+            self.build.build_with_format(
+                nested_request,
+                args_type,
+                metadata,
+                combinator,
+                context.state_settings,
+            )
         };
         merge_combinator::create(
             request.clone(),
@@ -436,15 +474,20 @@ impl RouteNode for PlainRoute {
                 &context.request,
                 context.metadata,
                 self.build.null_argument_mode(),
+                context.state_settings,
             )?
         {
             return Ok(Some(function));
         }
         let request = context.request.clone();
         let args_type = request.args_type;
-        let function = self
-            .build
-            .build(request, args_type, metadata, PlainCombinator)?;
+        let function = self.build.build_with_format(
+            request,
+            args_type,
+            metadata,
+            PlainCombinator,
+            context.state_settings,
+        )?;
         Ok(Some(function))
     }
 }
@@ -508,6 +551,7 @@ impl RouteNode for IfRoute {
                 &context.request,
                 &self.metadata(context.metadata),
                 NullArgumentMode::Any,
+                context.state_settings,
             )?
         {
             return Ok(Some(function));
@@ -539,14 +583,18 @@ impl RouteNode for IfRoute {
         };
         let metadata = self.metadata(context.metadata);
         let request = context.request.clone();
-        let function = self
-            .build
-            .build(request, &args_type, metadata, IfCombinator {
+        let function = self.build.build_with_format(
+            request,
+            &args_type,
+            metadata,
+            IfCombinator {
                 nested_args_type: args_type.clone(),
                 condition_index,
                 always_false: condition_type.is_null(),
                 strip_nullable_input: !native_null_input,
-            })?;
+            },
+            context.state_settings,
+        )?;
         Ok(Some(function))
     }
 }
@@ -620,6 +668,7 @@ impl RouteNode for StateRoute {
                 return Ok(Some(state_combinator::create_state_null_result_function(
                     context.request.clone(),
                     self.metadata(context.metadata),
+                    context.state_settings.state_version,
                 )?));
             }
             let strip_nullable_input = context
@@ -647,11 +696,13 @@ impl RouteNode for StateRoute {
         });
         let input_types = args_type.as_deref().unwrap_or(context.request.args_type);
         let request = context.request.clone();
-        let function = self
-            .build
-            .build(request, input_types, metadata, StateCombinator {
-                plan: state_plan,
-            })?;
+        let function = self.build.build_with_format(
+            request,
+            input_types,
+            metadata,
+            StateCombinator { plan: state_plan },
+            context.state_settings,
+        )?;
         Ok(Some(function))
     }
 }
@@ -698,6 +749,7 @@ impl RouteNode for DistinctAliasRoute {
                 &context.request,
                 context.metadata,
                 self.build.null_argument_mode(),
+                context.state_settings,
             )?
         {
             return Ok(Some(function));
@@ -705,9 +757,13 @@ impl RouteNode for DistinctAliasRoute {
         let metadata = *context.metadata;
         let request = context.request.clone();
         let args_type = request.args_type;
-        let function = self
-            .build
-            .build(request, args_type, metadata, PlainCombinator)?;
+        let function = self.build.build_with_format(
+            request,
+            args_type,
+            metadata,
+            PlainCombinator,
+            context.state_settings,
+        )?;
         Ok(Some(function))
     }
 }
@@ -771,6 +827,7 @@ impl<const SKIP_NULLS: bool> RouteNode for DistinctRoute<SKIP_NULLS> {
                     DistinctRouteBuild::Unary(build) => build.null_argument_mode(),
                     DistinctRouteBuild::MultiArg(build) => build.null_argument_mode(),
                 },
+                context.state_settings,
             )?
         {
             return Ok(Some(function));
@@ -793,15 +850,25 @@ impl<const SKIP_NULLS: bool> RouteNode for DistinctRoute<SKIP_NULLS> {
                         "unary DISTINCT requires one argument",
                     ));
                 };
-                build.build(request, &args_type, metadata, UnaryDistinctCombinator {
-                    arg_type: arg_type.clone(),
-                })?
+                build.build_with_format(
+                    request,
+                    &args_type,
+                    metadata,
+                    UnaryDistinctCombinator {
+                        arg_type: arg_type.clone(),
+                    },
+                    context.state_settings,
+                )?
             }
-            DistinctRouteBuild::MultiArg(build) => {
-                build.build(request, &args_type, metadata, MultiArgDistinctCombinator {
+            DistinctRouteBuild::MultiArg(build) => build.build_with_format(
+                request,
+                &args_type,
+                metadata,
+                MultiArgDistinctCombinator {
                     args_type: args_type.clone(),
-                })?
-            }
+                },
+                context.state_settings,
+            )?,
         };
         Ok(Some(function))
     }

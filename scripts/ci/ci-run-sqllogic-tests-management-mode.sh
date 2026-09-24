@@ -14,7 +14,6 @@ echo "Starting standalone DatabendQuery and DatabendMeta"
 TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http"}
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
-
 echo "Starting databend-sqllogic tests"
 if [ -n "${1:-}" ]; then
 	sqllogic_filter "$1"

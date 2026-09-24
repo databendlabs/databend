@@ -232,7 +232,9 @@ pub(crate) fn sort_state_description(
     serde_items.push(StateSerdeItem::DataType(DataType::Binary));
     serde_items.extend_from_slice(inner.serde_items());
 
-    AggregateStateDescription::new(fields, serde_items).with_manual_drop(true)
+    AggregateStateDescription::new(fields, serde_items)
+        .with_manual_drop(true)
+        .with_state_version(inner.state_version())
 }
 
 impl<I> AggregateEval for SortEval<I>

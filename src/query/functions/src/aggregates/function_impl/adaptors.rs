@@ -56,6 +56,7 @@ pub(super) use multi_arg_distinct::RowUniqSet;
 pub(super) use multi_arg_nullable::MultiArgOrNullEval;
 pub(super) use multi_arg_nullable::MultiArgSkipNullEval;
 pub(super) use name_route::*;
+#[cfg(test)]
 pub(super) use null_argument_result::try_create_null_argument_result_function;
 pub(super) use unary::*;
 pub(super) use unary_distinct::create_unary_distinct;
@@ -116,6 +117,7 @@ pub(super) struct UnaryBuildContext<'a, C> {
     metadata: AggregateMetadata,
     combinator: C,
     input_type: DataType,
+    state_settings: AggregateStateSettings,
 }
 
 pub(super) struct MultiArgBuildContext<'a, C> {
@@ -123,6 +125,7 @@ pub(super) struct MultiArgBuildContext<'a, C> {
     metadata: AggregateMetadata,
     combinator: C,
     input_types: Vec<DataType>,
+    state_settings: AggregateStateSettings,
 }
 
 pub(super) struct DirectBuildContext<'a, C> {
@@ -131,6 +134,7 @@ pub(super) struct DirectBuildContext<'a, C> {
     combinator: C,
     // Includes nullable types when the implementation handles NULL itself.
     input_types: &'a [DataType],
+    state_settings: AggregateStateSettings,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -476,6 +480,24 @@ mod tests {
             ],
         )
         .with_manual_drop(true)
+    }
+
+    #[test]
+    fn state_adaptors_preserve_protocol_version() {
+        let state = AggregateStateDescription::new(
+            vec![AggrStateType::Custom(Layout::new::<SumState>())],
+            vec![StateSerdeItem::DataType(UInt64Type::data_type())],
+        )
+        .with_state_version(7);
+
+        assert_eq!(
+            state_combinator::nullable_input_state_description(&state).state_version(),
+            7
+        );
+        assert_eq!(
+            sort_combinator::sort_state_description(&state).state_version(),
+            7
+        );
     }
 
     fn state_serde_data_type(item: &StateSerdeItem) -> DataType {

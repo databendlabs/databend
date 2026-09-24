@@ -13,6 +13,8 @@
 // limitations under the License.
 
 //! Per-family expression declarations and immutable historical state samples.
+use databend_common_expression::aggregate::aggregate_function::AggregateStateSettings;
+use databend_common_expression::aggregate::aggregate_function::AggregateStateWritePolicy;
 use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
@@ -72,6 +74,10 @@ fn check_metadata(case: &PreparedCall, result_type: DataType) {
     let mut failed = 0;
     let name = case.name();
     let old_state = case.state_type();
+    let DataType::AggregateState(metadata) = &old_state else {
+        unreachable!()
+    };
+    assert_eq!(metadata.state_version, 0, "{}", case.expression);
     for (route, args, result) in [
         (name.clone(), case.arguments.clone(), &result_type),
         (format!("{name}_state"), case.arguments.clone(), &old_state),
@@ -87,13 +93,19 @@ fn check_metadata(case: &PreparedCall, result_type: DataType) {
         ),
     ] {
         checked += 1;
-        let resolved = AGGR_REGISTRY.resolve(RawAggregateCall {
+        let request = RawAggregateCall {
             name: &route,
             params: &[],
             args_type: &args,
             distinct: false,
             order_by: &[],
-        });
+        };
+        let resolved = if route == name {
+            AGGR_REGISTRY
+                .resolve_with_state_settings(request, AggregateStateSettings::v0_compatibility())
+        } else {
+            AGGR_REGISTRY.resolve_with_state_policy(request, AggregateStateWritePolicy::Compatible)
+        };
         let error = match resolved {
             Err(error) => Some(error.to_string()),
             Ok(function) => {
@@ -167,13 +179,16 @@ fn read_states(case: &PreparedCall, samples: &[Sample]) {
                 .map(BlockEntry::data_type)
                 .collect::<Vec<_>>();
             let function = AGGR_REGISTRY
-                .resolve(RawAggregateCall {
-                    name,
-                    params: &[],
-                    args_type: &args,
-                    distinct: false,
-                    order_by: &[],
-                })
+                .resolve_with_state_settings(
+                    RawAggregateCall {
+                        name,
+                        params: &[],
+                        args_type: &args,
+                        distinct: false,
+                        order_by: &[],
+                    },
+                    AggregateStateSettings::v0_compatibility(),
+                )
                 .unwrap();
             assert_eq!(function.state().data_type(), case.state);
             let owner = AggregateStateOwner::new(vec![function.clone()]).unwrap();

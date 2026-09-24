@@ -131,8 +131,10 @@ pub(super) fn create_multi_arg_distinct(
 ) -> Result<AggregateCallRef> {
     let mut fields = vec![AggrStateType::Custom(Layout::new::<MultiArgDistinctState>())];
     fields.extend_from_slice(state.fields());
+    let state_version = state.state_version();
     let state = AggregateStateDescription::new(fields, vec![RowUniqSet::serde_item()])
-        .with_manual_drop(true);
+        .with_manual_drop(true)
+        .with_state_version(state_version);
     PlainCombinator.create::<false>(
         signature,
         metadata,

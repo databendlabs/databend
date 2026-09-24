@@ -409,6 +409,7 @@ pub struct AggregateStateDescription {
     fields: Vec<AggrStateType>,
     serde_items: Vec<StateSerdeItem>,
     need_manual_drop: bool,
+    state_version: u64,
 }
 
 impl AggregateStateDescription {
@@ -420,7 +421,13 @@ impl AggregateStateDescription {
             fields: fields.into(),
             serde_items: serde_items.into(),
             need_manual_drop: false,
+            state_version: 0,
         }
+    }
+
+    pub fn with_state_version(mut self, state_version: u64) -> Self {
+        self.state_version = state_version;
+        self
     }
 
     pub fn with_manual_drop(mut self, need_manual_drop: bool) -> Self {
@@ -445,6 +452,10 @@ impl AggregateStateDescription {
 
     pub fn need_manual_drop(&self) -> bool {
         self.need_manual_drop
+    }
+
+    pub fn state_version(&self) -> u64 {
+        self.state_version
     }
 
     pub fn data_type(&self) -> DataType {
@@ -1077,12 +1088,115 @@ pub struct RawAggregateCall<'a> {
     pub order_by: &'a [AggregateBoundOrderByItem],
 }
 
+/// Reserved for execution-only layouts; never a persisted state format version.
+pub const EXECUTION_ONLY_STATE_VERSION: u64 = u64::MAX;
+
+/// Layout settings selected by the function for one aggregate call. Execution
+/// may use a different layout from the persisted input or output format; a
+/// read's input version never implicitly determines the version written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AggregateStateSettings {
+    /// Persisted output format version, or EXECUTION_ONLY_STATE_VERSION when
+    /// the layout is used only for execution. Never inherited from the input.
+    pub state_version: u64,
+    /// Whether the selected output/internal layout retains the outer
+    /// input-presence flag where the state has one.
+    pub preserve_nullable_input_rows_flag: bool,
+    /// Whether the serialized input has the outer input-presence flag. This may
+    /// differ from the output setting when reading an older persisted layout.
+    pub input_nullable_input_rows_flag: bool,
+}
+
+impl AggregateStateSettings {
+    /// Retain the v0 nullable-input layout when writing or reading states
+    /// whose format must remain compatible with existing persisted data.
+    pub const fn v0_compatibility() -> Self {
+        Self {
+            preserve_nullable_input_rows_flag: true,
+            state_version: 0,
+            input_nullable_input_rows_flag: true,
+        }
+    }
+}
+
 pub trait AggregateCallBuilder: Send + Sync + 'static {
     fn arguments(&self) -> &ArgumentsPattern;
 
     fn features(&self) -> &AggregateFeatures;
 
     fn build(&self, request: RawAggregateCall<'_>) -> Result<AggregateCallRef>;
+
+    fn build_with_state_settings(
+        &self,
+        request: RawAggregateCall<'_>,
+        settings: AggregateStateSettings,
+    ) -> Result<AggregateCallRef> {
+        if settings != AggregateStateSettings::v0_compatibility() {
+            return Err(ErrorCode::BadDataValueType(format!(
+                "Aggregate {} does not support the requested state format",
+                request.name
+            )));
+        }
+        self.build(request)
+    }
+}
+
+/// How a registered aggregate interacts with persisted aggregate states.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AggregateStateAccess {
+    #[default]
+    Execution,
+    Read,
+    Write,
+    ReadWrite,
+}
+
+impl AggregateStateAccess {
+    pub fn reads(self) -> bool {
+        matches!(self, Self::Read | Self::ReadWrite)
+    }
+
+    pub fn writes(self) -> bool {
+        matches!(self, Self::Write | Self::ReadWrite)
+    }
+}
+
+/// The production policy for persisted aggregate states.
+#[derive(Clone, Copy, Debug, Default)]
+pub enum AggregateStateWritePolicy {
+    #[default]
+    Compatible,
+    /// Select the function's newest supported format (for controlled migrations).
+    Latest,
+}
+
+/// Function-specific selection of execution and persisted state layouts.
+/// `input_version` comes from the input AggregateState type; None denotes a
+/// legacy physical state without format metadata. `read` may convert that
+/// format into an independent execution layout. `write` chooses a format from
+/// the global policy; `rewrite` must choose its output from that policy, not
+/// from the input version. The function defines the versions and conversions.
+pub trait AggregateStateSettingsSelector: Send + Sync + 'static {
+    fn execution(&self, request: &RawAggregateCall<'_>) -> Result<AggregateStateSettings>;
+
+    fn read(
+        &self,
+        request: &RawAggregateCall<'_>,
+        input_version: Option<u64>,
+    ) -> Result<AggregateStateSettings>;
+
+    fn write(
+        &self,
+        request: &RawAggregateCall<'_>,
+        policy: AggregateStateWritePolicy,
+    ) -> Result<AggregateStateSettings>;
+
+    fn rewrite(
+        &self,
+        request: &RawAggregateCall<'_>,
+        policy: AggregateStateWritePolicy,
+        input_version: Option<u64>,
+    ) -> Result<AggregateStateSettings>;
 }
 
 pub struct AggregateDescriptor {
@@ -1091,6 +1205,8 @@ pub struct AggregateDescriptor {
     arguments: ArgumentsPattern,
     features: AggregateFeatures,
     builder: Arc<dyn AggregateCallBuilder>,
+    state_settings: Option<Arc<dyn AggregateStateSettingsSelector>>,
+    state_access: AggregateStateAccess,
 }
 
 impl AggregateDescriptor {
@@ -1103,6 +1219,50 @@ impl AggregateDescriptor {
             arguments,
             features,
             builder,
+            state_settings: None,
+            state_access: AggregateStateAccess::Execution,
+        }
+    }
+
+    /// Select the execution layout or a versioned format for this descriptor.
+    pub fn with_state_settings(mut self, select: Arc<dyn AggregateStateSettingsSelector>) -> Self {
+        self.state_settings = Some(select);
+        self
+    }
+
+    pub fn with_state_access(mut self, access: AggregateStateAccess) -> Self {
+        self.state_access = access;
+        self
+    }
+
+    /// Select internal layout and decode format independently of the write policy.
+    /// A read-only route may use a newer internal layout without persisting it.
+    fn select_state_settings(
+        &self,
+        request: &RawAggregateCall<'_>,
+        policy: AggregateStateWritePolicy,
+    ) -> Result<AggregateStateSettings> {
+        let input = if self.state_access.reads() {
+            request.args_type.first().map(DataType::remove_nullable)
+        } else {
+            None
+        };
+        let input = input.as_ref().and_then(|ty| match ty {
+            DataType::AggregateState(state) => Some(state.as_ref()),
+            _ => None,
+        });
+        let select = self.state_settings.as_ref().ok_or_else(|| {
+            ErrorCode::BadDataValueType(format!(
+                "No aggregate state settings defined for {}",
+                self.name
+            ))
+        })?;
+        let input_version = input.map(|state| state.state_version);
+        match self.state_access {
+            AggregateStateAccess::Execution => select.execution(request),
+            AggregateStateAccess::Read => select.read(request, input_version),
+            AggregateStateAccess::Write => select.write(request, policy),
+            AggregateStateAccess::ReadWrite => select.rewrite(request, policy, input_version),
         }
     }
 
@@ -1184,6 +1344,42 @@ impl AggregateRegistry {
     }
 
     pub fn resolve(&self, request: RawAggregateCall<'_>) -> Result<AggregateCallRef> {
+        let settings =
+            self.select_state_settings(&request, AggregateStateWritePolicy::default())?;
+        self.resolve_with_state_settings(request, settings)
+    }
+
+    fn select_state_settings(
+        &self,
+        request: &RawAggregateCall<'_>,
+        policy: AggregateStateWritePolicy,
+    ) -> Result<AggregateStateSettings> {
+        let descriptor = self.descriptor(request.name).ok_or_else(|| {
+            ErrorCode::UnknownAggregateFunction(format!(
+                "Unsupported AggregateFunction: {}",
+                request.name
+            ))
+        })?;
+        descriptor.select_state_settings(request, policy)
+    }
+
+    /// Override the format policy for tests or a controlled migration.
+    /// The aggregate defines which layout each policy selects.
+    pub fn resolve_with_state_policy(
+        &self,
+        request: RawAggregateCall<'_>,
+        policy: AggregateStateWritePolicy,
+    ) -> Result<AggregateCallRef> {
+        let settings = self.select_state_settings(&request, policy)?;
+        self.resolve_with_state_settings(request, settings)
+    }
+
+    /// Build using settings already selected by the registry.
+    pub fn resolve_with_state_settings(
+        &self,
+        request: RawAggregateCall<'_>,
+        settings: AggregateStateSettings,
+    ) -> Result<AggregateCallRef> {
         let requested_name = request.name.to_ascii_lowercase();
         let name = self.canonical_name(&requested_name);
         let descriptor = self.functions.get(&name).ok_or_else(|| {
@@ -1194,13 +1390,16 @@ impl AggregateRegistry {
 
         if request.distinct {
             if descriptor.features().distinct_policy == DistinctPolicy::Idempotent {
-                return self.resolve(RawAggregateCall {
-                    name: requested_name.as_str(),
-                    params: request.params,
-                    args_type: request.args_type,
-                    distinct: false,
-                    order_by: request.order_by,
-                });
+                return self.resolve_with_state_settings(
+                    RawAggregateCall {
+                        name: requested_name.as_str(),
+                        params: request.params,
+                        args_type: request.args_type,
+                        distinct: false,
+                        order_by: request.order_by,
+                    },
+                    settings,
+                );
             }
 
             // The target owns the DISTINCT signature. Resolve the redirect
@@ -1219,7 +1418,7 @@ impl AggregateRegistry {
                     distinct: false,
                     order_by: request.order_by,
                 };
-                return self.resolve(redirected);
+                return self.resolve_with_state_settings(redirected, settings);
             }
             return Err(ErrorCode::UnknownAggregateFunction(format!(
                 "Unsupported AggregateFunction signature: {requested_name}({:?})",
@@ -1253,7 +1452,9 @@ impl AggregateRegistry {
             distinct: false,
             order_by: request.order_by,
         };
-        descriptor.builder.build(request)
+        descriptor
+            .builder
+            .build_with_state_settings(request, settings)
     }
 
     fn canonical_name(&self, name: &str) -> String {
