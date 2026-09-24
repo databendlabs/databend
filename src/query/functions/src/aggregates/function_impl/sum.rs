@@ -26,6 +26,9 @@ use databend_common_expression::SELECTIVITY_THRESHOLD;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::aggregate_function::AggregateStateSettings;
+use databend_common_expression::aggregate_function::AggregateStateSettingsSelector;
+use databend_common_expression::aggregate_function::AggregateStateWritePolicy;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BuilderExt;
@@ -70,6 +73,89 @@ pub type AggregateSumUInt64State = AggregateNumberSumState<NumberType<u64>>;
 
 struct SumBuilder;
 
+struct SumStateSettings;
+
+impl SumStateSettings {
+    fn compact() -> AggregateStateSettings {
+        AggregateStateSettings {
+            state_version: 1,
+            preserve_nullable_input_rows_flag: false,
+            input_nullable_input_rows_flag: false,
+        }
+    }
+
+    /// SUM's persisted format map: v0 retains the nullable input-rows flag,
+    /// v1 is compact. Using v1 internally does not enable v1 persistence;
+    /// production writes still select v0 through the Compatible policy.
+    fn versioned(request: &RawAggregateCall<'_>, version: u64) -> Result<AggregateStateSettings> {
+        match version {
+            0 => Ok(AggregateStateSettings::v0_compatibility()),
+            1 => Ok(Self::compact()),
+            _ => Err(ErrorCode::BadDataValueType(format!(
+                "Aggregate state version {version} is not supported by {} (expected version 0 or 1)",
+                request.name
+            ))),
+        }
+    }
+}
+
+impl AggregateStateSettingsSelector for SumStateSettings {
+    fn execution(&self, request: &RawAggregateCall<'_>) -> Result<AggregateStateSettings> {
+        Ok(if request.distinct {
+            AggregateStateSettings::v0_compatibility()
+        } else {
+            Self::compact()
+        })
+    }
+
+    fn read(
+        &self,
+        request: &RawAggregateCall<'_>,
+        input_version: Option<u64>,
+    ) -> Result<AggregateStateSettings> {
+        let Some(input_version) = input_version else {
+            // Legacy physical states have no format metadata.
+            return Self::versioned(request, 0);
+        };
+        let input = Self::versioned(request, input_version)?;
+        let mut settings = self.execution(request)?;
+        settings.input_nullable_input_rows_flag = input.preserve_nullable_input_rows_flag;
+        Ok(settings)
+    }
+
+    fn write(
+        &self,
+        request: &RawAggregateCall<'_>,
+        policy: AggregateStateWritePolicy,
+    ) -> Result<AggregateStateSettings> {
+        let version = match policy {
+            AggregateStateWritePolicy::Compatible => 0,
+            AggregateStateWritePolicy::Latest => 1,
+        };
+        Self::versioned(request, version)
+    }
+
+    fn rewrite(
+        &self,
+        request: &RawAggregateCall<'_>,
+        policy: AggregateStateWritePolicy,
+        input_version: Option<u64>,
+    ) -> Result<AggregateStateSettings> {
+        let mut settings = self.write(request, policy)?;
+        if let Some(input_version) = input_version {
+            let input = Self::versioned(request, input_version)?;
+            if input_version > settings.state_version {
+                return Err(ErrorCode::BadDataValueType(format!(
+                    "Cannot write aggregate state version {} from input version {input_version}",
+                    settings.state_version
+                )));
+            }
+            settings.input_nullable_input_rows_flag = input.preserve_nullable_input_rows_flag;
+        }
+        Ok(settings)
+    }
+}
+
 impl SumBuilder {
     fn legacy_signatures(_params: &[Scalar], state_type: &DataType) -> Vec<Vec<DataType>> {
         let DataType::Tuple(fields) = state_type else {
@@ -109,6 +195,7 @@ impl SumBuilder {
             NullInput::Filter,
         )
         .with_distinct_target("sum_distinct")
+        .with_state_settings(SumStateSettings)
         .then(
             MergeRoute::unary(false, Self::create)
                 .with_legacy_signature_resolver(Self::legacy_signatures),

@@ -9,6 +9,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::aggregate::aggregate_function::*;
+use databend_common_expression::aggregate_function::AggregateStateWritePolicy;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
@@ -340,9 +341,305 @@ fn test_v2_sum_merge_and_merge_state() -> Result<()> {
     let DataType::AggregateState(state_metadata) = &state.1 else {
         unreachable!()
     };
-    let physical_state = (state.0.clone(), state_metadata.physical_type().clone());
-    let merged_legacy_state = eval_v2_state_merge("sum_merge", &[], &physical_state)?;
-    assert_eq!(merged_legacy_state, merged);
+    assert_eq!(state_metadata.state_version, 0);
+    Ok(())
+}
+
+#[test]
+fn test_nullable_sum_request_state_settings() -> Result<()> {
+    let nullable_int64 = [DataType::Nullable(Box::new(Int64Type::data_type()))];
+    fn call<'a>(name: &'a str, args_type: &'a [DataType]) -> RawAggregateCall<'a> {
+        RawAggregateCall {
+            name,
+            params: &[],
+            args_type,
+            distinct: false,
+            order_by: &[],
+        }
+    }
+    let request = AGGR_REGISTRY.resolve(call("sum", &nullable_int64))?;
+    let compatible = AGGR_REGISTRY.resolve_with_state_settings(
+        call("sum", &nullable_int64),
+        AggregateStateSettings::v0_compatibility(),
+    )?;
+    assert_eq!(
+        compatible.state().data_type(),
+        DataType::Tuple(vec![
+            Int64Type::data_type(),
+            DataType::Boolean,
+            DataType::Boolean,
+        ])
+    );
+    assert_eq!(
+        request.state().data_type(),
+        DataType::Tuple(vec![Int64Type::data_type(), DataType::Boolean])
+    );
+    assert_eq!(compatible.state().state_version(), 0);
+    assert_eq!(request.state().state_version(), 1);
+
+    // Persisted state routes do not inherit the ordinary SUM optimization.
+    let persisted = AGGR_REGISTRY.resolve(call("sum_state", &nullable_int64))?;
+    let DataType::AggregateState(ty) = &persisted.signature().return_type else {
+        panic!("sum_state must return AggregateState");
+    };
+    assert_eq!(ty.state_version, 0);
+    assert_eq!(
+        ty.state_type.as_ref(),
+        &DataType::Tuple(vec![
+            Int64Type::data_type(),
+            DataType::Boolean,
+            DataType::Boolean,
+        ])
+    );
+
+    // The SUM descriptor selects v1 for other argument types as well.
+    let nullable_uint64 = [DataType::Nullable(Box::new(UInt64Type::data_type()))];
+    let other_state = AGGR_REGISTRY.resolve_with_state_policy(
+        call("sum_state", &nullable_uint64),
+        AggregateStateWritePolicy::Latest,
+    )?;
+    let DataType::AggregateState(ty) = &other_state.signature().return_type else {
+        panic!("sum_state must return AggregateState");
+    };
+    assert_eq!(ty.state_version, 1);
+    assert_eq!(
+        ty.state_type.as_ref(),
+        &DataType::Tuple(vec![UInt64Type::data_type(), DataType::Boolean])
+    );
+    let non_nullable_int32 = [Int32Type::data_type()];
+    let non_nullable_state = AGGR_REGISTRY.resolve_with_state_policy(
+        call("sum_state", &non_nullable_int32),
+        AggregateStateWritePolicy::Latest,
+    )?;
+    let DataType::AggregateState(ty) = &non_nullable_state.signature().return_type else {
+        panic!("sum_state must return AggregateState");
+    };
+    assert_eq!(ty.state_version, 1);
+    let v0_state = AGGR_REGISTRY.resolve_with_state_policy(
+        call("sum_state", &non_nullable_int32),
+        AggregateStateWritePolicy::Compatible,
+    )?;
+    let DataType::AggregateState(v0_ty) = &v0_state.signature().return_type else {
+        panic!("sum_state must return AggregateState");
+    };
+    assert_eq!(ty.state_type, v0_ty.state_type);
+
+    // Other ordinary aggregate calls also use the compact execution layout.
+    for name in ["sum", "avg", "min", "stddev_pop"] {
+        let execution = AGGR_REGISTRY.resolve(call(name, &nullable_uint64))?;
+        let compatible = AGGR_REGISTRY.resolve_with_state_settings(
+            call(name, &nullable_uint64),
+            AggregateStateSettings::v0_compatibility(),
+        )?;
+        assert_eq!(execution.state().state_version(), 1, "{name}");
+        assert_eq!(compatible.state().state_version(), 0, "{name}");
+    }
+    Ok(())
+}
+
+#[test]
+fn test_sum_default_state_read_and_write_policy() -> Result<()> {
+    let nullable = [DataType::Nullable(Box::new(Int64Type::data_type()))];
+    let call = |name: &str, args_type: &[DataType]| -> Result<_> {
+        AGGR_REGISTRY.resolve(RawAggregateCall {
+            name,
+            params: &[],
+            args_type,
+            distinct: false,
+            order_by: &[],
+        })
+    };
+    let old = call("sum_state", &nullable)?;
+    let old_type = old.signature().return_type.clone();
+    let DataType::AggregateState(old_metadata) = &old_type else {
+        panic!("sum_state must return an AggregateState");
+    };
+    assert_eq!(old_metadata.state_version, 0);
+    let merged = call("sum_merge", std::slice::from_ref(&old_type))?;
+    assert_eq!(merged.state().state_version(), 1);
+    assert_eq!(
+        merged.state().data_type(),
+        DataType::Tuple(vec![Int64Type::data_type(), DataType::Boolean])
+    );
+    let rewritten = call("sum_merge_state", std::slice::from_ref(&old_type))?;
+    assert_eq!(rewritten.signature().return_type, old_type);
+
+    let new = AGGR_REGISTRY.resolve_with_state_policy(
+        RawAggregateCall {
+            name: "sum_state",
+            params: &[],
+            args_type: &nullable,
+            distinct: false,
+            order_by: &[],
+        },
+        AggregateStateWritePolicy::Latest,
+    )?;
+    let new_type = new.signature().return_type.clone();
+    assert_eq!(
+        call("sum_merge", std::slice::from_ref(&new_type))?
+            .state()
+            .state_version(),
+        1
+    );
+    assert!(call("sum_merge_state", std::slice::from_ref(&new_type)).is_err());
+
+    // Physical equality is not a substitute for validating the format version.
+    let non_nullable = [Int32Type::data_type()];
+    let v0 = call("sum_state", &non_nullable)?
+        .signature()
+        .return_type
+        .clone();
+    let v1 = AGGR_REGISTRY
+        .resolve_with_state_policy(
+            RawAggregateCall {
+                name: "sum_state",
+                params: &[],
+                args_type: &non_nullable,
+                distinct: false,
+                order_by: &[],
+            },
+            AggregateStateWritePolicy::Latest,
+        )?
+        .signature()
+        .return_type
+        .clone();
+    let (DataType::AggregateState(v0_meta), DataType::AggregateState(v1_meta)) = (&v0, &v1) else {
+        unreachable!();
+    };
+    assert_eq!(v0_meta.state_type, v1_meta.state_type);
+    assert_eq!(
+        call("sum_merge_state", std::slice::from_ref(&v0))?
+            .signature()
+            .return_type,
+        v0
+    );
+    assert!(call("sum_merge_state", std::slice::from_ref(&v1)).is_err());
+    assert!(call("sum_merge", &[v0_meta.state_type.as_ref().clone()]).is_ok());
+
+    let mut unsupported = (**v1_meta).clone();
+    unsupported.state_version = 2;
+    assert!(
+        call("sum_merge", &[DataType::AggregateState(Box::new(
+            unsupported
+        ))])
+        .is_err()
+    );
+    Ok(())
+}
+
+/// v0/v1 here name two layouts selected by the registry, not historical samples.
+#[test]
+fn test_nullable_sum_v0_to_v1_state() -> Result<()> {
+    let int64 = Int64Type::data_type();
+    let args = [DataType::Nullable(Box::new(int64.clone()))];
+    let make_state = |version: u64, values: Vec<Option<i64>>| -> Result<(Scalar, DataType)> {
+        let function = AGGR_REGISTRY.resolve_with_state_policy(
+            RawAggregateCall {
+                name: "sum_state",
+                params: &[],
+                args_type: &args,
+                distinct: false,
+                order_by: &[],
+            },
+            if version == 0 {
+                AggregateStateWritePolicy::Compatible
+            } else {
+                AggregateStateWritePolicy::Latest
+            },
+        )?;
+        let owner = AggregateStateOwner::new(vec![function.clone()])?;
+        let input = [Int64Type::from_opt_data(values).into()];
+        function.accumulate(owner.state(0), (&input).into())?;
+        let ty = function.signature().return_type.clone();
+        let mut builder = ColumnBuilder::with_capacity(&ty, 1);
+        function.merge_result(owner.state(0), &mut builder)?;
+        Ok((builder.build().index(0).unwrap().to_owned(), ty))
+    };
+
+    let merge = |name: &str,
+                 state_type: &DataType,
+                 values: &[Scalar],
+                 version: u64|
+     -> Result<(Column, DataType)> {
+        let types = [state_type.clone()];
+        let function = AGGR_REGISTRY.resolve_with_state_policy(
+            RawAggregateCall {
+                name,
+                params: &[],
+                args_type: &types,
+                distinct: false,
+                order_by: &[],
+            },
+            if version == 0 {
+                AggregateStateWritePolicy::Compatible
+            } else {
+                AggregateStateWritePolicy::Latest
+            },
+        )?;
+        let owner = AggregateStateOwner::new(vec![function.clone()])?;
+        for value in values {
+            let entry = [BlockEntry::new_const_column(
+                state_type.clone(),
+                value.clone(),
+                1,
+            )];
+            function.accumulate(owner.state(0), (&entry).into())?;
+        }
+        let return_type = function.signature().return_type.clone();
+        let mut builder = ColumnBuilder::with_capacity(&return_type, 1);
+        function.merge_result(owner.state(0), &mut builder)?;
+        Ok((builder.build(), return_type))
+    };
+
+    let cases = [
+        (vec![], Scalar::Null),
+        (vec![None, None], Scalar::Null),
+        (
+            vec![Some(2), None, Some(2), Some(5), Some(9)],
+            Scalar::Number(NumberScalar::Int64(18)),
+        ),
+    ];
+    let mut migrated_mixed = None;
+    for (values, expected) in cases {
+        let (old, old_type) = make_state(0, values.clone())?;
+        let DataType::AggregateState(old_metadata) = &old_type else {
+            panic!("v0 sum_state must return an AggregateState");
+        };
+        assert_eq!(old_metadata.state_version, 0);
+        assert_eq!(
+            old_metadata.state_type.as_ref(),
+            &DataType::Tuple(vec![int64.clone(), DataType::Boolean, DataType::Boolean])
+        );
+
+        let (converted, new_type) = merge("sum_merge_state", &old_type, &[old], 1)?;
+        let DataType::AggregateState(new_metadata) = &new_type else {
+            panic!("migration must return an AggregateState");
+        };
+        assert_eq!(new_metadata.state_version, 1);
+        assert_eq!(
+            new_metadata.state_type.as_ref(),
+            &DataType::Tuple(vec![int64.clone(), DataType::Boolean])
+        );
+        let converted = converted.index(0).unwrap().to_owned();
+        let (fresh, fresh_type) = make_state(1, values)?;
+        assert_eq!(new_type, fresh_type);
+        assert_eq!(converted, fresh);
+        let (result, _) = merge("sum_merge", &new_type, std::slice::from_ref(&converted), 1)?;
+        assert_eq!(result.index(0).unwrap().to_owned(), expected);
+        if expected == Scalar::Number(NumberScalar::Int64(18)) {
+            migrated_mixed = Some((converted, new_type));
+        }
+    }
+
+    // Once converted, a v0 state can share a target with a new v1 state.
+    let (converted, v1_type) = migrated_mixed.unwrap();
+    let (fresh, fresh_type) = make_state(1, vec![Some(7), None])?;
+    assert_eq!(v1_type, fresh_type);
+    let (result, _) = merge("sum_merge", &v1_type, &[converted, fresh], 1)?;
+    assert_eq!(
+        result.index(0).unwrap().to_owned(),
+        Scalar::Number(NumberScalar::Int64(25))
+    );
     Ok(())
 }
 

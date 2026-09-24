@@ -97,15 +97,13 @@ impl IPhysicalPlan for AggregatePartial {
                 continue;
             }
 
-            let func = registry
-                .resolve(RawAggregateCall {
-                    name: &desc.sig.name,
-                    params: &desc.sig.params,
-                    args_type: &desc.sig.args,
-                    distinct: false,
-                    order_by: &desc.sig.order_by,
-                })
-                .unwrap();
+            let func = registry.resolve(RawAggregateCall {
+                name: &desc.sig.name,
+                params: &desc.sig.params,
+                args_type: &desc.sig.args,
+                distinct: false,
+                order_by: &desc.sig.order_by,
+            })?;
 
             fields.push(DataField::new(&name, func.state().data_type()))
         }
