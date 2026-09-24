@@ -55,6 +55,13 @@ pub use endpoint_policy::check_storage_params_endpoints;
 mod concurrent_limit_layer;
 pub use concurrent_limit_layer::ConcurrentLimitLayer;
 
+mod fault_injection_layer;
+pub use fault_injection_layer::FaultHandle;
+pub use fault_injection_layer::FaultInjection;
+pub use fault_injection_layer::FaultKind;
+pub use fault_injection_layer::FaultOp;
+pub use fault_injection_layer::FaultRule;
+
 mod http_client;
 pub use http_client::StorageHttpClient;
 
