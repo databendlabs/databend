@@ -1,0 +1,43 @@
+Exchange
+├── output columns: [row_number() OVER (PARTITION BY k ORDER BY TRY_CAST(d:ts AS Int64)) (#4), rank() OVER (PARTITION BY k ORDER BY TRY_CAST(d:ts AS Int64) DESC) (#7), k (#8)]
+├── exchange type: Merge
+└── EvalScalar
+    ├── output columns: [row_number() OVER (PARTITION BY k ORDER BY TRY_CAST(d:ts AS Int64)) (#4), rank() OVER (PARTITION BY k ORDER BY TRY_CAST(d:ts AS Int64) DESC) (#7), k (#8)]
+    ├── expressions: [scalar_result (#2)]
+    ├── estimated rows: 100000.00
+    └── WindowGroup
+        ├── output columns: [row_number_part_0 (#2), row_number_order_0 (#3), row_number() OVER (PARTITION BY k ORDER BY TRY_CAST(d:ts AS Int64)) (#4), rank() OVER (PARTITION BY k ORDER BY TRY_CAST(d:ts AS Int64) DESC) (#7)]
+        ├── Window
+        │   ├── output column: [4]
+        │   ├── aggregate function: [row_number]
+        │   ├── partition by: [row_number_part_0]
+        │   ├── order by: [row_number_order_0]
+        │   └── frame: [Range: Preceding(None) ~ CurrentRow]
+        ├── Window
+        │   ├── output column: [7]
+        │   ├── aggregate function: [rank]
+        │   ├── partition by: [row_number_part_0]
+        │   ├── order by: [row_number_order_0]
+        │   └── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── WindowPartition
+            ├── output columns: [row_number_part_0 (#2), row_number_order_0 (#3)]
+            ├── hash keys: [row_number_part_0]
+            ├── estimated rows: 100000.00
+            └── Exchange
+                ├── output columns: [row_number_part_0 (#2), row_number_order_0 (#3)]
+                ├── exchange type: Hash(operator_key (#2))
+                └── EvalScalar
+                    ├── output columns: [row_number_part_0 (#2), row_number_order_0 (#3)]
+                    ├── expressions: [TRY_CAST(get_by_keypath(key_payload.d (#1), '{"id"}') AS Int64 NULL), TRY_CAST(get_by_keypath(key_payload.d (#1), '{"ts"}') AS Int64 NULL)]
+                    ├── estimated rows: 100000.00
+                    └── TableScan
+                        ├── table: default.default.key_payload
+                        ├── scan id: 0
+                        ├── output columns: [d (#1)]
+                        ├── read rows: 0
+                        ├── read size: 0
+                        ├── partitions total: 0
+                        ├── partitions scanned: 0
+                        ├── push downs: [filters: [], limit: NONE]
+                        └── estimated rows: 100000.00
+

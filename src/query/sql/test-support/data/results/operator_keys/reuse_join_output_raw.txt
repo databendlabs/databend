@@ -1,0 +1,17 @@
+EvalScalar
+├── scalars: [plus(CAST(get_by_keypath(key_payload.d (#1), '{"id"}') AS Int64 NULL), 1) AS (#4)]
+└── Join(Inner)
+    ├── build keys: [key_dimension.id (#2)]
+    ├── probe keys: [CAST(get_by_keypath(key_payload.d (#1), '{"id"}') AS Int64 NULL)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.key_dimension (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.key_payload (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+

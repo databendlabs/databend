@@ -1,0 +1,105 @@
+statement ok
+CREATE TABLE window_input_reuse (d VARIANT)
+
+statement ok
+INSERT INTO window_input_reuse SELECT parse_json(value) FROM (VALUES
+    ('{"user_id":1,"room_id":10,"status":1,"updated_at":1,"payload":"one_old"}'),
+    ('{"user_id":1,"room_id":10,"status":1,"updated_at":2,"payload":"one_new"}'),
+    ('{"user_id":2,"room_id":20,"status":0,"updated_at":1,"payload":"two_old"}'),
+    ('{"user_id":2,"room_id":20,"status":0,"updated_at":3,"payload":"two_new"}'),
+    ('{"user_id":"bad","room_id":30,"status":1,"updated_at":1,"payload":"null_old"}'),
+    ('{"room_id":30,"status":1,"updated_at":2,"payload":"null_new"}')
+) AS t(value)
+
+# Reuse window keys in the original SELECT/QUALIFY shape, including TRY_CAST NULLs.
+query IIII
+SELECT try_cast(d:user_id AS BIGINT) AS user_id,
+       try_cast(d:room_id AS BIGINT) AS room_id,
+       try_cast(d:status AS BIGINT) AS status,
+       try_cast(d:updated_at AS BIGINT) AS updated_at
+FROM window_input_reuse
+QUALIFY row_number() OVER (PARTITION BY user_id, room_id, status ORDER BY updated_at DESC) = 1
+ORDER BY user_id NULLS FIRST
+----
+NULL 30 1 2
+1 10 1 2
+2 20 0 3
+
+# Multiple windows share canonicalized key columns.
+query IIII
+SELECT try_cast(d:user_id AS BIGINT) AS user_id,
+       try_cast(d:updated_at AS BIGINT) AS updated_at,
+       row_number() OVER (PARTITION BY user_id ORDER BY updated_at DESC) AS rn,
+       rank() OVER (PARTITION BY user_id ORDER BY updated_at DESC) AS r
+FROM window_input_reuse
+QUALIFY rn = 1
+ORDER BY user_id NULLS FIRST
+----
+NULL 2 1 1
+1 2 1 1
+2 3 1 1
+
+# A reused partition key is produced inside WindowGroup; filters must not move
+# below the group before that key exists.
+query III
+SELECT try_cast(d:user_id AS BIGINT) AS user_id,
+       row_number() OVER (PARTITION BY user_id ORDER BY try_cast(d:updated_at AS BIGINT) DESC) AS rn,
+       rank() OVER (PARTITION BY user_id ORDER BY try_cast(d:updated_at AS BIGINT)) AS r
+FROM window_input_reuse
+QUALIFY user_id > 0
+ORDER BY user_id, rn
+----
+1 1 2
+1 2 1
+2 1 2
+2 2 1
+
+# RANGE must still resolve the order type when the original JSON is pruned.
+query II
+SELECT DISTINCT try_cast(d:updated_at AS BIGINT) AS updated_at,
+       sum(try_cast(d:user_id AS BIGINT)) OVER
+       (ORDER BY updated_at RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) AS s
+FROM window_input_reuse
+ORDER BY updated_at
+----
+1 3
+2 4
+3 3
+
+query III
+SELECT DISTINCT try_cast(d:updated_at AS BIGINT) AS updated_at,
+       sum(try_cast(d:user_id AS BIGINT)) OVER w AS s,
+       count(*) OVER w AS n
+FROM window_input_reuse
+WINDOW w AS (ORDER BY updated_at RANGE BETWEEN 1 PRECEDING AND CURRENT ROW)
+ORDER BY updated_at
+----
+1 3 3
+2 4 5
+3 3 3
+
+# Reuse a nested SELECT expression and a QUALIFY predicate.
+query I
+SELECT try_cast(d:user_id AS BIGINT) + 100
+FROM window_input_reuse
+QUALIFY row_number() OVER (PARTITION BY try_cast(d:user_id AS BIGINT)
+                          ORDER BY try_cast(d:updated_at AS BIGINT) DESC) = 1
+    AND try_cast(d:user_id AS BIGINT) > 0
+ORDER BY 1
+----
+101
+102
+
+# JSON must remain available when a later expression still needs it.
+query T rowsort
+SELECT d:payload::STRING
+FROM window_input_reuse
+QUALIFY row_number() OVER (PARTITION BY try_cast(d:user_id AS BIGINT)
+                          ORDER BY try_cast(d:updated_at AS BIGINT) DESC) = 1
+----
+null_new
+one_new
+two_new
+
+statement ok
+DROP TABLE window_input_reuse

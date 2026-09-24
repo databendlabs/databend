@@ -1,0 +1,24 @@
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [row_number() OVER (PARTITION BY k ORDER BY TRY_CAST(d:ts AS Int64)) (#4) AS (#4), rank() OVER (PARTITION BY k ORDER BY TRY_CAST(d:ts AS Int64) DESC) (#7) AS (#7), row_number_part_0 (#2) AS (#8)]
+    └── WindowGroup
+        ├── Window
+        │   ├── aggregate function: row_number
+        │   ├── partition items: [row_number_part_0 (#2) AS (#2)]
+        │   ├── order by items: [row_number_order_0 (#3) AS (#3)]
+        │   └── frame: [Range: Preceding(None) ~ CurrentRow]
+        ├── Window
+        │   ├── aggregate function: rank
+        │   ├── partition items: [row_number_part_0 (#2) AS (#2)]
+        │   ├── order by items: [row_number_order_0 (#3) AS (#3) DESC]
+        │   └── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [row_number_part_0 (#2)]
+            └── EvalScalar
+                ├── scalars: [CAST(get_by_keypath(key_payload.d (#1), '{"id"}') AS Int64 NULL) AS (#2), CAST(get_by_keypath(key_payload.d (#1), '{"ts"}') AS Int64 NULL) AS (#3)]
+                └── Scan
+                    ├── table: default.key_payload (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+

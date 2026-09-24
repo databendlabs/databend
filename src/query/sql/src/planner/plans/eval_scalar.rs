@@ -39,6 +39,8 @@ use crate::plans::BoundColumnRef;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
+use crate::plans::VisitorMut;
+use crate::plans::walk_expr_mut;
 
 /// Evaluate scalar expression
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -78,7 +80,51 @@ impl ScalarItem {
     }
 }
 
+/// Expressions in one EvalScalar read the same input schema. Remove all live
+/// definitions before adding their sources, including shadowed IDs.
+pub fn derive_scalar_input_columns(items: &[ScalarItem], output: &ColumnSet) -> ColumnSet {
+    let mut input = output.clone();
+    for item in items {
+        if output.contains(&item.index) {
+            input.remove(&item.index);
+        }
+    }
+    for item in items {
+        if output.contains(&item.index) {
+            item.scalar.collect_used_columns(&mut input);
+        }
+    }
+    input
+}
+
 impl EvalScalar {
+    /// Recover a definition for statistics expressed in this operator's output
+    /// scope. Sources overwritten by sibling definitions no longer denote their
+    /// input values, so those definitions cannot be expanded here.
+    pub(crate) fn expand_preserved_inputs(&self, scalar: &mut ScalarExpr) -> Result<()> {
+        struct Expand<'a>(&'a [ScalarItem], ColumnSet);
+        impl VisitorMut<'_> for Expand<'_> {
+            fn visit(&mut self, scalar: &mut ScalarExpr) -> Result<()> {
+                if let ScalarExpr::BoundColumnRef(column) = scalar {
+                    if let Some(item) = self.0.iter().find(|item| item.index == column.column.index)
+                        && item.scalar.is_deterministic()
+                        && item.scalar.used_columns().is_disjoint(&self.1)
+                    {
+                        *scalar = item.scalar.clone();
+                    }
+                    // Sibling definitions read the same input, not each other.
+                    return Ok(());
+                }
+                walk_expr_mut(self, scalar)
+            }
+        }
+        Expand(
+            &self.items,
+            self.items.iter().map(|item| item.index).collect(),
+        )
+        .visit(scalar)
+    }
+
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
         for item in &self.items {
@@ -315,8 +361,75 @@ mod tests {
     use crate::plans::DummyTableScan;
     use crate::plans::FunctionCall;
 
+    #[test]
+    fn required_inputs_preserve_sources_shadowed_by_sibling_definitions() {
+        let eval = EvalScalar {
+            items: vec![
+                ScalarItem {
+                    index: Symbol::new(1),
+                    scalar: column(0),
+                },
+                ScalarItem {
+                    index: Symbol::new(0),
+                    scalar: column(2),
+                },
+                ScalarItem {
+                    index: Symbol::new(3),
+                    scalar: column(4),
+                },
+            ],
+        };
+        assert_eq!(
+            derive_scalar_input_columns(
+                &eval.items,
+                &ColumnSet::from([Symbol::new(0), Symbol::new(1)])
+            ),
+            ColumnSet::from([Symbol::new(0), Symbol::new(2)]),
+        );
+        assert_eq!(
+            derive_scalar_input_columns(
+                &eval.items,
+                &ColumnSet::from([Symbol::new(1), Symbol::new(5)])
+            ),
+            ColumnSet::from([Symbol::new(0), Symbol::new(5)]),
+        );
+    }
+
     fn int_type() -> DataType {
         DataType::Number(NumberDataType::Int64)
+    }
+
+    #[test]
+    fn statistics_definitions_preserve_source_scope() -> Result<()> {
+        let mut eval = EvalScalar {
+            items: vec![ScalarItem {
+                index: Symbol::new(1),
+                scalar: column(0),
+            }],
+        };
+        let mut scalar = column(1);
+        eval.expand_preserved_inputs(&mut scalar)?;
+        assert_eq!(scalar, column(0));
+
+        eval.items.push(ScalarItem {
+            index: Symbol::new(0),
+            scalar: int_constant(42),
+        });
+        let mut scalar = column(1);
+        eval.expand_preserved_inputs(&mut scalar)?;
+        assert_eq!(scalar, column(1));
+
+        eval.items[0].scalar = FunctionCall {
+            span: None,
+            func_name: "rand".to_string(),
+            params: vec![],
+            arguments: vec![],
+            return_type: Box::new(DataType::Number(NumberDataType::Float64)),
+        }
+        .into();
+        eval.expand_preserved_inputs(&mut scalar)?;
+        assert_eq!(scalar, column(1));
+        Ok(())
     }
 
     fn column_with_type(index: usize, data_type: DataType) -> ScalarExpr {

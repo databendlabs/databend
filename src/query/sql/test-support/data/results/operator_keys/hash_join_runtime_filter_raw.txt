@@ -1,0 +1,20 @@
+EvalScalar
+├── scalars: [COUNT(*) (#4) AS (#4)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#4)]
+    └── Join(Inner)
+        ├── build keys: [key_dimension.id (#2)]
+        ├── probe keys: [bit_and(key_payload.id (#0), 255)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.key_dimension (#1)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.key_payload (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+

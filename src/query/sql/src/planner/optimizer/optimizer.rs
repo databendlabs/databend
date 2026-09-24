@@ -36,6 +36,7 @@ use crate::optimizer::optimizers::CommonSubexpressionOptimizer;
 use crate::optimizer::optimizers::DPhpyOptimizer;
 use crate::optimizer::optimizers::EliminateSelfJoinOptimizer;
 use crate::optimizer::optimizers::distributed::BroadcastToShuffleOptimizer;
+use crate::optimizer::optimizers::materialize_keys::MaterializeKeysOptimizer;
 use crate::optimizer::optimizers::operator::CleanupUnusedCTEOptimizer;
 use crate::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
 use crate::optimizer::optimizers::operator::FinalizeSpatialJoinOptimizer;
@@ -45,6 +46,7 @@ use crate::optimizer::optimizers::operator::RuleStatsAggregateOptimizer;
 use crate::optimizer::optimizers::operator::SingleToInnerOptimizer;
 use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
 use crate::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
+use crate::optimizer::optimizers::reuse_scalars::ReuseScalarsOptimizer;
 use crate::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
 use crate::optimizer::optimizers::rule::RuleEagerAggregation;
 use crate::optimizer::optimizers::rule::RuleID;
@@ -334,6 +336,8 @@ async fn optimize_query_inner(
             settings.get_force_eager_aggregate()?,
             RuleEagerAggregation::new(opt_ctx.get_metadata()),
         )
+        .add(MaterializeKeysOptimizer::new(opt_ctx.get_metadata()))
+        .add(ReuseScalarsOptimizer)
         // Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
         .add(CascadesOptimizer::new(opt_ctx.clone())?)
         // Eliminate unnecessary scalar calculations to clean up the final plan

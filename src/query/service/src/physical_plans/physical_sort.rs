@@ -372,9 +372,9 @@ impl PhysicalPlanBuilder {
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        sort.items.iter().for_each(|s| {
-            required.insert(s.index);
-        });
+        required = self
+            .derive_children_required_columns(s_expr, &required)?
+            .remove(0);
 
         // If the query will be optimized by lazy reading, we don't need to do pre-projection.
         let pre_projection: Option<Vec<usize>> = if self.metadata.read().lazy_columns().is_empty() {

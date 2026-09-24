@@ -36,6 +36,7 @@ use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::SpatialJoinCandidate;
 use crate::plans::has_spatial_join_preconditions;
@@ -588,8 +589,53 @@ impl Operator for Join {
     fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         let left_stat_info = rel_expr.derive_cardinality_child(0, stat_ctx)?;
         let right_stat_info = rel_expr.derive_cardinality_child(1, stat_ctx)?;
-        let stat_info = self.derive_join_stats(left_stat_info, right_stat_info, stat_ctx)?;
-        Ok(stat_info)
+        let mut join = self.clone();
+        let mut defined_keys = ColumnSet::new();
+        if let RelExpr::SExpr { expr } = rel_expr {
+            // Materializing keys must not hide source NULL rejection or make a
+            // derived key look like an identity column to histogram propagation.
+            // Only expand definitions whose sources still exist in this scope.
+            for (side, mut input) in expr.children().enumerate() {
+                while matches!(input.plan(), RelOperator::Exchange(_)) {
+                    input = input.child(0)?;
+                }
+                if let RelOperator::EvalScalar(eval) = input.plan() {
+                    for condition in &mut join.equi_conditions {
+                        let scalar = if side == 0 {
+                            &mut condition.left
+                        } else {
+                            &mut condition.right
+                        };
+                        let original = scalar.clone();
+                        eval.expand_preserved_inputs(scalar)?;
+                        if *scalar != original {
+                            defined_keys.extend(original.used_columns());
+                        }
+                    }
+                }
+            }
+        }
+        if defined_keys.is_empty() {
+            return self.derive_join_stats(left_stat_info, right_stat_info, stat_ctx);
+        }
+        let key_stats =
+            self.derive_join_stats(left_stat_info.clone(), right_stat_info.clone(), stat_ctx)?;
+        let mut source_stats = Arc::unwrap_or_clone(join.derive_join_stats(
+            left_stat_info,
+            right_stat_info,
+            stat_ctx,
+        )?);
+        // The expanded expressions describe source columns, but the materialized
+        // result columns also survive the join and need their matched statistics.
+        for key in defined_keys {
+            if let Some(stat) = key_stats.statistics.column_stats.get(&key) {
+                source_stats
+                    .statistics
+                    .column_stats
+                    .insert(key, stat.clone());
+            }
+        }
+        Ok(Arc::new(source_stats))
     }
 
     fn compute_required_prop_child(

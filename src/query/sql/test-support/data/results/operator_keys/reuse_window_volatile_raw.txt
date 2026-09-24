@@ -1,0 +1,19 @@
+EvalScalar
+├── scalars: [row_number() OVER (PARTITION BY id + 1 ORDER BY rand()) (#4) AS (#4), rank() OVER (PARTITION BY id + 1 ORDER BY id DESC) (#6) AS (#6), plus(key_payload.id (#0), 1) AS (#7), rand() AS (#8)]
+└── WindowGroup
+    ├── Window
+    │   ├── aggregate function: row_number
+    │   ├── partition items: [plus(key_payload.id (#0), 1) AS (#2)]
+    │   ├── order by items: [rand() AS (#3)]
+    │   └── frame: [Range: Preceding(None) ~ CurrentRow]
+    ├── Window
+    │   ├── aggregate function: rank
+    │   ├── partition items: [plus(key_payload.id (#0), 1) AS (#2)]
+    │   ├── order by items: [key_payload.id (#0) AS (#0) DESC]
+    │   └── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Scan
+        ├── table: default.key_payload (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+

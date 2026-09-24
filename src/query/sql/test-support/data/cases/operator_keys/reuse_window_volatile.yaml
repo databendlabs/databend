@@ -1,0 +1,19 @@
+name: reuse_window_volatile
+description: "A WindowGroup containing a volatile input exposes only deterministic input results for reuse."
+node_num: 3
+sql: |
+  SELECT id+1, rand(), row_number() OVER(PARTITION BY id+1 ORDER BY rand()), rank() OVER(PARTITION BY id+1 ORDER BY id DESC) FROM key_payload
+tables:
+  key_payload: operator_keys/payload.sql
+  key_dimension: operator_keys/dimension.sql
+table_statistics:
+  key_payload:
+    num_rows: 100000
+    data_size: 104857600
+    number_of_blocks: 10
+    number_of_segments: 1
+  key_dimension:
+    num_rows: 1000000
+    data_size: 16000000
+    number_of_blocks: 10
+    number_of_segments: 1

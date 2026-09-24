@@ -13,8 +13,113 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_sql::Planner;
+use databend_common_sql::plans::Plan;
+use databend_query::physical_plans::PhysicalPlan;
+use databend_query::physical_plans::PhysicalPlanBuilder;
+use databend_query::physical_plans::Window;
+use databend_query::physical_plans::WindowGroup;
+use databend_query::physical_plans::WindowPartition;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::expects_ok;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_window_inputs_prune_json_after_evaluation() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command("CREATE TABLE window_json_inputs (d VARIANT) ENGINE = Memory")
+        .await?;
+
+    let cases = [
+        // The original SELECT/QUALIFY shape must reuse the window key columns.
+        (
+            "SELECT try_cast(d:id AS BIGINT) AS id, try_cast(d:ts AS BIGINT) AS ts \
+          FROM window_json_inputs \
+          QUALIFY row_number() OVER (PARTITION BY id ORDER BY ts DESC) = 1",
+            false,
+        ),
+        // Reuse also applies to a subexpression and a QUALIFY predicate.
+        (
+            "SELECT try_cast(d:id AS BIGINT) + 1 FROM window_json_inputs \
+          QUALIFY row_number() OVER (PARTITION BY try_cast(d:id AS BIGINT) \
+          ORDER BY try_cast(d:ts AS BIGINT)) = 1 AND try_cast(d:id AS BIGINT) > 0",
+            false,
+        ),
+        // Multiple windows canonicalize their partition/order input IDs.
+        (
+            "SELECT try_cast(d:id AS BIGINT) AS id, \
+          row_number() OVER (PARTITION BY id ORDER BY try_cast(d:ts AS BIGINT)) AS rn, \
+          rank() OVER (PARTITION BY id ORDER BY try_cast(d:ts AS BIGINT) DESC) AS r \
+          FROM window_json_inputs",
+            false,
+        ),
+        // A filter cannot move below the group that produces its reused key.
+        (
+            "SELECT try_cast(d:id AS BIGINT) AS id, \
+          row_number() OVER (PARTITION BY id ORDER BY try_cast(d:ts AS BIGINT)) AS rn, \
+          rank() OVER (PARTITION BY id ORDER BY try_cast(d:ts AS BIGINT) DESC) AS r \
+          FROM window_json_inputs QUALIFY id > 0",
+            false,
+        ),
+        // RANGE planning must use the evaluated order column's type.
+        (
+            "SELECT try_cast(d:ts AS BIGINT) AS ts, \
+          sum(try_cast(d:id AS BIGINT)) OVER (ORDER BY ts \
+          RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM window_json_inputs",
+            false,
+        ),
+        // The parent still needs the original JSON in these cases.
+        (
+            "SELECT d FROM window_json_inputs QUALIFY row_number() OVER \
+          (PARTITION BY try_cast(d:id AS BIGINT) ORDER BY try_cast(d:ts AS BIGINT)) = 1",
+            true,
+        ),
+        (
+            "SELECT d:payload FROM window_json_inputs QUALIFY row_number() OVER \
+          (PARTITION BY try_cast(d:id AS BIGINT) ORDER BY try_cast(d:ts AS BIGINT)) = 1",
+            true,
+        ),
+    ];
+
+    for (sql, keep_json) in cases {
+        let ctx = fixture.new_query_ctx().await?;
+        let (plan, _) = Planner::new(ctx.clone()).plan_sql(sql).await?;
+        let Plan::Query {
+            s_expr,
+            metadata,
+            bind_context,
+            ..
+        } = plan
+        else {
+            panic!("expected query plan");
+        };
+        let plan = PhysicalPlanBuilder::new(metadata, ctx, false)
+            .build(&s_expr, bind_context.column_set())
+            .await?;
+        assert!(check_window_input_json(&plan, keep_json, sql)? > 0);
+    }
+    Ok(())
+}
+
+fn check_window_input_json(plan: &PhysicalPlan, keep_json: bool, sql: &str) -> Result<usize> {
+    let is_window = plan.as_any().is::<Window>()
+        || plan.as_any().is::<WindowGroup>()
+        || plan.as_any().is::<WindowPartition>();
+    let mut count = usize::from(is_window);
+    for child in plan.children() {
+        if is_window {
+            let has_json = child
+                .output_schema()?
+                .fields()
+                .iter()
+                .any(|field| field.data_type().remove_nullable() == DataType::Variant);
+            assert_eq!(has_json, keep_json, "window input schema for {sql}");
+        }
+        count += check_window_input_json(child, keep_json, sql)?;
+    }
+    Ok(count)
+}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_window_grouping_over_rollup() -> Result<()> {

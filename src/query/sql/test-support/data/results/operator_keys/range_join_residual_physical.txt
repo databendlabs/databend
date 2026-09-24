@@ -1,0 +1,37 @@
+Exchange
+├── output columns: [t.id (#0)]
+├── exchange type: Merge
+└── IEJoin
+    ├── output columns: [t.id (#0)]
+    ├── join type: INNER
+    ├── range join conditions: [operator_key (#7) "lt" u.x (#3), operator_key (#8) "gt" u.x (#3)]
+    ├── other conditions: [TRY_CAST(get_by_keypath(t.d (#1), '{"ts"}') AS Int64 NULL) > u.id (#2)]
+    ├── estimated rows: 50000000000.00
+    ├── Exchange(Left)
+    │   ├── output columns: [t.id (#0), t.d (#1), operator_key (#7), operator_key (#8)]
+    │   ├── exchange type: Broadcast
+    │   └── EvalScalar
+    │       ├── output columns: [t.id (#0), t.d (#1), operator_key (#7), operator_key (#8)]
+    │       ├── expressions: [TRY_CAST(get_by_keypath(t.d (#1), '{"lo"}') AS Int64 NULL), TRY_CAST(get_by_keypath(t.d (#1), '{"hi"}') AS Int64 NULL)]
+    │       ├── estimated rows: 100000.00
+    │       └── TableScan
+    │           ├── table: default.default.key_payload
+    │           ├── scan id: 0
+    │           ├── output columns: [id (#0), d (#1)]
+    │           ├── read rows: 0
+    │           ├── read size: 0
+    │           ├── partitions total: 0
+    │           ├── partitions scanned: 0
+    │           ├── push downs: [filters: [], limit: NONE]
+    │           └── estimated rows: 100000.00
+    └── TableScan(Right)
+        ├── table: default.default.key_dimension
+        ├── scan id: 1
+        ├── output columns: [id (#2), x (#3)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [], limit: NONE]
+        └── estimated rows: 1000000.00
+

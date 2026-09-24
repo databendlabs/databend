@@ -1,0 +1,21 @@
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [plus(operator_key (#7), 1) AS (#4), key_payload.d (#1) AS (#5), key_dimension.id (#2) AS (#6)]
+    └── Join(Inner)
+        ├── build keys: [operator_key (#7)]
+        ├── probe keys: [key_dimension.id (#2)]
+        ├── other filters: []
+        ├── Exchange(Broadcast)
+        │   └── EvalScalar
+        │       ├── scalars: [CAST(get_by_keypath(key_payload.d (#1), '{"id"}') AS Int64 NULL) AS (#7)]
+        │       └── Scan
+        │           ├── table: default.key_payload (#0)
+        │           ├── filters: []
+        │           ├── order by: []
+        │           └── limit: NONE
+        └── Scan
+            ├── table: default.key_dimension (#1)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+

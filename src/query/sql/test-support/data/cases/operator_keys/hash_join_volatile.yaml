@@ -1,0 +1,19 @@
+name: hash_join_volatile
+description: "A volatile key must not be shared or extracted into a deterministic key definition."
+node_num: 3
+sql: |
+  SELECT count(*) FROM key_dimension u JOIN key_payload t ON u.id=try_cast(t.d:id AS BIGINT)+rand()
+tables:
+  key_payload: operator_keys/payload.sql
+  key_dimension: operator_keys/dimension.sql
+table_statistics:
+  key_payload:
+    num_rows: 100000
+    data_size: 104857600
+    number_of_blocks: 10
+    number_of_segments: 1
+  key_dimension:
+    num_rows: 1000000
+    data_size: 16000000
+    number_of_blocks: 10
+    number_of_segments: 1

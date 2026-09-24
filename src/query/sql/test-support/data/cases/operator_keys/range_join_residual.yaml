@@ -1,0 +1,19 @@
+name: range_join_residual
+description: "A third range predicate stays a residual and retains its dependencies."
+node_num: 3
+sql: |
+  SELECT t.id FROM key_payload t JOIN key_dimension u ON try_cast(t.d:lo AS BIGINT)<u.x AND try_cast(t.d:hi AS BIGINT)>u.x AND try_cast(t.d:ts AS BIGINT)>u.id
+tables:
+  key_payload: operator_keys/payload.sql
+  key_dimension: operator_keys/dimension.sql
+table_statistics:
+  key_payload:
+    num_rows: 100000
+    data_size: 104857600
+    number_of_blocks: 10
+    number_of_segments: 1
+  key_dimension:
+    num_rows: 1000000
+    data_size: 16000000
+    number_of_blocks: 10
+    number_of_segments: 1

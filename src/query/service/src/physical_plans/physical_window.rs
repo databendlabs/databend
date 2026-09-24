@@ -39,7 +39,6 @@ use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
-use databend_common_sql::TypeCheck;
 use databend_common_sql::binder::wrap_cast;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::AggregateFunctionSignature;
@@ -524,28 +523,27 @@ impl PhysicalPlanBuilder {
             required.remove(&window.index);
         }
         for item in &window_group.scalar_items {
-            item.scalar.collect_used_columns(&mut required);
             required.insert(item.index);
         }
         for window in &window_group.windows {
             for item in &window.arguments {
-                item.scalar.collect_used_columns(&mut required);
                 required.insert(item.index);
             }
             for item in &window.partition_by {
-                item.scalar.collect_used_columns(&mut required);
                 required.insert(item.index);
             }
             for item in &window.order_by {
-                item.order_by_item
-                    .scalar
-                    .collect_used_columns(&mut required);
                 required.insert(item.order_by_item.index);
             }
         }
 
         let child = s_expr.child(0)?;
-        let input = self.build(child, required.clone()).await?;
+        // Sources are needed to evaluate the window inputs, but only the
+        // resulting columns and the parent's outputs need to survive the sort.
+        let input_required = self
+            .derive_children_required_columns(s_expr, &required)?
+            .remove(0);
+        let input = self.build(child, input_required).await?;
         let input = if window_group.scalar_items.is_empty() {
             input
         } else {
@@ -616,22 +614,9 @@ impl PhysicalPlanBuilder {
         // left join ( select dense_rank() over(order by t1.a desc) as rk
         // from (select 'a2' as a) t1 )s2 on s1.rk=s2.rk;
 
-        // The scalar items in window function is not replaced yet.
-        // The will be replaced in physical plan builder.
-        window.arguments.iter().for_each(|item| {
-            item.scalar.collect_used_columns(&mut required);
-            required.insert(item.index);
-        });
-        window.partition_by.iter().for_each(|item| {
-            item.scalar.collect_used_columns(&mut required);
-            required.insert(item.index);
-        });
-        window.order_by.iter().for_each(|item| {
-            item.order_by_item
-                .scalar
-                .collect_used_columns(&mut required);
-            required.insert(item.order_by_item.index);
-        });
+        required = self
+            .derive_children_required_columns(s_expr, &required)?
+            .remove(0);
 
         // 2. Build physical plan.
         let input = self.build(s_expr.child(0)?, required).await?;
@@ -659,6 +644,10 @@ impl PhysicalPlanBuilder {
         let mut w = window.clone();
 
         if w.frame.units.is_range() && w.order_by.len() == 1 {
+            let mut common_ty = input_schema
+                .field_with_name(&w.order_by[0].order_by_item.index.to_string())?
+                .data_type()
+                .clone();
             let order_by = &mut w.order_by[0].order_by_item.scalar;
 
             let mut start = match &mut w.frame.start_bound {
@@ -672,7 +661,6 @@ impl PhysicalPlanBuilder {
                 _ => None,
             };
 
-            let mut common_ty = order_by.type_check(input_schema)?.data_type().clone();
             if common_ty.remove_nullable().is_timestamp() {
                 for scalar in start.iter_mut().chain(end.iter_mut()) {
                     let scalar_ty = scalar.as_ref().infer_data_type();

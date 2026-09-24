@@ -1,0 +1,46 @@
+Exchange
+├── output columns: [TRY_CAST(t.d:id AS Int64) + 1 (#4)]
+├── exchange type: Merge
+└── EvalScalar
+    ├── output columns: [TRY_CAST(t.d:id AS Int64) + 1 (#4)]
+    ├── expressions: [scalar_result (#7) + 1]
+    ├── estimated rows: 100000000000.00
+    └── HashJoin
+        ├── output columns: [operator_key (#7)]
+        ├── join type: INNER
+        ├── build keys: [operator_key (#7)]
+        ├── probe keys: [u.id (#2)]
+        ├── keys is null equal: [false]
+        ├── filters: []
+        ├── build join filters:
+        │   └── filter id:0, build key:operator_key (#7), probe targets:[u.id (#2)@scan1], filter type:bloom,inlist,min_max
+        ├── estimated rows: 100000000000.00
+        ├── Exchange(Build)
+        │   ├── output columns: [operator_key (#7)]
+        │   ├── exchange type: Broadcast
+        │   └── EvalScalar
+        │       ├── output columns: [operator_key (#7)]
+        │       ├── expressions: [TRY_CAST(get_by_keypath(t.d (#1), '{"id"}') AS Int64 NULL)]
+        │       ├── estimated rows: 100000.00
+        │       └── TableScan
+        │           ├── table: default.default.key_payload
+        │           ├── scan id: 0
+        │           ├── output columns: [d (#1)]
+        │           ├── read rows: 0
+        │           ├── read size: 0
+        │           ├── partitions total: 0
+        │           ├── partitions scanned: 0
+        │           ├── push downs: [filters: [], limit: NONE]
+        │           └── estimated rows: 100000.00
+        └── TableScan(Probe)
+            ├── table: default.default.key_dimension
+            ├── scan id: 1
+            ├── output columns: [id (#2)]
+            ├── read rows: 0
+            ├── read size: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [], limit: NONE]
+            ├── apply join filters: [#0]
+            └── estimated rows: 1000000.00
+

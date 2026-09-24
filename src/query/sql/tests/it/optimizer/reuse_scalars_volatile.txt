@@ -1,0 +1,45 @@
+=== window_input_reuse_preserves_nondeterministic_expressions ===
+description: Only deterministic window inputs may replace SELECT expressions.
+sql: SELECT number + 1 AS n, rand() AS r, row_number() OVER (PARTITION BY number + 1 ORDER BY rand()) FROM t
+raw_plan:
+EvalScalar
+├── scalars: [row_number() OVER (PARTITION BY number + 1 ORDER BY rand()) (#3) AS (#3), plus(t.number (#0), 1) AS (#4), rand() AS (#5)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: [plus(t.number (#0), 1) AS (#1)]
+    ├── order by items: [rand() AS (#2)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [row_number_part_0 (#1) ASC NULLS LAST, row_number_order_0 (#2) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: RowNumber
+        └── EvalScalar
+            ├── scalars: [plus(t.number (#0), 1) AS (#1), rand() AS (#2)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [row_number() OVER (PARTITION BY number + 1 ORDER BY rand()) (#3) AS (#3), row_number_part_0 (#1) AS (#4), rand() AS (#5)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: [row_number_part_0 (#1) AS (#1)]
+    ├── order by items: [row_number_order_0 (#2) AS (#2)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [row_number_part_0 (#1) ASC NULLS LAST, row_number_order_0 (#2) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: RowNumber
+        └── EvalScalar
+            ├── scalars: [plus(t.number (#0), 1) AS (#1), rand() AS (#2)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: [row_number_part_0 (#1) ASC, row_number_order_0 (#2) ASC]
+                └── limit: NONE
+

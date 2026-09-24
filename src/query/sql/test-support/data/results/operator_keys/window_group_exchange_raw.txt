@@ -1,0 +1,19 @@
+EvalScalar
+├── scalars: [row_number() OVER (PARTITION BY k ORDER BY TRY_CAST(d:ts AS Int64)) (#4) AS (#4), rank() OVER (PARTITION BY k ORDER BY TRY_CAST(d:ts AS Int64) DESC) (#7) AS (#7), CAST(get_by_keypath(key_payload.d (#1), '{"id"}') AS Int64 NULL) AS (#8)]
+└── WindowGroup
+    ├── Window
+    │   ├── aggregate function: row_number
+    │   ├── partition items: [CAST(get_by_keypath(key_payload.d (#1), '{"id"}') AS Int64 NULL) AS (#2)]
+    │   ├── order by items: [CAST(get_by_keypath(key_payload.d (#1), '{"ts"}') AS Int64 NULL) AS (#3)]
+    │   └── frame: [Range: Preceding(None) ~ CurrentRow]
+    ├── Window
+    │   ├── aggregate function: rank
+    │   ├── partition items: [CAST(get_by_keypath(key_payload.d (#1), '{"id"}') AS Int64 NULL) AS (#2)]
+    │   ├── order by items: [CAST(get_by_keypath(key_payload.d (#1), '{"ts"}') AS Int64 NULL) AS (#3) DESC]
+    │   └── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Scan
+        ├── table: default.key_payload (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+

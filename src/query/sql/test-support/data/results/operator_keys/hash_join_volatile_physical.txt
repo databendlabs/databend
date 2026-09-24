@@ -1,0 +1,44 @@
+AggregateFinal
+├── output columns: [COUNT(*) (#4)]
+├── group by: []
+├── aggregate functions: [count()]
+├── estimated rows: 1.00
+└── Exchange
+    ├── output columns: [COUNT(*) (#4)]
+    ├── exchange type: Merge
+    └── AggregatePartial
+        ├── group by: []
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 1.00
+        └── HashJoin
+            ├── output columns: []
+            ├── join type: INNER
+            ├── build keys: [TRY_CAST(get_by_keypath(t.d (#3), '{"id"}') AS Int64 NULL) + CAST(rand() AS Float64 NULL)]
+            ├── probe keys: [CAST(u.id (#0) AS Float64 NULL)]
+            ├── keys is null equal: [false]
+            ├── filters: []
+            ├── estimated rows: 100000000000.00
+            ├── Exchange(Build)
+            │   ├── output columns: [t.d (#3)]
+            │   ├── exchange type: Broadcast
+            │   └── TableScan
+            │       ├── table: default.default.key_payload
+            │       ├── scan id: 1
+            │       ├── output columns: [d (#3)]
+            │       ├── read rows: 0
+            │       ├── read size: 0
+            │       ├── partitions total: 0
+            │       ├── partitions scanned: 0
+            │       ├── push downs: [filters: [], limit: NONE]
+            │       └── estimated rows: 100000.00
+            └── TableScan(Probe)
+                ├── table: default.default.key_dimension
+                ├── scan id: 0
+                ├── output columns: [id (#0)]
+                ├── read rows: 0
+                ├── read size: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 1000000.00
+

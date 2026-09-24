@@ -266,6 +266,7 @@ mod correlated_subquery_regression;
 mod get_table_bind_test;
 mod insert;
 mod multi_table_insert;
+mod operator_keys;
 mod range_join;
 mod spatial_join;
 mod window;
