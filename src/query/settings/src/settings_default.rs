@@ -1075,6 +1075,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_recluster_task_selection_v2", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables experimental v2 task selection for aggressive linear RECLUSTER FINAL; disable to use v1.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_parquet_page_index", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables parquet page index",
