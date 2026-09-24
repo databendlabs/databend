@@ -449,6 +449,11 @@ impl SinkAnalyzeState {
         }
         // Columns without a collector were all NULL so far; their bounds come from the
         // appended rows.
+        //
+        // Legacy segments (version < 2) are intentionally not handled here: they never reach
+        // the KLL sketches, so a column whose non-NULL values all live in them has no
+        // collector until this rebase, and the new collector does not count those legacy
+        // rows. This is an accepted limitation for these pre-current-format segments.
         self.extend_kll_full_histograms(&appended).await?;
         log::info!(
             "ANALYZE rebased statistics over {} appended segments",

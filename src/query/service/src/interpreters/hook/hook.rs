@@ -247,3 +247,105 @@ impl HookOperator {
         hook_analyze(self.ctx.clone(), pipeline, desc).await;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
+
+    use databend_common_exception::ErrorCode;
+    use databend_common_exception::Result;
+    use databend_common_pipeline::core::LockGuard;
+    use databend_common_pipeline::core::UnlockApi;
+    use parking_lot::Mutex;
+
+    use super::*;
+
+    #[derive(Default)]
+    struct MockUnlock {
+        unlocked: AtomicBool,
+    }
+
+    impl MockUnlock {
+        fn unlocked(&self) -> bool {
+            self.unlocked.load(Ordering::SeqCst)
+        }
+    }
+
+    impl UnlockApi for MockUnlock {
+        fn unlock(&self, _revision: u64) {
+            self.unlocked.store(true, Ordering::SeqCst);
+        }
+    }
+
+    struct LockedPipeline {
+        pipeline: Pipeline,
+        guard: SharedLockGuard,
+        unlock: Arc<MockUnlock>,
+        /// Lock state seen by each observing callback, in execution order. Callback panics
+        /// are caught by the finished chain, so the states are asserted after it ran.
+        observed: Arc<Mutex<Vec<bool>>>,
+    }
+
+    impl LockedPipeline {
+        fn create() -> Self {
+            let unlock = Arc::new(MockUnlock::default());
+            let guard = SharedLockGuard::new(Arc::new(LockGuard::new(unlock.clone(), 1)));
+            LockedPipeline {
+                pipeline: Pipeline::create(),
+                guard,
+                unlock,
+                observed: Arc::new(Mutex::new(vec![])),
+            }
+        }
+
+        fn observe_lock(&mut self) {
+            let unlock = self.unlock.clone();
+            let observed = self.observed.clone();
+            self.pipeline.set_on_finished(move |_info: &ExecutionInfo| {
+                observed.lock().push(unlock.unlocked());
+                Ok(())
+            });
+        }
+
+        fn finish(&mut self) -> Result<()> {
+            self.pipeline
+                .take_on_finished()
+                .apply(ExecutionInfo::create(Ok(()), HashMap::new()))
+        }
+    }
+
+    #[test]
+    fn test_lock_released_between_callbacks_in_order() -> Result<()> {
+        let mut locked = LockedPipeline::create();
+        // Compact and refresh hooks register before the release and run under the lock.
+        locked.observe_lock();
+        register_lock_release(&mut locked.pipeline, &locked.guard);
+        // The analyze hook registers after the release and runs without the lock.
+        locked.observe_lock();
+
+        locked.finish()?;
+        assert_eq!(*locked.observed.lock(), vec![false, true]);
+        assert!(locked.unlock.unlocked());
+        assert!(locked.guard.try_take().is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn test_lock_released_after_earlier_callback_fails() {
+        let mut locked = LockedPipeline::create();
+        locked
+            .pipeline
+            .set_on_finished(|_info: &ExecutionInfo| Err(ErrorCode::Internal("hook failed")));
+        register_lock_release(&mut locked.pipeline, &locked.guard);
+        locked.observe_lock();
+
+        assert!(locked.finish().is_err());
+        // The failure interrupts the normal chain, so neither the normal release nor the
+        // later callback runs; the always callback still releases the lock.
+        assert!(locked.observed.lock().is_empty());
+        assert!(locked.unlock.unlocked());
+        assert!(locked.guard.try_take().is_none());
+    }
+}
