@@ -246,6 +246,42 @@ WHERE (
 statement ok
 SET enable_experimental_new_join = 1;
 
+statement ok
+CREATE OR REPLACE TABLE nullable_scalar_reorder_outer (id INT, k INT NULL, c INT);
+
+statement ok
+INSERT INTO nullable_scalar_reorder_outer VALUES (1, NULL, 10), (2, NULL, 5), (3, 1, 10);
+
+statement ok
+CREATE OR REPLACE TABLE nullable_scalar_reorder_join (id INT);
+
+statement ok
+INSERT INTO nullable_scalar_reorder_join VALUES (1), (2), (3);
+
+# The NULL-safe correlation key must survive join reordering, both in DPhyp and in
+# the RS-L1 rules used when DPhyp is disabled.
+query I rowsort
+SELECT o.id
+FROM nullable_scalar_reorder_outer AS o
+JOIN nullable_scalar_reorder_join AS j ON o.id = j.id
+WHERE o.c > (SELECT MAX(v) FROM nullable_scalar_payload WHERE o.k IS NULL);
+----
+1
+
+statement ok
+SET enable_dphyp = 0;
+
+query I rowsort
+SELECT o.id
+FROM nullable_scalar_reorder_outer AS o
+JOIN nullable_scalar_reorder_join AS j ON o.id = j.id
+WHERE o.c > (SELECT MAX(v) FROM nullable_scalar_payload WHERE o.k IS NULL);
+----
+1
+
+statement ok
+UNSET enable_dphyp;
+
 query IBB rowsort
 SELECT
       t1.a,
