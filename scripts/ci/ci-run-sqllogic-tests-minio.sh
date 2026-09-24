@@ -41,7 +41,6 @@ TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http"}
 TEST_PARALLEL=${TEST_PARALLEL:-8}
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
-
 echo "Starting databend-sqllogic tests"
 if [ -n "${1:-}" ]; then
 	sqllogic_filter "$1"
