@@ -133,8 +133,6 @@ stat          : l.k (#0) min=1, max=3, ndv=2.250, null=0.750, histogram=none
 stat          : b (#1) min=false, max=true, ndv=1.875 (upper=2.000), null=0.000, histogram=none
 stat          : r.k (#2) min=1, max=2, ndv=1.333, null=1.000, histogram=none
 stat          : b (#3) min=false, max=true, ndv=1.615 (upper=2.000), null=0.000, histogram=none
-stat          : operator_key (#4) min=0, max=1, ndv=2.000, null=0.000, histogram=none
-stat          : operator_key (#5) min=0, max=1, ndv=2.000, null=0.000, histogram=none
 
 === inner_disjoint_bounds ===
 description: Disjoint value bounds drive regular equality to zero matches without a histogram.
@@ -319,7 +317,6 @@ join          : INNER cardinality=600.000
 stat          : l.k (#0) min=5, max=10, ndv=6.000, null=0.000, histogram=rows=600.000, ndv=6.000, buckets=[5..5:100.000/1.000, 6..6:100.000/1.000, 7..7:100.000/1.000, 8..8:100.000/1.000, 9..9:100.000/1.000, 10..10:100.000/1.000]
 stat          : r.k1 (#1) min=5, max=10, ndv=6.000, null=0.000, histogram=rows=600.000, ndv=6.000, buckets=[5..5:100.000/1.000, 6..6:100.000/1.000, 7..7:100.000/1.000, 8..8:100.000/1.000, 9..9:100.000/1.000, 10..10:100.000/1.000]
 stat          : r.k2 (#2) min=1, max=10, ndv=10.000, null=0.000, histogram=rows=600.000, ndv=10.000, buckets=[1..1:60.000/1.000, 2..2:60.000/1.000, 3..3:60.000/1.000, 4..4:60.000/1.000, 5..5:60.000/1.000, 6..6:60.000/1.000, 7..7:60.000/1.000, 8..8:60.000/1.000, 9..9:60.000/1.000, 10..10:60.000/1.000]
-stat          : operator_key (#3) min=1, max=10, ndv=10.000, null=0.000, histogram=none
 
 === inner_repeated_identity_column_combines_distributions ===
 description: When one identity column participates in multiple direct equalities, all matched distributions narrow its bounds while the most selective equality supplies its histogram shape.
@@ -350,7 +347,6 @@ join          : INNER cardinality=100.000
 stat          : l.k (#0) min=1, max=10, ndv=10.000, null=0.000, histogram=none
 stat          : r.k1 (#1) min=1, max=10, ndv=10.000 (upper=10.000), null=0.000, histogram=rows=100.000, ndv=10.000, buckets=[1..1:10.000/1.000, 2..2:10.000/1.000, 3..3:10.000/1.000, 4..4:10.000/1.000, 5..5:10.000/1.000, 6..6:10.000/1.000, 7..7:10.000/1.000, 8..8:10.000/1.000, 9..9:10.000/1.000, 10..10:10.000/1.000]
 stat          : r.k2 (#2) min=1, max=100, ndv=100.000, null=0.000, histogram=rows=100.000, ndv=100.000, buckets=[1..10:10.000/10.000, 11..20:10.000/10.000, 21..30:10.000/10.000, 31..40:10.000/10.000, 41..50:10.000/10.000, 51..60:10.000/10.000, 61..70:10.000/10.000, 71..80:10.000/10.000, 81..90:10.000/10.000, 91..100:10.000/10.000]
-stat          : operator_key (#3) min=1, max=100, ndv=100.000, null=0.000, histogram=none
 
 === inner_unknown_non_equi_strongest_condition ===
 description: A residual comparison between varying columns uses the default 0.5 selectivity; the strongest condition determines cardinality while equality histogram propagation remains intact.
@@ -588,7 +584,6 @@ right ddl      : CREATE TABLE r(k INT NULL)
 right rows     : 100
 join          : INNER cardinality=9500.000
 stat          : l.k (#0) min=1, max=50, ndv=49.831 (upper=50.000), null=475.000, histogram=none
-stat          : operator_key (#2) min=2, max=51, ndv=50.000, null=0.000, histogram=none
 
 === inner_missing_second_key_stats_preserves_first_key_histogram ===
 description: An equality condition with incomplete statistics contributes its conservative fallback without erasing the propagated histogram from another modeled key.
@@ -668,7 +663,6 @@ input stat    : right.k min=1, max=2, ndv=Some(2), null=1
 join          : INNER cardinality=2.000
 stat          : l.k (#0) min=1, max=3, ndv=1.809 (upper=2.000), null=0.000, histogram=none
 stat          : r.k (#1) min=1, max=2, ndv=2.000, null=0.000, histogram=rows=2.000, ndv=2.000, buckets=[1..1:1.000/1.000, 2..2:1.000/1.000]
-stat          : operator_key (#2) min=1, max=2, ndv=2.000, null=0.000, histogram=none
 
 === inner_mixed_numeric_equality ===
 description: Different integer SQL types reach the numeric comparison boundary through the normal binder and optimizer path.

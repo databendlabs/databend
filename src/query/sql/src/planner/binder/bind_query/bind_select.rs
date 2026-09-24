@@ -62,7 +62,9 @@ use crate::planner::binder::select::SelectAliasCatalog;
 use crate::planner::binder::select::SelectClauseFact;
 use crate::planner::binder::select::SelectList;
 use crate::planner::binder::sort::OrderItems;
+use crate::planner::binder::window::WindowScalarRewriter;
 use crate::plans::ScalarExpr;
+use crate::plans::VisitorMut as _;
 
 #[derive(Clone, Default)]
 struct SelectClauseFacts {
@@ -451,6 +453,10 @@ impl Binder {
         if !from_context.windows.window_functions.is_empty() {
             let window_functions = from_context.windows.window_functions.clone();
             s_expr = self.bind_window_functions(&window_functions, s_expr)?;
+            let mut rewriter = WindowScalarRewriter::new(&s_expr)?;
+            for item in select_info.projection_scalars.values_mut() {
+                rewriter.visit(&mut item.scalar)?;
+            }
         }
 
         // Bind lazy Set-returning functions after aggregate plan.

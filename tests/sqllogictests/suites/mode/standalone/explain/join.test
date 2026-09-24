@@ -60,7 +60,7 @@ HashJoin
 ├── output columns: [t.number (#0)]
 ├── join type: INNER
 ├── build keys: [t.number (#0), t.number (#0)]
-├── probe keys: [t1.number (#1), operator_key (#3)]
+├── probe keys: [t1.number (#1), t1.number (#1) + 1]
 ├── keys is null equal: [false, false]
 ├── filters: []
 ├── build join filters:
@@ -78,22 +78,18 @@ HashJoin
 │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 1.00
-└── EvalScalar(Probe)
-    ├── output columns: [t1.number (#1), operator_key (#3)]
-    ├── expressions: [t1.number (#1) + 1]
-    ├── estimated rows: 2.00
-    └── TableScan
-        ├── table: default.default.t1
-        ├── scan id: 1
-        ├── output columns: [number (#1)]
-        ├── read rows: 10
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [t1.number (#1) = t1.number (#1) + 1], limit: NONE]
-        ├── apply join filters: [#0, #1]
-        └── estimated rows: 2.00
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── scan id: 1
+    ├── output columns: [number (#1)]
+    ├── read rows: 10
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [t1.number (#1) = t1.number (#1) + 1], limit: NONE]
+    ├── apply join filters: [#0, #1]
+    └── estimated rows: 2.00
 
 query T
 explain select t.number from t, t1 where t.number > 1 and 1 < t1.number
@@ -851,7 +847,7 @@ EvalScalar
     ├── output columns: []
     ├── join type: INNER
     ├── build keys: [t6.wms_id (#4)]
-    ├── probe keys: [operator_key (#8)]
+    ├── probe keys: [replace(t1.ext (#1), '33', '44')]
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
@@ -867,21 +863,17 @@ EvalScalar
     │   ├── partitions scanned: 0
     │   ├── push downs: [filters: [is_true(substr(t2.wms_id (#4), 1) = 'R006')], limit: NONE]
     │   └── estimated rows: 0.00
-    └── EvalScalar(Probe)
-        ├── output columns: [operator_key (#8)]
-        ├── expressions: [replace(t1.ext (#1), '33', '44')]
-        ├── estimated rows: 0.00
-        └── TableScan
-            ├── table: default.default.t1
-            ├── scan id: 0
-            ├── output columns: [ext (#1)]
-            ├── read rows: 0
-            ├── read size: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            ├── push downs: [filters: [is_true(substr(replace(t1.ext (#1), '33', '44'), 1) = 'R006')], limit: NONE]
-            ├── apply join filters: [#0]
-            └── estimated rows: 0.00
+    └── TableScan(Probe)
+        ├── table: default.default.t1
+        ├── scan id: 0
+        ├── output columns: [ext (#1)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [is_true(substr(replace(t1.ext (#1), '33', '44'), 1) = 'R006')], limit: NONE]
+        ├── apply join filters: [#0]
+        └── estimated rows: 0.00
 
 query T
 explain select 1 from (select t1.* from t1) t1 inner join (select * from t2 ) t6 on replace(t1.ext, '33', '44') = t6.wms_id where replace(t1.ext, '33', '44') = 'R006';
@@ -894,7 +886,7 @@ EvalScalar
     ├── output columns: []
     ├── join type: INNER
     ├── build keys: [t6.wms_id (#4)]
-    ├── probe keys: [operator_key (#8)]
+    ├── probe keys: [replace(t1.ext (#1), '33', '44')]
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
@@ -910,21 +902,17 @@ EvalScalar
     │   ├── partitions scanned: 0
     │   ├── push downs: [filters: [is_true(t2.wms_id (#4) = 'R006')], limit: NONE]
     │   └── estimated rows: 0.00
-    └── EvalScalar(Probe)
-        ├── output columns: [operator_key (#8)]
-        ├── expressions: [replace(t1.ext (#1), '33', '44')]
-        ├── estimated rows: 0.00
-        └── TableScan
-            ├── table: default.default.t1
-            ├── scan id: 0
-            ├── output columns: [ext (#1)]
-            ├── read rows: 0
-            ├── read size: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            ├── push downs: [filters: [is_true(replace(t1.ext (#1), '33', '44') = 'R006')], limit: NONE]
-            ├── apply join filters: [#0]
-            └── estimated rows: 0.00
+    └── TableScan(Probe)
+        ├── table: default.default.t1
+        ├── scan id: 0
+        ├── output columns: [ext (#1)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [is_true(replace(t1.ext (#1), '33', '44') = 'R006')], limit: NONE]
+        ├── apply join filters: [#0]
+        └── estimated rows: 0.00
 
 query T
 explain select 1 from (select t1.* from t1) t1 inner join (select * from t2 ) t6 on replace(t1.ext, '33', '44') = t6.wms_id where replace(substr(t1.ext, 1), '33', '44') = 'R006';
@@ -937,7 +925,7 @@ EvalScalar
     ├── output columns: []
     ├── join type: INNER
     ├── build keys: [t6.wms_id (#4)]
-    ├── probe keys: [operator_key (#8)]
+    ├── probe keys: [replace(t1.ext (#1), '33', '44')]
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
@@ -953,21 +941,17 @@ EvalScalar
     │   ├── partitions scanned: 0
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 0.00
-    └── EvalScalar(Probe)
-        ├── output columns: [operator_key (#8)]
-        ├── expressions: [replace(t1.ext (#1), '33', '44')]
-        ├── estimated rows: 0.00
-        └── TableScan
-            ├── table: default.default.t1
-            ├── scan id: 0
-            ├── output columns: [ext (#1)]
-            ├── read rows: 0
-            ├── read size: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            ├── push downs: [filters: [is_true(replace(substr(t1.ext (#1), 1), '33', '44') = 'R006')], limit: NONE]
-            ├── apply join filters: [#0]
-            └── estimated rows: 0.00
+    └── TableScan(Probe)
+        ├── table: default.default.t1
+        ├── scan id: 0
+        ├── output columns: [ext (#1)]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [is_true(replace(substr(t1.ext (#1), 1), '33', '44') = 'R006')], limit: NONE]
+        ├── apply join filters: [#0]
+        └── estimated rows: 0.00
 
 statement ok
 drop table t1;

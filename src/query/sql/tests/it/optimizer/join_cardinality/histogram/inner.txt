@@ -70,8 +70,6 @@ sql           : SELECT * FROM l INNER JOIN r ON l.k + 0 = r.k + 0
 join          : INNER cardinality=100000000.000
 stat          : l.k (#0) min=0, max=9999, ndv=10000.000, null=0.000, histogram=none
 stat          : r.k (#2) min=5000, max=14999, ndv=10000.000, null=0.000, histogram=none
-stat          : operator_key (#4) min=5000, max=9999, ndv=10000.000, null=0.000, histogram=none
-stat          : operator_key (#5) min=5000, max=9999, ndv=10000.000, null=0.000, histogram=none
 
 case          : inner_join_derived_left_key_without_histogram
 description   : A derived left join key keeps bounds and NDV but has no typed histogram, so join estimation naturally falls back to NDV.
@@ -82,7 +80,6 @@ sql           : SELECT * FROM l INNER JOIN r ON l.k + 0 = r.k
 join          : INNER cardinality=58.500
 stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
 stat          : r.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=58.500, ndv=4.000, buckets=[1..1:11.250/1.000, 2..2:15.750/1.000, 3..3:13.500/1.000, 5..5:18.000/1.000]
-stat          : operator_key (#4) min=1, max=5, ndv=3.000, null=0.000, histogram=none
 
 case          : inner_join_derived_right_key_without_histogram
 description   : A derived right join key keeps bounds and NDV but has no typed histogram, so join estimation naturally falls back to NDV.
@@ -93,7 +90,6 @@ sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k + 0
 join          : INNER cardinality=58.500
 stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=58.500, ndv=3.000, buckets=[1..1:13.000/1.000, 3..3:26.000/1.000, 5..5:19.500/1.000]
 stat          : r.k (#2) min=1, max=5, ndv=4.000 (upper=4.000), null=0.000, histogram=none
-stat          : operator_key (#4) min=1, max=5, ndv=3.000, null=0.000, histogram=none
 
 case          : inner_join_both_derived_keys_without_histograms
 description   : Both derived join keys keep bounds and NDV but lose typed histograms, exercising the two-sided NDV fallback through SQL.
@@ -104,8 +100,6 @@ sql           : SELECT * FROM l INNER JOIN r ON l.k + 0 = r.k + 0
 join          : INNER cardinality=58.500
 stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
 stat          : r.k (#2) min=1, max=5, ndv=4.000 (upper=4.000), null=0.000, histogram=none
-stat          : operator_key (#4) min=1, max=5, ndv=3.000, null=0.000, histogram=none
-stat          : operator_key (#5) min=1, max=5, ndv=3.000, null=0.000, histogram=none
 
 case          : inner_join_no_overlap
 description   : Join-key histograms do not overlap, so the inner estimate is zero before join-type rules apply.

@@ -153,9 +153,10 @@ impl PhysicalPlanBuilder {
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        let used = self
-            .derive_children_required_columns(s_expr, &required)?
-            .remove(0);
+        let mut used = required.clone();
+        for predicate in &filter.predicates {
+            predicate.collect_used_columns(&mut used);
+        }
 
         // 2. Build physical plan.
         let input = self.build(s_expr.child(0)?, used).await?;

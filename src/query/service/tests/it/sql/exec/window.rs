@@ -12,15 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use databend_common_catalog::cluster_info::Cluster;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::Plan;
+use databend_meta_client::types::NodeInfo;
+use databend_query::clusters::ClusterHelper;
 use databend_query::physical_plans::PhysicalPlan;
 use databend_query::physical_plans::PhysicalPlanBuilder;
 use databend_query::physical_plans::Window;
 use databend_query::physical_plans::WindowGroup;
 use databend_query::physical_plans::WindowPartition;
+use databend_query::sessions::TableContextCluster;
+use databend_query::sessions::TableContextSettings;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::expects_ok;
 
@@ -28,7 +35,7 @@ use databend_query::test_kits::expects_ok;
 async fn test_window_inputs_prune_json_after_evaluation() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture
-        .execute_command("CREATE TABLE window_json_inputs (d VARIANT) ENGINE = Memory")
+        .execute_command("CREATE TABLE window_json_inputs (d VARIANT)")
         .await?;
 
     let cases = [
@@ -82,22 +89,47 @@ async fn test_window_inputs_prune_json_after_evaluation() -> Result<()> {
         ),
     ];
 
-    for (sql, keep_json) in cases {
-        let ctx = fixture.new_query_ctx().await?;
-        let (plan, _) = Planner::new(ctx.clone()).plan_sql(sql).await?;
-        let Plan::Query {
-            s_expr,
-            metadata,
-            bind_context,
-            ..
-        } = plan
-        else {
-            panic!("expected query plan");
-        };
-        let plan = PhysicalPlanBuilder::new(metadata, ctx, false)
-            .build(&s_expr, bind_context.column_set())
-            .await?;
-        assert!(check_window_input_json(&plan, keep_json, sql)? > 0);
+    for nodes in [1, 3] {
+        for (sql, keep_json) in cases {
+            let ctx = fixture.new_query_ctx().await?;
+            ctx.get_settings()
+                .set_setting("enable_planner_cache".to_string(), "0".to_string())?;
+            if nodes == 3 {
+                let members = (0..nodes)
+                    .map(|id| {
+                        let mut node = NodeInfo::create(
+                            id.to_string(),
+                            String::new(),
+                            String::new(),
+                            String::new(),
+                            String::new(),
+                            String::new(),
+                            String::new(),
+                        );
+                        node.cluster_id = "cluster_id".to_string();
+                        node.warehouse_id = "warehouse_id".to_string();
+                        Arc::new(node)
+                    })
+                    .collect();
+                ctx.set_cluster(Cluster::create(members, "0".to_string()));
+            }
+            let (plan, _) = Planner::new(ctx.clone()).plan_sql(sql).await?;
+            let Plan::Query {
+                s_expr,
+                metadata,
+                bind_context,
+                ..
+            } = plan
+            else {
+                panic!("expected query plan");
+            };
+            let plan = PhysicalPlanBuilder::new(metadata, ctx, false)
+                .build(&s_expr, bind_context.column_set())
+                .await?;
+            assert!(
+                check_window_input_json(&plan, keep_json, &format!("{nodes} nodes: {sql}"))? > 0
+            );
+        }
     }
     Ok(())
 }
@@ -109,8 +141,13 @@ fn check_window_input_json(plan: &PhysicalPlan, keep_json: bool, sql: &str) -> R
     let mut count = usize::from(is_window);
     for child in plan.children() {
         if is_window {
-            let has_json = child
-                .output_schema()?
+            let schema = if plan.as_any().is::<WindowPartition>() {
+                // WindowPartition projects before its buffering processors.
+                plan.output_schema()?
+            } else {
+                child.output_schema()?
+            };
+            let has_json = schema
                 .fields()
                 .iter()
                 .any(|field| field.data_type().remove_nullable() == DataType::Variant);

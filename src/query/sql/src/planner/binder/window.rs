@@ -40,6 +40,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::LagLeadFunction;
 use crate::plans::NthValueFunction;
+use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Sort;
@@ -54,6 +55,66 @@ use crate::plans::WindowGroup;
 use crate::plans::WindowOrderBy;
 use crate::plans::WindowPartition;
 use crate::plans::walk_expr_mut;
+
+/// Reuse inputs already evaluated by this query block's windows. Collect from
+/// the bound plan because WindowGroup can canonicalize the input column IDs.
+pub(super) struct WindowScalarRewriter {
+    scalars: HashMap<ScalarExpr, ScalarExpr>,
+}
+
+impl WindowScalarRewriter {
+    pub(super) fn new(mut child: &SExpr) -> Result<Self> {
+        let mut scalars = HashMap::new();
+        loop {
+            let items: Vec<&ScalarItem> = match child.plan() {
+                RelOperator::Window(window) => window
+                    .arguments
+                    .iter()
+                    .chain(&window.partition_by)
+                    .chain(window.order_by.iter().map(|order| &order.order_by_item))
+                    .collect(),
+                RelOperator::WindowGroup(group) => group.scalar_items.iter().collect(),
+                _ => break,
+            };
+            for item in items {
+                if matches!(
+                    item.scalar,
+                    ScalarExpr::FunctionCall(_) | ScalarExpr::CastExpr(_)
+                ) && item.scalar.is_deterministic()
+                {
+                    scalars
+                        .entry(item.scalar.clone())
+                        .or_insert(item.bound_column_expr("window_input".to_string())?);
+                }
+            }
+            child = child.child(0)?;
+        }
+        Ok(Self { scalars })
+    }
+}
+
+impl VisitorMut<'_> for WindowScalarRewriter {
+    fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
+        if let Some(column) = self.scalars.get(expr)
+            && column.data_type().as_ref() == expr.data_type().as_ref()
+        {
+            *expr = column.clone();
+            return Ok(());
+        }
+        // Only rewrite row-local consumers in this query block. Lambdas,
+        // subqueries, aggregates and window functions have separate scopes.
+        match expr {
+            ScalarExpr::FunctionCall(func) => {
+                for argument in &mut func.arguments {
+                    self.visit(argument)?;
+                }
+            }
+            ScalarExpr::CastExpr(cast) => self.visit(&mut cast.argument)?,
+            _ => {}
+        }
+        Ok(())
+    }
+}
 
 impl Binder {
     pub(super) fn bind_window_functions(

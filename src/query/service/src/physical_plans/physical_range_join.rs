@@ -24,20 +24,15 @@ use databend_common_expression::type_check::common_super_type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::Sinker;
-use databend_common_pipeline_transforms::TransformPipelineHelper;
-use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::binder::JoinPredicate;
 use databend_common_sql::binder::wrap_cast;
-use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::RelationalProperty;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::optimizers::materialize_keys::KeyMaterializer;
 use databend_common_sql::plans::JoinType;
-use databend_common_sql::plans::RelOperator;
 
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -66,11 +61,7 @@ pub struct RangeJoin {
     // ASOF outer joins reuse this path after the interval-boundary rewrite.
     pub join_type: JoinType,
     pub range_join_type: RangeJoinType,
-    // The full matched row schema is needed by residual predicates and ASOF
-    // unmatched-row construction. Projection applies after those operations.
     pub output_schema: DataSchemaRef,
-    #[serde(default)]
-    pub projections: Option<Vec<usize>>,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -91,15 +82,7 @@ impl IPhysicalPlan for RangeJoin {
 
     #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(match &self.projections {
-            Some(projections) => DataSchema::new_ref(
-                projections
-                    .iter()
-                    .map(|&index| self.output_schema.field(index).clone())
-                    .collect(),
-            ),
-            None => self.output_schema.clone(),
-        })
+        Ok(self.output_schema.clone())
     }
 
     fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
@@ -154,7 +137,6 @@ impl IPhysicalPlan for RangeJoin {
             join_type: self.join_type,
             range_join_type: self.range_join_type.clone(),
             output_schema: self.output_schema.clone(),
-            projections: self.projections.clone(),
             stat_info: self.stat_info.clone(),
         })
     }
@@ -167,19 +149,7 @@ impl IPhysicalPlan for RangeJoin {
             function_context,
         ));
         self.build_right(state.clone(), builder)?;
-        self.build_left(state, builder)?;
-        if let Some(projection) = &self.projections {
-            builder.main_pipeline.add_transformer(|| {
-                CompoundBlockOperator::new(
-                    vec![BlockOperator::Project {
-                        projection: projection.clone(),
-                    }],
-                    builder.func_ctx.clone(),
-                    self.output_schema.num_fields(),
-                )
-            });
-        }
-        Ok(())
+        self.build_left(state, builder)
     }
 }
 
@@ -240,10 +210,14 @@ impl PhysicalPlanBuilder {
         &mut self,
         join_type: JoinType,
         s_expr: &SExpr,
-        required: ColumnSet,
+        left_required: ColumnSet,
+        right_required: ColumnSet,
         mut range_conditions: Vec<ScalarExpr>,
         mut other_conditions: Vec<ScalarExpr>,
     ) -> Result<PhysicalPlan> {
+        let left_prop = RelExpr::with_s_expr(s_expr.right_child()).derive_relational_prop()?;
+        let right_prop = RelExpr::with_s_expr(s_expr.left_child()).derive_relational_prop()?;
+
         debug_assert!(!range_conditions.is_empty());
 
         let range_join_type = if range_conditions.len() >= 2 {
@@ -256,55 +230,9 @@ impl PhysicalPlanBuilder {
             RangeJoinType::Merge
         };
 
-        // Only the selected range keys are evaluated for every input row.
-        // Remaining inequalities are residual predicates and must stay in place.
-        let left_columns = s_expr
-            .left_child()
-            .derive_relational_prop()?
-            .output_columns
-            .clone();
-        let right_columns = s_expr
-            .right_child()
-            .derive_relational_prop()?
-            .output_columns
-            .clone();
-        let mut left_keys = KeyMaterializer::new(self.metadata.clone());
-        let mut right_keys = KeyMaterializer::new(self.metadata.clone());
-        for condition in &mut range_conditions {
-            if let ScalarExpr::FunctionCall(func) = condition {
-                for arg in &mut func.arguments {
-                    let used = arg.used_columns();
-                    if !used.is_empty() && used.is_subset(&left_columns) {
-                        left_keys.materialize(arg, s_expr.left_child())?;
-                    } else if !used.is_empty() && used.is_subset(&right_columns) {
-                        right_keys.materialize(arg, s_expr.right_child())?;
-                    }
-                }
-            }
-        }
-        let RelOperator::Join(mut join) = s_expr.plan().clone() else {
-            unreachable!()
-        };
-        join.non_equi_conditions = range_conditions
-            .iter()
-            .chain(&other_conditions)
-            .cloned()
-            .collect();
-        let s_expr = s_expr
-            .replace_plan(Arc::new(join.into()))
-            .replace_children([
-                Arc::new(left_keys.finish(s_expr.left_child().clone())),
-                Arc::new(right_keys.finish(s_expr.right_child().clone())),
-            ]);
-        let mut children_required = self.derive_children_required_columns(&s_expr, &required)?;
-        let right_required = children_required.pop().unwrap();
-        let left_required = children_required.pop().unwrap();
-        let left_prop = RelExpr::with_s_expr(s_expr.right_child()).derive_relational_prop()?;
-        let right_prop = RelExpr::with_s_expr(s_expr.left_child()).derive_relational_prop()?;
-
         // Construct IEJoin
         let (right_side, left_side) = self
-            .build_join_sides(&s_expr, left_required, right_required)
+            .build_join_sides(s_expr, left_required, right_required)
             .await?;
 
         let left_schema = self.prepare_probe_schema(join_type, &left_side)?;
@@ -319,16 +247,6 @@ impl PhysicalPlanBuilder {
                 .collect::<Vec<_>>(),
         );
 
-        let mut projections = required
-            .union(self.metadata.read().get_retained_column())
-            .filter_map(|column| {
-                output_schema
-                    .column_with_name(&column.to_string())
-                    .map(|(index, _)| index)
-            })
-            .collect::<Vec<_>>();
-        projections.sort_unstable();
-        let projections = (projections.len() != output_schema.num_fields()).then_some(projections);
         Ok(PhysicalPlan::new(RangeJoin {
             left: left_side,
             right: right_side,
@@ -352,8 +270,7 @@ impl PhysicalPlanBuilder {
             join_type,
             range_join_type,
             output_schema,
-            projections,
-            stat_info: Some(self.build_plan_stat_info(&s_expr)?),
+            stat_info: Some(self.build_plan_stat_info(s_expr)?),
         }))
     }
 }

@@ -44,7 +44,6 @@ use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::optimizers::materialize_keys::expand_input_keys;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinType;
 use tokio::sync::Barrier;
@@ -797,7 +796,6 @@ impl PhysicalPlanBuilder {
     fn process_equi_conditions(
         &self,
         join: &Join,
-        s_expr: &SExpr,
         probe_schema: &DataSchemaRef,
         build_schema: &DataSchemaRef,
         column_projections: &[Symbol],
@@ -825,17 +823,9 @@ impl PhysicalPlanBuilder {
                 .project_column_ref(|index| probe_schema.index_of(&index.to_string()))?;
 
             // Prepare runtime filter expression
-            let probe_source = expand_input_keys(left_condition.clone(), s_expr.left_child())?;
-            let left_expr_for_runtime_filter = probe_source
-                .as_ref()
-                .map(|source| self.prepare_runtime_filter_expr(source))
-                .transpose()?
-                .flatten();
+            let left_expr_for_runtime_filter = self.prepare_runtime_filter_expr(left_condition)?;
 
-            let right_used_columns =
-                expand_input_keys(right_condition.clone(), s_expr.right_child())?
-                    .map(|source| source.used_columns())
-                    .unwrap_or_default();
+            let right_used_columns = right_condition.used_columns();
             let build_table_index = if right_used_columns.len() == 1 {
                 let column_idx = *right_used_columns.iter().next().unwrap();
                 if matches!(
@@ -1326,7 +1316,6 @@ impl PhysicalPlanBuilder {
             build_table_indexes,
         ) = self.process_equi_conditions(
             join,
-            s_expr,
             &probe_schema,
             &build_schema,
             &column_projections,

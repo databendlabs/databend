@@ -540,14 +540,21 @@ impl PhysicalPlanBuilder {
         let child = s_expr.child(0)?;
         // Sources are needed to evaluate the window inputs, but only the
         // resulting columns and the parent's outputs need to survive the sort.
-        let input_required = self
-            .derive_children_required_columns(s_expr, &required)?
-            .remove(0);
+        let mut input_required = required.clone();
+        for item in &window_group.scalar_items {
+            input_required.remove(&item.index);
+        }
+        for item in &window_group.scalar_items {
+            item.scalar.collect_used_columns(&mut input_required);
+        }
         let input = self.build(child, input_required).await?;
         let input = if window_group.scalar_items.is_empty() {
             input
         } else {
-            let mut projections = required.iter().copied().collect::<Vec<_>>();
+            let mut projections = required
+                .union(self.metadata.read().get_retained_column())
+                .copied()
+                .collect::<Vec<_>>();
             for item in &window_group.scalar_items {
                 projections.push(item.index);
             }
@@ -614,9 +621,17 @@ impl PhysicalPlanBuilder {
         // left join ( select dense_rank() over(order by t1.a desc) as rk
         // from (select 'a2' as a) t1 )s2 on s1.rk=s2.rk;
 
-        required = self
-            .derive_children_required_columns(s_expr, &required)?
-            .remove(0);
+        // The child EvalScalar has already evaluated these expressions. Keep
+        // their results across the sort/window, not their source columns.
+        window.arguments.iter().for_each(|item| {
+            required.insert(item.index);
+        });
+        window.partition_by.iter().for_each(|item| {
+            required.insert(item.index);
+        });
+        window.order_by.iter().for_each(|item| {
+            required.insert(item.order_by_item.index);
+        });
 
         // 2. Build physical plan.
         let input = self.build(s_expr.child(0)?, required).await?;
@@ -884,6 +899,7 @@ fn apply_window_sort_plan(
 
     if !window.partition_by.is_empty() {
         return Ok(PhysicalPlan::new(WindowPartition {
+            pre_projection: None,
             meta: PhysicalPlanMeta::new("WindowPartition"),
             input,
             partition_by: window.partition_by.clone(),

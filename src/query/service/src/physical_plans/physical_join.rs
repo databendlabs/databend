@@ -156,9 +156,13 @@ impl PhysicalPlanBuilder {
             }
         }
 
-        let mut children_required = self.derive_children_required_columns(s_expr, &required)?;
-        let right_required = children_required.pop().unwrap();
-        let left_required = children_required.pop().unwrap();
+        // Include columns referenced in left conditions and right conditions.
+        let mut left_required = others_required.clone();
+        let mut right_required = others_required.clone();
+        for condition in &join.equi_conditions {
+            condition.left.collect_used_columns(&mut left_required);
+            condition.right.collect_used_columns(&mut right_required);
+        }
 
         // 2. Try Build physical spatial join plan.
         if let Some(candidate) = join.spatial_join.clone() {
@@ -232,7 +236,8 @@ impl PhysicalPlanBuilder {
             self.build_range_join(
                 join.join_type,
                 s_expr,
-                required,
+                left_required,
+                right_required,
                 range_conditions,
                 other_conditions,
             )
@@ -273,8 +278,15 @@ impl PhysicalPlanBuilder {
                     .await
                 }
                 PhysicalJoinType::RangeJoin { range, other } => {
-                    self.build_range_join(join.join_type, s_expr, required, range, other)
-                        .await
+                    self.build_range_join(
+                        join.join_type,
+                        s_expr,
+                        left_required,
+                        right_required,
+                        range,
+                        other,
+                    )
+                    .await
                 }
             }
         }

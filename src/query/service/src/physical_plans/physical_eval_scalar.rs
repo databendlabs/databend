@@ -210,20 +210,23 @@ impl PhysicalPlanBuilder {
         &mut self,
         s_expr: &SExpr,
         eval_scalar: &databend_common_sql::plans::EvalScalar,
-        required: ColumnSet,
+        mut required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
         let column_projections = required.clone();
-        let used = eval_scalar
-            .items
-            .iter()
-            .filter(|item| required.contains(&item.index))
-            .cloned()
-            .collect::<Vec<_>>();
-        let required = self
-            .derive_children_required_columns(s_expr, &required)?
-            .remove(0);
+        let mut used = vec![];
+        // Only keep columns needed by parent plan.
+        for s in &eval_scalar.items {
+            if !required.contains(&s.index) {
+                continue;
+            }
+            used.push(s.clone());
+            // The item defines this output index. Only request the child column
+            // when the defining expression itself references that index.
+            required.remove(&s.index);
+            s.scalar.collect_used_columns(&mut required);
+        }
         // 2. Build physical plan.
         if used.is_empty() {
             self.build(s_expr.child(0)?, required).await

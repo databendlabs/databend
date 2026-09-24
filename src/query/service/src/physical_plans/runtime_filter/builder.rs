@@ -32,7 +32,6 @@ use databend_common_sql::IndexType;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::Symbol;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::optimizers::materialize_keys::expand_input_keys;
 use databend_common_sql::plans::Exchange;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinEquiCondition;
@@ -325,14 +324,7 @@ fn collect_equi_conditions(s_expr: &SExpr) -> Result<Vec<JoinEquiCondition>> {
 
     if let RelOperator::Join(join) = s_expr.plan() {
         if matches!(join.join_type, JoinType::Inner) {
-            for condition in &join.equi_conditions {
-                if let (Some(left), Some(right)) = (
-                    expand_input_keys(condition.left.clone(), s_expr.left_child())?,
-                    expand_input_keys(condition.right.clone(), s_expr.right_child())?,
-                ) {
-                    conditions.push(JoinEquiCondition::new(left, right, condition.is_null_equal));
-                }
-            }
+            conditions.extend(join.equi_conditions.clone());
         }
     }
 

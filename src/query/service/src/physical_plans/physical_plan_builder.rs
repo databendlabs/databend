@@ -29,7 +29,6 @@ use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::RelOperator;
-use databend_common_sql::plans::derive_scalar_input_columns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
@@ -208,9 +207,6 @@ impl PhysicalPlanBuilder {
         self.metadata = metadata;
     }
 
-    // Shared by physical construction and the CTE consumer union. Scalar
-    // definitions contribute sources only at their producer, while consumers
-    // (including exchanges introduced by distribution planning) require results.
     pub(crate) fn derive_children_required_columns(
         &self,
         s_expr: &SExpr,
@@ -226,8 +222,12 @@ impl PhysicalPlanBuilder {
 
         match s_expr.plan() {
             RelOperator::EvalScalar(eval_scalar) => {
-                child_required[0] =
-                    derive_scalar_input_columns(&eval_scalar.items, parent_required);
+                let req = &mut child_required[0];
+                for item in &eval_scalar.items {
+                    if parent_required.contains(&item.index) {
+                        item.scalar.collect_used_columns(req);
+                    }
+                }
             }
             RelOperator::Filter(filter) => {
                 let req = &mut child_required[0];
@@ -239,45 +239,57 @@ impl PhysicalPlanBuilder {
                 let req = &mut child_required[0];
                 for item in &agg.group_items {
                     req.insert(item.index);
+                    item.scalar.collect_used_columns(req);
                 }
-                // Final aggregation consumes partial states at the result IDs;
-                // only Partial/Initial evaluate the original argument columns.
-                if !matches!(agg.mode, databend_common_sql::plans::AggregateMode::Final) {
-                    for item in &agg.aggregate_functions {
-                        req.remove(&item.index);
-                    }
-                    for item in &agg.aggregate_functions {
-                        if parent_required.contains(&item.index) {
-                            item.scalar.collect_used_columns(req);
-                        }
+                for item in &agg.aggregate_functions {
+                    if parent_required.contains(&item.index) {
+                        item.scalar.collect_used_columns(req);
                     }
                 }
             }
             RelOperator::Window(window) => {
                 let req = &mut child_required[0];
-                req.remove(&window.index);
-                req.extend(window.arguments.iter().map(|item| item.index));
-                req.extend(window.partition_by.iter().map(|item| item.index));
-                req.extend(window.order_by.iter().map(|item| item.order_by_item.index));
-            }
-            RelOperator::WindowGroup(group) => {
-                let req = &mut child_required[0];
-                for window in &group.windows {
-                    req.remove(&window.index);
-                    req.extend(window.arguments.iter().map(|item| item.index));
-                    req.extend(window.partition_by.iter().map(|item| item.index));
-                    req.extend(window.order_by.iter().map(|item| item.order_by_item.index));
+                for item in &window.arguments {
+                    item.scalar.collect_used_columns(req);
+                    req.insert(item.index);
                 }
-                req.extend(group.scalar_items.iter().map(|item| item.index));
-                *req = derive_scalar_input_columns(&group.scalar_items, req);
+                for item in &window.partition_by {
+                    item.scalar.collect_used_columns(req);
+                    req.insert(item.index);
+                }
+                for item in &window.order_by {
+                    item.order_by_item.scalar.collect_used_columns(req);
+                    req.insert(item.order_by_item.index);
+                }
+            }
+            RelOperator::WindowGroup(window_group) => {
+                let req = &mut child_required[0];
+                for window in &window_group.windows {
+                    req.remove(&window.index);
+                }
+                for item in &window_group.scalar_items {
+                    item.scalar.collect_used_columns(req);
+                    req.insert(item.index);
+                }
+                for window in &window_group.windows {
+                    for item in &window.arguments {
+                        item.scalar.collect_used_columns(req);
+                        req.insert(item.index);
+                    }
+                    for item in &window.partition_by {
+                        item.scalar.collect_used_columns(req);
+                        req.insert(item.index);
+                    }
+                    for item in &window.order_by {
+                        item.order_by_item.scalar.collect_used_columns(req);
+                        req.insert(item.order_by_item.index);
+                    }
+                }
             }
             RelOperator::Sort(sort) => {
                 let req = &mut child_required[0];
                 for item in &sort.items {
                     req.insert(item.index);
-                }
-                if let Some(partition) = &sort.window_partition {
-                    req.extend(partition.partition_by.iter().map(|item| item.index));
                 }
             }
             RelOperator::TopN(top_n) => {
@@ -345,10 +357,7 @@ impl PhysicalPlanBuilder {
                 child_required[0] = left_required;
                 child_required[1] = right_required;
             }
-            RelOperator::Exchange(
-                databend_common_sql::plans::Exchange::NodeToNodeHash(exprs)
-                | databend_common_sql::plans::Exchange::GlobalHash(exprs),
-            ) => {
+            RelOperator::Exchange(databend_common_sql::plans::Exchange::NodeToNodeHash(exprs)) => {
                 let req = &mut child_required[0];
                 for expr in exprs {
                     expr.collect_used_columns(req);

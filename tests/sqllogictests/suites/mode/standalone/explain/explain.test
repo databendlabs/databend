@@ -871,7 +871,7 @@ Sort(Single)
     ├── keys is null equal: [false, false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:0, build key:numbers.number (#2), probe targets:[numbers.number (#0)@scan0], filter type:bloom,inlist,min_max
+    │   └── filter id:0, build key:numbers.number (#2), probe targets:[a.number (#0)@scan0], filter type:bloom,inlist,min_max
     ├── estimated rows: 25.00
     ├── EvalScalar(Build)
     │   ├── output columns: [numbers.number (#2), register_at (#3)]
@@ -981,7 +981,7 @@ HashJoin
 ├── output columns: [t1.a (#0), t1.b (#1)]
 ├── join type: INNER
 ├── build keys: [t1.a (#0)]
-├── probe keys: [CAST(operator_key (#5) AS Int32 NULL)]
+├── probe keys: [CAST(CAST(subquery_2 (#2) AS UInt16 NULL) AS Int32 NULL)]
 ├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 3.00
@@ -996,22 +996,18 @@ HashJoin
 │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 3.00
-└── EvalScalar(Probe)
-    ├── output columns: [operator_key (#5)]
-    ├── expressions: [CAST(subquery_2 (#2) AS UInt16 NULL)]
+└── AggregateFinal(Probe)
+    ├── output columns: [col0 (#2)]
+    ├── group by: [col0]
+    ├── aggregate functions: []
     ├── estimated rows: 22.00
-    └── AggregateFinal
-        ├── output columns: [col0 (#2)]
+    └── AggregatePartial
         ├── group by: [col0]
         ├── aggregate functions: []
         ├── estimated rows: 22.00
-        └── AggregatePartial
-            ├── group by: [col0]
-            ├── aggregate functions: []
-            ├── estimated rows: 22.00
-            └── ConstantTableScan
-                ├── output columns: [col0 (#2)]
-                └── column 0: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 3000]
+        └── ConstantTableScan
+            ├── output columns: [col0 (#2)]
+            └── column 0: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 3000]
 
 query T
 explain settings(inlist_to_join_threshold=5) select * from t1 where a not in (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 3000);
@@ -1024,7 +1020,7 @@ Filter
     ├── output columns: [t1.a (#0), t1.b (#1), marker (#3)]
     ├── join type: LEFT MARK
     ├── build keys: [t1.a (#0)]
-    ├── probe keys: [CAST(operator_key (#5) AS Int32 NULL)]
+    ├── probe keys: [CAST(CAST(subquery_2 (#2) AS UInt16 NULL) AS Int32 NULL)]
     ├── keys is null equal: [true]
     ├── filters: []
     ├── estimated rows: 3.00
@@ -1039,22 +1035,18 @@ Filter
     │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 3.00
-    └── EvalScalar(Probe)
-        ├── output columns: [operator_key (#5)]
-        ├── expressions: [CAST(subquery_2 (#2) AS UInt16 NULL)]
+    └── AggregateFinal(Probe)
+        ├── output columns: [col0 (#2)]
+        ├── group by: [col0]
+        ├── aggregate functions: []
         ├── estimated rows: 22.00
-        └── AggregateFinal
-            ├── output columns: [col0 (#2)]
+        └── AggregatePartial
             ├── group by: [col0]
             ├── aggregate functions: []
             ├── estimated rows: 22.00
-            └── AggregatePartial
-                ├── group by: [col0]
-                ├── aggregate functions: []
-                ├── estimated rows: 22.00
-                └── ConstantTableScan
-                    ├── output columns: [col0 (#2)]
-                    └── column 0: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 3000]
+            └── ConstantTableScan
+                ├── output columns: [col0 (#2)]
+                └── column 0: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 3000]
 
 statement ok
 CREATE OR REPLACE TABLE t1(i int, j int);
@@ -1784,20 +1776,16 @@ EvalScalar
     │                   └── HashJoin
     │                       ├── output columns: [0 (#74), x (#79), v (#80), x (#81), y (#82), sx (#84), sy (#85)]
     │                       ├── join type: INNER
-    │                       ├── build keys: [CAST(operator_key (#107) AS Int64 NULL)]
+    │                       ├── build keys: [CAST(p.v (#83) - 1 AS Int64 NULL)]
     │                       ├── probe keys: [CAST(f.v (#80) AS Int64 NULL)]
     │                       ├── keys is null equal: [false]
     │                       ├── filters: []
     │                       ├── estimated rows: 0.00
-    │                       ├── EvalScalar(Build)
-    │                       │   ├── output columns: [x (#81), y (#82), sx (#84), sy (#85), operator_key (#107)]
-    │                       │   ├── expressions: [p.v (#83) - 1]
+    │                       ├── Filter(Build)
+    │                       │   ├── output columns: [x (#81), y (#82), v (#83), sx (#84), sy (#85)]
+    │                       │   ├── filters: [p.v (#83) > 0]
     │                       │   ├── estimated rows: 0.00
-    │                       │   └── Filter
-    │                       │       ├── output columns: [x (#81), y (#82), v (#83), sx (#84), sy (#85)]
-    │                       │       ├── filters: [p.v (#83) > 0]
-    │                       │       ├── estimated rows: 0.00
-    │                       │       └── RecursiveCteScan
+    │                       │   └── RecursiveCteScan
     │                       └── EvalScalar(Probe)
     │                           ├── output columns: [0 (#74), x (#79), v (#80)]
     │                           ├── expressions: [CAST(g.x (#78) AS UInt64 NULL), CAST(ascii(substr(CAST(s.line (#75) AS String NULL), g.x (#78), 1)) - 48 AS UInt64 NULL)]
@@ -1912,20 +1900,16 @@ EvalScalar
         │                           └── HashJoin
         │                               ├── output columns: [0 (#28), x (#33), v (#34), x (#35), y (#36), sx (#38), sy (#39)]
         │                               ├── join type: INNER
-        │                               ├── build keys: [CAST(operator_key (#106) AS Int64 NULL)]
+        │                               ├── build keys: [CAST(p.v (#37) - 1 AS Int64 NULL)]
         │                               ├── probe keys: [CAST(f.v (#34) AS Int64 NULL)]
         │                               ├── keys is null equal: [false]
         │                               ├── filters: []
         │                               ├── estimated rows: 0.00
-        │                               ├── EvalScalar(Build)
-        │                               │   ├── output columns: [x (#35), y (#36), sx (#38), sy (#39), operator_key (#106)]
-        │                               │   ├── expressions: [p.v (#37) - 1]
+        │                               ├── Filter(Build)
+        │                               │   ├── output columns: [x (#35), y (#36), v (#37), sx (#38), sy (#39)]
+        │                               │   ├── filters: [p.v (#37) > 0]
         │                               │   ├── estimated rows: 0.00
-        │                               │   └── Filter
-        │                               │       ├── output columns: [x (#35), y (#36), v (#37), sx (#38), sy (#39)]
-        │                               │       ├── filters: [p.v (#37) > 0]
-        │                               │       ├── estimated rows: 0.00
-        │                               │       └── RecursiveCteScan
+        │                               │   └── RecursiveCteScan
         │                               └── EvalScalar(Probe)
         │                                   ├── output columns: [0 (#28), x (#33), v (#34)]
         │                                   ├── expressions: [CAST(g.x (#32) AS UInt64 NULL), CAST(ascii(substr(CAST(s.line (#29) AS String NULL), g.x (#32), 1)) - 48 AS UInt64 NULL)]

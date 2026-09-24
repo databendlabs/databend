@@ -216,15 +216,19 @@ impl PhysicalPlanBuilder {
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        let used = agg
-            .aggregate_functions
-            .iter()
-            .filter(|item| required.contains(&item.index))
-            .cloned()
-            .collect::<Vec<_>>();
-        required = self
-            .derive_children_required_columns(s_expr, &required)?
-            .remove(0);
+        let mut used = vec![];
+        for item in &agg.aggregate_functions {
+            if required.contains(&item.index) {
+                item.scalar.collect_used_columns(&mut required);
+                used.push(item.clone());
+            }
+        }
+
+        agg.group_items.iter().for_each(|i| {
+            // If the group item comes from a complex expression, we only include the final
+            // column index here. The used columns will be included in its EvalScalar child.
+            required.insert(i.index);
+        });
 
         // single key without aggregation
         if agg.group_items.is_empty() && used.is_empty() {
