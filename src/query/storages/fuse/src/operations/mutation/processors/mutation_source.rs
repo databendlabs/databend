@@ -101,7 +101,7 @@ pub struct MutationSource {
 }
 
 impl MutationSource {
-    #![allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         action: MutationAction,
@@ -154,11 +154,15 @@ impl Processor for MutationSource {
         }
 
         if matches!(self.state, State::Finish) {
+            self.partition_receiver.take();
             self.output.finish();
             return Ok(Event::Finished);
         }
 
         if self.output.is_finished() {
+            self.state = State::Finish;
+            // Release the receiver now so upstream senders can stop before the graph is dropped.
+            self.partition_receiver.take();
             return Ok(Event::Finished);
         }
 
