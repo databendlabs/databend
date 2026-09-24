@@ -18,6 +18,8 @@ use std::sync::Arc;
 
 use async_channel::Receiver;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::build_origin_block_row_num;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
@@ -354,7 +356,11 @@ impl Processor for MutationSource {
                     return Err(ErrorCode::Internal("It's a bug. Need partition receiver"));
                 };
                 self.state = match receiver.recv().await {
-                    Ok(part) => State::ReadData(Some(part?)),
+                    Ok(part) => {
+                        let part = part?;
+                        Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, 1);
+                        State::ReadData(Some(part))
+                    }
                     // All the partitions have been received.
                     Err(_) => State::Finish,
                 };
