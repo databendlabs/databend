@@ -55,7 +55,7 @@ HashJoin
 ├── output columns: [p.a (#0), b.id (#1)]
 ├── join type: INNER
 ├── build keys: [b.id (#1)]
-├── probe keys: [CAST(p.a (#0) AS Int32 NULL)]
+├── probe keys: [operator_key (#2)]
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
@@ -72,18 +72,22 @@ HashJoin
 │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 3.00
-└── TableScan(Probe)
-    ├── table: default.default.rf_cast_probe
-    ├── scan id: 0
-    ├── output columns: [a (#0)]
-    ├── read rows: 3
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [], limit: NONE]
-    ├── apply join filters: [#0]
-    └── estimated rows: 3.00
+└── EvalScalar(Probe)
+    ├── output columns: [p.a (#0), operator_key (#2)]
+    ├── expressions: [CAST(p.a (#0) AS Int32 NULL)]
+    ├── estimated rows: 3.00
+    └── TableScan
+        ├── table: default.default.rf_cast_probe
+        ├── scan id: 0
+        ├── output columns: [a (#0)]
+        ├── read rows: 3
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── push downs: [filters: [], limit: NONE]
+        ├── apply join filters: [#0]
+        └── estimated rows: 3.00
 
 statement ok
 drop table rf_cast_probe;
@@ -289,7 +293,7 @@ HashJoin
 ├── output columns: [p.a (#0), b.id (#1)]
 ├── join type: INNER
 ├── build keys: [b.id (#1)]
-├── probe keys: [p.a (#0) + 10]
+├── probe keys: [operator_key (#2)]
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
@@ -306,18 +310,22 @@ HashJoin
 │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 2.00
-└── TableScan(Probe)
-    ├── table: default.default.rf_expr_probe
-    ├── scan id: 0
-    ├── output columns: [a (#0)]
-    ├── read rows: 3
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [], limit: NONE]
-    ├── apply join filters: [#0]
-    └── estimated rows: 3.00
+└── EvalScalar(Probe)
+    ├── output columns: [p.a (#0), operator_key (#2)]
+    ├── expressions: [p.a (#0) + 10]
+    ├── estimated rows: 3.00
+    └── TableScan
+        ├── table: default.default.rf_expr_probe
+        ├── scan id: 0
+        ├── output columns: [a (#0)]
+        ├── read rows: 3
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── push downs: [filters: [], limit: NONE]
+        ├── apply join filters: [#0]
+        └── estimated rows: 3.00
 
 # A value-changing root expression stays on its own scan even when the probe
 # subtree contains an equivalent connector.
@@ -332,7 +340,7 @@ HashJoin
 ├── output columns: [p.a (#0), c.id (#1), b.id (#2)]
 ├── join type: INNER
 ├── build keys: [b.id (#2)]
-├── probe keys: [p.a (#0) + 10]
+├── probe keys: [operator_key (#4)]
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
@@ -349,39 +357,70 @@ HashJoin
 │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 2.00
-└── HashJoin(Probe)
-    ├── output columns: [p.a (#0), c.id (#1)]
-    ├── join type: INNER
-    ├── build keys: [c.id (#1)]
-    ├── probe keys: [p.a (#0) + 10]
-    ├── keys is null equal: [false]
-    ├── filters: []
-    ├── build join filters:
-    │   └── filter id:0, build key:c.id (#1), probe targets:[p.a (#0) + 10@scan0], filter type:bloom,inlist,min_max
+└── EvalScalar(Probe)
+    ├── output columns: [p.a (#0), c.id (#1), operator_key (#4)]
+    ├── expressions: [scalar_result (#3)]
     ├── estimated rows: 3.00
-    ├── TableScan(Build)
-    │   ├── table: default.default.rf_expr_connector
-    │   ├── scan id: 1
-    │   ├── output columns: [id (#1)]
-    │   ├── read rows: 3
-    │   ├── read size: < 1 KiB
-    │   ├── partitions total: 1
-    │   ├── partitions scanned: 1
-    │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    │   ├── push downs: [filters: [], limit: NONE]
-    │   └── estimated rows: 3.00
-    └── TableScan(Probe)
-        ├── table: default.default.rf_expr_probe
-        ├── scan id: 0
-        ├── output columns: [a (#0)]
-        ├── read rows: 3
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [], limit: NONE]
-        ├── apply join filters: [#1, #0]
-        └── estimated rows: 3.00
+    └── HashJoin
+        ├── output columns: [p.a (#0), operator_key (#3), c.id (#1)]
+        ├── join type: INNER
+        ├── build keys: [c.id (#1)]
+        ├── probe keys: [operator_key (#3)]
+        ├── keys is null equal: [false]
+        ├── filters: []
+        ├── build join filters:
+        │   └── filter id:0, build key:c.id (#1), probe targets:[p.a (#0) + 10@scan0], filter type:bloom,inlist,min_max
+        ├── estimated rows: 3.00
+        ├── TableScan(Build)
+        │   ├── table: default.default.rf_expr_connector
+        │   ├── scan id: 1
+        │   ├── output columns: [id (#1)]
+        │   ├── read rows: 3
+        │   ├── read size: < 1 KiB
+        │   ├── partitions total: 1
+        │   ├── partitions scanned: 1
+        │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+        │   ├── push downs: [filters: [], limit: NONE]
+        │   └── estimated rows: 3.00
+        └── EvalScalar(Probe)
+            ├── output columns: [p.a (#0), operator_key (#3)]
+            ├── expressions: [p.a (#0) + 10]
+            ├── estimated rows: 3.00
+            └── TableScan
+                ├── table: default.default.rf_expr_probe
+                ├── scan id: 0
+                ├── output columns: [a (#0)]
+                ├── read rows: 3
+                ├── read size: < 1 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                ├── push downs: [filters: [], limit: NONE]
+                ├── apply join filters: [#1, #0]
+                └── estimated rows: 3.00
+
+query I
+SELECT count(*)
+FROM rf_expr_probe p
+JOIN rf_expr_connector c ON p.a + 10 = c.id
+JOIN rf_expr_build b ON c.id = b.id;
+----
+2
+
+# A key computed below the NULL-supplying side cannot be expanded into a
+# scan-level filter above the outer join: its unmatched row has k = NULL.
+query I
+SELECT p.a
+FROM rf_expr_probe p
+LEFT JOIN (
+    SELECT c.id, c.id + 10 AS k
+    FROM rf_expr_connector c
+    JOIN rf_expr_build b ON c.id + 10 = b.id + 10
+) r ON p.a + 10 = r.id
+JOIN rf_expr_equiv e ON coalesce(r.k, 1) = e.c
+ORDER BY p.a;
+----
+2
 
 statement ok
 unset disable_join_reorder;
@@ -447,7 +486,7 @@ HashJoin
 ├── output columns: [p.a (#0), b.id (#1)]
 ├── join type: INNER
 ├── build keys: [b.id (#1)]
-├── probe keys: [CAST(CAST(p.a (#0) AS Int32) AS Int64)]
+├── probe keys: [operator_key (#2)]
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
@@ -464,18 +503,22 @@ HashJoin
 │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 3.00
-└── TableScan(Probe)
-    ├── table: default.default.rf_nested_cast_probe
-    ├── scan id: 0
-    ├── output columns: [a (#0)]
-    ├── read rows: 4
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [], limit: NONE]
-    ├── apply join filters: [#0]
-    └── estimated rows: 4.00
+└── EvalScalar(Probe)
+    ├── output columns: [p.a (#0), operator_key (#2)]
+    ├── expressions: [CAST(CAST(p.a (#0) AS Int32) AS Int64)]
+    ├── estimated rows: 4.00
+    └── TableScan
+        ├── table: default.default.rf_nested_cast_probe
+        ├── scan id: 0
+        ├── output columns: [a (#0)]
+        ├── read rows: 4
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── push downs: [filters: [], limit: NONE]
+        ├── apply join filters: [#0]
+        └── estimated rows: 4.00
 
 statement ok
 drop table rf_nested_cast_probe;
@@ -533,7 +576,7 @@ HashJoin
 ├── output columns: [p.s (#0), b.id (#1)]
 ├── join type: INNER
 ├── build keys: [CAST(b.id (#1) AS Int64 NULL)]
-├── probe keys: [TRY_CAST(p.s (#0) AS Int64 NULL)]
+├── probe keys: [operator_key (#2)]
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
@@ -550,18 +593,22 @@ HashJoin
 │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 2.00
-└── TableScan(Probe)
-    ├── table: default.default.rf_try_cast_probe
-    ├── scan id: 0
-    ├── output columns: [s (#0)]
-    ├── read rows: 4
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-    ├── push downs: [filters: [], limit: NONE]
-    ├── apply join filters: [#0]
-    └── estimated rows: 4.00
+└── EvalScalar(Probe)
+    ├── output columns: [p.s (#0), operator_key (#2)]
+    ├── expressions: [TRY_CAST(p.s (#0) AS Int64 NULL)]
+    ├── estimated rows: 4.00
+    └── TableScan
+        ├── table: default.default.rf_try_cast_probe
+        ├── scan id: 0
+        ├── output columns: [s (#0)]
+        ├── read rows: 4
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── push downs: [filters: [], limit: NONE]
+        ├── apply join filters: [#0]
+        └── estimated rows: 4.00
 
 statement ok
 drop table rf_try_cast_probe;

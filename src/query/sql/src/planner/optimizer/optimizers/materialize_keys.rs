@@ -23,6 +23,7 @@ use crate::optimizer::ir::SExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::Exchange;
+use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 use crate::plans::VisitorMut;
@@ -113,6 +114,14 @@ impl KeyMaterializer {
 }
 
 fn key_column(item: &ScalarItem) -> Result<ScalarExpr> {
+    // Preserve an existing reference, including its binding metadata. Distribution
+    // properties compare column and table IDs, so losing the table binding can
+    // make an already partitioned input appear to need another exchange.
+    if let ScalarExpr::BoundColumnRef(column) = &item.scalar
+        && column.column.index == item.index
+    {
+        return Ok(item.scalar.clone());
+    }
     // Unlike bound_column_expr, preserve the defined index even for aliases.
     Ok(BoundColumnRef {
         span: item.scalar.span(),
@@ -263,6 +272,41 @@ pub fn expand_input_keys(mut scalar: ScalarExpr, mut input: &SExpr) -> Result<Op
                 }
             }
             RelOperator::Exchange(_) => {}
+            RelOperator::Join(join) => {
+                // Reuse can reference a key produced below an earlier join.
+                // Trace only an input whose values survive this join unchanged;
+                // expressions on a NULL-extended side are not interchangeable.
+                let preserved: &[usize] = match join.join_type {
+                    JoinType::Inner | JoinType::InnerAny | JoinType::Cross => &[0, 1],
+                    JoinType::Left
+                    | JoinType::LeftAny
+                    | JoinType::LeftSingle
+                    | JoinType::LeftSemi
+                    | JoinType::LeftAnti => &[0],
+                    JoinType::Right
+                    | JoinType::RightAny
+                    | JoinType::RightSingle
+                    | JoinType::RightSemi
+                    | JoinType::RightAnti => &[1],
+                    _ => &[],
+                };
+                let used = scalar.used_columns();
+                let mut source = None;
+                if !used.is_empty() {
+                    for &side in preserved {
+                        let child = input.child(side)?;
+                        if used.is_subset(&child.derive_relational_prop()?.output_columns) {
+                            source = Some(child);
+                            break;
+                        }
+                    }
+                }
+                if let Some(child) = source {
+                    input = child;
+                    continue;
+                }
+                break;
+            }
             _ => break,
         }
         input = input.child(0)?;

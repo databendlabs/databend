@@ -348,6 +348,8 @@ AggregateFinal
             ├── probe keys: [x.a (#2)]
             ├── keys is null equal: [false]
             ├── filters: []
+            ├── build join filters(distributed):
+            │   └── filter id:0, build key:CAST(y.a (#1) AS UInt64 NULL), probe targets:[CAST(numbers.number (#0) AS UInt64 NULL)@scan0], filter type:bloom,inlist,min_max
             ├── estimated rows: 50.00
             ├── Exchange(Build)
             │   ├── output columns: [numbers.number (#1)]
@@ -378,6 +380,7 @@ AggregateFinal
                         ├── partitions total: 1
                         ├── partitions scanned: 1
                         ├── push downs: [filters: [], limit: NONE]
+                        ├── apply join filters: [#0]
                         └── estimated rows: 10.00
 
 statement ok
@@ -404,31 +407,35 @@ Exchange
 └── HashJoin
     ├── output columns: [t1.a (#0), t1.b (#1)]
     ├── join type: INNER
-    ├── build keys: [CAST(CAST(subquery_2 (#2) AS UInt8 NULL) AS Int32 NULL)]
+    ├── build keys: [CAST(operator_key (#5) AS Int32 NULL)]
     ├── probe keys: [t1.a (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:0, build key:CAST(CAST(subquery_2 (#2) AS UInt8 NULL) AS Int32 NULL), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
+    │   └── filter id:0, build key:CAST(operator_key (#5) AS Int32 NULL), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
     ├── estimated rows: 2.00
     ├── Exchange(Build)
-    │   ├── output columns: [col0 (#2)]
+    │   ├── output columns: [operator_key (#5)]
     │   ├── exchange type: Broadcast
-    │   └── AggregateFinal
-    │       ├── output columns: [col0 (#2)]
-    │       ├── group by: [col0]
-    │       ├── aggregate functions: []
+    │   └── EvalScalar
+    │       ├── output columns: [operator_key (#5)]
+    │       ├── expressions: [CAST(subquery_2 (#2) AS UInt8 NULL)]
     │       ├── estimated rows: 2.00
-    │       └── Exchange
+    │       └── AggregateFinal
     │           ├── output columns: [col0 (#2)]
-    │           ├── exchange type: Hash(0)
-    │           └── AggregatePartial
-    │               ├── group by: [col0]
-    │               ├── aggregate functions: []
-    │               ├── estimated rows: 2.00
-    │               └── ConstantTableScan
-    │                   ├── output columns: [col0 (#2)]
-    │                   └── column 0: [1, 2]
+    │           ├── group by: [col0]
+    │           ├── aggregate functions: []
+    │           ├── estimated rows: 2.00
+    │           └── Exchange
+    │               ├── output columns: [col0 (#2)]
+    │               ├── exchange type: Hash(0)
+    │               └── AggregatePartial
+    │                   ├── group by: [col0]
+    │                   ├── aggregate functions: []
+    │                   ├── estimated rows: 2.00
+    │                   └── ConstantTableScan
+    │                       ├── output columns: [col0 (#2)]
+    │                       └── column 0: [1, 2]
     └── TableScan(Probe)
         ├── table: default.default.t1
         ├── scan id: 0

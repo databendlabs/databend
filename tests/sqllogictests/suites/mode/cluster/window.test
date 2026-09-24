@@ -154,13 +154,13 @@ Exchange
         ├── output columns: [numbers.number (#0), lead_default_value (#1), lead_part_0 (#2), lead_order_0 (#3), lead_default_value (#5)]
         ├── hash keys: [lead_part_0]
         ├── estimated rows: 50.00
-        └── EvalScalar
+        └── Exchange
             ├── output columns: [numbers.number (#0), lead_default_value (#1), lead_part_0 (#2), lead_order_0 (#3), lead_default_value (#5)]
-            ├── expressions: [0, numbers.number (#0) % 3, numbers.number (#0) + 1, 0]
-            ├── estimated rows: 50.00
-            └── Exchange
-                ├── output columns: [numbers.number (#0)]
-                ├── exchange type: Hash(numbers.number (#0) % 3)
+            ├── exchange type: Hash(operator_key (#2))
+            └── EvalScalar
+                ├── output columns: [numbers.number (#0), lead_default_value (#1), lead_part_0 (#2), lead_order_0 (#3), lead_default_value (#5)]
+                ├── expressions: [0, numbers.number (#0) % 3, numbers.number (#0) + 1, 0]
+                ├── estimated rows: 50.00
                 └── TableScan
                     ├── table: default.system.numbers
                     ├── scan id: 0

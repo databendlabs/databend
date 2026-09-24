@@ -841,18 +841,18 @@ explain  select a, sum(number - 1) over (partition by number % 3) from (select n
     from numbers(50));
 ----
 Window
-├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#3), sum_arg_0 (#4), sum_part_0 (#5), sum(number - 1) OVER (PARTITION BY number % 3) (#6)]
+├── output columns: [rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#3), sum_arg_0 (#4), sum_part_0 (#5), sum(number - 1) OVER (PARTITION BY number % 3) (#6)]
 ├── aggregate function: [sum(sum_arg_0)]
 ├── partition by: [sum_part_0]
 ├── order by: []
 ├── frame: [Range: Preceding(None) ~ Following(None)]
 └── WindowPartition
-    ├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#3), sum_arg_0 (#4), sum_part_0 (#5)]
+    ├── output columns: [rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#3), sum_arg_0 (#4), sum_part_0 (#5)]
     ├── hash keys: [sum_part_0]
     ├── estimated rows: 50.00
     └── EvalScalar
-        ├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#3), sum_arg_0 (#4), sum_part_0 (#5)]
-        ├── expressions: [numbers.number (#0) - 1, numbers.number (#0) % 3]
+        ├── output columns: [rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#3), sum_arg_0 (#4), sum_part_0 (#5)]
+        ├── expressions: [numbers.number (#0) - 1, scalar_result (#1)]
         ├── estimated rows: 50.00
         └── Window
             ├── output columns: [numbers.number (#0), rank_part_0 (#1), rank_order_0 (#2), rank() OVER (PARTITION BY number % 3 ORDER BY number + 1) (#3)]
@@ -926,18 +926,18 @@ query T
 explain  select a, sum(number - 1) over (partition by number % 3) from (select number,  rank()over (partition by number % 3 order by number) a from numbers(50));
 ----
 Window
-├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number) (#2), sum_arg_0 (#3), sum_part_0 (#4), sum(number - 1) OVER (PARTITION BY number % 3) (#5)]
+├── output columns: [rank() OVER (PARTITION BY number % 3 ORDER BY number) (#2), sum_arg_0 (#3), sum_part_0 (#4), sum(number - 1) OVER (PARTITION BY number % 3) (#5)]
 ├── aggregate function: [sum(sum_arg_0)]
 ├── partition by: [sum_part_0]
 ├── order by: []
 ├── frame: [Range: Preceding(None) ~ Following(None)]
 └── WindowPartition
-    ├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number) (#2), sum_arg_0 (#3), sum_part_0 (#4)]
+    ├── output columns: [rank() OVER (PARTITION BY number % 3 ORDER BY number) (#2), sum_arg_0 (#3), sum_part_0 (#4)]
     ├── hash keys: [sum_part_0]
     ├── estimated rows: 50.00
     └── EvalScalar
-        ├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number) (#2), sum_arg_0 (#3), sum_part_0 (#4)]
-        ├── expressions: [numbers.number (#0) - 1, numbers.number (#0) % 3]
+        ├── output columns: [rank() OVER (PARTITION BY number % 3 ORDER BY number) (#2), sum_arg_0 (#3), sum_part_0 (#4)]
+        ├── expressions: [numbers.number (#0) - 1, scalar_result (#1)]
         ├── estimated rows: 50.00
         └── Window
             ├── output columns: [numbers.number (#0), rank_part_0 (#1), rank() OVER (PARTITION BY number % 3 ORDER BY number) (#2)]
@@ -968,18 +968,18 @@ query T
 explain  select a, sum(number - 1) over (partition by number % 3) from (select number,  rank()over (partition by number % 3 order by number) a from numbers(50)) t(number);
 ----
 Window
-├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number) (#2), sum_arg_0 (#3), sum_part_0 (#4), sum(number - 1) OVER (PARTITION BY number % 3) (#5)]
+├── output columns: [rank() OVER (PARTITION BY number % 3 ORDER BY number) (#2), sum_arg_0 (#3), sum_part_0 (#4), sum(number - 1) OVER (PARTITION BY number % 3) (#5)]
 ├── aggregate function: [sum(sum_arg_0)]
 ├── partition by: [sum_part_0]
 ├── order by: []
 ├── frame: [Range: Preceding(None) ~ Following(None)]
 └── WindowPartition
-    ├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number) (#2), sum_arg_0 (#3), sum_part_0 (#4)]
+    ├── output columns: [rank() OVER (PARTITION BY number % 3 ORDER BY number) (#2), sum_arg_0 (#3), sum_part_0 (#4)]
     ├── hash keys: [sum_part_0]
     ├── estimated rows: 50.00
     └── EvalScalar
-        ├── output columns: [numbers.number (#0), rank() OVER (PARTITION BY number % 3 ORDER BY number) (#2), sum_arg_0 (#3), sum_part_0 (#4)]
-        ├── expressions: [numbers.number (#0) - 1, numbers.number (#0) % 3]
+        ├── output columns: [rank() OVER (PARTITION BY number % 3 ORDER BY number) (#2), sum_arg_0 (#3), sum_part_0 (#4)]
+        ├── expressions: [numbers.number (#0) - 1, scalar_result (#1)]
         ├── estimated rows: 50.00
         └── Window
             ├── output columns: [numbers.number (#0), rank_part_0 (#1), rank() OVER (PARTITION BY number % 3 ORDER BY number) (#2)]
@@ -1011,10 +1011,10 @@ explain with test as ( select number % 10 as id, number as full_matched, max(num
 ----
 EvalScalar
 ├── output columns: [numbers.number (#0), max(number) OVER (PARTITION BY id) (#2), id (#3)]
-├── expressions: [numbers.number (#0) % 10]
+├── expressions: [scalar_result (#1)]
 ├── estimated rows: 500.00
 └── Filter
-    ├── output columns: [numbers.number (#0), max(number) OVER (PARTITION BY id) (#2)]
+    ├── output columns: [numbers.number (#0), max_part_0 (#1), max(number) OVER (PARTITION BY id) (#2)]
     ├── filters: [numbers.number (#0) = 3]
     ├── estimated rows: 500.00
     └── Window
