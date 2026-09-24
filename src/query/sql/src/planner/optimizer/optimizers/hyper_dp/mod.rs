@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod algorithm;
+mod cluster_key;
 mod dphyp;
 mod join_relation;
 

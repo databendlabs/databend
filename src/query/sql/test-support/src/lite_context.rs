@@ -115,11 +115,13 @@ use databend_meta_runtime::DatabendRuntime;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManager;
 use databend_storages_common_session::TxnManagerRef;
+use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ColumnCountMinSketch;
 use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 
 use crate::ReplayInput;
 use crate::ReplayRowAccessPolicy;
@@ -325,6 +327,10 @@ impl Table for FakeTable {
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
+    }
+
+    fn cluster_key_meta(&self) -> Option<ClusterKey> {
+        self.table_info.meta.cluster_key_v2.clone()
     }
 
     fn stream_source_table_info(&self) -> Option<&TableInfo> {
@@ -813,7 +819,7 @@ impl LiteTableContext {
         frequency_stats: FrequencyStatsMap,
         options: BTreeMap<String, String>,
         row_access_policy_columns_ids: Option<SecurityPolicyColumnMap>,
-    ) -> Result<Arc<dyn Table>> {
+    ) -> Result<Arc<FakeTable>> {
         let schema = Arc::new(TableSchema::new(fields));
         let FrequencyStatsMap {
             top_n,
@@ -1441,15 +1447,37 @@ impl LiteTableContext {
                     }
                 };
 
-                self.register_table_with_stats(
+                let mut options = stmt.table_options;
+                let cluster_key = stmt.cluster_by.map(|cluster_by| {
+                    options.insert(
+                        OPT_KEY_CLUSTER_TYPE.to_string(),
+                        cluster_by.cluster_type.to_string().to_lowercase(),
+                    );
+                    format!(
+                        "({})",
+                        cluster_by
+                            .cluster_exprs
+                            .iter()
+                            .map(|expr| format!("{expr:#}"))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                });
+                let mut table = self.build_fake_table(
                     &database,
                     &table_name,
                     fields,
                     table_stats,
                     column_stats,
                     histograms,
-                    stmt.table_options,
-                )
+                    FrequencyStatsMap::default(),
+                    options,
+                    None,
+                )?;
+                Arc::make_mut(&mut table).table_info.meta.cluster_key_v2 =
+                    cluster_key.map(|key| (0, key));
+                self.default_catalog.insert_table(&database, table);
+                Ok(())
             }
             _ => unsupported("lite sql harness table registration from non-DDL SQL"),
         }
