@@ -1,3 +1,5 @@
+# run-with-settings: enable_prune_pipeline=0
+
 statement ok
 drop table if exists t;
 
@@ -136,8 +138,8 @@ drop view v_after_deletion;
 statement ok
 drop table if exists del_id;
 
-# The segments of a lazy distributed deletion are pruned by a pruning pipeline at runtime,
-# which streams the deletion tasks to the mutation sources of each node.
+# Exercise lazy distributed deletion with both runtime pipeline pruning and legacy
+# initialization-time pruning through the extra settings pass.
 statement ok
 create or replace table t_lazy (id int not null, c1 int not null) row_per_block=10;
 

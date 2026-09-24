@@ -16,6 +16,7 @@ use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
+use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::PartStatistics;
@@ -48,6 +49,7 @@ use databend_common_storages_fuse::SegmentLocation;
 use databend_common_storages_fuse::operations::CommitMeta;
 use databend_common_storages_fuse::operations::ConflictResolveContext;
 use databend_common_storages_fuse::operations::MutationAction;
+use databend_common_storages_fuse::operations::MutationBlockPruningContext;
 
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::format::MutationSourceFormatter;
@@ -168,16 +170,41 @@ impl IPhysicalPlan for MutationSource {
                     snapshot_loc: None,
                 });
             }
-            // Prune the segments in a separate pipeline while the query is running, and
-            // stream the deletion tasks to the mutation sources.
-            let (prune_pipeline, partition_receiver) = table.build_mutation_prune_pipeline(
-                builder.ctx.clone(),
-                self.filters.clone(),
-                Projection::Columns(read_partition_columns.clone()),
-                segment_locations,
-            )?;
-            builder.pipelines.push(prune_pipeline);
-            Some(partition_receiver)
+            let projection = Projection::Columns(read_partition_columns.clone());
+            if builder.ctx.get_settings().get_enable_prune_pipeline()? {
+                // Prune the segments while the query is running and stream the deletion tasks.
+                let (prune_pipeline, partition_receiver) = table.build_mutation_prune_pipeline(
+                    builder.ctx.clone(),
+                    self.filters.clone(),
+                    projection,
+                    segment_locations,
+                )?;
+                builder.pipelines.push(prune_pipeline);
+                Some(partition_receiver)
+            } else {
+                // Preserve the legacy initialization-time pruning when the pipeline is disabled.
+                let ctx = builder.ctx.clone();
+                let table = table.clone();
+                let filters = self.filters.clone();
+                let prune_ctx = MutationBlockPruningContext {
+                    segment_locations,
+                    block_count: None,
+                };
+                Runtime::with_worker_threads(2, Some("do_mutation_block_pruning".to_string()))?
+                    .block_on(async move {
+                        let (_, partitions) = table
+                            .do_mutation_block_pruning(
+                                ctx.clone(),
+                                filters,
+                                projection,
+                                prune_ctx,
+                                true,
+                            )
+                            .await?;
+                        ctx.set_partitions(partitions)
+                    })?;
+                None
+            }
         } else {
             builder.ctx.set_partitions(self.partitions.clone())?;
             None
