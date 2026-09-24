@@ -179,3 +179,4 @@ mod v184_data_share_storage;
 mod v185_segment_claim_meta;
 mod v186_table_meta_ttl;
 mod v187_aggregate_state_version;
+mod v188_table_clone;

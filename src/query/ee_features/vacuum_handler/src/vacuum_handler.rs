@@ -38,6 +38,7 @@ pub trait VacuumHandler: Sync + Send {
         &self,
         threads_nums: usize,
         tables: Vec<TableInfo>,
+        safe_clone_table_ids: HashSet<u64>,
     ) -> VacuumDropTablesResult;
 
     async fn do_vacuum_temporary_files(
@@ -82,9 +83,10 @@ impl VacuumHandlerWrapper {
         &self,
         threads_nums: usize,
         tables: Vec<TableInfo>,
+        safe_clone_table_ids: HashSet<u64>,
     ) -> VacuumDropTablesResult {
         self.handler
-            .do_vacuum_drop_tables(threads_nums, tables)
+            .do_vacuum_drop_tables(threads_nums, tables, safe_clone_table_ids)
             .await
     }
 

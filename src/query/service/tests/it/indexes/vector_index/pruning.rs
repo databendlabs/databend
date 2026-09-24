@@ -157,6 +157,7 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         ttl: None,
         table_indexes: Some(table_indexes),
         table_constraints: None,
+        clone: None,
         attached_columns: None,
         table_partition: None,
         table_properties: None,
