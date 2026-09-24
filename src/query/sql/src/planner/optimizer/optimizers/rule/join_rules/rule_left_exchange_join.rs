@@ -18,7 +18,8 @@ use std::vec;
 
 use databend_common_exception::Result;
 
-use super::util::get_join_predicates;
+use super::util::equi_condition_to_predicate;
+use crate::ColumnSet;
 use crate::binder::JoinPredicate;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
@@ -120,7 +121,20 @@ impl Rule for RuleLeftExchangeJoin {
         let contains_cross_join =
             matches!(join1.join_type, JoinType::Cross) || join2.join_type == JoinType::Cross;
 
-        let predicates = [get_join_predicates(&join1)?, get_join_predicates(&join2)?].concat();
+        // NULL-safe equi conditions can't be represented by `eq` predicates, so keep them as
+        // structured conditions and place them after the ordinary predicates are resolved.
+        let mut predicates = vec![];
+        let mut null_equal_conditions = vec![];
+        for join in [&join1, &join2] {
+            for condition in join.equi_conditions.iter() {
+                if condition.is_null_equal {
+                    null_equal_conditions.push(condition);
+                } else {
+                    predicates.push(equi_condition_to_predicate(condition));
+                }
+            }
+            predicates.extend(join.non_equi_conditions.iter().cloned());
+        }
 
         let mut join_3 = Join::default();
         let mut join_4 = Join::default();
@@ -172,10 +186,6 @@ impl Rule for RuleLeftExchangeJoin {
             }
         }
 
-        if !join_3.equi_conditions.is_empty() {
-            join_3.join_type = JoinType::Inner;
-        }
-
         // Resolve predicates for join4
         for predicate in join_4_preds.iter() {
             let join_pred = JoinPredicate::new(predicate, &t1_prop, &t3_prop);
@@ -203,6 +213,29 @@ impl Rule for RuleLeftExchangeJoin {
                     }
                 }
             }
+        }
+
+        // Place NULL-safe conditions on the join whose children provide both sides. Inner joins
+        // with NULL-safe equality keys are still associative, but these conditions must stay
+        // equi conditions; give up the exchange if one can't be placed that way.
+        for condition in null_equal_conditions {
+            if let Some(condition) =
+                orient_equi_condition(condition, &t1_prop.output_columns, &t3_prop.output_columns)
+            {
+                join_4.equi_conditions.push(condition);
+            } else if let Some(condition) = orient_equi_condition(
+                condition,
+                &join4_prop.output_columns,
+                &t2_prop.output_columns,
+            ) {
+                join_3.equi_conditions.push(condition);
+            } else {
+                return Ok(());
+            }
+        }
+
+        if !join_3.equi_conditions.is_empty() {
+            join_3.join_type = JoinType::Inner;
         }
 
         if !join_4.equi_conditions.is_empty() {
@@ -244,4 +277,32 @@ impl Default for RuleLeftExchangeJoin {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Orient an equi condition so that its left side is provided by `left_columns` and its right
+/// side by `right_columns`, keeping `is_null_equal`. Returns `None` if it can't be oriented.
+fn orient_equi_condition(
+    condition: &JoinEquiCondition,
+    left_columns: &ColumnSet,
+    right_columns: &ColumnSet,
+) -> Option<JoinEquiCondition> {
+    let left_used_columns = condition.left.used_columns();
+    let right_used_columns = condition.right.used_columns();
+    if left_used_columns.is_empty() || right_used_columns.is_empty() {
+        return None;
+    }
+
+    if left_used_columns.is_subset(left_columns) && right_used_columns.is_subset(right_columns) {
+        return Some(condition.clone());
+    }
+
+    if right_used_columns.is_subset(left_columns) && left_used_columns.is_subset(right_columns) {
+        return Some(JoinEquiCondition::new(
+            condition.right.clone(),
+            condition.left.clone(),
+            condition.is_null_equal,
+        ));
+    }
+
+    None
 }
