@@ -422,10 +422,13 @@ async fn test_like_escape_preserves_existing_binding_semantics() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tuple_in_multicolumn_subquery() -> Result<()> {
     let ctx = LiteTableContext::create().await?;
-    ctx.register_setup_sql("CREATE TABLE orders(user_id INT, product_id INT)")
+    ctx.register_setup_sql("CREATE TABLE orders(user_id INT NULL, product_id INT NULL)")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE wide(a INT NULL, b INT NULL, c INT NULL, d INT NULL)")
         .await?;
     for sql in [
         "SELECT * FROM orders WHERE (user_id, product_id) IN (SELECT user_id, product_id FROM orders GROUP BY user_id, product_id)",
+        "SELECT * FROM wide WHERE (a, b, c, d) IN (SELECT a, b, c, d FROM wide)",
         "SELECT * FROM orders WHERE (user_id, product_id) NOT IN (SELECT user_id, product_id FROM orders)",
         "SELECT (user_id, product_id) IN (SELECT user_id, product_id FROM orders) FROM orders",
         "SELECT * FROM orders AS o WHERE (o.user_id, o.product_id) IN (SELECT i.user_id, i.product_id FROM orders AS i WHERE i.user_id = o.user_id)",
@@ -440,6 +443,12 @@ async fn test_tuple_in_multicolumn_subquery() -> Result<()> {
     ] {
         assert!(ctx.bind_sql(sql).await.is_err(), "should reject {sql}");
     }
+    // Three-valued NOT IN over many nullable fields is bounded at plan time.
+    let plan = ctx
+        .bind_sql("SELECT * FROM wide WHERE (a, b, c, d) NOT IN (SELECT a, b, c, d FROM wide)")
+        .await?;
+    let err = ctx.optimize_plan(plan).await.unwrap_err();
+    assert!(err.message().contains("nullable fields"), "{err}");
     Ok(())
 }
 

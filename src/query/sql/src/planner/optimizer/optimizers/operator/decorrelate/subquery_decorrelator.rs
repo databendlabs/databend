@@ -683,6 +683,9 @@ impl SubqueryDecorrelatorOptimizer {
                     UnnestResult::SimpleJoin { output_index },
                 ))
             }
+            SubqueryType::Any if !subquery.row_columns.is_empty() => {
+                self.rewrite_uncorrelated_row_value(outer, subquery, is_conjunctive_predicate)
+            }
             SubqueryType::Any => {
                 let output_column = subquery.output_column.clone();
                 let column_name = format!("subquery_{}", output_column.index);

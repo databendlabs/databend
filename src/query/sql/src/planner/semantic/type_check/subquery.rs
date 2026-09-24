@@ -38,19 +38,14 @@ use super::FullTypeCheckAdapter;
 use super::TypeCheckSubqueryPlan;
 use super::TypeChecker;
 use crate::BindContext;
-use crate::ColumnBindingBuilder;
 use crate::ColumnSet;
 use crate::MetadataRef;
-use crate::Visibility;
 use crate::binder::Binder;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::NameResolutionContext;
-use crate::plans::BoundColumnRef;
-use crate::plans::EvalScalar;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
-use crate::plans::ScalarItem;
 use crate::plans::SubqueryComparisonOp;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
@@ -374,7 +369,7 @@ where A: super::TypeCheckAdapter
         }
 
         let TypeCheckSubqueryPlan {
-            mut s_expr,
+            s_expr,
             output_context,
         } = self.adapter.bind_subquery(
             self.bind_context,
@@ -388,8 +383,6 @@ where A: super::TypeCheckAdapter
 
         // IN and = ANY compare row values positionally; other subquery
         // comparisons retain their existing single-column requirement.
-        // This uses the existing tuple equality semantics; SQL three-valued
-        // comparisons of rows containing NULL require separate support.
         let tuple_arity = child_expr.as_ref().and_then(|(_, ty)| {
             match (typ, &compare_op, ty.remove_nullable()) {
                 (SubqueryType::Any, Some(SubqueryComparisonOp::Equal), DataType::Tuple(fields)) => {
@@ -417,34 +410,14 @@ where A: super::TypeCheckAdapter
             .set_span(span));
         }
 
-        let mut output_column = output_context.columns[0].clone();
-        if tuple_arity.is_some() && output_arity > 1 {
-            let args = output_context
-                .columns
-                .iter()
-                .cloned()
-                .map(|column| ScalarExpr::BoundColumnRef(BoundColumnRef { span, column }))
-                .collect();
-            let deref!((tuple, tuple_type)) =
-                self.resolve_scalar_function_call(span, "tuple", vec![], args)?;
-            let index = self
-                .metadata
-                .write()
-                .add_derived_column("subquery_tuple".to_string(), tuple_type.clone());
-            output_column = ColumnBindingBuilder::new(
-                "subquery_tuple".to_string(),
-                index,
-                Box::new(tuple_type),
-                Visibility::Visible,
-            )
-            .build();
-            s_expr = s_expr.build_unary(EvalScalar {
-                items: vec![ScalarItem {
-                    scalar: tuple,
-                    index,
-                }],
-            });
-        }
+        let output_column = output_context.columns[0].clone();
+        // Separate columns are compared field by field by the decorrelator,
+        // which keeps SQL three-valued semantics for NULL fields.
+        let row_columns = if tuple_arity.is_some() && output_arity > 1 {
+            output_context.columns.clone()
+        } else {
+            vec![]
+        };
 
         let mut contain_agg = None;
         if let SetExpr::Select(select_stmt) = &subquery.body {
@@ -519,6 +492,7 @@ where A: super::TypeCheckAdapter
             child_expr: child_scalar,
             compare_op,
             output_column,
+            row_columns,
             projection_index: None,
             data_type: Box::new(data_type),
             typ,
