@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod exchange_data_codec;
 pub mod inbound_channel;
 pub mod inbound_quota;
 pub mod local_channel;
@@ -21,6 +22,8 @@ pub mod outbound_transport;
 
 pub use databend_common_pipeline::core::SyncTaskHandle;
 pub use databend_common_pipeline::core::SyncTaskSet;
+pub use exchange_data_codec::DefaultExchangeDataCodec;
+pub use exchange_data_codec::ExchangeDataCodec;
 pub use inbound_channel::InboundChannel;
 pub use inbound_channel::NetworkInboundChannelSet;
 pub use inbound_channel::NetworkInboundReceiver;

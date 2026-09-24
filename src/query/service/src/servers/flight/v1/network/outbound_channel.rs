@@ -35,6 +35,8 @@ use databend_common_io::prelude::BinaryWrite;
 use databend_common_io::prelude::bincode_serialize_into_buf;
 use databend_common_settings::FlightCompression;
 
+use super::DefaultExchangeDataCodec;
+use super::ExchangeDataCodec;
 use super::outbound_buffer::ExchangeSinkBuffer;
 
 /// Outbound channel trait for sending data blocks.
@@ -160,6 +162,7 @@ pub struct RemoteChannel {
     channel_id: usize,
     buffer: Arc<ExchangeSinkBuffer>,
     ipc_options: IpcWriteOptions,
+    codec: Arc<dyn ExchangeDataCodec>,
 }
 
 impl RemoteChannel {
@@ -169,11 +172,28 @@ impl RemoteChannel {
         buffer: Arc<ExchangeSinkBuffer>,
         compression: Option<FlightCompression>,
     ) -> Result<Arc<dyn OutboundChannel>> {
+        Self::create_with_codec(
+            dest_idx,
+            channel_id,
+            buffer,
+            compression,
+            DefaultExchangeDataCodec::create(),
+        )
+    }
+
+    pub fn create_with_codec(
+        dest_idx: usize,
+        channel_id: usize,
+        buffer: Arc<ExchangeSinkBuffer>,
+        compression: Option<FlightCompression>,
+        codec: Arc<dyn ExchangeDataCodec>,
+    ) -> Result<Arc<dyn OutboundChannel>> {
         Ok(Arc::new(Self {
             dest_idx,
             channel_id,
             buffer,
             ipc_options: make_ipc_options(compression)?,
+            codec,
         }))
     }
 }
@@ -187,9 +207,11 @@ impl OutboundChannel for RemoteChannel {
     }
 
     async fn add_block(&self, block: DataBlock) -> Result<()> {
+        let Some(block) = self.codec.encode(block)? else {
+            return Ok(());
+        };
         Profile::record_usize_profile(ProfileStatisticsName::ExchangeRows, block.num_rows());
         Profile::record_usize_profile(ProfileStatisticsName::ExchangeBytes, block.memory_size());
-
         let flight_data_list = serialize_block(block, &self.ipc_options, None)?;
 
         let tid_prefix = (self.channel_id as u16).to_le_bytes();
@@ -284,6 +306,7 @@ mod tests {
     use arrow_flight::FlightData;
     use arrow_schema::Schema as ArrowSchema;
     use databend_common_base::runtime::Runtime;
+    use databend_common_exception::ErrorCode;
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
     use databend_common_expression::types::Int32Type;
@@ -324,6 +347,22 @@ mod tests {
         DataBlock::new_from_columns(vec![col])
     }
 
+    struct SelectiveEncodeCodec;
+
+    impl ExchangeDataCodec for SelectiveEncodeCodec {
+        fn encode(&self, block: DataBlock) -> Result<Option<DataBlock>> {
+            match block.num_rows() {
+                1 => Ok(None),
+                2 => Err(ErrorCode::BadBytes("invalid codec payload")),
+                _ => Ok(Some(make_block(4))),
+            }
+        }
+
+        fn decode(&self, _block: DataBlock) -> Result<Option<DataBlock>> {
+            unreachable!("outbound channel never decodes")
+        }
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn test_remote_channel_send_block() {
         let rt = test_runtime();
@@ -346,6 +385,34 @@ mod tests {
         // Cleanup
         pong_tx.send(Ok(FlightData::default())).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_remote_channel_codec_encodes_skips_and_propagates_errors() {
+        let rt = test_runtime();
+        let (exchange, send_rx, pong_tx) = create_mock_exchange(1);
+        let buffer = Arc::new(
+            ExchangeSinkBuffer::create(vec![exchange], ExchangeBufferConfig::default(), &rt)
+                .unwrap(),
+        );
+        let channel =
+            RemoteChannel::create_with_codec(0, 0, buffer, None, Arc::new(SelectiveEncodeCodec))
+                .unwrap();
+
+        channel.add_block(make_block(1)).await.unwrap();
+        let error = channel.add_block(make_block(2)).await.unwrap_err();
+        assert_eq!(error.code(), ErrorCode::BAD_BYTES);
+        assert_eq!(error.message(), "invalid codec payload");
+        channel.add_block(make_block(3)).await.unwrap();
+
+        // The first packet must be the accepted block after encoding.
+        let flight_data = strip_tid(send_rx.recv().await.unwrap());
+        let schema = Arc::new(make_block(4).infer_schema());
+        let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
+        let decoded = deserialize_flight_data(flight_data, &schema, &arrow_schema).unwrap();
+        assert_eq!(decoded.num_rows(), 4);
+
+        pong_tx.send(Ok(FlightData::default())).await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
