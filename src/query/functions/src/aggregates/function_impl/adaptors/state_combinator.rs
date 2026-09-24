@@ -40,6 +40,7 @@ pub(crate) fn aggregate_state_data_type(
     physical_type: DataType,
     state_version: u64,
 ) -> Result<DataType> {
+    debug_assert_ne!(state_version, EXECUTION_ONLY_STATE_VERSION);
     let params = params
         .iter()
         .cloned()

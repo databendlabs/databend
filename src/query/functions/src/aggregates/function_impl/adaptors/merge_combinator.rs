@@ -40,6 +40,7 @@ use super::AggregateStateSet;
 use super::AggregateStateSettings;
 use super::ArgumentsPattern;
 use super::Combinator;
+use super::EXECUTION_ONLY_STATE_VERSION;
 use super::FunctionInputLayout;
 use super::MergeResultInput;
 use super::MergeSerializedInput;
@@ -151,24 +152,24 @@ impl MergeCombinator {
         let migration = self.resolve_migration(&state_type, persisted_type)?;
         // _merge_state uses the output format selected by the write policy,
         // even if the input must first be converted to the execution layout.
-        let result_state_type = match argument_type {
-            DataType::AggregateState(persisted) => {
-                DataType::AggregateState(Box::new(AggregateStateDataType {
-                    state_type: Box::new(state_type),
-                    state_version: state.state_version(),
-                    ..*persisted
-                }))
-            }
-            _ => aggregate_state_data_type(
-                &nested_signature.name,
-                &nested_signature.params,
-                nested_signature.args_type,
-                state_type,
-                state.state_version(),
-            )?,
-        };
         self.signature.return_type = if self.returns_state {
-            result_state_type
+            debug_assert_ne!(state.state_version(), EXECUTION_ONLY_STATE_VERSION);
+            match argument_type {
+                DataType::AggregateState(persisted) => {
+                    DataType::AggregateState(Box::new(AggregateStateDataType {
+                        state_type: Box::new(state_type),
+                        state_version: state.state_version(),
+                        ..*persisted
+                    }))
+                }
+                _ => aggregate_state_data_type(
+                    &nested_signature.name,
+                    &nested_signature.params,
+                    nested_signature.args_type,
+                    state_type,
+                    state.state_version(),
+                )?,
+            }
         } else {
             nested_signature.return_type
         };

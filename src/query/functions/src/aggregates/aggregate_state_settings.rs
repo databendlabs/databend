@@ -17,6 +17,7 @@ use databend_common_exception::Result;
 use databend_common_expression::aggregate_function::AggregateStateSettings;
 use databend_common_expression::aggregate_function::AggregateStateSettingsSelector;
 use databend_common_expression::aggregate_function::AggregateStateWritePolicy;
+use databend_common_expression::aggregate_function::EXECUTION_ONLY_STATE_VERSION;
 use databend_common_expression::aggregate_function::RawAggregateCall;
 
 pub(super) struct CompatibleStateSettings;
@@ -34,14 +35,10 @@ impl CompatibleStateSettings {
     }
 
     fn execution_settings(request: &RawAggregateCall<'_>) -> AggregateStateSettings {
-        if request.distinct {
-            AggregateStateSettings::v0_compatibility()
-        } else {
-            AggregateStateSettings {
-                state_version: 1,
-                preserve_nullable_input_rows_flag: false,
-                input_nullable_input_rows_flag: false,
-            }
+        AggregateStateSettings {
+            state_version: EXECUTION_ONLY_STATE_VERSION,
+            preserve_nullable_input_rows_flag: request.distinct,
+            input_nullable_input_rows_flag: request.distinct,
         }
     }
 }
@@ -57,8 +54,13 @@ impl AggregateStateSettingsSelector for CompatibleStateSettings {
         input_version: Option<u64>,
     ) -> Result<AggregateStateSettings> {
         let Some(input_version) = input_version else {
-            // Legacy physical states carry no format metadata.
-            return Self::versioned(request, 0);
+            // Legacy physical states carry no format metadata; read them in
+            // the v0 layout without assigning a persisted output version.
+            return Ok(AggregateStateSettings {
+                state_version: EXECUTION_ONLY_STATE_VERSION,
+                preserve_nullable_input_rows_flag: true,
+                input_nullable_input_rows_flag: true,
+            });
         };
         let input = Self::versioned(request, input_version)?;
         let mut settings = Self::execution_settings(request);

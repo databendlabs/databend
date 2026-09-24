@@ -76,6 +76,18 @@ struct SumBuilder;
 struct SumStateSettings;
 
 impl SumStateSettings {
+    fn fixed_null_state(request: &RawAggregateCall<'_>) -> bool {
+        match request.args_type {
+            [DataType::Null] => true,
+            [state_type] => matches!(
+                state_type.remove_nullable(),
+                DataType::AggregateState(state)
+                    if matches!(state.argument_types.as_slice(), [DataType::Null])
+            ),
+            _ => false,
+        }
+    }
+
     fn compact() -> AggregateStateSettings {
         AggregateStateSettings {
             state_version: 1,
@@ -85,8 +97,8 @@ impl SumStateSettings {
     }
 
     /// SUM's persisted format map: v0 retains the nullable input-rows flag,
-    /// v1 is compact. Using v1 internally does not enable v1 persistence;
-    /// production writes still select v0 through the Compatible policy.
+    /// v1 is compact. Ordinary execution uses the compact layout without
+    /// assigning it a persisted version; production writes select v0.
     fn versioned(request: &RawAggregateCall<'_>, version: u64) -> Result<AggregateStateSettings> {
         match version {
             0 => Ok(AggregateStateSettings::v0_compatibility()),
@@ -101,10 +113,10 @@ impl SumStateSettings {
 
 impl AggregateStateSettingsSelector for SumStateSettings {
     fn execution(&self, request: &RawAggregateCall<'_>) -> Result<AggregateStateSettings> {
-        Ok(if request.distinct {
-            AggregateStateSettings::v0_compatibility()
-        } else {
-            Self::compact()
+        Ok(AggregateStateSettings {
+            state_version: EXECUTION_ONLY_STATE_VERSION,
+            preserve_nullable_input_rows_flag: request.distinct,
+            input_nullable_input_rows_flag: request.distinct,
         })
     }
 
@@ -114,8 +126,12 @@ impl AggregateStateSettingsSelector for SumStateSettings {
         input_version: Option<u64>,
     ) -> Result<AggregateStateSettings> {
         let Some(input_version) = input_version else {
-            // Legacy physical states have no format metadata.
-            return Self::versioned(request, 0);
+            // Legacy physical states use the v0 layout without an output format version.
+            return Ok(AggregateStateSettings {
+                state_version: EXECUTION_ONLY_STATE_VERSION,
+                preserve_nullable_input_rows_flag: true,
+                input_nullable_input_rows_flag: true,
+            });
         };
         let input = Self::versioned(request, input_version)?;
         let mut settings = self.execution(request)?;
@@ -128,8 +144,11 @@ impl AggregateStateSettingsSelector for SumStateSettings {
         request: &RawAggregateCall<'_>,
         policy: AggregateStateWritePolicy,
     ) -> Result<AggregateStateSettings> {
+        // SUM(NULL) uses the same fixed state in both layouts, including
+        // _merge_state; no new persisted format version is needed.
         let version = match policy {
             AggregateStateWritePolicy::Compatible => 0,
+            AggregateStateWritePolicy::Latest if Self::fixed_null_state(request) => 0,
             AggregateStateWritePolicy::Latest => 1,
         };
         Self::versioned(request, version)
@@ -144,7 +163,7 @@ impl AggregateStateSettingsSelector for SumStateSettings {
         let mut settings = self.write(request, policy)?;
         if let Some(input_version) = input_version {
             let input = Self::versioned(request, input_version)?;
-            if input_version > settings.state_version {
+            if input_version > settings.state_version && !Self::fixed_null_state(request) {
                 return Err(ErrorCode::BadDataValueType(format!(
                     "Cannot write aggregate state version {} from input version {input_version}",
                     settings.state_version

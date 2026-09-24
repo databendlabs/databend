@@ -163,6 +163,7 @@ mod tests {
 
     use databend_common_exception::ErrorCode;
     use databend_common_expression::aggregate_function::AggregateStateWritePolicy;
+    use databend_common_expression::aggregate_function::EXECUTION_ONLY_STATE_VERSION;
 
     use super::super::super::DirectBuildContext;
     use super::super::super::DirectBuildFn;
@@ -178,7 +179,7 @@ mod tests {
     {
         fn execution(&self, _request: &RawAggregateCall<'_>) -> Result<AggregateStateSettings> {
             Ok(AggregateStateSettings {
-                state_version: 1,
+                state_version: EXECUTION_ONLY_STATE_VERSION,
                 preserve_nullable_input_rows_flag: false,
                 input_nullable_input_rows_flag: false,
             })
@@ -243,7 +244,11 @@ mod tests {
             })?;
             assert_eq!(
                 function.state().state_version(),
-                if name == "compatible_probe" { 0 } else { 1 },
+                if name == "compatible_probe" {
+                    0
+                } else {
+                    EXECUTION_ONLY_STATE_VERSION
+                },
             );
         }
         Ok(())
@@ -277,7 +282,7 @@ mod tests {
                 .resolve(call("execution_probe"))?
                 .state()
                 .state_version(),
-            1
+            EXECUTION_ONLY_STATE_VERSION
         );
         assert_eq!(
             registry

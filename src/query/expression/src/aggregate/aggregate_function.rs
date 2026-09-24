@@ -1088,14 +1088,16 @@ pub struct RawAggregateCall<'a> {
     pub order_by: &'a [AggregateBoundOrderByItem],
 }
 
+/// Reserved for execution-only layouts; never a persisted state format version.
+pub const EXECUTION_ONLY_STATE_VERSION: u64 = u64::MAX;
+
 /// Layout settings selected by the function for one aggregate call. Execution
 /// may use a different layout from the persisted input or output format; a
 /// read's input version never implicitly determines the version written.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AggregateStateSettings {
-    /// Version of the selected output (or execution-only) layout, not inherited
-    /// from the input state. An execution-only version is not a promise to
-    /// persist states in that format.
+    /// Persisted output format version, or EXECUTION_ONLY_STATE_VERSION when
+    /// the layout is used only for execution. Never inherited from the input.
     pub state_version: u64,
     /// Whether the selected output/internal layout retains the outer
     /// input-presence flag where the state has one.

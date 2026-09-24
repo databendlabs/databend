@@ -375,7 +375,10 @@ fn test_nullable_sum_request_state_settings() -> Result<()> {
         DataType::Tuple(vec![Int64Type::data_type(), DataType::Boolean])
     );
     assert_eq!(compatible.state().state_version(), 0);
-    assert_eq!(request.state().state_version(), 1);
+    assert_eq!(
+        request.state().state_version(),
+        EXECUTION_ONLY_STATE_VERSION
+    );
 
     // Persisted state routes do not inherit the ordinary SUM optimization.
     let persisted = AGGR_REGISTRY.resolve(call("sum_state", &nullable_int64))?;
@@ -431,7 +434,11 @@ fn test_nullable_sum_request_state_settings() -> Result<()> {
             call(name, &nullable_uint64),
             AggregateStateSettings::v0_compatibility(),
         )?;
-        assert_eq!(execution.state().state_version(), 1, "{name}");
+        assert_eq!(
+            execution.state().state_version(),
+            EXECUTION_ONLY_STATE_VERSION,
+            "{name}"
+        );
         assert_eq!(compatible.state().state_version(), 0, "{name}");
     }
     Ok(())
@@ -456,7 +463,7 @@ fn test_sum_default_state_read_and_write_policy() -> Result<()> {
     };
     assert_eq!(old_metadata.state_version, 0);
     let merged = call("sum_merge", std::slice::from_ref(&old_type))?;
-    assert_eq!(merged.state().state_version(), 1);
+    assert_eq!(merged.state().state_version(), EXECUTION_ONLY_STATE_VERSION);
     assert_eq!(
         merged.state().data_type(),
         DataType::Tuple(vec![Int64Type::data_type(), DataType::Boolean])
@@ -479,7 +486,7 @@ fn test_sum_default_state_read_and_write_policy() -> Result<()> {
         call("sum_merge", std::slice::from_ref(&new_type))?
             .state()
             .state_version(),
-        1
+        EXECUTION_ONLY_STATE_VERSION
     );
     assert!(call("sum_merge_state", std::slice::from_ref(&new_type)).is_err());
 
@@ -516,8 +523,69 @@ fn test_sum_default_state_read_and_write_policy() -> Result<()> {
     assert!(call("sum_merge_state", std::slice::from_ref(&v1)).is_err());
     assert!(call("sum_merge", &[v0_meta.state_type.as_ref().clone()]).is_ok());
 
+    // A NULL-only SUM has a fixed state layout: Latest does not create a new format.
+    let null_args = [DataType::Null];
+    assert_eq!(
+        call("sum", &null_args)?.state().state_version(),
+        EXECUTION_ONLY_STATE_VERSION
+    );
+    let null_v0 = call("sum_state", &null_args)?
+        .signature()
+        .return_type
+        .clone();
+    let null_latest = AGGR_REGISTRY
+        .resolve_with_state_policy(
+            RawAggregateCall {
+                name: "sum_state",
+                params: &[],
+                args_type: &null_args,
+                distinct: false,
+                order_by: &[],
+            },
+            AggregateStateWritePolicy::Latest,
+        )?
+        .signature()
+        .return_type
+        .clone();
+    assert_eq!(null_latest, null_v0);
+    let DataType::AggregateState(null_meta) = &null_latest else {
+        unreachable!();
+    };
+    assert_eq!(null_meta.state_version, 0);
+    let null_merge_state = AGGR_REGISTRY.resolve_with_state_policy(
+        RawAggregateCall {
+            name: "sum_merge_state",
+            params: &[],
+            args_type: std::slice::from_ref(&null_latest),
+            distinct: false,
+            order_by: &[],
+        },
+        AggregateStateWritePolicy::Latest,
+    )?;
+    assert_eq!(null_merge_state.signature().return_type, null_v0);
+
+    // An older NULL state tagged v1 has the same payload and can be rewritten as v0.
+    let mut null_v1_meta = (**null_meta).clone();
+    null_v1_meta.state_version = 1;
+    assert_eq!(
+        call("sum_merge_state", &[DataType::AggregateState(Box::new(
+            null_v1_meta
+        ))])?
+        .signature()
+        .return_type,
+        null_v0
+    );
+
     let mut unsupported = (**v1_meta).clone();
     unsupported.state_version = 2;
+    assert!(
+        call("sum_merge", &[DataType::AggregateState(Box::new(
+            unsupported.clone()
+        ))])
+        .is_err()
+    );
+    // The internal-only marker is not a persisted format that can be read.
+    unsupported.state_version = EXECUTION_ONLY_STATE_VERSION;
     assert!(
         call("sum_merge", &[DataType::AggregateState(Box::new(
             unsupported
@@ -837,6 +905,22 @@ fn test_v2_merge_resolves_legacy_physical_state() -> Result<()> {
 
         // Strip the metadata to emulate a pre-v182 column, then merge it.
         let physical_type = metadata.physical_type().clone();
+        let legacy_merge = AGGR_REGISTRY.resolve(RawAggregateCall {
+            name: merge_name,
+            params: &[],
+            args_type: std::slice::from_ref(&physical_type),
+            distinct: false,
+            order_by: &[],
+        })?;
+        assert_eq!(
+            legacy_merge.state().state_version(),
+            if merge_name.ends_with("_merge_state") {
+                0
+            } else {
+                EXECUTION_ONLY_STATE_VERSION
+            },
+            "{case}"
+        );
         let merged = eval_v2_state_merge_entry(
             merge_name,
             &[],
