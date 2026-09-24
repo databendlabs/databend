@@ -121,6 +121,20 @@ async fn test_optimizer_accepts_correlated_and_lateral_scopes() -> Result<()> {
             sql: "SELECT a, (SELECT max(b) FROM scope_t t2 WHERE t2.c = t1.c) FROM scope_t t1",
         },
         SqlTestCase {
+            name: "left_semi_retained_column",
+            description: "",
+            setup_sqls: &[TABLE],
+            sql: "SELECT t1.a FROM scope_t t1 LEFT SEMI JOIN scope_t t2 ON t1.a = t2.a
+                WHERE t1.b > 1",
+        },
+        SqlTestCase {
+            name: "right_anti_retained_column",
+            description: "",
+            setup_sqls: &[TABLE],
+            sql: "SELECT t2.a FROM scope_t t1 RIGHT ANTI JOIN scope_t t2 ON t1.a = t2.a
+                WHERE t2.b > 1",
+        },
+        SqlTestCase {
             name: "window_group_with_scalar_items",
             description: "",
             setup_sqls: &[TABLE],

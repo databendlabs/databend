@@ -221,6 +221,9 @@ mod tests {
     use crate::plans::EvalScalar;
     use crate::plans::ExpressionScan;
     use crate::plans::Filter;
+    use crate::plans::Join;
+    use crate::plans::JoinEquiCondition;
+    use crate::plans::JoinType;
     use crate::plans::ScalarExpr;
     use crate::plans::ScalarItem;
     use crate::plans::Scan;
@@ -283,6 +286,58 @@ mod tests {
             err.message().contains("EvalScalar") && err.message().contains("2 (c2)"),
             "{err}"
         );
+    }
+
+    #[test]
+    fn semi_and_anti_join_only_expose_the_retained_side() -> Result<()> {
+        let metadata = metadata_with_columns(3);
+        for (join_type, retained, dropped) in [
+            (JoinType::LeftSemi, 0, 1),
+            (JoinType::LeftAnti, 0, 1),
+            (JoinType::RightSemi, 1, 0),
+            (JoinType::RightAnti, 1, 0),
+        ] {
+            let join = SExpr::create_binary(
+                Arc::new(RelOperator::Join(Join {
+                    join_type,
+                    equi_conditions: vec![JoinEquiCondition::new(column(0), column(1), false)],
+                    // A mark-to-semi rewrite can leave the former marker index on the join.
+                    marker_index: Some(Symbol::new(2)),
+                    ..Default::default()
+                })),
+                scan(&[0]),
+                scan(&[1]),
+            );
+            // Join conditions may reference both inputs, but only the retained side reaches
+            // an operator above the join.
+            join.validate_column_scope(&metadata)?;
+            let prop = join.derive_relational_prop()?;
+            assert_eq!(
+                prop.output_columns,
+                [Symbol::new(retained)].into_iter().collect()
+            );
+            assert!(prop.outer_columns.is_empty());
+            let valid = SExpr::create_unary(
+                Arc::new(RelOperator::Filter(Filter {
+                    predicates: vec![column(retained)],
+                })),
+                join.clone(),
+            );
+            valid.validate_column_scope(&metadata)?;
+            let invalid = SExpr::create_unary(
+                Arc::new(RelOperator::Filter(Filter {
+                    predicates: vec![column(dropped)],
+                })),
+                join,
+            );
+            let err = invalid.validate_column_scope(&metadata).unwrap_err();
+            assert!(
+                err.message().contains("Filter")
+                    && err.message().contains(&format!("{dropped} (c{dropped})")),
+                "{err}"
+            );
+        }
+        Ok(())
     }
 
     #[test]
