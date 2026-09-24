@@ -1,0 +1,40 @@
+statement ok
+set force_eager_aggregate = 1;
+
+statement ok
+create or replace table eager_sales(customer_id int, item_id int, amount decimal(10, 2));
+
+statement ok
+create or replace table eager_items(item_id int);
+
+statement ok
+insert into eager_sales values
+    (1, 10, 10.00),
+    (1, 10, 20.00),
+    (1, 20, 30.00),
+    (2, 10, 40.00),
+    (2, 30, 50.00);
+
+statement ok
+insert into eager_items values (10), (10), (20), (20), (20), (40);
+
+# The item join key is absent from the final GROUP BY. Duplicate item rows on
+# the build side must be preserved as multiplicity, not reduced to DISTINCT.
+query IR
+select customer_id, sum(amount)
+from eager_sales
+join eager_items using (item_id)
+group by customer_id
+order by customer_id;
+----
+1 150.00
+2 80.00
+
+statement ok
+drop table eager_sales;
+
+statement ok
+drop table eager_items;
+
+statement ok
+set force_eager_aggregate = 0;
