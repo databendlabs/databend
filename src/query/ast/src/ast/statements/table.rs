@@ -311,6 +311,12 @@ pub enum CreateTableSource {
         database: Option<Identifier>,
         table: Identifier,
     },
+    Clone {
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        table: Identifier,
+        travel_point: Option<TimeTravelPoint>,
+    },
 }
 
 impl Display for CreateTableSource {
@@ -342,6 +348,19 @@ impl Display for CreateTableSource {
             } => {
                 write!(f, "LIKE ")?;
                 write_dot_separated_list(f, catalog.iter().chain(database).chain(Some(table)))
+            }
+            CreateTableSource::Clone {
+                catalog,
+                database,
+                table,
+                travel_point,
+            } => {
+                write!(f, "CLONE ")?;
+                write_dot_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+                if let Some(point) = travel_point {
+                    write!(f, " AT {point}")?;
+                }
+                Ok(())
             }
         }
     }

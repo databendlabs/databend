@@ -15,6 +15,7 @@
 mod analyze;
 mod append;
 mod changes;
+mod clone;
 mod commit;
 mod common;
 mod compact;
@@ -67,7 +68,9 @@ pub use snapshot_hint::*;
 pub use table_index::do_refresh_table_index;
 pub use util::*;
 pub use vacuum::ASSUMPTION_MAX_TXN_DURATION;
+pub use vacuum::CloneDescendantMark;
 pub use vacuum::is_gc_candidate_segment_block;
+pub use vacuum::slice_summary;
 pub use vacuum::vacuum_tables_from_info;
 pub use virtual_column::VirtualColumnVacuumResult;
 pub use virtual_column::cleanup_vacuum_virtual_column_files;

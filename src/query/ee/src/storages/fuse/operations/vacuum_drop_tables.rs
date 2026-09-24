@@ -19,6 +19,7 @@ use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::parse_clone_group_id;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropTablesResult;
 use databend_storages_common_table_meta::table::is_fuse_backed_engine;
@@ -129,10 +130,17 @@ pub async fn vacuum_drop_tables_by_table_info(
     Ok(failed_tables)
 }
 
+/// Vacuum dropped table directories, allowing a clone-group member only when the caller has
+/// verified that no existing group member directly depends on it.
+///
+/// Callers must compute `safe_clone_table_ids` from the current clone lineage. Passing an empty
+/// set is safe but defers every clone-group member indefinitely, so it must be a deliberate
+/// choice rather than a default.
 #[async_backtrace::framed]
 pub async fn vacuum_drop_tables(
     threads_nums: usize,
     tables: Vec<TableInfo>,
+    safe_clone_table_ids: HashSet<u64>,
 ) -> VacuumDropTablesResult {
     let num_tables = tables.len();
     info!("vacuum_drop_tables {} tables", num_tables);
@@ -147,6 +155,25 @@ pub async fn vacuum_drop_tables(
                 && FuseTable::is_table_attached(table_info.options()))
         {
             continue;
+        }
+        match parse_clone_group_id(&table_info.meta.options) {
+            Err(error) => {
+                error!(
+                    "defer vacuum of table {} with invalid clone_group_id: {}",
+                    table_info.ident.table_id, error
+                );
+                failed_tables.insert(table_info.ident.table_id);
+                continue;
+            }
+            Ok(Some(_)) if !safe_clone_table_ids.contains(&table_info.ident.table_id) => {
+                info!(
+                    "defer vacuum of clone-group table {} until it has no existing clone child",
+                    table_info.ident.table_id
+                );
+                failed_tables.insert(table_info.ident.table_id);
+                continue;
+            }
+            Ok(_) => {}
         }
         let operator = if is_fuse_backed_engine(table_info.engine()) {
             FuseTable::create_storage_operator(&table_info, None)

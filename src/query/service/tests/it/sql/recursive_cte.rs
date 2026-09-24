@@ -149,6 +149,7 @@ async fn create_internal_recursive_cte_memory_table(
         as_select: None,
         table_indexes: None,
         table_constraints: None,
+        clone: None,
         attached_columns: None,
     };
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
@@ -356,6 +357,7 @@ fn recursive_cte_deterministic_wrong_count_repro() -> anyhow::Result<()> {
             as_select: None,
             table_indexes: None,
             table_constraints: None,
+            clone: None,
             attached_columns: None,
         };
         let create_table_interpreter =

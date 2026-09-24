@@ -15,8 +15,13 @@
 // Logs from this module will show up as "[VACUUM] ...".
 databend_common_tracing::register_module_tag!("[VACUUM]");
 
+use std::cmp::max;
+use std::cmp::min;
+use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::sync::Arc;
+use std::time::Instant;
 use std::time::SystemTime;
 
 use chrono::DateTime;
@@ -31,8 +36,8 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListTableTagsReq;
+use databend_common_meta_app::schema::LvtUpdate;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 use databend_storages_common_cache::Table;
 use databend_storages_common_cache::TableSnapshot;
@@ -40,7 +45,9 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::meta::is_uuid_v7;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
+use futures_util::StreamExt;
 use futures_util::TryStreamExt;
+use futures_util::stream;
 use log::info;
 use log::warn;
 use opendal::Entry;
@@ -49,6 +56,8 @@ use opendal::Operator;
 
 use crate::FuseTable;
 use crate::RetentionPolicy;
+use crate::io::MetaReaders;
+use crate::io::SnapshotHistoryReader;
 use crate::io::SnapshotLiteExtended;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -91,18 +100,7 @@ fn retention_cutoff(
     latest_snapshot_timestamp: DateTime<Utc>,
     retention_period: TimeDelta,
 ) -> DateTime<Utc> {
-    std::cmp::min(now - retention_period, latest_snapshot_timestamp)
-}
-
-fn flashback_gc_root_lvt(respect_flash_back: bool, lvt: DateTime<Utc>) -> Option<DateTime<Utc>> {
-    respect_flash_back.then_some(lvt)
-}
-
-fn is_snapshot_at_or_before_lvt(
-    snapshot_timestamp: Option<DateTime<Utc>>,
-    lvt: DateTime<Utc>,
-) -> bool {
-    snapshot_timestamp.is_some_and(|timestamp| timestamp <= lvt)
+    min(now - retention_period, latest_snapshot_timestamp)
 }
 
 pub struct SnapshotGcSelection {
@@ -110,6 +108,14 @@ pub struct SnapshotGcSelection {
     pub snapshots_to_gc: Vec<String>,
     pub gc_root_meta_ts: DateTime<Utc>,
     pub gc_root_path: String,
+    /// The owner LVT this round publishes: the GC root timestamp.
+    pub gc_root_lvt: LeastVisibleTime,
+}
+
+#[derive(Default)]
+pub struct CloneDescendantMark {
+    pub descendant_ids: HashSet<u64>,
+    pub lvt_updates: Vec<LvtUpdate>,
 }
 
 /// Object storage supported by Databend is expected to return entries sorted in ascending lexicographical
@@ -338,6 +344,421 @@ impl FuseTable {
         }
     }
 
+    /// Visit committed history to a time boundary (or the anchor if no boundary exists).
+    /// No object-directory listing or LVT reads happen here. The visitor lets descendant
+    /// protection collect references without allocating a mark set in the owner-only path.
+    async fn select_snapshot_history_gc_root<F>(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        head: (Arc<TableSnapshot>, u64),
+        boundary: Option<DateTime<Utc>>,
+        snapshot_limit: Option<usize>,
+        mut visit: F,
+    ) -> Result<(Arc<TableSnapshot>, u64)>
+    where
+        F: FnMut(&TableSnapshot) + Send,
+    {
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        let location_gen = self.meta_location_generator();
+        let previous = match head.0.prev_snapshot_id {
+            Some((id, version)) => reader.snapshot_history(
+                location_gen.gen_snapshot_location(&id, version)?,
+                version,
+                location_gen.clone(),
+            ),
+            None => Box::pin(stream::empty()),
+        };
+        // The caller already read the head to calculate the retention boundary.
+        let mut history = previous;
+        let mut head = Some(head);
+        let abort_checker = ctx.clone().get_abort_checker();
+        let mut count = 0;
+        loop {
+            abort_checker.try_check_aborting()?;
+            // snapshot_history also ends on NotFound. Only an observed anchor or boundary
+            // completes this selection; a missing head or an unproven gap must stop GC.
+            let (snapshot, version) = if let Some(head) = head.take() {
+                head
+            } else {
+                history.try_next().await?.ok_or_else(|| {
+                    ErrorCode::StorageNotFound(format!(
+                        "table {} snapshot history ended before its GC boundary or anchor",
+                        self.get_id()
+                    ))
+                })?
+            };
+            let timestamp = snapshot.timestamp.ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "table {} snapshot {} has no timestamp",
+                    self.get_id(),
+                    snapshot.snapshot_id
+                ))
+            })?;
+            visit(&snapshot);
+            count += 1;
+            if snapshot.prev_snapshot_id.is_none()
+                || boundary.is_some_and(|time| timestamp <= time)
+                || snapshot_limit.is_some_and(|limit| count >= limit.max(1))
+            {
+                return Ok((snapshot, version));
+            }
+        }
+    }
+
+    async fn table_tag_segments(
+        table_id: u64,
+        operator: Operator,
+        catalog: Arc<dyn Catalog>,
+    ) -> Result<HashSet<Location>> {
+        let tags = catalog
+            .list_table_tags(ListTableTagsReq {
+                table_id,
+                include_expired: false,
+            })
+            .await?;
+        let mut segments = HashSet::new();
+        for (_tag_name, seq_tag) in tags {
+            // Tag listing and object reads are not atomic. A listed tag may be dropped or
+            // expire before this read, allowing another GC to remove its snapshot. Tolerate
+            // NotFound without revalidating the tag: this scan is not a strongly consistent
+            // tag view. Other storage errors still abort GC.
+            if let Some(snapshot) =
+                SnapshotsIO::read_snapshot_for_vacuum(operator.clone(), &seq_tag.data.snapshot_loc)
+                    .await?
+            {
+                segments.extend(snapshot.segments.iter().cloned());
+            }
+        }
+        Ok(segments)
+    }
+
+    /// Validate a clone group's binding graph and return descendants of `source_table_id`.
+    /// Malformed, cyclic, or disconnected bindings fail closed.
+    pub fn clone_descendant_ids(
+        clone_group_id: u64,
+        source_table_id: u64,
+        bindings: &[(u64, u64)],
+    ) -> Result<HashSet<u64>> {
+        let clone_ids = bindings
+            .iter()
+            .map(|(table_id, _)| *table_id)
+            .collect::<HashSet<_>>();
+        // Each member is created by exactly one direct source. A repeated child ID means the
+        // lineage is corrupted, and it is also what would let a cycle stay reachable from the
+        // group root, making an owner appear inside its own descendant set.
+        if clone_ids.len() != bindings.len() {
+            return Err(ErrorCode::Internal(format!(
+                "clone group {} has a member with more than one direct source",
+                clone_group_id
+            )));
+        }
+        let mut children = HashMap::<u64, Vec<u64>>::new();
+        for (table_id, source_id) in bindings {
+            children.entry(*source_id).or_default().push(*table_id);
+        }
+
+        let descendants_of = |root| {
+            let mut queue = VecDeque::from([root]);
+            let mut descendants = HashSet::new();
+            while let Some(source_id) = queue.pop_front() {
+                if let Some(child_ids) = children.get(&source_id) {
+                    for child_id in child_ids {
+                        if descendants.insert(*child_id) {
+                            queue.push_back(*child_id);
+                        }
+                    }
+                }
+            }
+            descendants
+        };
+
+        // A malformed or disconnected lineage can hide a live member from descendant protection.
+        // Validate the entire binding graph using IDs only and fail closed before reading metadata.
+        let connected = descendants_of(clone_group_id);
+        if connected != clone_ids
+            || connected.contains(&clone_group_id)
+            || (source_table_id != clone_group_id && !clone_ids.contains(&source_table_id))
+        {
+            return Err(ErrorCode::Internal(format!(
+                "clone group {} has malformed or disconnected lineage for table {}",
+                clone_group_id, source_table_id
+            )));
+        }
+
+        Ok(if source_table_id == clone_group_id {
+            connected
+        } else {
+            descendants_of(source_table_id)
+        })
+    }
+
+    async fn mark_one_clone_descendant(
+        ctx: Arc<dyn TableContext>,
+        catalog: Arc<dyn Catalog>,
+        table_info: TableInfo,
+        observed_lvt: (u64, Option<DateTime<Utc>>),
+        scan_time: DateTime<Utc>,
+        publish_lvt: bool,
+    ) -> Result<(LvtUpdate, HashSet<Location>)> {
+        let table_id = table_info.ident.table_id;
+        let (lvt_seq, lvt) = observed_lvt;
+        let table = catalog.get_table_by_info(&table_info)?;
+        let descendant = FuseTable::try_from_table(table.as_ref())?;
+        let mut candidate = lvt
+            .map(LeastVisibleTime::new)
+            .unwrap_or_else(LeastVisibleTime::unbounded);
+        let segments = if let Some(location) = descendant.snapshot_loc() {
+            let version = TableMetaLocationGenerator::snapshot_version(&location);
+            let head = descendant
+                .read_table_snapshot()
+                .await?
+                .ok_or_else(|| ErrorCode::StorageNotFound("clone head disappeared during mark"))?;
+            let head_time = head
+                .timestamp
+                .ok_or_else(|| ErrorCode::Internal("clone head has no timestamp"))?;
+            let (boundary, limit) = if publish_lvt {
+                // A VACUUM target may advance descendant fences, but its session retention
+                // settings must not shorten another table's history.
+                match descendant.get_clone_descendant_retention_policy(ctx.as_ref())? {
+                    RetentionPolicy::ByTimePeriod(period) => {
+                        let cutoff = retention_cutoff(scan_time, head_time, period);
+                        (Some(lvt.map_or(cutoff, |time| time.max(cutoff))), None)
+                    }
+                    RetentionPolicy::ByNumOfSnapshotsToKeep(n) => (lvt, Some(n)),
+                }
+            } else {
+                // Derived-file cleanup does not atomically publish LVTs. Preserve every
+                // descendant snapshot that could still be published.
+                (lvt, None)
+            };
+            let mut protected = HashSet::new();
+            let mut is_head = true;
+            let (root, _) = descendant
+                .select_snapshot_history_gc_root(
+                    &ctx,
+                    (head, version),
+                    boundary,
+                    limit,
+                    |snapshot| {
+                        if publish_lvt
+                            || is_head
+                            || lvt.is_none_or(|lvt| snapshot.timestamp.is_some_and(|ts| ts >= lvt))
+                        {
+                            protected.extend(snapshot.segments.iter().cloned());
+                        }
+                        is_head = false;
+                    },
+                )
+                .await?;
+            if publish_lvt {
+                let root_timestamp = root.timestamp.ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "clone descendant {table_id} GC root has no timestamp"
+                    ))
+                })?;
+                candidate.time = candidate.time.max(root_timestamp);
+            }
+            protected
+        } else {
+            let statistics = &table_info.meta.statistics;
+            if statistics.number_of_rows != 0
+                || statistics.data_bytes != 0
+                || statistics.compressed_data_bytes != 0
+                || statistics.number_of_segments.unwrap_or(0) != 0
+                || statistics.number_of_blocks.unwrap_or(0) != 0
+            {
+                return Err(ErrorCode::Internal(format!(
+                    "non-empty clone descendant {table_id} has no snapshot location"
+                )));
+            }
+            HashSet::new()
+        };
+        Ok(((table_id, lvt_seq, candidate), segments))
+    }
+
+    /// Mark clone descendants. Base-data VACUUM publishes the returned LVT updates atomically;
+    /// derived-file cleanup passes `publish_lvt = false` and only collects references.
+    pub async fn mark_clone_descendants<T>(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        catalog: &Arc<dyn Catalog>,
+        segments: &mut HashSet<Location>,
+        publish_lvt: bool,
+        concurrency: usize,
+        status_callback: T,
+    ) -> Result<CloneDescendantMark>
+    where
+        T: Fn(String),
+    {
+        let clone_group_id = self.clone_group_id()?;
+        let bindings = catalog.list_clone_group_bindings(clone_group_id).await?;
+        let descendant_ids = Self::clone_descendant_ids(clone_group_id, self.get_id(), &bindings)?;
+        let lvt_updates = self
+            .scan_clone_descendants(
+                ctx,
+                catalog,
+                &descendant_ids,
+                segments,
+                publish_lvt,
+                concurrency,
+                &status_callback,
+            )
+            .await?;
+        Ok(CloneDescendantMark {
+            descendant_ids,
+            lvt_updates,
+        })
+    }
+
+    /// Protect descendants created after the mark. Their creation used the LVT visible before
+    /// publication, so like a tag they can reference history below the published fence. Clones
+    /// created after publication are bounded by the published LVT and need no rescan.
+    pub async fn mark_new_clone_descendants<T>(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        catalog: &Arc<dyn Catalog>,
+        observed: &mut HashSet<u64>,
+        segments: &mut HashSet<Location>,
+        concurrency: usize,
+        status_callback: T,
+    ) -> Result<()>
+    where
+        T: Fn(String),
+    {
+        let clone_group_id = self.clone_group_id()?;
+        let bindings = catalog.list_clone_group_bindings(clone_group_id).await?;
+        let current = Self::clone_descendant_ids(clone_group_id, self.get_id(), &bindings)?;
+        let new_ids = current
+            .difference(observed)
+            .copied()
+            .collect::<HashSet<_>>();
+        self.scan_clone_descendants(
+            ctx,
+            catalog,
+            &new_ids,
+            segments,
+            false,
+            concurrency,
+            &status_callback,
+        )
+        .await?;
+        observed.extend(new_ids);
+        Ok(())
+    }
+
+    async fn scan_clone_descendants<T>(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        catalog: &Arc<dyn Catalog>,
+        descendant_ids: &HashSet<u64>,
+        segments: &mut HashSet<Location>,
+        publish_lvt: bool,
+        concurrency: usize,
+        status_callback: &T,
+    ) -> Result<Vec<LvtUpdate>>
+    where
+        T: Fn(String),
+    {
+        if descendant_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let table_ids = descendant_ids.iter().copied().collect::<Vec<_>>();
+        let tenant = ctx.get_tenant();
+        // Observe every LVT before the batched metadata/head read. FLASHBACK changes both the
+        // TableMeta and LVT sequences, so publication catches every interleaving.
+        let observed_lvts = catalog
+            .mget_table_lvts(&tenant, &table_ids)
+            .await?
+            .into_iter()
+            .map(|(table_id, lvt)| {
+                let observed = lvt
+                    .map(|v| (v.seq, (!v.data.is_unbounded()).then_some(v.data.time)))
+                    .unwrap_or((0, None));
+                (table_id, observed)
+            })
+            .collect::<HashMap<_, _>>();
+        let descendants = catalog.mget_table_metas_by_ids(&table_ids).await?;
+        let scan_time = Utc::now();
+        if descendants.iter().any(|(_, meta)| meta.is_none()) {
+            // One recheck for the whole batch: final GC atomically removes metadata and binding.
+            let missing_ids = descendants
+                .iter()
+                .filter_map(|(id, meta)| meta.is_none().then_some(*id))
+                .collect::<HashSet<_>>();
+            let current_bindings = catalog
+                .list_clone_group_bindings(self.clone_group_id()?)
+                .await?;
+            if let Some(id) = current_bindings
+                .iter()
+                .find_map(|(id, _)| missing_ids.contains(id).then_some(*id))
+            {
+                return Err(ErrorCode::StorageNotFound(format!(
+                    "clone descendant {id} metadata is unavailable; defer GC"
+                )));
+            }
+        }
+        let mut scans = stream::iter(descendants.into_iter().filter_map(|(id, meta)| {
+            meta.map(|seq_meta| {
+                let mut table_info = self.get_table_info().clone();
+                table_info.ident.table_id = id;
+                table_info.ident.seq = seq_meta.seq;
+                table_info.meta = seq_meta.data;
+                let observed_lvt = observed_lvts.get(&id).copied().ok_or_else(|| {
+                    ErrorCode::Internal(format!("clone descendant {id} has no observed LVT"))
+                });
+                let ctx = ctx.clone();
+                let catalog = catalog.clone();
+                async move {
+                    Self::mark_one_clone_descendant(
+                        ctx,
+                        catalog,
+                        table_info,
+                        observed_lvt?,
+                        scan_time,
+                        publish_lvt,
+                    )
+                    .await
+                }
+            })
+        }))
+        .buffer_unordered(concurrency.max(1));
+        let mut lvt_updates = Vec::new();
+        while let Some((update, protected)) = scans.try_next().await? {
+            status_callback(format!(
+                "gc clone refs: table {}, protected segments: {}",
+                update.0,
+                protected.len()
+            ));
+            if publish_lvt {
+                lvt_updates.push(update);
+            }
+            segments.extend(protected);
+        }
+        Ok(lvt_updates)
+    }
+
+    pub async fn extend_clone_descendant_tag_segments(
+        &self,
+        catalog: &Arc<dyn Catalog>,
+        descendant_ids: &HashSet<u64>,
+        concurrency: usize,
+        segments: &mut HashSet<Location>,
+    ) -> Result<()> {
+        let operator = self.get_operator();
+        let mut scans =
+            stream::iter(descendant_ids.iter().copied().map(|table_id| {
+                Self::table_tag_segments(table_id, operator.clone(), catalog.clone())
+            }))
+            .buffer_unordered(concurrency.max(1));
+        // Merge each table's tag segments as it completes instead of holding every per-table set.
+        while let Some(tag_segments) = scans.try_next().await? {
+            segments.extend(tag_segments);
+        }
+        Ok(())
+    }
+
+    /// Get all segments still reachable from this table and its clone descendants.
+    #[async_backtrace::framed]
     /// Collect segments from snapshots in a given prefix
     ///
     /// This is a helper function used by both main branch and branch refs
@@ -397,7 +818,8 @@ impl FuseTable {
         Ok(())
     }
 
-    /// Get all segments referenced by snapshots, including branches and tags
+    /// Get all segments referenced by snapshots, including branches and tags, plus every
+    /// snapshot of this table's clone descendants that could still be published.
     #[async_backtrace::framed]
     pub async fn get_snapshot_referenced_segments<T>(
         &self,
@@ -449,30 +871,38 @@ impl FuseTable {
 
         // Protect tags on base table as well.
         let catalog = ctx.get_catalog(self.get_table_info().catalog()).await?;
-        let tags = catalog
-            .list_table_tags(ListTableTagsReq {
-                table_id: self.get_id(),
-                include_expired: false,
-            })
-            .await?;
+        segments.extend(
+            Self::table_tag_segments(self.get_id(), self.get_operator(), catalog.clone()).await?,
+        );
 
-        for (_tag_name, seq_tag) in tags {
-            if let Some(snapshot) = SnapshotsIO::read_snapshot_for_vacuum(
-                self.get_operator(),
-                &seq_tag.data.snapshot_loc,
+        // 3. Protect clone descendants without advancing their LVTs.
+        let mark = self
+            .mark_clone_descendants(
+                ctx.clone(),
+                &catalog,
+                &mut segments,
+                false,
+                max_threads,
+                status_callback,
             )
-            .await?
-            {
-                segments.extend(snapshot.segments.iter().cloned());
-            }
-        }
+            .await?;
+        self.extend_clone_descendant_tag_segments(
+            &catalog,
+            &mark.descendant_ids,
+            max_threads,
+            &mut segments,
+        )
+        .await?;
         Ok(Some(segments))
     }
 
+    /// Prepare owner GC using the LVT observed before refreshing the table's head.
+    /// An absent LVT is represented by unbounded(); this method never re-reads it.
     pub async fn prepare_snapshot_gc_selection(
         &self,
         ctx: &Arc<dyn TableContext>,
         respect_flash_back: bool,
+        observed_lvt: &LeastVisibleTime,
     ) -> Result<Option<SnapshotGcSelection>> {
         let Some(latest_snapshot) = self.read_table_snapshot().await? else {
             info!(
@@ -481,13 +911,17 @@ impl FuseTable {
             );
             return Ok(None);
         };
-
-        let start = std::time::Instant::now();
+        let latest_location = self.snapshot_loc().ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "table {} has a snapshot but no snapshot location",
+                self.get_id()
+            ))
+        })?;
+        let start = Instant::now();
         let retention_policy = self.get_data_retention_policy(ctx.as_ref())?;
         let snapshot_location_prefix = self.meta_location_generator().snapshot_location_prefix();
 
         let mut is_vacuum_all = false;
-        let mut need_update_lvt = false;
         let mut respect_flash_back_with_lvt = None;
 
         let snapshots_before_lvt = match retention_policy {
@@ -503,17 +937,21 @@ impl FuseTable {
                 // A zero retention period indicates that we should vacuum all the historical snapshots
                 is_vacuum_all = retention_period.is_zero();
 
-                let Some(lvt) = self
-                    .set_lvt(latest_snapshot, ctx.as_ref(), retention_period)
-                    .await?
-                else {
+                if !is_uuid_v7(&latest_snapshot.snapshot_id) {
                     return Ok(None);
-                };
+                }
+                let timestamp = latest_snapshot
+                    .timestamp
+                    .ok_or_else(|| ErrorCode::Internal("GC head has no timestamp"))?;
+                let lvt = max(
+                    retention_cutoff(Utc::now(), timestamp, retention_period),
+                    observed_lvt.time,
+                );
 
-                respect_flash_back_with_lvt = flashback_gc_root_lvt(respect_flash_back, lvt);
+                respect_flash_back_with_lvt = respect_flash_back.then_some(lvt);
 
                 ctx.set_status_info(&format!(
-                    "Set LVT for table {}, elapsed: {:?}, LVT: {:?}",
+                    "Calculated LVT for table {}, elapsed: {:?}, LVT: {:?}",
                     self.table_info.desc,
                     start.elapsed(),
                     lvt
@@ -522,7 +960,7 @@ impl FuseTable {
                 if is_vacuum_all {
                     self.list_files_until_prefix(
                         snapshot_location_prefix,
-                        self.snapshot_loc().unwrap().as_str(),
+                        &latest_location,
                         true,
                         None,
                     )
@@ -542,8 +980,7 @@ impl FuseTable {
                 let mut snapshots = self
                     .list_files_until_prefix(
                         snapshot_location_prefix,
-                        // Safe to unwrap here: we have checked that `fuse_table` has a snapshot
-                        self.snapshot_loc().unwrap().as_str(),
+                        &latest_location,
                         need_one_more,
                         None,
                     )
@@ -558,7 +995,6 @@ impl FuseTable {
                     // as gc root, this flag will be propagated to the select_gc_root func later.
                     is_vacuum_all = true;
                 }
-                need_update_lvt = true;
 
                 // When selecting the GC root later, the last snapshot in `snapshots` (after truncation)
                 // is the candidate, but its commit status is uncertain, so its previous snapshot is used
@@ -584,23 +1020,16 @@ impl FuseTable {
         let Some(selection) = self
             .select_gc_root(
                 ctx,
+                latest_location,
                 &snapshots_before_lvt,
                 is_vacuum_all,
                 respect_flash_back_with_lvt,
+                latest_snapshot,
             )
             .await?
         else {
             return Ok(None);
         };
-
-        if need_update_lvt {
-            let cat = ctx.get_default_catalog()?;
-            cat.set_table_lvt(
-                &LeastVisibleTimeIdent::new(ctx.get_tenant(), self.get_id()),
-                &LeastVisibleTime::new(selection.gc_root.timestamp.unwrap()),
-            )
-            .await?;
-        }
 
         ctx.set_status_info(&format!(
             "Selected gc_root for table {}, elapsed: {:?}, gc_root: {:?}, snapshots_to_gc: {:?}",
@@ -615,38 +1044,43 @@ impl FuseTable {
     async fn select_gc_root(
         &self,
         ctx: &Arc<dyn TableContext>,
+        latest_location: String,
         snapshots_before_lvt: &[Entry],
         is_vacuum_all: bool,
         respect_flash_back: Option<DateTime<Utc>>,
+        latest_snapshot: Arc<TableSnapshot>,
     ) -> Result<Option<SnapshotGcSelection>> {
         let op = self.get_operator();
-        let gc_root_path = if is_vacuum_all {
-            // safe to unwrap, or we should have stopped vacuuming in set_lvt()
-            self.snapshot_loc().unwrap()
+        let version = TableMetaLocationGenerator::snapshot_version(&latest_location);
+        let (gc_root_path, selected_root) = if is_vacuum_all {
+            (latest_location, Some((latest_snapshot, version)))
         } else if let Some(lvt) = respect_flash_back {
-            let latest_location = self.snapshot_loc().unwrap();
-            let gc_root = self
-                .find_location(ctx, latest_location, |snapshot| {
-                    is_snapshot_at_or_before_lvt(snapshot.timestamp, lvt)
-                })
-                .await
-                .ok();
-            let Some(gc_root) = gc_root else {
-                info!("no gc_root found, stop vacuuming");
-                return Ok(None);
-            };
-            gc_root
-        } else {
-            if snapshots_before_lvt.is_empty() {
-                info!("no snapshots before lvt, stop vacuuming");
+            let (root, version) = self
+                .select_snapshot_history_gc_root(
+                    ctx,
+                    (latest_snapshot, version),
+                    Some(lvt),
+                    None,
+                    |_| {},
+                )
+                .await?;
+            // An intact chain may end at an anchor newer than the cutoff. It must still be
+            // protected, but there is no owner history at the requested cutoff to reclaim.
+            if root.timestamp.is_none_or(|timestamp| timestamp > lvt) {
                 return Ok(None);
             }
-            let (anchor, _) = SnapshotsIO::read_snapshot(
-                snapshots_before_lvt.last().unwrap().path().to_owned(),
-                op.clone(),
-                false,
-            )
-            .await?;
+            let location = self
+                .meta_location_generator()
+                .gen_snapshot_location(&root.snapshot_id, version)?;
+            (location, Some((root, version)))
+        } else {
+            let Some(anchor_entry) = snapshots_before_lvt.last() else {
+                info!("no snapshots before lvt, stop vacuuming");
+                return Ok(None);
+            };
+            let (anchor, _) =
+                SnapshotsIO::read_snapshot(anchor_entry.path().to_owned(), op.clone(), false)
+                    .await?;
             let Some((gc_root_id, gc_root_ver)) = anchor.prev_snapshot_id else {
                 info!("anchor has no prev_snapshot_id, stop vacuuming");
                 return Ok(None);
@@ -658,11 +1092,14 @@ impl FuseTable {
                 info!("gc_root {} is not v7", gc_root_path);
                 return Ok(None);
             }
-            gc_root_path
+            (gc_root_path, None)
         };
 
         let dal = self.get_operator_ref();
-        let gc_root = SnapshotsIO::read_snapshot(gc_root_path.clone(), op.clone(), false).await;
+        let gc_root = match selected_root {
+            Some(root) => Ok(root),
+            None => SnapshotsIO::read_snapshot(gc_root_path.clone(), op.clone(), false).await,
+        };
         let gc_root_meta_ts = match dal.stat(&gc_root_path).await {
             Ok(v) => v.last_modified().ok_or_else(|| {
                 ErrorCode::StorageOther(format!(
@@ -718,11 +1155,15 @@ impl FuseTable {
                     ))
                 })?;
                 let snapshots_to_gc = gc_candidates[..gc_root_idx].to_vec();
+                let timestamp = gc_root.timestamp.ok_or_else(|| {
+                    ErrorCode::Internal(format!("GC root {} has no timestamp", gc_root_path))
+                })?;
                 Ok(Some(SnapshotGcSelection {
                     gc_root,
                     snapshots_to_gc,
                     gc_root_meta_ts,
                     gc_root_path,
+                    gc_root_lvt: LeastVisibleTime::new(timestamp),
                 }))
             }
             Err(e) => {
@@ -730,37 +1171,6 @@ impl FuseTable {
                 Ok(None)
             }
         }
-    }
-
-    /// Try set lvt as min(latest_snapshot.timestamp, now - retention_time).
-    ///
-    /// Return `None` means we stop vacuuming, but don't want to report error to user.
-    pub async fn set_lvt(
-        &self,
-        latest_snapshot: Arc<TableSnapshot>,
-        ctx: &dyn TableContext,
-        retention_period: TimeDelta,
-    ) -> Result<Option<DateTime<Utc>>> {
-        if !is_uuid_v7(&latest_snapshot.snapshot_id) {
-            info!(
-                "Latest snapshot is not v7, stopping vacuum: {:?}",
-                latest_snapshot.snapshot_id
-            );
-            return Ok(None);
-        }
-        let catalog = ctx.get_default_catalog()?;
-        // safe to unwrap, as we have checked the version is v4
-        let latest_ts = latest_snapshot.timestamp.unwrap();
-        let lvt_point_candidate = retention_cutoff(Utc::now(), latest_ts, retention_period);
-
-        let lvt_point = catalog
-            .set_table_lvt(
-                &LeastVisibleTimeIdent::new(ctx.get_tenant(), self.get_id()),
-                &LeastVisibleTime::new(lvt_point_candidate),
-            )
-            .await?
-            .time;
-        Ok(Some(lvt_point))
     }
 }
 
@@ -829,20 +1239,27 @@ mod tests {
     }
 
     #[test]
-    fn test_snapshot_at_or_before_lvt_boundary() {
-        let lvt = Utc.with_ymd_and_hms(2025, 1, 8, 12, 0, 0).unwrap();
+    fn test_clone_descendant_ids() {
+        let bindings = [(2, 1), (3, 2), (4, 1)];
+        assert_eq!(
+            FuseTable::clone_descendant_ids(1, 1, &bindings).unwrap(),
+            HashSet::from([2, 3, 4])
+        );
+        assert_eq!(
+            FuseTable::clone_descendant_ids(1, 2, &bindings).unwrap(),
+            HashSet::from([3])
+        );
 
-        assert_eq!(flashback_gc_root_lvt(false, lvt), None);
-        assert_eq!(flashback_gc_root_lvt(true, lvt), Some(lvt));
-        assert!(!is_snapshot_at_or_before_lvt(None, lvt));
-        assert!(!is_snapshot_at_or_before_lvt(
-            Some(lvt + TimeDelta::microseconds(1)),
-            lvt
-        ));
-        assert!(is_snapshot_at_or_before_lvt(Some(lvt), lvt));
-        assert!(is_snapshot_at_or_before_lvt(
-            Some(lvt - TimeDelta::microseconds(1)),
-            lvt
-        ));
+        // Disconnected bindings or a source outside the group fail closed.
+        assert!(FuseTable::clone_descendant_ids(1, 1, &[(2, 1), (4, 3)]).is_err());
+        assert!(FuseTable::clone_descendant_ids(1, 3, &[(2, 1)]).is_err());
+
+        // Table 2 has two direct sources, which keeps the 2 -> 3 -> 2 cycle reachable from the
+        // group root. Every owner perspective must fail closed rather than treat itself as its
+        // own descendant and advance its LVT past its own GC root.
+        let cyclic = [(2, 1), (3, 2), (2, 3)];
+        for owner in [1, 2, 3] {
+            assert!(FuseTable::clone_descendant_ids(1, owner, &cyclic).is_err());
+        }
     }
 }

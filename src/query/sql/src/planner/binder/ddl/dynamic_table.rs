@@ -263,6 +263,7 @@ impl Binder {
             as_select,
             table_indexes: None,
             table_constraints: None,
+            clone: None,
             attached_columns: None,
         };
         let plan = CreateDynamicTablePlan {

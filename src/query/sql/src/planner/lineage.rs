@@ -2041,6 +2041,7 @@ mod tests {
             as_select: as_select.map(Box::new),
             table_indexes: None,
             table_constraints: None,
+            clone: None,
             attached_columns: None,
         }
     }
