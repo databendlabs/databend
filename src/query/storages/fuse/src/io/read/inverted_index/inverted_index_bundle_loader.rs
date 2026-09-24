@@ -32,6 +32,7 @@ use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_byte
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_milliseconds;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::InvertedIndexFullPayloadCache;
 use databend_storages_common_cache::InvertedIndexLookupCache;
 use databend_storages_common_cache::InvertedIndexMetaCache;
 use databend_storages_common_cache::InvertedIndexPayloadCache;
@@ -67,6 +68,7 @@ const MAX_FULL_LOOKUP_CACHE_SIZE: usize = MAX_MERGED_READ_SIZE;
 const LOOKUP_FULL_CACHE_KEY_PREFIX: &str = "ii-lookup-full-v1:";
 const LOOKUP_PAGE_CACHE_KEY_PREFIX: &str = "ii-lookup-page-v1:";
 const PAYLOAD_CACHE_KEY_PREFIX: &str = "ii-payload-page-v1:";
+const FULL_PAYLOAD_CACHE_KEY_PREFIX: &str = "ii-payload-full-v1:";
 
 fn record_inverted_index_read(bytes: usize, elapsed: std::time::Duration) {
     metrics_inc_block_inverted_index_read_bytes(u64::try_from(bytes).unwrap_or(u64::MAX));
@@ -155,6 +157,7 @@ struct RemoteBundleDirectory {
     external_files: BundleExternalFiles,
     lookup_cache: Option<InvertedIndexLookupCache>,
     payload_cache: Option<InvertedIndexPayloadCache>,
+    full_payload_cache: Option<InvertedIndexFullPayloadCache>,
 }
 
 impl RemoteBundleDirectory {
@@ -201,6 +204,7 @@ struct RemoteBundleFileHandle {
     cache_policy: RangeCachePolicy,
     lookup_cache: Option<InvertedIndexLookupCache>,
     payload_cache: Option<InvertedIndexPayloadCache>,
+    full_payload_cache: Option<InvertedIndexFullPayloadCache>,
     path: PathBuf,
 }
 
@@ -234,6 +238,26 @@ impl RemoteBundleFileHandle {
 
     fn whole_lookup_key(&self) -> String {
         whole_lookup_cache_key(&self.location, &self.path, self.file_id)
+    }
+
+    fn full_payload_key(&self) -> String {
+        format!(
+            "{FULL_PAYLOAD_CACHE_KEY_PREFIX}{}:{}:{}",
+            self.location,
+            component_name(&self.path),
+            self.file_id
+        )
+    }
+
+    fn cached_full_payload(&self) -> Option<Bytes> {
+        let cache = self.full_payload_cache.as_ref()?;
+        let key = self.full_payload_key();
+        let data = cache.get(&key)?.data.clone();
+        if data.len() != self.len() {
+            cache.evict(&key);
+            return None;
+        }
+        Some(data)
     }
 
     fn page_key(&self, page_no: usize) -> String {
@@ -392,20 +416,30 @@ impl RemoteBundleFileHandle {
         // page-sized object requests.
         let fetch_lock = full_payload_fetch_lock(&self.location, self.file_id);
         let _guard = fetch_lock.lock().await;
-        let last_page = (self.len() - 1) / CACHE_PAGE_SIZE;
-        if let Some(data) = self.assemble_cached_pages(0, last_page)? {
-            return Ok(data);
+        if let Some(data) = self.cached_full_payload() {
+            return Ok(OwnedBytes::new(data.to_vec()));
+        }
+        if self.payload_cache.is_some() {
+            let last_page = (self.len() - 1) / CACHE_PAGE_SIZE;
+            if let Some(data) = self.assemble_cached_pages(0, last_page)? {
+                return Ok(data);
+            }
         }
 
         let data = self.fetch_range(0..self.len()).await?;
-        for page_no in 0..=last_page {
-            let page_range = self.page_range(page_no)?;
-            // Keep cache entries independently owned. Otherwise one surviving 64 KiB page would
-            // retain the complete postings file allocation after the search-scoped pin is dropped.
-            self.insert_page(
-                page_no,
-                Bytes::copy_from_slice(&data[page_range.start..page_range.end]),
-            );
+        // Full components are stored as one entry in a separate memory pool. Oversized files
+        // are only pinned for this search; they must not evict hot payload pages.
+        if let Some(cache) = &self.full_payload_cache {
+            if data
+                .len()
+                .saturating_add(std::mem::size_of::<InvertedIndexPayloadBytes>())
+                <= cache.bytes_capacity() as usize
+            {
+                cache.insert(
+                    self.full_payload_key(),
+                    InvertedIndexPayloadBytes::new(data.clone()),
+                );
+            }
         }
         Ok(OwnedBytes::new(Vec::<u8>::from(data)))
     }
@@ -455,11 +489,19 @@ impl RemoteBundleFileHandle {
             return Ok(OwnedBytes::empty());
         }
 
+        if self.cache_policy == RangeCachePolicy::PayloadPages
+            && let Some(data) = self.cached_full_payload()
+        {
+            return Ok(OwnedBytes::new(data.slice(range).to_vec()));
+        }
+
         let cache_enabled = match self.cache_policy {
             RangeCachePolicy::LookupWhole | RangeCachePolicy::LookupPages => {
                 self.lookup_cache.is_some()
             }
-            RangeCachePolicy::PayloadPages => self.payload_cache.is_some(),
+            RangeCachePolicy::PayloadPages => {
+                self.payload_cache.is_some() || self.full_payload_cache.is_some()
+            }
         };
         if !cache_enabled {
             return self
@@ -472,6 +514,12 @@ impl RemoteBundleFileHandle {
         }
         if self.is_full_postings_read(&range) {
             return self.read_full_postings_file().await;
+        }
+        if self.cache_policy == RangeCachePolicy::PayloadPages && self.payload_cache.is_none() {
+            return self
+                .fetch_range(range)
+                .await
+                .map(|data| OwnedBytes::new(data.to_vec()));
         }
 
         let first_page = range.start / CACHE_PAGE_SIZE;
@@ -604,6 +652,7 @@ impl Directory for RemoteBundleDirectory {
             cache_policy: range_cache_policy(path, file_len_u64),
             lookup_cache: self.lookup_cache.clone(),
             payload_cache: self.payload_cache.clone(),
+            full_payload_cache: self.full_payload_cache.clone(),
             path: path.to_path_buf(),
         }))
     }
@@ -854,6 +903,7 @@ pub(crate) async fn load_bundle_search_directory(
         external_files: footer.external_files.clone(),
         lookup_cache,
         payload_cache: cache_manager.get_inverted_index_payload_cache(),
+        full_payload_cache: cache_manager.get_inverted_index_full_payload_cache(),
     };
     let search_pin = SearchPinDirectory::new(Arc::new(remote));
     let directory = FooterDirectory::new(search_pin, footer);
@@ -953,9 +1003,16 @@ mod tests {
         )
     }
 
-    async fn payload_file_handle(
+    fn full_payload_cache(capacity: usize) -> Option<InvertedIndexFullPayloadCache> {
+        (capacity > 0).then(|| {
+            InMemoryLruCache::with_bytes_capacity("memory_full_payload".to_string(), capacity)
+        })
+    }
+
+    async fn payload_file_handle_with_full_capacity(
         location: &str,
         data: Vec<u8>,
+        full_capacity: usize,
     ) -> Result<(RemoteBundleFileHandle, Arc<Mutex<Vec<Range<u64>>>>)> {
         let layer = RecordingLayer::default();
         let ranges = layer.ranges.clone();
@@ -972,10 +1029,19 @@ mod tests {
                 cache_policy: RangeCachePolicy::PayloadPages,
                 lookup_cache: None,
                 payload_cache: payload_cache(data.len() * 2),
+                full_payload_cache: full_payload_cache(full_capacity),
                 path: PathBuf::from("segment.idx"),
             },
             ranges,
         ))
+    }
+
+    async fn payload_file_handle(
+        location: &str,
+        data: Vec<u8>,
+    ) -> Result<(RemoteBundleFileHandle, Arc<Mutex<Vec<Range<u64>>>>)> {
+        let full_capacity = data.len() * 2;
+        payload_file_handle_with_full_capacity(location, data, full_capacity).await
     }
 
     fn footer_fixture() -> (Vec<u8>, u64, InvertedIndexBundleFooter) {
@@ -1052,6 +1118,112 @@ mod tests {
         assert_eq!(first.as_ref(), data);
         assert_eq!(second.as_ref(), data);
         assert_eq!(*ranges.lock().unwrap(), vec![0..data.len() as u64]);
+        assert!(file.cached_full_payload().is_some());
+        assert!(file.cached_page(0)?.is_none());
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_partial_read_reuses_full_payload() -> Result<()> {
+        let data = (0..(MAX_MERGED_PAGES + 1) * CACHE_PAGE_SIZE)
+            .map(|index| index as u8)
+            .collect::<Vec<_>>();
+        let (file, ranges) = payload_file_handle("full-then-partial", data.clone()).await?;
+
+        assert_eq!(file.read_cached_pages(0..data.len()).await?.as_ref(), data);
+        let partial = CACHE_PAGE_SIZE + 7..CACHE_PAGE_SIZE + 31;
+        assert_eq!(
+            file.read_cached_pages(partial.clone()).await?.as_ref(),
+            &data[partial]
+        );
+        assert_eq!(*ranges.lock().unwrap(), vec![0..data.len() as u64]);
+        assert!(file.cached_page(1)?.is_none());
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_evicted_full_payload_falls_back_to_page_cache() -> Result<()> {
+        let data = (0..(MAX_MERGED_PAGES + 1) * CACHE_PAGE_SIZE)
+            .map(|index| index as u8)
+            .collect::<Vec<_>>();
+        let (file, ranges) = payload_file_handle("evicted-full", data.clone()).await?;
+        file.read_cached_pages(0..data.len()).await?;
+        file.full_payload_cache
+            .as_ref()
+            .unwrap()
+            .evict(&file.full_payload_key());
+
+        let partial = CACHE_PAGE_SIZE + 7..CACHE_PAGE_SIZE + 31;
+        assert_eq!(
+            file.read_cached_pages(partial.clone()).await?.as_ref(),
+            &data[partial]
+        );
+        assert_eq!(*ranges.lock().unwrap(), vec![
+            0..data.len() as u64,
+            CACHE_PAGE_SIZE as u64..(2 * CACHE_PAGE_SIZE) as u64,
+        ]);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_full_pool_eviction_preserves_hot_page() -> Result<()> {
+        let data = (0..(MAX_MERGED_PAGES + 1) * CACHE_PAGE_SIZE)
+            .map(|index| index as u8)
+            .collect::<Vec<_>>();
+        let capacity = data.len() + std::mem::size_of::<InvertedIndexPayloadBytes>() + 128;
+        let (first, first_ranges) =
+            payload_file_handle_with_full_capacity("eviction-first", data.clone(), capacity)
+                .await?;
+        let (mut second, _) =
+            payload_file_handle_with_full_capacity("eviction-second", data.clone(), capacity)
+                .await?;
+        second.full_payload_cache = first.full_payload_cache.clone();
+
+        first.read_cached_pages(0..CACHE_PAGE_SIZE).await?;
+        first.read_cached_pages(0..data.len()).await?;
+        second.read_cached_pages(0..data.len()).await?;
+        assert!(first.cached_full_payload().is_none());
+        assert!(second.cached_full_payload().is_some());
+        assert!(first.cached_page(0)?.is_some());
+        assert_eq!(
+            first.read_cached_pages(0..CACHE_PAGE_SIZE).await?.as_ref(),
+            &data[..CACHE_PAGE_SIZE]
+        );
+        assert_eq!(*first_ranges.lock().unwrap(), vec![
+            0..CACHE_PAGE_SIZE as u64,
+            0..data.len() as u64,
+        ]);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_oversized_full_payload_does_not_evict_pages() -> Result<()> {
+        let data = (0..(MAX_MERGED_PAGES + 1) * CACHE_PAGE_SIZE)
+            .map(|index| index as u8)
+            .collect::<Vec<_>>();
+        let (file, ranges) =
+            payload_file_handle_with_full_capacity("oversized-full", data.clone(), data.len() - 1)
+                .await?;
+        // Populate a hot page before the full read; an oversized full component must not
+        // displace it, nor should the full read populate thousands of individual pages.
+        assert_eq!(
+            file.read_cached_pages(0..CACHE_PAGE_SIZE).await?.as_ref(),
+            &data[..CACHE_PAGE_SIZE]
+        );
+        assert_eq!(file.read_cached_pages(0..data.len()).await?.as_ref(), data);
+        assert!(file.cached_full_payload().is_none());
+        assert!(file.cached_page(0)?.is_some());
+        assert!(file.cached_page(1)?.is_none());
+        let partial = CACHE_PAGE_SIZE + 7..CACHE_PAGE_SIZE + 31;
+        assert_eq!(
+            file.read_cached_pages(partial.clone()).await?.as_ref(),
+            &data[partial]
+        );
+        assert_eq!(*ranges.lock().unwrap(), vec![
+            0..CACHE_PAGE_SIZE as u64,
+            0..data.len() as u64,
+            CACHE_PAGE_SIZE as u64..(2 * CACHE_PAGE_SIZE) as u64,
+        ]);
         Ok(())
     }
 
@@ -1085,6 +1257,7 @@ mod tests {
         assert_eq!(LOOKUP_FULL_CACHE_KEY_PREFIX, "ii-lookup-full-v1:");
         assert_eq!(LOOKUP_PAGE_CACHE_KEY_PREFIX, "ii-lookup-page-v1:");
         assert_eq!(PAYLOAD_CACHE_KEY_PREFIX, "ii-payload-page-v1:");
+        assert_eq!(FULL_PAYLOAD_CACHE_KEY_PREFIX, "ii-payload-full-v1:");
     }
 
     #[test]
@@ -1284,6 +1457,7 @@ mod tests {
             external_files: footer.external_files.clone(),
             lookup_cache: None,
             payload_cache: payload_cache(postings.len() * 2),
+            full_payload_cache: full_payload_cache(postings.len() * 2),
         };
 
         assert!(remote.exists(Path::new("segment.idx"))?);
