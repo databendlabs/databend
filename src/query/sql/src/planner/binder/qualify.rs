@@ -24,8 +24,8 @@ use crate::binder::ExprContext;
 use crate::binder::ScalarBinder;
 use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::into_conjunctions;
+use crate::binder::window::WindowInputColumns;
 use crate::binder::window::WindowRewriter;
-use crate::binder::window::WindowScalarRewriter;
 use crate::binder::window::find_replaced_window_function;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::GroupingChecker;
@@ -67,11 +67,12 @@ impl Binder {
         Ok(scalar)
     }
 
-    pub fn bind_qualify(
+    pub(super) fn bind_qualify(
         &mut self,
         bind_context: &mut BindContext,
         qualify: ScalarExpr,
         child: SExpr,
+        window_inputs: &mut WindowInputColumns,
     ) -> Result<SExpr> {
         bind_context.expr_context = ExprContext::QualifyClause;
 
@@ -88,7 +89,7 @@ impl Binder {
                 let mut qualify_checker = QualifyChecker::new(bind_context);
                 qualify_checker.visit(&mut qualify)?;
             }
-            WindowScalarRewriter::new(&child)?.visit(&mut qualify)?;
+            window_inputs.visit(&mut qualify)?;
             qualify
         };
 

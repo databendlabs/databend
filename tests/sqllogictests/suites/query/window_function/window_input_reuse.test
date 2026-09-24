@@ -101,6 +101,38 @@ null_new
 one_new
 two_new
 
+# Reuse the final input columns when windows belong to different groups.
+query IIII
+SELECT try_cast(d:user_id AS BIGINT) AS user_id,
+       try_cast(d:updated_at AS BIGINT) AS updated_at,
+       row_number() OVER (PARTITION BY user_id ORDER BY updated_at DESC) AS rn,
+       rank() OVER (ORDER BY updated_at) AS r
+FROM window_input_reuse
+QUALIFY try_cast(d:user_id AS BIGINT) > 0
+ORDER BY user_id, updated_at
+----
+1 1 2 1
+1 2 1 4
+2 1 2 1
+2 3 1 6
+
+# An aggregate-dependent SRF expands rows between the windows and QUALIFY.
+query II
+SELECT try_cast(d:user_id AS BIGINT) + 10 AS k,
+       unnest([sum(try_cast(d:updated_at AS BIGINT)),
+               sum(try_cast(d:updated_at AS BIGINT)) + 1]) AS n
+FROM window_input_reuse
+GROUP BY try_cast(d:user_id AS BIGINT)
+QUALIFY row_number() OVER (PARTITION BY try_cast(d:user_id AS BIGINT) + 10
+                          ORDER BY try_cast(d:user_id AS BIGINT) + 10) = 1
+    AND try_cast(d:user_id AS BIGINT) + 10 > 10
+ORDER BY k, n
+----
+11 3
+11 4
+12 4
+12 5
+
 statement ok
 DROP TABLE window_input_reuse
 
