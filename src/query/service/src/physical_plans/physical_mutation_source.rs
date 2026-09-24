@@ -16,7 +16,6 @@ use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::PartStatistics;
@@ -49,7 +48,6 @@ use databend_common_storages_fuse::SegmentLocation;
 use databend_common_storages_fuse::operations::CommitMeta;
 use databend_common_storages_fuse::operations::ConflictResolveContext;
 use databend_common_storages_fuse::operations::MutationAction;
-use databend_common_storages_fuse::operations::MutationBlockPruningContext;
 
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::format::MutationSourceFormatter;
@@ -159,12 +157,7 @@ impl IPhysicalPlan for MutationSource {
             .collect();
 
         let is_lazy = self.partitions.partitions_type() == PartInfoType::LazyLevel && is_delete;
-        if is_lazy {
-            let ctx = builder.ctx.clone();
-            let table_clone = table.clone();
-            let ctx_clone = builder.ctx.clone();
-            let filters_clone = self.filters.clone();
-            let projection = Projection::Columns(read_partition_columns.clone());
+        let partition_receiver = if is_lazy {
             let mut segment_locations = Vec::with_capacity(self.partitions.partitions.len());
             for part in &self.partitions.partitions {
                 // Safe to downcast because we know the partition is lazy
@@ -175,27 +168,20 @@ impl IPhysicalPlan for MutationSource {
                     snapshot_loc: None,
                 });
             }
-            let prune_ctx = MutationBlockPruningContext {
+            // Prune the segments in a separate pipeline while the query is running, and
+            // stream the deletion tasks to the mutation sources.
+            let (prune_pipeline, partition_receiver) = table.build_mutation_prune_pipeline(
+                builder.ctx.clone(),
+                self.filters.clone(),
+                Projection::Columns(read_partition_columns.clone()),
                 segment_locations,
-                block_count: None,
-            };
-            Runtime::with_worker_threads(2, Some("do_mutation_block_pruning".to_string()))?
-                .block_on(async move {
-                    let (_, partitions) = table_clone
-                        .do_mutation_block_pruning(
-                            ctx_clone,
-                            filters_clone,
-                            projection,
-                            prune_ctx,
-                            true,
-                        )
-                        .await?;
-                    ctx.set_partitions(partitions)?;
-                    Ok(())
-                })?;
+            )?;
+            builder.pipelines.push(prune_pipeline);
+            Some(partition_receiver)
         } else {
             builder.ctx.set_partitions(self.partitions.clone())?;
-        }
+            None
+        };
 
         let filter = self.filters.clone().map(|v| v.filter);
         let mutation_action = if is_delete {
@@ -216,6 +202,7 @@ impl IPhysicalPlan for MutationSource {
             col_indices,
             &mut builder.main_pipeline,
             mutation_action,
+            partition_receiver,
         )?;
 
         if table.change_tracking_enabled() {

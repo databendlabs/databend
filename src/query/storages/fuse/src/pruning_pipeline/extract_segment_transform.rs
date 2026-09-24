@@ -85,7 +85,7 @@ impl BlockMetaAccumulatingTransform<PrunedCompactSegmentMeta> for ExtractSegment
 }
 
 impl ExtractSegmentTransform {
-    fn extract_block_metas(
+    pub(crate) fn extract_block_metas(
         segment_path: &str,
         segment: &CompactSegmentInfo,
         populate_cache: bool,

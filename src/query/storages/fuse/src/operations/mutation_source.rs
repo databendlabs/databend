@@ -13,7 +13,10 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
+use async_channel::Receiver;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
@@ -29,6 +32,7 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_metrics::storage::*;
+use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_storages_common_index::RangeIndex;
@@ -36,6 +40,7 @@ use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::RangePruner;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use log::info;
 
 use crate::FuseLazyPartInfo;
 use crate::FuseTable;
@@ -44,8 +49,16 @@ use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSource;
+use crate::pruning::BlockPruner;
 use crate::pruning::FusePruner;
+use crate::pruning::SegmentPruner;
 use crate::pruning::create_segment_location_vector;
+use crate::pruning_pipeline::LazySegmentReceiverSource;
+use crate::pruning_pipeline::MutationBlockPruneTransform;
+use crate::pruning_pipeline::MutationPruneStats;
+use crate::pruning_pipeline::PrunedCompactSegmentMeta;
+use crate::pruning_pipeline::SegmentPruneTransform;
+use crate::pruning_pipeline::SendMutationPartSink;
 
 impl FuseTable {
     #[async_backtrace::framed]
@@ -56,6 +69,7 @@ impl FuseTable {
         col_indices: Vec<FieldIndex>,
         pipeline: &mut Pipeline,
         mutation_action: MutationAction,
+        partition_receiver: Option<Receiver<Result<PartInfoPtr>>>,
     ) -> Result<()> {
         let all_column_indices = self.all_column_indices();
         let col_indices =
@@ -105,9 +119,12 @@ impl FuseTable {
         projection.sort_by_key(|&i| source_col_indices[i]);
         let ops = vec![BlockOperator::Project { projection }];
 
-        let max_threads = (ctx.get_settings().get_max_threads()? as usize)
-            .min(ctx.partition_num())
-            .max(1);
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        // The number of streamed partitions is unknown until pruning is done.
+        let max_threads = match partition_receiver {
+            Some(_) => max_threads,
+            None => max_threads.min(ctx.partition_num()).max(1),
+        };
         // Add source pipe.
         pipeline.add_source(
             |output| {
@@ -121,6 +138,7 @@ impl FuseTable {
                     ops.clone(),
                     self.storage_format,
                     update_stream_columns,
+                    partition_receiver.clone(),
                 )
             },
             max_threads,
@@ -178,47 +196,7 @@ impl FuseTable {
             segment_locations,
             block_count,
         } = prune_ctx;
-        let push_down = Some(PushDownInfo {
-            projection: Some(projection),
-            filters: filters.clone(),
-            ..PushDownInfo::default()
-        });
-        let spatial_index_columns =
-            Self::create_spatial_index_columns(&self.table_info.meta.indexes);
-
-        let mut pruner = FusePruner::create(
-            &ctx,
-            self.operator.clone(),
-            self.schema_with_stream(),
-            &push_down,
-            self.partition_pruning_info(ctx.clone()),
-            self.bloom_index_cols(),
-            Self::create_ngram_index_args(&self.table_info.meta.indexes, &self.schema(), false)?,
-            spatial_index_columns,
-            None,
-        )?;
-
-        if let Some(inverse) = filters.map(|f| f.inverted_filter) {
-            // now the `block_metas` refers to the blocks that need to be deleted completely or partially.
-            //
-            // let's try pruning the blocks further to get the blocks that need to be deleted completely, so that
-            // later during mutation, we need not load the data of these blocks:
-            //
-            // 1. invert the filter expression
-            // 2. apply the inverse filter expression to the block metas, utilizing range index
-            //  - for those blocks that need to be deleted completely, they will be filtered out.
-            //  - for those blocks that need to be deleted partially, they will NOT be filtered out.
-            //
-            let inverse = inverse.as_expr(&BUILTIN_FUNCTIONS);
-            let func_ctx = ctx.get_function_context()?;
-            let range_index = RangeIndex::try_create(
-                func_ctx,
-                &inverse,
-                self.schema(),
-                StatisticsOfColumns::default(), // TODO default values
-            )?;
-            pruner.set_inverse_range_index(range_index);
-        }
+        let mut pruner = self.create_mutation_pruner(ctx, filters, projection)?;
 
         let block_metas = if is_delete {
             pruner.delete_pruning(segment_locations).await?
@@ -303,6 +281,153 @@ impl FuseTable {
             );
         }
         Ok((statistics, parts))
+    }
+
+    fn create_mutation_pruner(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        filters: Option<Filters>,
+        projection: Projection,
+    ) -> Result<FusePruner> {
+        let push_down = Some(PushDownInfo {
+            projection: Some(projection),
+            filters: filters.clone(),
+            ..PushDownInfo::default()
+        });
+        let spatial_index_columns =
+            Self::create_spatial_index_columns(&self.table_info.meta.indexes);
+
+        let mut pruner = FusePruner::create(
+            &ctx,
+            self.operator.clone(),
+            self.schema_with_stream(),
+            &push_down,
+            self.partition_pruning_info(ctx.clone()),
+            self.bloom_index_cols(),
+            Self::create_ngram_index_args(&self.table_info.meta.indexes, &self.schema(), false)?,
+            spatial_index_columns,
+            None,
+        )?;
+
+        if let Some(inverse) = filters.map(|f| f.inverted_filter) {
+            // now the `block_metas` refers to the blocks that need to be deleted completely or partially.
+            //
+            // let's try pruning the blocks further to get the blocks that need to be deleted completely, so that
+            // later during mutation, we need not load the data of these blocks:
+            //
+            // 1. invert the filter expression
+            // 2. apply the inverse filter expression to the block metas, utilizing range index
+            //  - for those blocks that need to be deleted completely, they will be filtered out.
+            //  - for those blocks that need to be deleted partially, they will NOT be filtered out.
+            //
+            let inverse = inverse.as_expr(&BUILTIN_FUNCTIONS);
+            let func_ctx = ctx.get_function_context()?;
+            let range_index = RangeIndex::try_create(
+                func_ctx,
+                &inverse,
+                self.schema(),
+                StatisticsOfColumns::default(), // TODO default values
+            )?;
+            pruner.set_inverse_range_index(range_index);
+        }
+        Ok(pruner)
+    }
+
+    /// Build a pipeline that prunes the lazy segments of a deletion while the query is running,
+    /// and streams the deletion tasks to the returned receiver, which feeds the mutation sources.
+    ///
+    /// Pruning a large table can be slow, so it must not happen while the pipeline is being
+    /// built: in cluster mode that runs inside the fragment initialization of every node,
+    /// before the query is started.
+    pub fn build_mutation_prune_pipeline(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        filters: Option<Filters>,
+        projection: Projection,
+        segment_locations: Vec<SegmentLocation>,
+    ) -> Result<(Pipeline, Receiver<Result<PartInfoPtr>>)> {
+        let pruner = self.create_mutation_pruner(ctx.clone(), filters, projection)?;
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_io_requests = self.adjust_io_request(&ctx)?;
+        let (segment_tx, segment_rx) = async_channel::bounded(max_io_requests);
+        let (part_info_tx, part_info_rx) = async_channel::bounded(max_io_requests);
+
+        let mut prune_pipeline = Pipeline::create();
+        prune_pipeline.add_source(
+            |output| LazySegmentReceiverSource::create(ctx.clone(), segment_rx.clone(), output),
+            max_threads,
+        )?;
+
+        let segment_pruner = SegmentPruner::create(
+            pruner.pruning_ctx.clone(),
+            pruner.table_schema.clone(),
+            Default::default(),
+        )?;
+        prune_pipeline.add_transform(|input, output| {
+            SegmentPruneTransform::<PrunedCompactSegmentMeta>::create(
+                input,
+                output,
+                segment_pruner.clone(),
+                pruner.pruning_ctx.clone(),
+            )
+        })?;
+
+        let block_pruner = Arc::new(BlockPruner::create(pruner.pruning_ctx.clone())?);
+        let inverse_range_index = pruner.get_inverse_range_index();
+        let schema = self.schema_with_stream();
+        let stats = Arc::new(MutationPruneStats::default());
+        prune_pipeline.add_transform(|input, output| {
+            MutationBlockPruneTransform::create(
+                input,
+                output,
+                block_pruner.clone(),
+                pruner.pruning_ctx.clone(),
+                inverse_range_index.clone(),
+                schema.clone(),
+                stats.clone(),
+            )
+        })?;
+        prune_pipeline
+            .add_sink(|input| SendMutationPartSink::create(input, part_info_tx.clone()))?;
+        // Only the sinks may hold the senders, otherwise the channel is never closed.
+        drop(part_info_tx);
+
+        let data_metrics = self.data_metrics.clone();
+        prune_pipeline.set_on_finished(move |info: &ExecutionInfo| {
+            if info.res.is_ok() {
+                let num_parts = stats.num_parts.load(Ordering::Relaxed);
+                let num_whole_block_mutation = stats.num_whole_block_mutation.load(Ordering::Relaxed);
+                let num_whole_segment_mutation =
+                    stats.num_whole_segment_mutation.load(Ordering::Relaxed);
+                data_metrics.inc_partitions_scanned(num_parts as u64);
+                metrics_inc_deletion_block_range_pruned_whole_block_nums(
+                    num_whole_block_mutation as u64,
+                );
+                metrics_inc_deletion_segment_range_purned_whole_segment_nums(
+                    num_whole_segment_mutation as u64,
+                );
+                info!(
+                    "delete pruning done, number of whole block deletion detected in pruning phase: {}",
+                    num_whole_block_mutation
+                );
+            }
+            Ok(())
+        });
+
+        prune_pipeline.set_on_init(move || {
+            // We cannot use the runtime associated with the query to avoid increasing its lifetime.
+            GlobalIORuntime::instance().spawn(async move {
+                for segment in segment_locations {
+                    // The query may be killed or finished early, ignore the error.
+                    if segment_tx.send(segment).await.is_err() {
+                        break;
+                    }
+                }
+            });
+            Ok(())
+        });
+
+        Ok((prune_pipeline, part_info_rx))
     }
 }
 

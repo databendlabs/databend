@@ -135,3 +135,95 @@ drop view v_after_deletion;
 
 statement ok
 drop table if exists del_id;
+
+# The segments of a lazy distributed deletion are pruned by a pruning pipeline at runtime,
+# which streams the deletion tasks to the mutation sources of each node.
+statement ok
+create or replace table t_lazy (id int not null, c1 int not null) row_per_block=10;
+
+# 12 segments, more than the number of nodes, so that the deletion is lazy
+statement ok
+insert into t_lazy select number, number * 10 from numbers(100);
+
+statement ok
+insert into t_lazy select number, number * 10 from numbers(200) where number >= 100;
+
+statement ok
+insert into t_lazy select number, number * 10 from numbers(300) where number >= 200;
+
+statement ok
+insert into t_lazy select number, number * 10 from numbers(400) where number >= 300;
+
+statement ok
+insert into t_lazy select number, number * 10 from numbers(500) where number >= 400;
+
+statement ok
+insert into t_lazy select number, number * 10 from numbers(600) where number >= 500;
+
+statement ok
+insert into t_lazy select number, number * 10 from numbers(700) where number >= 600;
+
+statement ok
+insert into t_lazy select number, number * 10 from numbers(800) where number >= 700;
+
+statement ok
+insert into t_lazy select number, number * 10 from numbers(900) where number >= 800;
+
+statement ok
+insert into t_lazy select number, number * 10 from numbers(1000) where number >= 900;
+
+statement ok
+insert into t_lazy select number, number * 10 from numbers(1100) where number >= 1000;
+
+statement ok
+insert into t_lazy select number, number * 10 from numbers(1200) where number >= 1100;
+
+# no segment is touched
+statement ok
+delete from t_lazy where id > 5000;
+
+query II
+select count(*), sum(c1) from t_lazy;
+----
+1200 7194000
+
+# mix of whole segment, whole block and partial block deletions
+statement ok
+delete from t_lazy where id < 300 or (id >= 400 and id < 450) or (id >= 645 and id < 655) or id >= 1195;
+
+query II
+select count(*), sum(c1) from t_lazy;
+----
+835 6408450
+
+query I
+select count(*) from t_lazy where id < 300 or (id >= 400 and id < 450) or (id >= 645 and id < 655) or id >= 1195;
+----
+0
+
+# more mutation sources than deletion tasks
+statement ok
+set max_threads = 16;
+
+statement ok
+delete from t_lazy where id = 700;
+
+statement ok
+unset max_threads;
+
+query II
+select count(*), sum(c1) from t_lazy;
+----
+834 6401450
+
+# all the rows are deleted by the filter
+statement ok
+delete from t_lazy where id >= 0;
+
+query I
+select count(*) from t_lazy;
+----
+0
+
+statement ok
+drop table t_lazy;
