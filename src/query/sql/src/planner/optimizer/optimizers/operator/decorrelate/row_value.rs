@@ -12,18 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Row-value `IN` against a multi-column subquery: `(a, b) IN (SELECT x, y ...)`.
+//! `(a, b) IN (SELECT x, y ...)` with SQL row comparison semantics.
 //!
-//! SQL compares the rows field by field with three-valued logic: TRUE when some
-//! subquery row equals on every field, FALSE when every subquery row differs on
-//! at least one non-NULL field, and NULL otherwise.
-//!
-//! A hash join only pairs rows whose keys are equal, so a NULL field can never
-//! match through a key. The rewrite builds one `RightMark` join per set of
-//! compared fields: the strict branch keys on every field; each wildcard branch
-//! drops a subset of the nullable fields from the key and checks on the matched
-//! pairs that every dropped field is NULL on one side. All branches are plain
-//! hash joins with non-NULL keys, and an `EvalScalar` combines their markers.
+//! A hash join cannot match a NULL field through its key, so the rewrite
+//! uses one `RightMark` join per set of compared fields: the strict join keys
+//! on every field (TRUE), and each wildcard join drops some nullable fields
+//! from the key and requires them to be NULL on either side (UNKNOWN).
 
 use std::sync::Arc;
 
@@ -38,7 +32,6 @@ use databend_common_expression::types::NumberScalar;
 use super::DerivedColumnScope;
 use super::subquery_decorrelator::SubqueryDecorrelatorOptimizer;
 use super::subquery_decorrelator::UnnestResult;
-use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::Visibility;
 use crate::optimizer::ir::SExpr;
@@ -55,8 +48,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 
-/// Each nullable field doubles the number of wildcard branches, and every
-/// branch evaluates the subquery again.
+/// Wildcard joins grow as 2^n in the number of nullable fields.
 const MAX_NULLABLE_ROW_FIELDS: usize = 3;
 
 fn call(span: Span, name: &str, args: Vec<ScalarExpr>) -> Result<ScalarExpr> {
@@ -73,13 +65,16 @@ fn call(span: Span, name: &str, args: Vec<ScalarExpr>) -> Result<ScalarExpr> {
 
 fn fold(span: Span, op: &str, preds: Vec<ScalarExpr>) -> Result<ScalarExpr> {
     let mut iter = preds.into_iter();
-    let first = iter.next().expect("at least one predicate");
-    iter.try_fold(first, |acc, pred| call(span, op, vec![acc, pred]))
+    let mut acc = iter.next().expect("at least one predicate");
+    for pred in iter {
+        acc = call(span, op, vec![acc, pred])?;
+    }
+    Ok(acc)
 }
 
-/// `x IS NULL`; only `is_not_null` is registered as a function.
 fn is_null(span: Span, expr: ScalarExpr) -> Result<ScalarExpr> {
-    call(span, "not", vec![call(span, "is_not_null", vec![expr])?])
+    let not_null = call(span, "is_not_null", vec![expr])?;
+    call(span, "not", vec![not_null])
 }
 
 fn constant(span: Span, value: Scalar) -> ScalarExpr {
@@ -94,12 +89,33 @@ fn column_ref(span: Span, name: String, index: Symbol, data_type: DataType) -> S
     })
 }
 
-fn right_ref(span: Span, column: &ColumnBinding, index: Symbol) -> ScalarExpr {
-    let name = format!("subquery_{index}");
-    column_ref(span, name, index, (*column.data_type).clone())
+fn marker_ref(span: Span, index: Symbol) -> ScalarExpr {
+    let data_type = DataType::Nullable(Box::new(DataType::Boolean));
+    column_ref(span, "marker".to_string(), index, data_type)
 }
 
-/// Left-hand fields and the matching subquery output columns of a row-value subquery.
+fn right_refs(
+    subquery: &SubqueryExpr,
+    scope: Option<&DerivedColumnScope>,
+) -> Result<Vec<ScalarExpr>> {
+    let mut refs = Vec::with_capacity(subquery.row_columns.len());
+    for column in &subquery.row_columns {
+        let index = match scope {
+            Some(scope) => scope.must_resolve(column.index)?,
+            None => column.index,
+        };
+        let data_type = (*column.data_type).clone();
+        refs.push(column_ref(
+            subquery.span,
+            format!("subquery_{index}"),
+            index,
+            data_type,
+        ));
+    }
+    Ok(refs)
+}
+
+/// Left-hand fields and the matching subquery output columns.
 pub(crate) fn row_value_fields(
     subquery: &SubqueryExpr,
 ) -> Result<(Vec<ScalarExpr>, Vec<ScalarExpr>)> {
@@ -115,8 +131,9 @@ pub(crate) fn row_value_fields(
         {
             func.arguments.clone()
         }
-        _ => (1..=arity)
-            .map(|i| {
+        _ => {
+            let mut fields = Vec::with_capacity(arity);
+            for i in 1..=arity {
                 let mut get = FunctionCall {
                     span,
                     func_name: "get".to_string(),
@@ -125,61 +142,42 @@ pub(crate) fn row_value_fields(
                     return_type: Box::new(DataType::Null),
                 };
                 get.refresh_return_type()?;
-                Ok(get.into())
-            })
-            .collect::<Result<_>>()?,
+                fields.push(get.into());
+            }
+            fields
+        }
     };
-    let right = subquery
-        .row_columns
-        .iter()
-        .map(|column| right_ref(span, column, column.index))
-        .collect();
-    Ok((left, right))
+    Ok((left, right_refs(subquery, None)?))
 }
 
-/// `l1 = r1 AND l2 = r2 AND ...` with SQL three-valued semantics.
+/// `l1 = r1 AND l2 = r2 AND ...`
 pub(crate) fn row_value_equality(
     subquery: &SubqueryExpr,
     left: &[ScalarExpr],
     right: &[ScalarExpr],
 ) -> Result<ScalarExpr> {
     let span = subquery.span;
-    let preds = left
-        .iter()
-        .zip(right)
-        .map(|(l, r)| call(span, "eq", vec![l.clone(), r.clone()]))
-        .collect::<Result<_>>()?;
+    let mut preds = Vec::with_capacity(left.len());
+    for (l, r) in left.iter().zip(right) {
+        preds.push(call(span, "eq", vec![l.clone(), r.clone()])?);
+    }
     fold(span, "and", preds)
 }
 
 impl SubqueryDecorrelatorOptimizer {
-    fn new_marker(&self) -> Symbol {
-        self.ctx.get_metadata().write().add_derived_column(
-            "marker".to_string(),
-            DataType::Nullable(Box::new(DataType::Boolean)),
-        )
+    fn new_markers(&self, count: usize) -> Vec<Symbol> {
+        let metadata = self.ctx.get_metadata();
+        let mut metadata = metadata.write();
+        let mut markers = Vec::with_capacity(count);
+        for _ in 0..count {
+            markers.push(metadata.add_derived_column(
+                "marker".to_string(),
+                DataType::Nullable(Box::new(DataType::Boolean)),
+            ));
+        }
+        markers
     }
 
-    /// A fresh copy of the subquery plan. New column indexes and scan ids keep
-    /// the copies apart in the memo and in runtime filter targets.
-    fn subquery_copy(&mut self, subquery: &SubqueryExpr) -> Result<(SExpr, Vec<ScalarExpr>)> {
-        let mut scope = DerivedColumnScope::default();
-        let plan = self.clone_outer_recursive(&subquery.subquery, &mut scope)?;
-        let right = subquery
-            .row_columns
-            .iter()
-            .map(|column| {
-                Ok(right_ref(
-                    subquery.span,
-                    column,
-                    scope.must_resolve(column.index)?,
-                ))
-            })
-            .collect::<Result<_>>()?;
-        Ok((plan, right))
-    }
-
-    /// Mark `outer` rows that match `build` on `keys` and satisfy `predicate`.
     fn mark_join(
         &self,
         outer: SExpr,
@@ -199,11 +197,97 @@ impl SubqueryDecorrelatorOptimizer {
         SExpr::create_binary(Arc::new(join.into()), Arc::new(outer), Arc::new(build))
     }
 
-    /// Rewrite an uncorrelated `(l1, ..., ln) IN (SELECT r1, ..., rn ...)`.
+    /// Key-less join against the distinct NULL patterns of the subquery.
+    fn null_pattern_join(
+        &mut self,
+        outer: SExpr,
+        subquery: &SubqueryExpr,
+        left: &[ScalarExpr],
+        marker: Symbol,
+    ) -> Result<SExpr> {
+        let span = subquery.span;
+        let mut scope = DerivedColumnScope::default();
+        let copy = self.clone_outer_recursive(&subquery.subquery, &mut scope)?;
+        let right = right_refs(subquery, Some(&scope))?;
+
+        let mut indexes = Vec::with_capacity(left.len());
+        {
+            let metadata = self.ctx.get_metadata();
+            let mut metadata = metadata.write();
+            for i in 0..left.len() {
+                indexes
+                    .push(metadata.add_derived_column(format!("is_null_{i}"), DataType::Boolean));
+            }
+        }
+
+        let mut eval_items = vec![];
+        let mut group_items = vec![];
+        let mut preds = vec![];
+        for (i, index) in indexes.into_iter().enumerate() {
+            let flag = column_ref(span, format!("is_null_{i}"), index, DataType::Boolean);
+            eval_items.push(ScalarItem {
+                scalar: is_null(span, right[i].clone())?,
+                index,
+            });
+            group_items.push(ScalarItem {
+                scalar: flag.clone(),
+                index,
+            });
+            let left_null = is_null(span, left[i].clone())?;
+            preds.push(call(span, "or", vec![left_null, flag])?);
+        }
+        let patterns = copy
+            .build_unary(EvalScalar { items: eval_items })
+            .build_unary(Aggregate {
+                group_items,
+                ..Default::default()
+            });
+        let predicate = fold(span, "and", preds)?;
+        Ok(self.mark_join(outer, patterns, vec![], Some(predicate), marker))
+    }
+
+    /// Join keyed on the fields in `compared`; the other fields must be NULL
+    /// on either side.
+    fn wildcard_join(
+        &mut self,
+        outer: SExpr,
+        subquery: &SubqueryExpr,
+        left: &[ScalarExpr],
+        nullable: &[usize],
+        compared: &[bool],
+        marker: Symbol,
+    ) -> Result<SExpr> {
+        let span = subquery.span;
+        let mut scope = DerivedColumnScope::default();
+        let copy = self.clone_outer_recursive(&subquery.subquery, &mut scope)?;
+        let right = right_refs(subquery, Some(&scope))?;
+
+        let mut keys = vec![];
+        let mut filters = vec![];
+        let mut preds = vec![];
+        for i in 0..left.len() {
+            if compared[i] {
+                keys.push((left[i].clone(), right[i].clone()));
+                if nullable.contains(&i) {
+                    filters.push(call(span, "is_not_null", vec![right[i].clone()])?);
+                }
+            } else {
+                let left_null = is_null(span, left[i].clone())?;
+                let right_null = is_null(span, right[i].clone())?;
+                preds.push(call(span, "or", vec![left_null, right_null])?);
+            }
+        }
+        let build = copy.build_unary(Filter {
+            predicates: filters,
+        });
+        let predicate = fold(span, "and", preds)?;
+        Ok(self.mark_join(outer, build, keys, Some(predicate), marker))
+    }
+
+    /// Uncorrelated `(l1, ..., ln) IN (SELECT r1, ..., rn ...)`.
     ///
-    /// The marker follows SQL row comparison: TRUE, FALSE, or NULL. When the
-    /// subquery is a whole `WHERE` conjunct only TRUE rows survive, so a single
-    /// strict hash join is enough.
+    /// A `WHERE` conjunct only keeps TRUE rows, so one strict hash join is
+    /// enough there; otherwise UNKNOWN must be told apart from FALSE.
     pub(crate) fn rewrite_uncorrelated_row_value(
         &mut self,
         outer: SExpr,
@@ -213,26 +297,28 @@ impl SubqueryDecorrelatorOptimizer {
         let span = subquery.span;
         let (left, right) = row_value_fields(subquery)?;
         let arity = left.len();
-        let nullable: Vec<usize> = (0..arity)
-            .filter(|&i| {
-                left[i].data_type().is_nullable_or_null()
-                    || right[i].data_type().is_nullable_or_null()
-            })
-            .collect();
-        let keys_of = |right: &[ScalarExpr], keep: &dyn Fn(usize) -> bool| {
-            (0..arity)
-                .filter(|&i| keep(i))
-                .map(|i| (left[i].clone(), right[i].clone()))
-                .collect::<Vec<_>>()
-        };
+
+        let mut nullable = vec![];
+        for i in 0..arity {
+            if left[i].data_type().is_nullable_or_null()
+                || right[i].data_type().is_nullable_or_null()
+            {
+                nullable.push(i);
+            }
+        }
+
+        let mut strict_keys = Vec::with_capacity(arity);
+        for i in 0..arity {
+            strict_keys.push((left[i].clone(), right[i].clone()));
+        }
+        let build = *subquery.subquery.clone();
 
         if is_conjunctive_predicate || nullable.is_empty() {
-            let marker_index = subquery
-                .projection_index
-                .unwrap_or_else(|| self.new_marker());
-            let keys = keys_of(&right, &|_| true);
-            let s_expr =
-                self.mark_join(outer, *subquery.subquery.clone(), keys, None, marker_index);
+            let marker_index = match subquery.projection_index {
+                Some(index) => index,
+                None => self.new_markers(1)[0],
+            };
+            let s_expr = self.mark_join(outer, build, strict_keys, None, marker_index);
             return Ok((s_expr, UnnestResult::MarkJoin { marker_index }));
         }
         if nullable.len() > MAX_NULLABLE_ROW_FIELDS {
@@ -242,131 +328,43 @@ impl SubqueryDecorrelatorOptimizer {
             .set_span(span));
         }
 
-        // Hash joins may report NULL markers on their own (NULL keys on either
-        // side), so every branch marker is folded with `is_true` below.
-        let strict_marker = self.new_marker();
-        let keys = keys_of(&right, &|_| true);
-        let mut s_expr =
-            self.mark_join(outer, *subquery.subquery.clone(), keys, None, strict_marker);
-        let mut wildcard_markers = vec![];
-        // `mask` selects the nullable fields that stay in the hash key; the
-        // dropped fields must be NULL on one of the two sides.
-        for mask in 0..(1u32 << nullable.len()) - 1 {
-            let compared = |i: usize| match nullable.iter().position(|&n| n == i) {
-                Some(bit) => mask & (1 << bit) != 0,
-                None => true,
-            };
-            let dropped: Vec<usize> = (0..arity).filter(|&i| !compared(i)).collect();
-            let (copy, right) = self.subquery_copy(subquery)?;
-            let marker = self.new_marker();
-            let branch = if dropped.len() == arity {
-                // Nothing to hash on: reduce the subquery to its distinct NULL
-                // patterns so the key-less join stays tiny.
-                let mut flags = vec![];
-                let mut eval_items = vec![];
-                for &i in &dropped {
-                    let index = self
-                        .ctx
-                        .get_metadata()
-                        .write()
-                        .add_derived_column(format!("is_null_{i}"), DataType::Boolean);
-                    flags.push(column_ref(
-                        span,
-                        format!("is_null_{i}"),
-                        index,
-                        DataType::Boolean,
-                    ));
-                    eval_items.push(ScalarItem {
-                        scalar: is_null(span, right[i].clone())?,
-                        index,
-                    });
-                }
-                let group_items = flags
-                    .iter()
-                    .zip(&eval_items)
-                    .map(|(flag, item)| ScalarItem {
-                        scalar: flag.clone(),
-                        index: item.index,
-                    })
-                    .collect();
-                let patterns = copy
-                    .build_unary(EvalScalar { items: eval_items })
-                    .build_unary(Aggregate {
-                        group_items,
-                        ..Default::default()
-                    });
-                let preds = dropped
-                    .iter()
-                    .zip(flags)
-                    .map(|(&i, flag)| call(span, "or", vec![is_null(span, left[i].clone())?, flag]))
-                    .collect::<Result<_>>()?;
-                self.mark_join(
-                    s_expr,
-                    patterns,
-                    vec![],
-                    Some(fold(span, "and", preds)?),
-                    marker,
-                )
+        // markers[0] is the strict join, markers[1..] one per wildcard branch.
+        let branches = (1usize << nullable.len()) - 1;
+        let markers = self.new_markers(branches + 1);
+        let strict_marker = markers[0];
+        let wildcard_markers = &markers[1..];
+        let mut s_expr = self.mark_join(outer, build, strict_keys, None, strict_marker);
+
+        // Bit `b` of `mask` keeps nullable field `nullable[b]` in the key.
+        for (mask, marker) in wildcard_markers.iter().enumerate() {
+            let mut compared = vec![true; arity];
+            for (bit, field) in nullable.iter().enumerate() {
+                compared[*field] = mask & (1 << bit) != 0;
+            }
+            s_expr = if compared.iter().any(|c| *c) {
+                self.wildcard_join(s_expr, subquery, &left, &nullable, &compared, *marker)?
             } else {
-                // Keep NULL out of the hash keys so the join never reports
-                // has_null, then check the dropped fields on matched pairs.
-                let filters = nullable
-                    .iter()
-                    .filter(|&&i| compared(i))
-                    .map(|&i| call(span, "is_not_null", vec![right[i].clone()]))
-                    .collect::<Result<Vec<_>>>()?;
-                let build = if filters.is_empty() {
-                    copy
-                } else {
-                    copy.build_unary(Filter {
-                        predicates: filters,
-                    })
-                };
-                let preds = dropped
-                    .iter()
-                    .map(|&i| {
-                        let left_null = is_null(span, left[i].clone())?;
-                        call(span, "or", vec![
-                            left_null,
-                            is_null(span, right[i].clone())?,
-                        ])
-                    })
-                    .collect::<Result<_>>()?;
-                let keys = keys_of(&right, &compared);
-                self.mark_join(s_expr, build, keys, Some(fold(span, "and", preds)?), marker)
+                self.null_pattern_join(s_expr, subquery, &left, *marker)?
             };
-            s_expr = branch;
-            wildcard_markers.push(marker);
         }
 
-        // TRUE on a strict match, NULL on a possible match, FALSE otherwise.
-        let is_true = |index| {
-            let marker = column_ref(
-                span,
-                "marker".to_string(),
-                index,
-                DataType::Nullable(Box::new(DataType::Boolean)),
-            );
-            call(span, "is_true", vec![marker])
-        };
-        let possible = fold(
-            span,
-            "or",
-            wildcard_markers
-                .into_iter()
-                .map(is_true)
-                .collect::<Result<_>>()?,
-        )?;
+        // Joins may emit NULL markers themselves, hence `is_true`.
+        let mut possible = vec![];
+        for marker in wildcard_markers {
+            possible.push(call(span, "is_true", vec![marker_ref(span, *marker)])?);
+        }
+        let strict = call(span, "is_true", vec![marker_ref(span, strict_marker)])?;
         let combined = call(span, "if", vec![
-            is_true(strict_marker)?,
+            strict,
             constant(span, Scalar::Boolean(true)),
-            possible,
+            fold(span, "or", possible)?,
             constant(span, Scalar::Null),
             constant(span, Scalar::Boolean(false)),
         ])?;
-        let marker_index = subquery
-            .projection_index
-            .unwrap_or_else(|| self.new_marker());
+        let marker_index = match subquery.projection_index {
+            Some(index) => index,
+            None => self.new_markers(1)[0],
+        };
         let s_expr = s_expr.build_unary(EvalScalar {
             items: vec![ScalarItem {
                 scalar: combined,
