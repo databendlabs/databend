@@ -406,11 +406,28 @@ impl PhysicalPlanBuilder {
 
             assert!(sort.after_exchange.is_none());
 
-            let input_plan = self.build(s_expr.unary_child(), required).await?;
+            let input_plan = self.build(s_expr.unary_child(), required.clone()).await?;
+            // Exchange may retain source columns to evaluate its partition expressions.
+            // Drop them before buffering window partitions, once the keys are available.
+            let input_schema = input_plan.output_schema()?;
+            required.extend(self.metadata.read().get_retained_column());
+            let projections = input_schema
+                .fields()
+                .iter()
+                .filter_map(|field| {
+                    required
+                        .iter()
+                        .find(|column| column.to_string() == *field.name())
+                        .copied()
+                })
+                .collect::<Vec<_>>();
+            let pre_projection =
+                (projections.len() < input_schema.num_fields()).then_some(projections);
 
             return Ok(PhysicalPlan::new(WindowPartition {
                 meta: PhysicalPlanMeta::new("WindowPartition"),
                 input: input_plan,
+                pre_projection,
                 partition_by: window_partition.clone(),
                 order_by: order_by.clone(),
                 top_n: window.top.map(|top| WindowPartitionTopN {

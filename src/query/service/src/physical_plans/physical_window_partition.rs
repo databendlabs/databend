@@ -18,10 +18,15 @@ use std::sync::atomic::AtomicUsize;
 
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_sql::Symbol;
+use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::SortDesc;
 
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -41,6 +46,7 @@ use crate::pipelines::processors::transforms::WindowPartitionTopNExchange;
 pub struct WindowPartition {
     pub meta: PhysicalPlanMeta,
     pub input: PhysicalPlan,
+    pub pre_projection: Option<Vec<Symbol>>,
     pub partition_by: Vec<Symbol>,
     pub order_by: Vec<SortDesc>,
     pub top_n: Option<WindowPartitionTopN>,
@@ -59,6 +65,20 @@ impl IPhysicalPlan for WindowPartition {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    #[recursive::recursive]
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        let input_schema = self.input.output_schema()?;
+        match &self.pre_projection {
+            Some(projection) => Ok(DataSchemaRefExt::create(
+                projection
+                    .iter()
+                    .map(|index| input_schema.field_with_name(&index.to_string()).cloned())
+                    .collect::<Result<Vec<_>>>()?,
+            )),
+            None => Ok(input_schema),
+        }
     }
 
     fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
@@ -84,6 +104,7 @@ impl IPhysicalPlan for WindowPartition {
         PhysicalPlan::new(WindowPartition {
             meta: self.meta.clone(),
             input,
+            pre_projection: self.pre_projection.clone(),
             partition_by: self.partition_by.clone(),
             order_by: self.order_by.clone(),
             top_n: self.top_n.clone(),
@@ -93,6 +114,23 @@ impl IPhysicalPlan for WindowPartition {
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         self.input.build_pipeline(builder)?;
+
+        if let Some(projection) = &self.pre_projection {
+            let input_schema = self.input.output_schema()?;
+            let projection = projection
+                .iter()
+                .map(|index| input_schema.index_of(&index.to_string()))
+                .collect::<Result<Vec<_>>>()?;
+            builder.main_pipeline.add_transformer(|| {
+                CompoundBlockOperator::new(
+                    vec![BlockOperator::Project {
+                        projection: projection.clone(),
+                    }],
+                    builder.func_ctx.clone(),
+                    input_schema.num_fields(),
+                )
+            });
+        }
 
         let num_processors = builder.main_pipeline.output_len();
 

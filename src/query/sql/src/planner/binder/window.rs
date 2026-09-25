@@ -55,12 +55,59 @@ use crate::plans::WindowOrderBy;
 use crate::plans::WindowPartition;
 use crate::plans::walk_expr_mut;
 
+/// Deterministic window inputs available to consumers in the same query block.
+/// Record the final column IDs after WindowGroup input canonicalization.
+#[derive(Default)]
+pub(super) struct WindowInputColumns {
+    scalars: HashMap<ScalarExpr, ScalarExpr>,
+}
+
+impl WindowInputColumns {
+    fn extend<'a>(&mut self, items: impl IntoIterator<Item = &'a ScalarItem>) -> Result<()> {
+        for item in items {
+            if matches!(
+                item.scalar,
+                ScalarExpr::FunctionCall(_) | ScalarExpr::CastExpr(_)
+            ) && item.scalar.is_deterministic()
+            {
+                self.scalars
+                    .entry(item.scalar.clone())
+                    .or_insert(item.bound_column_expr("window_input".to_string())?);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl VisitorMut<'_> for WindowInputColumns {
+    fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
+        if let Some(column) = self.scalars.get(expr)
+            && column.data_type().as_ref() == expr.data_type().as_ref()
+        {
+            *expr = column.clone();
+            return Ok(());
+        }
+        // Only rewrite row-local consumers in this query block. Lambdas,
+        // subqueries, aggregates and window functions have separate scopes.
+        match expr {
+            ScalarExpr::FunctionCall(func) => {
+                for argument in &mut func.arguments {
+                    self.visit(argument)?;
+                }
+            }
+            ScalarExpr::CastExpr(cast) => self.visit(&mut cast.argument)?,
+            _ => {}
+        }
+        Ok(())
+    }
+}
+
 impl Binder {
     pub(super) fn bind_window_functions(
         &mut self,
         window_infos: &[WindowFunctionInfo],
         child: SExpr,
-    ) -> Result<SExpr> {
+    ) -> Result<(SExpr, WindowInputColumns)> {
         bind_window_function_infos(&self.ctx, window_infos, child)
     }
 
@@ -690,17 +737,30 @@ pub fn bind_window_function_info(
     ))
 }
 
-pub fn bind_window_function_infos(
+fn bind_window_function_infos(
     ctx: &Arc<dyn TableContext>,
     window_infos: &[WindowFunctionInfo],
     child: SExpr,
-) -> Result<SExpr> {
+) -> Result<(SExpr, WindowInputColumns)> {
+    let mut inputs = WindowInputColumns::default();
     if window_infos.is_empty() {
-        return Ok(child);
+        return Ok((child, inputs));
     }
 
-    if window_infos.len() == 1 {
-        return bind_window_function_info(ctx, &window_infos[0], child);
+    if let [window] = window_infos {
+        inputs.extend(
+            window
+                .arguments
+                .iter()
+                .chain(&window.partition_by_items)
+                .chain(
+                    window
+                        .order_by_items
+                        .iter()
+                        .map(|order| &order.order_by_item),
+                ),
+        )?;
+        return Ok((bind_window_function_info(ctx, window, child)?, inputs));
     }
 
     let mut groups = Vec::new();
@@ -777,9 +837,15 @@ pub fn bind_window_function_infos(
             .is_none_or(|window| window.partition_by.is_empty())
     });
 
-    Ok(groups.into_iter().fold(child, |child, window_group| {
+    // Prefer the outermost group's result when several groups evaluate the
+    // same expression, so consumers do not retain an earlier duplicate column.
+    for group in groups.iter().rev() {
+        inputs.extend(&group.scalar_items)?;
+    }
+    let child = groups.into_iter().fold(child, |child, window_group| {
         SExpr::create_unary(Arc::new(window_group.into()), Arc::new(child))
-    }))
+    });
+    Ok((child, inputs))
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
