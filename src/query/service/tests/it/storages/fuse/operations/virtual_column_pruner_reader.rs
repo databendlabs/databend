@@ -57,10 +57,6 @@ use parquet::arrow::arrow_reader::RowSelector;
 #[tokio::test(flavor = "multi_thread")]
 async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
-    fixture
-        .default_session()
-        .get_settings()
-        .set_enable_experimental_virtual_column(1)?;
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
 

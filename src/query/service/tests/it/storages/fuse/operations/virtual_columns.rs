@@ -41,10 +41,6 @@ use databend_storages_common_table_meta::meta::Versioned;
 /// Create a variant table, insert data, and refresh virtual columns.
 async fn setup_table_with_virtual_columns(num_blocks: usize) -> anyhow::Result<TestFixture> {
     let fixture = TestFixture::setup().await?;
-    fixture
-        .default_session()
-        .get_settings()
-        .set_enable_experimental_virtual_column(1)?;
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
     append_variant_sample_data(num_blocks, &fixture).await?;
