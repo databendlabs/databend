@@ -26,6 +26,7 @@ use crate::KeyExistsBuilder;
 use crate::KeyUnknownBuilder;
 use crate::app_error::ReferenceAlreadyExists;
 use crate::app_error::UnknownReference;
+use crate::tenant::Tenant;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableTag {
@@ -85,6 +86,7 @@ impl KeyExistsBuilder for TableIdTagName {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableTagReq {
+    pub tenant: Tenant,
     pub table_id: u64,
     pub seq: MatchSeq,
     pub tag_name: String,

@@ -31,6 +31,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::Constraint;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::storage::StorageParams;
@@ -42,6 +43,14 @@ use crate::plans::MaintenanceTarget;
 use crate::plans::Plan;
 
 pub type TableOptions = BTreeMap<String, String>;
+
+pub const CLONE_EXPERIMENTAL_DISABLED_MESSAGE: &str = "CREATE TABLE ... CLONE is experimental and disabled. Set enable_experimental_clone_table=1 to enable it. Clone table data integrity and safety are not guaranteed in mixed-version deployments.";
+
+#[derive(Clone, Debug)]
+pub struct CloneTableSource {
+    pub table_info: TableInfo,
+    pub navigation: Option<NavigationPoint>,
+}
 
 #[derive(Clone, Debug)]
 pub struct CreateTablePlan {
@@ -67,6 +76,7 @@ pub struct CreateTablePlan {
     pub table_indexes: Option<BTreeMap<String, TableIndex>>,
     pub table_constraints: Option<BTreeMap<String, Constraint>>,
 
+    pub clone: Option<CloneTableSource>,
     pub attached_columns: Option<Vec<Identifier>>,
 }
 

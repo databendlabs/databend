@@ -15,9 +15,11 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
+use chrono::Duration;
 use chrono::Utc;
 use databend_common_ast::ast::Engine;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_catalog::table::Table;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -30,18 +32,23 @@ use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::CreateTableCloneMeta;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TablePartition;
 use databend_common_meta_app::schema::TableStatistics;
+use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::always_callback;
 use databend_common_sql::DefaultExprBinder;
+use databend_common_sql::plans::CLONE_EXPERIMENTAL_DISABLED_MESSAGE;
+use databend_common_sql::plans::CloneTableSource;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_storages_fuse::FUSE_OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_common_storages_fuse::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD;
@@ -49,6 +56,7 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FuseSegmentFormat;
 use databend_common_storages_fuse::FuseStorageFormat;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -57,9 +65,14 @@ use databend_meta_client::types::MatchSeq;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::abort_staged_temp_table;
+use databend_storages_common_table_meta::meta::ClusterKeyInfo;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
+use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
@@ -67,6 +80,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+use databend_storages_common_table_meta::table::cluster_type_from_options;
 use log::error;
 use log::info;
 
@@ -107,6 +121,9 @@ use crate::sql::plans::Insert;
 use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::Plan;
 use crate::storages::StorageDescription;
+
+/// Attempts to refresh the clone source after a concurrent source commit changed its version.
+const CLONE_SOURCE_REFRESH_ATTEMPTS: usize = 3;
 
 #[derive(Clone, Debug)]
 pub struct CreateTableInterpreter {
@@ -149,6 +166,17 @@ impl Interpreter for CreateTableInterpreter {
     #[async_backtrace::framed]
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
+            if self.plan.clone.is_some()
+                && !self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_clone_table()?
+            {
+                return Err(ErrorCode::Unimplemented(
+                    CLONE_EXPERIMENTAL_DISABLED_MESSAGE,
+                ));
+            }
+
             let tenant = &self.plan.tenant;
 
             let has_computed_column = self
@@ -218,6 +246,10 @@ impl Interpreter for CreateTableInterpreter {
                         "TTL is not supported for TEMPORARY tables",
                     ));
                 }
+            }
+
+            if self.plan.clone.is_some() {
+                return self.create_table_clone().await;
             }
 
             match &self.plan.as_select {
@@ -420,6 +452,242 @@ impl CreateTableInterpreter {
         Ok(pipeline)
     }
 
+    #[async_backtrace::framed]
+    async fn create_table_clone(&self) -> Result<PipelineBuildResult> {
+        let clone = self
+            .plan
+            .clone
+            .as_ref()
+            .ok_or_else(|| ErrorCode::Internal("missing CREATE TABLE CLONE plan"))?;
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        let tenant = self.ctx.get_tenant();
+        let storage_class = self.ctx.get_settings().get_s3_storage_class()?;
+        let source_table_id = clone.table_info.ident.table_id;
+
+        // Meta CASes the source TableMeta sequence captured in the request, so the anchor, schema
+        // and policies always describe one source version. A concurrent source commit between two
+        // attempts only moves that version forward; refresh the source and rebuild the request.
+        let mut source_info = clone.table_info.clone();
+        let mut attempts = 0;
+        let (reply, mut staged_table_meta, source_snapshot) = loop {
+            let (req, source_snapshot) = self.build_clone_request(&source_info, clone).await?;
+            let staged_table_meta = req.table_meta.clone();
+            match catalog.create_table(req).await {
+                Ok(reply) => break (reply, staged_table_meta, source_snapshot),
+                Err(err)
+                    if attempts < CLONE_SOURCE_REFRESH_ATTEMPTS
+                        && matches!(
+                            err.code(),
+                            ErrorCode::TABLE_VERSION_MISMATCHED | ErrorCode::INVALID_TABLE_CLONE
+                        ) =>
+                {
+                    attempts += 1;
+                    let latest = catalog
+                        .get_table_meta_by_id(source_table_id)
+                        .await?
+                        .ok_or_else(|| {
+                            ErrorCode::UnknownTable(format!(
+                                "clone source table {source_table_id} no longer exists"
+                            ))
+                        })?;
+                    source_info.ident.seq = latest.seq;
+                    source_info.meta = latest.data;
+                }
+                Err(err) => return Err(err),
+            }
+        };
+        if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
+            return Ok(PipelineBuildResult::create());
+        }
+
+        let table_id = reply.table_id;
+        let table_id_seq = reply.table_id_seq.ok_or_else(|| {
+            ErrorCode::Internal("CREATE TABLE CLONE did not return staged table sequence")
+        })?;
+        if staged_table_meta
+            .options
+            .get(OPT_KEY_CHANGE_TRACKING)
+            .is_some_and(|value| value.eq_ignore_ascii_case("true"))
+        {
+            staged_table_meta.options.insert(
+                OPT_KEY_CHANGE_TRACKING_BEGIN_VER.to_string(),
+                table_id_seq.to_string(),
+            );
+        }
+        let staged_table_info = TableInfo::new(
+            &self.plan.database,
+            &self.plan.table,
+            TableIdent::new(table_id, table_id_seq),
+            staged_table_meta.clone(),
+        );
+        let target =
+            FuseTable::create_without_refresh_table_info(staged_table_info, storage_class)?;
+        if let Some(snapshot) = source_snapshot {
+            Self::write_clone_anchor(&target, &mut staged_table_meta, &snapshot).await?;
+        }
+        staged_table_meta.updated_on = Utc::now();
+
+        // The anchor references exactly the segments of the staged placeholder head, which any
+        // concurrent GC mark already protects. No LVT fence is needed on this fresh table, and a
+        // fence would only fail spuriously when an ancestor VACUUM publishes in this window.
+        catalog
+            .update_single_table_meta(
+                &tenant,
+                UpdateTableMetaReq {
+                    table_id,
+                    seq: MatchSeq::Exact(table_id_seq),
+                    new_table_meta: staged_table_meta,
+                    base_snapshot_location: None,
+                    lvt_check: None,
+                },
+                target.get_table_info(),
+            )
+            .await?;
+
+        let commit_req = CommitTableMetaReq {
+            name_ident: TableNameIdent {
+                tenant: tenant.clone(),
+                db_name: self.plan.database.clone(),
+                table_name: self.plan.table.clone(),
+            },
+            db_id: reply.db_id,
+            table_id,
+            prev_table_id: reply.prev_table_id,
+            orphan_table_name: reply.orphan_table_name.clone(),
+        };
+        catalog.commit_table_meta(commit_req).await?;
+        self.process_ownership(&tenant, reply).await?;
+
+        Ok(PipelineBuildResult::create())
+    }
+
+    /// Build the staged CREATE request for one observed source version. The selected source
+    /// snapshot is returned so the caller can write the target-owned anchor after Meta accepts it.
+    async fn build_clone_request(
+        &self,
+        source_info: &TableInfo,
+        clone: &CloneTableSource,
+    ) -> Result<(CreateTableReq, Option<Arc<TableSnapshot>>)> {
+        let storage_class = self.ctx.get_settings().get_s3_storage_class()?;
+        let target_database_id = self
+            .plan
+            .options
+            .get(OPT_KEY_DATABASE_ID)
+            .cloned()
+            .ok_or_else(|| {
+                ErrorCode::Internal("CREATE TABLE CLONE target database ID is missing")
+            })?;
+
+        let source =
+            FuseTable::create_without_refresh_table_info(source_info.clone(), storage_class)?;
+        let source_snapshot_location = match &clone.navigation {
+            Some(point) => source.navigate_to_location(self.ctx.clone(), point).await?,
+            None => source.snapshot_loc(),
+        };
+        let source_snapshot = match (&clone.navigation, source_snapshot_location.clone()) {
+            // A historical snapshot may be vacuumed after navigation; report missing history
+            // like other navigation paths instead of a raw storage error.
+            (Some(_), Some(location)) => Some(
+                FuseTable::read_navigation_snapshot(
+                    location,
+                    source.get_operator(),
+                    "CLONE AT (SNAPSHOT)",
+                )
+                .await?
+                .0,
+            ),
+            _ => {
+                source
+                    .read_table_snapshot_with_location(source_snapshot_location.clone())
+                    .await?
+            }
+        };
+        let snapshot_timestamp = source_snapshot
+            .as_ref()
+            .map(|snapshot| {
+                snapshot.timestamp.ok_or_else(|| {
+                    ErrorCode::TableHistoricalDataNotFound(
+                        "The selected snapshot has no timestamp and cannot be retained safely",
+                    )
+                })
+            })
+            .transpose()?
+            // Empty tables have no historical objects to retain, but still need a timestamp so
+            // Meta always performs and CASes the source LVT check.
+            .unwrap_or_else(Utc::now);
+
+        let mut table_meta = source
+            .build_clone_table_meta(
+                self.ctx.clone(),
+                target_database_id,
+                source_snapshot.as_deref(),
+            )
+            .await?;
+        self.validate_create_table_meta(&table_meta)?;
+        let now = Utc::now();
+        table_meta.created_on = now;
+        table_meta.updated_on = now;
+        table_meta.drop_on = Some(now);
+
+        let mut req = self.build_request_with_meta(table_meta);
+        req.as_dropped = true;
+        req.table_meta.options.insert(
+            OPT_KEY_CLONE_GROUP_ID.to_string(),
+            source.clone_group_id()?.to_string(),
+        );
+        if let Some(source_snapshot_location) = source_snapshot_location {
+            // Protect the selected source root as soon as the binding is committed. This closes
+            // the interval before the target-owned anchor is written and installed.
+            req.table_meta.options.insert(
+                OPT_KEY_SNAPSHOT_LOCATION.to_string(),
+                source_snapshot_location,
+            );
+        }
+        req.clone = Some(CreateTableCloneMeta {
+            source_table_id: source_info.ident.table_id,
+            source_table_seq: MatchSeq::Exact(source_info.ident.seq),
+            snapshot_timestamp,
+        });
+        Ok((req, source_snapshot))
+    }
+
+    /// Write the target-owned root snapshot and point the staged metadata at it. A clone root is
+    /// a new snapshot that shares immutable segment and block pointers but deliberately has no
+    /// predecessor in the source snapshot chain.
+    async fn write_clone_anchor(
+        target: &FuseTable,
+        staged_table_meta: &mut TableMeta,
+        snapshot: &TableSnapshot,
+    ) -> Result<()> {
+        let cluster_key_info = staged_table_meta.cluster_key_meta().map(|cluster_key| {
+            ClusterKeyInfo::new(
+                cluster_key,
+                cluster_type_from_options(&staged_table_meta.options),
+            )
+        });
+        let anchor = TableSnapshot::try_new(
+            None,
+            None,
+            staged_table_meta.schema.as_ref().clone(),
+            snapshot.summary.clone(),
+            snapshot.segments.clone(),
+            cluster_key_info,
+            None,
+            TableMetaTimestamps::new(None, Duration::zero()),
+        )?;
+        let anchor_location = target
+            .meta_location_generator()
+            .gen_snapshot_location(&anchor.snapshot_id, TableSnapshot::VERSION)?;
+        target
+            .get_operator_ref()
+            .write(&anchor_location, anchor.to_bytes()?)
+            .await?;
+        staged_table_meta
+            .options
+            .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), anchor_location);
+        Ok(())
+    }
+
     // revoke ownership handling is now integrated into the create_table transaction
     async fn process_ownership(&self, tenant: &Tenant, reply: CreateTableReply) -> Result<()> {
         // grant the ownership of the table to the current role.
@@ -513,13 +781,6 @@ impl CreateTableInterpreter {
         statistics: Option<TableStatistics>,
     ) -> Result<CreateTableReq> {
         let fields = self.plan.schema.fields().clone();
-        let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
-        for field in fields.iter() {
-            if field.default_expr().is_some() {
-                let _ = default_expr_binder.get_scalar(field)?;
-            }
-            is_valid_column(field.name())?;
-        }
         let field_comments = if self.plan.field_comments.is_empty() {
             vec!["".to_string(); fields.len()]
         } else {
@@ -552,13 +813,6 @@ impl CreateTableInterpreter {
                 );
             }
         }
-        // Validate storage_format; rejects the removed `native` format.
-        if let Some(storage_format) = options.get(OPT_KEY_STORAGE_FORMAT) {
-            FuseStorageFormat::from_str(storage_format)?;
-        }
-        if let Some(segment_format) = options.get(OPT_KEY_SEGMENT_FORMAT) {
-            FuseSegmentFormat::from_str(segment_format)?;
-        }
         let comment = options.remove(OPT_KEY_COMMENT);
         let indexes = self.plan.table_indexes.clone().unwrap_or_default();
         let constraints = self.plan.table_constraints.clone().unwrap_or_default();
@@ -579,13 +833,43 @@ impl CreateTableInterpreter {
             ..Default::default()
         };
 
+        if let Some(cluster_key) = &self.plan.cluster_key {
+            table_meta.cluster_key_seq += 1;
+            table_meta.cluster_key_v2 = Some((table_meta.cluster_key_seq, cluster_key.clone()));
+        }
+
+        table_meta.ttl = self.plan.ttl.clone();
+
+        self.validate_create_table_meta(&table_meta)?;
+        Ok(self.build_request_with_meta(table_meta))
+    }
+
+    /// Validate the final metadata sent to Meta. CLONE calls this after projecting source
+    /// metadata onto the selected snapshot, avoiding an intermediate TableMeta.
+    fn validate_create_table_meta(&self, table_meta: &TableMeta) -> Result<()> {
+        let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
+        for field in table_meta.schema.fields() {
+            if field.default_expr().is_some() {
+                let _ = default_expr_binder.get_scalar(field)?;
+            }
+            is_valid_column(field.name())?;
+        }
+
+        // Validate storage_format; rejects the removed `native` format.
+        if let Some(storage_format) = table_meta.options.get(OPT_KEY_STORAGE_FORMAT) {
+            FuseStorageFormat::from_str(storage_format)?;
+        }
+        if let Some(segment_format) = table_meta.options.get(OPT_KEY_SEGMENT_FORMAT) {
+            FuseSegmentFormat::from_str(segment_format)?;
+        }
+
         is_valid_block_per_segment(&table_meta.options)?;
         is_valid_row_per_block(&table_meta.options)?;
         is_valid_recluster_depth(&table_meta.options)?;
         // check bloom_index_columns.
-        is_valid_bloom_index_columns(&table_meta.options, schema.clone())?;
+        is_valid_bloom_index_columns(&table_meta.options, table_meta.schema.clone())?;
         is_valid_bloom_index_type(&table_meta.options)?;
-        is_valid_approx_distinct_columns(&table_meta.options, schema.clone())?;
+        is_valid_approx_distinct_columns(&table_meta.options, table_meta.schema.clone())?;
         is_valid_change_tracking(&table_meta.options)?;
         // check random seed
         is_valid_random_seed(&table_meta.options)?;
@@ -600,7 +884,7 @@ impl CreateTableInterpreter {
         is_valid_data_page_bytes(&table_meta.options)?;
         is_valid_analyze_histogram_algorithm(&table_meta.options)?;
         is_valid_analyze_histogram_kll_relative_error(&table_meta.options)?;
-        is_valid_analyze_frequency_columns(&table_meta.options, schema)?;
+        is_valid_analyze_frequency_columns(&table_meta.options, table_meta.schema.clone())?;
         is_valid_analyze_top_n_size(&table_meta.options)?;
         is_valid_analyze_count_min_sketch_error_rate(&table_meta.options)?;
 
@@ -614,10 +898,14 @@ impl CreateTableInterpreter {
             FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD,
         )?;
 
-        for table_option in table_meta.options.iter() {
-            let key = table_option.0.to_lowercase();
-            // PARTITION BY is normalized and inserted by the binder as internal metadata.
-            if key != OPT_KEY_PARTITION_BY && !is_valid_create_opt(&key, &self.plan.engine) {
+        for key in table_meta.options.keys() {
+            let key = key.to_lowercase();
+            // PARTITION BY is normalized internal metadata; a clone inherits clone_group_id from
+            // its source before this validation runs.
+            if key != OPT_KEY_PARTITION_BY
+                && key != OPT_KEY_CLONE_GROUP_ID
+                && !is_valid_create_opt(&key, &self.plan.engine)
+            {
                 let msg = format!(
                     "table option {key} is invalid for create table statement with engine {}",
                     self.plan.engine
@@ -626,15 +914,11 @@ impl CreateTableInterpreter {
                 return Err(ErrorCode::TableOptionInvalid(msg));
             }
         }
+        Ok(())
+    }
 
-        if let Some(cluster_key) = &self.plan.cluster_key {
-            table_meta.cluster_key_seq += 1;
-            table_meta.cluster_key_v2 = Some((table_meta.cluster_key_seq, cluster_key.clone()));
-        }
-
-        table_meta.ttl = self.plan.ttl.clone();
-
-        let req = CreateTableReq {
+    fn build_request_with_meta(&self, table_meta: TableMeta) -> CreateTableReq {
+        CreateTableReq {
             create_option: self.plan.create_option,
             catalog_name: if self.plan.create_option.is_overriding() {
                 Some(self.plan.catalog.to_string())
@@ -649,6 +933,7 @@ impl CreateTableInterpreter {
             table_meta,
             source_table_option: None,
             as_dropped: false,
+            clone: None,
             materialized_view: None,
             table_properties: self.plan.table_properties.clone(),
             table_partition: self.plan.table_partition.as_ref().map(|table_partition| {
@@ -656,9 +941,7 @@ impl CreateTableInterpreter {
                     columns: table_partition.clone(),
                 }
             }),
-        };
-
-        Ok(req)
+        }
     }
 
     async fn build_attach_request(&self, storage_prefix: &str) -> Result<CreateTableReq> {

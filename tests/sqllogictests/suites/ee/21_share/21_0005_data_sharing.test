@@ -1,4 +1,7 @@
 statement ok
+SET enable_experimental_clone_table = 1
+
+statement ok
 set sandbox_tenant = 'share_consumer_e2e'
 
 statement ok
@@ -139,6 +142,15 @@ SELECT id, region, amount FROM consumer_shared_db.orders ORDER BY id
 ----
 1 apac 100
 2 emea 200
+
+# Shared sources expose FUSE TableInfo but are not tenant-owned managed tables.
+statement error CREATE TABLE CLONE supports only managed FUSE tables
+CREATE TABLE default.shared_clone_rejected CLONE consumer_shared_db.orders
+
+query I
+SELECT count(*) FROM system.tables WHERE database = 'default' AND name = 'shared_clone_rejected'
+----
+0
 
 statement error (?s).*READ ONLY.*
 INSERT INTO consumer_shared_db.orders VALUES (3, 'amer', 300)

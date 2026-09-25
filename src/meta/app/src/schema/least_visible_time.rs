@@ -20,8 +20,21 @@ pub struct LeastVisibleTime {
     pub time: DateTime<Utc>,
 }
 
+/// One batched LVT publication entry: `(table_id, observed_lvt_seq, candidate_lvt)`.
+pub type LvtUpdate = (u64, u64, LeastVisibleTime);
+
 impl LeastVisibleTime {
     pub fn new(time: DateTime<Utc>) -> Self {
         Self { time }
+    }
+
+    /// A writable fence without a historical lower bound. Every representable snapshot
+    /// timestamp is >= this value, including timestamps before the Unix epoch.
+    pub fn unbounded() -> Self {
+        Self::new(DateTime::<Utc>::MIN_UTC)
+    }
+
+    pub fn is_unbounded(&self) -> bool {
+        self.time == DateTime::<Utc>::MIN_UTC
     }
 }
