@@ -45,6 +45,7 @@ pub use database::*;
 pub use dictionary::*;
 pub use dynamic_table::*;
 pub use file_format::*;
+pub use index::IndexUserDictionary;
 pub use index::*;
 pub use materialized_view::*;
 pub use notification::*;

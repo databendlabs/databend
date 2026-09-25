@@ -19,6 +19,9 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::CreateTableIndexPlan;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::InvertedIndexUserDictionary;
+use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_materialized_view_license;
@@ -66,6 +69,23 @@ impl Interpreter for CreateTableIndexInterpreter {
                 ast::TableIndexType::Spatial => TableIndexType::Spatial,
             };
 
+            // The dictionary is written to the table storage before the index is registered.
+            let mut options = self.plan.index_options.clone();
+            if let Some(user_dictionary) = &self.plan.user_dictionary {
+                let content = user_dictionary.read().await?;
+                let dictionary = InvertedIndexUserDictionary::try_new(content)?;
+                let table = self
+                    .ctx
+                    .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
+                    .await?;
+                let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+                let location = dictionary.upload(fuse_table).await?;
+                options.insert(
+                    INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION.to_string(),
+                    location,
+                );
+            }
+
             let create_index_req = CreateTableIndexReq {
                 create_option: self.plan.create_option,
                 index_type,
@@ -74,7 +94,7 @@ impl Interpreter for CreateTableIndexInterpreter {
                 name: index_name,
                 column_ids,
                 sync_creation,
-                options: self.plan.index_options.clone(),
+                options,
             };
 
             catalog.create_table_index(create_index_req).await?;

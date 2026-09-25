@@ -196,7 +196,7 @@ impl TransformSerializeBlock {
         let ngram_args =
             FuseTable::create_ngram_index_args(&table.table_info.meta.indexes, &schema, true)?;
 
-        let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
+        let inverted_index_builders = create_inverted_index_builders(table)?;
 
         // Recluster/compact/refresh materialize virtual columns and reuse the
         // path frequencies collected by VirtualColumnBuilder. Other mutations

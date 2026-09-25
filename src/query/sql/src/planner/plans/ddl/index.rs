@@ -16,15 +16,19 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::TableIndexType;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_storage::init_stage_operator;
 use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::meta::Location;
 
@@ -72,6 +76,37 @@ pub struct CreateTableIndexPlan {
     pub table_id: MetaId,
     pub sync_creation: bool,
     pub index_options: BTreeMap<String, String>,
+    pub user_dictionary: Option<IndexUserDictionary>,
+}
+
+/// A `user_dictionary` inverted index option resolved by the binder.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IndexUserDictionary {
+    pub stage_info: StageInfo,
+    /// Path of the file within `stage_info`.
+    pub path: String,
+    /// The location as the user wrote it, e.g. `@ja_dict/userdict.csv`, used in messages.
+    pub location: String,
+}
+
+impl IndexUserDictionary {
+    /// Reads the dictionary file from its stage.
+    pub async fn read(&self) -> Result<Vec<u8>> {
+        let operator = init_stage_operator(&self.stage_info)?;
+        let meta = operator.stat(&self.path).await.map_err(|e| {
+            ErrorCode::IndexOptionInvalid(format!(
+                "failed to read user dictionary `{}`: {e}",
+                self.location
+            ))
+        })?;
+        if meta.is_dir() {
+            return Err(ErrorCode::IndexOptionInvalid(format!(
+                "user dictionary `{}` is a directory, expected a CSV file",
+                self.location
+            )));
+        }
+        Ok(operator.read(&self.path).await?.to_vec())
+    }
 }
 
 /// Drop.

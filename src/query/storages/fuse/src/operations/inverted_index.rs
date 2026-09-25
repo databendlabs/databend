@@ -50,6 +50,7 @@ use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
+use lindera::dictionary::UserDictionary;
 use opendal::Operator;
 
 use crate::FuseStorageFormat;
@@ -59,6 +60,7 @@ use crate::io::InvertedIndexWriter;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::read::read_segment_stats;
+use crate::io::resolve_inverted_index_user_dictionary;
 use crate::operations::BlockMetaIndex;
 use crate::operations::CommitSink;
 use crate::operations::MutationGenerator;
@@ -196,11 +198,15 @@ impl FuseTable {
         let max_threads = std::cmp::min(block_nums, max_threads);
         pipeline.try_resize(max_threads)?;
         let meta_location_generator = self.meta_location_generator.clone();
+        // Resolved once here, in async context; the sync transform only clones the `Arc`.
+        let user_dictionary =
+            resolve_inverted_index_user_dictionary(operator, index_options).await?;
         pipeline.add_transformer(|| {
             InvertedIndexTransform::new(
                 index_name.clone(),
                 index_version.clone(),
                 index_options.clone(),
+                user_dictionary.clone(),
                 data_schema.clone(),
                 index_schema.clone(),
                 operator.clone(),
@@ -326,6 +332,7 @@ pub struct InvertedIndexTransform {
     index_name: String,
     index_version: String,
     index_options: BTreeMap<String, String>,
+    user_dictionary: Option<Arc<UserDictionary>>,
     data_schema: DataSchemaRef,
     source_schema: TableSchemaRef,
     operator: Operator,
@@ -337,6 +344,7 @@ impl InvertedIndexTransform {
         index_name: String,
         index_version: String,
         index_options: BTreeMap<String, String>,
+        user_dictionary: Option<Arc<UserDictionary>>,
         data_schema: DataSchemaRef,
         source_schema: TableSchemaRef,
         operator: Operator,
@@ -346,6 +354,7 @@ impl InvertedIndexTransform {
             index_name,
             index_version,
             index_options,
+            user_dictionary,
             data_schema,
             source_schema,
             operator,
@@ -376,6 +385,7 @@ impl Transform for InvertedIndexTransform {
             &self.index_options,
             self.operator.clone(),
             index_location.clone(),
+            self.user_dictionary.clone(),
         )?;
         writer.add_block(&self.source_schema, &data_block)?;
 

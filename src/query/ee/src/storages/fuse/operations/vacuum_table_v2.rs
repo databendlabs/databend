@@ -35,6 +35,7 @@ use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::try_extract_uuid_v7_timestamp_from_path;
+use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION;
 use futures_util::TryStreamExt;
 use log::info;
 use log::warn;
@@ -252,6 +253,37 @@ pub async fn do_vacuum2(
         removed_inverted_index_v2,
     ));
 
+    // User dictionaries are referenced by index definitions in the table meta, not by snapshots:
+    // pruning always tokenizes with the dictionary of the current index definition.
+    let start = std::time::Instant::now();
+    let protected_dictionaries = table_info
+        .meta
+        .indexes
+        .values()
+        .filter_map(|index| {
+            index
+                .options
+                .get(INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION)
+                .cloned()
+        })
+        .collect::<HashSet<_>>();
+    let removed_dictionaries = purge_inverted_index_dict_objects(
+        fuse_table.get_operator_ref(),
+        &ctx,
+        fuse_table
+            .meta_location_generator()
+            .inverted_index_dict_location_prefix(),
+        &protected_dictionaries,
+        gc_root_meta_ts,
+    )
+    .await?;
+    ctx.set_status_info(&format!(
+        "Removed unreferenced inverted-index user dictionaries for table {}, elapsed: {:?}, removed: {}",
+        table_info.desc,
+        start.elapsed(),
+        removed_dictionaries,
+    ));
+
     let start = std::time::Instant::now();
 
     // Bloom indexes are still derived from data-block paths. Current `_i_i_v2` objects are deleted
@@ -327,6 +359,49 @@ pub async fn do_vacuum2(
     ));
 
     Ok(())
+}
+
+/// Removes user dictionary objects under `prefix` that no current index definition references.
+///
+/// Dictionary objects are content addressed and never carry a UUID, so the only age signal is
+/// the object's own `last_modified`; an object younger than the gc root may belong to a
+/// `CREATE INVERTED INDEX` that has uploaded but not yet committed, and is kept.
+async fn purge_inverted_index_dict_objects(
+    operator: &Operator,
+    ctx: &Arc<dyn TableContext>,
+    prefix: &str,
+    protected_locations: &HashSet<String>,
+    gc_root_meta_ts: DateTime<Utc>,
+) -> Result<usize> {
+    let file_remover = Files::create(Arc::clone(ctx), operator.clone());
+    let mut lister = operator.lister_with(prefix).recursive(true).await?;
+    let mut pending = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
+    let mut removed = 0;
+
+    while let Some(entry) = lister.try_next().await? {
+        if let Err(err) = ctx.check_aborting() {
+            return Err(err.with_context(format!(
+                "aborted while scanning inverted-index user dictionaries under {prefix}"
+            )));
+        }
+        if entry.metadata().is_dir() || protected_locations.contains(entry.path()) {
+            continue;
+        }
+        if !is_gc_candidate_segment_block(&entry, operator, gc_root_meta_ts).await? {
+            continue;
+        }
+        pending.push(entry.path().to_string());
+        if pending.len() == VACUUM2_BLOCK_DELETE_CHUNK_SIZE {
+            file_remover.remove_file_in_batch(&pending).await?;
+            removed += pending.len();
+            pending.clear();
+        }
+    }
+    if !pending.is_empty() {
+        file_remover.remove_file_in_batch(&pending).await?;
+        removed += pending.len();
+    }
+    Ok(removed)
 }
 
 async fn purge_inverted_index_v2_objects(
@@ -655,6 +730,7 @@ mod tests {
     use chrono::TimeZone;
     use databend_query::test_kits::TestFixture;
     use futures_util::StreamExt;
+    use opendal::services::Fs;
     use opendal::services::Memory;
 
     use super::*;
@@ -739,6 +815,57 @@ mod tests {
             assert!(!dal.exists(&orphan_idx).await?);
             assert!(dal.exists(&after_cutoff).await?);
             assert!(dal.exists(&stray).await?);
+            assert!(dal.exists(&outside).await?);
+            Ok(())
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn inverted_index_dict_gc_keeps_referenced_and_recent_objects() -> anyhow::Result<()>
+        {
+            const PREFIX: &str = "1/2/_i_i_d/";
+
+            let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+            let query_ctx = fixture.new_query_ctx().await?;
+            let ctx: Arc<dyn TableContext> = query_ctx;
+            // Dictionary objects are not UUID-named, so the purge falls back to `last_modified`,
+            // which the memory backend does not report; use a filesystem backend instead.
+            let root = tempfile::tempdir()?;
+            let dal = Operator::new(Fs::default().root(root.path().to_str().expect("utf-8 path")))?
+                .finish();
+
+            let referenced = format!("{PREFIX}{}.csv", "a".repeat(64));
+            let orphan = format!("{PREFIX}{}.csv", "b".repeat(64));
+            let outside = "1/2/_i_i_v2/gen/hdeadbeef.index".to_string();
+            dal.write(&referenced, vec![1]).await?;
+            dal.write(&orphan, vec![2]).await?;
+            dal.write(&outside, vec![3]).await?;
+
+            let protected = HashSet::from([referenced.clone()]);
+
+            // A gc root in the past: every object was written after it, so nothing is old enough.
+            let removed = purge_inverted_index_dict_objects(
+                &dal,
+                &ctx,
+                PREFIX,
+                &protected,
+                Utc::now() - chrono::Duration::days(1),
+            )
+            .await?;
+            assert_eq!(removed, 0);
+            assert!(dal.exists(&orphan).await?);
+
+            // A gc root far in the future: unreferenced objects are reclaimed, referenced kept.
+            let removed = purge_inverted_index_dict_objects(
+                &dal,
+                &ctx,
+                PREFIX,
+                &protected,
+                Utc::now() + chrono::Duration::days(4),
+            )
+            .await?;
+            assert_eq!(removed, 1);
+            assert!(dal.exists(&referenced).await?);
+            assert!(!dal.exists(&orphan).await?);
             assert!(dal.exists(&outside).await?);
             Ok(())
         }

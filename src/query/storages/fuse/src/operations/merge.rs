@@ -103,7 +103,7 @@ impl FuseTable {
             &self.table_info.meta.schema,
             true,
         )?;
-        let inverted_index_builders = create_inverted_index_builders(&self.table_info.meta);
+        let inverted_index_builders = create_inverted_index_builders(self)?;
         let vector_index_builder =
             VectorIndexBuilder::try_create(&self.table_info.meta.indexes, new_schema.clone(), true);
         let spatial_index_builder = SpatialIndexBuilder::try_create(

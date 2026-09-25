@@ -770,6 +770,7 @@ impl Binder {
             table_indexes: None,
             table_constraints: None,
             attached_columns: None,
+            index_user_dictionaries: None,
         };
         let plan = CreateMaterializedViewPlan {
             table_plan,
