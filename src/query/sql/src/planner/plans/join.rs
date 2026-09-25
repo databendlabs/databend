@@ -498,12 +498,20 @@ impl Operator for Join {
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let left_prop = rel_expr.derive_relational_prop_child(0)?;
         let right_prop = rel_expr.derive_relational_prop_child(1)?;
-        // Derive output columns
-        let mut output_columns = left_prop.output_columns.clone();
-        if let Some(mark_index) = self.marker_index {
+        let mut input_columns = left_prop.output_columns.clone();
+        input_columns.extend(right_prop.output_columns.iter().copied());
+        // Semi/anti joins only produce rows from the retained side. The other side is
+        // available to join conditions, but not to operators above the join.
+        let mut output_columns = match self.join_type {
+            JoinType::LeftSemi | JoinType::LeftAnti => left_prop.output_columns.clone(),
+            JoinType::RightSemi | JoinType::RightAnti => right_prop.output_columns.clone(),
+            _ => input_columns.clone(),
+        };
+        if self.join_type.is_mark_join()
+            && let Some(mark_index) = self.marker_index
+        {
             output_columns.insert(mark_index);
         }
-        output_columns.extend(right_prop.output_columns.iter().copied());
 
         // Derive outer columns
         let mut outer_columns = left_prop.outer_columns.clone();
@@ -516,7 +524,9 @@ impl Operator for Join {
         for condition in &self.non_equi_conditions {
             condition.collect_used_columns(&mut outer_columns);
         }
-        outer_columns.retain(|column| !output_columns.contains(column));
+        // The discarded side of a semi/anti join is local to its conditions, not outer.
+        outer_columns
+            .retain(|column| !input_columns.contains(column) && !output_columns.contains(column));
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
