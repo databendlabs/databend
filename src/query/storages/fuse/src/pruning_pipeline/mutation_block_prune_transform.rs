@@ -33,11 +33,17 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::AsyncSink;
 use databend_common_pipeline::sinks::AsyncSinker;
+use databend_common_pipeline_transforms::AccumulatingTransform;
+use databend_common_pipeline_transforms::AccumulatingTransformer;
 use databend_common_pipeline_transforms::AsyncAccumulatingTransform;
 use databend_common_pipeline_transforms::AsyncAccumulatingTransformer;
+use databend_common_pipeline_transforms::processors::BlockMetaAccumulatingTransform;
+use databend_common_pipeline_transforms::processors::BlockMetaAccumulatingTransformer;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::RangePruner;
+use databend_storages_common_table_meta::meta::BlockMeta;
 
 use crate::FuseTable;
 use crate::operations::DeletedSegmentInfo;
@@ -47,6 +53,8 @@ use crate::pruning::BlockPruner;
 use crate::pruning::PruningContext;
 use crate::pruning_pipeline::ExtractSegmentTransform;
 use crate::pruning_pipeline::PrunedCompactSegmentMeta;
+use crate::pruning_pipeline::block_metas_meta::BlockMetasMeta;
+use crate::pruning_pipeline::block_prune_result_meta::BlockPruneResult;
 
 /// Counters of the deletion pruning pipeline, shared by all of its processors.
 #[derive(Default)]
@@ -77,57 +85,42 @@ local_block_meta_serde!(MutationPartsMeta);
 #[typetag::serde(name = "mutation_parts_meta")]
 impl BlockMetaInfo for MutationPartsMeta {}
 
-/// Turns a pruned segment into deletion tasks, mirroring the delete branch of
-/// `FusePruner::pruning`:
-/// - a segment that the inverted filter rejects entirely is deleted as a whole;
-/// - otherwise its blocks are pruned by the filter, and the blocks that the
-///   inverted filter rejects are marked as whole block deletions.
-pub struct MutationBlockPruneTransform {
-    block_pruner: Arc<BlockPruner>,
+/// The first step of turning a pruned segment into deletion tasks, mirroring the delete
+/// branch of `FusePruner::pruning`:
+/// - a segment that the inverted filter rejects entirely is deleted as a whole, and is
+///   passed through the following steps as a [`MutationPartsMeta`];
+/// - otherwise its block metas are extracted for block pruning.
+///
+/// Decompressing the block metas is CPU bound, so this runs as a sync processor.
+pub struct MutationSegmentTransform {
     pruning_ctx: Arc<PruningContext>,
     inverse_range_index: Option<RangeIndex>,
-    schema: TableSchemaRef,
     stats: Arc<MutationPruneStats>,
 }
 
-impl MutationBlockPruneTransform {
+impl MutationSegmentTransform {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        block_pruner: Arc<BlockPruner>,
         pruning_ctx: Arc<PruningContext>,
         inverse_range_index: Option<RangeIndex>,
-        schema: TableSchemaRef,
         stats: Arc<MutationPruneStats>,
     ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
-            input,
-            output,
-            MutationBlockPruneTransform {
-                block_pruner,
+        Ok(ProcessorPtr::create(
+            BlockMetaAccumulatingTransformer::create(input, output, MutationSegmentTransform {
                 pruning_ctx,
                 inverse_range_index,
-                schema,
                 stats,
-            },
-        )))
+            }),
+        ))
     }
 }
 
-#[async_trait::async_trait]
-impl AsyncAccumulatingTransform for MutationBlockPruneTransform {
-    const NAME: &'static str = "MutationBlockPruneTransform";
+impl BlockMetaAccumulatingTransform<PrunedCompactSegmentMeta> for MutationSegmentTransform {
+    const NAME: &'static str = "MutationSegmentTransform";
 
-    async fn transform(&mut self, mut data: DataBlock) -> Result<Option<DataBlock>> {
-        let Some(meta) = data
-            .take_meta()
-            .and_then(PrunedCompactSegmentMeta::downcast_from)
-        else {
-            return Err(ErrorCode::Internal(
-                "Cannot downcast meta to PrunedCompactSegmentMeta",
-            ));
-        };
-        let (segment_location, info) = meta.segments;
+    fn transform(&mut self, data: PrunedCompactSegmentMeta) -> Result<Option<DataBlock>> {
+        let (segment_location, info) = data.segments;
 
         if let Some(range_index) = &self.inverse_range_index {
             let range_input =
@@ -160,15 +153,113 @@ impl AsyncAccumulatingTransform for MutationBlockPruneTransform {
             false,
             &self.pruning_ctx.pruning_cost,
         )?;
+        if block_metas.is_empty() {
+            return Ok(None);
+        }
         let projected_virtual_schema = self
             .pruning_ctx
             .project_virtual_segment_schema(info.summary.virtual_segment_schema.as_ref());
+        Ok(Some(DataBlock::empty_with_meta(BlockMetasMeta::create(
+            block_metas,
+            segment_location,
+            projected_virtual_schema,
+        ))))
+    }
+}
+
+/// Prunes the blocks with the indexes that have to be read, such as the bloom index.
+/// It is only added when such an index exists; the pruned blocks are turned into
+/// deletion tasks by [`MutationBlockPruneTransform`].
+pub struct AsyncMutationBlockPruneTransform {
+    block_pruner: Arc<BlockPruner>,
+}
+
+impl AsyncMutationBlockPruneTransform {
+    pub fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        block_pruner: Arc<BlockPruner>,
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
+            input,
+            output,
+            AsyncMutationBlockPruneTransform { block_pruner },
+        )))
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncAccumulatingTransform for AsyncMutationBlockPruneTransform {
+    const NAME: &'static str = "AsyncMutationBlockPruneTransform";
+
+    async fn transform(&mut self, mut data: DataBlock) -> Result<Option<DataBlock>> {
+        let Some(meta) = data.take_meta() else {
+            return Err(ErrorCode::Internal(
+                "Cannot downcast meta to BlockMetasMeta",
+            ));
+        };
+        let meta = match BlockMetasMeta::downcast_from_err(meta) {
+            Ok(meta) => meta,
+            // The segments deleted as a whole are passed through.
+            Err(meta) => return Ok(Some(pass_through_parts(meta)?)),
+        };
+
+        let block_meta_indexes = self.block_pruner.internal_column_pruning(&meta.block_metas);
         let block_metas = self
             .block_pruner
-            .pruning(segment_location, block_metas, projected_virtual_schema)
+            .block_pruning(
+                meta.segment_location,
+                meta.block_metas,
+                block_meta_indexes,
+                meta.projected_virtual_schema,
+                None,
+            )
             .await?;
         if block_metas.is_empty() {
             return Ok(None);
+        }
+        Ok(Some(DataBlock::empty_with_meta(BlockPruneResult::create(
+            block_metas,
+        ))))
+    }
+}
+
+/// Turns the pruned blocks into deletion tasks, marking the blocks that the inverted
+/// filter rejects as whole block deletions. If no [`AsyncMutationBlockPruneTransform`]
+/// runs before it, it also prunes the blocks with the range index.
+///
+/// Everything here is CPU bound, so this runs as a sync processor.
+pub struct MutationBlockPruneTransform {
+    block_pruner: Arc<BlockPruner>,
+    inverse_range_index: Option<RangeIndex>,
+    schema: TableSchemaRef,
+    stats: Arc<MutationPruneStats>,
+}
+
+impl MutationBlockPruneTransform {
+    pub fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        block_pruner: Arc<BlockPruner>,
+        inverse_range_index: Option<RangeIndex>,
+        schema: TableSchemaRef,
+        stats: Arc<MutationPruneStats>,
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(AccumulatingTransformer::create(
+            input,
+            output,
+            MutationBlockPruneTransform {
+                block_pruner,
+                inverse_range_index,
+                schema,
+                stats,
+            },
+        )))
+    }
+
+    fn build_parts(&self, block_metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>) -> Vec<DataBlock> {
+        if block_metas.is_empty() {
+            return vec![];
         }
 
         let mut parts = Vec::with_capacity(block_metas.len());
@@ -200,10 +291,49 @@ impl AsyncAccumulatingTransform for MutationBlockPruneTransform {
         self.stats
             .num_parts
             .fetch_add(parts.len(), Ordering::Relaxed);
-        Ok(Some(DataBlock::empty_with_meta(MutationPartsMeta::create(
-            parts,
-        ))))
+        vec![DataBlock::empty_with_meta(MutationPartsMeta::create(parts))]
     }
+}
+
+impl AccumulatingTransform for MutationBlockPruneTransform {
+    const NAME: &'static str = "MutationBlockPruneTransform";
+
+    fn transform(&mut self, mut data: DataBlock) -> Result<Vec<DataBlock>> {
+        let Some(meta) = data.take_meta() else {
+            return Err(ErrorCode::Internal(
+                "Cannot downcast meta to BlockPruneResult",
+            ));
+        };
+        // Pruned by `AsyncMutationBlockPruneTransform`.
+        let meta = match BlockPruneResult::downcast_from_err(meta) {
+            Ok(result) => return Ok(self.build_parts(result.block_metas)),
+            Err(meta) => meta,
+        };
+        let meta = match BlockMetasMeta::downcast_from_err(meta) {
+            Ok(meta) => meta,
+            // The segments deleted as a whole are passed through.
+            Err(meta) => return Ok(vec![pass_through_parts(meta)?]),
+        };
+
+        let block_meta_indexes = self.block_pruner.internal_column_pruning(&meta.block_metas);
+        let block_metas = self.block_pruner.block_pruning_sync(
+            meta.segment_location,
+            meta.block_metas,
+            block_meta_indexes,
+            meta.projected_virtual_schema,
+            None,
+        )?;
+        Ok(self.build_parts(block_metas))
+    }
+}
+
+fn pass_through_parts(meta: BlockMetaInfoPtr) -> Result<DataBlock> {
+    if MutationPartsMeta::downcast_ref_from(&meta).is_none() {
+        return Err(ErrorCode::Internal(
+            "Cannot downcast meta to MutationPartsMeta",
+        ));
+    }
+    Ok(DataBlock::empty_with_meta(meta))
 }
 
 /// Streams the deletion tasks produced by the pruning pipeline to the mutation sources.

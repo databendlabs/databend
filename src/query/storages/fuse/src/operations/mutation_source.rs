@@ -53,9 +53,11 @@ use crate::pruning::BlockPruner;
 use crate::pruning::FusePruner;
 use crate::pruning::SegmentPruner;
 use crate::pruning::create_segment_location_vector;
+use crate::pruning_pipeline::AsyncMutationBlockPruneTransform;
 use crate::pruning_pipeline::LazySegmentReceiverSource;
 use crate::pruning_pipeline::MutationBlockPruneTransform;
 use crate::pruning_pipeline::MutationPruneStats;
+use crate::pruning_pipeline::MutationSegmentTransform;
 use crate::pruning_pipeline::PrunedCompactSegmentMeta;
 use crate::pruning_pipeline::SegmentPruneTransform;
 use crate::pruning_pipeline::SendMutationPartSink;
@@ -372,16 +374,37 @@ impl FuseTable {
             )
         })?;
 
-        let block_pruner = Arc::new(BlockPruner::create(pruner.pruning_ctx.clone())?);
+        // Only the steps reading the storage run as async processors; the CPU bound
+        // pruning runs as sync processors, so that it does not block the IO runtime.
         let inverse_range_index = pruner.get_inverse_range_index();
-        let schema = self.schema_with_stream();
         let stats = Arc::new(MutationPruneStats::default());
+        prune_pipeline.add_transform(|input, output| {
+            MutationSegmentTransform::create(
+                input,
+                output,
+                pruner.pruning_ctx.clone(),
+                inverse_range_index.clone(),
+                stats.clone(),
+            )
+        })?;
+
+        let block_pruner = Arc::new(BlockPruner::create(pruner.pruning_ctx.clone())?);
+        if pruner.pruning_ctx.bloom_pruner.is_some()
+            || pruner.pruning_ctx.inverted_index_pruner.is_some()
+            || pruner.pruning_ctx.spatial_index_pruner.is_some()
+            || pruner.pruning_ctx.virtual_column_pruner.is_some()
+        {
+            prune_pipeline.add_transform(|input, output| {
+                AsyncMutationBlockPruneTransform::create(input, output, block_pruner.clone())
+            })?;
+        }
+
+        let schema = self.schema_with_stream();
         prune_pipeline.add_transform(|input, output| {
             MutationBlockPruneTransform::create(
                 input,
                 output,
                 block_pruner.clone(),
-                pruner.pruning_ctx.clone(),
                 inverse_range_index.clone(),
                 schema.clone(),
                 stats.clone(),
