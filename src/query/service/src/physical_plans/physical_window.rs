@@ -899,7 +899,6 @@ fn apply_window_sort_plan(
 
     if !window.partition_by.is_empty() {
         return Ok(PhysicalPlan::new(WindowPartition {
-            pre_projection: None,
             meta: PhysicalPlanMeta::new("WindowPartition"),
             input,
             partition_by: window.partition_by.clone(),

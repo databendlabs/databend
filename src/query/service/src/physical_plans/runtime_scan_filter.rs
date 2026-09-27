@@ -401,7 +401,6 @@ mod tests {
         );
 
         let window = PhysicalPlan::new(WindowPartition {
-            pre_projection: None,
             meta: PhysicalPlanMeta::new("WindowPartition"),
             input: scan.clone(),
             partition_by: vec![],
