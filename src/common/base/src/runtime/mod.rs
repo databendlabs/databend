@@ -67,6 +67,8 @@ pub use perf::CpuSummaryLevel;
 pub use perf::CpuSummaryRow;
 pub use perf::PerfConfig;
 pub use perf::PerfSamples;
+pub use perf::PerfTargetGuard;
+pub use perf::PerfTargets;
 pub use perf::QueryPerf;
 pub use perf::QueryPerfGuard;
 pub use perf::cpu_flamegraph;

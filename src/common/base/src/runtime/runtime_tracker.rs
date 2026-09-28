@@ -66,6 +66,7 @@ use crate::runtime::memory::AllocProfile;
 use crate::runtime::memory::GlobalStatBuffer;
 use crate::runtime::memory::MemStat;
 use crate::runtime::metrics::ScopedRegistry;
+use crate::runtime::perf::PerfTargets;
 use crate::runtime::profile::Profile;
 use crate::runtime::time_series::QueryTimeSeriesProfile;
 use crate::runtime::workload_group::WorkloadGroupResource;
@@ -339,6 +340,14 @@ impl Clone for TrackingPayload {
     }
 }
 
+/// Updates the thread-local profiling state of `EXPLAIN PERF` and the admin API for `payload`.
+#[inline]
+fn sync_profiling(payload: &TrackingPayload) {
+    let profiling = PerfTargets::resolve(payload);
+    QueryPerf::sync_from_payload(profiling.cpu);
+    AllocProfile::sync_current(profiling.alloc);
+}
+
 pub struct TrackingGuard {
     saved: Arc<TrackingPayload>,
 }
@@ -363,8 +372,7 @@ impl Drop for TrackingGuard {
             std::mem::swap(&mut thread_tracker.payload, &mut self.saved);
 
             // Sync perf flag when restoring the previous payload
-            QueryPerf::sync_from_payload(thread_tracker.payload.perf_enabled);
-            AllocProfile::sync_from_payload(thread_tracker.payload.alloc_profile.is_some());
+            sync_profiling(&thread_tracker.payload);
         });
     }
 }
@@ -453,8 +461,7 @@ impl ThreadTracker {
             std::mem::swap(&mut thread_tracker.payload, &mut guard.saved);
 
             // Sync perf flag from the new payload to thread_local PERF_FLAG
-            QueryPerf::sync_from_payload(thread_tracker.payload.perf_enabled);
-            AllocProfile::sync_from_payload(thread_tracker.payload.alloc_profile.is_some());
+            sync_profiling(&thread_tracker.payload);
 
             guard
         })
@@ -518,21 +525,18 @@ impl ThreadTracker {
         })
     }
 
-    /// Calls `f` with the allocation profile of the current thread and the plan node the thread
-    /// works for. Does nothing if the thread is not profiled or the tracker is being updated.
-    pub(crate) fn with_alloc_profile(f: impl FnOnce(&AllocProfile, Option<(u32, &str)>)) {
+    /// Calls `f` with the query id and the plan node of the current thread. Does nothing if the
+    /// tracker is being updated.
+    pub(crate) fn with_query_and_plan(f: impl FnOnce(Option<&str>, Option<(u32, &str)>)) {
         let _ = TRACKER.try_with(|tracker| {
             let Ok(tracker) = tracker.try_borrow() else {
-                return;
-            };
-            let Some(alloc_profile) = tracker.payload.alloc_profile.as_ref() else {
                 return;
             };
             let plan = tracker.payload.profile.as_ref().and_then(|profile| {
                 let name = profile.plan_name.as_deref().unwrap_or_default();
                 profile.plan_id.map(|id| (id, name))
             });
-            f(alloc_profile, plan);
+            f(tracker.payload.query_id.as_deref(), plan);
         });
     }
 

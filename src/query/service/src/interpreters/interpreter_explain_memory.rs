@@ -147,8 +147,14 @@ impl ExplainMemoryInterpreter {
     }
 }
 
-/// One flamegraph per node, the summary of all nodes.
 fn html_block(nodes: Vec<(String, Vec<AllocStack>)>) -> Result<DataBlock> {
+    Ok(DataBlock::new_from_columns(vec![StringType::from_data(
+        vec![memory_report_html(nodes)?],
+    )]))
+}
+
+/// The html report of sampled allocations: one flamegraph per node, the summary of all nodes.
+pub fn memory_report_html(nodes: Vec<(String, Vec<AllocStack>)>) -> Result<String> {
     let title = "Sampled allocations by plan node";
     let all = nodes
         .iter()
@@ -165,15 +171,11 @@ fn html_block(nodes: Vec<(String, Vec<AllocStack>)>) -> Result<DataBlock> {
     let mut svgs = svgs.into_iter();
     let (node_id, svg) = svgs.next().unwrap_or_default();
 
-    let html = QueryPerf::pretty_display(node_id, svg, svgs)
+    Ok(QueryPerf::pretty_display(node_id, svg, svgs)
         .replace("Query Performance Report", "Query Memory Allocation Report")
-        .replace("{{SUMMARY_TABLE}}", &summary_html(&all));
-    Ok(DataBlock::new_from_columns(vec![StringType::from_data(
-        vec![html],
-    )]))
+        .replace("{{SUMMARY_TABLE}}", &summary_html(&all)))
 }
 
-/// The summary row, then each plan node from the largest followed by its largest allocation sites.
 /// The summary row, then each plan node from the largest followed by its largest allocation sites,
 /// over the samples of all nodes.
 fn table_block(nodes: &[(String, Vec<AllocStack>)], limit: usize) -> DataBlock {

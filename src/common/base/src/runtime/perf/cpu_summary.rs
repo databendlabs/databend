@@ -326,6 +326,7 @@ mod tests {
         let samples = PerfSamples {
             cpu: vec![stack(&["main", "a"], 2)],
             memory: vec![AllocStack {
+                query_id: None,
                 plan: Some((3, "HashJoin".to_string())),
                 frames: vec!["main".to_string()],
                 bytes: 1024,

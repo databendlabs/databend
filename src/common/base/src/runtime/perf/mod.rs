@@ -14,6 +14,7 @@
 
 mod cpu_summary;
 mod perf_config;
+mod perf_targets;
 mod query_perf;
 
 pub use cpu_summary::CpuStack;
@@ -26,5 +27,7 @@ pub use cpu_summary::prefix_folded_by_node;
 pub use cpu_summary::stack_site;
 pub use cpu_summary::summarize_cpu_stacks;
 pub use perf_config::PerfConfig;
+pub use perf_targets::PerfTargetGuard;
+pub use perf_targets::PerfTargets;
 pub use query_perf::QueryPerf;
 pub use query_perf::QueryPerfGuard;

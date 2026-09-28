@@ -171,8 +171,14 @@ impl ExplainPerfInterpreter {
     }
 }
 
-/// One flamegraph per node.
 fn html_block(nodes: Vec<(String, Vec<CpuStack>)>) -> Result<DataBlock> {
+    Ok(DataBlock::new_from_columns(vec![StringType::from_data(
+        vec![cpu_report_html(nodes)?],
+    )]))
+}
+
+/// The html report of CPU samples: one flamegraph per node.
+pub fn cpu_report_html(nodes: Vec<(String, Vec<CpuStack>)>) -> Result<String> {
     let mut svgs = Vec::with_capacity(nodes.len());
     for (node, stacks) in nodes {
         let svg = cpu_flamegraph(&stacks, "Flame Graph").map_err(ErrorCode::Internal)?;
@@ -181,10 +187,7 @@ fn html_block(nodes: Vec<(String, Vec<CpuStack>)>) -> Result<DataBlock> {
     let mut svgs = svgs.into_iter();
     let (node_id, svg) = svgs.next().unwrap_or_default();
 
-    let html = QueryPerf::pretty_display(node_id, svg, svgs).replace("{{SUMMARY_TABLE}}", "");
-    Ok(DataBlock::new_from_columns(vec![StringType::from_data(
-        vec![html],
-    )]))
+    Ok(QueryPerf::pretty_display(node_id, svg, svgs).replace("{{SUMMARY_TABLE}}", ""))
 }
 
 /// The summary row, then the leaf functions and the Databend sites with the most samples, over the

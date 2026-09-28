@@ -22,6 +22,7 @@
 //! The profile shows where memory is allocated, including allocations freed soon after. It does
 //! not show which memory is alive at a given moment.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::sync::Arc;
@@ -69,22 +70,34 @@ impl ThreadSampler {
     }
 }
 
+thread_local! {
+    /// The profile the current thread samples into, set with [`PROFILE_FLAG`].
+    static CURRENT_PROFILE: RefCell<Option<Arc<AllocProfile>>> = const { RefCell::new(None) };
+}
+
 #[derive(Hash, PartialEq, Eq)]
 struct SampleKey {
+    /// Only recorded by profiles sampling several queries.
+    query: Option<String>,
     plan: Option<u32>,
     /// Instruction pointers, innermost first.
     frames: Box<[usize]>,
 }
 
-/// The sampled allocations of one query.
+/// The sampled allocations of one query, or of every query of a node.
 pub struct AllocProfile {
+    /// Records the query id of the samples, set when sampling a whole node.
+    with_query_id: bool,
     samples: Mutex<HashMap<SampleKey, u64>>,
-    plan_names: Mutex<HashMap<u32, String>>,
+    plan_names: Mutex<HashMap<(Option<String>, u32), String>>,
 }
 
 /// One aggregated call stack of an [`AllocProfile`].
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AllocStack {
+    /// The query of the allocations, only for profiles sampling a whole node.
+    #[serde(default)]
+    pub query_id: Option<String>,
     /// The plan node the allocations were made for, `None` outside plan nodes.
     pub plan: Option<(u32, String)>,
     /// Symbolized frames, outermost first.
@@ -94,17 +107,39 @@ pub struct AllocStack {
 }
 
 impl AllocProfile {
+    /// A profile for the threads of one query.
     pub fn create() -> Arc<AllocProfile> {
+        Self::create_impl(false)
+    }
+
+    /// A profile for every query of a node, the samples record their query id.
+    pub fn create_for_node() -> Arc<AllocProfile> {
+        Self::create_impl(true)
+    }
+
+    fn create_impl(with_query_id: bool) -> Arc<AllocProfile> {
         Arc::new(AllocProfile {
+            with_query_id,
             samples: Mutex::new(HashMap::new()),
             plan_names: Mutex::new(HashMap::new()),
         })
     }
 
-    /// Syncs the thread local flag with the tracking payload of the current thread.
+    /// Sets the profile the current thread samples into, called when the thread switches its
+    /// tracking payload.
     #[inline]
-    pub fn sync_from_payload(enabled: bool) {
+    pub(crate) fn sync_current(profile: Option<Arc<AllocProfile>>) {
+        let enabled = profile.is_some();
+        if !enabled && !unsafe { PROFILE_FLAG } {
+            return;
+        }
+
         unsafe { PROFILE_FLAG = enabled }
+        let _ = CURRENT_PROFILE.try_with(|current| {
+            if let Ok(mut current) = current.try_borrow_mut() {
+                *current = profile;
+            }
+        });
     }
 
     /// Reports `size` bytes allocated by the current thread.
@@ -153,16 +188,29 @@ impl AllocProfile {
             });
         }
 
-        ThreadTracker::with_alloc_profile(|profile, plan| {
+        let Some(profile) = CURRENT_PROFILE
+            .try_with(|current| current.try_borrow().ok().and_then(|x| x.clone()))
+            .ok()
+            .flatten()
+        else {
+            return;
+        };
+
+        ThreadTracker::with_query_and_plan(|query_id, plan| {
+            let query = match profile.with_query_id {
+                true => query_id.map(str::to_string),
+                false => None,
+            };
             if let Some((id, name)) = plan {
                 profile
                     .plan_names
                     .lock()
-                    .entry(id)
+                    .entry((query.clone(), id))
                     .or_insert_with(|| name.to_string());
             }
 
             let key = SampleKey {
+                query,
                 plan: plan.map(|(id, _)| id),
                 frames: frames[..depth].into(),
             };
@@ -181,7 +229,8 @@ impl AllocProfile {
         let plan_names = self.plan_names.lock().clone();
 
         let mut symbols: HashMap<usize, Vec<String>> = HashMap::new();
-        let mut stacks: HashMap<(Option<u32>, Vec<String>), u64> = HashMap::new();
+        type StackKey = (Option<String>, Option<u32>, Vec<String>);
+        let mut stacks: HashMap<StackKey, u64> = HashMap::new();
         for (key, bytes) in samples {
             let mut frames = Vec::with_capacity(key.frames.len());
             for ip in key.frames.iter() {
@@ -202,13 +251,17 @@ impl AllocProfile {
             let mut frames = frames.split_off(skip);
             frames.reverse();
 
-            *stacks.entry((key.plan, frames)).or_default() += bytes;
+            *stacks.entry((key.query, key.plan, frames)).or_default() += bytes;
         }
 
         let mut stacks = stacks
             .into_iter()
-            .map(|((plan, frames), bytes)| AllocStack {
-                plan: plan.map(|id| (id, plan_names.get(&id).cloned().unwrap_or_default())),
+            .map(|((query_id, plan, frames), bytes)| AllocStack {
+                plan: plan.map(|id| {
+                    let name = plan_names.get(&(query_id.clone(), id)).cloned();
+                    (id, name.unwrap_or_default())
+                }),
+                query_id,
                 frames,
                 bytes,
             })
@@ -252,11 +305,16 @@ impl AllocSummaryLevel {
     }
 }
 
-/// The label of a plan node in reports, e.g. `HashJoin [#3]`.
-pub fn plan_label(plan: &Option<(u32, String)>) -> String {
-    match plan {
+/// The label of the plan node of a stack in reports, e.g. `HashJoin [#3]`, prefixed with the query
+/// id when the profile samples a whole node.
+pub fn plan_label(stack: &AllocStack) -> String {
+    let plan = match &stack.plan {
         Some((id, name)) => format!("{name} [#{id}]"),
         None => "(no plan node)".to_string(),
+    };
+    match &stack.query_id {
+        Some(query_id) => format!("{query_id}: {plan}"),
+        None => plan,
     }
 }
 
@@ -276,16 +334,18 @@ pub fn summarize_alloc_stacks(
     let share = |part: u64, whole: u64| part as f64 / whole.max(1) as f64;
 
     let total = stacks.iter().map(|stack| stack.bytes).sum::<u64>();
-    let mut plans: HashMap<Option<u32>, (String, u64, HashMap<String, u64>)> = HashMap::new();
+    // The label identifies the plan node, it contains the plan id and the query id if any.
+    let mut plans: HashMap<String, (u64, HashMap<String, u64>)> = HashMap::new();
     for stack in stacks {
-        let (_, bytes, sites) = plans
-            .entry(stack.plan.as_ref().map(|(id, _)| *id))
-            .or_insert_with(|| (plan_label(&stack.plan), 0, HashMap::new()));
+        let (bytes, sites) = plans.entry(plan_label(stack)).or_default();
         *bytes += stack.bytes;
         *sites.entry(allocation_site(&stack.frames)).or_default() += stack.bytes;
     }
 
-    let mut plans = plans.into_values().collect::<Vec<_>>();
+    let mut plans = plans
+        .into_iter()
+        .map(|(plan, (bytes, sites))| (plan, bytes, sites))
+        .collect::<Vec<_>>();
     plans.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
 
     let mut rows = vec![AllocSummaryRow {
@@ -335,7 +395,7 @@ pub fn alloc_folded_stacks(stacks: &[AllocStack], limit: Option<usize>) -> Vec<(
         .iter()
         .map(|stack| {
             let mut frames = Vec::with_capacity(stack.frames.len() + 1);
-            frames.push(plan_label(&stack.plan));
+            frames.push(plan_label(stack));
             frames.extend(stack.frames.iter().map(|frame| sanitize(frame)));
             (frames.join(";"), stack.bytes)
         })
@@ -484,11 +544,13 @@ mod tests {
     fn test_flamegraph_is_rooted_at_plan_nodes() {
         let stacks = vec![
             AllocStack {
+                query_id: None,
                 plan: Some((3, "HashJoin".to_string())),
                 frames: vec!["main".to_string(), "build<[u8; 8]>".to_string()],
                 bytes: 1024,
             },
             AllocStack {
+                query_id: None,
                 plan: None,
                 frames: vec!["main".to_string()],
                 bytes: 512,
@@ -504,6 +566,7 @@ mod tests {
 
     fn stack(plan: Option<(u32, &str)>, frames: &[&str], samples: u64) -> AllocStack {
         AllocStack {
+            query_id: None,
             plan: plan.map(|(id, name)| (id, name.to_string())),
             frames: frames.iter().map(|x| x.to_string()).collect(),
             bytes: samples * SAMPLE_INTERVAL as u64,

@@ -50,18 +50,27 @@ impl QueryPerf {
     }
 
     pub fn start(frequency: i32) -> Result<QueryPerfGuard> {
-        let filter_closure = || !QueryPerf::flag();
-        let profiler_guard = ProfilerGuardBuilder::default()
-            .frequency(frequency)
-            .blocklist(&["libc", "libgcc", "pthread", "vdso"])
-            .set_filter_func(filter_closure)
-            .build()
-            .map_err(|e| ErrorCode::Internal(format!("Failed to create profiler, {e}")))?;
-        debug!("starting perf with frequency: {}", frequency);
+        let profiler_guard = Self::start_profiler(frequency, true)?;
         let mut payload = ThreadTracker::new_tracking_payload();
         payload.perf_enabled = true;
         let flag_guard = ThreadTracker::tracking(payload);
         Ok((flag_guard, profiler_guard))
+    }
+
+    /// Starts the CPU profiler of the process. With `filtered`, only the threads whose flag is set
+    /// are sampled, see [`QueryPerf::sync_from_payload`]. Fails if the profiler is already running.
+    pub fn start_profiler(frequency: i32, filtered: bool) -> Result<ProfilerGuard<'static>> {
+        let mut builder = ProfilerGuardBuilder::default()
+            .frequency(frequency)
+            .blocklist(&["libc", "libgcc", "pthread", "vdso"]);
+        if filtered {
+            builder = builder.set_filter_func(|| !QueryPerf::flag());
+        }
+        let profiler_guard = builder
+            .build()
+            .map_err(|e| ErrorCode::Internal(format!("Failed to create profiler, {e}")))?;
+        debug!("starting perf with frequency: {}", frequency);
+        Ok(profiler_guard)
     }
 
     /// The sampled call stacks, frames outermost first.
