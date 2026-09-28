@@ -43,14 +43,12 @@ pub enum ExplainKind {
 
     Graphical,
 
-    /// `EXPLAIN PERF [CPU | MEMORY] [(events = '...', format = '...', limit = '...')] <statement>`
+    /// `EXPLAIN PERF [CPU | MEMORY] [(format = '...', limit = <n>)] <statement>`
     Perf {
         mode: ExplainPerfMode,
         format: ExplainPerfFormat,
         /// The number of rows per group in the `table` and `folded` formats, `None` for the default.
         limit: Option<u64>,
-        /// Hardware counter groups, only valid in the CPU mode.
-        event_groups: Vec<Vec<String>>,
     },
 }
 
@@ -90,7 +88,7 @@ impl std::fmt::Display for ExplainPerfFormat {
 /// What `EXPLAIN PERF` samples while running the statement.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Drive, DriveMut)]
 pub enum ExplainPerfMode {
-    /// Samples call stacks on CPU time, with optional hardware counters.
+    /// Samples call stacks on CPU time.
     #[default]
     Cpu,
     /// Samples call stacks on allocated bytes, grouped by plan node.

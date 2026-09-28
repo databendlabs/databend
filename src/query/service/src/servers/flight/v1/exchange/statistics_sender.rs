@@ -39,7 +39,6 @@ use crate::servers::flight::v1::packets::ProgressInfo;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sessions::TableContextPartitionStats;
-use crate::sessions::TableContextPerf;
 use crate::sessions::TableContextProgress;
 use crate::sessions::TableContextTelemetry;
 
@@ -139,10 +138,6 @@ impl StatisticsSender {
 
                     if let Err(error) = Self::send_perf(&perf_guard, &tx).await {
                         warn!("Perf send has error, cause: {:?}.", error);
-                    }
-
-                    if let Err(error) = Self::send_perf_counters(&ctx, &executor, &tx).await {
-                        warn!("PerfCounters send has error, cause: {:?}.", error);
                     }
 
                     if let Err(error) = Self::send_part_statistics(&ctx, &tx).await {
@@ -295,21 +290,6 @@ impl StatisticsSender {
             let dumped = QueryPerf::dump(profiler_guard)?;
             let data_packet = DataPacket::QueryPerf(dumped);
             flight_sender.send(data_packet).await?;
-        }
-        Ok(())
-    }
-
-    async fn send_perf_counters(
-        ctx: &Arc<QueryContext>,
-        executor: &Arc<PipelineExecutor>,
-        flight_sender: &FlightSender,
-    ) -> Result<()> {
-        if ctx.get_perf_config().has_hw_counters() {
-            let counters = executor.fetch_perf_counters();
-            if !counters.counters.is_empty() {
-                let data_packet = DataPacket::QueryPerfCounters(counters);
-                flight_sender.send(data_packet).await?;
-            }
         }
         Ok(())
     }

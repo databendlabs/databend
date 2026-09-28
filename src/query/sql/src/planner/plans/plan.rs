@@ -255,7 +255,6 @@ pub enum Plan {
         mode: ExplainPerfMode,
         format: ExplainPerfFormat,
         limit: Option<u64>,
-        event_groups: Vec<Vec<String>>,
     },
     ReportIssue(String),
 
@@ -787,12 +786,10 @@ fn explain_perf_schema(mode: ExplainPerfMode, format: ExplainPerfFormat) -> Data
         ],
         (ExplainPerfMode::Cpu, ExplainPerfFormat::Table) => vec![
             DataField::new("level", string()),
-            DataField::new("plan_node", nullable_string()),
             DataField::new("function", nullable_string()),
-            DataField::new("self_samples", DataType::Nullable(Box::new(uint64()))),
-            DataField::new("total_samples", DataType::Nullable(Box::new(uint64()))),
-            DataField::new("share", DataType::Nullable(Box::new(float64()))),
-            DataField::new("counter_value", DataType::Nullable(Box::new(uint64()))),
+            DataField::new("self_samples", uint64()),
+            DataField::new("total_samples", uint64()),
+            DataField::new("share", float64()),
             DataField::new("low_confidence", DataType::Boolean),
             DataField::new("note", nullable_string()),
         ],

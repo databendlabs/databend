@@ -130,7 +130,7 @@ fn html_block(stacks: &[AllocStack], node_id: String) -> Result<DataBlock> {
         .map_err(ErrorCode::Internal)?;
     let html = QueryPerf::pretty_display(node_id, svg, std::iter::empty())
         .replace("Query Performance Report", "Query Memory Allocation Report")
-        .replace("{{PERF_COUNTERS_TABLE}}", &summary_html(stacks));
+        .replace("{{SUMMARY_TABLE}}", &summary_html(stacks));
     Ok(DataBlock::new_from_columns(vec![StringType::from_data(
         vec![html],
     )]))

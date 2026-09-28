@@ -9,16 +9,13 @@ explain perf memory select number % 100 as k, count(*) from numbers(1000000) gro
 statement ok
 explain perf memory select * from numbers(10) where number > 100;
 
-statement error 1065
-explain perf memory (events='cycles') select avg(number) from numbers(10000);
-
 query TTTIIRBT
-explain perf memory (format='table', limit='2') select number % 100 as k, count(*) from numbers(1000000) group by k order by k;
+explain perf memory (format='table', limit=2) select number % 100 as k, count(*) from numbers(1000000) group by k order by k;
 ----
 summary NULL NULL <slt:ignore>plan AggregatePartial [#<slt:ignore>site AggregatePartial [#<slt:ignore>
 
 query TII
-explain perf memory (format='folded', limit='3') select number % 100 as k, count(*) from numbers(1000000) group by k order by k;
+explain perf memory (format='folded', limit=3) select number % 100 as k, count(*) from numbers(1000000) group by k order by k;
 ----
 <slt:ignore>;<slt:ignore>
 

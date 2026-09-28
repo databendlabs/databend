@@ -19,8 +19,6 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::time::SystemTime;
 
-use databend_common_base::runtime::PerfCounters;
-use databend_common_base::runtime::PerfEvent;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_base::runtime::error_info::NodeErrorType;
@@ -86,7 +84,6 @@ pub struct ExecutorWorkerContext {
     worker_id: usize,
     task: ExecutorTask,
     workers_condvar: Arc<WorkersCondvar>,
-    perf_counters: Option<PerfCounters>,
 }
 
 impl ExecutorWorkerContext {
@@ -95,14 +92,7 @@ impl ExecutorWorkerContext {
             worker_id,
             workers_condvar,
             task: ExecutorTask::None,
-            perf_counters: None,
         }
-    }
-
-    /// Initialize hardware performance counters for this worker thread.
-    /// Silently does nothing if perf events are unavailable (non-Linux, no permissions, etc).
-    pub fn init_perf_counters(&mut self, event_groups: &[Vec<PerfEvent>]) {
-        self.perf_counters = PerfCounters::try_new(event_groups);
     }
 
     pub fn has_task(&self) -> bool {
@@ -181,22 +171,7 @@ impl ExecutorWorkerContext {
             let begin = SystemTime::now();
             let instant = Instant::now();
 
-            let perf_enabled = payload.perf_enabled;
-            if perf_enabled {
-                if let Some(counters) = &mut self.perf_counters {
-                    let _ = counters.reset_and_enable();
-                }
-            }
-
             proc.processor.process()?;
-
-            if perf_enabled {
-                if let Some(counters) = &mut self.perf_counters {
-                    if let Ok(values) = counters.disable_and_read() {
-                        Profile::record_perf_counters(values);
-                    }
-                }
-            }
 
             let nanos = instant.elapsed().as_nanos();
             assume(nanos < 18446744073709551615_u128);

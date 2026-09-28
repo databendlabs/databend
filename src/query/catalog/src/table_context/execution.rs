@@ -20,7 +20,6 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::PerfConfig;
-use databend_common_base::runtime::PerfEvent;
 use parking_lot::Mutex;
 
 use crate::statistics::data_cache_statistics::DataCacheMetrics;
@@ -100,14 +99,6 @@ pub trait TableContextPerf: Send + Sync {
     }
 
     fn set_nodes_perf(&self, _node: String, _perf: String) {
-        unimplemented!()
-    }
-
-    fn get_perf_events(&self) -> Vec<Vec<PerfEvent>> {
-        unimplemented!()
-    }
-
-    fn set_perf_events(&self, _event_groups: Vec<Vec<PerfEvent>>) {
         unimplemented!()
     }
 

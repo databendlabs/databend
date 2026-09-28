@@ -34,7 +34,6 @@ use databend_common_base::base::Version;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::PerfConfig;
-use databend_common_base::runtime::PerfEvent;
 use databend_common_catalog::BasicColumnStatistics;
 use databend_common_catalog::TableStatistics;
 use databend_common_catalog::catalog::Catalog;
@@ -2007,12 +2006,6 @@ impl TableContextPerf for LiteTableContext {
     }
 
     fn set_nodes_perf(&self, _node: String, _perf: String) {}
-
-    fn get_perf_events(&self) -> Vec<Vec<PerfEvent>> {
-        vec![]
-    }
-
-    fn set_perf_events(&self, _event_groups: Vec<Vec<PerfEvent>>) {}
 
     fn get_running_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
         vec![]

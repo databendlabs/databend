@@ -1463,7 +1463,6 @@ Explain {
         mode: Cpu,
         format: Html,
         limit: None,
-        event_groups: [],
     },
     options: (
         None,
@@ -1550,213 +1549,6 @@ Explain {
 
 
 ---------- Input ----------
-explain perf (events='cycles,instructions') select a from b;
----------- Output ---------
-EXPLAIN PERF CPU (events='cycles,instructions') SELECT a FROM b
----------- AST ------------
-Explain {
-    kind: Perf {
-        mode: Cpu,
-        format: Html,
-        limit: None,
-        event_groups: [
-            [
-                "cycles",
-            ],
-            [
-                "instructions",
-            ],
-        ],
-    },
-    options: (
-        None,
-        [],
-    ),
-    query: Query(
-        Query {
-            span: Some(
-                44..59,
-            ),
-            with: None,
-            body: Select(
-                SelectStmt {
-                    span: Some(
-                        44..59,
-                    ),
-                    hints: None,
-                    distinct: false,
-                    top_n: None,
-                    select_list: [
-                        AliasedExpr {
-                            expr: ColumnRef {
-                                span: Some(
-                                    51..52,
-                                ),
-                                column: ColumnRef {
-                                    database: None,
-                                    table: None,
-                                    column: Name(
-                                        Identifier {
-                                            span: Some(
-                                                51..52,
-                                            ),
-                                            name: "a",
-                                            quote: None,
-                                            ident_type: None,
-                                        },
-                                    ),
-                                },
-                            },
-                            alias: None,
-                        },
-                    ],
-                    from: [
-                        Table {
-                            span: Some(
-                                58..59,
-                            ),
-                            table: TableRef {
-                                catalog: None,
-                                database: None,
-                                table: Identifier {
-                                    span: Some(
-                                        58..59,
-                                    ),
-                                    name: "b",
-                                    quote: None,
-                                    ident_type: None,
-                                },
-                                branch: None,
-                            },
-                            alias: None,
-                            temporal: None,
-                            with_options: None,
-                            pivot: None,
-                            unpivot: None,
-                            sample: None,
-                        },
-                    ],
-                    selection: None,
-                    group_by: None,
-                    having: None,
-                    window_list: None,
-                    qualify: None,
-                },
-            ),
-            order_by: [],
-            limit: [],
-            offset: None,
-            ignore_result: false,
-        },
-    ),
-}
-
-
----------- Input ----------
-explain perf (events='cycles+instructions,branch-misses') select a from b;
----------- Output ---------
-EXPLAIN PERF CPU (events='cycles+instructions,branch-misses') SELECT a FROM b
----------- AST ------------
-Explain {
-    kind: Perf {
-        mode: Cpu,
-        format: Html,
-        limit: None,
-        event_groups: [
-            [
-                "cycles",
-                "instructions",
-            ],
-            [
-                "branch-misses",
-            ],
-        ],
-    },
-    options: (
-        None,
-        [],
-    ),
-    query: Query(
-        Query {
-            span: Some(
-                58..73,
-            ),
-            with: None,
-            body: Select(
-                SelectStmt {
-                    span: Some(
-                        58..73,
-                    ),
-                    hints: None,
-                    distinct: false,
-                    top_n: None,
-                    select_list: [
-                        AliasedExpr {
-                            expr: ColumnRef {
-                                span: Some(
-                                    65..66,
-                                ),
-                                column: ColumnRef {
-                                    database: None,
-                                    table: None,
-                                    column: Name(
-                                        Identifier {
-                                            span: Some(
-                                                65..66,
-                                            ),
-                                            name: "a",
-                                            quote: None,
-                                            ident_type: None,
-                                        },
-                                    ),
-                                },
-                            },
-                            alias: None,
-                        },
-                    ],
-                    from: [
-                        Table {
-                            span: Some(
-                                72..73,
-                            ),
-                            table: TableRef {
-                                catalog: None,
-                                database: None,
-                                table: Identifier {
-                                    span: Some(
-                                        72..73,
-                                    ),
-                                    name: "b",
-                                    quote: None,
-                                    ident_type: None,
-                                },
-                                branch: None,
-                            },
-                            alias: None,
-                            temporal: None,
-                            with_options: None,
-                            pivot: None,
-                            unpivot: None,
-                            sample: None,
-                        },
-                    ],
-                    selection: None,
-                    group_by: None,
-                    having: None,
-                    window_list: None,
-                    qualify: None,
-                },
-            ),
-            order_by: [],
-            limit: [],
-            offset: None,
-            ignore_result: false,
-        },
-    ),
-}
-
-
----------- Input ----------
 explain perf cpu select a from b;
 ---------- Output ---------
 EXPLAIN PERF CPU SELECT a FROM b
@@ -1766,7 +1558,6 @@ Explain {
         mode: Cpu,
         format: Html,
         limit: None,
-        event_groups: [],
     },
     options: (
         None,
@@ -1853,106 +1644,6 @@ Explain {
 
 
 ---------- Input ----------
-explain perf cpu (events='cycles') select a from b;
----------- Output ---------
-EXPLAIN PERF CPU (events='cycles') SELECT a FROM b
----------- AST ------------
-Explain {
-    kind: Perf {
-        mode: Cpu,
-        format: Html,
-        limit: None,
-        event_groups: [
-            [
-                "cycles",
-            ],
-        ],
-    },
-    options: (
-        None,
-        [],
-    ),
-    query: Query(
-        Query {
-            span: Some(
-                35..50,
-            ),
-            with: None,
-            body: Select(
-                SelectStmt {
-                    span: Some(
-                        35..50,
-                    ),
-                    hints: None,
-                    distinct: false,
-                    top_n: None,
-                    select_list: [
-                        AliasedExpr {
-                            expr: ColumnRef {
-                                span: Some(
-                                    42..43,
-                                ),
-                                column: ColumnRef {
-                                    database: None,
-                                    table: None,
-                                    column: Name(
-                                        Identifier {
-                                            span: Some(
-                                                42..43,
-                                            ),
-                                            name: "a",
-                                            quote: None,
-                                            ident_type: None,
-                                        },
-                                    ),
-                                },
-                            },
-                            alias: None,
-                        },
-                    ],
-                    from: [
-                        Table {
-                            span: Some(
-                                49..50,
-                            ),
-                            table: TableRef {
-                                catalog: None,
-                                database: None,
-                                table: Identifier {
-                                    span: Some(
-                                        49..50,
-                                    ),
-                                    name: "b",
-                                    quote: None,
-                                    ident_type: None,
-                                },
-                                branch: None,
-                            },
-                            alias: None,
-                            temporal: None,
-                            with_options: None,
-                            pivot: None,
-                            unpivot: None,
-                            sample: None,
-                        },
-                    ],
-                    selection: None,
-                    group_by: None,
-                    having: None,
-                    window_list: None,
-                    qualify: None,
-                },
-            ),
-            order_by: [],
-            limit: [],
-            offset: None,
-            ignore_result: false,
-        },
-    ),
-}
-
-
----------- Input ----------
 explain perf memory select a from b;
 ---------- Output ---------
 EXPLAIN PERF MEMORY SELECT a FROM b
@@ -1962,7 +1653,6 @@ Explain {
         mode: Memory,
         format: Html,
         limit: None,
-        event_groups: [],
     },
     options: (
         None,
@@ -2058,7 +1748,6 @@ Explain {
         mode: Cpu,
         format: Table,
         limit: None,
-        event_groups: [],
     },
     options: (
         None,
@@ -2145,9 +1834,9 @@ Explain {
 
 
 ---------- Input ----------
-explain perf cpu (events='cycles', format='folded', limit='20') select a from b;
+explain perf cpu (format='folded', limit=20) select a from b;
 ---------- Output ---------
-EXPLAIN PERF CPU (events='cycles', format='folded', limit='20') SELECT a FROM b
+EXPLAIN PERF CPU (format='folded', limit=20) SELECT a FROM b
 ---------- AST ------------
 Explain {
     kind: Perf {
@@ -2156,11 +1845,6 @@ Explain {
         limit: Some(
             20,
         ),
-        event_groups: [
-            [
-                "cycles",
-            ],
-        ],
     },
     options: (
         None,
@@ -2169,13 +1853,13 @@ Explain {
     query: Query(
         Query {
             span: Some(
-                64..79,
+                45..60,
             ),
             with: None,
             body: Select(
                 SelectStmt {
                     span: Some(
-                        64..79,
+                        45..60,
                     ),
                     hints: None,
                     distinct: false,
@@ -2184,7 +1868,7 @@ Explain {
                         AliasedExpr {
                             expr: ColumnRef {
                                 span: Some(
-                                    71..72,
+                                    52..53,
                                 ),
                                 column: ColumnRef {
                                     database: None,
@@ -2192,7 +1876,7 @@ Explain {
                                     column: Name(
                                         Identifier {
                                             span: Some(
-                                                71..72,
+                                                52..53,
                                             ),
                                             name: "a",
                                             quote: None,
@@ -2207,14 +1891,14 @@ Explain {
                     from: [
                         Table {
                             span: Some(
-                                78..79,
+                                59..60,
                             ),
                             table: TableRef {
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
                                     span: Some(
-                                        78..79,
+                                        59..60,
                                     ),
                                     name: "b",
                                     quote: None,
@@ -2247,9 +1931,9 @@ Explain {
 
 
 ---------- Input ----------
-explain perf memory (format = 'TABLE', limit = '5') select a from b;
+explain perf memory (format = 'TABLE', limit = 5) select a from b;
 ---------- Output ---------
-EXPLAIN PERF MEMORY (format='table', limit='5') SELECT a FROM b
+EXPLAIN PERF MEMORY (format='table', limit=5) SELECT a FROM b
 ---------- AST ------------
 Explain {
     kind: Perf {
@@ -2258,7 +1942,6 @@ Explain {
         limit: Some(
             5,
         ),
-        event_groups: [],
     },
     options: (
         None,
@@ -2267,13 +1950,13 @@ Explain {
     query: Query(
         Query {
             span: Some(
-                52..67,
+                50..65,
             ),
             with: None,
             body: Select(
                 SelectStmt {
                     span: Some(
-                        52..67,
+                        50..65,
                     ),
                     hints: None,
                     distinct: false,
@@ -2282,7 +1965,7 @@ Explain {
                         AliasedExpr {
                             expr: ColumnRef {
                                 span: Some(
-                                    59..60,
+                                    57..58,
                                 ),
                                 column: ColumnRef {
                                     database: None,
@@ -2290,7 +1973,7 @@ Explain {
                                     column: Name(
                                         Identifier {
                                             span: Some(
-                                                59..60,
+                                                57..58,
                                             ),
                                             name: "a",
                                             quote: None,
@@ -2305,14 +1988,14 @@ Explain {
                     from: [
                         Table {
                             span: Some(
-                                66..67,
+                                64..65,
                             ),
                             table: TableRef {
                                 catalog: None,
                                 database: None,
                                 table: Identifier {
                                     span: Some(
-                                        66..67,
+                                        64..65,
                                     ),
                                     name: "b",
                                     quote: None,

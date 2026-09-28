@@ -154,7 +154,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                         mode: ExplainPerfMode::Cpu,
                         format: ExplainPerfFormat::Html,
                         limit: None,
-                        event_groups: vec![],
                     },
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
@@ -3111,7 +3110,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ).parse(i),
         HintPrefix | LParen | FROM => query_statement(i),
         EXPLAIN => rule!(
-            #explain_perf : "`EXPLAIN PERF [CPU | MEMORY] [(events = '<event>,...', format = 'html | table | folded', limit = '<n>')] <statement>`"
+            #explain_perf : "`EXPLAIN PERF [CPU | MEMORY] [(format = 'html | table | folded', limit = <n>)] <statement>`"
             | #explain : "`EXPLAIN [VERBOSE | (<option>, ...)] [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
         ).parse(i),
@@ -6733,17 +6732,21 @@ pub fn explain_option(i: Input) -> IResult<ExplainOption> {
 }
 
 pub fn explain_perf(i: Input) -> IResult<Statement> {
+    enum PerfOption {
+        Format(String),
+        Limit(u64),
+    }
+
     // `FORMAT` and `LIMIT` are reserved keywords, they are not parsed as identifiers.
-    let key = alt((
-        map(rule! { FORMAT | LIMIT }, |token| {
-            token.text().to_lowercase()
+    let option = alt((
+        map(
+            rule! { FORMAT ~ "=" ~ ^#literal_string },
+            |(_, _, format)| PerfOption::Format(format),
+        ),
+        map(rule! { LIMIT ~ "=" ~ ^#literal_u64 }, |(_, _, limit)| {
+            PerfOption::Limit(limit)
         }),
-        map(ident, |key| key.name.to_lowercase()),
     ));
-    let option = map(
-        rule! { #key ~ "=" ~ ^#literal_string },
-        |(key, _, value)| (key, value),
-    );
 
     map_res(
         rule! {
@@ -6755,48 +6758,28 @@ pub fn explain_perf(i: Input) -> IResult<Statement> {
                 _ => ExplainPerfMode::Cpu,
             };
 
-            let mut event_groups = vec![];
             let mut format = None;
             let mut limit = None;
-            for (key, value) in opt_options.map(|(_, options, _)| options).unwrap_or_default() {
-                match key.as_str() {
-                    "events" if event_groups.is_empty() => {
-                        event_groups = value
-                            .split(',')
-                            .map(|group| {
-                                group
-                                    .split('+')
-                                    .map(|s| s.trim().to_string())
-                                    .filter(|s| !s.is_empty())
-                                    .collect::<Vec<_>>()
-                            })
-                            .filter(|g| !g.is_empty())
-                            .collect();
-                    }
-                    "format" if format.is_none() => {
+            for option in opt_options.map(|(_, options, _)| options).unwrap_or_default() {
+                match option {
+                    PerfOption::Format(value) if format.is_none() => {
                         format = Some(ExplainPerfFormat::from_name(&value).ok_or_else(|| {
                             nom::Err::Failure(ErrorKind::other(
                                 "expected 'html', 'table' or 'folded' as the format of EXPLAIN PERF",
                             ))
                         })?);
                     }
-                    "limit" if limit.is_none() => {
-                        limit = Some(value.trim().parse::<u64>().ok().filter(|x| *x > 0).ok_or_else(
-                            || {
-                                nom::Err::Failure(ErrorKind::other(
-                                    "expected a positive integer as the limit of EXPLAIN PERF",
-                                ))
-                            },
-                        )?);
-                    }
-                    "events" | "format" | "limit" => {
-                        return Err(nom::Err::Failure(ErrorKind::other(
-                            "duplicate option of EXPLAIN PERF",
-                        )));
+                    PerfOption::Limit(value) if limit.is_none() => {
+                        if value == 0 {
+                            return Err(nom::Err::Failure(ErrorKind::other(
+                                "expected a positive integer as the limit of EXPLAIN PERF",
+                            )));
+                        }
+                        limit = Some(value);
                     }
                     _ => {
                         return Err(nom::Err::Failure(ErrorKind::other(
-                            "expected 'events', 'format' or 'limit' as the option key for EXPLAIN PERF",
+                            "duplicate option of EXPLAIN PERF",
                         )));
                     }
                 }
@@ -6807,7 +6790,6 @@ pub fn explain_perf(i: Input) -> IResult<Statement> {
                     mode,
                     format: format.unwrap_or_default(),
                     limit,
-                    event_groups,
                 },
                 options: Default::default(),
                 query: Box::new(statement.stmt),

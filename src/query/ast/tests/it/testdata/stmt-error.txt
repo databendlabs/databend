@@ -30,33 +30,32 @@ error:
   | ^^^^^^^
   | |
   | expected 'html', 'table' or 'folded' as the format of EXPLAIN PERF
-  | while parsing `EXPLAIN PERF [CPU | MEMORY] [(events = '<event>,...', format = 'html | table | folded', limit = '<n>')] <statement>`
+  | while parsing `EXPLAIN PERF [CPU | MEMORY] [(format = 'html | table | folded', limit = <n>)] <statement>`
 
 
 ---------- Input ----------
-explain perf memory (limit='0') select a from b
+explain perf memory (limit=0) select a from b
 ---------- Output ---------
 error: 
   --> SQL:1:1
   |
-1 | explain perf memory (limit='0') select a from b
+1 | explain perf memory (limit=0) select a from b
   | ^^^^^^^
   | |
   | expected a positive integer as the limit of EXPLAIN PERF
-  | while parsing `EXPLAIN PERF [CPU | MEMORY] [(events = '<event>,...', format = 'html | table | folded', limit = '<n>')] <statement>`
+  | while parsing `EXPLAIN PERF [CPU | MEMORY] [(format = 'html | table | folded', limit = <n>)] <statement>`
 
 
 ---------- Input ----------
-explain perf (depth='3') select a from b
+explain perf (limit='3') select a from b
 ---------- Output ---------
 error: 
-  --> SQL:1:1
+  --> SQL:1:21
   |
-1 | explain perf (depth='3') select a from b
-  | ^^^^^^^
-  | |
-  | expected 'events', 'format' or 'limit' as the option key for EXPLAIN PERF
-  | while parsing `EXPLAIN PERF [CPU | MEMORY] [(events = '<event>,...', format = 'html | table | folded', limit = '<n>')] <statement>`
+1 | explain perf (limit='3') select a from b
+  | -------             ^^^ unexpected `'3'`, expecting <LiteralInteger> or <MySQLLiteralHex>
+  | |                    
+  | while parsing `EXPLAIN PERF [CPU | MEMORY] [(format = 'html | table | folded', limit = <n>)] <statement>`
 
 
 ---------- Input ----------
@@ -69,7 +68,7 @@ error:
   | ^^^^^^^
   | |
   | duplicate option of EXPLAIN PERF
-  | while parsing `EXPLAIN PERF [CPU | MEMORY] [(events = '<event>,...', format = 'html | table | folded', limit = '<n>')] <statement>`
+  | while parsing `EXPLAIN PERF [CPU | MEMORY] [(format = 'html | table | folded', limit = <n>)] <statement>`
 
 
 ---------- Input ----------

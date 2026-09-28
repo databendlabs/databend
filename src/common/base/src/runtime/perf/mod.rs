@@ -13,7 +13,7 @@
 // limitations under the License.
 
 mod cpu_summary;
-mod perf_counters;
+mod perf_config;
 mod query_perf;
 
 pub use cpu_summary::CpuStack;
@@ -22,9 +22,6 @@ pub use cpu_summary::CpuSummaryRow;
 pub use cpu_summary::cpu_folded_stacks;
 pub use cpu_summary::stack_site;
 pub use cpu_summary::summarize_cpu_stacks;
-pub use perf_counters::PerfConfig;
-pub use perf_counters::PerfCounters;
-pub use perf_counters::PerfEvent;
-pub use perf_counters::PerfValue;
+pub use perf_config::PerfConfig;
 pub use query_perf::QueryPerf;
 pub use query_perf::QueryPerfGuard;

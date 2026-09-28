@@ -327,20 +327,17 @@ impl InterpreterFactory {
                 mode: ExplainPerfMode::Cpu,
                 format,
                 limit,
-                event_groups,
             } => Ok(Arc::new(ExplainPerfInterpreter::try_create(
                 sql.clone(),
-                event_groups.clone(),
                 *format,
                 *limit,
                 ctx,
-            )?)),
+            ))),
             Plan::ExplainPerf {
                 sql,
                 mode: ExplainPerfMode::Memory,
                 format,
                 limit,
-                ..
             } => Ok(Arc::new(ExplainMemoryInterpreter::try_create(
                 sql.clone(),
                 *format,

@@ -60,14 +60,6 @@ impl TableContextPerf for QueryContext {
     fn set_nodes_perf(&self, node: String, perf: String) {
         self.shared.set_nodes_perf(node, perf);
     }
-
-    fn get_perf_events(&self) -> Vec<Vec<PerfEvent>> {
-        self.shared.get_perf_events()
-    }
-
-    fn set_perf_events(&self, event_groups: Vec<Vec<PerfEvent>>) {
-        self.shared.set_perf_events(event_groups);
-    }
 }
 
 impl TableContextQueryIdentity for QueryContext {

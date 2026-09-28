@@ -15,7 +15,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::runtime::PerfEvent;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 
@@ -28,7 +27,8 @@ pub struct ExecutorSettings {
     pub enable_queries_executor: bool,
     pub max_execute_time_in_seconds: Duration,
     pub executor_node_id: String,
-    pub perf_event_groups: Vec<Vec<PerfEvent>>,
+    /// The query runs under `EXPLAIN PERF CPU`, its threads are marked for sampling.
+    pub perf_enabled: bool,
 }
 
 impl ExecutorSettings {
@@ -57,7 +57,7 @@ impl ExecutorSettings {
             max_execute_time_in_seconds: Duration::from_secs(max_execute_time_in_seconds),
             max_threads,
             executor_node_id: ctx.get_cluster().local_id.clone(),
-            perf_event_groups: ctx.get_perf_config().event_groups,
+            perf_enabled: ctx.get_perf_config().perf_enabled,
         })
     }
 }

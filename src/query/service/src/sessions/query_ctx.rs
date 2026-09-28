@@ -49,7 +49,6 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::PerfConfig;
-use databend_common_base::runtime::PerfEvent;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -171,7 +170,6 @@ use crate::locks::CoordinationManager;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::processors::transforms::MaterializedCtePayload;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
-use crate::servers::flight::v1::packets::NodePerfCounters;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::ProcessInfo;
@@ -993,18 +991,6 @@ impl QueryContext {
 
     pub fn get_node_peek_memory_usage(&self) -> HashMap<String, usize> {
         self.shared.get_nodes_peek_memory_usage()
-    }
-
-    pub fn set_nodes_perf_counters(&self, node: String, counters: NodePerfCounters) {
-        self.shared.set_nodes_perf_counters(node, counters);
-    }
-
-    pub fn get_nodes_perf_counters(&self) -> HashMap<String, NodePerfCounters> {
-        self.shared.get_nodes_perf_counters()
-    }
-
-    pub fn collect_local_perf_counters(&self, node_id: String) {
-        self.shared.collect_local_perf_counters(node_id);
     }
 
     pub fn clear_table_meta_timestamps_cache(&self) {
