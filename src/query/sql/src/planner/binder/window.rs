@@ -23,6 +23,8 @@ use databend_common_ast::ast::WindowSpec;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::FunctionKind;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::select::SelectList;
@@ -56,12 +58,139 @@ use crate::plans::WindowOrderBy;
 use crate::plans::WindowPartition;
 use crate::plans::walk_expr_mut;
 
+/// Deterministic window inputs available to consumers in the same query block.
+/// Record the final column IDs after WindowGroup input canonicalization.
+#[derive(Default)]
+pub(super) struct WindowInputColumns {
+    scalars: HashMap<ScalarExpr, ScalarExpr>,
+}
+
+impl WindowInputColumns {
+    // Keep this check local to window input reuse: the release branch does not
+    // have ScalarExpr::is_deterministic(), and other expression scopes must not
+    // be reused here even if they contain deterministic scalar functions.
+    fn is_deterministic(expr: &ScalarExpr) -> bool {
+        match expr {
+            ScalarExpr::BoundColumnRef(_)
+            | ScalarExpr::ConstantExpr(_)
+            | ScalarExpr::TypedConstantExpr(_, _) => true,
+            ScalarExpr::FunctionCall(function) => {
+                // This release's get_property() does not inherit alias metadata
+                // (#20255). Query canonical properties without changing global
+                // function resolution or pulling in unrelated planner changes.
+                let name = function.func_name.to_lowercase();
+                let canonical_name = BUILTIN_FUNCTIONS.aliases.get(&name).unwrap_or(&name);
+                // sleep has observable side effects despite its default property.
+                if canonical_name == "sleep" {
+                    return false;
+                }
+                BUILTIN_FUNCTIONS
+                    .get_property(canonical_name)
+                    .is_some_and(|property| {
+                        property.kind != FunctionKind::SRF && !property.non_deterministic
+                    })
+                    && function.arguments.iter().all(Self::is_deterministic)
+            }
+            ScalarExpr::CastExpr(cast) => Self::is_deterministic(&cast.argument),
+            _ => false,
+        }
+    }
+
+    fn extend<'a>(&mut self, items: impl IntoIterator<Item = &'a ScalarItem>) -> Result<()> {
+        for item in items {
+            if matches!(
+                item.scalar,
+                ScalarExpr::FunctionCall(_) | ScalarExpr::CastExpr(_)
+            ) && Self::is_deterministic(&item.scalar)
+            {
+                self.scalars
+                    .entry(item.scalar.clone())
+                    .or_insert(item.bound_column_expr("window_input".to_string())?);
+            }
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod window_input_tests {
+    use super::*;
+    use crate::plans::FunctionCall;
+
+    #[test]
+    fn only_reuse_deterministic_row_local_functions() {
+        let function = |name: &str, arguments| {
+            ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: name.to_string(),
+                params: vec![],
+                arguments,
+            })
+        };
+        let random = function("rand", vec![]);
+        assert!(WindowInputColumns::is_deterministic(&function(
+            "abs",
+            vec![]
+        )));
+        assert!(!WindowInputColumns::is_deterministic(&random));
+        for name in [
+            "sleep",
+            "gen_random_uuid",
+            "uuid",
+            "now",
+            "current_timestamp",
+            "today",
+            "current_date",
+        ] {
+            assert!(
+                !WindowInputColumns::is_deterministic(&function(name, vec![])),
+                "{name}"
+            );
+        }
+        assert!(!WindowInputColumns::is_deterministic(&function(
+            "abs",
+            vec![random]
+        )));
+        assert!(!WindowInputColumns::is_deterministic(&function(
+            "unnest",
+            vec![]
+        )));
+        assert!(!WindowInputColumns::is_deterministic(&function(
+            "unknown_window_input",
+            vec![]
+        )));
+    }
+}
+
+impl VisitorMut<'_> for WindowInputColumns {
+    fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
+        if let Some(column) = self.scalars.get(expr)
+            && column.data_type()? == expr.data_type()?
+        {
+            *expr = column.clone();
+            return Ok(());
+        }
+        // Only rewrite row-local consumers in this query block. Lambdas,
+        // subqueries, aggregates and window functions have separate scopes.
+        match expr {
+            ScalarExpr::FunctionCall(func) => {
+                for argument in &mut func.arguments {
+                    self.visit(argument)?;
+                }
+            }
+            ScalarExpr::CastExpr(cast) => self.visit(&mut cast.argument)?,
+            _ => {}
+        }
+        Ok(())
+    }
+}
+
 impl Binder {
     pub(super) fn bind_window_functions(
         &mut self,
         window_infos: &[WindowFunctionInfo],
         child: SExpr,
-    ) -> Result<SExpr> {
+    ) -> Result<(SExpr, WindowInputColumns)> {
         bind_window_function_infos(&self.ctx, window_infos, child)
     }
 
@@ -691,17 +820,30 @@ pub fn bind_window_function_info(
     ))
 }
 
-pub fn bind_window_function_infos(
+fn bind_window_function_infos(
     ctx: &Arc<dyn TableContext>,
     window_infos: &[WindowFunctionInfo],
     child: SExpr,
-) -> Result<SExpr> {
+) -> Result<(SExpr, WindowInputColumns)> {
+    let mut inputs = WindowInputColumns::default();
     if window_infos.is_empty() {
-        return Ok(child);
+        return Ok((child, inputs));
     }
 
-    if window_infos.len() == 1 {
-        return bind_window_function_info(ctx, &window_infos[0], child);
+    if let [window] = window_infos {
+        inputs.extend(
+            window
+                .arguments
+                .iter()
+                .chain(&window.partition_by_items)
+                .chain(
+                    window
+                        .order_by_items
+                        .iter()
+                        .map(|order| &order.order_by_item),
+                ),
+        )?;
+        return Ok((bind_window_function_info(ctx, window, child)?, inputs));
     }
 
     let mut groups = Vec::new();
@@ -778,9 +920,15 @@ pub fn bind_window_function_infos(
             .is_none_or(|window| window.partition_by.is_empty())
     });
 
-    Ok(groups.into_iter().fold(child, |child, window_group| {
+    // Prefer the outermost group's result when several groups evaluate the
+    // same expression, so consumers do not retain an earlier duplicate column.
+    for group in groups.iter().rev() {
+        inputs.extend(&group.scalar_items)?;
+    }
+    let child = groups.into_iter().fold(child, |child, window_group| {
         SExpr::create_unary(Arc::new(window_group.into()), Arc::new(child))
-    }))
+    });
+    Ok((child, inputs))
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
