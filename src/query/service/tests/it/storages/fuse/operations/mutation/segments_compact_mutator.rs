@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -49,7 +48,6 @@ use databend_common_storages_fuse::operations::SegmentCompactor;
 use databend_common_storages_fuse::statistics::RowOrientedSegmentBuilder;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
-use databend_common_storages_fuse::statistics::sort_by_cluster_stats;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::sessions::QueryContext;
@@ -112,6 +110,128 @@ async fn test_compact_segment_normal_case() -> anyhow::Result<()> {
     let stream = fixture.execute_query(qry).await?;
     assert_eq!(num_inserts as u64, check_count(stream).await?);
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_compact_segment_limit_selects_newest() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command("create table t(c int) block_per_segment=4")
+        .await?;
+    fixture.append_rows(4).await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_catalog("default").await?;
+    let table = catalog.get_table(&ctx.get_tenant(), "default", "t").await?;
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+    let base = fuse.read_table_snapshot().await?.unwrap();
+    assert_eq!(base.segments.len(), 4);
+
+    let mutator = build_mutator(fuse, ctx, Some(2)).await?.unwrap();
+    let state = mutator.into_compaction_state();
+    assert_eq!(state.new_segment_paths.len(), 1);
+    assert_eq!(state.num_fragments_compacted, 2);
+    assert!(state.replaced_segments.keys().all(|idx| *idx < 2));
+    assert!(state.removed_segment_indexes.iter().all(|idx| *idx < 2));
+    assert_eq!(&state.segments_locations[1..], &base.segments[2..]);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_compact_segment_limit_does_not_read_older_segments() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let thresholds = BlockThresholds {
+        block_per_segment: 4,
+        ..Default::default()
+    };
+    let (locations, _, _) = CompactSegmentTestFixture::gen_segments(
+        ctx.clone(),
+        vec![1, 1, 1],
+        vec![1; 3],
+        thresholds,
+        None,
+        false,
+    )
+    .await?;
+    let mut snapshot_segments = locations.into_iter().rev().collect::<Vec<_>>();
+    let missing_older_location = ("test/nonexistent-segment".to_string(), SegmentInfo::VERSION);
+    snapshot_segments[2] = missing_older_location.clone();
+
+    let dal = ctx.get_application_level_data_operator()?.operator();
+    let schema = TestFixture::default_table_schema();
+    let segment_io = SegmentsIO::create(ctx.clone(), dal.clone(), schema);
+    let locations = TableMetaLocationGenerator::new("test/".to_owned());
+    let compactor = SegmentCompactor::new(
+        thresholds.block_per_segment as u64,
+        None,
+        4,
+        &segment_io,
+        &dal,
+        &locations,
+        TestFixture::default_table_meta_timestamps(),
+    );
+    let state = compactor
+        .compact(&snapshot_segments, Some(2), |_| {})
+        .await?;
+    assert_eq!(state.num_fragments_compacted, 2);
+    assert_eq!(
+        state.segments_locations.last(),
+        Some(&missing_older_location)
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_compact_segment_rejects_inconsistent_block_counts() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let dal = ctx.get_application_level_data_operator()?.operator();
+    let thresholds = BlockThresholds {
+        block_per_segment: 4,
+        ..Default::default()
+    };
+
+    for incorrect_count in [0, 2] {
+        let (locations, _, mut segments) = CompactSegmentTestFixture::gen_segments(
+            ctx.clone(),
+            vec![1, 1],
+            vec![1, 1],
+            thresholds,
+            None,
+            false,
+        )
+        .await?;
+        segments[0].summary.block_count = incorrect_count;
+        segments[0].write_meta(&dal, &locations[0].0).await?;
+
+        let segment_io = SegmentsIO::create(
+            ctx.clone(),
+            dal.clone(),
+            TestFixture::default_table_schema(),
+        );
+        let location_gen = TableMetaLocationGenerator::new("test/".to_owned());
+        let compactor = SegmentCompactor::new(
+            thresholds.block_per_segment as u64,
+            None,
+            4,
+            &segment_io,
+            &dal,
+            &location_gen,
+            TestFixture::default_table_meta_timestamps(),
+        );
+        let snapshot_segments = locations.into_iter().rev().collect::<Vec<_>>();
+        let result = compactor.compact(&snapshot_segments, None, |_| {}).await;
+        assert!(result.is_err(), "inconsistent count: {incorrect_count}");
+        assert!(
+            result
+                .err()
+                .expect("compaction should reject inconsistent block counts")
+                .to_string()
+                .contains("blocks in its summary")
+        );
+    }
     Ok(())
 }
 
@@ -555,7 +675,7 @@ async fn test_segment_compactor() -> anyhow::Result<()> {
             // input segments
             blocks_number_of_input_segments: vec![1, 2, 3, 2, 3],
             expected_number_of_output_segments: 4,
-            expected_block_number_of_new_segments: vec![2 + 3],
+            expected_block_number_of_new_segments: vec![1 + 2],
             case_name,
         };
 
@@ -568,7 +688,7 @@ async fn test_segment_compactor() -> anyhow::Result<()> {
             // input segments
             blocks_number_of_input_segments: vec![1, 2, 3, 2, 3],
             expected_number_of_output_segments: 4,
-            expected_block_number_of_new_segments: vec![2 + 3],
+            expected_block_number_of_new_segments: vec![1 + 2],
             case_name,
         };
 
@@ -757,15 +877,11 @@ impl CompactSegmentTestFixture {
             merge_statistics_mut(&mut summary, &segment.summary, cluster_key_info.as_ref());
         }
         self.input_blocks = blocks;
-        let limit = limit.unwrap_or(usize::MAX);
-        let num_locations = locations.len();
-        let reverse_locations = locations
-            .into_iter()
-            .enumerate()
-            .map(|(idx, location)| (num_locations - idx - 1, location))
-            .collect();
+        // The input is in snapshot order (newest first); gen_segments writes
+        // locations oldest first so reverse them before selecting the window.
+        let snapshot_segments = locations.into_iter().rev().collect::<Vec<_>>();
         let state = seg_acc
-            .compact(reverse_locations, limit, |status| {
+            .compact(&snapshot_segments, limit, |status| {
                 self.ctx.set_status_info(&status);
             })
             .await?;
@@ -1098,7 +1214,7 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
 
         // setup & run
         let rows_per_block = vec![1; block_number_of_segments.len()];
-        let (locations, _, mut segments) = CompactSegmentTestFixture::gen_segments(
+        let (locations, _, segments) = CompactSegmentTestFixture::gen_segments(
             ctx.clone(),
             block_number_of_segments,
             rows_per_block,
@@ -1126,31 +1242,18 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
             &location_gen,
             TestFixture::default_table_meta_timestamps(),
         );
-        let num_locations = locations.len();
-        let reverse_locations = locations
-            .into_iter()
-            .enumerate()
-            .map(|(idx, location)| (num_locations - idx - 1, location))
-            .collect();
+        let snapshot_segments = locations.into_iter().rev().collect::<Vec<_>>();
         let state = seg_acc
-            .compact(reverse_locations, limit, |status| {
+            .compact(&snapshot_segments, Some(limit), |status| {
                 ctx.set_status_info(&status);
             })
             .await?;
 
+        // A cluster key must not reorder the original blocks, even when a
+        // limit selects only part of the snapshot.
         let mut input_block_id = Vec::with_capacity(number_of_blocks);
-        for chunks in segments.chunks_mut(chunk_size) {
-            chunks.sort_by(|a, b| {
-                sort_by_cluster_stats(
-                    a.summary.cluster_stats.as_ref(),
-                    b.summary.cluster_stats.as_ref(),
-                    cluster_key_id,
-                )
-            });
-
-            chunks
-                .iter()
-                .for_each(|v| input_block_id.extend(v.blocks.iter().map(|b| b.location.clone())));
+        for segment in &segments {
+            input_block_id.extend(segment.blocks.iter().map(|b| b.location.clone()));
         }
 
         eprintln!(
@@ -1178,15 +1281,7 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
             output_block_id.extend(segment.blocks.iter().map(|b| b.location.clone()));
         }
 
-        if limit > chunk_size {
-            // check the block order.
-            assert_eq!(input_block_id, output_block_id);
-        } else {
-            // The scene is complex, skipping check order.
-            let input_block_id: HashSet<Location> = HashSet::from_iter(input_block_id);
-            let output_block_id: HashSet<Location> = HashSet::from_iter(output_block_id);
-            assert_eq!(input_block_id, output_block_id);
-        }
+        assert_eq!(input_block_id, output_block_id);
         assert_eq!(summary, statistics_of_segments);
     }
 

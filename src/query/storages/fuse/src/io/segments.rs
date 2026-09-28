@@ -53,6 +53,18 @@ impl SegmentsIO {
         }
     }
 
+    pub(crate) fn schema(&self) -> &TableSchemaRef {
+        &self.schema
+    }
+
+    pub(crate) fn compact_read_concurrency(&self, max_in_flight: usize) -> Result<usize> {
+        Ok(
+            (self.ctx.get_settings().get_max_storage_io_requests()? as usize)
+                .max(1)
+                .min(max_in_flight.max(1)),
+        )
+    }
+
     // Read one segment file by location.
     #[async_backtrace::framed]
     pub async fn read_compact_segment(
