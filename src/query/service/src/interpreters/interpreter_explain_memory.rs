@@ -25,8 +25,6 @@ use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::SAMPLE_INTERVAL;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::alloc_flamegraph;
-use databend_common_base::runtime::alloc_folded_stacks;
-use databend_common_base::runtime::prefix_folded_by_node;
 use databend_common_base::runtime::summarize_alloc_stacks;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -63,8 +61,6 @@ pub struct ExplainMemoryInterpreter {
 const HTML_SITES_PER_PLAN: usize = 5;
 /// The allocation sites per plan node in the `table` format by default.
 const DEFAULT_TABLE_LIMIT: usize = 5;
-/// The stacks in the `folded` format by default.
-const DEFAULT_FOLDED_LIMIT: usize = 100;
 
 impl ExplainMemoryInterpreter {
     pub fn try_create(
@@ -115,10 +111,6 @@ impl ExplainMemoryInterpreter {
             ExplainPerfFormat::Table => {
                 let limit = self.limit.map_or(DEFAULT_TABLE_LIMIT, |x| x as usize);
                 table_block(&nodes, limit)
-            }
-            ExplainPerfFormat::Folded => {
-                let limit = self.limit.map_or(DEFAULT_FOLDED_LIMIT, |x| x as usize);
-                folded_block(nodes, limit)
             }
         };
         Ok(vec![block])
@@ -198,8 +190,10 @@ fn table_block(nodes: &[(String, Vec<AllocStack>)], limit: usize) -> DataBlock {
             "Estimated from one sample every ~{} allocated, summed over the nodes {sampled_nodes}. \
              bytes is the allocation volume, including memory freed soon after, not the memory \
              alive at a given moment. share is of all bytes for 'plan' rows and of the plan node \
-             for 'site' rows. A site is the innermost Databend function of the call stacks. Up to \
-             {limit} sites per plan node.",
+             for 'site' rows. A site is the innermost Databend function of the call stacks, path \
+             its Databend callers (innermost first) on the call path with the most bytes, with \
+             the share of the site when it is reached through other paths too. Up to {limit} \
+             sites per plan node.",
             convert_byte_size(SAMPLE_INTERVAL as f64),
         )),
         _ => None,
@@ -209,6 +203,7 @@ fn table_block(nodes: &[(String, Vec<AllocStack>)], limit: usize) -> DataBlock {
         StringType::from_data(rows.iter().map(|x| x.level.as_str().to_string()).collect()),
         StringType::from_opt_data(rows.iter().map(|x| x.plan_node.clone()).collect()),
         StringType::from_opt_data(rows.iter().map(|x| x.site.clone()).collect()),
+        StringType::from_opt_data(rows.iter().map(|x| x.path.clone()).collect()),
         UInt64Type::from_data(rows.iter().map(|x| x.bytes).collect()),
         UInt64Type::from_data(rows.iter().map(|x| x.samples).collect()),
         Float64Type::from_data(rows.iter().map(|x| x.share).collect()),
@@ -218,25 +213,6 @@ fn table_block(nodes: &[(String, Vec<AllocStack>)], limit: usize) -> DataBlock {
                 .collect(),
         ),
         StringType::from_opt_data(rows.iter().map(|x| note(x.level)).collect()),
-    ])
-}
-
-/// Folded stacks rooted at the node, then the plan node.
-fn folded_block(nodes: Vec<(String, Vec<AllocStack>)>, limit: usize) -> DataBlock {
-    let nodes = nodes
-        .into_iter()
-        .map(|(node, stacks)| (node, alloc_folded_stacks(&stacks, None)))
-        .collect();
-    let lines = prefix_folded_by_node(nodes, Some(limit));
-    DataBlock::new_from_columns(vec![
-        StringType::from_data(lines.iter().map(|(stack, _)| stack.clone()).collect()),
-        UInt64Type::from_data(lines.iter().map(|(_, bytes)| *bytes).collect()),
-        UInt64Type::from_data(
-            lines
-                .iter()
-                .map(|(_, bytes)| bytes / SAMPLE_INTERVAL as u64)
-                .collect(),
-        ),
     ])
 }
 

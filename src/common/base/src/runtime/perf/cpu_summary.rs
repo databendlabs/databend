@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Tabular and folded views of the CPU samples of `EXPLAIN PERF CPU`.
+//! Tabular views of the CPU samples of `EXPLAIN PERF CPU`.
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -28,7 +28,7 @@ pub struct CpuStack {
     pub samples: u64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CpuSummaryLevel {
     Summary,
     /// A function, ranked by the samples in the function itself.
@@ -54,6 +54,8 @@ pub struct CpuSummaryRow {
     pub level: CpuSummaryLevel,
     /// `None` for the summary row.
     pub function: Option<String>,
+    /// The heaviest call path to the function, see [`heaviest_path`]. `None` for the summary row.
+    pub path: Option<String>,
     pub self_samples: u64,
     pub total_samples: u64,
     /// The share of all samples by the self samples.
@@ -65,35 +67,87 @@ pub fn is_databend_frame(frame: &str) -> bool {
     frame.trim_start_matches('<').starts_with("databend_")
 }
 
-/// The site of a stack in summaries: its innermost Databend frame, which tells which Databend
-/// code runs the standard library and third party code above it. Falls back to the innermost
-/// frame when the stack has no Databend frame. `frames` are outermost first.
-pub fn stack_site(frames: &[String]) -> Option<&str> {
+/// The index of the site of a stack in summaries: its innermost Databend frame, which tells which
+/// Databend code runs the standard library and third party code above it. Falls back to the
+/// innermost frame when the stack has no Databend frame. `frames` are outermost first.
+pub(crate) fn site_index(frames: &[String]) -> Option<usize> {
     frames
         .iter()
-        .rev()
-        .find(|frame| is_databend_frame(frame))
-        .or(frames.last())
-        .map(String::as_str)
+        .rposition(|frame| is_databend_frame(frame))
+        .or(frames.len().checked_sub(1))
+}
+
+/// The number of Databend callers in the path of a summary row.
+pub const PATH_DEPTH: usize = 3;
+
+/// The Databend callers of `frames[index]`, innermost first and at most [`PATH_DEPTH`], joined by
+/// ` <- `. Callers repeating the function or the previous caller, e.g. recursion, are skipped.
+pub(crate) fn caller_path(frames: &[String], index: usize) -> String {
+    let function = frames[index].as_str();
+    let mut callers: Vec<&str> = Vec::with_capacity(PATH_DEPTH);
+    for frame in frames[..index].iter().rev() {
+        if callers.len() == PATH_DEPTH {
+            break;
+        }
+        if is_databend_frame(frame) && frame != function && callers.last() != Some(&frame.as_str())
+        {
+            callers.push(frame);
+        }
+    }
+    callers.join(" <- ")
+}
+
+/// The call path with the most weight among the `paths` of a row, followed by its share of the
+/// row when the row is reached through other paths too. `None` without callers.
+pub(crate) fn heaviest_path(paths: &HashMap<String, u64>) -> Option<String> {
+    let total = paths.values().sum::<u64>();
+    let (path, weight) = paths
+        .iter()
+        .max_by(|left, right| left.1.cmp(right.1).then_with(|| right.0.cmp(left.0)))?;
+    if path.is_empty() {
+        return None;
+    }
+    match *weight < total {
+        true => Some(format!(
+            "{path} ({:.0}% of the row)",
+            *weight as f64 * 100.0 / total as f64
+        )),
+        false => Some(path.clone()),
+    }
 }
 
 /// Summarizes `stacks` into a summary row, the `limit` functions with the most self samples, and
-/// the `limit` sites with the most self samples, see [`stack_site`].
+/// the `limit` sites with the most self samples, see [`site_index`].
 ///
 /// The function rows show the leaf code that burns the CPU, often the standard library. The site
 /// rows attribute the same samples to the Databend code running it. The total samples of a row
-/// include the callees of its function. Call paths are shown by the folded stacks.
+/// include the callees of its function. The path of a row is its heaviest chain of Databend
+/// callers, see [`caller_path`].
 pub fn summarize_cpu_stacks(stacks: &[CpuStack], limit: usize) -> Vec<CpuSummaryRow> {
     let all = stacks.iter().map(|stack| stack.samples).sum::<u64>();
 
     let mut functions: HashMap<&str, (u64, u64)> = HashMap::new();
     let mut sites: HashMap<&str, u64> = HashMap::new();
+    let mut paths: HashMap<(CpuSummaryLevel, &str), HashMap<String, u64>> = HashMap::new();
     for stack in stacks {
         if let Some(leaf) = stack.frames.last() {
             functions.entry(leaf).or_default().0 += stack.samples;
+            let path = caller_path(&stack.frames, stack.frames.len() - 1);
+            *paths
+                .entry((CpuSummaryLevel::Function, leaf))
+                .or_default()
+                .entry(path)
+                .or_default() += stack.samples;
         }
-        if let Some(site) = stack_site(&stack.frames) {
+        if let Some(index) = site_index(&stack.frames) {
+            let site = stack.frames[index].as_str();
             *sites.entry(site).or_default() += stack.samples;
+            let path = caller_path(&stack.frames, index);
+            *paths
+                .entry((CpuSummaryLevel::Site, site))
+                .or_default()
+                .entry(path)
+                .or_default() += stack.samples;
         }
 
         // A recursive function is counted once per stack.
@@ -109,6 +163,7 @@ pub fn summarize_cpu_stacks(stacks: &[CpuStack], limit: usize) -> Vec<CpuSummary
     let mut rows = vec![CpuSummaryRow {
         level: CpuSummaryLevel::Summary,
         function: None,
+        path: None,
         self_samples: all,
         total_samples: all,
         share: 1.0,
@@ -132,6 +187,7 @@ pub fn summarize_cpu_stacks(stacks: &[CpuStack], limit: usize) -> Vec<CpuSummary
                 .map(|(function, self_samples)| CpuSummaryRow {
                     level,
                     function: Some(function.to_string()),
+                    path: paths.get(&(level, *function)).and_then(heaviest_path),
                     self_samples: *self_samples,
                     total_samples: functions.get(function).map_or(0, |x| x.1),
                     share: share(*self_samples),
@@ -141,9 +197,9 @@ pub fn summarize_cpu_stacks(stacks: &[CpuStack], limit: usize) -> Vec<CpuSummary
     rows
 }
 
-/// Folds `stacks` into `thread;frame;...;frame` lines with their samples, the largest `limit`
-/// stacks first.
-pub fn cpu_folded_stacks(stacks: &[CpuStack], limit: Option<usize>) -> Vec<(String, u64)> {
+/// Folds `stacks` into `thread;frame;...;frame` lines with their samples, the input of the
+/// flamegraph, the largest `limit` stacks first.
+fn cpu_folded_stacks(stacks: &[CpuStack], limit: Option<usize>) -> Vec<(String, u64)> {
     // `;` separates frames in the folded format, it appears in Rust types such as `[u8; 8]`.
     let sanitize = |frame: &str| frame.replace(';', ",");
 
@@ -193,25 +249,6 @@ impl PerfSamples {
     pub fn is_empty(&self) -> bool {
         self.cpu.is_empty() && self.memory.is_empty()
     }
-}
-
-/// Prefixes the folded stacks of each node with the node id, the largest `limit` stacks first.
-pub fn prefix_folded_by_node(
-    nodes: Vec<(String, Vec<(String, u64)>)>,
-    limit: Option<usize>,
-) -> Vec<(String, u64)> {
-    let mut lines = nodes
-        .into_iter()
-        .flat_map(|(node, lines)| {
-            let node = node.replace(';', ",");
-            lines
-                .into_iter()
-                .map(move |(stack, value)| (format!("{node};{stack}"), value))
-        })
-        .collect::<Vec<_>>();
-    lines.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
-    lines.truncate(limit.unwrap_or(usize::MAX));
-    lines
 }
 
 #[cfg(test)]
@@ -275,17 +312,53 @@ mod tests {
             // `memcpy` is attributed to the Databend function calling it.
             "site databend_join 3 9 0.25",
         ]);
+
+        let paths = summarize_cpu_stacks(&stacks, 2)
+            .into_iter()
+            .map(|row| row.path)
+            .collect::<Vec<_>>();
+        assert_eq!(paths, vec![
+            None,
+            Some("databend_join".to_string()),
+            // `memcpy` is reached through two paths.
+            Some("databend_join (75% of the row)".to_string()),
+            Some("databend_join".to_string()),
+            // `main` is not a Databend frame.
+            None,
+        ]);
     }
 
     #[test]
-    fn test_stack_site() {
+    fn test_caller_path() {
+        let frames = |frames: &[&str]| frames.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        let stack = frames(&[
+            "main",
+            "databend_a",
+            "databend_b",
+            "databend_b",
+            "std::iter",
+            "databend_c",
+            "databend_d",
+            "databend_d",
+            "memcpy",
+        ]);
+        // Repeated callers and the function itself are skipped, up to `PATH_DEPTH` callers.
+        assert_eq!(
+            caller_path(&stack, 7),
+            "databend_c <- databend_b <- databend_a"
+        );
+        assert_eq!(caller_path(&stack, 1), "");
+    }
+
+    #[test]
+    fn test_site_index() {
         let frames = |frames: &[&str]| frames.iter().map(|x| x.to_string()).collect::<Vec<_>>();
         assert_eq!(
-            stack_site(&frames(&["main", "<databend_join>::probe", "memcpy"])),
-            Some("<databend_join>::probe")
+            site_index(&frames(&["main", "<databend_join>::probe", "memcpy"])),
+            Some(1)
         );
-        assert_eq!(stack_site(&frames(&["main", "memcpy"])), Some("memcpy"));
-        assert_eq!(stack_site(&[]), None);
+        assert_eq!(site_index(&frames(&["main", "memcpy"])), Some(1));
+        assert_eq!(site_index(&[]), None);
     }
 
     #[test]
@@ -301,24 +374,6 @@ mod tests {
             ("worker;main;a".to_string(), 2),
         ]);
         assert_eq!(cpu_folded_stacks(&stacks, Some(1)).len(), 1);
-    }
-
-    #[test]
-    fn test_prefix_folded_by_node() {
-        let lines = prefix_folded_by_node(
-            vec![
-                ("n1".to_string(), vec![("a;b".to_string(), 3)]),
-                ("n2".to_string(), vec![
-                    ("a;c".to_string(), 5),
-                    ("a".to_string(), 1),
-                ]),
-            ],
-            Some(2),
-        );
-        assert_eq!(lines, vec![
-            ("n2;a;c".to_string(), 5),
-            ("n1;a;b".to_string(), 3)
-        ]);
     }
 
     #[test]

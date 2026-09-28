@@ -30,7 +30,9 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 
 use crate::runtime::ThreadTracker;
-use crate::runtime::perf::stack_site;
+use crate::runtime::perf::caller_path;
+use crate::runtime::perf::heaviest_path;
+use crate::runtime::perf::site_index;
 
 /// The average number of allocated bytes between two samples.
 pub const SAMPLE_INTERVAL: usize = 512 * 1024;
@@ -282,6 +284,8 @@ pub struct AllocSummaryRow {
     pub plan_node: Option<String>,
     /// The allocation site, only for [`AllocSummaryLevel::Site`].
     pub site: Option<String>,
+    /// The heaviest call path to the site, only for [`AllocSummaryLevel::Site`].
+    pub path: Option<String>,
     pub bytes: u64,
     pub samples: u64,
     /// The share of all bytes for the summary and plan rows, of the plan node for site rows.
@@ -318,14 +322,13 @@ pub fn plan_label(stack: &AllocStack) -> String {
     }
 }
 
-/// The frame a stack's allocation is attributed to in summaries: the innermost Databend frame,
-/// which is more telling than the containers of the standard library and third party crates.
-pub fn allocation_site(frames: &[String]) -> String {
-    stack_site(frames).unwrap_or_default().to_string()
-}
-
 /// Summarizes `stacks` into a summary row, then for each plan node, from the largest, a plan row
 /// followed by its `sites_per_plan` largest allocation sites.
+///
+/// The site of an allocation is the innermost Databend frame of its stack, which is more telling
+/// than the containers of the standard library and third party crates, see
+/// [`site_index`]. The path of a site row is its heaviest chain of Databend
+/// callers.
 pub fn summarize_alloc_stacks(
     stacks: &[AllocStack],
     sites_per_plan: usize,
@@ -335,11 +338,19 @@ pub fn summarize_alloc_stacks(
 
     let total = stacks.iter().map(|stack| stack.bytes).sum::<u64>();
     // The label identifies the plan node, it contains the plan id and the query id if any.
-    let mut plans: HashMap<String, (u64, HashMap<String, u64>)> = HashMap::new();
+    type Sites = HashMap<String, (u64, HashMap<String, u64>)>;
+    let mut plans: HashMap<String, (u64, Sites)> = HashMap::new();
     for stack in stacks {
         let (bytes, sites) = plans.entry(plan_label(stack)).or_default();
         *bytes += stack.bytes;
-        *sites.entry(allocation_site(&stack.frames)).or_default() += stack.bytes;
+        let Some(index) = site_index(&stack.frames) else {
+            let (site_bytes, _) = sites.entry(String::new()).or_default();
+            *site_bytes += stack.bytes;
+            continue;
+        };
+        let (site_bytes, paths) = sites.entry(stack.frames[index].clone()).or_default();
+        *site_bytes += stack.bytes;
+        *paths.entry(caller_path(&stack.frames, index)).or_default() += stack.bytes;
     }
 
     let mut plans = plans
@@ -352,6 +363,7 @@ pub fn summarize_alloc_stacks(
         level: AllocSummaryLevel::Summary,
         plan_node: None,
         site: None,
+        path: None,
         bytes: total,
         samples: samples(total),
         share: 1.0,
@@ -361,21 +373,23 @@ pub fn summarize_alloc_stacks(
             level: AllocSummaryLevel::Plan,
             plan_node: Some(plan.clone()),
             site: None,
+            path: None,
             bytes: plan_bytes,
             samples: samples(plan_bytes),
             share: share(plan_bytes, total),
         });
 
         let mut sites = sites.into_iter().collect::<Vec<_>>();
-        sites.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
+        sites.sort_by(|left, right| right.1.0.cmp(&left.1.0).then_with(|| left.0.cmp(&right.0)));
         rows.extend(
             sites
                 .into_iter()
                 .take(sites_per_plan)
-                .map(|(site, bytes)| AllocSummaryRow {
+                .map(|(site, (bytes, paths))| AllocSummaryRow {
                     level: AllocSummaryLevel::Site,
                     plan_node: Some(plan.clone()),
                     site: Some(site),
+                    path: heaviest_path(&paths),
                     bytes,
                     samples: samples(bytes),
                     share: share(bytes, plan_bytes),
@@ -386,8 +400,8 @@ pub fn summarize_alloc_stacks(
 }
 
 /// Folds `stacks` into `plan;frame;...;frame` lines rooted at the plan nodes, with their bytes,
-/// the largest `limit` stacks first.
-pub fn alloc_folded_stacks(stacks: &[AllocStack], limit: Option<usize>) -> Vec<(String, u64)> {
+/// the input of the flamegraph, the largest `limit` stacks first.
+fn alloc_folded_stacks(stacks: &[AllocStack], limit: Option<usize>) -> Vec<(String, u64)> {
     // `;` separates frames in the folded format, it appears in Rust types such as `[u8; 8]`.
     let sanitize = |frame: &str| frame.replace(';', ",");
 
@@ -621,6 +635,26 @@ mod tests {
             "plan (no plan node) - 1 0.06",
             "site (no plan node) main 1 1.00",
         ]);
+
+        let paths = rows.into_iter().map(|row| row.path).collect::<Vec<_>>();
+        assert_eq!(paths[2], None);
+        let stacks = vec![
+            stack(
+                Some((3, "HashJoin")),
+                &["databend_query::join::probe", "databend_query::join::build"],
+                3,
+            ),
+            stack(
+                Some((3, "HashJoin")),
+                &["databend_query::join::spill", "databend_query::join::build"],
+                1,
+            ),
+        ];
+        let rows = summarize_alloc_stacks(&stacks, 1);
+        assert_eq!(
+            rows[2].path.as_deref(),
+            Some("databend_query::join::probe (75% of the row)")
+        );
     }
 
     #[test]

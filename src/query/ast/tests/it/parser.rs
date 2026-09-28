@@ -129,7 +129,7 @@ fn test_statement() {
         r#"explain perf cpu select a from b;"#,
         r#"explain perf memory select a from b;"#,
         r#"explain perf (format='table') select a from b;"#,
-        r#"explain perf cpu (format='folded', limit=20) select a from b;"#,
+        r#"explain perf cpu (format='table', limit=20) select a from b;"#,
         r#"explain perf memory (format = 'TABLE', limit = 5) select a from b;"#,
         r#"explain analyze select * from t;"#,
         r#"describe a;"#,
@@ -1244,7 +1244,7 @@ fn test_statement_error() {
         r#"explain perf (format='xml') select a from b"#,
         r#"explain perf memory (limit=0) select a from b"#,
         r#"explain perf (limit='3') select a from b"#,
-        r#"explain perf (format='table', format='folded') select a from b"#,
+        r#"explain perf (format='table', format='html') select a from b"#,
         // REFRESH_MODE is no longer a dynamic table option.
         r#"CREATE DYNAMIC TABLE dt REFRESH_MODE = FULL AS SELECT id FROM a"#,
         r#"create table a (c float(10))"#,

@@ -9,3 +9,6 @@ explain perf cpu (format='table', limit=3) select sum(number) from numbers(10000
 
 statement error 1005
 explain perf (limit='3') select avg(number) from numbers(10000);
+
+statement error 1005
+explain perf (format='folded') select avg(number) from numbers(10000);

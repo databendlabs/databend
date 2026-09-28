@@ -47,7 +47,7 @@ pub enum ExplainKind {
     Perf {
         mode: ExplainPerfMode,
         format: ExplainPerfFormat,
-        /// The number of rows per group in the `table` and `folded` formats, `None` for the default.
+        /// The number of rows per group in the `table` format, `None` for the default.
         limit: Option<u64>,
     },
 }
@@ -60,8 +60,6 @@ pub enum ExplainPerfFormat {
     Html,
     /// A bounded result set of the hottest plan nodes and functions, for agents and scripts.
     Table,
-    /// Folded call stacks, one per row, for flamegraph tools and further analysis.
-    Folded,
 }
 
 impl ExplainPerfFormat {
@@ -69,7 +67,6 @@ impl ExplainPerfFormat {
         match name.to_lowercase().as_str() {
             "html" => Some(ExplainPerfFormat::Html),
             "table" => Some(ExplainPerfFormat::Table),
-            "folded" => Some(ExplainPerfFormat::Folded),
             _ => None,
         }
     }
@@ -80,7 +77,6 @@ impl std::fmt::Display for ExplainPerfFormat {
         match self {
             ExplainPerfFormat::Html => write!(f, "html"),
             ExplainPerfFormat::Table => write!(f, "table"),
-            ExplainPerfFormat::Folded => write!(f, "folded"),
         }
     }
 }

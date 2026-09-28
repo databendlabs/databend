@@ -8,9 +8,6 @@ statement ok
 explain perf memory (format='table', limit=2) select k, count(*), max(s) from t_explain_perf group by k;
 
 statement ok
-explain perf memory (format='folded', limit=3) select k, count(*), max(s) from t_explain_perf group by k;
-
-statement ok
 explain perf memory select k, count(*), max(s) from t_explain_perf group by k;
 
 statement ok

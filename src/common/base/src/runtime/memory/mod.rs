@@ -31,7 +31,6 @@ pub use alloc_profile::AllocSummaryRow;
 pub use alloc_profile::LOW_CONFIDENCE_SAMPLES;
 pub use alloc_profile::SAMPLE_INTERVAL;
 pub use alloc_profile::alloc_flamegraph;
-pub use alloc_profile::alloc_folded_stacks;
 pub use alloc_profile::summarize_alloc_stacks;
 pub use mem_stat::GLOBAL_MEM_STAT;
 pub use mem_stat::MemStat;

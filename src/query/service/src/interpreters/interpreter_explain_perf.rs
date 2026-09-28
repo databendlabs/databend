@@ -23,8 +23,6 @@ use databend_common_base::runtime::PerfConfig;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::cpu_flamegraph;
-use databend_common_base::runtime::cpu_folded_stacks;
-use databend_common_base::runtime::prefix_folded_by_node;
 use databend_common_base::runtime::summarize_cpu_stacks;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -59,8 +57,6 @@ pub struct ExplainPerfInterpreter {
 
 /// The rows per level in the `table` format by default.
 const DEFAULT_TABLE_LIMIT: usize = 20;
-/// The stacks in the `folded` format by default.
-const DEFAULT_FOLDED_LIMIT: usize = 100;
 
 impl ExplainPerfInterpreter {
     pub fn try_create(
@@ -110,20 +106,6 @@ impl ExplainPerfInterpreter {
             ExplainPerfFormat::Table => {
                 let limit = self.limit.map_or(DEFAULT_TABLE_LIMIT, |x| x as usize);
                 table_block(&nodes, limit, config.frequency)
-            }
-            ExplainPerfFormat::Folded => {
-                let limit = self.limit.map_or(DEFAULT_FOLDED_LIMIT, |x| x as usize);
-                let nodes = nodes
-                    .into_iter()
-                    .map(|(node, stacks)| (node, cpu_folded_stacks(&stacks, None)))
-                    .collect();
-                let (stacks, samples): (Vec<_>, Vec<_>) = prefix_folded_by_node(nodes, Some(limit))
-                    .into_iter()
-                    .unzip();
-                DataBlock::new_from_columns(vec![
-                    StringType::from_data(stacks),
-                    UInt64Type::from_data(samples),
-                ])
             }
         };
         Ok(vec![block])
@@ -213,7 +195,10 @@ fn table_block(nodes: &[(String, Vec<CpuStack>)], limit: usize, frequency: i32) 
              rank the functions by self_samples, the samples in the function itself. 'site' rows \
              rank Databend functions by the self_samples of the stacks whose innermost Databend \
              frame they are, i.e. including the library code they call. total_samples also count \
-             all callees. share is of all samples by self_samples. Up to {limit} rows per level."
+             all callees. share is of all samples by self_samples. path is the Databend callers of \
+             the function (innermost first) on the call path with the most samples, with the \
+             share of the row when it is reached through other paths too. Up to {limit} rows per \
+             level."
         )),
         _ => None,
     };
@@ -221,6 +206,7 @@ fn table_block(nodes: &[(String, Vec<CpuStack>)], limit: usize, frequency: i32) 
     DataBlock::new_from_columns(vec![
         StringType::from_data(rows.iter().map(|x| x.level.as_str().to_string()).collect()),
         StringType::from_opt_data(rows.iter().map(|x| x.function.clone()).collect()),
+        StringType::from_opt_data(rows.iter().map(|x| x.path.clone()).collect()),
         UInt64Type::from_data(rows.iter().map(|x| x.self_samples).collect()),
         UInt64Type::from_data(rows.iter().map(|x| x.total_samples).collect()),
         Float64Type::from_data(rows.iter().map(|x| x.share).collect()),

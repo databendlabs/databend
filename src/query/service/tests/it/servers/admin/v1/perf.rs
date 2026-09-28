@@ -56,6 +56,10 @@ async fn test_perf_bad_requests() -> anyhow::Result<()> {
             StatusCode::BAD_REQUEST,
         ),
         (
+            "/debug/perf/memory?seconds=1&format=folded",
+            StatusCode::BAD_REQUEST,
+        ),
+        (
             "/debug/perf/memory?query_id=not-running",
             StatusCode::NOT_FOUND,
         ),
@@ -84,7 +88,7 @@ async fn test_perf_memory_seconds() -> anyhow::Result<()> {
     assert_eq!(resp["rows"][0]["level"], "summary");
 
     // Only one profile samples the allocations of the node at a time.
-    let first = get(&srv, "/debug/perf/memory?seconds=2&format=folded");
+    let first = get(&srv, "/debug/perf/memory?seconds=2&format=json");
     let second = async {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         get(&srv, "/debug/perf/memory?seconds=1").await

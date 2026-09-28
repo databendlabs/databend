@@ -3110,7 +3110,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ).parse(i),
         HintPrefix | LParen | FROM => query_statement(i),
         EXPLAIN => rule!(
-            #explain_perf : "`EXPLAIN PERF [CPU | MEMORY] [(format = 'html | table | folded', limit = <n>)] <statement>`"
+            #explain_perf : "`EXPLAIN PERF [CPU | MEMORY] [(format = 'html | table', limit = <n>)] <statement>`"
             | #explain : "`EXPLAIN [VERBOSE | (<option>, ...)] [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
         ).parse(i),
@@ -6765,7 +6765,7 @@ pub fn explain_perf(i: Input) -> IResult<Statement> {
                     PerfOption::Format(value) if format.is_none() => {
                         format = Some(ExplainPerfFormat::from_name(&value).ok_or_else(|| {
                             nom::Err::Failure(ErrorKind::other(
-                                "expected 'html', 'table' or 'folded' as the format of EXPLAIN PERF",
+                                "expected 'html' or 'table' as the format of EXPLAIN PERF",
                             ))
                         })?);
                     }

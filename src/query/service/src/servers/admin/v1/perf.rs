@@ -20,12 +20,12 @@
 //! GET /debug/perf/cpu?query_id=<id>[&max_seconds=60]
 //! GET /debug/perf/memory?seconds=10
 //! GET /debug/perf/memory?query_id=<id>[&max_seconds=60]
-//!     [&format=html|json|folded][&limit=N]
+//!     [&format=html|json][&limit=N]
 //! ```
 //!
-//! `html` is the flamegraph report of `EXPLAIN PERF`, `json` a bounded summary for agents, and
-//! `folded` the folded stacks, one `stack count` per line. Only this node is sampled: to profile
-//! a distributed query, call every node running its fragments.
+//! `html` is the flamegraph report of `EXPLAIN PERF`, `json` a bounded summary for agents with the
+//! rows of the `table` format. Only this node is sampled: to profile a distributed query, call
+//! every node running its fragments.
 
 use std::time::Duration;
 use std::time::Instant;
@@ -39,9 +39,6 @@ use databend_common_base::runtime::PerfTargetGuard;
 use databend_common_base::runtime::PerfTargets;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::SAMPLE_INTERVAL;
-use databend_common_base::runtime::alloc_folded_stacks;
-use databend_common_base::runtime::cpu_folded_stacks;
-use databend_common_base::runtime::prefix_folded_by_node;
 use databend_common_base::runtime::summarize_alloc_stacks;
 use databend_common_base::runtime::summarize_cpu_stacks;
 use databend_common_config::GlobalConfig;
@@ -63,8 +60,6 @@ const MAX_SECONDS: u64 = 300;
 const DEFAULT_FREQUENCY: i32 = 99;
 /// The rows per level in the `json` format by default.
 const DEFAULT_JSON_LIMIT: usize = 20;
-/// The stacks in the `folded` format by default.
-const DEFAULT_FOLDED_LIMIT: usize = 100;
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 #[derive(Deserialize, Debug, Default)]
@@ -85,7 +80,6 @@ pub struct PerfRequest {
 enum Format {
     Html,
     Json,
-    Folded,
 }
 
 enum Target {
@@ -118,10 +112,9 @@ impl PerfRequest {
         let format = match self.format.as_deref().unwrap_or("html") {
             "html" => Format::Html,
             "json" => Format::Json,
-            "folded" => Format::Folded,
             other => {
                 return Err(bad_request(format!(
-                    "unknown format '{other}', expected html, json or folded"
+                    "unknown format '{other}', expected html or json"
                 )));
             }
         };
@@ -246,16 +239,6 @@ fn html_response(html: String) -> Response {
         .body(html)
 }
 
-fn folded_response(lines: Vec<(String, u64)>) -> Response {
-    let body = lines
-        .into_iter()
-        .map(|(stack, value)| format!("{stack} {value}\n"))
-        .collect::<String>();
-    Response::builder()
-        .content_type("text/plain; charset=utf-8")
-        .body(body)
-}
-
 fn json_response(value: serde_json::Value) -> Response {
     Response::builder()
         .content_type("application/json")
@@ -290,14 +273,6 @@ pub async fn perf_cpu_handler(req: Query<PerfRequest>) -> poem::Result<impl Into
             let html = cpu_report_html(vec![(node_id, stacks)]).map_err(internal)?;
             Ok(html_response(html))
         }
-        Format::Folded => {
-            let limit = req.limit.unwrap_or(DEFAULT_FOLDED_LIMIT);
-            let lines = cpu_folded_stacks(&stacks, None);
-            Ok(folded_response(prefix_folded_by_node(
-                vec![(node_id, lines)],
-                Some(limit),
-            )))
-        }
         Format::Json => {
             let limit = req.limit.unwrap_or(DEFAULT_JSON_LIMIT);
             Ok(json_response(cpu_json(
@@ -321,6 +296,7 @@ fn cpu_json(
             json!({
                 "level": row.level.as_str(),
                 "function": row.function,
+                "path": row.path,
                 "self_samples": row.self_samples,
                 "total_samples": row.total_samples,
                 "share": row.share,
@@ -341,7 +317,9 @@ fn cpu_json(
              functions by self_samples, the samples in the function itself. 'site' rows rank \
              Databend functions by the self_samples of the stacks whose innermost Databend frame \
              they are, i.e. including the library code they call. total_samples also count all \
-             callees. share is of all samples by self_samples. Up to {limit} rows per level.",
+             callees. share is of all samples by self_samples. path is the Databend callers of the \
+             function (innermost first) on the call path with the most samples, with the share of \
+             the row when it is reached through other paths too. Up to {limit} rows per level.",
             req.frequency
         ),
         "rows": rows,
@@ -379,14 +357,6 @@ pub async fn perf_memory_handler(req: Query<PerfRequest>) -> poem::Result<impl I
             let html = memory_report_html(vec![(node_id, stacks)]).map_err(internal)?;
             Ok(html_response(html))
         }
-        Format::Folded => {
-            let limit = req.limit.unwrap_or(DEFAULT_FOLDED_LIMIT);
-            let lines = alloc_folded_stacks(&stacks, None);
-            Ok(folded_response(prefix_folded_by_node(
-                vec![(node_id, lines)],
-                Some(limit),
-            )))
-        }
         Format::Json => {
             let limit = req.limit.unwrap_or(DEFAULT_JSON_LIMIT);
             Ok(json_response(memory_json(
@@ -411,6 +381,7 @@ fn memory_json(
                 "level": row.level.as_str(),
                 "plan_node": row.plan_node,
                 "site": row.site,
+                "path": row.path,
                 "bytes": row.bytes,
                 "samples": row.samples,
                 "share": row.share,
@@ -436,8 +407,10 @@ fn memory_json(
              node only; {plan_node}allocations outside queries are not sampled. bytes is the \
              allocation volume, including memory freed soon after, not the memory alive at a \
              given moment. share is of all bytes for 'plan' rows and of the plan node for 'site' \
-             rows. A site is the innermost Databend function of the call stacks. Up to {limit} \
-             sites per plan node.",
+             rows. A site is the innermost Databend function of the call stacks, path its \
+             Databend callers (innermost first) on the call path with the most bytes, with the \
+             share of the site when it is reached through other paths too. Up to {limit} sites \
+             per plan node.",
             convert_byte_size(SAMPLE_INTERVAL as f64),
         ),
         "rows": rows,

@@ -760,7 +760,7 @@ impl Plan {
     }
 }
 
-/// The result schema of `EXPLAIN PERF` in the `table` and `folded` formats.
+/// The result schema of `EXPLAIN PERF` in the `html` and `table` formats.
 fn explain_perf_schema(mode: ExplainPerfMode, format: ExplainPerfFormat) -> DataSchemaRef {
     let string = || DataType::String;
     let nullable_string = || DataType::Nullable(Box::new(DataType::String));
@@ -773,29 +773,22 @@ fn explain_perf_schema(mode: ExplainPerfMode, format: ExplainPerfFormat) -> Data
             DataField::new("level", string()),
             DataField::new("plan_node", nullable_string()),
             DataField::new("site", nullable_string()),
+            DataField::new("path", nullable_string()),
             DataField::new("bytes", uint64()),
             DataField::new("samples", uint64()),
             DataField::new("share", float64()),
             DataField::new("low_confidence", DataType::Boolean),
             DataField::new("note", nullable_string()),
         ],
-        (ExplainPerfMode::Memory, ExplainPerfFormat::Folded) => vec![
-            DataField::new("stack", string()),
-            DataField::new("bytes", uint64()),
-            DataField::new("samples", uint64()),
-        ],
         (ExplainPerfMode::Cpu, ExplainPerfFormat::Table) => vec![
             DataField::new("level", string()),
             DataField::new("function", nullable_string()),
+            DataField::new("path", nullable_string()),
             DataField::new("self_samples", uint64()),
             DataField::new("total_samples", uint64()),
             DataField::new("share", float64()),
             DataField::new("low_confidence", DataType::Boolean),
             DataField::new("note", nullable_string()),
-        ],
-        (ExplainPerfMode::Cpu, ExplainPerfFormat::Folded) => vec![
-            DataField::new("stack", string()),
-            DataField::new("samples", uint64()),
         ],
     };
     DataSchemaRefExt::create(fields)
