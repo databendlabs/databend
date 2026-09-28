@@ -14,7 +14,13 @@
 
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
+use databend_common_sql::optimizer::Optimizer;
+use databend_common_sql::optimizer::OptimizerContext;
+use databend_common_sql::optimizer::ir::Distribution;
+use databend_common_sql::optimizer::ir::RequiredProperty;
 use databend_common_sql::optimizer::ir::StatContext;
+use databend_common_sql::optimizer::optimizers::CascadesOptimizer;
+use databend_common_sql::plans::Plan;
 
 use crate::framework::LiteTableContext;
 use crate::framework::golden::SqlTestCase;
@@ -83,6 +89,50 @@ SELECT * FROM c",
     };
     write_optimized_case(&mut file, &dummy_scan, false).await?;
 
+    Ok(())
+}
+
+// Check the memo's root cost as well as the returned plan: optimize_sync falls
+// back to the input on a Cascades error, so a successful return alone is not enough.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_materialized_cte_cascades_cost() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    ctx.register_setup_sql(MCTE_INPUT_TABLE).await?;
+    let sql = "WITH c AS (SELECT a, v FROM mcte_input),
+               d AS (SELECT a FROM c WHERE v > 0)
+               SELECT a FROM d UNION ALL SELECT a FROM d";
+    let raw_plan = ctx.bind_sql(sql).await?;
+    let raw = raw_plan.format_indent(Default::default(), &StatContext::default())?;
+    let Plan::Query {
+        s_expr, metadata, ..
+    } = raw_plan
+    else {
+        unreachable!("expected a query plan")
+    };
+
+    for operator in ["Sequence", "MaterializedCTE", "MaterializedCTERef"] {
+        assert!(raw.contains(operator), "raw plan must contain {operator}");
+    }
+
+    for distributed in [false, true] {
+        let opt_ctx =
+            OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?);
+        opt_ctx.set_enable_distributed_optimization(distributed);
+        let mut optimizer = CascadesOptimizer::new(opt_ctx)?;
+        optimizer.optimize_sync(*s_expr.clone())?;
+        let required = if distributed {
+            RequiredProperty {
+                distribution: Distribution::Serial,
+            }
+        } else {
+            RequiredProperty::default()
+        };
+        let memo = optimizer.memo().unwrap();
+        assert!(
+            memo.root().unwrap().best_prop(&required).is_some(),
+            "Cascades fell back on materialized CTE (distributed={distributed})"
+        );
+    }
     Ok(())
 }
 

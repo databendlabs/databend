@@ -26,6 +26,7 @@ use crate::plans::ConstantTableScan;
 use crate::plans::Exchange;
 use crate::plans::Join;
 use crate::plans::JoinType;
+use crate::plans::Operator;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
 
@@ -84,6 +85,17 @@ impl DefaultCostModel {
             RelOperator::Join(plan) => self.compute_cost_join(memo, m_expr, plan),
             RelOperator::UnionAll(_) => self.compute_cost_union_all(memo, m_expr),
             RelOperator::Aggregate(_) => self.compute_aggregate(memo, m_expr),
+            // The producer is a child of Sequence, so its cost is counted once there.
+            // References are leaves: they pay for reading the materialized rows, not
+            // for re-executing the producer.
+            RelOperator::Sequence(_) => Ok(Cost(0.0)),
+            RelOperator::MaterializedCTE(_) => {
+                self.compute_cost_unary_common_operator(memo, m_expr)
+            }
+            RelOperator::MaterializedCTERef(_) => {
+                let card = memo.group(m_expr.group_index)?.stat_info.cardinality;
+                Ok(Cost(card * self.compute_per_row))
+            }
 
             RelOperator::EvalScalar(_)
             | RelOperator::Filter(_)
@@ -97,7 +109,10 @@ impl DefaultCostModel {
 
             RelOperator::Exchange(_) => self.compute_cost_exchange(memo, m_expr),
 
-            _ => Err(ErrorCode::Internal("Cannot compute cost from logical plan")),
+            plan => Err(ErrorCode::Internal(format!(
+                "Cannot compute cost from logical plan: {:?}",
+                plan.rel_op()
+            ))),
         }
     }
 
