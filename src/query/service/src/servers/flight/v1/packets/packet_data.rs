@@ -24,6 +24,7 @@ use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
 use bytes::Bytes;
 use databend_common_base::runtime::IoStatsSnapshot;
+use databend_common_base::runtime::PerfSamples;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetricValues;
 use databend_common_exception::ErrorCode;
@@ -67,7 +68,7 @@ pub enum DataPacket {
     MutationStatus(MutationStatus),
     DataCacheMetrics(DataCacheMetricValues),
     PartStatistics(HashMap<u32, PartStatistics>),
-    QueryPerf(String),
+    QueryPerf(PerfSamples),
     IoStats(IoStatsSnapshot),
 }
 
@@ -149,9 +150,9 @@ impl TryFrom<DataPacket> for FlightData {
                 data_header: Default::default(),
                 flight_descriptor: None,
             },
-            DataPacket::QueryPerf(query_perf) => FlightData {
+            DataPacket::QueryPerf(samples) => FlightData {
                 app_metadata: vec![0x09].into(),
-                data_body: query_perf.into_bytes().into(),
+                data_body: serde_json::to_vec(&samples)?.into(),
                 data_header: Default::default(),
                 flight_descriptor: None,
             },
@@ -229,9 +230,8 @@ impl TryFrom<FlightData> for DataPacket {
                 Ok(DataPacket::DataCacheMetrics(status))
             }
             0x09 => {
-                let query_perf = String::from_utf8(flight_data.data_body.to_vec())
-                    .map_err(|_| ErrorCode::BadBytes("Invalid UTF-8 in query performance data."))?;
-                Ok(DataPacket::QueryPerf(query_perf))
+                let samples = serde_json::from_slice::<PerfSamples>(&flight_data.data_body)?;
+                Ok(DataPacket::QueryPerf(samples))
             }
             0x0a => {
                 let stat =

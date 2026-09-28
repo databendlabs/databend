@@ -83,6 +83,7 @@ pub struct AllocProfile {
 }
 
 /// One aggregated call stack of an [`AllocProfile`].
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AllocStack {
     /// The plan node the allocations were made for, `None` outside plan nodes.
     pub plan: Option<(u32, String)>,

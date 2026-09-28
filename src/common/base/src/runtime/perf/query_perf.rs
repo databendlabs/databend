@@ -64,21 +64,6 @@ impl QueryPerf {
         Ok((flag_guard, profiler_guard))
     }
 
-    pub fn dump(profiler_guard: &ProfilerGuard<'static>) -> Result<String> {
-        let reporter = profiler_guard
-            .report()
-            .frames_post_processor(frames_post_processor())
-            .build()
-            .map_err(|_e| ErrorCode::Internal("Failed to report profiler data"))?;
-        debug!("perf stop, begin to dump flamegraph");
-        let mut svg = Vec::new();
-        reporter
-            .flamegraph(&mut svg)
-            .map_err(|_e| ErrorCode::Internal("Failed to generate flamegraph SVG"))?;
-
-        String::from_utf8(svg).map_err(|_e| ErrorCode::Internal("Failed to convert SVG to string"))
-    }
-
     /// The sampled call stacks, frames outermost first.
     pub fn stacks(profiler_guard: &ProfilerGuard<'static>) -> Result<Vec<CpuStack>> {
         let report = profiler_guard

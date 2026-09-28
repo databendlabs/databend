@@ -24,12 +24,14 @@ pub struct PerfConfig {
     /// Whether this node starts its own CPU profiler. The coordinator starts one for the whole
     /// statement, its fragments must not start another.
     pub profiler_enabled: bool,
+    /// The query runs under `EXPLAIN PERF MEMORY`, every node samples its allocations.
+    pub memory_enabled: bool,
     #[serde(default = "default_frequency")]
     pub frequency: i32,
 }
 
 impl PerfConfig {
     pub fn is_perf_active(&self) -> bool {
-        self.perf_enabled
+        self.perf_enabled || self.memory_enabled
     }
 }

@@ -22,7 +22,9 @@ use databend_common_base::runtime::LOW_CONFIDENCE_SAMPLES;
 use databend_common_base::runtime::PerfConfig;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::cpu_flamegraph;
 use databend_common_base::runtime::cpu_folded_stacks;
+use databend_common_base::runtime::prefix_folded_by_node;
 use databend_common_base::runtime::summarize_cpu_stacks;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -80,6 +82,7 @@ impl ExplainPerfInterpreter {
         let config = PerfConfig {
             perf_enabled: true,
             profiler_enabled: true,
+            memory_enabled: false,
             frequency: 99,
         };
         self.ctx.set_perf_config(config.clone());
@@ -88,25 +91,35 @@ impl ExplainPerfInterpreter {
 
         let (_flag_guard, profiler_guard) = perf_guard;
 
+        // The other nodes of the cluster profile their fragments and send the stacks back.
         let node_id = GlobalConfig::instance().query.node_id.clone();
+        let mut nodes = vec![(node_id, QueryPerf::stacks(&profiler_guard)?)];
+        let mut others = self
+            .ctx
+            .get_nodes_perf()
+            .lock()
+            .iter()
+            .filter(|(_, samples)| !samples.cpu.is_empty())
+            .map(|(node, samples)| (node.clone(), samples.cpu.clone()))
+            .collect::<Vec<_>>();
+        others.sort_by(|left, right| left.0.cmp(&right.0));
+        nodes.extend(others);
+
         let block = match self.format {
-            ExplainPerfFormat::Html => {
-                let dumped = QueryPerf::dump(&profiler_guard)?;
-                let other_nodes = self.ctx.get_nodes_perf().lock().clone();
-                let html = QueryPerf::pretty_display(node_id, dumped, other_nodes.into_iter())
-                    .replace("{{SUMMARY_TABLE}}", "");
-                DataBlock::new_from_columns(vec![StringType::from_data(vec![html])])
-            }
+            ExplainPerfFormat::Html => html_block(nodes)?,
             ExplainPerfFormat::Table => {
-                let stacks = QueryPerf::stacks(&profiler_guard)?;
                 let limit = self.limit.map_or(DEFAULT_TABLE_LIMIT, |x| x as usize);
-                table_block(&stacks, limit, &node_id, config.frequency)
+                table_block(&nodes, limit, config.frequency)
             }
             ExplainPerfFormat::Folded => {
-                let stacks = QueryPerf::stacks(&profiler_guard)?;
                 let limit = self.limit.map_or(DEFAULT_FOLDED_LIMIT, |x| x as usize);
-                let (stacks, samples): (Vec<_>, Vec<_>) =
-                    cpu_folded_stacks(&stacks, Some(limit)).into_iter().unzip();
+                let nodes = nodes
+                    .into_iter()
+                    .map(|(node, stacks)| (node, cpu_folded_stacks(&stacks, None)))
+                    .collect();
+                let (stacks, samples): (Vec<_>, Vec<_>) = prefix_folded_by_node(nodes, Some(limit))
+                    .into_iter()
+                    .unzip();
                 DataBlock::new_from_columns(vec![
                     StringType::from_data(stacks),
                     UInt64Type::from_data(samples),
@@ -158,17 +171,46 @@ impl ExplainPerfInterpreter {
     }
 }
 
-/// The summary row, then the leaf functions and the Databend sites with the most samples.
-fn table_block(stacks: &[CpuStack], limit: usize, node_id: &str, frequency: i32) -> DataBlock {
-    let rows = summarize_cpu_stacks(stacks, limit);
+/// One flamegraph per node.
+fn html_block(nodes: Vec<(String, Vec<CpuStack>)>) -> Result<DataBlock> {
+    let mut svgs = Vec::with_capacity(nodes.len());
+    for (node, stacks) in nodes {
+        let svg = cpu_flamegraph(&stacks, "Flame Graph").map_err(ErrorCode::Internal)?;
+        svgs.push((node, svg));
+    }
+    let mut svgs = svgs.into_iter();
+    let (node_id, svg) = svgs.next().unwrap_or_default();
+
+    let html = QueryPerf::pretty_display(node_id, svg, svgs).replace("{{SUMMARY_TABLE}}", "");
+    Ok(DataBlock::new_from_columns(vec![StringType::from_data(
+        vec![html],
+    )]))
+}
+
+/// The summary row, then the leaf functions and the Databend sites with the most samples, over the
+/// samples of all nodes.
+fn table_block(nodes: &[(String, Vec<CpuStack>)], limit: usize, frequency: i32) -> DataBlock {
+    let all = nodes
+        .iter()
+        .flat_map(|(_, stacks)| stacks.iter().cloned())
+        .collect::<Vec<_>>();
+    let sampled_nodes = nodes
+        .iter()
+        .map(|(node, stacks)| {
+            let samples = stacks.iter().map(|stack| stack.samples).sum::<u64>();
+            format!("{node} ({samples} samples)")
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let rows = summarize_cpu_stacks(&all, limit);
     let note = |level: CpuSummaryLevel| match level {
         CpuSummaryLevel::Summary => Some(format!(
-            "Sampled at {frequency} Hz on node {node_id}, other cluster nodes are not included. \
-             'function' rows rank the functions by self_samples, the samples in the function \
-             itself. 'site' rows rank Databend functions by the self_samples of the stacks whose \
-             innermost Databend frame they are, i.e. including the library code they call. \
-             total_samples also count all callees. share is of all samples by self_samples. Up to \
-             {limit} rows per level."
+            "Sampled at {frequency} Hz, summed over the nodes {sampled_nodes}. 'function' rows \
+             rank the functions by self_samples, the samples in the function itself. 'site' rows \
+             rank Databend functions by the self_samples of the stacks whose innermost Databend \
+             frame they are, i.e. including the library code they call. total_samples also count \
+             all callees. share is of all samples by self_samples. Up to {limit} rows per level."
         )),
         _ => None,
     };

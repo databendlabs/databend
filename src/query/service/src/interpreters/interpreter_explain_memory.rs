@@ -20,11 +20,13 @@ use databend_common_base::runtime::AllocProfile;
 use databend_common_base::runtime::AllocStack;
 use databend_common_base::runtime::AllocSummaryLevel;
 use databend_common_base::runtime::LOW_CONFIDENCE_SAMPLES;
+use databend_common_base::runtime::PerfConfig;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::SAMPLE_INTERVAL;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::alloc_flamegraph;
 use databend_common_base::runtime::alloc_folded_stacks;
+use databend_common_base::runtime::prefix_folded_by_node;
 use databend_common_base::runtime::summarize_alloc_stacks;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -44,6 +46,7 @@ use crate::interpreters::QueryFinishHooks;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextPerf;
 
 /// `EXPLAIN PERF MEMORY <statement>` runs the statement and samples its allocations on this node.
 ///
@@ -81,22 +84,41 @@ impl ExplainMemoryInterpreter {
     async fn explain_memory(&self) -> Result<Vec<DataBlock>> {
         let profile = AllocProfile::create();
 
+        // The other nodes of the cluster sample their fragments and send the stacks back.
+        self.ctx.set_perf_config(PerfConfig {
+            perf_enabled: false,
+            profiler_enabled: false,
+            memory_enabled: true,
+            frequency: 0,
+        });
+
         let mut payload = ThreadTracker::new_tracking_payload();
         payload.alloc_profile = Some(profile.clone());
         ThreadTracker::tracking_future_with_payload(self.execute(), Some(Arc::new(payload)))
             .await?;
 
-        let stacks = profile.stacks();
         let node_id = GlobalConfig::instance().query.node_id.clone();
+        let mut nodes = vec![(node_id, profile.stacks())];
+        let mut others = self
+            .ctx
+            .get_nodes_perf()
+            .lock()
+            .iter()
+            .filter(|(_, samples)| !samples.memory.is_empty())
+            .map(|(node, samples)| (node.clone(), samples.memory.clone()))
+            .collect::<Vec<_>>();
+        others.sort_by(|left, right| left.0.cmp(&right.0));
+        nodes.extend(others);
+
         let block = match self.format {
-            ExplainPerfFormat::Html => html_block(&stacks, node_id)?,
+            ExplainPerfFormat::Html => html_block(nodes)?,
             ExplainPerfFormat::Table => {
                 let limit = self.limit.map_or(DEFAULT_TABLE_LIMIT, |x| x as usize);
-                table_block(&stacks, limit, &node_id)
+                table_block(&nodes, limit)
             }
             ExplainPerfFormat::Folded => {
                 let limit = self.limit.map_or(DEFAULT_FOLDED_LIMIT, |x| x as usize);
-                folded_block(&stacks, limit)
+                folded_block(nodes, limit)
             }
         };
         Ok(vec![block])
@@ -125,27 +147,57 @@ impl ExplainMemoryInterpreter {
     }
 }
 
-fn html_block(stacks: &[AllocStack], node_id: String) -> Result<DataBlock> {
-    let svg = alloc_flamegraph(stacks, "Sampled allocations by plan node")
-        .map_err(ErrorCode::Internal)?;
-    let html = QueryPerf::pretty_display(node_id, svg, std::iter::empty())
+/// One flamegraph per node, the summary of all nodes.
+fn html_block(nodes: Vec<(String, Vec<AllocStack>)>) -> Result<DataBlock> {
+    let title = "Sampled allocations by plan node";
+    let all = nodes
+        .iter()
+        .flat_map(|(_, stacks)| stacks.iter().cloned())
+        .collect::<Vec<_>>();
+
+    let mut svgs = Vec::with_capacity(nodes.len());
+    for (node, stacks) in nodes {
+        svgs.push((
+            node,
+            alloc_flamegraph(&stacks, title).map_err(ErrorCode::Internal)?,
+        ));
+    }
+    let mut svgs = svgs.into_iter();
+    let (node_id, svg) = svgs.next().unwrap_or_default();
+
+    let html = QueryPerf::pretty_display(node_id, svg, svgs)
         .replace("Query Performance Report", "Query Memory Allocation Report")
-        .replace("{{SUMMARY_TABLE}}", &summary_html(stacks));
+        .replace("{{SUMMARY_TABLE}}", &summary_html(&all));
     Ok(DataBlock::new_from_columns(vec![StringType::from_data(
         vec![html],
     )]))
 }
 
 /// The summary row, then each plan node from the largest followed by its largest allocation sites.
-fn table_block(stacks: &[AllocStack], limit: usize, node_id: &str) -> DataBlock {
-    let rows = summarize_alloc_stacks(stacks, limit);
+/// The summary row, then each plan node from the largest followed by its largest allocation sites,
+/// over the samples of all nodes.
+fn table_block(nodes: &[(String, Vec<AllocStack>)], limit: usize) -> DataBlock {
+    let all = nodes
+        .iter()
+        .flat_map(|(_, stacks)| stacks.iter().cloned())
+        .collect::<Vec<_>>();
+    let sampled_nodes = nodes
+        .iter()
+        .map(|(node, stacks)| {
+            let bytes = stacks.iter().map(|stack| stack.bytes).sum::<u64>();
+            format!("{node} ({} samples)", bytes / SAMPLE_INTERVAL as u64)
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let rows = summarize_alloc_stacks(&all, limit);
     let note = |level: AllocSummaryLevel| match level {
         AllocSummaryLevel::Summary => Some(format!(
-            "Estimated from one sample every ~{} allocated on node {node_id}, other cluster nodes \
-             are not included. bytes is the allocation volume, including memory freed soon after, \
-             not the memory alive at a given moment. share is of all bytes for 'plan' rows and of \
-             the plan node for 'site' rows. A site is the innermost Databend function of the call \
-             stacks. Up to {limit} sites per plan node.",
+            "Estimated from one sample every ~{} allocated, summed over the nodes {sampled_nodes}. \
+             bytes is the allocation volume, including memory freed soon after, not the memory \
+             alive at a given moment. share is of all bytes for 'plan' rows and of the plan node \
+             for 'site' rows. A site is the innermost Databend function of the call stacks. Up to \
+             {limit} sites per plan node.",
             convert_byte_size(SAMPLE_INTERVAL as f64),
         )),
         _ => None,
@@ -167,8 +219,13 @@ fn table_block(stacks: &[AllocStack], limit: usize, node_id: &str) -> DataBlock 
     ])
 }
 
-fn folded_block(stacks: &[AllocStack], limit: usize) -> DataBlock {
-    let lines = alloc_folded_stacks(stacks, Some(limit));
+/// Folded stacks rooted at the node, then the plan node.
+fn folded_block(nodes: Vec<(String, Vec<AllocStack>)>, limit: usize) -> DataBlock {
+    let nodes = nodes
+        .into_iter()
+        .map(|(node, stacks)| (node, alloc_folded_stacks(&stacks, None)))
+        .collect();
+    let lines = prefix_folded_by_node(nodes, Some(limit));
     DataBlock::new_from_columns(vec![
         StringType::from_data(lines.iter().map(|(stack, _)| stack.clone()).collect()),
         UInt64Type::from_data(lines.iter().map(|(_, bytes)| *bytes).collect()),

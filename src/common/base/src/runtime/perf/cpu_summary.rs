@@ -17,8 +17,10 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use crate::runtime::AllocStack;
+
 /// One sampled call stack and the number of samples it received.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct CpuStack {
     pub thread: String,
     /// Symbolized frames, outermost first.
@@ -159,6 +161,55 @@ pub fn cpu_folded_stacks(stacks: &[CpuStack], limit: Option<usize>) -> Vec<(Stri
     lines
 }
 
+/// Renders `stacks` as a flamegraph SVG, rooted at the threads.
+pub fn cpu_flamegraph(stacks: &[CpuStack], title: &str) -> Result<String, String> {
+    let lines = cpu_folded_stacks(stacks, None)
+        .into_iter()
+        .map(|(stack, samples)| format!("{stack} {samples}"))
+        .collect::<Vec<_>>();
+
+    let mut options = pprof::flamegraph::Options::default();
+    options.title = title.to_string();
+    options.count_name = "samples".to_string();
+
+    let mut svg = Vec::new();
+    pprof::flamegraph::from_lines(&mut options, lines.iter().map(String::as_str), &mut svg)
+        .map_err(|e| format!("failed to render flamegraph: {e}"))?;
+    String::from_utf8(svg).map_err(|e| format!("invalid flamegraph svg: {e}"))
+}
+
+/// The samples one node sends back to the coordinator of `EXPLAIN PERF`.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct PerfSamples {
+    pub cpu: Vec<CpuStack>,
+    pub memory: Vec<AllocStack>,
+}
+
+impl PerfSamples {
+    pub fn is_empty(&self) -> bool {
+        self.cpu.is_empty() && self.memory.is_empty()
+    }
+}
+
+/// Prefixes the folded stacks of each node with the node id, the largest `limit` stacks first.
+pub fn prefix_folded_by_node(
+    nodes: Vec<(String, Vec<(String, u64)>)>,
+    limit: Option<usize>,
+) -> Vec<(String, u64)> {
+    let mut lines = nodes
+        .into_iter()
+        .flat_map(|(node, lines)| {
+            let node = node.replace(';', ",");
+            lines
+                .into_iter()
+                .map(move |(stack, value)| (format!("{node};{stack}"), value))
+        })
+        .collect::<Vec<_>>();
+    lines.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
+    lines.truncate(limit.unwrap_or(usize::MAX));
+    lines
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -236,5 +287,40 @@ mod tests {
             ("worker;main;a".to_string(), 2),
         ]);
         assert_eq!(cpu_folded_stacks(&stacks, Some(1)).len(), 1);
+    }
+
+    #[test]
+    fn test_prefix_folded_by_node() {
+        let lines = prefix_folded_by_node(
+            vec![
+                ("n1".to_string(), vec![("a;b".to_string(), 3)]),
+                ("n2".to_string(), vec![
+                    ("a;c".to_string(), 5),
+                    ("a".to_string(), 1),
+                ]),
+            ],
+            Some(2),
+        );
+        assert_eq!(lines, vec![
+            ("n2;a;c".to_string(), 5),
+            ("n1;a;b".to_string(), 3)
+        ]);
+    }
+
+    #[test]
+    fn test_perf_samples_roundtrip() {
+        let samples = PerfSamples {
+            cpu: vec![stack(&["main", "a"], 2)],
+            memory: vec![AllocStack {
+                plan: Some((3, "HashJoin".to_string())),
+                frames: vec!["main".to_string()],
+                bytes: 1024,
+            }],
+        };
+        let json = serde_json::to_vec(&samples).unwrap();
+        let decoded: PerfSamples = serde_json::from_slice(&json).unwrap();
+        assert_eq!(decoded.cpu, samples.cpu);
+        assert_eq!(decoded.memory, samples.memory);
+        assert!(!decoded.is_empty());
     }
 }

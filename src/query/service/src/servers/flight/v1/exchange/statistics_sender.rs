@@ -18,7 +18,9 @@ use std::time::Duration;
 
 use async_channel::Sender;
 use databend_common_base::JoinHandle;
+use databend_common_base::runtime::AllocProfile;
 use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::PerfSamples;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::QueryPerfGuard;
 use databend_common_base::runtime::ThreadTracker;
@@ -55,6 +57,7 @@ impl StatisticsSender {
         exchange: FlightExchange,
         executor: Arc<PipelineExecutor>,
         perf_guard: Option<QueryPerfGuard>,
+        alloc_profile: Option<Arc<AllocProfile>>,
         profile_rx: oneshot::Receiver<HashMap<u32, PlanProfile>>,
     ) -> Self {
         let spawner = ctx.clone();
@@ -136,7 +139,7 @@ impl StatisticsSender {
                         warn!("Statistics send has error, cause: {:?}.", error);
                     }
 
-                    if let Err(error) = Self::send_perf(&perf_guard, &tx).await {
+                    if let Err(error) = Self::send_perf(&perf_guard, &alloc_profile, &tx).await {
                         warn!("Perf send has error, cause: {:?}.", error);
                     }
 
@@ -282,14 +285,22 @@ impl StatisticsSender {
         flight_sender.send(data_packet).await
     }
 
+    /// Sends the call stacks sampled by `EXPLAIN PERF` on this node to the coordinator.
     async fn send_perf(
         perf_guard: &Option<QueryPerfGuard>,
+        alloc_profile: &Option<Arc<AllocProfile>>,
         flight_sender: &FlightSender,
     ) -> Result<()> {
+        let mut samples = PerfSamples::default();
         if let Some((_flag_guard, profiler_guard)) = perf_guard {
-            let dumped = QueryPerf::dump(profiler_guard)?;
-            let data_packet = DataPacket::QueryPerf(dumped);
-            flight_sender.send(data_packet).await?;
+            samples.cpu = QueryPerf::stacks(profiler_guard)?;
+        }
+        if let Some(alloc_profile) = alloc_profile {
+            samples.memory = alloc_profile.stacks();
+        }
+
+        if !samples.is_empty() {
+            flight_sender.send(DataPacket::QueryPerf(samples)).await?;
         }
         Ok(())
     }

@@ -34,6 +34,7 @@ use databend_common_base::runtime::IoStats;
 use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::PerfConfig;
+use databend_common_base::runtime::PerfSamples;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::drop_guard;
 use databend_common_catalog::catalog::Catalog;
@@ -177,7 +178,7 @@ pub struct QueryContextShared {
 
     // QueryPerf configuration (profiler + hw counters)
     pub(super) perf_config: Mutex<PerfConfig>,
-    pub(super) nodes_perf: Arc<Mutex<HashMap<String, String>>>,
+    pub(super) nodes_perf: Arc<Mutex<HashMap<String, PerfSamples>>>,
 
     pub(super) materialized_cte_receivers:
         Arc<Mutex<HashMap<String, Vec<Receiver<MaterializedCtePayload>>>>>,
@@ -888,13 +889,13 @@ impl QueryContextShared {
         self.perf_config.lock().profiler_enabled
     }
 
-    pub fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, String>>> {
+    pub fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, PerfSamples>>> {
         self.nodes_perf.clone()
     }
 
-    pub fn set_nodes_perf(&self, node: String, perf: String) {
+    pub fn set_nodes_perf(&self, node: String, samples: PerfSamples) {
         let mut nodes_perf = self.nodes_perf.lock();
-        nodes_perf.insert(node, perf);
+        nodes_perf.insert(node, samples);
     }
 }
 
