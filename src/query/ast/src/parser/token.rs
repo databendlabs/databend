@@ -556,6 +556,8 @@ pub enum TokenKind {
     COPY,
     #[token("COUNT", ignore(ascii_case))]
     COUNT,
+    #[token("CPU", ignore(ascii_case))]
+    CPU,
     #[token("CREDENTIAL", ignore(ascii_case))]
     CREDENTIAL,
     #[token("CREATE", ignore(ascii_case))]

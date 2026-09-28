@@ -16,18 +16,27 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_ast::ast::ExplainPerfFormat;
 use databend_common_base::base::convert_number_size;
+use databend_common_base::runtime::CpuStack;
+use databend_common_base::runtime::CpuSummaryLevel;
+use databend_common_base::runtime::LOW_CONFIDENCE_SAMPLES;
 use databend_common_base::runtime::PerfConfig;
 use databend_common_base::runtime::PerfEvent;
 use databend_common_base::runtime::PerfValue;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::cpu_folded_stacks;
+use databend_common_base::runtime::summarize_cpu_stacks;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_sql::Planner;
 use databend_meta_plugin_semaphore::acquirer::Permit;
@@ -46,12 +55,21 @@ pub struct ExplainPerfInterpreter {
     pub sql: String,
     pub ctx: Arc<QueryContext>,
     pub event_groups: Vec<Vec<PerfEvent>>,
+    pub format: ExplainPerfFormat,
+    pub limit: Option<u64>,
 }
+
+/// The functions per level in the `table` format by default.
+const DEFAULT_TABLE_LIMIT: usize = 20;
+/// The stacks in the `folded` format by default.
+const DEFAULT_FOLDED_LIMIT: usize = 100;
 
 impl ExplainPerfInterpreter {
     pub fn try_create(
         sql: String,
         event_group_names: Vec<Vec<String>>,
+        format: ExplainPerfFormat,
+        limit: Option<u64>,
         ctx: Arc<QueryContext>,
     ) -> Result<Self> {
         let event_groups = if event_group_names.is_empty() {
@@ -79,6 +97,8 @@ impl ExplainPerfInterpreter {
             sql,
             ctx,
             event_groups,
+            format,
+            limit,
         })
     }
 
@@ -107,6 +127,30 @@ impl ExplainPerfInterpreter {
         let (_flag_guard, profiler_guard) = perf_guard;
 
         let node_id = GlobalConfig::instance().query.node_id.clone();
+        match self.format {
+            ExplainPerfFormat::Html => {}
+            ExplainPerfFormat::Table => {
+                let stacks = QueryPerf::stacks(&profiler_guard)?;
+                let limit = self.limit.map_or(DEFAULT_TABLE_LIMIT, |x| x as usize);
+                return Ok(vec![self.table_block(
+                    &stacks,
+                    limit,
+                    &node_id,
+                    config.frequency,
+                )]);
+            }
+            ExplainPerfFormat::Folded => {
+                let stacks = QueryPerf::stacks(&profiler_guard)?;
+                let limit = self.limit.map_or(DEFAULT_FOLDED_LIMIT, |x| x as usize);
+                let (stacks, samples): (Vec<_>, Vec<_>) =
+                    cpu_folded_stacks(&stacks, Some(limit)).into_iter().unzip();
+                return Ok(vec![DataBlock::new_from_columns(vec![
+                    StringType::from_data(stacks),
+                    UInt64Type::from_data(samples),
+                ])]);
+            }
+        }
+
         let dumped = QueryPerf::dump(&profiler_guard)?;
         let other_nodes = self.ctx.get_nodes_perf().lock().clone();
         let mut html = QueryPerf::pretty_display(node_id, dumped, other_nodes.into_iter());
@@ -160,6 +204,89 @@ impl ExplainPerfInterpreter {
         .await;
         self.ctx.attach_query_lineage(previous_query_lineage);
         result
+    }
+
+    /// The CPU samples of this node by function, followed by the hardware counters of all nodes.
+    fn table_block(
+        &self,
+        stacks: &[CpuStack],
+        limit: usize,
+        node_id: &str,
+        frequency: i32,
+    ) -> DataBlock {
+        let mut level = vec![];
+        let mut plan_node = vec![];
+        let mut function = vec![];
+        let mut self_samples = vec![];
+        let mut total_samples = vec![];
+        let mut share = vec![];
+        let mut counter_value = vec![];
+        let mut low_confidence = vec![];
+        let mut note = vec![];
+
+        for row in summarize_cpu_stacks(stacks, limit) {
+            level.push(row.level.as_str().to_string());
+            plan_node.push(None);
+            note.push(match row.level {
+                CpuSummaryLevel::Summary => Some(format!(
+                    "Sampled at {frequency} Hz on node {node_id}, other cluster nodes are not included. \
+                     'function' rows rank the functions by self_samples, the samples in the function \
+                     itself. 'site' rows rank Databend functions by the self_samples of the stacks \
+                     whose innermost Databend frame they are, i.e. including the library code they \
+                     call. total_samples also count all callees. share is of all samples by \
+                     self_samples. Up to {limit} rows per level. 'counter' rows carry the hardware \
+                     counters of each plan node on every node."
+                )),
+                _ => None,
+            });
+            function.push(row.function);
+            self_samples.push(Some(row.self_samples));
+            total_samples.push(Some(row.total_samples));
+            share.push(Some(row.share));
+            counter_value.push(None);
+            low_confidence.push(row.self_samples < LOW_CONFIDENCE_SAMPLES);
+        }
+
+        let mut nodes = self
+            .ctx
+            .get_nodes_perf_counters()
+            .into_iter()
+            .collect::<Vec<_>>();
+        nodes.sort_by(|left, right| left.0.cmp(&right.0));
+        for (node, node_counters) in nodes {
+            for (plan, counters) in node_counters.counters {
+                let mut counters = counters.into_iter().collect::<Vec<_>>();
+                counters.sort_by_key(|(event, _)| event.display_name());
+                for (event, value) in counters {
+                    level.push("counter".to_string());
+                    plan_node.push(Some(plan.clone()));
+                    function.push(Some(event.display_name().to_string()));
+                    self_samples.push(None);
+                    total_samples.push(None);
+                    share.push(None);
+                    counter_value.push(Some(value.count));
+                    low_confidence.push(value.multiplexed);
+                    note.push(Some(match value.multiplexed {
+                        true => format!(
+                            "node {node}, multiplexed: the count is scaled from a partial run"
+                        ),
+                        false => format!("node {node}"),
+                    }));
+                }
+            }
+        }
+
+        DataBlock::new_from_columns(vec![
+            StringType::from_data(level),
+            StringType::from_opt_data(plan_node),
+            StringType::from_opt_data(function),
+            UInt64Type::from_opt_data(self_samples),
+            UInt64Type::from_opt_data(total_samples),
+            Float64Type::from_opt_data(share),
+            UInt64Type::from_opt_data(counter_value),
+            BooleanType::from_data(low_confidence),
+            StringType::from_opt_data(note),
+        ])
     }
 
     fn build_hw_counters_html(&self) -> String {

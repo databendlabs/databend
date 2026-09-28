@@ -21,6 +21,7 @@ databend-base = { workspace = true }
 databend-common-exception = { workspace = true }
 
 async-backtrace = { workspace = true }
+backtrace = { workspace = true }
 borsh = { workspace = true }
 bytemuck = { workspace = true }
 bytes = { workspace = true }

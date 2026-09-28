@@ -5,6 +5,12 @@ statement ok
 explain perf (events='cycles') select avg(number) from numbers(10000);
 
 statement ok
+explain perf cpu select avg(number) from numbers(10000);
+
+statement ok
+explain perf cpu (events='cycles') select avg(number) from numbers(10000);
+
+statement ok
 explain perf (events='cycles,instructions,l1d-read-misses,branch-misses,ll-read-misses') select avg(number) as n from numbers(10000) order by n limit 5
 
 statement ok
@@ -12,3 +18,13 @@ explain perf (events='cycles+instructions,branch-misses') select avg(number) fro
 
 statement error 1005
 explain perf (events='bad_arguments') select avg(number) from numbers(10000);
+
+query TTTIIRIBT
+explain perf cpu (format='table', limit='3') select sum(number) from numbers(10000000);
+----
+summary NULL NULL <slt:ignore>
+
+query TI
+explain perf (format='folded', limit='5') select sum(number) from numbers(10000000);
+----
+<slt:ignore>;<slt:ignore>

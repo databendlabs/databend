@@ -1,0 +1,26 @@
+statement ok
+explain perf memory select avg(number) from numbers(10000);
+
+query T
+explain perf memory select number % 100 as k, count(*) from numbers(1000000) group by k order by k;
+----
+<slt:ignore>Query Memory Allocation Report<slt:ignore>Allocated bytes by plan node<slt:ignore>AggregatePartial [#<slt:ignore>
+
+statement ok
+explain perf memory select * from numbers(10) where number > 100;
+
+statement error 1065
+explain perf memory (events='cycles') select avg(number) from numbers(10000);
+
+query TTTIIRBT
+explain perf memory (format='table', limit='2') select number % 100 as k, count(*) from numbers(1000000) group by k order by k;
+----
+summary NULL NULL <slt:ignore>plan AggregatePartial [#<slt:ignore>site AggregatePartial [#<slt:ignore>
+
+query TII
+explain perf memory (format='folded', limit='3') select number % 100 as k, count(*) from numbers(1000000) group by k order by k;
+----
+<slt:ignore>;<slt:ignore>
+
+statement error 1005
+explain perf memory (format='xml') select 1;

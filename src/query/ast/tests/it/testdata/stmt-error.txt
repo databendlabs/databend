@@ -21,6 +21,58 @@ error:
 
 
 ---------- Input ----------
+explain perf (format='xml') select a from b
+---------- Output ---------
+error: 
+  --> SQL:1:1
+  |
+1 | explain perf (format='xml') select a from b
+  | ^^^^^^^
+  | |
+  | expected 'html', 'table' or 'folded' as the format of EXPLAIN PERF
+  | while parsing `EXPLAIN PERF [CPU | MEMORY] [(events = '<event>,...', format = 'html | table | folded', limit = '<n>')] <statement>`
+
+
+---------- Input ----------
+explain perf memory (limit='0') select a from b
+---------- Output ---------
+error: 
+  --> SQL:1:1
+  |
+1 | explain perf memory (limit='0') select a from b
+  | ^^^^^^^
+  | |
+  | expected a positive integer as the limit of EXPLAIN PERF
+  | while parsing `EXPLAIN PERF [CPU | MEMORY] [(events = '<event>,...', format = 'html | table | folded', limit = '<n>')] <statement>`
+
+
+---------- Input ----------
+explain perf (depth='3') select a from b
+---------- Output ---------
+error: 
+  --> SQL:1:1
+  |
+1 | explain perf (depth='3') select a from b
+  | ^^^^^^^
+  | |
+  | expected 'events', 'format' or 'limit' as the option key for EXPLAIN PERF
+  | while parsing `EXPLAIN PERF [CPU | MEMORY] [(events = '<event>,...', format = 'html | table | folded', limit = '<n>')] <statement>`
+
+
+---------- Input ----------
+explain perf (format='table', format='folded') select a from b
+---------- Output ---------
+error: 
+  --> SQL:1:1
+  |
+1 | explain perf (format='table', format='folded') select a from b
+  | ^^^^^^^
+  | |
+  | duplicate option of EXPLAIN PERF
+  | while parsing `EXPLAIN PERF [CPU | MEMORY] [(events = '<event>,...', format = 'html | table | folded', limit = '<n>')] <statement>`
+
+
+---------- Input ----------
 CREATE DYNAMIC TABLE dt REFRESH_MODE = FULL AS SELECT id FROM a
 ---------- Output ---------
 error: 

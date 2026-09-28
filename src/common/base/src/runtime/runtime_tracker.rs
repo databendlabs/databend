@@ -62,6 +62,7 @@ use crate::runtime::MemStatBuffer;
 use crate::runtime::OutOfLimit;
 use crate::runtime::QueryPerf;
 use crate::runtime::TimeSeriesProfiles;
+use crate::runtime::memory::AllocProfile;
 use crate::runtime::memory::GlobalStatBuffer;
 use crate::runtime::memory::MemStat;
 use crate::runtime::metrics::ScopedRegistry;
@@ -150,6 +151,8 @@ pub struct TrackingPayload {
     pub workload_group_resource: Option<Arc<WorkloadGroupResource>>,
     pub processor_interrupt: Option<Arc<AtomicBool>>,
     pub perf_enabled: bool,
+    /// Samples the allocations of the thread, set by `EXPLAIN PERF MEMORY`.
+    pub alloc_profile: Option<Arc<AllocProfile>>,
     pub process_rows: AtomicUsize,
 }
 
@@ -328,6 +331,7 @@ impl Clone for TrackingPayload {
             workload_group_resource: self.workload_group_resource.clone(),
             processor_interrupt: self.processor_interrupt.clone(),
             perf_enabled: self.perf_enabled,
+            alloc_profile: self.alloc_profile.clone(),
             process_rows: AtomicUsize::new(
                 self.process_rows.load(std::sync::atomic::Ordering::SeqCst),
             ),
@@ -360,6 +364,7 @@ impl Drop for TrackingGuard {
 
             // Sync perf flag when restoring the previous payload
             QueryPerf::sync_from_payload(thread_tracker.payload.perf_enabled);
+            AllocProfile::sync_from_payload(thread_tracker.payload.alloc_profile.is_some());
         });
     }
 }
@@ -415,6 +420,7 @@ impl ThreadTracker {
                 workload_group_resource: None,
                 processor_interrupt: None,
                 perf_enabled: false,
+                alloc_profile: None,
                 process_rows: AtomicUsize::new(0),
             }),
         }
@@ -448,6 +454,7 @@ impl ThreadTracker {
 
             // Sync perf flag from the new payload to thread_local PERF_FLAG
             QueryPerf::sync_from_payload(thread_tracker.payload.perf_enabled);
+            AllocProfile::sync_from_payload(thread_tracker.payload.alloc_profile.is_some());
 
             guard
         })
@@ -509,6 +516,24 @@ impl ThreadTracker {
             borrow_mut.out_of_limit_desc = desc;
             old
         })
+    }
+
+    /// Calls `f` with the allocation profile of the current thread and the plan node the thread
+    /// works for. Does nothing if the thread is not profiled or the tracker is being updated.
+    pub(crate) fn with_alloc_profile(f: impl FnOnce(&AllocProfile, Option<(u32, &str)>)) {
+        let _ = TRACKER.try_with(|tracker| {
+            let Ok(tracker) = tracker.try_borrow() else {
+                return;
+            };
+            let Some(alloc_profile) = tracker.payload.alloc_profile.as_ref() else {
+                return;
+            };
+            let plan = tracker.payload.profile.as_ref().and_then(|profile| {
+                let name = profile.plan_name.as_deref().unwrap_or_default();
+                profile.plan_id.map(|id| (id, name))
+            });
+            f(alloc_profile, plan);
+        });
     }
 
     pub fn mem_stat() -> Option<&'static Arc<MemStat>> {

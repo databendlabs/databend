@@ -17,12 +17,15 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
+use databend_common_ast::ast::ExplainPerfFormat;
+use databend_common_ast::ast::ExplainPerfMode;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use educe::Educe;
 
 use super::CreateDictionaryPlan;
@@ -249,6 +252,9 @@ pub enum Plan {
     },
     ExplainPerf {
         sql: String,
+        mode: ExplainPerfMode,
+        format: ExplainPerfFormat,
+        limit: Option<u64>,
         event_groups: Vec<Vec<String>>,
     },
     ReportIssue(String),
@@ -605,9 +611,11 @@ impl Plan {
             | Plan::ExplainAst { .. }
             | Plan::ExplainSyntax { .. }
             | Plan::ExplainAnalyze { .. }
-            | Plan::ExplainPerf { .. } => {
-                DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
-            }
+            | Plan::ExplainPerf {
+                format: ExplainPerfFormat::Html,
+                ..
+            } => DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)]),
+            Plan::ExplainPerf { mode, format, .. } => explain_perf_schema(*mode, *format),
             Plan::DataMutation { schema, .. } => schema.clone(),
             Plan::ShowCreateCatalog(plan) => plan.schema(),
             Plan::ShowCreateDatabase(plan) => plan.schema(),
@@ -751,6 +759,49 @@ impl Plan {
             ignore_result: *ignore_result,
         }
     }
+}
+
+/// The result schema of `EXPLAIN PERF` in the `table` and `folded` formats.
+fn explain_perf_schema(mode: ExplainPerfMode, format: ExplainPerfFormat) -> DataSchemaRef {
+    let string = || DataType::String;
+    let nullable_string = || DataType::Nullable(Box::new(DataType::String));
+    let uint64 = || DataType::Number(NumberDataType::UInt64);
+    let float64 = || DataType::Number(NumberDataType::Float64);
+
+    let fields = match (mode, format) {
+        (_, ExplainPerfFormat::Html) => vec![DataField::new("explain", string())],
+        (ExplainPerfMode::Memory, ExplainPerfFormat::Table) => vec![
+            DataField::new("level", string()),
+            DataField::new("plan_node", nullable_string()),
+            DataField::new("site", nullable_string()),
+            DataField::new("bytes", uint64()),
+            DataField::new("samples", uint64()),
+            DataField::new("share", float64()),
+            DataField::new("low_confidence", DataType::Boolean),
+            DataField::new("note", nullable_string()),
+        ],
+        (ExplainPerfMode::Memory, ExplainPerfFormat::Folded) => vec![
+            DataField::new("stack", string()),
+            DataField::new("bytes", uint64()),
+            DataField::new("samples", uint64()),
+        ],
+        (ExplainPerfMode::Cpu, ExplainPerfFormat::Table) => vec![
+            DataField::new("level", string()),
+            DataField::new("plan_node", nullable_string()),
+            DataField::new("function", nullable_string()),
+            DataField::new("self_samples", DataType::Nullable(Box::new(uint64()))),
+            DataField::new("total_samples", DataType::Nullable(Box::new(uint64()))),
+            DataField::new("share", DataType::Nullable(Box::new(float64()))),
+            DataField::new("counter_value", DataType::Nullable(Box::new(uint64()))),
+            DataField::new("low_confidence", DataType::Boolean),
+            DataField::new("note", nullable_string()),
+        ],
+        (ExplainPerfMode::Cpu, ExplainPerfFormat::Folded) => vec![
+            DataField::new("stack", string()),
+            DataField::new("samples", uint64()),
+        ],
+    };
+    DataSchemaRefExt::create(fields)
 }
 
 #[cfg(test)]

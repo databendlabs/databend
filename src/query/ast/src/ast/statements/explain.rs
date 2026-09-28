@@ -43,9 +43,67 @@ pub enum ExplainKind {
 
     Graphical,
 
+    /// `EXPLAIN PERF [CPU | MEMORY] [(events = '...', format = '...', limit = '...')] <statement>`
     Perf {
+        mode: ExplainPerfMode,
+        format: ExplainPerfFormat,
+        /// The number of rows per group in the `table` and `folded` formats, `None` for the default.
+        limit: Option<u64>,
+        /// Hardware counter groups, only valid in the CPU mode.
         event_groups: Vec<Vec<String>>,
     },
+}
+
+/// How `EXPLAIN PERF` presents the samples.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Drive, DriveMut)]
+pub enum ExplainPerfFormat {
+    /// An HTML report with flamegraphs, for people.
+    #[default]
+    Html,
+    /// A bounded result set of the hottest plan nodes and functions, for agents and scripts.
+    Table,
+    /// Folded call stacks, one per row, for flamegraph tools and further analysis.
+    Folded,
+}
+
+impl ExplainPerfFormat {
+    pub fn from_name(name: &str) -> Option<ExplainPerfFormat> {
+        match name.to_lowercase().as_str() {
+            "html" => Some(ExplainPerfFormat::Html),
+            "table" => Some(ExplainPerfFormat::Table),
+            "folded" => Some(ExplainPerfFormat::Folded),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for ExplainPerfFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExplainPerfFormat::Html => write!(f, "html"),
+            ExplainPerfFormat::Table => write!(f, "table"),
+            ExplainPerfFormat::Folded => write!(f, "folded"),
+        }
+    }
+}
+
+/// What `EXPLAIN PERF` samples while running the statement.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Drive, DriveMut)]
+pub enum ExplainPerfMode {
+    /// Samples call stacks on CPU time, with optional hardware counters.
+    #[default]
+    Cpu,
+    /// Samples call stacks on allocated bytes, grouped by plan node.
+    Memory,
+}
+
+impl std::fmt::Display for ExplainPerfMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExplainPerfMode::Cpu => write!(f, "CPU"),
+            ExplainPerfMode::Memory => write!(f, "MEMORY"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Drive, DriveMut)]

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
+use databend_common_ast::ast::ExplainPerfMode;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -321,9 +322,31 @@ impl InterpreterFactory {
                 *partial,
                 *graphical,
             )?)),
-            Plan::ExplainPerf { sql, event_groups } => Ok(Arc::new(
-                ExplainPerfInterpreter::try_create(sql.clone(), event_groups.clone(), ctx)?,
-            )),
+            Plan::ExplainPerf {
+                sql,
+                mode: ExplainPerfMode::Cpu,
+                format,
+                limit,
+                event_groups,
+            } => Ok(Arc::new(ExplainPerfInterpreter::try_create(
+                sql.clone(),
+                event_groups.clone(),
+                *format,
+                *limit,
+                ctx,
+            )?)),
+            Plan::ExplainPerf {
+                sql,
+                mode: ExplainPerfMode::Memory,
+                format,
+                limit,
+                ..
+            } => Ok(Arc::new(ExplainMemoryInterpreter::try_create(
+                sql.clone(),
+                *format,
+                *limit,
+                ctx,
+            ))),
             Plan::ReportIssue(sql) => Ok(Arc::new(ReportIssueInterpreter::try_create(
                 ctx,
                 sql.clone(),

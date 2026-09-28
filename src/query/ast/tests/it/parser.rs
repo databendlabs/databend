@@ -128,6 +128,12 @@ fn test_statement() {
         r#"explain perf select a from b;"#,
         r#"explain perf (events='cycles,instructions') select a from b;"#,
         r#"explain perf (events='cycles+instructions,branch-misses') select a from b;"#,
+        r#"explain perf cpu select a from b;"#,
+        r#"explain perf cpu (events='cycles') select a from b;"#,
+        r#"explain perf memory select a from b;"#,
+        r#"explain perf (format='table') select a from b;"#,
+        r#"explain perf cpu (events='cycles', format='folded', limit='20') select a from b;"#,
+        r#"explain perf memory (format = 'TABLE', limit = '5') select a from b;"#,
         r#"explain analyze select * from t;"#,
         r#"describe a;"#,
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
@@ -1238,6 +1244,10 @@ fn test_statement_error() {
     let cases = &[
         r#"create table a.b (c integer not null 1, b float(10))"#,
         r#"SET SECONDARY ROLES"#,
+        r#"explain perf (format='xml') select a from b"#,
+        r#"explain perf memory (limit='0') select a from b"#,
+        r#"explain perf (depth='3') select a from b"#,
+        r#"explain perf (format='table', format='folded') select a from b"#,
         // REFRESH_MODE is no longer a dynamic table option.
         r#"CREATE DYNAMIC TABLE dt REFRESH_MODE = FULL AS SELECT id FROM a"#,
         r#"create table a (c float(10))"#,

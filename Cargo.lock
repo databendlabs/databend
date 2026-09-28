@@ -3411,6 +3411,7 @@ dependencies = [
  "anyerror",
  "anyhow",
  "async-backtrace",
+ "backtrace",
  "borsh",
  "bytemuck",
  "bytes",

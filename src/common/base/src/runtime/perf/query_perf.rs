@@ -21,6 +21,7 @@ use regex::Regex;
 
 use crate::runtime::ThreadTracker;
 use crate::runtime::TrackingGuard;
+use crate::runtime::perf::CpuStack;
 
 /// This flag need to be accessed in signal handler,
 /// so we use #[thread_local] and put it separately from ThreadTracker
@@ -76,6 +77,32 @@ impl QueryPerf {
             .map_err(|_e| ErrorCode::Internal("Failed to generate flamegraph SVG"))?;
 
         String::from_utf8(svg).map_err(|_e| ErrorCode::Internal("Failed to convert SVG to string"))
+    }
+
+    /// The sampled call stacks, frames outermost first.
+    pub fn stacks(profiler_guard: &ProfilerGuard<'static>) -> Result<Vec<CpuStack>> {
+        let report = profiler_guard
+            .report()
+            .frames_post_processor(frames_post_processor())
+            .build()
+            .map_err(|_e| ErrorCode::Internal("Failed to report profiler data"))?;
+
+        Ok(report
+            .data
+            .iter()
+            .filter(|(_, samples)| **samples > 0)
+            .map(|(frames, samples)| CpuStack {
+                thread: frames.thread_name_or_id(),
+                // Frames and the symbols inlined in them are stored innermost first.
+                frames: frames
+                    .frames
+                    .iter()
+                    .rev()
+                    .flat_map(|symbols| symbols.iter().rev().map(|symbol| symbol.name()))
+                    .collect(),
+                samples: *samples as u64,
+            })
+            .collect())
     }
 
     pub fn pretty_display(
@@ -147,7 +174,8 @@ fn frames_post_processor() -> impl Fn(&mut pprof::Frames) {
         if let Some(pos) = frames.frames.iter().position(|frame| {
             frame
                 .iter()
-                .any(|symbol| symbol.name() == PPROF_TRACE_SYMBOL)
+                // The symbol may carry generic arguments, e.g. `::<perf_signal_handler::{closure#0}>`.
+                .any(|symbol| symbol.name().starts_with(PPROF_TRACE_SYMBOL))
         }) {
             frames.frames.drain(..=pos);
         }

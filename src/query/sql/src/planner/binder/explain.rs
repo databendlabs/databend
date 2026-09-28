@@ -15,6 +15,7 @@
 use databend_common_ast::Span;
 use databend_common_ast::ast::ExplainKind;
 use databend_common_ast::ast::ExplainOption;
+use databend_common_ast::ast::ExplainPerfMode;
 use databend_common_ast::ast::Statement;
 use databend_common_base::runtime::PerfEvent;
 use databend_common_exception::ErrorCode;
@@ -157,7 +158,18 @@ impl Binder {
                     plan: Box::new(self.bind_statement(bind_context, inner).await?),
                 })
             }
-            ExplainKind::Perf { event_groups } => {
+            ExplainKind::Perf {
+                mode,
+                format,
+                limit,
+                event_groups,
+            } => {
+                if *mode == ExplainPerfMode::Memory && !event_groups.is_empty() {
+                    return Err(ErrorCode::SemanticError(
+                        "EXPLAIN PERF MEMORY does not take hardware events, they are only supported by EXPLAIN PERF CPU",
+                    ));
+                }
+
                 let mut seen = std::collections::HashSet::new();
                 for group in event_groups {
                     for name in group {
@@ -176,6 +188,9 @@ impl Binder {
                 }
                 Ok(Plan::ExplainPerf {
                     sql: inner.to_string(),
+                    mode: *mode,
+                    format: *format,
+                    limit: *limit,
                     event_groups: event_groups.clone(),
                 })
             }
