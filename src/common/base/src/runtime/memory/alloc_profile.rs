@@ -212,7 +212,7 @@ impl AllocProfile {
                 bytes,
             })
             .collect::<Vec<_>>();
-        stacks.sort_by(|left, right| right.bytes.cmp(&left.bytes));
+        stacks.sort_by_key(|stack| std::cmp::Reverse(stack.bytes));
         stacks
     }
 }
