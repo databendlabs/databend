@@ -1099,6 +1099,122 @@ evaluation (internal):
 +--------+-------------------------------------------+
 
 
+ast            : add_hours('2026-09-26 08:34:00', 1)
+raw expr       : add_hours('2026-09-26 08:34:00', 1)
+checked expr   : add_hours<Timestamp, Int64>(CAST<String>("2026-09-26 08:34:00" AS Timestamp), CAST<UInt8>(1_u8 AS Int64))
+optimized expr : 1790415240000000
+output type    : Timestamp
+output domain  : {1790415240000000..=1790415240000000}
+output         : '2026-09-26 09:34:00.000000'
+
+
+ast            : add_minutes('2026-09-26 08:34:00', 1)
+raw expr       : add_minutes('2026-09-26 08:34:00', 1)
+checked expr   : add_minutes<Timestamp, Int64>(CAST<String>("2026-09-26 08:34:00" AS Timestamp), CAST<UInt8>(1_u8 AS Int64))
+optimized expr : 1790411700000000
+output type    : Timestamp
+output domain  : {1790411700000000..=1790411700000000}
+output         : '2026-09-26 08:35:00.000000'
+
+
+ast            : add_seconds('2026-09-26 08:34:00', 1)
+raw expr       : add_seconds('2026-09-26 08:34:00', 1)
+checked expr   : add_seconds<Timestamp, Int64>(CAST<String>("2026-09-26 08:34:00" AS Timestamp), CAST<UInt8>(1_u8 AS Int64))
+optimized expr : 1790411641000000
+output type    : Timestamp
+output domain  : {1790411641000000..=1790411641000000}
+output         : '2026-09-26 08:34:01.000000'
+
+
+ast            : subtract_hours('2026-09-26 08:34:00', 1)
+raw expr       : subtract_hours('2026-09-26 08:34:00', 1)
+checked expr   : subtract_hours<Timestamp, Int64>(CAST<String>("2026-09-26 08:34:00" AS Timestamp), CAST<UInt8>(1_u8 AS Int64))
+optimized expr : 1790408040000000
+output type    : Timestamp
+output domain  : {1790408040000000..=1790408040000000}
+output         : '2026-09-26 07:34:00.000000'
+
+
+ast            : subtract_minutes('2026-09-26 08:34:00', 1)
+raw expr       : subtract_minutes('2026-09-26 08:34:00', 1)
+checked expr   : subtract_minutes<Timestamp, Int64>(CAST<String>("2026-09-26 08:34:00" AS Timestamp), CAST<UInt8>(1_u8 AS Int64))
+optimized expr : 1790411580000000
+output type    : Timestamp
+output domain  : {1790411580000000..=1790411580000000}
+output         : '2026-09-26 08:33:00.000000'
+
+
+ast            : subtract_seconds('2026-09-26 08:34:00', 1)
+raw expr       : subtract_seconds('2026-09-26 08:34:00', 1)
+checked expr   : subtract_seconds<Timestamp, Int64>(CAST<String>("2026-09-26 08:34:00" AS Timestamp), CAST<UInt8>(1_u8 AS Int64))
+optimized expr : 1790411639000000
+output type    : Timestamp
+output domain  : {1790411639000000..=1790411639000000}
+output         : '2026-09-26 08:33:59.000000'
+
+
+ast            : subtract_minutes('2026-09-26', 5)
+raw expr       : subtract_minutes('2026-09-26', 5)
+checked expr   : subtract_minutes<Timestamp, Int64>(CAST<String>("2026-09-26" AS Timestamp), CAST<UInt8>(5_u8 AS Int64))
+optimized expr : 1790380500000000
+output type    : Timestamp
+output domain  : {1790380500000000..=1790380500000000}
+output         : '2026-09-25 23:55:00.000000'
+
+
+ast            : add_days('2026-09-26 08:34:00', 1)
+raw expr       : add_days('2026-09-26 08:34:00', 1)
+checked expr   : add_days<Date, Int64>(CAST<String>("2026-09-26 08:34:00" AS Date), CAST<UInt8>(1_u8 AS Int64))
+optimized expr : 20723
+output type    : Date
+output domain  : {20723..=20723}
+output         : '2026-09-27'
+
+
+ast            : add_hours(a, b)
+raw expr       : add_hours(a::String, b::Int32)
+checked expr   : add_hours<Timestamp, Int64>(CAST<String>(a AS Timestamp), CAST<Int32>(b AS Int64))
+evaluation:
++--------+----------------------------------------+---------+------------------------------+
+|        | a                                      | b       | Output                       |
++--------+----------------------------------------+---------+------------------------------+
+| Type   | String                                 | Int32   | Timestamp                    |
+| Domain | {"2026-09-26"..="2026-09-26 08:34:00"} | {1..=2} | Unknown                      |
+| Row 0  | '2026-09-26 08:34:00'                  | 1       | '2026-09-26 09:34:00.000000' |
+| Row 1  | '2026-09-26'                           | 2       | '2026-09-26 02:00:00.000000' |
++--------+----------------------------------------+---------+------------------------------+
+evaluation (internal):
++--------+-------------------------------------------------------+
+| Column | Data                                                  |
++--------+-------------------------------------------------------+
+| a      | Column(StringColumn[2026-09-26 08:34:00, 2026-09-26]) |
+| b      | Column(Int32([1, 2]))                                 |
+| Output | Timestamp([1790415240000000, 1790388000000000])       |
++--------+-------------------------------------------------------+
+
+
+ast            : subtract_seconds(a, b)
+raw expr       : subtract_seconds(a::String, b::Int32)
+checked expr   : subtract_seconds<Timestamp, Int64>(CAST<String>(a AS Timestamp), CAST<Int32>(b AS Int64))
+evaluation:
++--------+----------------------------------------+---------+------------------------------+
+|        | a                                      | b       | Output                       |
++--------+----------------------------------------+---------+------------------------------+
+| Type   | String                                 | Int32   | Timestamp                    |
+| Domain | {"2026-09-26"..="2026-09-26 08:34:00"} | {1..=2} | Unknown                      |
+| Row 0  | '2026-09-26 08:34:00'                  | 1       | '2026-09-26 08:33:59.000000' |
+| Row 1  | '2026-09-26'                           | 2       | '2026-09-25 23:59:58.000000' |
++--------+----------------------------------------+---------+------------------------------+
+evaluation (internal):
++--------+-------------------------------------------------------+
+| Column | Data                                                  |
++--------+-------------------------------------------------------+
+| a      | Column(StringColumn[2026-09-26 08:34:00, 2026-09-26]) |
+| b      | Column(Int32([1, 2]))                                 |
+| Output | Timestamp([1790411639000000, 1790380798000000])       |
++--------+-------------------------------------------------------+
+
+
 ast            : date_add(year, 10000, to_date(0))
 raw expr       : add_years(to_date(0), 10000)
 checked expr   : add_years<Date, Int64>(CAST<Int64>(CAST<UInt8>(0_u8 AS Int64) AS Date), CAST<UInt16>(10000_u16 AS Int64))
