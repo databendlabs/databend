@@ -139,6 +139,7 @@ impl QueriesPipelineExecutor {
                         worker_id,
                         res: Ok(()),
                         graph,
+                        processor: None,
                     },
                 );
 
@@ -215,14 +216,15 @@ impl QueriesPipelineExecutor {
                     match execute_res {
                         Ok(res) => {
                             match res {
-                                Ok(Some((executed_pid, graph))) => {
+                                Ok(Some(executed)) => {
+                                    let executed_pid = executed.node();
+                                    let graph = executed.graph().clone();
                                     // Not scheduled graph if pipeline is finished.
                                     if !self.global_tasks_queue.is_finished()
                                         && !graph.is_should_finish()
                                     {
                                         // We immediately schedule the processor again.
-                                        let schedule_queue_res =
-                                            graph.clone().schedule_queue(executed_pid);
+                                        let schedule_queue_res = graph.schedule_queue(executed);
                                         match schedule_queue_res {
                                             Ok(schedule_queue) => {
                                                 schedule_queue.schedule_with_condition(

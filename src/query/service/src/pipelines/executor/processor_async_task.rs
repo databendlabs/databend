@@ -27,7 +27,6 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_pipeline::core::ProcessorPtr;
 use futures_util::FutureExt;
 use futures_util::future::BoxFuture;
 use futures_util::future::Either;
@@ -41,6 +40,7 @@ use crate::pipelines::executor::QueriesExecutorTasksQueue;
 use crate::pipelines::executor::QueryExecutorTasksQueue;
 use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WorkersCondvar;
+use crate::pipelines::executor::executor_graph::ProcessorWrapper;
 
 const TARGET_DUMP_GRAPH: &str = "databend::log::dump_graph";
 
@@ -94,38 +94,56 @@ pub struct ProcessorAsyncTask {
     instant: Instant,
     last_nanos: usize,
     graph: Arc<RunningGraph>,
-    inner: BoxFuture<'static, Result<()>>,
+    inner: BoxFuture<'static, (ProcessorWrapper, Result<()>)>,
 }
 
 impl ProcessorAsyncTask {
-    pub fn create<Inner: Future<Output = Result<()>> + Send + 'static>(
+    pub fn create(
         query_id: Arc<String>,
         worker_id: usize,
-        processor: ProcessorPtr,
+        processor: ProcessorWrapper,
         queue: Arc<ExecutorTasksQueue>,
         workers_condvar: Arc<WorkersCondvar>,
-        graph: Arc<RunningGraph>,
-        inner: Inner,
     ) -> ProcessorAsyncTask {
+        let processor_id = processor.node;
+        let graph = processor.graph().clone();
         let finished_notify = if queue.is_queries_executor() {
             graph.get_finished_notify()
         } else {
             queue.get_finished_notify()
         };
 
+        let graph_clone = graph.clone();
         let inner = async move {
-            let left = Box::pin(inner);
-            let right = Box::pin(finished_notify.notified());
-            match futures::future::select(left, right).await {
-                Either::Left((res, _)) => res,
-                Either::Right((_, _)) => Err(ErrorCode::AbortedQuery(
-                    "Query aborted due to server shutdown or query termination",
-                )),
-            }
+            let mut processor = processor;
+            let res = {
+                let process = Box::pin(processor.async_process());
+                let aborted = Box::pin(finished_notify.notified());
+                let aborted_error = || {
+                    Err(ErrorCode::AbortedQuery(
+                        "Query aborted due to server shutdown or query termination",
+                    ))
+                };
+                match graph_clone.node_async_cancelled(processor_id) {
+                    None => match futures::future::select(process, aborted).await {
+                        Either::Left((res, _)) => res,
+                        Either::Right(_) => aborted_error(),
+                    },
+                    Some(cancelled) => {
+                        let stop = futures::future::select(aborted, Box::pin(cancelled));
+                        match futures::future::select(process, stop).await {
+                            Either::Left((res, _)) => res,
+                            Either::Right((Either::Left(_), _)) => aborted_error(),
+                            // Every output has finished: drop `async_process` and let `event()`
+                            // finish the processor.
+                            Either::Right((Either::Right(_), _)) => Ok(()),
+                        }
+                    }
+                }
+            };
+            (processor, res)
         };
 
-        let processor_id = unsafe { processor.id() };
-        let processor_name = unsafe { processor.name() };
         let queue_clone = queue.clone();
         let graph_clone = graph.clone();
         let inner = async move {
@@ -140,6 +158,7 @@ impl ProcessorAsyncTask {
                         inner = right;
                         let elapsed = start.elapsed();
                         let active_workers = queue_clone.active_workers();
+                        let processor_name = graph_clone.node_name(processor_id);
                         warn!(
                             "Slow async task detected - query: {:?}, processor: {:?} ({}), elapsed: {:?}, active workers: {:?}",
                             query_id, processor_id, processor_name, elapsed, active_workers
@@ -209,7 +228,7 @@ impl Future for ProcessorAsyncTask {
                 self.last_nanos = after_poll_nanos;
                 Poll::Pending
             }
-            Ok(Poll::Ready(res)) => {
+            Ok(Poll::Ready((processor, res))) => {
                 self.queue.completed_async_task(
                     self.workers_condvar.clone(),
                     CompletedAsyncTask::create(
@@ -217,6 +236,7 @@ impl Future for ProcessorAsyncTask {
                         self.worker_id,
                         res,
                         self.graph.clone(),
+                        Some(processor),
                     ),
                 );
                 Poll::Ready(())
@@ -229,6 +249,7 @@ impl Future for ProcessorAsyncTask {
                         self.worker_id,
                         Err(cause),
                         self.graph.clone(),
+                        None,
                     ),
                 );
 

@@ -525,7 +525,7 @@ mod tests {
                 let partial_sorts = pipeline
                     .graph
                     .node_weights()
-                    .filter(|node| unsafe { node.proc.name() }.contains("SortPartialTransform"))
+                    .filter(|node| node.proc.name().contains("SortPartialTransform"))
                     .count();
                 assert_eq!(
                     partial_sorts,

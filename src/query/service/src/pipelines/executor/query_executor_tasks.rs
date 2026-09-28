@@ -201,8 +201,6 @@ struct ExecutorTasks {
     workers_completed_async_tasks: Vec<VecDeque<CompletedAsyncTask>>,
 }
 
-unsafe impl Send for ExecutorTasks {}
-
 impl ExecutorTasks {
     pub fn create(workers_size: usize) -> ExecutorTasks {
         let mut workers_sync_tasks = Vec::with_capacity(workers_size);

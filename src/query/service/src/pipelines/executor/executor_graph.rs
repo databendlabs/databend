@@ -17,7 +17,9 @@ use std::collections::VecDeque;
 use std::collections::hash_map::Entry;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::future::Future;
 use std::sync::Arc;
+use std::sync::MutexGuard;
 use std::sync::PoisonError;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
@@ -50,7 +52,7 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::PlanProfile;
-use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProxyWakeCallback;
 use databend_common_pipeline::core::port::connect;
 use databend_common_pipeline::core::port_trigger::DirectedEdge;
@@ -70,6 +72,7 @@ use petgraph::dot::Dot;
 use petgraph::prelude::EdgeIndex;
 use petgraph::prelude::NodeIndex;
 use petgraph::prelude::StableGraph;
+use tokio::sync::Notify;
 
 use crate::pipelines::executor::ExecutorTask;
 use crate::pipelines::executor::ExecutorWorkerContext;
@@ -122,9 +125,60 @@ fn plan_node_memory_identity(profile: &Profile) -> String {
     identity
 }
 
+/// Cancellation request for a node's in-flight `async_process`, see
+/// `Processor::cancel_async_on_outputs_finished`.
+///
+/// The request is sticky: output ports never leave the finished state, so once every output has
+/// finished no later `async_process` of the node is useful either.
+#[derive(Default)]
+struct AsyncCancel {
+    requested: AtomicBool,
+    notify: Notify,
+}
+
+impl AsyncCancel {
+    fn request(&self) {
+        self.requested.store(true, Ordering::Release);
+        self.notify.notify_waiters();
+    }
+
+    async fn cancelled(&self) {
+        loop {
+            // Created before checking the flag: `notify_waiters` wakes every `Notified` that
+            // already exists, even if it has not been polled yet.
+            let notified = self.notify.notified();
+            if self.requested.load(Ordering::Acquire) {
+                return;
+            }
+            notified.await;
+        }
+    }
+}
+
+/// A node's scheduling state and its processor, guarded by one lock.
+///
+/// While the node is `Processing`, the processor is owned by a `ProcessorWrapper` and `processor`
+/// is `None`.
+struct Slot {
+    state: State,
+    processor: Option<Box<dyn Processor>>,
+}
+
+impl Slot {
+    fn processor(&mut self) -> Result<&mut dyn Processor> {
+        match self.processor.as_deref_mut() {
+            Some(processor) => Ok(processor),
+            None => Err(ErrorCode::Internal(
+                "Processor is not in the executor graph while scheduling it",
+            )),
+        }
+    }
+}
+
 pub(crate) struct Node {
-    state: std::sync::Mutex<State>,
-    pub(crate) processor: ProcessorPtr,
+    slot: std::sync::Mutex<Slot>,
+    cancel_async_on_outputs_finished: bool,
+    async_cancel: AsyncCancel,
 
     pub(crate) tracking_payload: TrackingPayload,
     updated_list: Arc<UpdateList>,
@@ -136,14 +190,15 @@ impl Node {
     pub fn create(
         pid: usize,
         scope: Option<Arc<PlanScope>>,
-        processor: &ProcessorPtr,
+        processor: Box<dyn Processor>,
         inputs_port: &[Arc<InputPort>],
         outputs_port: &[Arc<OutputPort>],
         time_series_profile: Option<Arc<TimeSeriesProfiles>>,
         plan_mem_stat: Option<Arc<MemStat>>,
         processor_interrupt: Arc<AtomicBool>,
     ) -> Arc<Node> {
-        let p_name = unsafe { processor.name() };
+        let p_name = processor.name();
+        let cancel_async_on_outputs_finished = processor.cancel_async_on_outputs_finished();
         let tracking_payload = {
             let mut tracking_payload = ThreadTracker::new_tracking_payload();
 
@@ -179,13 +234,32 @@ impl Node {
         };
 
         Arc::new(Node {
-            state: std::sync::Mutex::new(State::Idle),
-            processor: processor.clone(),
+            slot: std::sync::Mutex::new(Slot {
+                state: State::Idle,
+                processor: Some(processor),
+            }),
+            cancel_async_on_outputs_finished,
+            async_cancel: AsyncCancel::default(),
             updated_list: UpdateList::create(),
             inputs_port: inputs_port.to_vec(),
             outputs_port: outputs_port.to_vec(),
             tracking_payload,
         })
+    }
+
+    fn name(&self) -> &str {
+        self.tracking_payload
+            .profile
+            .as_ref()
+            .map_or("", |profile| profile.p_name.as_str())
+    }
+
+    fn lock_slot(&self) -> MutexGuard<'_, Slot> {
+        self.slot.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn outputs_finished(&self) -> bool {
+        !self.outputs_port.is_empty() && self.outputs_port.iter().all(|x| x.is_finished())
     }
 
     pub fn record_error(&self, error: NodeErrorType) {
@@ -335,7 +409,8 @@ impl ExecutingGraph {
         interrupt: &Arc<AtomicBool>,
     ) {
         let offset = graph.node_count();
-        for node in pipeline.graph.node_weights() {
+        let (nodes, edges) = pipeline.take_graph();
+        for node in nodes {
             let pid = graph.node_count();
             let mut time_series_profile = None;
 
@@ -362,20 +437,21 @@ impl ExecutingGraph {
                 )
             });
 
+            let node_index = NodeIndex::new(pid);
+            let mut processor = node.proc.into_inner();
+            processor.set_id(node_index);
+
             let graph_node_index = graph.add_node(Node::create(
                 pid,
-                node.scope.clone(),
-                &node.proc,
+                node.scope,
+                processor,
                 &node.inputs,
                 &node.outputs,
                 time_series_profile,
                 plan_mem_stat,
                 interrupt.clone(),
             ));
-
-            unsafe {
-                node.proc.set_id(graph_node_index);
-            }
+            debug_assert_eq!(graph_node_index, node_index);
         }
 
         // FIXME:
@@ -394,12 +470,10 @@ impl ExecutingGraph {
             }
         }
 
-        for edge in pipeline.graph.edge_indices() {
-            let index = EdgeIndex::new(edge.index());
-            if let Some((source, target)) = pipeline.graph.edge_endpoints(index) {
+        for (source, target, edge_weight) in edges {
+            {
                 let source = NodeIndex::new(offset + source.index());
                 let target = NodeIndex::new(offset + target.index());
-                let edge_weight = pipeline.graph.edge_weight(index).unwrap();
 
                 let edge_index = graph.add_edge(source, target, EdgeInfo {
                     input_index: edge_weight.input_index,
@@ -450,7 +524,13 @@ impl ExecutingGraph {
         unsafe {
             let mut schedule_queue = ScheduleQueue::with_capacity(capacity);
             for sink_index in locker.graph.externals(Direction::Outgoing) {
-                ExecutingGraph::schedule_queue(locker, sink_index, &mut schedule_queue, graph)?;
+                ExecutingGraph::schedule_queue(
+                    locker,
+                    sink_index,
+                    None,
+                    &mut schedule_queue,
+                    graph,
+                )?;
             }
 
             Ok(schedule_queue)
@@ -463,103 +543,121 @@ impl ExecutingGraph {
     pub unsafe fn schedule_queue(
         locker: &StateLockGuard,
         index: NodeIndex,
+        mut executed: Option<Box<dyn Processor>>,
         schedule_queue: &mut ScheduleQueue,
         graph: &Arc<RunningGraph>,
     ) -> Result<()> {
-        unsafe {
-            let mut need_schedule_nodes = VecDeque::new();
-            let mut need_schedule_edges = VecDeque::new();
+        let mut need_schedule_nodes = VecDeque::new();
+        let mut need_schedule_edges = VecDeque::new();
 
-            need_schedule_nodes.push_back(index);
+        need_schedule_nodes.push_back(index);
 
-            while !need_schedule_nodes.is_empty() || !need_schedule_edges.is_empty() {
-                // To avoid lock too many times, we will try to cache lock.
-                let mut state_guard_cache = None;
-                let mut event_cause = EventCause::Other;
+        while !need_schedule_nodes.is_empty() || !need_schedule_edges.is_empty() {
+            // To avoid lock too many times, we will try to cache lock.
+            let mut state_guard_cache = None;
+            let mut event_cause = EventCause::Other;
 
-                if need_schedule_nodes.is_empty() {
-                    let edge = need_schedule_edges.pop_front().unwrap();
-                    let target_index = DirectedEdge::get_target(&edge, &locker.graph)?;
+            if need_schedule_nodes.is_empty() {
+                let edge = need_schedule_edges.pop_front().unwrap();
+                let target_index = DirectedEdge::get_target(&edge, &locker.graph)?;
 
-                    event_cause = match edge {
-                        DirectedEdge::Source(index) => {
-                            EventCause::Input(locker.graph.edge_weight(index).unwrap().input_index)
-                        }
-                        DirectedEdge::Target(index) => EventCause::Output(
-                            locker.graph.edge_weight(index).unwrap().output_index,
-                        ),
-                    };
-
-                    let node = &locker.graph[target_index];
-                    let node_state = node.state.lock().unwrap_or_else(PoisonError::into_inner);
-
-                    if matches!(*node_state, State::Idle) {
-                        state_guard_cache = Some(node_state);
-                        need_schedule_nodes.push_back(target_index);
-                    } else {
-                        node.processor.un_reacted(event_cause.clone())?;
+                event_cause = match edge {
+                    DirectedEdge::Source(index) => {
+                        EventCause::Input(locker.graph.edge_weight(index).unwrap().input_index)
                     }
-                }
+                    DirectedEdge::Target(index) => {
+                        EventCause::Output(locker.graph.edge_weight(index).unwrap().output_index)
+                    }
+                };
 
-                if let Some(schedule_index) = need_schedule_nodes.pop_front() {
-                    let node = &locker.graph[schedule_index];
-                    let (event, process_rows) = {
-                        let mut payload = node.tracking_payload.clone();
-                        payload.process_rows = AtomicUsize::new(0);
-                        let guard = ThreadTracker::tracking(payload);
+                let node = &locker.graph[target_index];
+                let slot = node.lock_slot();
 
-                        if state_guard_cache.is_none() {
-                            state_guard_cache = Some(node.state.lock().unwrap());
-                        }
-
-                        let event = node.processor.event(event_cause)?;
-                        let process_rows = ThreadTracker::process_rows();
-                        match guard.flush() {
-                            Ok(_) => Ok((event, process_rows)),
-                            Err(out_of_limit) => Err(out_of_limit_error(out_of_limit)),
-                        }
-                    }?;
-
-                    trace!(
-                        "node id: {:?}, name: {:?}, event: {:?}",
-                        node.processor.id(),
-                        node.processor.name(),
-                        event
-                    );
-                    let processor_state = match event {
-                        Event::Finished => {
-                            if !matches!(state_guard_cache.as_deref(), Some(State::Finished)) {
-                                locker.finished_nodes.fetch_add(1, Ordering::SeqCst);
-                            }
-
-                            State::Finished
-                        }
-                        Event::NeedData | Event::NeedConsume => State::Idle,
-                        Event::Sync => {
-                            schedule_queue.push_sync(ProcessorWrapper {
-                                processor: node.processor.clone(),
-                                graph: graph.clone(),
-                                process_rows,
-                            });
-                            State::Processing
-                        }
-                        Event::Async => {
-                            schedule_queue.push_async(ProcessorWrapper {
-                                processor: node.processor.clone(),
-                                graph: graph.clone(),
-                                process_rows,
-                            });
-                            State::Processing
-                        }
-                    };
-
-                    node.trigger(&mut need_schedule_edges);
-                    *state_guard_cache.unwrap() = processor_state;
+                if matches!(slot.state, State::Idle) {
+                    state_guard_cache = Some(slot);
+                    need_schedule_nodes.push_back(target_index);
+                } else if node.cancel_async_on_outputs_finished
+                    && matches!(slot.state, State::Processing)
+                    && matches!(event_cause, EventCause::Output(_))
+                    && node.outputs_finished()
+                {
+                    node.async_cancel.request();
                 }
             }
 
-            Ok(())
+            if let Some(schedule_index) = need_schedule_nodes.pop_front() {
+                let node = &locker.graph[schedule_index];
+                let slot = state_guard_cache.get_or_insert_with(|| node.lock_slot());
+                match executed.take() {
+                    // The node that just finished executing hands its processor back.
+                    Some(processor) => slot.processor = Some(processor),
+                    // A wake-up for a running or finished node. A running node calls `event()`
+                    // when it completes, so there is nothing to do.
+                    None if !matches!(slot.state, State::Idle) => continue,
+                    None => {}
+                }
+
+                let (event, process_rows) = {
+                    let mut payload = node.tracking_payload.clone();
+                    payload.process_rows = AtomicUsize::new(0);
+                    let guard = ThreadTracker::tracking(payload);
+
+                    let slot = state_guard_cache.as_mut().unwrap();
+                    let event = slot.processor()?.event_with_cause(event_cause)?;
+                    let process_rows = ThreadTracker::process_rows();
+                    match guard.flush() {
+                        Ok(_) => Ok((event, process_rows)),
+                        Err(out_of_limit) => Err(out_of_limit_error(out_of_limit)),
+                    }
+                }?;
+
+                trace!(
+                    "node id: {:?}, name: {:?}, event: {:?}",
+                    schedule_index,
+                    node.name(),
+                    event
+                );
+                let processor_state = match event {
+                    Event::Finished => {
+                        if !matches!(
+                            state_guard_cache.as_deref().map(|x| &x.state),
+                            Some(State::Finished)
+                        ) {
+                            locker.finished_nodes.fetch_add(1, Ordering::SeqCst);
+                        }
+
+                        State::Finished
+                    }
+                    Event::NeedData | Event::NeedConsume => State::Idle,
+                    Event::Sync => {
+                        let slot = state_guard_cache.as_mut().unwrap();
+                        schedule_queue.push_sync(ProcessorWrapper::create(
+                            schedule_index,
+                            slot.processor.take(),
+                            graph,
+                            process_rows,
+                        ));
+                        State::Processing
+                    }
+                    Event::Async => {
+                        let slot = state_guard_cache.as_mut().unwrap();
+                        schedule_queue.push_async(ProcessorWrapper::create(
+                            schedule_index,
+                            slot.processor.take(),
+                            graph,
+                            process_rows,
+                        ));
+                        State::Processing
+                    }
+                };
+
+                // SAFETY: the caller of `schedule_queue` serializes access to the graph.
+                unsafe { node.trigger(&mut need_schedule_edges) };
+                state_guard_cache.unwrap().state = processor_state;
+            }
         }
+
+        Ok(())
     }
 
     /// Checks if a task can be performed in the current epoch, consuming a point if possible.
@@ -599,11 +697,125 @@ impl ExecutingGraph {
     }
 }
 
-#[derive(Clone)]
+/// A scheduled processor. The wrapper owns the processor while it runs, so only the worker holding
+/// it can drive the processor.
+///
+/// Rescheduling the node hands the processor back to the graph (`RunningGraph::schedule_queue`).
+/// A wrapper that is dropped instead, e.g. after an error or when the query shuts down, also
+/// returns it, so processors are always dropped together with the graph.
 pub struct ProcessorWrapper {
-    pub processor: ProcessorPtr,
-    pub graph: Arc<RunningGraph>,
+    pub node: NodeIndex,
+    /// Always `Some` while the wrapper is alive. It is an `Option` only so that the processor can
+    /// be moved out when the wrapper is consumed: by `RunningGraph::schedule_queue` on the normal
+    /// path, or by `Drop` otherwise.
+    processor: Option<Box<dyn Processor>>,
+    graph: Arc<RunningGraph>,
     pub process_rows: usize,
+}
+
+impl ProcessorWrapper {
+    fn create(
+        node: NodeIndex,
+        processor: Option<Box<dyn Processor>>,
+        graph: &Arc<RunningGraph>,
+        process_rows: usize,
+    ) -> ProcessorWrapper {
+        debug_assert!(processor.is_some());
+        ProcessorWrapper {
+            node,
+            processor,
+            graph: graph.clone(),
+            process_rows,
+        }
+    }
+
+    pub fn graph(&self) -> &Arc<RunningGraph> {
+        &self.graph
+    }
+
+    pub fn processor(&mut self) -> &mut dyn Processor {
+        self.processor
+            .as_deref_mut()
+            .expect("ProcessorWrapper owns its processor until it is dropped")
+    }
+
+    /// Runs `async_process` inside a span named after the processor.
+    pub async fn async_process(&mut self) -> Result<()> {
+        let node = self.node;
+        let span =
+            Span::enter_with_local_parent(format!("{}::async_process", self.graph.node_name(node)))
+                .with_property(|| ("graph-node-id", node.index().to_string()));
+
+        match self.processor().async_process().await {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                span.with_property(|| ("error", "true")).add_properties(|| {
+                    [
+                        ("error.type", err.code().to_string()),
+                        ("error.message", err.display_text()),
+                    ]
+                });
+                log::info!(error = err.to_string(); "Error in process");
+                Err(err)
+            }
+        }
+    }
+}
+
+/// Hands the processor back to its node's slot when a wrapper is dropped without being
+/// rescheduled.
+///
+/// On the normal path `RunningGraph::schedule_queue` has already taken the processor, so this is
+/// a no-op. It only does work when a scheduled task is abandoned:
+/// - `process()` or `async_process()` returned an error and the worker gives up the task;
+/// - the query finishes or is aborted while tasks are still queued, and the queues are dropped;
+/// - a spawned `ProcessorAsyncTask` is dropped before completing (e.g. runtime shutdown, or its
+///   future panicked and is dropped later).
+///
+/// Without this, the processor would be dropped right there, on whatever worker or runtime thread
+/// abandoned the task, while the rest of the query may still be running. Before processors were
+/// owned by the scheduled task they always lived until the graph was dropped, and processors
+/// rely on that: dropping one early releases what it holds (channel senders, spill files, shared
+/// state), which peers can observe as an unexpected disconnect and may report as an error before
+/// the real cause is recorded. Returning the processor keeps that lifetime unchanged.
+///
+/// The node's state is left as `Processing`, so the node is never scheduled again and the
+/// processor is only dropped together with the graph. Taking the slot lock here cannot deadlock:
+/// wrappers are created while the scheduler holds that lock, but they are only moved into the
+/// schedule queue there, never dropped.
+impl Drop for ProcessorWrapper {
+    fn drop(&mut self) {
+        if let Some(processor) = self.processor.take() {
+            self.graph.0.graph[self.node].lock_slot().processor = Some(processor);
+        }
+    }
+}
+
+/// Why a node is scheduled again.
+pub enum Reschedule {
+    /// The node finished executing and hands its processor back.
+    Executed(ProcessorWrapper),
+    /// The node was woken through its `ExecutorWaker`. Ignored unless the node is idle.
+    Woken {
+        node: NodeIndex,
+        graph: Arc<RunningGraph>,
+    },
+}
+
+impl Reschedule {
+    pub fn node(&self) -> NodeIndex {
+        match self {
+            Reschedule::Executed(executed) => executed.node,
+            Reschedule::Woken { node, .. } => *node,
+        }
+    }
+
+    pub fn graph(&self) -> &Arc<RunningGraph> {
+        match self {
+            Reschedule::Executed(executed) => &executed.graph,
+            Reschedule::Woken { graph, .. } => graph,
+        }
+    }
 }
 
 pub struct ScheduleQueue {
@@ -638,7 +850,7 @@ impl ScheduleQueue {
         debug_assert!(!context.has_task());
 
         while let Some(processor) = self.async_queue.pop_front() {
-            let query_id = processor.graph.get_query_id().clone();
+            let query_id = processor.graph().get_query_id().clone();
             Self::schedule_async_task(
                 processor,
                 query_id,
@@ -666,28 +878,21 @@ impl ScheduleQueue {
         workers_condvar: Arc<WorkersCondvar>,
         global_queue: Arc<QueryExecutorTasksQueue>,
     ) {
-        unsafe {
-            workers_condvar.inc_active_async_worker();
-            let graph = proc.graph;
-            let node_index = proc.processor.id();
-            let tracking_payload = graph.get_node_tracking_payload(node_index).clone();
-            let _guard = ThreadTracker::tracking(tracking_payload.clone());
-            let process_future = proc.processor.async_process();
-            let processor_task = ProcessorAsyncTask::create(
-                query_id,
-                wakeup_worker_id,
-                proc.processor.clone(),
-                Arc::new(ExecutorTasksQueue::QueryExecutorTasksQueue(global_queue)),
-                workers_condvar,
-                graph,
-                process_future,
-            );
-            executor.async_runtime.spawn(
-                tracking_payload.clone().tracking(processor_task).in_span(
-                    Span::enter_with_local_parent(std::any::type_name::<ProcessorAsyncTask>()),
-                ),
-            );
-        }
+        workers_condvar.inc_active_async_worker();
+        let tracking_payload = proc.graph().get_node_tracking_payload(proc.node).clone();
+        let _guard = ThreadTracker::tracking(tracking_payload.clone());
+        let processor_task = ProcessorAsyncTask::create(
+            query_id,
+            wakeup_worker_id,
+            proc,
+            Arc::new(ExecutorTasksQueue::QueryExecutorTasksQueue(global_queue)),
+            workers_condvar,
+        );
+        executor
+            .async_runtime
+            .spawn(tracking_payload.tracking(processor_task).in_span(
+                Span::enter_with_local_parent(std::any::type_name::<ProcessorAsyncTask>()),
+            ));
     }
 
     fn schedule_sync(&mut self, _: &QueryExecutorTasksQueue, ctx: &mut ExecutorWorkerContext) {
@@ -720,10 +925,10 @@ impl ScheduleQueue {
 
         while let Some(processor) = self.async_queue.pop_front() {
             if processor
-                .graph
+                .graph()
                 .can_perform_task(executor.epoch.load(Ordering::SeqCst))
             {
-                let query_id = processor.graph.get_query_id().clone();
+                let query_id = processor.graph().get_query_id().clone();
                 Self::schedule_async_task_with_condition(
                     processor,
                     query_id,
@@ -743,7 +948,7 @@ impl ScheduleQueue {
 
         if let Some(processor) = self.sync_queue.pop_front() {
             if processor
-                .graph
+                .graph()
                 .can_perform_task(executor.epoch.load(Ordering::SeqCst))
             {
                 context.set_task(ExecutorTask::Sync(processor));
@@ -769,28 +974,21 @@ impl ScheduleQueue {
         workers_condvar: Arc<WorkersCondvar>,
         global_queue: Arc<QueriesExecutorTasksQueue>,
     ) {
-        unsafe {
-            workers_condvar.inc_active_async_worker();
-            let graph = proc.graph;
-            let node_index = proc.processor.id();
-            let tracking_payload = graph.get_node_tracking_payload(node_index).clone();
-            let _guard = ThreadTracker::tracking(tracking_payload.clone());
-            let process_future = proc.processor.async_process();
-            let processor_task = ProcessorAsyncTask::create(
-                query_id,
-                wakeup_worker_id,
-                proc.processor.clone(),
-                Arc::new(ExecutorTasksQueue::QueriesExecutorTasksQueue(global_queue)),
-                workers_condvar,
-                graph,
-                process_future,
-            );
-            executor.async_runtime.spawn(
-                tracking_payload.clone().tracking(processor_task).in_span(
-                    Span::enter_with_local_parent(std::any::type_name::<ProcessorAsyncTask>()),
-                ),
-            );
-        }
+        workers_condvar.inc_active_async_worker();
+        let tracking_payload = proc.graph().get_node_tracking_payload(proc.node).clone();
+        let _guard = ThreadTracker::tracking(tracking_payload.clone());
+        let processor_task = ProcessorAsyncTask::create(
+            query_id,
+            wakeup_worker_id,
+            proc,
+            Arc::new(ExecutorTasksQueue::QueriesExecutorTasksQueue(global_queue)),
+            workers_condvar,
+        );
+        executor
+            .async_runtime
+            .spawn(tracking_payload.tracking(processor_task).in_span(
+                Span::enter_with_local_parent(std::any::type_name::<ProcessorAsyncTask>()),
+            ));
     }
 }
 
@@ -843,16 +1041,40 @@ impl RunningGraph {
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
-    pub unsafe fn schedule_queue(self: Arc<Self>, node_index: NodeIndex) -> Result<ScheduleQueue> {
+    pub unsafe fn schedule_queue(
+        self: &Arc<Self>,
+        reschedule: Reschedule,
+    ) -> Result<ScheduleQueue> {
+        debug_assert!(Arc::ptr_eq(self, reschedule.graph()));
+        let (node, processor) = match reschedule {
+            Reschedule::Executed(mut executed) => (executed.node, executed.processor.take()),
+            Reschedule::Woken { node, .. } => (node, None),
+        };
+
+        let mut schedule_queue = ScheduleQueue::with_capacity(0);
         unsafe {
-            let mut schedule_queue = ScheduleQueue::with_capacity(0);
-            ExecutingGraph::schedule_queue(&self.0, node_index, &mut schedule_queue, &self)?;
-            Ok(schedule_queue)
+            ExecutingGraph::schedule_queue(&self.0, node, processor, &mut schedule_queue, self)?;
         }
+        Ok(schedule_queue)
     }
 
     pub(crate) fn get_node_tracking_payload(&self, pid: NodeIndex) -> &TrackingPayload {
         &self.0.graph[pid].tracking_payload
+    }
+
+    pub(crate) fn node_name(&self, pid: NodeIndex) -> &str {
+        self.0.graph[pid].name()
+    }
+
+    /// Resolves when the node's in-flight `async_process` should be dropped, see
+    /// `Processor::cancel_async_on_outputs_finished`. `None` if the node never cancels.
+    pub(crate) fn node_async_cancelled(
+        &self,
+        pid: NodeIndex,
+    ) -> Option<impl Future<Output = ()> + Send + '_> {
+        let node = &self.0.graph[pid];
+        node.cancel_async_on_outputs_finished
+            .then(|| node.async_cancel.cancelled())
     }
 
     pub fn perf_event_groups(&self) -> &[Vec<PerfEvent>] {
@@ -1064,67 +1286,69 @@ impl RunningGraph {
         let mut nodes_display = Vec::with_capacity(self.0.graph.node_count());
 
         for node_index in self.0.graph.node_indices() {
-            unsafe {
-                let state = self.0.graph[node_index].state.lock().unwrap();
-                let inputs_status = self.0.graph[node_index]
-                    .inputs_port
-                    .iter()
-                    .map(|x| {
-                        let finished = match x.is_finished() {
-                            true => "Finished",
-                            false => "Unfinished",
-                        };
+            let node = &self.0.graph[node_index];
+            let slot = node.lock_slot();
+            // A running processor is owned by its worker, so only idle or finished ones report.
+            let details_status = slot.processor.as_ref().and_then(|x| x.details_status());
 
-                        let has_data = match x.has_data() {
-                            true => "HasData",
-                            false => "Nodata",
-                        };
+            let inputs_status = node
+                .inputs_port
+                .iter()
+                .map(|x| {
+                    let finished = match x.is_finished() {
+                        true => "Finished",
+                        false => "Unfinished",
+                    };
 
-                        let need_data = match x.is_need_data() {
-                            true => "NeedData",
-                            false => "UnNeeded",
-                        };
+                    let has_data = match x.has_data() {
+                        true => "HasData",
+                        false => "Nodata",
+                    };
 
-                        (finished, has_data, need_data)
-                    })
-                    .collect::<Vec<_>>();
+                    let need_data = match x.is_need_data() {
+                        true => "NeedData",
+                        false => "UnNeeded",
+                    };
 
-                let outputs_status = self.0.graph[node_index]
-                    .outputs_port
-                    .iter()
-                    .map(|x| {
-                        let finished = match x.is_finished() {
-                            true => "Finished",
-                            false => "Unfinished",
-                        };
+                    (finished, has_data, need_data)
+                })
+                .collect::<Vec<_>>();
 
-                        let has_data = match x.has_data() {
-                            true => "HasData",
-                            false => "Nodata",
-                        };
+            let outputs_status = node
+                .outputs_port
+                .iter()
+                .map(|x| {
+                    let finished = match x.is_finished() {
+                        true => "Finished",
+                        false => "Unfinished",
+                    };
 
-                        let need_data = match x.is_need_data() {
-                            true => "NeedData",
-                            false => "UnNeeded",
-                        };
+                    let has_data = match x.has_data() {
+                        true => "HasData",
+                        false => "Nodata",
+                    };
 
-                        (finished, has_data, need_data)
-                    })
-                    .collect::<Vec<_>>();
+                    let need_data = match x.is_need_data() {
+                        true => "NeedData",
+                        false => "UnNeeded",
+                    };
 
-                nodes_display.push(NodeDisplay {
-                    inputs_status,
-                    outputs_status,
-                    id: self.0.graph[node_index].processor.id().index(),
-                    name: self.0.graph[node_index].processor.name(),
-                    details_status: self.0.graph[node_index].processor.details_status(),
-                    state: String::from(match *state {
-                        State::Idle => "Idle",
-                        State::Processing => "Processing",
-                        State::Finished => "Finished",
-                    }),
-                });
-            }
+                    (finished, has_data, need_data)
+                })
+                .collect::<Vec<_>>();
+
+            nodes_display.push(NodeDisplay {
+                inputs_status,
+                outputs_status,
+                id: node_index.index(),
+                name: node.name().to_string(),
+                details_status,
+                state: String::from(match slot.state {
+                    State::Idle => "Idle",
+                    State::Processing => "Processing",
+                    State::Finished => "Finished",
+                }),
+            });
         }
 
         if pretty {
@@ -1205,7 +1429,7 @@ impl Drop for RunningGraph {
 
 impl Debug for Node {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
-        unsafe { write!(f, "{}", self.processor.name()) }
+        write!(f, "{}", self.name())
     }
 }
 
@@ -1244,28 +1468,19 @@ impl Debug for ScheduleQueue {
             name: String,
         }
 
-        unsafe {
-            let mut sync_queue = Vec::with_capacity(self.sync_queue.len());
-            let mut async_queue = Vec::with_capacity(self.async_queue.len());
-
-            for item in &self.sync_queue {
-                sync_queue.push(QueueItem {
-                    id: item.processor.id().index(),
-                    name: item.processor.name().to_string(),
+        let queue_items = |queue: &VecDeque<ProcessorWrapper>| {
+            queue
+                .iter()
+                .map(|item| QueueItem {
+                    id: item.node.index(),
+                    name: item.graph.node_name(item.node).to_string(),
                 })
-            }
+                .collect::<Vec<_>>()
+        };
 
-            for item in &self.async_queue {
-                async_queue.push(QueueItem {
-                    id: item.processor.id().index(),
-                    name: item.processor.name().to_string(),
-                })
-            }
-
-            f.debug_struct("ScheduleQueue")
-                .field("sync_queue", &sync_queue)
-                .field("async_queue", &async_queue)
-                .finish()
-        }
+        f.debug_struct("ScheduleQueue")
+            .field("sync_queue", &queue_items(&self.sync_queue))
+            .field("async_queue", &queue_items(&self.async_queue))
+            .finish()
     }
 }

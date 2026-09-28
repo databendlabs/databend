@@ -23,7 +23,6 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
 use crate::core::Event;
-use crate::core::EventCause;
 use crate::core::OutputPort;
 use crate::core::Processor;
 use crate::core::ProcessorPtr;
@@ -34,10 +33,6 @@ pub trait AsyncSource: Send {
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
     async fn generate(&mut self) -> Result<Option<DataBlock>>;
-
-    fn un_reacted(&self) -> Result<()> {
-        Ok(())
-    }
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
@@ -106,14 +101,6 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
                 Ok(Event::NeedConsume)
             }
         }
-    }
-
-    fn un_reacted(&self, _cause: EventCause, _id: usize) -> Result<()> {
-        if let EventCause::Output(_output) = _cause {
-            self.inner.un_reacted()?;
-        }
-
-        Ok(())
     }
 
     #[async_backtrace::framed]
