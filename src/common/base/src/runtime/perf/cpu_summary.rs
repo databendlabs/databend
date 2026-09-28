@@ -167,6 +167,10 @@ pub fn cpu_flamegraph(stacks: &[CpuStack], title: &str) -> Result<String, String
         .into_iter()
         .map(|(stack, samples)| format!("{stack} {samples}"))
         .collect::<Vec<_>>();
+    // The flamegraph renderer fails without stacks, e.g. for a statement too short to be sampled.
+    if lines.is_empty() {
+        return Ok("<p>No samples were taken.</p>".to_string());
+    }
 
     let mut options = pprof::flamegraph::Options::default();
     options.title = title.to_string();
@@ -220,6 +224,16 @@ mod tests {
             frames: frames.iter().map(|x| x.to_string()).collect(),
             samples,
         }
+    }
+
+    #[test]
+    fn test_flamegraph_without_samples() {
+        assert!(cpu_flamegraph(&[], "cpu").unwrap().contains("No samples"));
+        assert!(
+            crate::runtime::alloc_flamegraph(&[], "memory")
+                .unwrap()
+                .contains("No samples")
+        );
     }
 
     #[test]

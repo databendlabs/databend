@@ -351,6 +351,10 @@ pub fn alloc_flamegraph(stacks: &[AllocStack], title: &str) -> Result<String, St
         .into_iter()
         .map(|(stack, bytes)| format!("{stack} {bytes}"))
         .collect::<Vec<_>>();
+    // The flamegraph renderer fails without stacks, e.g. for a statement too short to be sampled.
+    if lines.is_empty() {
+        return Ok("<p>No samples were taken.</p>".to_string());
+    }
 
     let mut options = pprof::flamegraph::Options::default();
     options.title = title.to_string();
