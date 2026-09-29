@@ -58,7 +58,8 @@ mod tests {
         let mut logical = SExpr::create(DummyTableScan::new(), vec![], Some(7), None, None);
         logical.set_applied_rule(&RuleID::EliminateEvalScalar);
         logical.derive_relational_prop()?;
-        RelExpr::with_s_expr(&logical).derive_cardinality(&StatContext::default())?;
+        RelExpr::with_s_expr(&logical)
+            .derive_cardinality(&StatContext::without_settings(Default::default()))?;
         let physical = PExpr::from(logical.clone());
         assert_eq!(physical.original_group(), Some(7));
         assert!(physical.applied_rule(&RuleID::EliminateEvalScalar));

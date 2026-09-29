@@ -105,6 +105,7 @@ async fn write_decimal_case(
         s_expr.planned()?.expr(),
         JoinType::Inner,
         name,
+        &ctx.stat_context()?,
     )?;
     assert_eq!(joins, 1);
     writeln!(file)?;
