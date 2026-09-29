@@ -12,18 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! `COMPACT SEGMENT` is a pipeline over the selected segments:
-//!
-//! 1. `read_segments_oldest_first` reads segments concurrently, in order.
-//! 2. `SegmentCompactor` plans merge groups in snapshot order, from summaries.
-//! 3. `MergeTasks` runs planned groups concurrently (`merge_group`); their
-//!    results are applied in plan order.
-//! 4. On selection/merge failure or cancellation, newly written outputs are
-//!    removed on a best-effort basis. Files orphaned by commit failure rely on vacuum.
-//!
-//! `max_threads` bounds concurrent merge groups; `max_storage_io_requests`
-//! bounds all storage requests (reads and writes) of one compaction.
-
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::future::Future;
