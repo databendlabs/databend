@@ -1445,7 +1445,6 @@ fn test_removed_vacuum_syntax() {
         "VACUUM ALL LIMIT 10",
         "VACUUM DROP TABLE DRY RUN",
         "VACUUM DROP TABLE DRY RUN SUMMARY",
-        "VACUUM DROP TABLE FROM db LIMIT 10",
         "VACUUM DROP TABLE FROM catalog.db",
         "VACUUM DROPPED OBJECTS FROM db LIMIT 10",
         "VACUUM DROPPED OBJECTS FROM catalog.db",
@@ -1462,6 +1461,24 @@ fn test_removed_vacuum_syntax() {
             parse_sql(&tokens, Dialect::PostgreSQL).is_err(),
             "removed syntax should fail to parse: {case}"
         );
+    }
+}
+
+#[test]
+fn test_vacuum_drop_table_legacy_limit_ignored() {
+    let cases = [
+        ("VACUUM DROP TABLE LIMIT 1000", "VACUUM DROP TABLE"),
+        (
+            "VACUUM DROP TABLE FROM db LIMIT 10",
+            "VACUUM DROP TABLE FROM db",
+        ),
+    ];
+
+    for (sql, expected) in cases {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        assert!(matches!(stmt, Statement::VacuumDropTable(_)), "{sql}");
+        assert_eq!(stmt.to_string(), expected, "{sql}");
     }
 }
 
