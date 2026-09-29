@@ -98,6 +98,10 @@ where A: TypeCheckAdapter
         arena: &CoreExprArena<'_>,
         root: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        // Must run before resolution: context special functions fold to literals.
+        if self.adapter.require_context_independent() {
+            arena.check_context_independent()?;
+        }
         self.adapter.check_core_expr_context(arena)?;
         self.resolve_core(arena, root)
     }

@@ -341,7 +341,67 @@ impl<'a> CoreExprArena<'a> {
     }
 }
 
+impl CoreExprArena<'_> {
+    /// Reject special functions whose value comes from the session or query
+    /// context. They are folded into literals during resolution, so this must
+    /// run on the lowered tree before any node is resolved.
+    pub(super) fn check_context_independent(&self) -> Result<()> {
+        for node in &self.nodes {
+            if let CoreExpr::SpecialFunction { span, function } = node
+                && let Some(func_name) = function.context_dependency()
+            {
+                return Err(ErrorCode::SemanticError(format!(
+                    "`{func_name}` depends on the session or query context and is not allowed in persisted or storage-level expressions"
+                ))
+                .set_span(*span));
+            }
+        }
+        Ok(())
+    }
+}
+
 impl SpecialFunction {
+    /// The canonical name of a function whose value depends on the session or
+    /// query context, or `None` for pure rewrites like `coalesce`.
+    fn context_dependency(&self) -> Option<&'static str> {
+        match self {
+            SpecialFunction::Namespace(NamespaceFunction::CurrentCatalog) => {
+                Some("current_catalog()")
+            }
+            SpecialFunction::Namespace(NamespaceFunction::CurrentDatabase) => {
+                Some("current_database()")
+            }
+            SpecialFunction::Session(SessionFunction::Version) => Some("version()"),
+            SpecialFunction::Session(SessionFunction::ConnectionId) => Some("connection_id()"),
+            SpecialFunction::Session(SessionFunction::ClientSessionId) => {
+                Some("client_session_id()")
+            }
+            SpecialFunction::Session(SessionFunction::LastQueryId(_))
+            | SpecialFunction::LastQueryId { .. } => Some("last_query_id()"),
+            SpecialFunction::Session(SessionFunction::Variable(_))
+            | SpecialFunction::GetVariable { .. } => Some("getvariable()"),
+            SpecialFunction::Auth(AuthFunction::CurrentUser) => Some("current_user()"),
+            SpecialFunction::Auth(AuthFunction::CurrentRole) => Some("current_role()"),
+            SpecialFunction::Auth(AuthFunction::CurrentSecondaryRoles) => {
+                Some("current_secondary_roles()")
+            }
+            SpecialFunction::Auth(AuthFunction::CurrentAvailableRoles) => {
+                Some("current_available_roles()")
+            }
+            SpecialFunction::Auth(AuthFunction::CurrentTenantId) => Some("current_tenant_id()"),
+            SpecialFunction::IsRoleInSession { .. } => Some("is_role_in_session()"),
+            SpecialFunction::Timezone => Some("timezone()"),
+            SpecialFunction::Coalesce { .. }
+            | SpecialFunction::Decode { .. }
+            | SpecialFunction::ArraySort { .. }
+            | SpecialFunction::ArrayAggregate { .. }
+            | SpecialFunction::CastToVariant { .. }
+            | SpecialFunction::GreatestOrLeast { .. }
+            | SpecialFunction::DecodeString { .. }
+            | SpecialFunction::Scalar { .. } => None,
+        }
+    }
+
     pub(super) fn resolve<'tc, A>(
         &self,
         type_checker: &mut TypeChecker<'tc, A>,

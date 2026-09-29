@@ -79,12 +79,20 @@ impl FullTypeCheckAdapter {
             ctx,
             dependencies,
             forbid_udf: false,
+            context_independent: false,
             skip_sequence_check: false,
         })
     }
 
     pub fn with_forbid_udf(mut self, forbid_udf: bool) -> Self {
         self.forbid_udf = forbid_udf;
+        self
+    }
+
+    /// Reject session/query context functions, for persisted or storage-level
+    /// expressions. See `TypeCheckAdapter::require_context_independent`.
+    pub fn with_context_independent(mut self, context_independent: bool) -> Self {
+        self.context_independent = context_independent;
         self
     }
 
@@ -153,6 +161,10 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
 
     fn forbid_udf(&self) -> bool {
         self.forbid_udf
+    }
+
+    fn require_context_independent(&self) -> bool {
+        self.context_independent
     }
 
     fn validate_sequence(&self, sequence_name: &str) -> Result<()> {

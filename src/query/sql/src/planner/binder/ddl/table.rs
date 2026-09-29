@@ -2479,6 +2479,7 @@ impl Binder {
             &[],
         );
         scalar_binder.forbid_udf();
+        scalar_binder.require_context_independent();
         let (scalar, _) = scalar_binder.bind(ttl_expr)?;
         if scalar.used_columns().is_empty() {
             return Err(ErrorCode::SemanticError(format!(
@@ -2545,6 +2546,8 @@ impl Binder {
         );
         // Table keys cannot be a UDF expression.
         scalar_binder.forbid_udf();
+        // Table keys are persisted and evaluated at the storage level.
+        scalar_binder.require_context_independent();
 
         let mut normalizer = StoredKeyNormalizer::new(&self.name_resolution_ctx);
         let mut table_keys = Vec::with_capacity(expr_len);

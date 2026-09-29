@@ -653,6 +653,35 @@ create table t(a int) cluster by (a+rand())
 statement error 1081.*is not deterministic
 create table t(a string) cluster by (a+uuid())
 
+# Context functions fold to literals before the deterministic check, so they
+# must be rejected up front (issue #19833).
+statement error depends on the session or query context
+create table t(a int) cluster by (concat(to_string(a), current_database()))
+
+statement error depends on the session or query context
+create table t(a int) cluster by (a + getvariable('x'))
+
+statement error depends on the session or query context
+create table t(a string, b string as (concat(a, current_database())) stored)
+
+statement error depends on the session or query context
+create table t(a string, b string as (concat(a, current_user())) virtual)
+
+statement error depends on the session or query context
+create table t(a int, b int null as (a + getvariable('x')) stored)
+
+statement ok
+create or replace table t_ctx(a int)
+
+statement error depends on the session or query context
+alter table t_ctx cluster by (concat(to_string(a), current_database()))
+
+statement error depends on the session or query context
+alter table t_ctx add column b string as (concat(to_string(a), current_database())) virtual
+
+statement ok
+drop table t_ctx
+
 statement ok
 create or replace table tt(a tuple(x int, y int), b string, c int) cluster by (b);
 

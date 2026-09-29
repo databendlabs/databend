@@ -22,6 +22,7 @@ use databend_common_expression::types::DataType;
 
 use crate::MetadataRef;
 use crate::planner::binder::BindContext;
+use crate::planner::semantic::FullTypeCheckAdapter;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::ScalarExpr;
@@ -34,6 +35,7 @@ pub struct ScalarBinder<'a> {
     metadata: MetadataRef,
     aliases: &'a [(String, ScalarExpr)],
     forbid_udf: bool,
+    context_independent: bool,
 }
 
 impl<'a> ScalarBinder<'a> {
@@ -51,6 +53,7 @@ impl<'a> ScalarBinder<'a> {
             metadata,
             aliases,
             forbid_udf: false,
+            context_independent: false,
         }
     }
 
@@ -58,14 +61,22 @@ impl<'a> ScalarBinder<'a> {
         self.forbid_udf = true;
     }
 
+    /// Reject session/query context functions such as `current_database()`,
+    /// for expressions that are persisted or evaluated at the storage level.
+    pub fn require_context_independent(&mut self) {
+        self.context_independent = true;
+    }
+
     pub fn bind(&mut self, expr: &Expr) -> Result<(ScalarExpr, DataType)> {
-        let mut type_checker = TypeChecker::try_create(
+        let adapter = FullTypeCheckAdapter::new(self.ctx.clone())?
+            .with_forbid_udf(self.forbid_udf)
+            .with_context_independent(self.context_independent);
+        let mut type_checker = TypeChecker::try_create_with_adapter(
             self.bind_context,
-            self.ctx.clone(),
+            adapter,
             self.name_resolution_ctx,
             self.metadata.clone(),
             self.aliases,
-            self.forbid_udf,
         )?;
         Ok(*type_checker.resolve(expr)?)
     }

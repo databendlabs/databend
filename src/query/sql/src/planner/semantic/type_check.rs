@@ -281,6 +281,7 @@ pub struct FullTypeCheckAdapter {
     ctx: Arc<dyn TableContext>,
     dependencies: FullTypeCheckAdapterDependencies,
     forbid_udf: bool,
+    context_independent: bool,
     skip_sequence_check: bool,
 }
 
@@ -353,6 +354,16 @@ pub trait TypeCheckAdapter: Clone + Sized {
     }
 
     fn forbid_udf(&self) -> bool {
+        false
+    }
+
+    /// Whether the expression must not depend on session or query context.
+    ///
+    /// Context special functions such as `current_database()` or `getvariable()`
+    /// are folded into literals during resolution, after which
+    /// `Expr::is_deterministic` can no longer detect them. Persisted and
+    /// storage-level expressions enable this so they are rejected before folding.
+    fn require_context_independent(&self) -> bool {
         false
     }
 

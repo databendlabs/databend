@@ -62,6 +62,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::binder::ScalarBinder;
 use crate::planner::binder::BindContext;
+use crate::planner::semantic::FullTypeCheckAdapter;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::LambdaFunc;
@@ -239,7 +240,9 @@ pub fn parse_exprs(
     let tokens = tokenize_sql(sql)?;
     let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
     let names = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
-    parse_ast_exprs_with_context(ctx, table_meta, ast_exprs, &names)
+    // Also used for default expressions, which may legitimately depend on the
+    // session (e.g. `DEFAULT current_user()`), so no context policy here.
+    parse_ast_exprs_with_context(ctx, table_meta, ast_exprs, &names, false)
 }
 
 pub fn parse_exprs_to_field_index(
@@ -258,10 +261,12 @@ fn parse_ast_exprs_with_context(
     table_meta: Arc<dyn Table>,
     ast_exprs: Vec<AExpr>,
     names: &NameResolutionContext,
+    context_independent: bool,
 ) -> Result<Vec<Expr<ColumnBinding>>> {
     let (mut bind_context, metadata) = bind_table(table_meta)?;
+    let adapter = FullTypeCheckAdapter::new(ctx)?.with_context_independent(context_independent);
     let mut type_checker =
-        TypeChecker::try_create(&mut bind_context, ctx, names, metadata, &[], false)?;
+        TypeChecker::try_create_with_adapter(&mut bind_context, adapter, names, metadata, &[])?;
 
     ast_exprs
         .iter()
@@ -278,9 +283,21 @@ pub fn parse_to_filters(
     sql: &str,
 ) -> Result<Filters> {
     let schema = table_meta.schema();
-    let exprs = parse_exprs(ctx, table_meta, sql)?
+    let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+    let tokens = tokenize_sql(sql)?;
+    let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
+    let names = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
+    // Storage-level filters drive pruning, so they must be context independent
+    // and deterministic.
+    let exprs = parse_ast_exprs_with_context(ctx, table_meta, ast_exprs, &names, true)?
         .into_iter()
         .map(|expr| {
+            if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                return Err(ErrorCode::SemanticError(format!(
+                    "filter expression `{}` is not deterministic",
+                    expr.sql_display(),
+                )));
+            }
             Ok(expr
                 .project_column_ref(|binding| {
                     Ok(schema
@@ -410,13 +427,14 @@ pub fn parse_computed_expr_to_string(
 
     let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let mut type_checker = TypeChecker::try_create(
+    // Computed columns are persisted and re-evaluated in other sessions.
+    let adapter = FullTypeCheckAdapter::new(ctx)?.with_context_independent(true);
+    let mut type_checker = TypeChecker::try_create_with_adapter(
         &mut bind_context,
-        ctx,
+        adapter,
         &name_resolution_ctx,
         Arc::new(RwLock::new(metadata)),
         &[],
-        false,
     )?;
 
     let (scalar, data_type) = *type_checker.resolve(ast)?;
@@ -531,7 +549,9 @@ pub fn bind_normalized_key_exprs(
 ) -> Result<Vec<Expr<usize>>> {
     let schema = table_meta.schema();
     let names = NameResolutionContext::preserve_identifier_case();
-    parse_ast_exprs_with_context(ctx, table_meta, ast_exprs, &names)?
+    // Runtime rebinding of already persisted keys: keep permissive so tables
+    // created before the definition-time check stay readable and writable.
+    parse_ast_exprs_with_context(ctx, table_meta, ast_exprs, &names, false)?
         .into_iter()
         .map(|expr| {
             expr.project_column_ref(|col| schema.index_of(&col.column_name))
@@ -549,13 +569,15 @@ pub fn analyze_cluster_keys(
 ) -> Result<(String, Vec<Expr<Symbol>>)> {
     let ast_exprs = parse_cluster_key_exprs(sql)?;
     let (mut bind_context, metadata) = bind_table(table_meta)?;
-    let mut type_checker = TypeChecker::try_create(
+    let adapter = FullTypeCheckAdapter::new(ctx)?
+        .with_forbid_udf(true)
+        .with_context_independent(true);
+    let mut type_checker = TypeChecker::try_create_with_adapter(
         &mut bind_context,
-        ctx,
+        adapter,
         name_resolution_ctx,
         metadata,
         &[],
-        true,
     )?;
 
     let mut normalizer = StoredKeyNormalizer::new(name_resolution_ctx);
@@ -689,6 +711,7 @@ pub fn validate_stored_ttl_expr(
     let names = NameResolutionContext::preserve_identifier_case();
     let mut binder = ScalarBinder::new(&mut bind_context, ctx, &names, metadata, &[]);
     binder.forbid_udf();
+    binder.require_context_independent();
     let (scalar, _) = binder.bind(&ast)?;
     validate_ttl_expr(&scalar, &format!("{ast:#}"))
 }

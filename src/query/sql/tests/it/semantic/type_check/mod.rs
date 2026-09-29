@@ -72,6 +72,7 @@ struct TestTypeCheckAdapter {
     func_ctx: FunctionContext,
     udf_adapter: TestUdfAdapter,
     forbid_udf: bool,
+    context_independent: bool,
     effective_role_names: Vec<String>,
     result_cache_uncacheable: Arc<AtomicBool>,
 }
@@ -83,6 +84,7 @@ impl TestTypeCheckAdapter {
             func_ctx: FunctionContext::default(),
             udf_adapter: TestUdfAdapter::default(),
             forbid_udf: false,
+            context_independent: false,
             effective_role_names: vec!["analyst".to_string(), "reader".to_string()],
             result_cache_uncacheable: Arc::new(AtomicBool::new(false)),
         }
@@ -95,6 +97,11 @@ impl TestTypeCheckAdapter {
 
     fn with_forbid_udf(mut self, forbid_udf: bool) -> Self {
         self.forbid_udf = forbid_udf;
+        self
+    }
+
+    fn with_context_independent(mut self, context_independent: bool) -> Self {
+        self.context_independent = context_independent;
         self
     }
 
@@ -216,6 +223,10 @@ impl TypeCheckAdapter for TestTypeCheckAdapter {
 
     fn forbid_udf(&self) -> bool {
         self.forbid_udf
+    }
+
+    fn require_context_independent(&self) -> bool {
+        self.context_independent
     }
 
     fn validate_sequence(&self, sequence_name: &str) -> Result<()> {
