@@ -153,8 +153,11 @@ async fn test_eager_aggregation_keeps_decimal_product_types_in_sync() -> Result<
         name: "decimal_sum_multiplied_by_eager_count",
         description: "",
         setup_sqls: &[DECIMAL_SALES_TABLE, DATE_DIM_TABLE],
+        // An equi-join keeps a group column on both sides, so the `sum * eager_count`
+        // rewrite (`SingleCount`) stays eligible. A CROSS JOIN would leave `date_dim`
+        // without a group column and the rule would skip that rewrite (#20483).
         sql: "SELECT ss_store_sk, sum(ss_ext_sales_price)
-FROM store_sales CROSS JOIN date_dim
+FROM store_sales JOIN date_dim ON ss_store_sk = d_date_sk
 GROUP BY ss_store_sk",
     };
     let ctx = setup_context(&case).await?;
@@ -213,6 +216,37 @@ GROUP BY ss_store_sk"
         for result in results.results() {
             result.validate_types(&metadata)?;
         }
+    }
+    Ok(())
+}
+
+// Regression for #20483: an eager aggregate on a side without any GROUP BY column is
+// a scalar aggregate and emits one row for an empty input. Pushing it below a CROSS
+// JOIN would make the join emit rows from the other side, so no candidate is legal.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_eager_aggregation_skips_side_without_group_column() -> Result<()> {
+    for aggregate in ["sum", "count", "min", "max"] {
+        let sql = format!(
+            "SELECT ss_store_sk, {aggregate}(d_date_sk)
+FROM store_sales CROSS JOIN date_dim
+GROUP BY ss_store_sk"
+        );
+        let ctx = LiteTableContext::create().await?;
+        ctx.register_setup_sql(DECIMAL_SALES_TABLE).await?;
+        ctx.register_setup_sql(DATE_DIM_TABLE).await?;
+        let Plan::Query {
+            s_expr, metadata, ..
+        } = ctx.bind_sql(&sql).await?
+        else {
+            unreachable!("test query should bind to Plan::Query")
+        };
+        let opt_ctx =
+            OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?);
+        let split = RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::SplitAggregate])
+            .optimize_sync(*s_expr)?;
+        let mut results = TransformResult::new();
+        RuleEagerAggregation::new(metadata.clone()).apply(&split, &mut results)?;
+        assert!(results.results().is_empty(), "{aggregate}");
     }
     Ok(())
 }
