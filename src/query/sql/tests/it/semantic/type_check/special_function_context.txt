@@ -1,5 +1,5 @@
 === current_database_rejected ===
-description: current_database() must be rejected before it folds to a literal.
+description: current_database() must be rejected instead of folding to a literal.
 sql: current_database()
 status: error
 code: 1065
@@ -123,6 +123,27 @@ sql: context_udf(text)
 status: error
 code: 1065
 message: `current_database()` depends on the session or query context and is not allowed in persisted or storage-level expressions
+
+=== array_sort_default_nulls_order_rejected ===
+description: array_sort() without NULLS FIRST/LAST reads the session null-order setting.
+sql: array_sort([3, 1, 2])
+status: error
+code: 1065
+message: `array_sort()` depends on the session or query context and is not allowed in persisted or storage-level expressions; specify NULLS FIRST or NULLS LAST explicitly
+
+=== array_sort_default_nulls_order_with_sort_order_rejected ===
+description: An explicit sort order alone still leaves the null order to the session.
+sql: array_sort([3, 1, 2], 'desc')
+status: error
+code: 1065
+message: `array_sort()` depends on the session or query context and is not allowed in persisted or storage-level expressions; specify NULLS FIRST or NULLS LAST explicitly
+
+=== array_sort_explicit_nulls_order_allowed ===
+description: array_sort() with an explicit null order does not read session context.
+sql: array_sort([3, 1, 2], 'desc', 'nulls last')
+status: ok
+scalar: [3, 2, 1]
+type: Array(UInt8)
 
 === coalesce_allowed ===
 description: Pure special-function rewrites stay allowed.

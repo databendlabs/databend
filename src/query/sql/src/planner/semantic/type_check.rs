@@ -264,6 +264,39 @@ pub enum AuthFunction {
     CurrentTenantId,
 }
 
+impl NamespaceFunction {
+    pub fn name(&self) -> &'static str {
+        match self {
+            NamespaceFunction::CurrentCatalog => "current_catalog()",
+            NamespaceFunction::CurrentDatabase => "current_database()",
+        }
+    }
+}
+
+impl SessionFunction<'_> {
+    pub fn name(&self) -> &'static str {
+        match self {
+            SessionFunction::Version => "version()",
+            SessionFunction::ConnectionId => "connection_id()",
+            SessionFunction::ClientSessionId => "client_session_id()",
+            SessionFunction::LastQueryId(_) => "last_query_id()",
+            SessionFunction::Variable(_) => "getvariable()",
+        }
+    }
+}
+
+impl AuthFunction {
+    pub fn name(&self) -> &'static str {
+        match self {
+            AuthFunction::CurrentUser => "current_user()",
+            AuthFunction::CurrentRole => "current_role()",
+            AuthFunction::CurrentSecondaryRoles => "current_secondary_roles()",
+            AuthFunction::CurrentAvailableRoles => "current_available_roles()",
+            AuthFunction::CurrentTenantId => "current_tenant_id()",
+        }
+    }
+}
+
 pub struct TypeCheckSubqueryPlan {
     pub s_expr: SExpr,
     pub output_context: BindContext,
@@ -359,10 +392,10 @@ pub trait TypeCheckAdapter: Clone + Sized {
 
     /// Whether the expression must not depend on session or query context.
     ///
-    /// Context special functions such as `current_database()` or `getvariable()`
-    /// are folded into literals during resolution, after which
-    /// `Expr::is_deterministic` can no longer detect them. Persisted and
-    /// storage-level expressions enable this so they are rejected before folding.
+    /// Context values such as `current_database()` or `getvariable()` are folded
+    /// into literals during resolution, after which `Expr::is_deterministic` can
+    /// no longer detect them. Persisted and storage-level expressions enable this;
+    /// `TypeChecker::check_context_access` then rejects each context read.
     fn require_context_independent(&self) -> bool {
         false
     }
@@ -394,6 +427,8 @@ pub trait TypeCheckAdapter: Clone + Sized {
         Err(missing_type_check_adapter_dependency("subquery planner"))
     }
 
+    // Context resolvers below: callers in `TypeChecker` must call
+    // `check_context_access` first so `require_context_independent` is honored.
     fn resolve_namespace_function(&self, _function: NamespaceFunction) -> Result<Scalar> {
         Err(missing_type_check_adapter_dependency("namespace function"))
     }

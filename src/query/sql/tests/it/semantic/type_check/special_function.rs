@@ -164,8 +164,8 @@ async fn test_type_check_special_function() -> Result<()> {
     run_type_check_cases("special_function.txt", &cases).await
 }
 
-/// Persisted and storage-level expressions must reject context special
-/// functions before they are folded into literals (issue #19833).
+/// Persisted and storage-level expressions must reject every read of session
+/// or query context, since such values are folded into literals (issue #19833).
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_type_check_context_independent_policy() -> Result<()> {
     init_testing_globals();
@@ -182,7 +182,7 @@ async fn test_type_check_context_independent_policy() -> Result<()> {
     let cases = [
         SqlTestCase {
             name: "current_database_rejected",
-            description: "current_database() must be rejected before it folds to a literal.",
+            description: "current_database() must be rejected instead of folding to a literal.",
             setup_sqls: &[],
             sql: "current_database()",
         },
@@ -287,6 +287,24 @@ async fn test_type_check_context_independent_policy() -> Result<()> {
             description: "A context function inside a SQL UDF body must be rejected when the UDF is expanded.",
             setup_sqls: &[],
             sql: "context_udf(text)",
+        },
+        SqlTestCase {
+            name: "array_sort_default_nulls_order_rejected",
+            description: "array_sort() without NULLS FIRST/LAST reads the session null-order setting.",
+            setup_sqls: &[],
+            sql: "array_sort([3, 1, 2])",
+        },
+        SqlTestCase {
+            name: "array_sort_default_nulls_order_with_sort_order_rejected",
+            description: "An explicit sort order alone still leaves the null order to the session.",
+            setup_sqls: &[],
+            sql: "array_sort([3, 1, 2], 'desc')",
+        },
+        SqlTestCase {
+            name: "array_sort_explicit_nulls_order_allowed",
+            description: "array_sort() with an explicit null order does not read session context.",
+            setup_sqls: &[],
+            sql: "array_sort([3, 1, 2], 'desc', 'nulls last')",
         },
         SqlTestCase {
             name: "coalesce_allowed",

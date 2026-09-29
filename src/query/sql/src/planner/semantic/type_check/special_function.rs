@@ -341,67 +341,7 @@ impl<'a> CoreExprArena<'a> {
     }
 }
 
-impl CoreExprArena<'_> {
-    /// Reject special functions whose value comes from the session or query
-    /// context. They are folded into literals during resolution, so this must
-    /// run on the lowered tree before any node is resolved.
-    pub(super) fn check_context_independent(&self) -> Result<()> {
-        for node in &self.nodes {
-            if let CoreExpr::SpecialFunction { span, function } = node
-                && let Some(func_name) = function.context_dependency()
-            {
-                return Err(ErrorCode::SemanticError(format!(
-                    "`{func_name}` depends on the session or query context and is not allowed in persisted or storage-level expressions"
-                ))
-                .set_span(*span));
-            }
-        }
-        Ok(())
-    }
-}
-
 impl SpecialFunction {
-    /// The canonical name of a function whose value depends on the session or
-    /// query context, or `None` for pure rewrites like `coalesce`.
-    fn context_dependency(&self) -> Option<&'static str> {
-        match self {
-            SpecialFunction::Namespace(NamespaceFunction::CurrentCatalog) => {
-                Some("current_catalog()")
-            }
-            SpecialFunction::Namespace(NamespaceFunction::CurrentDatabase) => {
-                Some("current_database()")
-            }
-            SpecialFunction::Session(SessionFunction::Version) => Some("version()"),
-            SpecialFunction::Session(SessionFunction::ConnectionId) => Some("connection_id()"),
-            SpecialFunction::Session(SessionFunction::ClientSessionId) => {
-                Some("client_session_id()")
-            }
-            SpecialFunction::Session(SessionFunction::LastQueryId(_))
-            | SpecialFunction::LastQueryId { .. } => Some("last_query_id()"),
-            SpecialFunction::Session(SessionFunction::Variable(_))
-            | SpecialFunction::GetVariable { .. } => Some("getvariable()"),
-            SpecialFunction::Auth(AuthFunction::CurrentUser) => Some("current_user()"),
-            SpecialFunction::Auth(AuthFunction::CurrentRole) => Some("current_role()"),
-            SpecialFunction::Auth(AuthFunction::CurrentSecondaryRoles) => {
-                Some("current_secondary_roles()")
-            }
-            SpecialFunction::Auth(AuthFunction::CurrentAvailableRoles) => {
-                Some("current_available_roles()")
-            }
-            SpecialFunction::Auth(AuthFunction::CurrentTenantId) => Some("current_tenant_id()"),
-            SpecialFunction::IsRoleInSession { .. } => Some("is_role_in_session()"),
-            SpecialFunction::Timezone => Some("timezone()"),
-            SpecialFunction::Coalesce { .. }
-            | SpecialFunction::Decode { .. }
-            | SpecialFunction::ArraySort { .. }
-            | SpecialFunction::ArrayAggregate { .. }
-            | SpecialFunction::CastToVariant { .. }
-            | SpecialFunction::GreatestOrLeast { .. }
-            | SpecialFunction::DecodeString { .. }
-            | SpecialFunction::Scalar { .. } => None,
-        }
-    }
-
     pub(super) fn resolve<'tc, A>(
         &self,
         type_checker: &mut TypeChecker<'tc, A>,
@@ -418,6 +358,23 @@ impl SpecialFunction {
 impl<'a, A> TypeChecker<'a, A>
 where A: TypeCheckAdapter
 {
+    /// Gate for every read of session or query context during resolution.
+    ///
+    /// Such values are folded into literals, so `Expr::is_deterministic` cannot
+    /// detect them afterwards. Checking at the read site (instead of classifying
+    /// functions up front) means new context-dependent resolution is covered as
+    /// long as it reads context through here.
+    fn check_context_access(&self, span: Span, func_name: &str, hint: Option<&str>) -> Result<()> {
+        if !self.adapter.require_context_independent() {
+            return Ok(());
+        }
+        let hint = hint.map(|hint| format!("; {hint}")).unwrap_or_default();
+        Err(ErrorCode::SemanticError(format!(
+            "`{func_name}` depends on the session or query context and is not allowed in persisted or storage-level expressions{hint}"
+        ))
+        .set_span(span))
+    }
+
     fn resolve_special_function(
         &mut self,
         arena: &CoreExprArena<'_>,
@@ -425,27 +382,39 @@ where A: TypeCheckAdapter
         function: &SpecialFunction,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match function {
-            SpecialFunction::Namespace(namespace_function) => self.resolve_special_literal(
-                span,
-                self.adapter
-                    .resolve_namespace_function(*namespace_function)?,
-            ),
-            SpecialFunction::Session(session_function) => self.resolve_special_literal(
-                span,
-                self.adapter.resolve_session_function(*session_function)?,
-            ),
-            SpecialFunction::Auth(authorization_function) => self.resolve_special_literal(
-                span,
-                self.adapter
-                    .resolve_authorization_function(*authorization_function)?,
-            ),
+            SpecialFunction::Namespace(namespace_function) => {
+                self.check_context_access(span, namespace_function.name(), None)?;
+                self.resolve_special_literal(
+                    span,
+                    self.adapter
+                        .resolve_namespace_function(*namespace_function)?,
+                )
+            }
+            SpecialFunction::Session(session_function) => {
+                self.check_context_access(span, session_function.name(), None)?;
+                self.resolve_special_literal(
+                    span,
+                    self.adapter.resolve_session_function(*session_function)?,
+                )
+            }
+            SpecialFunction::Auth(authorization_function) => {
+                self.check_context_access(span, authorization_function.name(), None)?;
+                self.resolve_special_literal(
+                    span,
+                    self.adapter
+                        .resolve_authorization_function(*authorization_function)?,
+                )
+            }
             SpecialFunction::IsRoleInSession { role } => {
                 self.resolve_is_role_in_session(arena, span, role)
             }
-            SpecialFunction::Timezone => self.resolve_special_literal(
-                span,
-                Scalar::String(self.adapter.settings().get_timezone().unwrap()),
-            ),
+            SpecialFunction::Timezone => {
+                self.check_context_access(span, "timezone()", None)?;
+                self.resolve_special_literal(
+                    span,
+                    Scalar::String(self.adapter.settings().get_timezone().unwrap()),
+                )
+            }
             SpecialFunction::LastQueryId { arg } => {
                 let scalar = match arg {
                     Some((_, arg)) => {
@@ -568,6 +537,7 @@ where A: TypeCheckAdapter
         span: Span,
         role: &CoreDisplayExprArg,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        self.check_context_access(span, "is_role_in_session()", None)?;
         let effective_roles = self.adapter.resolve_effective_role_names()?;
         let (_, role, _) = self.resolve_display_arg(arena, role)?;
         let mut predicate_levels =
@@ -614,11 +584,9 @@ where A: TypeCheckAdapter
         } else {
             -1
         };
-        self.resolve_special_literal(
-            span,
-            self.adapter
-                .resolve_session_function(SessionFunction::LastQueryId(index as i32))?,
-        )
+        let function = SessionFunction::LastQueryId(index as i32);
+        self.check_context_access(span, function.name(), None)?;
+        self.resolve_special_literal(span, self.adapter.resolve_session_function(function)?)
     }
 
     fn resolve_coalesce(
@@ -775,8 +743,18 @@ where A: TypeCheckAdapter
                 ));
             }
         }
-        let nulls_first =
-            nulls_first.unwrap_or_else(|| self.adapter.settings().get_nulls_first()(asc));
+        let nulls_first = match nulls_first {
+            Some(nulls_first) => nulls_first,
+            None => {
+                // The default null order is a session setting.
+                self.check_context_access(
+                    span,
+                    "array_sort()",
+                    Some("specify NULLS FIRST or NULLS LAST explicitly"),
+                )?;
+                self.adapter.settings().get_nulls_first()(asc)
+            }
+        };
         let func_name = match (asc, nulls_first) {
             (true, true) => "array_sort_asc_null_first",
             (false, true) => "array_sort_desc_null_first",
@@ -850,9 +828,9 @@ where A: TypeCheckAdapter
         if let Ok(arg) = ConstantExpr::try_from(scalar.clone())
             && let Scalar::String(var_name) = arg.value
         {
-            let var_value = self
-                .adapter
-                .resolve_session_function(SessionFunction::Variable(&var_name))?;
+            let function = SessionFunction::Variable(&var_name);
+            self.check_context_access(span, function.name(), None)?;
+            let var_value = self.adapter.resolve_session_function(function)?;
             let var_value = shrink_scalar(var_value);
             let data_type = var_value.as_ref().infer_data_type();
             return Ok(Box::new((
