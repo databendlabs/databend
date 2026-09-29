@@ -23,19 +23,38 @@ mod selectivity;
 pub(crate) use cardinality::cap_stat_info_by_rows;
 pub use column_stat::*;
 use databend_common_expression::FunctionContext;
+use databend_common_settings::Settings;
 pub(crate) use join::JoinStatsEstimator;
+pub use selectivity::FilterAndStrategy;
 pub use selectivity::MAX_SELECTIVITY;
 pub(crate) use selectivity::Selectivity;
 pub use selectivity::SelectivityEstimator;
 pub(crate) use selectivity::SelectivityVisitor;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct StatContext {
     pub function_context: FunctionContext,
+    pub filter_and_strategy: FilterAndStrategy,
 }
 
 impl StatContext {
-    pub fn new(function_context: FunctionContext) -> Self {
-        Self { function_context }
+    /// For callers without query settings, such as standalone statistics unit tests.
+    pub fn without_settings(function_context: FunctionContext) -> Self {
+        Self {
+            function_context,
+            filter_and_strategy: FilterAndStrategy::Independent,
+        }
+    }
+
+    pub fn new(function_context: FunctionContext, settings: &Settings) -> Self {
+        let filter_and_strategy = settings
+            .get_filter_and_strategy()
+            .ok()
+            .and_then(|value| FilterAndStrategy::parse(&value))
+            .unwrap_or(FilterAndStrategy::Independent);
+        Self {
+            function_context,
+            filter_and_strategy,
+        }
     }
 }

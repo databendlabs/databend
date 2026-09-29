@@ -18,7 +18,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::optimizers::rule::Rule;
 use databend_common_sql::optimizer::optimizers::rule::RuleCommuteJoin;
 use databend_common_sql::optimizer::optimizers::rule::TransformResult;
@@ -97,17 +96,18 @@ async fn write_optimizer_commuted_right_single(
         return Err(ErrorCode::Internal("SELECT should bind to a query plan"));
     };
     let mut state = TransformResult::new();
+    let stat_context = ctx.stat_context()?;
     let (right_single, optimizer) = match find_join(&s_expr, JoinType::RightSingle) {
         Some(right_single) => (right_single, "full optimizer"),
         None => {
             let left_single = find_join(&s_expr, JoinType::LeftSingle)
                 .ok_or_else(|| ErrorCode::Internal("optimizer did not derive SINGLE from SQL"))?;
-            RuleCommuteJoin::new(StatContext::default()).apply(left_single, &mut state)?;
+            RuleCommuteJoin::new(stat_context.clone()).apply(left_single, &mut state)?;
             let left_cardinality = RelExpr::with_s_expr(left_single.child(0)?)
-                .derive_cardinality(&StatContext::default())?
+                .derive_cardinality(&stat_context)?
                 .cardinality;
             let right_cardinality = RelExpr::with_s_expr(left_single.child(1)?)
-                .derive_cardinality(&StatContext::default())?
+                .derive_cardinality(&stat_context)?
                 .cardinality;
             let right_single = state
                 .results()
@@ -131,6 +131,7 @@ async fn write_optimizer_commuted_right_single(
         right_single,
         JoinType::RightSingle,
         case.name,
+        &stat_context,
     )?;
     assert_eq!(joins, 1);
     Ok(())

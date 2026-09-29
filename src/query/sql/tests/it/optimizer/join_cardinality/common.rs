@@ -149,6 +149,7 @@ pub(super) fn collect_join_cardinalities(
     expr: &SExpr,
     expected_join_type: JoinType,
     case_name: &str,
+    stat_context: &StatContext,
 ) -> Result<usize> {
     let mut joins = 0;
     if let RelOperator::Join(join) = expr.plan() {
@@ -156,7 +157,7 @@ pub(super) fn collect_join_cardinalities(
             join.join_type, expected_join_type,
             "unexpected join type for {case_name}"
         );
-        let stat_info = RelExpr::with_s_expr(expr).derive_cardinality(&StatContext::default())?;
+        let stat_info = RelExpr::with_s_expr(expr).derive_cardinality(stat_context)?;
         writeln!(
             file,
             "join          : {:<11} cardinality={:.3}",
@@ -167,7 +168,14 @@ pub(super) fn collect_join_cardinalities(
     }
 
     for child in expr.children() {
-        joins += collect_join_cardinalities(file, metadata, child, expected_join_type, case_name)?;
+        joins += collect_join_cardinalities(
+            file,
+            metadata,
+            child,
+            expected_join_type,
+            case_name,
+            stat_context,
+        )?;
     }
 
     Ok(joins)

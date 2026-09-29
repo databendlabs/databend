@@ -183,7 +183,7 @@ impl PhysicalPlanBuilder {
         right_required: ColumnSet,
     ) -> Result<Option<PhysicalPlan>> {
         let max_build_rows = self.ctx.get_settings().get_spatial_join_max_build_rows()? as f64;
-        let stat_ctx = StatContext::new(self.func_ctx.clone());
+        let stat_ctx = StatContext::new(self.func_ctx.clone(), &self.ctx.get_settings());
         let left_card = RelExpr::with_s_expr(s_expr.left_child())
             .derive_cardinality(&stat_ctx)?
             .cardinality;

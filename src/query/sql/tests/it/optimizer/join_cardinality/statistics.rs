@@ -138,8 +138,14 @@ async fn write_sql_join_statistics_case(
         return Err(ErrorCode::Internal("SELECT should bind to a query plan"));
     };
     let metadata = metadata.read();
-    let joins =
-        collect_join_cardinalities(file, &metadata, &s_expr, case.expected_join_type, case.name)?;
+    let joins = collect_join_cardinalities(
+        file,
+        &metadata,
+        &s_expr,
+        case.expected_join_type,
+        case.name,
+        &ctx.stat_context()?,
+    )?;
     assert_eq!(joins, 1);
     writeln!(file)?;
     Ok(())
@@ -1221,8 +1227,8 @@ fn sql_join_statistics_cases() -> Result<Vec<SqlJoinStatisticsCase>> {
             )])?,
         },
         SqlJoinStatisticsCase {
-            name: "inner_inaccurate_bytes_histogram_fallback",
-            description: "Inaccurate byte histograms are ignored for equality cardinality, so the complete SQL join falls back to NDV and propagates no histogram.",
+            name: "inner_bytes_histogram_fallback",
+            description: "Byte histograms have no equality join estimator, so the complete SQL join falls back to NDV and propagates no histogram.",
             sql: "SELECT * FROM l INNER JOIN r ON l.k = r.k",
             expected_join_type: JoinType::Inner,
             left: sql_join_table_with_histograms(

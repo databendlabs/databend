@@ -860,20 +860,20 @@ on t3.c1 = t4.c1
 Filter
 ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
 ├── filters: [is_true(c1 (#0) = t3.c1 (#0))]
-├── estimated rows: 0.20
+├── estimated rows: 0.17
 └── Filter
     ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
     ├── filters: [is_true(sum(c2) (#2) > 0)]
-    ├── estimated rows: 1.00
+    ├── estimated rows: 0.85
     └── AggregateFinal
         ├── output columns: [sum(c2) (#2), t_nullable.c1 (#0)]
         ├── group by: [c1]
         ├── aggregate functions: [sum(c2)]
-        ├── estimated rows: 2.00
+        ├── estimated rows: 1.71
         └── AggregatePartial
             ├── group by: [c1]
             ├── aggregate functions: [sum(c2)]
-            ├── estimated rows: 2.00
+            ├── estimated rows: 1.71
             └── TableScan
                 ├── table: default.eliminate_self_join.t_nullable
                 ├── scan id: 0
@@ -884,7 +884,7 @@ Filter
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                 ├── push downs: [filters: [t_nullable.c2 (#1) > 15 and t_nullable.c1 (#0) < 3], limit: NONE]
-                └── estimated rows: 2.00
+                └── estimated rows: 1.71
 
 query II
 select t3.c1, t3.c2
