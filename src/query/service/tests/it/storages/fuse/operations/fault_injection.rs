@@ -31,6 +31,7 @@ use databend_common_storage::FaultInjection;
 use databend_common_storage::FaultKind;
 use databend_common_storage::FaultOp;
 use databend_common_storage::FaultRule;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::test_kits::*;
 use futures::TryStreamExt;
@@ -152,6 +153,84 @@ async fn test_temporary_read_failure_is_retried() -> Result<()> {
     assert_eq!(count(&fixture).await?, 2);
     assert_eq!(fault.hits(), 1, "the fault was never exercised");
     fault.remove();
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_compact_segment_write_failure_cleans_concurrent_output() -> Result<()> {
+    let _serial = SERIAL.lock().await;
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    fixture
+        .execute_command("CREATE TABLE default.t_compact_fault (id INT) block_per_segment=10")
+        .await?;
+    for i in 0..3 {
+        fixture
+            .execute_command(&format!("INSERT INTO default.t_compact_fault VALUES ({i})"))
+            .await?;
+    }
+    fixture
+        .execute_command("ANALYZE TABLE default.t_compact_fault")
+        .await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_catalog("default").await?;
+    let table = catalog
+        .get_table(&ctx.get_tenant(), "default", "t_compact_fault")
+        .await?;
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+    let before_snapshot = fuse.read_table_snapshot().await?.unwrap();
+    assert!(before_snapshot.segments.len() >= 2);
+    let prefix = fuse.meta_location_generator().prefix().to_owned();
+    let dal = ctx.get_application_level_data_operator()?.operator();
+    let list = |dir: &'static str| {
+        let dal = dal.clone();
+        let path = format!("{prefix}/{dir}/");
+        async move {
+            Ok::<_, ErrorCode>(
+                dal.list(&path)
+                    .await?
+                    .iter()
+                    .map(|entry| entry.path().to_string())
+                    .collect::<Vec<_>>(),
+            )
+        }
+    };
+    let before_segments = list("_sg").await?;
+    let before_stats = list("_hs").await?;
+    assert!(
+        !before_stats.is_empty(),
+        "this test requires source stats files"
+    );
+
+    // Both outputs start together. Fail either PUT and check the successful
+    // sibling cannot survive as an unreferenced file.
+    for output in ["_sg", "_hs"] {
+        let fault = FaultInjection::install(FaultRule::new(
+            FaultOp::Write,
+            format!("{prefix}/{output}/"),
+            FaultKind::Permanent,
+        ));
+        let err = fixture
+            .execute_command("OPTIMIZE TABLE default.t_compact_fault COMPACT SEGMENT")
+            .await
+            .expect_err("one compact output write should fail");
+        assert_ne!(err.code(), ErrorCode::UNWIND_ERROR);
+        assert!(
+            fault.hits() >= 1,
+            "the {output} write fault was not exercised"
+        );
+        fault.remove();
+        assert_eq!(before_segments, list("_sg").await?);
+        assert_eq!(before_stats, list("_hs").await?);
+        let table = catalog
+            .get_table(&ctx.get_tenant(), "default", "t_compact_fault")
+            .await?;
+        let fuse = FuseTable::try_from_table(table.as_ref())?;
+        assert_eq!(
+            fuse.read_table_snapshot().await?.unwrap().segments,
+            before_snapshot.segments
+        );
+    }
     Ok(())
 }
 

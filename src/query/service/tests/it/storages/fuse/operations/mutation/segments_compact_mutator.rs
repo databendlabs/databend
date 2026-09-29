@@ -15,6 +15,9 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use chrono::Utc;
 use databend_common_base::runtime::execute_futures_in_parallel;
@@ -40,8 +43,10 @@ use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::io::WriteSettings;
+use databend_common_storages_fuse::io::read_segment_stats;
 use databend_common_storages_fuse::io::serialize_block;
 use databend_common_storages_fuse::operations::CompactOptions;
+use databend_common_storages_fuse::operations::ConflictResolveContext;
 use databend_common_storages_fuse::operations::SegmentCompactMutator;
 use databend_common_storages_fuse::operations::SegmentCompactionState;
 use databend_common_storages_fuse::operations::SegmentCompactor;
@@ -58,9 +63,13 @@ use databend_query::sessions::TableContextTableManagement;
 use databend_query::sessions::TableContextTelemetry;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::SegmentStatistics;
+use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::ColumnTopN;
+use databend_storages_common_table_meta::meta::ColumnTopNEntry;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -70,8 +79,19 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentB
 use databend_storages_common_table_meta::meta::column_oriented_segment::VirtualBlockInput;
 use databend_storages_common_table_meta::table::ClusterType;
 use futures_util::TryStreamExt;
+use opendal::raw::Access;
+use opendal::raw::Layer;
+use opendal::raw::LayeredAccess;
+use opendal::raw::OpList;
+use opendal::raw::OpRead;
+use opendal::raw::OpWrite;
+use opendal::raw::RpDelete;
+use opendal::raw::RpList;
+use opendal::raw::RpRead;
+use opendal::raw::RpWrite;
 use rand::Rng;
 use rand::thread_rng;
+use tokio::sync::Notify;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_normal_case() -> anyhow::Result<()> {
@@ -134,7 +154,8 @@ async fn test_compact_segment_limit_selects_newest() -> anyhow::Result<()> {
     assert_eq!(state.num_fragments_compacted, 2);
     assert!(state.replaced_segments.keys().all(|idx| *idx < 2));
     assert!(state.removed_segment_indexes.iter().all(|idx| *idx < 2));
-    assert_eq!(&state.segments_locations[1..], &base.segments[2..]);
+    let output = output_locations(&base.segments, &state);
+    assert_eq!(&output[1..], &base.segments[2..]);
     Ok(())
 }
 
@@ -160,26 +181,17 @@ async fn test_compact_segment_limit_does_not_read_older_segments() -> anyhow::Re
     snapshot_segments[2] = missing_older_location.clone();
 
     let dal = ctx.get_application_level_data_operator()?.operator();
-    let schema = TestFixture::default_table_schema();
-    let segment_io = SegmentsIO::create(ctx.clone(), dal.clone(), schema);
-    let locations = TableMetaLocationGenerator::new("test/".to_owned());
-    let compactor = SegmentCompactor::new(
-        thresholds.block_per_segment as u64,
-        None,
-        4,
-        &segment_io,
+    let state = compact_segments(
         &dal,
-        &locations,
-        TestFixture::default_table_meta_timestamps(),
-    );
-    let state = compactor
-        .compact(&snapshot_segments, Some(2), |_| {})
-        .await?;
+        thresholds.block_per_segment,
+        1,
+        &snapshot_segments,
+        Some(2),
+    )
+    .await?;
     assert_eq!(state.num_fragments_compacted, 2);
-    assert_eq!(
-        state.segments_locations.last(),
-        Some(&missing_older_location)
-    );
+    let output = output_locations(&snapshot_segments, &state);
+    assert_eq!(output.last(), Some(&missing_older_location));
     Ok(())
 }
 
@@ -206,23 +218,15 @@ async fn test_compact_segment_rejects_inconsistent_block_counts() -> anyhow::Res
         segments[0].summary.block_count = incorrect_count;
         segments[0].write_meta(&dal, &locations[0].0).await?;
 
-        let segment_io = SegmentsIO::create(
-            ctx.clone(),
-            dal.clone(),
-            TestFixture::default_table_schema(),
-        );
-        let location_gen = TableMetaLocationGenerator::new("test/".to_owned());
-        let compactor = SegmentCompactor::new(
-            thresholds.block_per_segment as u64,
-            None,
-            4,
-            &segment_io,
-            &dal,
-            &location_gen,
-            TestFixture::default_table_meta_timestamps(),
-        );
         let snapshot_segments = locations.into_iter().rev().collect::<Vec<_>>();
-        let result = compactor.compact(&snapshot_segments, None, |_| {}).await;
+        let result = compact_segments(
+            &dal,
+            thresholds.block_per_segment,
+            1,
+            &snapshot_segments,
+            None,
+        )
+        .await;
         assert!(result.is_err(), "inconsistent count: {incorrect_count}");
         assert!(
             result
@@ -232,6 +236,555 @@ async fn test_compact_segment_rejects_inconsistent_block_counts() -> anyhow::Res
                 .contains("blocks in its summary")
         );
     }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_compact_segment_parallel_groups_preserve_hll_and_top_n_order() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let dal = ctx.get_application_level_data_operator()?.operator();
+    let thresholds = BlockThresholds {
+        block_per_segment: 10,
+        ..Default::default()
+    };
+    // Five sources produce two independent merge groups. Give each block a
+    // distinct HLL payload so the output proves that asynchronous completion
+    // cannot reorder statistics within or between groups.
+    let (locations, _, mut segments) = CompactSegmentTestFixture::gen_segments(
+        ctx.clone(),
+        vec![5, 5, 15, 5, 5],
+        vec![1; 5],
+        thresholds,
+        None,
+        false,
+    )
+    .await?;
+    for (i, (location, segment)) in locations.iter().zip(&mut segments).enumerate() {
+        let block_hlls = (0..segment.blocks.len())
+            .map(|j| vec![i as u8, j as u8])
+            .collect::<Vec<_>>();
+        let block_top_ns = (0..segment.blocks.len())
+            .map(|j| {
+                HashMap::from([(0, ColumnTopN {
+                    capacity: 1,
+                    values: vec![ColumnTopNEntry {
+                        scalar: Scalar::Number(NumberScalar::Int32(i as i32)),
+                        count: j as u64 + 1,
+                        error: 0,
+                    }],
+                    min_index: None,
+                })])
+            })
+            .collect::<Vec<_>>();
+        let stats = SegmentStatistics::new(block_hlls, block_top_ns);
+        attach_segment_stats(&dal, &location.0, segment, stats).await?;
+    }
+    let snapshot_segments = locations.into_iter().rev().collect::<Vec<_>>();
+    let state = compact_segments(
+        &dal,
+        thresholds.block_per_segment,
+        4,
+        &snapshot_segments,
+        None,
+    )
+    .await?;
+    assert_eq!(state.new_segment_paths.len(), 2);
+    let expected = [(0, 1), (3, 4)];
+    for (path, (first, second)) in state.new_segment_paths.iter().zip(expected) {
+        let segment = SegmentsIO::read_compact_segment(
+            dal.clone(),
+            (path.clone(), SegmentInfo::VERSION),
+            TestFixture::default_table_schema(),
+            false,
+        )
+        .await?;
+        let stats_loc = &segment
+            .summary
+            .additional_stats_meta
+            .as_ref()
+            .unwrap()
+            .location;
+        let stats = read_segment_stats(dal.clone(), stats_loc.clone()).await?;
+        let expected_hlls = [first, second]
+            .into_iter()
+            .flat_map(|source| {
+                (0..segments[source].blocks.len()).map(move |j| vec![source as u8, j as u8])
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(stats.block_hlls, expected_hlls);
+        let expected_top_ns = [first, second]
+            .into_iter()
+            .flat_map(|source| {
+                (0..segments[source].blocks.len()).map(move |j| {
+                    HashMap::from([(0, ColumnTopN {
+                        capacity: 1,
+                        values: vec![ColumnTopNEntry {
+                            scalar: Scalar::Number(NumberScalar::Int32(source as i32)),
+                            count: j as u64 + 1,
+                            error: 0,
+                        }],
+                        min_index: None,
+                    })])
+                })
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(stats.block_top_ns, expected_top_ns);
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_compact_segment_single_thread_many_stats() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let dal = ctx.get_application_level_data_operator()?.operator();
+    let thresholds = BlockThresholds {
+        block_per_segment: 16,
+        ..Default::default()
+    };
+    // Check the order of many HLL files with one merge worker. This verifies
+    // correctness, not the number of reads that execute concurrently.
+    let (locations, _, mut segments) = CompactSegmentTestFixture::gen_segments(
+        ctx,
+        vec![1; 16],
+        vec![1; 16],
+        thresholds,
+        None,
+        false,
+    )
+    .await?;
+    for (i, (location, segment)) in locations.iter().zip(&mut segments).enumerate() {
+        let stats = SegmentStatistics::new(vec![vec![i as u8]], vec![Default::default()]);
+        attach_segment_stats(&dal, &location.0, segment, stats).await?;
+    }
+    let snapshot_segments = locations.into_iter().rev().collect::<Vec<_>>();
+    let layer = DelayStatsRead::default();
+    let state = compact_segments(
+        &dal.clone().layer(layer.clone()),
+        thresholds.block_per_segment,
+        1,
+        &snapshot_segments,
+        None,
+    )
+    .await?;
+    assert!(
+        layer.peak.load(Ordering::Relaxed) >= 3,
+        "a single merge worker should overlap more than two stats reads"
+    );
+    assert_eq!(state.new_segment_paths.len(), 1);
+    let merged = SegmentsIO::read_compact_segment(
+        dal.clone(),
+        (state.new_segment_paths[0].clone(), SegmentInfo::VERSION),
+        TestFixture::default_table_schema(),
+        false,
+    )
+    .await?;
+    let stats_loc = merged
+        .summary
+        .additional_stats_meta
+        .as_ref()
+        .unwrap()
+        .location
+        .clone();
+    let stats = read_segment_stats(dal, stats_loc).await?;
+    let expected = (0..16).map(|i| vec![i as u8]).collect::<Vec<_>>();
+    assert_eq!(stats.block_hlls, expected);
+    Ok(())
+}
+
+#[derive(Clone, Debug, Default)]
+struct DelayStatsRead {
+    active: Arc<AtomicUsize>,
+    peak: Arc<AtomicUsize>,
+}
+
+impl<A: Access> Layer<A> for DelayStatsRead {
+    type LayeredAccess = DelayedStatsAccessor<A>;
+
+    fn layer(&self, inner: A) -> Self::LayeredAccess {
+        DelayedStatsAccessor {
+            inner,
+            active: self.active.clone(),
+            peak: self.peak.clone(),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct DelayedStatsAccessor<A: Access> {
+    inner: A,
+    active: Arc<AtomicUsize>,
+    peak: Arc<AtomicUsize>,
+}
+
+impl<A: Access> LayeredAccess for DelayedStatsAccessor<A> {
+    type Inner = A;
+    type Reader = A::Reader;
+    type Writer = A::Writer;
+    type Lister = A::Lister;
+    type Deleter = A::Deleter;
+
+    fn inner(&self) -> &Self::Inner {
+        &self.inner
+    }
+
+    async fn read(&self, path: &str, args: OpRead) -> opendal::Result<(RpRead, Self::Reader)> {
+        if path.contains("/_hs/") {
+            let active = self.active.fetch_add(1, Ordering::Relaxed) + 1;
+            self.peak.fetch_max(active, Ordering::Relaxed);
+            tokio::time::sleep(Duration::from_millis(30)).await;
+            self.active.fetch_sub(1, Ordering::Relaxed);
+        }
+        self.inner.read(path, args).await
+    }
+
+    async fn write(&self, path: &str, args: OpWrite) -> opendal::Result<(RpWrite, Self::Writer)> {
+        self.inner.write(path, args).await
+    }
+
+    async fn delete(&self) -> opendal::Result<(RpDelete, Self::Deleter)> {
+        self.inner.delete().await
+    }
+
+    async fn list(&self, path: &str, args: OpList) -> opendal::Result<(RpList, Self::Lister)> {
+        self.inner.list(path, args).await
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_compact_segment_skips_incomplete_stats() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let dal = ctx.get_application_level_data_operator()?.operator();
+    let thresholds = BlockThresholds {
+        block_per_segment: 10,
+        ..Default::default()
+    };
+    let (locations, _, mut segments) = CompactSegmentTestFixture::gen_segments(
+        ctx.clone(),
+        vec![1, 1],
+        vec![1, 1],
+        thresholds,
+        None,
+        false,
+    )
+    .await?;
+    let stats = SegmentStatistics::new(vec![vec![1]], vec![Default::default()]);
+    attach_segment_stats(&dal, &locations[0].0, &mut segments[0], stats).await?;
+
+    let snapshot_segments = locations.into_iter().rev().collect::<Vec<_>>();
+    let state = compact_segments(
+        &dal,
+        thresholds.block_per_segment,
+        4,
+        &snapshot_segments,
+        None,
+    )
+    .await?;
+    assert_eq!(state.new_segment_paths.len(), 1);
+    let merged = SegmentsIO::read_compact_segment(
+        dal.clone(),
+        (state.new_segment_paths[0].clone(), SegmentInfo::VERSION),
+        TestFixture::default_table_schema(),
+        false,
+    )
+    .await?;
+    assert!(merged.summary.additional_stats_meta.is_none());
+    let merged_stats_path =
+        TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(
+            &state.new_segment_paths[0],
+        );
+    assert!(!dal.exists(&merged_stats_path).await?);
+    Ok(())
+}
+
+#[derive(Clone, Debug)]
+struct PauseSegmentWrite {
+    entered: Arc<Notify>,
+    release: Arc<Notify>,
+}
+
+impl<A: Access> Layer<A> for PauseSegmentWrite {
+    type LayeredAccess = PausedSegmentAccessor<A>;
+
+    fn layer(&self, inner: A) -> Self::LayeredAccess {
+        PausedSegmentAccessor {
+            inner,
+            entered: self.entered.clone(),
+            release: self.release.clone(),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct PausedSegmentAccessor<A: Access> {
+    inner: A,
+    entered: Arc<Notify>,
+    release: Arc<Notify>,
+}
+
+impl<A: Access> LayeredAccess for PausedSegmentAccessor<A> {
+    type Inner = A;
+    type Reader = A::Reader;
+    type Writer = A::Writer;
+    type Lister = A::Lister;
+    type Deleter = A::Deleter;
+
+    fn inner(&self) -> &Self::Inner {
+        &self.inner
+    }
+
+    async fn read(&self, path: &str, args: OpRead) -> opendal::Result<(RpRead, Self::Reader)> {
+        self.inner.read(path, args).await
+    }
+
+    async fn delete(&self) -> opendal::Result<(RpDelete, Self::Deleter)> {
+        self.inner.delete().await
+    }
+
+    async fn list(&self, path: &str, args: OpList) -> opendal::Result<(RpList, Self::Lister)> {
+        self.inner.list(path, args).await
+    }
+
+    async fn write(&self, path: &str, args: OpWrite) -> opendal::Result<(RpWrite, Self::Writer)> {
+        if path.contains("/_sg/") {
+            self.entered.notify_one();
+            self.release.notified().await;
+        }
+        self.inner.write(path, args).await
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_compact_segment_cancel_between_stats_and_segment_writes() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let dal = ctx.get_application_level_data_operator()?.operator();
+    let thresholds = BlockThresholds {
+        block_per_segment: 10,
+        ..Default::default()
+    };
+    let (locations, _, mut segments) = CompactSegmentTestFixture::gen_segments(
+        ctx.clone(),
+        vec![1, 1],
+        vec![1, 1],
+        thresholds,
+        None,
+        false,
+    )
+    .await?;
+    for (location, segment) in locations.iter().zip(&mut segments) {
+        let stats = SegmentStatistics::new(vec![vec![1]], vec![Default::default()]);
+        attach_segment_stats(&dal, &location.0, segment, stats).await?;
+    }
+    let before_segments = list_paths(&dal, "test/_sg/").await?;
+    let before_stats = list_paths(&dal, "test/_hs/").await?;
+    assert!(before_stats.len() >= 2);
+    let pause = PauseSegmentWrite {
+        entered: Arc::new(Notify::new()),
+        release: Arc::new(Notify::new()),
+    };
+    let operator = dal.clone().layer(pause.clone());
+    let snapshot_segments = locations.into_iter().rev().collect::<Vec<_>>();
+    let mut compact = Box::pin(compact_segments(
+        &operator,
+        thresholds.block_per_segment,
+        4,
+        &snapshot_segments,
+        None,
+    ));
+    tokio::time::timeout(Duration::from_secs(10), async {
+        tokio::select! {
+            _ = pause.entered.notified() => {},
+            _ = &mut compact => panic!("compaction completed before the segment write"),
+        }
+    })
+    .await?;
+    // The segment write is paused; the stats write may complete independently.
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while list_paths(&dal, "test/_hs/").await.unwrap() == before_stats {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await?;
+    drop(compact);
+    // Cleanup runs asynchronously; wait until the uncommitted stats file is gone.
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while list_paths(&dal, "test/_hs/").await.unwrap() != before_stats {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await?;
+    assert_eq!(list_paths(&dal, "test/_sg/").await?, before_segments);
+    // If the blocked write were detached instead of aborted, it could create an
+    // uncommitted segment once released. The guard must cancel it first.
+    pause.release.notify_one();
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert_eq!(list_paths(&dal, "test/_sg/").await?, before_segments);
+    assert_eq!(list_paths(&dal, "test/_hs/").await?, before_stats);
+    Ok(())
+}
+
+// Reconstruct the snapshot exactly as the production commit path does, rather
+// than maintaining a second full segment list during compaction selection.
+fn output_locations(base: &[Location], state: &SegmentCompactionState) -> Vec<Location> {
+    ConflictResolveContext::merge_segments(
+        base.to_vec(),
+        vec![],
+        state.replaced_segments.clone(),
+        state.removed_segment_indexes.clone(),
+    )
+}
+
+// Compact `segments` (snapshot order, newest first) with the default test
+// schema. Use four IO requests per merge worker in these focused tests.
+async fn compact_segments(
+    operator: &opendal::Operator,
+    block_per_segment: usize,
+    max_threads: usize,
+    segments: &[Location],
+    limit: Option<usize>,
+) -> Result<SegmentCompactionState> {
+    let location_gen = TableMetaLocationGenerator::new("test/".to_owned());
+    SegmentCompactor::new(
+        block_per_segment as u64,
+        None,
+        max_threads,
+        max_threads * 4,
+        TestFixture::default_table_schema(),
+        operator,
+        &location_gen,
+        TestFixture::default_table_meta_timestamps(),
+    )
+    .compact(segments, limit, |_| {})
+    .await
+}
+
+// Write `stats` as the segment's HLL/Top-N file and rewrite the segment so its
+// summary points to it.
+async fn attach_segment_stats(
+    dal: &opendal::Operator,
+    segment_path: &str,
+    segment: &mut SegmentInfo,
+    stats: SegmentStatistics,
+) -> anyhow::Result<()> {
+    let bytes = stats.to_bytes()?;
+    let stats_path =
+        TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(segment_path);
+    segment.summary.additional_stats_meta = Some(AdditionalStatsMeta {
+        size: bytes.len() as u64,
+        location: (stats_path.clone(), SegmentStatistics::VERSION),
+        ..Default::default()
+    });
+    dal.write(&stats_path, bytes).await?;
+    segment.write_meta(dal, segment_path).await?;
+    Ok(())
+}
+
+async fn list_paths(dal: &opendal::Operator, prefix: &str) -> anyhow::Result<Vec<String>> {
+    let mut paths = dal
+        .list(prefix)
+        .await?
+        .iter()
+        .map(|entry| entry.path().to_string())
+        .collect::<Vec<_>>();
+    paths.sort();
+    Ok(paths)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_compact_segment_parallel_group_failure_cleans_outputs() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let dal = ctx.get_application_level_data_operator()?.operator();
+    let thresholds = BlockThresholds {
+        block_per_segment: 10,
+        ..Default::default()
+    };
+    // The old end makes one merge group; the newest group contains a corrupt
+    // summary, so the first group's output must be removed before returning.
+    let (locations, _, mut segments) = CompactSegmentTestFixture::gen_segments(
+        ctx.clone(),
+        vec![1, 1, 10, 1, 1],
+        vec![1; 5],
+        thresholds,
+        None,
+        false,
+    )
+    .await?;
+    segments.last_mut().unwrap().summary.block_count = 2;
+    segments
+        .last()
+        .unwrap()
+        .write_meta(&dal, &locations.last().unwrap().0)
+        .await?;
+    let before = list_paths(&dal, "test/_sg/").await?;
+    // max_threads 4 allows four merge groups, so both groups are in flight
+    // together and the failure of the second must clean up the first.
+    let snapshot_segments = locations.into_iter().rev().collect::<Vec<_>>();
+    let error = compact_segments(
+        &dal,
+        thresholds.block_per_segment,
+        4,
+        &snapshot_segments,
+        None,
+    )
+    .await
+    .err()
+    .expect("the second group must reject inconsistent block counts");
+    assert!(error.to_string().contains("blocks in its summary"));
+    assert_eq!(
+        before,
+        list_paths(&dal, "test/_sg/").await?,
+        "failed compaction left behind a segment file"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_compact_segment_read_failure_cleans_submitted_merges() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let dal = ctx.get_application_level_data_operator()?.operator();
+    let thresholds = BlockThresholds {
+        block_per_segment: 10,
+        ..Default::default()
+    };
+    // Traversal is oldest first: 1 + 1 + 10 forms a merge group that is
+    // submitted before the newest segment's read error reaches the planner.
+    // The error must abort the submitted group and leave no files behind,
+    // whether or not the group had written its output yet. Deleting output
+    // that was already written is covered by the parallel group failure test.
+    let (locations, _, _) = CompactSegmentTestFixture::gen_segments(
+        ctx.clone(),
+        vec![1, 1, 10, 1],
+        vec![1; 4],
+        thresholds,
+        None,
+        false,
+    )
+    .await?;
+    let mut snapshot_segments = locations.into_iter().rev().collect::<Vec<_>>();
+    snapshot_segments[0] = ("test/nonexistent-segment".to_string(), SegmentInfo::VERSION);
+    let before = list_paths(&dal, "test/_sg/").await?;
+    let result = compact_segments(
+        &dal,
+        thresholds.block_per_segment,
+        4,
+        &snapshot_segments,
+        None,
+    )
+    .await;
+    assert!(
+        result.is_err(),
+        "reading a missing segment must fail compaction"
+    );
+    assert_eq!(
+        before,
+        list_paths(&dal, "test/_sg/").await?,
+        "failed compaction left behind a segment file"
+    );
     Ok(())
 }
 
@@ -400,7 +953,7 @@ async fn test_compact_segment_changes_preserve_position() -> anyhow::Result<()> 
     };
     let mut case_fixture = CompactSegmentTestFixture::try_new(&ctx, threshold)?;
 
-    let (state, _) = case_fixture
+    let (state, _, base_segments) = case_fixture
         .run(&[10, 10, 1, 2, 10, 10], None, None)
         .await?;
 
@@ -408,8 +961,9 @@ async fn test_compact_segment_changes_preserve_position() -> anyhow::Result<()> 
     let new_segment = (state.new_segment_paths[0].clone(), SegmentInfo::VERSION);
     assert_eq!(state.replaced_segments.get(&2), Some(&new_segment));
     assert_eq!(state.removed_segment_indexes, vec![3]);
-    assert_eq!(state.segments_locations[2], new_segment);
-    assert_eq!(state.segments_locations.len(), 5);
+    let output = output_locations(&base_segments, &state);
+    assert_eq!(output[2], new_segment);
+    assert_eq!(output.len(), 5);
 
     Ok(())
 }
@@ -503,6 +1057,18 @@ async fn test_segment_compactor() -> anyhow::Result<()> {
         //   - blocks and the order of them are not changed
         //   - statistics are as expected
         //   - the output segments could not be compacted further
+        case.run_and_verify(&ctx, threshold_10, None).await?;
+    }
+
+    {
+        // Several independent groups finish concurrently. Output locations,
+        // block order and statistics must still follow the snapshot traversal.
+        let case = CompactCase {
+            blocks_number_of_input_segments: vec![5, 5, 15, 5, 5, 15, 5, 5, 15, 5, 5],
+            expected_number_of_output_segments: 7,
+            expected_block_number_of_new_segments: vec![10, 10, 10, 10],
+            case_name: "multiple parallel merge groups",
+        };
         case.run_and_verify(&ctx, threshold_10, None).await?;
     }
 
@@ -842,13 +1408,13 @@ impl CompactSegmentTestFixture {
         num_block_of_segments: &'a [usize],
         limit: Option<usize>,
         cluster_key_id: Option<u32>,
-    ) -> Result<(SegmentCompactionState, Statistics)> {
+    ) -> Result<(SegmentCompactionState, Statistics, Vec<Location>)> {
         let data_accessor = &self.data_accessor.operator();
         let location_gen = &self.location_gen;
 
         let schema = TestFixture::default_table_schema();
-        let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), data_accessor.clone(), schema);
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        let max_io_requests = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
 
         let cluster_key_info = cluster_key_id
             .map(|id| ClusterKeyInfo::new((id, "(id)".to_string()), ClusterType::Linear));
@@ -856,7 +1422,8 @@ impl CompactSegmentTestFixture {
             self.threshold.block_per_segment as u64,
             cluster_key_info.clone(),
             max_threads,
-            &fuse_segment_io,
+            max_io_requests,
+            schema,
             data_accessor,
             location_gen,
             TestFixture::default_table_meta_timestamps(),
@@ -885,7 +1452,7 @@ impl CompactSegmentTestFixture {
                 self.ctx.set_status_info(&status);
             })
             .await?;
-        Ok((state, summary))
+        Ok((state, summary, snapshot_segments))
     }
 
     pub async fn gen_segments(
@@ -1067,9 +1634,10 @@ impl CompactCase {
             TestFixture::default_table_schema(),
         );
         let mut case_fixture = CompactSegmentTestFixture::try_new(ctx, threshold)?;
-        let (r, summary) = case_fixture
+        let (r, summary, base_segments) = case_fixture
             .run(&self.blocks_number_of_input_segments, limit, None)
             .await?;
+        let output = output_locations(&base_segments, &r);
 
         // verify that:
 
@@ -1085,7 +1653,7 @@ impl CompactCase {
 
         // 2. number of segments is as expected (including both of the segments that not changed and newly generated segments)
         assert_eq!(
-            r.segments_locations.len(),
+            output.len(),
             self.expected_number_of_output_segments,
             "case: {}, step: verify number of output segments (new segments and unchanged segments)",
             self.case_name,
@@ -1106,7 +1674,7 @@ impl CompactCase {
         let mut block_num_of_output_segments = vec![];
 
         // 4. input blocks should be there and in the original order
-        for location in r.segments_locations.iter().rev() {
+        for location in output.iter().rev() {
             let load_params = LoadParams {
                 location: location.0.clone(),
                 len_hint: None,
@@ -1142,7 +1710,7 @@ impl CompactCase {
         // 6. the output segments can not be compacted further, if (no limit)
         if limit.is_none() {
             let mut case_fixture = CompactSegmentTestFixture::try_new(ctx, threshold)?;
-            let (r, _) = case_fixture
+            let (r, _, base_segments) = case_fixture
                 .run(&block_num_of_output_segments, None, None)
                 .await?;
             assert_eq!(
@@ -1153,7 +1721,7 @@ impl CompactCase {
             );
             let num_of_output_segments = block_num_of_output_segments.len();
             assert_eq!(
-                r.segments_locations.len(),
+                output_locations(&base_segments, &r).len(),
                 num_of_output_segments,
                 "case: {}, verify number of segments",
                 self.case_name
@@ -1167,7 +1735,6 @@ impl CompactCase {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
     let cluster_key_id = 0;
-    let chunk_size = 6;
     let threshold = BlockThresholds {
         block_per_segment: 5,
         ..Default::default()
@@ -1185,7 +1752,6 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
 
     let compact_segment_reader =
         MetaReaders::segment_info_reader(data_accessor.clone(), schema.clone());
-    let fuse_segment_io = SegmentsIO::create(ctx.clone(), data_accessor.clone(), schema);
 
     let mut rand = thread_rng();
 
@@ -1236,8 +1802,9 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
         let seg_acc = SegmentCompactor::new(
             threshold.block_per_segment as u64,
             cluster_key_info.clone(),
-            chunk_size,
-            &fuse_segment_io,
+            settings.get_max_threads()? as usize,
+            settings.get_max_storage_io_requests()? as usize,
+            schema.clone(),
             &data_accessor,
             &location_gen,
             TestFixture::default_table_meta_timestamps(),
@@ -1256,13 +1823,10 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
             input_block_id.extend(segment.blocks.iter().map(|b| b.location.clone()));
         }
 
-        eprintln!(
-            "after compact, the num of all segments {}",
-            state.segments_locations.len()
-        );
+        let output = output_locations(&snapshot_segments, &state);
         let mut statistics_of_segments: Statistics = Statistics::default();
         let mut output_block_id = Vec::with_capacity(number_of_blocks);
-        for location in state.segments_locations.iter().rev() {
+        for location in output.iter().rev() {
             let load_params = LoadParams {
                 location: location.0.clone(),
                 len_hint: None,
