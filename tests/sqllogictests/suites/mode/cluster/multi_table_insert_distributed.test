@@ -125,5 +125,123 @@ Fragment 2:
         └── source fragment: [0]
 (empty)
 
+# Each target keeps the original source-once and multi-table commit pipeline,
+# but uses its own partition key for distributed hash routing.
+statement ok
+create table mti_hash_a(a int, v int default 7)
+partition by (a % 2) write_distribution_mode='hash' row_per_block=1000;
+
+statement ok
+create table mti_hash_b(a int, v int default 9)
+partition by ((a + 1) % 3) write_distribution_mode='hash' row_per_block=1000;
+
+statement ok
+create table mti_plain(a int, label string default 'plain');
+
+statement ok
+insert all
+  into mti_hash_a(a) values(a)
+  into mti_hash_b(a) values(a)
+  into mti_plain(a) values(a)
+select a from mti_src;
+
+query III
+select count(*), sum(a), sum(v) from mti_hash_a;
+----
+100 4950 700
+
+query III
+select count(*), sum(a), sum(v) from mti_hash_b;
+----
+100 4950 900
+
+query IIT
+select count(*), sum(a), min(label) from mti_plain;
+----
+100 4950 plain
+
+query I
+select count(*) from (
+  select _block_name from mti_hash_a group by _block_name
+  having min(a % 2) != max(a % 2)
+);
+----
+0
+
+query I
+select count(*) from (
+  select _block_name from mti_hash_b group by _block_name
+  having min((a + 1) % 3) != max((a + 1) % 3)
+);
+----
+0
+
+# Multiple clauses targeting the same table must combine their commit metadata.
+statement ok
+insert all
+  into mti_hash_a(a) values(a + 100)
+  into mti_hash_a(a) values(a + 200)
+select a from mti_src where a < 5;
+
+query III
+select count(*), sum(a), sum(v) from mti_hash_a;
+----
+110 6470 770
+
+# Several source blocks across the cluster still feed every target exactly once.
+statement ok
+create table mti_bulk_src(a int);
+
+statement ok
+insert into mti_bulk_src select number::int from numbers(2048);
+
+statement ok
+set max_block_size = 128;
+
+statement ok
+insert all
+  into mti_hash_a(a) values(a)
+  into mti_hash_b(a) values(a)
+  into mti_plain(a) values(a)
+select a from mti_bulk_src;
+
+query III
+select (select count(*) from mti_hash_a),
+       (select count(*) from mti_hash_b),
+       (select count(*) from mti_plain);
+----
+2158 2148 2148
+
+# Verify hash routing changes the physical write layout, not just row results.
+statement ok
+create table mti_partition_src(a int) row_per_block=128 block_per_segment=1000;
+
+statement ok
+insert into mti_partition_src select number::int from numbers(4096);
+
+statement ok
+create table mti_hash_compare(a int)
+partition by(a % 2) write_distribution_mode='hash'
+row_per_block=1000 block_per_segment=1000;
+
+statement ok
+create table mti_none_compare(a int)
+partition by(a % 2) row_per_block=1000 block_per_segment=1000;
+
+statement ok
+insert all
+  into mti_hash_compare values(a)
+  into mti_none_compare values(a)
+select a from mti_partition_src;
+
+query II
+select to_int64(h.row_count = n.row_count),
+       to_int64(h.block_count < n.block_count)
+from fuse_snapshot('mti_distributed', 'mti_hash_compare') h
+cross join fuse_snapshot('mti_distributed', 'mti_none_compare') n
+limit 1;
+----
+1 1
+
 statement ok
 drop database mti_distributed
