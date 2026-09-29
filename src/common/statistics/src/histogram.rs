@@ -35,31 +35,23 @@ pub const DEFAULT_HISTOGRAM_BUCKETS: usize = 100;
 /// prove value existence, complete value-set coverage, exact NDV, or confirmed
 /// join matches.
 ///
-/// `accuracy == true` only means the bucket statistics are expected to be
-/// relatively more accurate because they still come directly from
-/// `ANALYZE TABLE`. ANALYZE buckets are observed row-order tiles: for each
-/// supported non-null column, ANALYZE runs a query equivalent to sorting rows
-/// by the column, assigning `NTILE(DEFAULT_HISTOGRAM_BUCKETS)`, then grouping by
-/// tile and collecting `MIN(col)`, `MAX(col)`, `COUNT()`, and
+/// Every histogram is an approximation, whatever produced it (ANALYZE window
+/// queries, KLL sketches, or synthesis from NDV and bounds), and consumers
+/// treat them all the same way. ANALYZE buckets are observed row-order tiles:
+/// for each supported non-null column, ANALYZE runs a query equivalent to
+/// sorting rows by the column, assigning `NTILE(DEFAULT_HISTOGRAM_BUCKETS)`,
+/// then grouping by tile and collecting `MIN(col)`, `MAX(col)`, `COUNT()`, and
 /// `COUNT(DISTINCT col)`. Each bucket is the modeled closed value envelope of
 /// one row-order tile. The bucket list is not a value-domain partition:
 /// adjacent buckets may share boundaries or overlap when duplicate values
 /// cross tile boundaries.
 ///
 /// Histograms synthesized from column NDV plus min/max bounds by
-/// [`crate::HistogramBuilder::from_ndv`] use `accuracy == false`. Scaling a
-/// histogram by an independent selectivity also marks it inaccurate: scaling
-/// only aligns row mass after a filter whose surviving values are unknown, so
-/// the original bucket distinct counts are expected to be less accurate. Range
-/// clipping and join overlap estimation keep this relative-quality flag because
-/// they do not by themselves perform that unknown-value alignment. Numeric
-/// synthetic histograms keep `avg_spacing` separately so consumers can detect
-/// distorted ranges.
-///
-/// Consumers may use this distinction to choose a confidence or refinement
-/// policy, but must not interpret it as proof. The type variants preserve the
-/// bucket value type for serialization, function selectivity, and type-specific
-/// join estimation.
+/// [`crate::HistogramBuilder::from_ndv`] also record their value spacing at
+/// synthesis in `avg_spacing`, so consumers can tell when bucket positions stop
+/// carrying information (see [`Histogram::is_range_sparse`]). The type variants
+/// preserve the bucket value type for serialization, function selectivity, and
+/// type-specific join estimation.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Histogram {
     Int(TypedHistogram<i64>),
@@ -104,23 +96,14 @@ impl<'a> BorrowedHistogram<'a> {
         }
     }
 
-    pub fn accuracy(self) -> bool {
+    /// See [`TypedHistogram::is_range_sparse`].
+    pub fn is_range_sparse(self, min_retention: f64) -> bool {
         match self {
-            Self::Int(histogram) => histogram.accuracy,
-            Self::UInt(histogram) => histogram.accuracy,
-            Self::Float(histogram) => histogram.accuracy,
-            Self::Bytes(histogram) => histogram.accuracy,
+            Self::Int(histogram) => histogram.is_range_sparse(min_retention),
+            Self::UInt(histogram) => histogram.is_range_sparse(min_retention),
+            Self::Float(histogram) => histogram.is_range_sparse(min_retention),
+            Self::Bytes(histogram) => histogram.is_range_sparse(min_retention),
         }
-    }
-
-    pub fn is_range_distorted(self) -> bool {
-        match self {
-            Self::Int(histogram) => histogram.avg_spacing,
-            Self::UInt(histogram) => histogram.avg_spacing,
-            Self::Float(histogram) => histogram.avg_spacing,
-            Self::Bytes(histogram) => histogram.avg_spacing,
-        }
-        .is_some_and(|bucket_width| bucket_width > 1e12)
     }
 
     /// Estimate a numeric join in the comparison expression's return type.
@@ -422,18 +405,15 @@ fn last_integer_satisfying(
 }
 
 impl Histogram {
-    pub fn try_from_buckets(
-        accuracy: bool,
-        buckets: Vec<HistogramBucket>,
-        avg_spacing: Option<f64>,
-    ) -> Result<Self, &'static str> {
+    /// Build a histogram from ANALYZE buckets or persisted snapshot buckets.
+    /// These are never synthetic, so `avg_spacing` is `None`.
+    pub fn try_from_buckets(buckets: Vec<HistogramBucket>) -> Result<Self, &'static str> {
         let Some(first_bucket) = buckets.first() else {
             return Err("histogram must contain at least one bucket");
         };
 
         match first_bucket {
             HistogramBucket::Int(_) => Ok(Self::Int(TypedHistogram {
-                accuracy,
                 row_scale: 1.0,
                 buckets: buckets
                     .into_iter()
@@ -442,10 +422,9 @@ impl Histogram {
                         _ => Err("histogram bucket types must be consistent"),
                     })
                     .collect::<Result<Vec<_>, _>>()?,
-                avg_spacing,
+                avg_spacing: None,
             })),
             HistogramBucket::UInt(_) => Ok(Self::UInt(TypedHistogram {
-                accuracy,
                 row_scale: 1.0,
                 buckets: buckets
                     .into_iter()
@@ -454,10 +433,9 @@ impl Histogram {
                         _ => Err("histogram bucket types must be consistent"),
                     })
                     .collect::<Result<Vec<_>, _>>()?,
-                avg_spacing,
+                avg_spacing: None,
             })),
             HistogramBucket::Float(_) => Ok(Self::Float(TypedHistogram {
-                accuracy,
                 row_scale: 1.0,
                 buckets: buckets
                     .into_iter()
@@ -466,10 +444,9 @@ impl Histogram {
                         _ => Err("histogram bucket types must be consistent"),
                     })
                     .collect::<Result<Vec<_>, _>>()?,
-                avg_spacing,
+                avg_spacing: None,
             })),
             HistogramBucket::Bytes(_) => Ok(Self::Bytes(TypedHistogram {
-                accuracy,
                 row_scale: 1.0,
                 buckets: buckets
                     .into_iter()
@@ -478,26 +455,8 @@ impl Histogram {
                         _ => Err("histogram bucket types must be consistent"),
                     })
                     .collect::<Result<Vec<_>, _>>()?,
-                avg_spacing,
+                avg_spacing: None,
             })),
-        }
-    }
-
-    pub fn accuracy(&self) -> bool {
-        match self {
-            Self::Int(histogram) => histogram.accuracy,
-            Self::UInt(histogram) => histogram.accuracy,
-            Self::Float(histogram) => histogram.accuracy,
-            Self::Bytes(histogram) => histogram.accuracy,
-        }
-    }
-
-    pub fn avg_spacing(&self) -> Option<f64> {
-        match self {
-            Self::Int(histogram) => histogram.avg_spacing,
-            Self::UInt(histogram) => histogram.avg_spacing,
-            Self::Float(histogram) => histogram.avg_spacing,
-            Self::Bytes(histogram) => histogram.avg_spacing,
         }
     }
 
@@ -602,9 +561,9 @@ impl Histogram {
             .estimate_join_numeric_compatible(BorrowedHistogram::from(other))
     }
 
-    pub fn is_range_distorted(&self) -> bool {
-        self.avg_spacing()
-            .is_some_and(|bucket_width| bucket_width > 1e12)
+    /// See [`TypedHistogram::is_range_sparse`].
+    pub fn is_range_sparse(&self, min_retention: f64) -> bool {
+        BorrowedHistogram::from(self).is_range_sparse(min_retention)
     }
 }
 
@@ -873,13 +832,11 @@ mod tests {
     #[test]
     fn test_mixed_numeric_join_calculates_existing_buckets_directly() -> ExceptionResult<()> {
         let left = Histogram::Int(TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(1, 1, 3.0, 1.0)],
             avg_spacing: None,
         });
         let right = Histogram::UInt(TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(1, 1, 2.0, 1.0)],
             avg_spacing: None,
@@ -898,7 +855,6 @@ mod tests {
     fn test_direct_numeric_join_matches_typed_join_for_representable_ranges() -> ExceptionResult<()>
     {
         let left_int = Histogram::Int(TypedHistogram {
-            accuracy: false,
             row_scale: 0.5,
             buckets: vec![
                 TypedHistogramBucket::new(0, 10, 40.0, 10.0),
@@ -908,7 +864,6 @@ mod tests {
             avg_spacing: None,
         });
         let left_float = Histogram::Float(TypedHistogram {
-            accuracy: false,
             row_scale: 0.5,
             buckets: vec![
                 TypedHistogramBucket::new(F64::from(0.0), F64::from(10.0), 40.0, 10.0),
@@ -918,7 +873,6 @@ mod tests {
             avg_spacing: None,
         });
         let right_float = Histogram::Float(TypedHistogram {
-            accuracy: false,
             row_scale: 0.25,
             buckets: vec![
                 TypedHistogramBucket::new(F64::from(5.0), F64::from(15.0), 32.0, 9.0),
@@ -946,7 +900,6 @@ mod tests {
     fn test_float_join_with_nan_bounds_does_not_panic() -> ExceptionResult<()> {
         let histogram = |buckets: Vec<TypedHistogramBucket<F64>>| {
             Histogram::Float(TypedHistogram {
-                accuracy: false,
                 row_scale: 1.0,
                 buckets,
                 avg_spacing: None,
@@ -998,19 +951,16 @@ mod tests {
     #[test]
     fn test_direct_mixed_integer_join_matches_typed_join() -> ExceptionResult<()> {
         let left = Histogram::Int(TypedHistogram {
-            accuracy: false,
             row_scale: 0.5,
             buckets: vec![TypedHistogramBucket::new(-10, 20, 80.0, 24.0)],
             avg_spacing: None,
         });
         let right_int = Histogram::Int(TypedHistogram {
-            accuracy: false,
             row_scale: 0.25,
             buckets: vec![TypedHistogramBucket::new(5, 30, 60.0, 20.0)],
             avg_spacing: None,
         });
         let right_uint = Histogram::UInt(TypedHistogram {
-            accuracy: false,
             row_scale: 0.25,
             buckets: vec![TypedHistogramBucket::new(5, 30, 60.0, 20.0)],
             avg_spacing: None,
@@ -1030,7 +980,6 @@ mod tests {
     #[test]
     fn test_mixed_integer_join_preserves_large_integer_boundaries() -> ExceptionResult<()> {
         let left = Histogram::Int(TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(
                 9_007_199_254_740_992,
@@ -1041,7 +990,6 @@ mod tests {
             avg_spacing: None,
         });
         let right = Histogram::UInt(TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(
                 9_007_199_254_740_993,
@@ -1064,7 +1012,6 @@ mod tests {
     #[test]
     fn test_numeric_join_uses_requested_return_type() -> ExceptionResult<()> {
         let left = Histogram::Int(TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(
                 9_007_199_254_740_992,
@@ -1075,7 +1022,6 @@ mod tests {
             avg_spacing: None,
         });
         let right = Histogram::Int(TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(
                 9_007_199_254_740_993,
@@ -1101,13 +1047,11 @@ mod tests {
     #[test]
     fn test_integer_join_compares_values_outside_return_type_range() -> ExceptionResult<()> {
         let left = Histogram::UInt(TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(u64::MAX, u64::MAX, 1.0, 1.0)],
             avg_spacing: None,
         });
         let right = Histogram::Int(TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 0, 1.0, 1.0)],
             avg_spacing: None,

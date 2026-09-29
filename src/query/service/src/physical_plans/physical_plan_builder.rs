@@ -71,7 +71,7 @@ impl PhysicalPlanBuilder {
 
     pub fn build_plan_stat_info(&self, s_expr: &PExpr) -> Result<PlanStatsInfo> {
         let rel_expr = RelExpr::with_p_expr(s_expr);
-        let stat_context = StatContext::new(self.func_ctx.clone());
+        let stat_context = StatContext::new(self.func_ctx.clone(), &self.ctx.get_settings());
         let stat_info = rel_expr.derive_cardinality(&stat_context)?;
 
         Ok(PlanStatsInfo {

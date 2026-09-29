@@ -381,7 +381,8 @@ impl Operator for Scan {
                     StatCardinality::exact(precise_cardinality),
                 )
                 .with_top_n(std::mem::take(&mut output_top_n))
-                .with_count_min_sketch(std::mem::take(&mut output_count_min_sketch));
+                .with_count_min_sketch(std::mem::take(&mut output_count_min_sketch))
+                .with_and_strategy(stat_ctx.filter_and_strategy);
                 let cardinality = sb.apply(&prewhere.predicates, &stat_ctx.function_context)?;
                 column_stats = sb.into_column_stats();
                 cardinality
@@ -414,6 +415,7 @@ impl Operator for Scan {
                     SelectivityEstimator::new(column_stats, input_cardinality)
                         .with_top_n(output_top_n)
                         .with_count_min_sketch(output_count_min_sketch)
+                        .with_and_strategy(stat_ctx.filter_and_strategy)
                         .apply(preds, &stat_ctx.function_context)?
                 }
                 _ => cardinality,
@@ -547,7 +549,10 @@ mod tests {
         };
         let s_expr = SExpr::create_leaf(RelOperator::Scan(scan.clone()));
         let rel_expr = RelExpr::with_s_expr(&s_expr);
-        let stats = scan.derive_stats(&rel_expr, &StatContext::default())?;
+        let stats = scan.derive_stats(
+            &rel_expr,
+            &StatContext::without_settings(Default::default()),
+        )?;
         assert!(stats.statistics.top_n.contains_key(&column));
         assert_eq!(stats.statistics.precise_cardinality, Some(100));
 
@@ -560,8 +565,10 @@ mod tests {
         };
         let sampled_s_expr = SExpr::create_leaf(RelOperator::Scan(sampled_scan.clone()));
         let sampled_rel_expr = RelExpr::with_s_expr(&sampled_s_expr);
-        let sampled_stats =
-            sampled_scan.derive_stats(&sampled_rel_expr, &StatContext::default())?;
+        let sampled_stats = sampled_scan.derive_stats(
+            &sampled_rel_expr,
+            &StatContext::without_settings(Default::default()),
+        )?;
         assert!(sampled_stats.statistics.top_n.is_empty());
         assert_eq!(sampled_stats.statistics.precise_cardinality, None);
 

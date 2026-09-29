@@ -41,6 +41,7 @@ use databend_common_sql::Visibility;
 use databend_common_sql::optimizer::ir::ColumnStat;
 use databend_common_sql::optimizer::ir::ColumnStatSet;
 use databend_common_sql::optimizer::ir::CountMinSketchSet;
+use databend_common_sql::optimizer::ir::FilterAndStrategy;
 use databend_common_sql::optimizer::ir::SelectivityEstimator;
 use databend_common_sql::optimizer::ir::TopNSet;
 use databend_common_sql::plans::BoundColumnRef;
@@ -881,7 +882,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
     write_case_title(
         &mut file,
         "histogram_comparison_predicates",
-        "Histogram comparisons should restrict bucket ranges, counts, and accuracy consistently.",
+        "Histogram comparisons should restrict bucket ranges and counts consistently.",
     )?;
     let edge_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::Int {
         min: 1,
@@ -889,7 +890,6 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: Some(TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(1, 10, 100.0, 10.0)],
             avg_spacing: None,
@@ -909,7 +909,6 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: Some(TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
             avg_spacing: None,
@@ -928,7 +927,6 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
             ndv: NdvEstimate::exact(20.0),
             null_count: StatCount::exact(0),
             histogram: Some(TypedHistogram {
-                accuracy: true,
                 row_scale: 1.0,
                 buckets: vec![
                     TypedHistogramBucket::new(0, 9, 50.0, 10.0),
@@ -951,7 +949,6 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: Some(TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
             buckets: vec![
                 TypedHistogramBucket::new(0, 4, 50.0, 5.0),
@@ -973,7 +970,6 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(30),
         histogram: Some(TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 9, 70.0, 10.0)],
             avg_spacing: None,
@@ -992,7 +988,6 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         ndv: NdvEstimate::exact(738.0),
         null_count: StatCount::exact(0),
         histogram: Some(TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 737, 738.0, 738.0)],
             avg_spacing: None,
@@ -1019,7 +1014,6 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         ndv: NdvEstimate::exact(20.0),
         null_count: StatCount::exact(0),
         histogram: Some(TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
             buckets: vec![
                 TypedHistogramBucket::new(F64::from(0.0), F64::from(10.0), 100.0, 10.0),
@@ -1090,7 +1084,6 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(50),
         histogram: Some(TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
             avg_spacing: None,
@@ -1116,10 +1109,9 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
             NdvEstimate::exact(100.0),
             StatCount::exact(0),
             Some(Histogram::UInt(TypedHistogram {
-                accuracy: false,
                 row_scale: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 1000, 100.0, 100.0)],
-                avg_spacing: Some(1e13),
+                avg_spacing: Some(f64::INFINITY),
             })),
         )
         .unwrap(),
@@ -1134,8 +1126,8 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
 
     write_case_title(
         &mut file,
-        "histogram_accuracy_provenance",
-        "Whole-bucket range pruning may trust ANALYZE distinct counts, but derived bucket distinct values are only estimates.",
+        "histogram_distinct_counts_after_restrict",
+        "Whole-bucket range pruning keeps the surviving buckets' distinct counts; after an earlier independent filter those counts are only estimates.",
     )?;
     let analyzed_string_histogram_stats =
         ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::Bytes {
@@ -1144,7 +1136,6 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
             ndv: NdvEstimate::exact(26.0),
             null_count: StatCount::exact(0),
             histogram: Some(TypedHistogram {
-                accuracy: true,
                 row_scale: 1.0,
                 buckets: vec![
                     TypedHistogramBucket::new(b"a".to_vec(), b"f".to_vec(), 60.0, 6.0),
@@ -1170,7 +1161,6 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
             ndv: NdvEstimate::new(13.0, 26.0),
             null_count: StatCount::exact(0),
             histogram: Some(TypedHistogram {
-                accuracy: false,
                 row_scale: 1.0,
                 buckets: vec![
                     TypedHistogramBucket::new(b"a".to_vec(), b"f".to_vec(), 30.0, 3.0),
@@ -1320,7 +1310,6 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: Some(TypedHistogram {
-            accuracy: true,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
             avg_spacing: None,
@@ -1375,7 +1364,6 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
             ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
             histogram: Some(TypedHistogram {
-                accuracy: true,
                 row_scale: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
                 avg_spacing: None,
@@ -1387,7 +1375,6 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
             ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
             histogram: Some(TypedHistogram {
-                accuracy: true,
                 row_scale: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
                 avg_spacing: None,
@@ -1417,7 +1404,6 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
             ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
             histogram: Some(TypedHistogram {
-                accuracy: true,
                 row_scale: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
                 avg_spacing: None,
@@ -1429,7 +1415,6 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
             ndv: NdvEstimate::exact(5.0),
             null_count: StatCount::exact(0),
             histogram: Some(TypedHistogram {
-                accuracy: true,
                 row_scale: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 4, 50.0, 5.0)],
                 avg_spacing: None,
@@ -1578,7 +1563,6 @@ fn test_selectivity_null_outcomes() -> Result<()> {
         ndv: NdvEstimate::exact(6.0),
         null_count: StatCount::estimate(8.0, 8.0),
         histogram: Some(TypedHistogram {
-            accuracy: false,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
             avg_spacing: None,
@@ -1598,7 +1582,6 @@ fn test_selectivity_null_outcomes() -> Result<()> {
             ndv: NdvEstimate::exact(6.0),
             null_count: StatCount::exact(2),
             histogram: Some(TypedHistogram {
-                accuracy: false,
                 row_scale: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
                 avg_spacing: None,
@@ -1618,7 +1601,6 @@ fn test_selectivity_null_outcomes() -> Result<()> {
             ndv: NdvEstimate::exact(6.0),
             null_count: StatCount::exact(2),
             histogram: Some(TypedHistogram {
-                accuracy: true,
                 row_scale: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
                 avg_spacing: None,
@@ -1638,7 +1620,6 @@ fn test_selectivity_null_outcomes() -> Result<()> {
             ndv: NdvEstimate::exact(6.0),
             null_count: StatCount::exact(2),
             histogram: Some(TypedHistogram {
-                accuracy: true,
                 row_scale: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
                 avg_spacing: None,
@@ -1673,7 +1654,6 @@ fn test_selectivity_null_outcomes() -> Result<()> {
         ndv: NdvEstimate::exact(6.0),
         null_count: StatCount::exact(2),
         histogram: Some(TypedHistogram {
-            accuracy: false,
             row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
             avg_spacing: None,
@@ -1811,5 +1791,104 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
         StatCardinality::estimate(100.0),
     )?;
 
+    Ok(())
+}
+
+fn and_strategy_estimate(
+    strategy: FilterAndStrategy,
+    expr_text: &str,
+    columns: &[(&str, DataType)],
+    column_stats: &ColumnStatSet,
+) -> Result<f64> {
+    let raw_expr = parse_raw_expr(expr_text, columns, &BUILTIN_FUNCTIONS);
+    let predicate = raw_expr_to_scalar(&raw_expr, columns);
+    SelectivityEstimator::new(column_stats.clone(), StatCardinality::estimate(AND_ROWS))
+        .with_and_strategy(strategy)
+        .apply(
+            &[predicate],
+            &databend_common_expression::FunctionContext::default(),
+        )
+}
+
+const AND_ROWS: f64 = 1_000_000.0;
+
+#[test]
+fn test_selectivity_and_strategies() -> Result<()> {
+    // a: 10 distinct values, b: 100 distinct values, c: 10 distinct values.
+    let stat = |ndv: f64, max: u64| ColumnStat::UInt {
+        min: 0,
+        max,
+        ndv: NdvEstimate::exact(ndv),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    };
+    let column_stats = ColumnStatSet::from_iter([
+        (Symbol::new(0), stat(10.0, 9)),
+        (Symbol::new(1), stat(100.0, 99)),
+        (Symbol::new(2), stat(10.0, 9)),
+    ]);
+    let columns = [
+        ("a", UInt64Type::data_type()),
+        ("b", UInt64Type::data_type()),
+        ("c", UInt64Type::data_type()),
+    ];
+    let estimate = |strategy, expr| and_strategy_estimate(strategy, expr, &columns, &column_stats);
+    let close = |actual: f64, expected: f64| {
+        assert!(
+            (actual - expected).abs() < 1e-6 * expected.max(1.0),
+            "expected {expected}, got {actual}"
+        );
+    };
+
+    // Two predicates on different columns: a = 5 (0.1), b = 7 (0.01).
+    let expr = "and_filters(a = 5, b = 7)";
+    close(estimate(FilterAndStrategy::Min, expr)?, AND_ROWS * 0.01);
+    close(
+        estimate(FilterAndStrategy::Independent, expr)?,
+        AND_ROWS * 0.001,
+    );
+
+    // Three predicates: a = 5 (0.1), b = 7 (0.01), c = 3 (0.1).
+    let expr = "and_filters(a = 5, b = 7, c = 3)";
+    close(estimate(FilterAndStrategy::Min, expr)?, AND_ROWS * 0.01);
+    close(
+        estimate(FilterAndStrategy::Independent, expr)?,
+        AND_ROWS * 0.0001,
+    );
+
+    // Same column twice: `independent` must not multiply a = 5 with a != 3, but the
+    // unrelated b = 7 still multiplies.
+    let expr = "and_filters(a = 5, a != 3, b = 7)";
+    close(estimate(FilterAndStrategy::Min, expr)?, AND_ROWS * 0.01);
+    // min(a = 5, a != 3) = 0.1, times b = 7 (0.01)
+    close(
+        estimate(FilterAndStrategy::Independent, expr)?,
+        AND_ROWS * 0.1 * 0.01,
+    );
+
+    // A range split into two comparisons on one column is a single group.
+    let expr = "and_filters(a >= 2, a <= 6, b = 7)";
+    let min_only = estimate(FilterAndStrategy::Min, "and_filters(a >= 2, a <= 6)")?;
+    close(
+        estimate(FilterAndStrategy::Independent, expr)?,
+        min_only * 0.01,
+    );
+
+    // Single predicate: both strategies agree.
+    for strategy in [FilterAndStrategy::Min, FilterAndStrategy::Independent] {
+        close(estimate(strategy, "a = 5")?, AND_ROWS * 0.1);
+    }
+
+    // Default is independent.
+    let default =
+        SelectivityEstimator::new(column_stats.clone(), StatCardinality::estimate(AND_ROWS))
+            .apply(
+                &[raw_expr_to_scalar(
+                    &parse_raw_expr("and_filters(a = 5, b = 7)", &columns, &BUILTIN_FUNCTIONS),
+                    &columns,
+                )],
+                &databend_common_expression::FunctionContext::default(),
+            )?;
+    close(default, AND_ROWS * 0.001);
     Ok(())
 }

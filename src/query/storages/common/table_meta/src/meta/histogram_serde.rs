@@ -56,8 +56,12 @@ fn parse_histogram(value: serde_json::Value) -> Option<Histogram> {
 
 #[derive(Serialize, Deserialize)]
 pub struct LegacyHistogram {
+    /// Legacy field with no meaning left: always written as `true` for readers
+    /// that still require it, ignored on read.
     accuracy: bool,
     buckets: Vec<LegacyHistogramBucket>,
+    /// Legacy field: only planning-time synthetic histograms carry a spacing and
+    /// they are never persisted. Always written as `None`, ignored on read.
     #[serde(default)]
     avg_spacing: Option<f64>,
 }
@@ -65,12 +69,12 @@ pub struct LegacyHistogram {
 impl From<&Histogram> for LegacyHistogram {
     fn from(histogram: &Histogram) -> Self {
         Self {
-            accuracy: histogram.accuracy(),
+            accuracy: true,
             buckets: histogram
                 .bucket_iter()
                 .map(|bucket| LegacyHistogramBucket::from(bucket.owned()))
                 .collect(),
-            avg_spacing: histogram.avg_spacing(),
+            avg_spacing: None,
         }
     }
 }
@@ -85,7 +89,7 @@ impl TryFrom<LegacyHistogram> for Histogram {
             .map(HistogramBucket::try_from)
             .collect::<Result<Vec<_>, _>>()?;
 
-        Histogram::try_from_buckets(value.accuracy, buckets, value.avg_spacing)
+        Histogram::try_from_buckets(buckets)
     }
 }
 
@@ -184,7 +188,6 @@ mod tests {
             histograms: HashMap::from([(
                 1,
                 Histogram::Float(TypedHistogram {
-                    accuracy: false,
                     row_scale: 1.0,
                     buckets: vec![TypedHistogramBucket::new(
                         F64::from(1.0),
@@ -198,8 +201,10 @@ mod tests {
         };
 
         let value = serde_json::to_value(stats).unwrap();
-        assert_eq!(value["histograms"]["1"]["accuracy"], false);
-        assert_eq!(value["histograms"]["1"]["avg_spacing"], 0.5);
+        // The synthetic spacing is planning-only and is not persisted; the legacy
+        // fields are written with their fixed values.
+        assert_eq!(value["histograms"]["1"]["accuracy"], true);
+        assert!(value["histograms"]["1"]["avg_spacing"].is_null());
         assert!(value["histograms"]["1"]["buckets"].is_array());
         assert!(value["histograms"]["1"].get("Float").is_none());
     }

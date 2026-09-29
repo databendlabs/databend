@@ -25,35 +25,38 @@ use crate::Histogram;
 use crate::NdvEstimate;
 use crate::estimate_distinct_count_after_row_scale;
 
+/// Synthetic bucket width (at the requested bucket count) above which the
+/// histogram bounds are treated as distorted by outliers at synthesis.
+const DISTORTED_SYNTHETIC_BUCKET_WIDTH: f64 = 1e12;
+
 #[derive(Clone, PartialEq)]
 pub struct TypedHistogram<T> {
-    /// Relative quality of this probabilistic histogram model. `true` means the
-    /// bucket statistics are expected to be more accurate because they still
-    /// come directly from ANALYZE; it does not provide strong consistency or
-    /// prove value existence, complete coverage, exact NDV, or confirmed
-    /// matches.
-    ///
-    /// Histograms synthesized from NDV/min-max bounds mark this flag `false`.
-    /// Row scaling by an independent selectivity also marks it `false`: scaling
-    /// is a row-mass alignment after a filter whose surviving values are
-    /// unknown, so bucket distinct counts are expected to be less accurate.
-    /// Range clipping and join overlap preserve this relative-quality flag.
-    pub accuracy: bool,
-    /// A histogram-level row multiplier used to align row mass with the current
-    /// cardinality without rewriting bucket distinct estimates.
+    /// A pending histogram-level row multiplier that aligns row mass with the
+    /// current cardinality. `scale_counts` only updates this multiplier and
+    /// leaves bucket counts untouched; `restrict_*` and
+    /// `collapse_counts_to_distinct` fold it into both `num_values` and
+    /// `num_distinct` and reset it to 1.
     pub row_scale: f64,
     /// Buckets are ordered ranges. `num_values` is the row count in the bucket
     /// and `num_distinct` is the distinct-value count represented by it.
     pub buckets: Vec<TypedHistogramBucket<T>>,
-    /// Numeric synthetic histograms store the average bucket spacing used to
-    /// detect min/max distortion from sparse or outlier-heavy ranges.
+    /// Set only on synthetic histograms built by
+    /// [`TypedHistogramBuilder::from_ndv`]; `None` means the buckets were
+    /// sampled (or the domain has no distance, such as bytes). Synthetic
+    /// histograms exist only during planning and are never persisted, so this
+    /// field has no compatibility constraints.
+    ///
+    /// The value is the average spacing between distinct values at synthesis,
+    /// `(max - min) / ndv`. It is the baseline against which later thinning is
+    /// measured (see [`TypedHistogram::is_range_sparse`]). `f64::INFINITY`
+    /// marks bounds that were already distorted by outliers at synthesis; such
+    /// a histogram's positions are never trusted.
     pub avg_spacing: Option<f64>,
 }
 
 impl<T: fmt::Debug> fmt::Debug for TypedHistogram<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut debug = f.debug_struct("TypedHistogram");
-        debug.field("accuracy", &self.accuracy);
         if self.row_scale != 1.0 {
             debug.field("row_scale", &self.row_scale);
         }
@@ -65,9 +68,8 @@ impl<T: fmt::Debug> fmt::Debug for TypedHistogram<T> {
 }
 
 impl<T> TypedHistogram<T> {
-    pub fn new(buckets: Vec<TypedHistogramBucket<T>>, accuracy: bool) -> Self {
+    pub fn new(buckets: Vec<TypedHistogramBucket<T>>) -> Self {
         Self {
-            accuracy,
             row_scale: 1.0,
             buckets,
             avg_spacing: None,
@@ -92,10 +94,6 @@ impl<T> TypedHistogram<T> {
             .iter()
             .map(|bucket| bucket.num_distinct)
             .sum::<f64>();
-        if self.accuracy {
-            return NdvEstimate::exact(possible_distinct);
-        }
-
         let expected_distinct = self
             .buckets
             .iter()
@@ -109,26 +107,88 @@ impl<T> TypedHistogram<T> {
     }
 
     pub fn scale_counts(&mut self, selectivity: f64) {
-        self.accuracy = false;
         self.row_scale *= selectivity;
     }
 
+    /// Turn every distinct value into a single row (the shape of a group-by
+    /// output). The pending `row_scale` is folded into the distinct counts
+    /// first, so `ndv()` is the same before and after the call.
     pub fn collapse_counts_to_distinct(&mut self) {
-        self.row_scale = 1.0;
         for bucket in &mut self.buckets {
-            bucket.num_values = bucket.num_distinct;
+            let num_distinct = bucket.expected_distinct_after_row_scale(self.row_scale);
+            bucket.num_distinct = num_distinct;
+            bucket.num_values = num_distinct;
+        }
+        self.row_scale = 1.0;
+    }
+}
+
+impl<T: Value> TypedHistogram<T> {
+    /// Whether a synthetic histogram's bucket positions have stopped carrying
+    /// information, so callers should not use them for positional arithmetic
+    /// (bucket overlap in joins, bounds in range predicates). Sampled
+    /// histograms (`avg_spacing == None`) always return `false`: their bounds
+    /// were observed.
+    ///
+    /// A synthetic histogram spreads `ndv` values uniformly over `[min, max]`.
+    /// That placement stops being meaningful in two ways:
+    /// - At synthesis, the bounds were distorted by outliers, for example a
+    ///   sentinel near `i64::MAX`. `from_ndv` records this as an infinite
+    ///   `avg_spacing`, and this check always reports it, whatever
+    ///   `min_retention` is.
+    /// - Later, filters on other columns thinned the values. Only a fraction
+    ///   of the synthesised values survive, and nothing says where in the
+    ///   range they sit. This is reported when
+    ///   [`Self::synthetic_distinct_retention`] falls below `min_retention`,
+    ///   a threshold the caller chooses.
+    pub fn is_range_sparse(&self, min_retention: f64) -> bool {
+        match self.avg_spacing {
+            None => false,
+            Some(spacing) if spacing.is_infinite() => true,
+            Some(_) => self
+                .synthetic_distinct_retention()
+                .is_some_and(|retention| retention < min_retention),
         }
     }
 
-    pub fn is_range_distorted(&self) -> bool {
-        self.avg_spacing
-            .is_some_and(|bucket_width| bucket_width > 1e12)
+    /// How much of the synthesised value density is left: the spacing between
+    /// distinct values at synthesis divided by the current spacing,
+    /// `avg_spacing * ndv_now / (max_now - min_now)`, capped at 1.
+    ///
+    /// - Right after `from_ndv` it is 1, however sparse the domain itself is:
+    ///   a key with 1.5M values over a range of 6M is not thinned.
+    /// - `scale_counts` lowers `ndv_now` with the bounds unchanged, so
+    ///   retention drops.
+    /// - `restrict_*` cuts the bounds and folds `row_scale` into bucket
+    ///   distinct counts by the same range fraction, so retention is unchanged.
+    /// - A join output keeps the larger spacing of its two inputs (the lower
+    ///   density), with its own bounds and matched NDV.
+    ///
+    /// `None` for sampled histograms, histograms with distorted bounds, and
+    /// ranges of zero width.
+    pub fn synthetic_distinct_retention(&self) -> Option<f64> {
+        let synthetic_spacing = self.avg_spacing.filter(|spacing| spacing.is_finite())?;
+        let (first, last) = (self.buckets.first()?, self.buckets.last()?);
+        // `avg_spacing` over a single slot is the width of the range.
+        let width = T::avg_spacing(first.lower_bound(), last.upper_bound(), 1)?;
+        let ndv = self.ndv();
+        let ndv = ndv.expected.unwrap_or(ndv.upper);
+        if width <= 0.0 || ndv <= 0.0 {
+            return None;
+        }
+        Some((synthetic_spacing * ndv / width).min(1.0))
     }
 }
 
 impl<T> TypedHistogram<T>
 where T: Copy + Ord + Into<i128>
 {
+    /// Restrict to `[min, max]`, folding the pending `row_scale` into the
+    /// buckets and resetting it to 1. Both `num_values` and `num_distinct`
+    /// are folded: a bucket must not end up claiming more distinct values
+    /// than rows, and `ndv()` on the result must equal `ndv()` on the input
+    /// restricted to the same range. The same contract applies to
+    /// `restrict_float_buckets` and `restrict_bytes_buckets`.
     pub fn restrict_discrete_buckets(&self, min: T, max: T) -> Option<Self> {
         let mut buckets = Vec::new();
         for bucket in &self.buckets {
@@ -148,7 +208,7 @@ where T: Copy + Ord + Into<i128>
                 new_min.into(),
                 new_max.into(),
                 bucket.num_values() * self.row_scale,
-                bucket.num_distinct(),
+                bucket.expected_distinct_after_row_scale(self.row_scale),
             );
             buckets.push(TypedHistogramBucket::new(
                 new_min,
@@ -158,7 +218,6 @@ where T: Copy + Ord + Into<i128>
             ));
         }
         (!buckets.is_empty()).then_some(Self {
-            accuracy: self.accuracy,
             row_scale: 1.0,
             buckets,
             avg_spacing: self.avg_spacing,
@@ -190,7 +249,7 @@ impl TypedHistogram<OrderedFloat<f64>> {
                 new_min,
                 new_max,
                 bucket.num_values() * self.row_scale,
-                bucket.num_distinct(),
+                bucket.expected_distinct_after_row_scale(self.row_scale),
             );
             buckets.push(TypedHistogramBucket::new(
                 new_min,
@@ -200,7 +259,6 @@ impl TypedHistogram<OrderedFloat<f64>> {
             ));
         }
         (!buckets.is_empty()).then_some(Self {
-            accuracy: self.accuracy,
             row_scale: 1.0,
             buckets,
             avg_spacing: self.avg_spacing,
@@ -234,11 +292,10 @@ impl TypedHistogram<Vec<u8>> {
                 new_min,
                 new_max,
                 bucket.num_values() * self.row_scale,
-                bucket.num_distinct(),
+                bucket.expected_distinct_after_row_scale(self.row_scale),
             ));
         }
         (!buckets.is_empty()).then_some(Self {
-            accuracy: self.accuracy,
             row_scale: 1.0,
             buckets,
             avg_spacing: self.avg_spacing,
@@ -467,7 +524,6 @@ impl TypedHistogramBuilder {
                 ))
             } else {
                 Ok(TypedHistogram {
-                    accuracy: false,
                     row_scale: 1.0,
                     buckets: vec![],
                     avg_spacing: None,
@@ -497,7 +553,16 @@ impl TypedHistogramBuilder {
             return Err("histogram min bound must not be greater than max bound".to_string());
         }
 
-        let avg_spacing = T::avg_spacing(&min, &max, num_buckets);
+        // Bucket width at the requested bucket count above this threshold means
+        // the bounds come from outliers (sentinels) rather than from the
+        // values; mark the histogram as distorted.
+        let avg_spacing = match T::avg_spacing(&min, &max, num_buckets) {
+            Some(bucket_width) if bucket_width > DISTORTED_SYNTHETIC_BUCKET_WIDTH => {
+                Some(f64::INFINITY)
+            }
+            Some(_) => T::avg_spacing(&min, &max, ndv as usize),
+            None => None,
+        };
         let adjusted_num_buckets = T::synthetic_bucket_count_limit(&min, &max)
             .map(|bucket_count_limit| num_buckets.min(ndv as usize).min(bucket_count_limit))
             .unwrap_or_else(|| num_buckets.min(ndv as usize));
@@ -533,7 +598,6 @@ impl TypedHistogramBuilder {
             .collect();
 
         Ok(TypedHistogram {
-            accuracy: false,
             row_scale: 1.0,
             buckets,
             avg_spacing,
@@ -551,8 +615,11 @@ pub trait Value: Clone + PartialEq {
         bucket_index: usize,
     ) -> Result<Self, String>;
 
-    fn avg_spacing(min: &Self, max: &Self, num_buckets: usize) -> Option<f64> {
-        let _ = (min, max, num_buckets);
+    /// Average spacing when `n` slots are spread evenly over `[min, max]`,
+    /// that is `(max - min) / n`. `None` when `max <= min`, `n == 0`, or the
+    /// domain has no distance (bytes).
+    fn avg_spacing(min: &Self, max: &Self, n: usize) -> Option<f64> {
+        let _ = (min, max, n);
         None
     }
 
@@ -936,7 +1003,6 @@ impl Value for String {
 
     fn into_histogram(histogram: TypedHistogram<Self>) -> Histogram {
         Histogram::Bytes(TypedHistogram {
-            accuracy: histogram.accuracy,
             row_scale: histogram.row_scale,
             buckets: histogram
                 .buckets
@@ -1025,13 +1091,10 @@ mod tests {
 
     #[test]
     fn test_typed_histogram_bounds_use_bucket_type() {
-        let histogram = TypedHistogram::new(
-            vec![
-                TypedHistogramBucket::new("a".to_string(), "m".to_string(), 3.0, 2.0),
-                TypedHistogramBucket::new("m".to_string(), "z".to_string(), 4.0, 3.0),
-            ],
-            true,
-        );
+        let histogram = TypedHistogram::new(vec![
+            TypedHistogramBucket::new("a".to_string(), "m".to_string(), 3.0, 2.0),
+            TypedHistogramBucket::new("m".to_string(), "z".to_string(), 4.0, 3.0),
+        ]);
 
         assert_eq!(
             histogram.bounds(),
@@ -1040,15 +1103,12 @@ mod tests {
     }
 
     #[test]
-    fn test_typed_histogram_scaling_marks_inaccurate() {
-        let mut histogram = TypedHistogram::new(
-            vec![TypedHistogramBucket::new(0_u64, 10_u64, 100.0, 10.0)],
-            true,
-        );
+    fn test_typed_histogram_scaling_defers_to_row_scale() {
+        let mut histogram =
+            TypedHistogram::new(vec![TypedHistogramBucket::new(0_u64, 10_u64, 100.0, 10.0)]);
 
         histogram.scale_counts(0.25);
 
-        assert!(!histogram.accuracy);
         assert_eq!(histogram.num_values(), 25.0);
         assert_eq!(histogram.buckets[0].num_distinct, 10.0);
         assert_eq!(histogram.ndv(), NdvEstimate::new(9.436864852905273, 10.0));
@@ -1056,17 +1116,13 @@ mod tests {
 
     #[test]
     fn test_typed_histogram_scaling_keeps_original_bucket_basis() {
-        let mut sequential = TypedHistogram::new(
-            vec![TypedHistogramBucket::new(0_u64, 10_u64, 100.0, 10.0)],
-            true,
-        );
+        let mut sequential =
+            TypedHistogram::new(vec![TypedHistogramBucket::new(0_u64, 10_u64, 100.0, 10.0)]);
         sequential.scale_counts(0.5);
         sequential.scale_counts(0.5);
 
-        let mut combined = TypedHistogram::new(
-            vec![TypedHistogramBucket::new(0_u64, 10_u64, 100.0, 10.0)],
-            true,
-        );
+        let mut combined =
+            TypedHistogram::new(vec![TypedHistogramBucket::new(0_u64, 10_u64, 100.0, 10.0)]);
         combined.scale_counts(0.25);
 
         assert_eq!(sequential.num_values(), combined.num_values());
@@ -1080,11 +1136,11 @@ mod tests {
         let left = TypedHistogramBounds::new(0_u64, 10_u64);
         let right = TypedHistogramBounds::new(5_u64, 15_u64);
 
-        assert!(!histogram.accuracy);
         assert_eq!(histogram.num_buckets(), 4);
         assert_eq!(histogram.num_values(), 16.0);
         assert_eq!(histogram.ndv().expected, Some(8.0));
-        assert_eq!(histogram.avg_spacing, Some(20.0));
+        // (80 - 0) / ndv 8
+        assert_eq!(histogram.avg_spacing, Some(10.0));
         assert!(left.has_intersection(&right));
         assert_eq!(
             left.intersection(&right),
