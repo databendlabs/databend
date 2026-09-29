@@ -157,6 +157,13 @@ impl IPhysicalPlan for ReplaceDeduplicate {
             Arc::new(self.target_schema.clone().into()),
         )?;
 
+        PipelineBuilder::build_table_write_layout_with_schema(
+            builder.ctx.clone(),
+            &mut builder.main_pipeline,
+            tbl.clone(),
+            modified_schema.as_ref().clone(),
+        )?;
+
         let block_thresholds = table.get_block_thresholds();
         build_compact_block_pipeline(&mut builder.main_pipeline, block_thresholds)?;
 

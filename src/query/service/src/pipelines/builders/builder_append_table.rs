@@ -68,6 +68,18 @@ impl PipelineBuilder {
         pipeline: &mut Pipeline,
         table: Arc<dyn Table>,
     ) -> Result<()> {
+        let input_schema = DataSchema::from(&table.schema().remove_virtual_computed_fields());
+        Self::build_table_write_layout_with_schema(ctx, pipeline, table, input_schema)
+    }
+
+    /// Same as [`Self::build_table_write_layout`] for inputs whose columns differ from the
+    /// table schema (e.g. an extra DELETE WHEN column). Partition keys are resolved by name.
+    pub fn build_table_write_layout_with_schema(
+        ctx: Arc<QueryContext>,
+        pipeline: &mut Pipeline,
+        table: Arc<dyn Table>,
+        input_schema: DataSchema,
+    ) -> Result<()> {
         if table.engine() != "FUSE" {
             return Ok(());
         }
@@ -79,8 +91,6 @@ impl PipelineBuilder {
         let Some(partition_info) = fuse_table.partition_pruning_info(ctx.clone()) else {
             return Ok(());
         };
-        let table_schema = table.schema().remove_virtual_computed_fields();
-        let input_schema = DataSchema::from(&table_schema);
         let num_input_columns = input_schema.num_fields();
         let partition_exprs = partition_info
             .partition_keys
