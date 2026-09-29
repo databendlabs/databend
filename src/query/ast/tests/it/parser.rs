@@ -62,6 +62,20 @@ fn test_set_ttl_and_modify_column_are_distinct() {
         assert!(matches!(stmt.action, AlterTableAction::ModifyColumn { .. }));
     }
 
+    let tokens = tokenize_sql("ALTER TABLE t MATERIALIZE TTL").unwrap();
+    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+    let Statement::AlterTable(stmt) = stmt else {
+        panic!("expected ALTER TABLE");
+    };
+    assert!(matches!(stmt.action, AlterTableAction::MaterializeTableTtl));
+    assert_eq!(stmt.to_string(), "ALTER TABLE t MATERIALIZE TTL");
+
+    // MATERIALIZE is not reserved and remains usable as an identifier.
+    let tokens = tokenize_sql("SELECT materialize FROM t").unwrap();
+    assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_ok());
+    let tokens = tokenize_sql("CREATE TABLE materialize (materialize INT)").unwrap();
+    assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_ok());
+
     // MODIFY is exclusively column syntax, not an alias for SET TTL.
     let tokens = tokenize_sql("ALTER TABLE t MODIFY TTL event_time + INTERVAL 7 DAY").unwrap();
     assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err());

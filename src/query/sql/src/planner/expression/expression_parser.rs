@@ -720,6 +720,7 @@ pub fn validate_stored_ttl_expr(
     let names = NameResolutionContext::preserve_identifier_case();
     let adapter = PersistedTypeCheckAdapter::new(&ctx.get_settings(), ctx.get_function_context()?)?;
     let mut binder = ScalarBinder::with_adapter(&mut bind_context, adapter, &names, metadata, &[]);
+    binder.forbid_virtual_computed_column();
     let (scalar, _) = binder.bind(&ast)?;
     validate_ttl_expr(&scalar, &format!("{ast:#}"))
 }

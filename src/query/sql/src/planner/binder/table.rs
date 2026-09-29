@@ -372,6 +372,27 @@ impl Binder {
         sample: &Option<SampleConfig>,
         case_sensitive: bool,
     ) -> Result<(SExpr, BindContext)> {
+        self.bind_base_table_with_policy(
+            bind_context,
+            database_name,
+            table_index,
+            change_type,
+            sample,
+            case_sensitive,
+            true,
+        )
+    }
+
+    pub(crate) fn bind_base_table_with_policy(
+        &mut self,
+        bind_context: &BindContext,
+        database_name: &str,
+        table_index: IndexType,
+        change_type: Option<ChangeType>,
+        sample: &Option<SampleConfig>,
+        case_sensitive: bool,
+        apply_row_access_policy: bool,
+    ) -> Result<(SExpr, BindContext)> {
         let mut bind_context = BindContext::with_parent(bind_context.clone())?;
 
         let table = self.metadata.read().table(table_index).clone();
@@ -479,11 +500,13 @@ impl Binder {
             )));
         }
         // Check for row_access_policy and write secure predicates into Scan
-        let final_s_expr = if let Some(policy) = &table
+        let final_s_expr = if let Some(policy) = table
             .table()
             .get_table_info()
             .meta
             .row_access_policy_columns_ids
+            .as_ref()
+            .filter(|_| apply_row_access_policy)
         {
             self.bind_row_access_policy(
                 table_index,

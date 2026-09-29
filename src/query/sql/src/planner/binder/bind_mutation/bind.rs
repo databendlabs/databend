@@ -128,6 +128,16 @@ impl Binder {
         bind_context: &mut BindContext,
         mutation: Mutation,
     ) -> Result<Plan> {
+        self.bind_mutation_with_ttl(bind_context, mutation, None)
+            .await
+    }
+
+    pub(in crate::planner::binder) async fn bind_mutation_with_ttl(
+        &mut self,
+        bind_context: &mut BindContext,
+        mutation: Mutation,
+        expected_ttl: Option<String>,
+    ) -> Result<Plan> {
         mutation.check_semantic()?;
 
         let Mutation {
@@ -175,6 +185,7 @@ impl Binder {
                 table.clone(),
                 &target_table_identifier,
                 table_schema.clone(),
+                expected_ttl.is_some(),
             )
             .await?;
         let target_table_index = bind_result.target_table_index;
@@ -300,6 +311,7 @@ impl Binder {
             predicate_column_index: None,
             direct_filter: vec![],
             truncate_table: false,
+            expected_ttl,
         };
 
         if mutation_strategy == MutationStrategy::NotMatchedOnly && !insert_only(&mutation) {
