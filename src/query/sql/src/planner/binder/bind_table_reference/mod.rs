@@ -16,6 +16,7 @@ mod bind;
 mod bind_asof_join;
 mod bind_cte;
 mod bind_join;
+mod bind_lateral_aggregate;
 mod bind_location;
 mod bind_materialized_view;
 pub(crate) use bind_materialized_view::MaterializedViewReadMode;
