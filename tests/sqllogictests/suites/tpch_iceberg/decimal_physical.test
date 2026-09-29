@@ -1,0 +1,30 @@
+# Prepared by scripts/prepare_iceberg_decimal_data.py; the same Iceberg table
+# contains both a PyArrow FIXED_LEN_BYTE_ARRAY(7) file and a PyIceberg INT64 file.
+statement ok
+DROP CATALOG IF EXISTS ctl;
+
+statement ok
+CREATE CATALOG ctl TYPE=ICEBERG CONNECTION=(
+    TYPE='rest'
+    ADDRESS='http://127.0.0.1:8181'
+    WAREHOUSE='s3://iceberg-tpch/'
+    "s3.region"='us-east-1'
+    "s3.endpoint"='http://127.0.0.1:9002'
+);
+
+query IT rowsort
+SELECT k, d FROM ctl.test.t_decimal_physical ORDER BY k;
+----
+1 123.45
+2 -7.01
+3 99999.99
+4 42.00
+
+# Projection without the decimal does not need the rebuilt decimal decoder.
+query I rowsort
+SELECT k FROM ctl.test.t_decimal_physical ORDER BY k;
+----
+1
+2
+3
+4
