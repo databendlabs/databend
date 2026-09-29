@@ -62,6 +62,7 @@ rust_decimal = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, features = ["arbitrary_precision"] }
+simple_hll = { workspace = true }
 smallvec = { workspace = true }
 strength_reduce = { workspace = true }
 terminal_size = { workspace = true }

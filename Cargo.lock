@@ -3331,6 +3331,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "simple_hll",
  "smallvec",
  "strength_reduce",
  "terminal_size",
