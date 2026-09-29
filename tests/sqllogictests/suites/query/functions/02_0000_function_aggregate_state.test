@@ -319,6 +319,17 @@ select avg_merge(tuple(to_decimal(4500, 38, 0), 10::uint64, true));
 statement ok
 drop table legacy_aggregate_state_combinator_test
 
+# A v0 nullable SUM state is readable with the compact internal layout,
+# while merge_state writes the v0 layout (three fields) again.
+query III
+select s.1, s.2::int, s.3::int
+from (
+    select sum_merge_state(s) as s
+    from (select sum_state(if(number = 0, NULL, number::int64)) as s from numbers(4))
+);
+----
+6 1 1
+
 # Nullable sum keeps both the non-NULL and input-presence state flags.
 query III
 select s.1, s.2::int, s.3::int

@@ -77,6 +77,7 @@ use log::error;
 use log::info;
 use log::warn;
 
+use super::data_retention_util::is_drop_time_retainable;
 use super::index_api::IndexApi;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
@@ -176,6 +177,14 @@ where
 
 pub const ORPHAN_POSTFIX: &str = "orphan";
 
+/// Returns true if `table_name` is the history name of a CTAS staging table,
+/// i.e. `orphan@<ts>`, created by `create_table` with `as_dropped = true`.
+fn is_orphan_table_name(table_name: &str) -> bool {
+    table_name
+        .strip_prefix(ORPHAN_POSTFIX)
+        .is_some_and(|rest| rest.starts_with('@'))
+}
+
 /// Remove copied files for a dropped table.
 ///
 /// Dropped table can not be accessed by any query,
@@ -253,6 +262,10 @@ async fn remove_copied_files_for_dropped_table(
 /// Lists all dropped and non-dropped tables belonging to a Database,
 /// returns those tables that are eligible for garbage collection,
 /// i.e., whose dropped time is in the specified range.
+///
+/// CTAS staging tables (`orphan@<ts>`) whose `drop_on` is within the default
+/// retention period are always skipped, to protect an in-progress CTAS from
+/// being vacuumed concurrently.
 #[logcall::logcall(input = "")]
 #[fastrace::trace]
 pub async fn get_history_tables_for_gc(
@@ -307,6 +320,7 @@ pub async fn get_history_tables_for_gc(
     let mut filter_tb_infos = vec![];
     const BATCH_SIZE: usize = 1000;
 
+    let now = Utc::now();
     let args_len = args.len();
     let mut num_out_of_time_range = 0;
     let mut num_processed = 0;
@@ -362,6 +376,23 @@ pub async fn get_history_tables_for_gc(
 
                 if !drop_time_range.contains(time_point) {
                     debug!("table {:?} is not in drop_time_range", seq_meta.data);
+                    num_out_of_time_range += 1;
+                    continue;
+                }
+
+                // A CTAS staging table (`orphan@<ts>`) is created with `drop_on = now` and is
+                // only turned into a visible table by `commit_table_meta` after all data is
+                // written. A vacuum with a short retention (e.g. 0 days) must not collect it
+                // while the CTAS may still be running, otherwise the files written afterward
+                // are left without any metadata. Keep such tables for at least the default
+                // retention period, regardless of the requested retention.
+                if is_orphan_table_name(table_name)
+                    && is_drop_time_retainable(seq_meta.drop_on, now)
+                {
+                    info!(
+                        "get_history_tables_for_gc: skip CTAS staging table {} {:?}, drop_on {:?} is within the minimum retention period",
+                        table_name, table_id, seq_meta.drop_on
+                    );
                     num_out_of_time_range += 1;
                     continue;
                 }

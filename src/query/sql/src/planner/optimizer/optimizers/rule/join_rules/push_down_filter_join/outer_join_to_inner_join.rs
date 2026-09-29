@@ -22,6 +22,7 @@ use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -35,12 +36,17 @@ use crate::binder::JoinPredicate;
 use crate::executor::cast_expr_to_non_null_boolean;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatContext;
 use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
 
-pub fn outer_join_to_inner_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(SExpr, bool)> {
+pub fn outer_join_to_inner_join(
+    s_expr: &SExpr,
+    metadata: MetadataRef,
+    stat_context: &StatContext,
+) -> Result<(SExpr, bool)> {
     let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
     if !join.join_type.is_outer_join() {
         return Ok((s_expr.clone(), false));
@@ -63,6 +69,7 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr, metadata: MetadataRef) -> Result
                     &left_prop.output_columns,
                     &join.join_type,
                     metadata.clone(),
+                    &stat_context.function_context,
                 )? =>
             {
                 can_filter_left_null = true;
@@ -73,6 +80,7 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr, metadata: MetadataRef) -> Result
                     &right_prop.output_columns,
                     &join.join_type,
                     metadata.clone(),
+                    &stat_context.function_context,
                 )? =>
             {
                 can_filter_right_null = true;
@@ -83,6 +91,7 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr, metadata: MetadataRef) -> Result
                     &left_prop.output_columns,
                     &join.join_type,
                     metadata.clone(),
+                    &stat_context.function_context,
                 )? {
                     can_filter_left_null = true;
                 }
@@ -91,6 +100,7 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr, metadata: MetadataRef) -> Result
                     &right_prop.output_columns,
                     &join.join_type,
                     metadata.clone(),
+                    &stat_context.function_context,
                 )? {
                     can_filter_right_null = true;
                 }
@@ -155,6 +165,7 @@ pub fn can_filter_null(
     columns_can_be_replaced: &ColumnSet,
     join_type: &JoinType,
     metadata: MetadataRef,
+    func_ctx: &FunctionContext,
 ) -> Result<bool> {
     // Single joins are outer joins for correlated scalar subqueries: the unmatched side is
     // null-supplying, so `IS NULL` predicates must keep their original outer-join semantics.
@@ -238,8 +249,7 @@ pub fn can_filter_null(
     if replace.can_replace {
         let columns = null_scalar_expr.columns_and_data_types(metadata);
         let expr = convert_scalar_expr_to_expr(null_scalar_expr, columns)?;
-        let (expr, _) =
-            ConstantFolder::fold_context_independent(Cow::Owned(expr), &BUILTIN_FUNCTIONS);
+        let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), func_ctx, &BUILTIN_FUNCTIONS);
         if let Expr::Constant(Constant { scalar, .. }) = expr.as_ref()
             && matches!(scalar, Scalar::Boolean(false) | Scalar::Null)
         {

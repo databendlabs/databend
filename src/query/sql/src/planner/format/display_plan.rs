@@ -110,6 +110,7 @@ impl Plan {
             Plan::AlterTableClusterKey(_) => Ok("AlterTableClusterKey".to_string()),
             Plan::AlterTablePartitionBy(_) => Ok("AlterTablePartitionBy".to_string()),
             Plan::DropTableClusterKey(_) => Ok("DropTableClusterKey".to_string()),
+            Plan::AlterTableTtl(_) => Ok("AlterTableTtl".to_string()),
             Plan::RefreshTableCache(_) => Ok("RefreshTableCache".to_string()),
             Plan::ReclusterTable(_) => Ok("ReclusterTable".to_string()),
             Plan::TruncateTable(_) => Ok("TruncateTable".to_string()),

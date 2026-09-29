@@ -36,6 +36,8 @@ use databend_common_expression::types::DataType;
 use jsonb::keypath::OwnedKeyPaths;
 use parking_lot::RwLock;
 
+use crate::BoundQueryLineage;
+use crate::QueryLineageRelationKind;
 use crate::optimizer::ir::SExpr;
 
 /// Planner use [`usize`] as its index type.
@@ -91,6 +93,11 @@ pub struct Metadata {
     /// one producer definition and its temporary-table output mappings so
     /// lineage extraction can look through that execution detail.
     materialized_cte_lineage_sources: HashMap<IndexType, MaterializedCteLineageSource>,
+    /// Query lineage captured from the bound plan before optimization. Lineage is a
+    /// logical property of what the user wrote, while the optimizer may fold scans into
+    /// constants, decorrelate subqueries into marker joins, or route a scan through a
+    /// materialized view. Capturing here keeps those execution rewrites out of lineage.
+    bound_query_lineage: Option<BoundQueryLineage>,
     next_runtime_filter_id: usize,
     next_logical_recursive_cte_id: u32,
     next_materialized_cte_id: usize,
@@ -546,6 +553,14 @@ impl Metadata {
         self.base_column_scan_id.get(&column_index).cloned()
     }
 
+    pub(crate) fn set_bound_query_lineage(&mut self, lineage: BoundQueryLineage) {
+        self.bound_query_lineage = Some(lineage);
+    }
+
+    pub fn bound_query_lineage(&self) -> Option<&BoundQueryLineage> {
+        self.bound_query_lineage.as_ref()
+    }
+
     pub(crate) fn add_view_lineage_source_column(
         &mut self,
         column_index: Symbol,
@@ -666,9 +681,13 @@ pub(crate) struct LineageSourceRelation {
     pub(crate) id: u64,
 }
 
+/// A logical output column of a view-like relation that lineage must not look through.
+/// `kind` is `View` or `MaterializedView`; both expand to a query at bind time, but the
+/// user referenced the object, not the tables behind it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ViewLineageSourceColumn {
     pub(crate) relation: LineageSourceRelation,
+    pub(crate) kind: QueryLineageRelationKind,
     pub(crate) name: String,
     pub(crate) id: ColumnId,
 }

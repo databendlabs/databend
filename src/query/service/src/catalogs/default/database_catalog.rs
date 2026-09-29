@@ -861,7 +861,7 @@ impl Catalog for DatabaseCatalog {
     async fn get_drop_table_infos(
         &self,
         req: ListDroppedTableReq,
-    ) -> Result<(Vec<Arc<dyn Table>>, Vec<DroppedId>)> {
+    ) -> Result<(Vec<TableInfo>, Vec<DroppedId>)> {
         self.mutable_catalog.get_drop_table_infos(req).await
     }
 

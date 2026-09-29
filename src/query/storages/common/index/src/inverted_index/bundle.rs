@@ -441,18 +441,39 @@ impl InvertedIndexBundleFooter {
 
         let footer_start = u64::try_from(output.len())
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "bundle is too large"))?;
-        let footer = BundleFooter {
-            file_ranges: BundleFileRanges { files: file_ranges },
-            external_files: BundleExternalFiles {
+        let footer_and_trailer = Self::encode_footer_and_trailer(
+            BundleFileRanges { files: file_ranges },
+            BundleExternalFiles {
                 files: external_files,
             },
             open_slices,
             managed_json,
             meta_json,
+            footer_start,
+        )?;
+        output.extend_from_slice(&footer_and_trailer);
+        Ok(output)
+    }
+
+    /// Encodes the footer and trailer that follow a raw region ending at `footer_start`.
+    pub fn encode_footer_and_trailer(
+        file_ranges: BundleFileRanges,
+        external_files: BundleExternalFiles,
+        open_slices: BTreeMap<PathBuf, Vec<BundleOpenSlice>>,
+        managed_json: Vec<u8>,
+        meta_json: Vec<u8>,
+        footer_start: u64,
+    ) -> io::Result<Vec<u8>> {
+        let footer = BundleFooter {
+            file_ranges,
+            external_files,
+            open_slices,
+            managed_json,
+            meta_json,
         };
         footer.validate(footer_start)?;
-        let footer_bytes = InvertedIndexBundleVersion::encode_footer(&footer)?;
-        let persisted_footer_len = footer_bytes
+        let mut output = InvertedIndexBundleVersion::encode_footer(&footer)?;
+        let persisted_footer_len = output
             .len()
             .checked_add(INVERTED_INDEX_BUNDLE_TRAILER_LEN)
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "footer is too large"))?;
@@ -465,9 +486,7 @@ impl InvertedIndexBundleFooter {
                 ),
             ));
         }
-        InvertedIndexBundleVersion::decode_footer(&footer_bytes)?;
-
-        output.extend_from_slice(&footer_bytes);
+        InvertedIndexBundleVersion::decode_footer(&output)?;
         output.extend_from_slice(&footer_start.to_le_bytes());
         output.extend_from_slice(&(InvertedIndexBundleVersion::V1 as u32).to_le_bytes());
         output.extend_from_slice(&BUNDLE_TRAILER_MAGIC);

@@ -106,6 +106,27 @@ FROM result CROSS JOIN history
 ----
 1
 
+# Statistics-folded aggregates still attribute to the scanned table and column.
+query ITTTT
+SELECT distance, source_object_database, source_object_name, target_object_database, target_object_name
+FROM get_lineage('lineage_history_statements.folded_agg_dst', 'TABLE', 'UPSTREAM', 1)
+----
+1 lineage_history_statements src lineage_history_statements folded_agg_dst
+
+query ISS
+SELECT distance, source_column_name, target_column_name
+FROM get_lineage('lineage_history_statements.folded_agg_dst.m', 'COLUMN', 'UPSTREAM', 1)
+----
+1 a m
+
+# The projected IN subquery contributes both the probe column and the subquery column.
+query ISS rowsort
+SELECT distance, source_column_name, target_column_name
+FROM get_lineage('lineage_history_statements.in_projection_dst.x', 'COLUMN', 'UPSTREAM', 1)
+----
+1 a x
+1 b x
+
 query ITTTT
 SELECT distance, source_object_database, source_object_name, target_object_database, target_object_name
 FROM get_lineage('lineage_history_statements.multi_a', 'TABLE', 'UPSTREAM', 1)

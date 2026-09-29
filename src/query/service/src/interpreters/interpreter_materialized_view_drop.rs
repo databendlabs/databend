@@ -26,6 +26,7 @@ use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::log_lineage_object_deletion;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextLicense;
@@ -113,6 +114,9 @@ impl Interpreter for DropMaterializedViewInterpreter {
                             .unwrap_or_default(),
                     })
                     .await?;
+                // A materialized view cannot be undropped, so its lineage edges are dead as
+                // soon as the drop commits; do not wait for VACUUM like regular Fuse tables.
+                log_lineage_object_deletion(&self.ctx, table.get_id());
             };
 
             Ok(PipelineBuildResult::create())

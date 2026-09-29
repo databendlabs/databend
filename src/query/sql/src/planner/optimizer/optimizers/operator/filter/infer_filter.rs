@@ -693,10 +693,10 @@ impl<'a> InferFilterOptimizer<'a> {
             }
         }
 
-        // Construct predicates for each ScalarExpr.
-        for expr in self.exprs.iter() {
-            let index = self.expr_index.get(expr).unwrap();
-            let parent_index = Self::find(&mut parents, *index);
+        // Construct predicates for each ScalarExpr. `exprs` is indexed by the same
+        // positions recorded in `expr_index`, so the position is the expression index.
+        for (index, expr) in self.exprs.iter().enumerate() {
+            let parent_index = Self::find(&mut parents, index);
             let parent_predicates = &self.expr_predicates[parent_index];
             for predicate in parent_predicates.iter() {
                 let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [expr]);

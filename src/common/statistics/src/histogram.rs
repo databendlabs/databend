@@ -275,7 +275,11 @@ impl NumericRange {
     pub(crate) fn width(self) -> Option<f64> {
         match self {
             Self::Integer { min, max } => max.checked_sub(min).map(|width| width as f64),
-            Self::Float { min, max } => Some(max.into_inner() - min.into_inner()),
+            Self::Float { min, max } => {
+                // See `NumericValue::distance` for `OrderedFloat<f64>`.
+                let width = max.into_inner() - min.into_inner();
+                width.is_finite().then_some(width)
+            }
         }
     }
 
@@ -932,6 +936,62 @@ mod tests {
         assert_eq!(direct.cardinality, native.cardinality);
         assert_eq!(direct.ndv, native.ndv);
         assert!(direct.histogram.is_none());
+        Ok(())
+    }
+
+    /// NaN sorts above every finite value, so a column holding NaN yields
+    /// buckets such as `[1.0, NaN]`. Their width is undefined and estimation
+    /// must degrade gracefully instead of producing NaN coverages.
+    #[test]
+    fn test_float_join_with_nan_bounds_does_not_panic() -> ExceptionResult<()> {
+        let histogram = |buckets: Vec<TypedHistogramBucket<F64>>| {
+            Histogram::Float(TypedHistogram {
+                accuracy: false,
+                row_scale: 1.0,
+                buckets,
+                avg_spacing: None,
+            })
+        };
+        let left = histogram(vec![TypedHistogramBucket::new(
+            F64::from(1.0),
+            F64::from(f64::NAN),
+            4.0,
+            3.0,
+        )]);
+        let right = histogram(vec![
+            TypedHistogramBucket::new(F64::from(0.0), F64::from(2.0), 2.0, 2.0),
+            TypedHistogramBucket::new(F64::from(2.0), F64::from(f64::NAN), 2.0, 2.0),
+        ]);
+        for (left, right) in [(&left, &right), (&right, &left), (&left, &left)] {
+            let estimation = left.estimate_join(right)?;
+            assert!(estimation.cardinality.expected.is_finite());
+            assert!(estimation.ndv.upper.is_finite());
+        }
+        let infinite = histogram(vec![TypedHistogramBucket::new(
+            F64::from(f64::NEG_INFINITY),
+            F64::from(f64::INFINITY),
+            4.0,
+            3.0,
+        )]);
+        assert!(
+            infinite
+                .estimate_join(&right)?
+                .cardinality
+                .expected
+                .is_finite()
+        );
+
+        // Restricting a NaN-bounded bucket keeps it whole instead of scaling
+        // its counts by an undefined selectivity.
+        let Histogram::Float(nan_bucket) = &left else {
+            unreachable!()
+        };
+        let restricted = nan_bucket
+            .restrict_float_buckets(F64::from(2.0), F64::from(f64::NAN))
+            .expect("bucket overlaps the requested range");
+        assert_eq!(restricted.buckets.len(), 1);
+        assert_eq!(restricted.buckets[0].num_values(), 4.0);
+        assert_eq!(restricted.buckets[0].num_distinct(), 3.0);
         Ok(())
     }
 

@@ -38,7 +38,6 @@ pub use block_writer::write_data;
 pub use bloom_index_writer::BloomIndexRebuilder;
 pub use bloom_index_writer::BloomIndexState;
 pub use inverted_index_writer::InvertedIndexBuilder;
-pub(crate) use inverted_index_writer::InvertedIndexState;
 pub use inverted_index_writer::InvertedIndexWriter;
 pub(crate) use inverted_index_writer::create_index_schema;
 pub(crate) use inverted_index_writer::create_inverted_index_builders;

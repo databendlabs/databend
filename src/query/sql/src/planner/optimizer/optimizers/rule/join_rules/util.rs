@@ -17,27 +17,32 @@ use databend_common_expression::types::DataType;
 
 use crate::plans::FunctionCall;
 use crate::plans::Join;
+use crate::plans::JoinEquiCondition;
 use crate::plans::ScalarExpr;
 
 pub fn get_join_predicates(join: &Join) -> Result<Vec<ScalarExpr>> {
     Ok(join
         .equi_conditions
         .iter()
-        .map(|equi_condition| {
-            let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
-                &equi_condition.left,
-                &equi_condition.right,
-            ]);
-            Ok(ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "eq".to_string(),
-                params: vec![],
-                arguments: vec![equi_condition.left.clone(), equi_condition.right.clone()],
-                return_type: Box::new(return_type),
-            }))
-        })
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
+        .map(equi_condition_to_predicate)
         .chain(join.non_equi_conditions.clone())
         .collect())
+}
+
+/// Convert an equi condition to an `eq` predicate.
+///
+/// Note that the result can't represent a NULL-safe condition (`is_null_equal`), so callers
+/// must handle NULL-safe conditions separately instead of converting them with this function.
+pub fn equi_condition_to_predicate(equi_condition: &JoinEquiCondition) -> ScalarExpr {
+    let return_type = ScalarExpr::passthrough_nullable_type(DataType::Boolean, [
+        &equi_condition.left,
+        &equi_condition.right,
+    ]);
+    ScalarExpr::FunctionCall(FunctionCall {
+        span: None,
+        func_name: "eq".to_string(),
+        params: vec![],
+        arguments: vec![equi_condition.left.clone(), equi_condition.right.clone()],
+        return_type: Box::new(return_type),
+    })
 }

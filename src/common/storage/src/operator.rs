@@ -62,6 +62,7 @@ use crate::StorageHttpClient;
 use crate::concurrent_limit_layer::ConcurrentLimitLayer;
 use crate::config::CredentialChainConfig;
 use crate::config::EndpointPolicyScope;
+use crate::fault_injection_layer::FaultInjectionLayer;
 use crate::http_client::get_storage_http_client;
 use crate::metrics_layer::METRICS_LAYER;
 use crate::operator_cache::get_operator_cache;
@@ -239,6 +240,9 @@ fn build_operator<B: Builder>(
         // storage operator so that all underlying storage operations
         // will send to storage runtime.
         .layer(RuntimeLayer::new(GlobalIORuntime::instance()))
+        // Test-only fault injection; inert unless a test installs a rule. Below the retry
+        // layer so that injected temporary errors are retried like real ones.
+        .layer(FaultInjectionLayer)
         .finish();
 
     // Make sure the http client has been updated.

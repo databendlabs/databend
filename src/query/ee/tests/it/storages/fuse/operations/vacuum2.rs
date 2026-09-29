@@ -25,6 +25,10 @@ use databend_common_expression::DataBlock;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_sql::plans::VacuumTablesPlan;
+use databend_common_storage::FaultInjection;
+use databend_common_storage::FaultKind;
+use databend_common_storage::FaultOp;
+use databend_common_storage::FaultRule;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::SegmentsIO;
@@ -115,6 +119,70 @@ async fn test_vacuum_table_command() -> anyhow::Result<()> {
             > 2
     );
 
+    fixture
+        .execute_command(&format!("vacuum table {database}.{table}"))
+        .await?;
+    assert_only_current_snapshot_files(&ctx, storage_root, database, table).await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_table_reports_a_failed_delete() -> anyhow::Result<()> {
+    // A vacuum that cannot delete an object must say so, not report success and leave the
+    // object behind unnoticed (the shape of #14043).
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+
+    let database = "vacuum_fault_db";
+    let table = "t";
+    for statement in [
+        format!("create database {database}"),
+        format!("create table {database}.{table} (c int) as select 1"),
+        format!("insert into {database}.{table} values (2)"),
+        format!("truncate table {database}.{table}"),
+    ] {
+        fixture.execute_command(&statement).await?;
+    }
+
+    let ctx = fixture.new_query_ctx().await?;
+    let storage_root = fixture.storage_root();
+    let files_before = table_storage_files(&ctx, storage_root, database, table).await?;
+
+    // Scope the fault to this table so other tests in the process are unaffected.
+    let tenant = ctx.get_tenant();
+    let catalog = ctx.get_catalog("default").await?;
+    let fuse_table = catalog.get_table(&tenant, database, table).await?;
+    let prefix = FuseTable::try_from_table(fuse_table.as_ref())?
+        .meta_location_generator()
+        .prefix()
+        .to_string();
+    let fault = FaultInjection::install(FaultRule::new(
+        FaultOp::Delete,
+        format!("{prefix}/_sg/"),
+        FaultKind::Permanent,
+    ));
+    let result = fixture
+        .execute_command(&format!("vacuum table {database}.{table}"))
+        .await;
+    let hits = fault.hits();
+    fault.remove();
+
+    assert!(hits >= 1, "the vacuum never tried to delete a segment");
+    let err = result.expect_err("vacuum must fail when a delete fails");
+    assert_ne!(err.code(), ErrorCode::UNWIND_ERROR, "must not panic: {err}");
+
+    // The segments it could not delete are still there, and a later vacuum finishes the job.
+    let files_after = table_storage_files(&ctx, storage_root, database, table).await?;
+    assert!(
+        files_after
+            .iter()
+            .any(|f| f.to_string_lossy().contains("_sg/")),
+        "a failed delete must leave the object in place: before {files_before:?}, after {files_after:?}"
+    );
     fixture
         .execute_command(&format!("vacuum table {database}.{table}"))
         .await?;

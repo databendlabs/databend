@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::types::DataType;
 
 use crate::MetadataRef;
@@ -22,6 +23,7 @@ use crate::binder::JoinPredicate;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatContext;
 use crate::optimizer::optimizers::operator::EquivalentConstantsVisitor;
 use crate::optimizer::optimizers::operator::InferFilterOptimizer;
 use crate::optimizer::optimizers::operator::JoinProperty;
@@ -49,10 +51,11 @@ use crate::plans::VisitorMut;
 pub struct RulePushDownFilterJoin {
     matchers: Vec<Matcher>,
     metadata: MetadataRef,
+    stat_context: StatContext,
 }
 
 impl RulePushDownFilterJoin {
-    pub fn new(metadata: MetadataRef) -> Self {
+    pub fn new(metadata: MetadataRef, stat_context: StatContext) -> Self {
         Self {
             // Filter
             //  \
@@ -68,6 +71,7 @@ impl RulePushDownFilterJoin {
                 }],
             }],
             metadata,
+            stat_context,
         }
     }
 }
@@ -86,7 +90,8 @@ impl Rule for RulePushDownFilterJoin {
         }
 
         // Second, try to convert outer join to inner join
-        let (s_expr, outer_to_inner) = outer_join_to_inner_join(s_expr, self.metadata.clone())?;
+        let (s_expr, outer_to_inner) =
+            outer_join_to_inner_join(s_expr, self.metadata.clone(), &self.stat_context)?;
 
         // Third, check if can convert mark join to semi join
         let (s_expr, mark_to_semi) = convert_mark_to_semi_join(&s_expr, self.metadata.clone())?;
@@ -101,7 +106,11 @@ impl Rule for RulePushDownFilterJoin {
         }
 
         // Finally, push down filter to join.
-        let (need_push, mut result) = try_push_down_filter_join(&s_expr, self.metadata.clone())?;
+        let (need_push, mut result) = try_push_down_filter_join(
+            &s_expr,
+            self.metadata.clone(),
+            &self.stat_context.function_context,
+        )?;
         if !need_push && !outer_to_inner && !mark_to_semi {
             return Ok(());
         }
@@ -117,7 +126,11 @@ impl Rule for RulePushDownFilterJoin {
     }
 }
 
-fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(bool, SExpr)> {
+fn try_push_down_filter_join(
+    s_expr: &SExpr,
+    metadata: MetadataRef,
+    func_ctx: &FunctionContext,
+) -> Result<(bool, SExpr)> {
     // Extract or predicates from Filter to push down them to join.
     // For example: `select * from t1, t2 where (t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)`
     // The predicate will be rewritten to `((t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)) and (t1.a=1 or t1.a=2) and (t2.b=2 or t2.b=1)`
@@ -168,6 +181,7 @@ fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(b
                         &left_prop.output_columns,
                         &join.join_type,
                         metadata.clone(),
+                        func_ctx,
                     )? {
                         left_push_down.push(predicate);
                     } else {
@@ -187,6 +201,7 @@ fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(b
                         &right_prop.output_columns,
                         &join.join_type,
                         metadata.clone(),
+                        func_ctx,
                     )? {
                         right_push_down.push(predicate);
                     } else {

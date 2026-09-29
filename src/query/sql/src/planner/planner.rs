@@ -50,6 +50,7 @@ use crate::CountSetOps;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::VariableNormalizer;
+use crate::binder::lineage_enabled;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::optimize;
 use crate::planner::QueryExecutor;
@@ -92,6 +93,32 @@ impl Planner {
         let extras = self.parse_sql(sql)?;
         let plan = self.plan_stmt(&extras.statement, false).await?;
         Ok((plan, extras))
+    }
+
+    /// Parse and bind `sql` without optimizing it or consulting the plan cache.
+    ///
+    /// Lineage consumers use this to inspect the logical plan exactly as written, since the
+    /// optimizer may fold scans away or route them through materialized views.
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn bind_sql(&mut self, sql: &str) -> Result<Plan> {
+        let extras = self.parse_sql(sql)?;
+        let stmt = &extras.statement;
+        let query_kind = get_query_kind(stmt);
+        apply_statement_settings(self.ctx.clone(), stmt)?;
+        let name_resolution_ctx =
+            NameResolutionContext::try_from(self.ctx.get_settings().as_ref())?;
+        let binder = Binder::new(
+            self.ctx.clone(),
+            CatalogManager::instance(),
+            name_resolution_ctx,
+            Metadata::default_ref(),
+        )
+        .with_subquery_executor(self.query_executor.clone());
+        // Attach before bind for the same reason as `plan_stmt`: table sources such as
+        // ParquetRSTable::create read the query string during binding.
+        self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
+        binder.bind(stmt).await
     }
 
     #[fastrace::trace]
@@ -312,6 +339,12 @@ impl Planner {
         let plan = binder.bind(stmt).await?;
         // attach again to avoid the query kind is overwritten by the subquery
         self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
+
+        // Lineage describes what the user wrote, so capture it before the optimizer
+        // rewrites the plan for execution.
+        if lineage_enabled() {
+            plan.capture_bound_query_lineage();
+        }
 
         // Step 4: Optimize the SExpr with optimizers, and generate optimized physical SExpr
         // Single-statement EXECUTE IMMEDIATE can apply inner settings during binding.

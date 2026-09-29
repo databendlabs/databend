@@ -29,13 +29,25 @@ pub trait BlockingWrite: io::Write + Send {
     fn close(&mut self) -> Result<()>;
 }
 
-pub const BLOCKING_WRITE_CHUNK_SIZE: usize = 4 * 1024 * 1024;
+/// Smallest chunk handed to OpenDAL. It is the multipart minimum of S3, GCS and OBS, so on
+/// those services every chunk becomes exactly one part instead of being coalesced.
+pub const BLOCKING_WRITE_CHUNK_SIZE: usize = 5 * 1024 * 1024;
 pub const BLOCKING_WRITE_MAX_CHUNKS: usize = 2;
+
+/// Chunk size for `operator`: the default, raised to the service's multipart minimum when that
+/// is larger. Read from static capability metadata; no request is made.
+pub fn blocking_write_chunk_size(operator: &Operator) -> usize {
+    let capability = operator.info().full_capability();
+    match capability.write_multi_min_size {
+        Some(min_size) => BLOCKING_WRITE_CHUNK_SIZE.max(min_size),
+        None => BLOCKING_WRITE_CHUNK_SIZE,
+    }
+}
 
 /// Worst-case bytes retained by one blocking writer: the current producer
 /// buffer, the bounded channel, and one chunk owned by the upload worker.
-pub fn blocking_write_retained_bytes(max_chunks: usize) -> usize {
-    BLOCKING_WRITE_CHUNK_SIZE.saturating_mul(max_chunks.max(1).saturating_add(2))
+pub fn blocking_write_retained_bytes(operator: &Operator, max_chunks: usize) -> usize {
+    blocking_write_chunk_size(operator).saturating_mul(max_chunks.max(1).saturating_add(2))
 }
 
 enum UploadCommand {
@@ -80,6 +92,7 @@ enum UploadWorkerState {
 
 /// An OpenDAL-backed blocking writer that starts its upload worker on the first non-empty write.
 pub struct OpenDalBlockingWrite {
+    chunk_size: usize,
     current: Option<BytesMut>,
     bytes_written: u64,
     state: UploadWorkerState,
@@ -87,8 +100,10 @@ pub struct OpenDalBlockingWrite {
 
 impl OpenDalBlockingWrite {
     fn create(operator: Operator, path: String, max_chunks: usize) -> Self {
+        let chunk_size = blocking_write_chunk_size(&operator);
         Self {
-            current: Some(BytesMut::with_capacity(BLOCKING_WRITE_CHUNK_SIZE)),
+            chunk_size,
+            current: Some(BytesMut::with_capacity(chunk_size)),
             bytes_written: 0,
             state: UploadWorkerState::Unopened(PendingWorker {
                 operator,
@@ -169,13 +184,13 @@ impl io::Write for OpenDalBlockingWrite {
             let mut current = self
                 .current
                 .take()
-                .unwrap_or_else(|| BytesMut::with_capacity(BLOCKING_WRITE_CHUNK_SIZE));
-            let space = BLOCKING_WRITE_CHUNK_SIZE - current.len();
+                .unwrap_or_else(|| BytesMut::with_capacity(self.chunk_size));
+            let space = self.chunk_size - current.len();
             let take = space.min(remaining.len());
             current.extend_from_slice(&remaining[..take]);
             remaining = &remaining[take..];
 
-            if current.len() == BLOCKING_WRITE_CHUNK_SIZE {
+            if current.len() == self.chunk_size {
                 self.send_current(current)?;
             } else {
                 self.current = Some(current);
@@ -320,5 +335,35 @@ mod tests {
             .block_on(async { op.read(&path).await.map_err(ErrorCode::from) })
             .unwrap();
         assert_eq!(data.to_bytes().as_ref(), b"0123456789abcdef");
+    }
+}
+
+#[cfg(test)]
+mod chunk_size_tests {
+    use opendal::Operator;
+    use opendal::services::Memory;
+
+    use super::*;
+
+    #[test]
+    fn test_chunk_size_follows_the_service_minimum() {
+        // Memory has no multipart minimum: the default applies.
+        let memory = Operator::new(Memory::default()).unwrap().finish();
+        assert_eq!(
+            blocking_write_chunk_size(&memory),
+            BLOCKING_WRITE_CHUNK_SIZE
+        );
+
+        // S3 requires 5 MiB parts; the default already satisfies it, so chunks are one part each.
+        let s3 = Operator::new(opendal::services::S3::default().bucket("b").region("r"))
+            .unwrap()
+            .finish();
+        let min_size = s3.info().full_capability().write_multi_min_size.unwrap();
+        assert!(BLOCKING_WRITE_CHUNK_SIZE >= min_size);
+        assert_eq!(blocking_write_chunk_size(&s3), BLOCKING_WRITE_CHUNK_SIZE);
+        assert_eq!(
+            blocking_write_retained_bytes(&s3, BLOCKING_WRITE_MAX_CHUNKS),
+            BLOCKING_WRITE_CHUNK_SIZE * (BLOCKING_WRITE_MAX_CHUNKS + 2)
+        );
     }
 }

@@ -185,6 +185,11 @@ pub struct TableMeta {
     /// Global monotonically increasing sequence for cluster key changes, to
     /// ensuring a unique identifier for each version of cluster key.
     pub cluster_key_seq: u32,
+    /// Row-level TTL expression, e.g. `event_time + INTERVAL 30 DAY`.
+    ///
+    /// Only the definition text is stored. Referenced columns and result type
+    /// are derived on demand, mirroring how `cluster_key` is handled.
+    pub ttl: Option<String>,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub comment: String,
@@ -409,6 +414,7 @@ impl Default for TableMeta {
             cluster_key: None,
             cluster_key_v2: None,
             cluster_key_seq: 0,
+            ttl: None,
             created_on: Utc::now(),
             updated_on: Utc::now(),
             comment: "".to_string(),

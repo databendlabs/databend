@@ -24,10 +24,10 @@ use databend_common_expression::ColumnId;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_sql::binder::validate_constraints_by_schema;
+use databend_common_sql::validate_stored_ttl_expr;
 use databend_meta_client::types::MatchSeq;
 
 use crate::FuseTable;
-use crate::io::SnapshotsIO;
 use crate::operations::SnapshotHintWriter;
 
 impl FuseTable {
@@ -102,7 +102,8 @@ impl FuseTable {
             ));
         };
         let (snapshot, format_version) =
-            SnapshotsIO::read_snapshot(snapshot_loc, self.get_operator(), true).await?;
+            Self::read_navigation_snapshot(snapshot_loc, self.get_operator(), "revert point")
+                .await?;
 
         let mut table_info = self.table_info.clone();
         let snapshot_loc = self
@@ -134,6 +135,18 @@ impl FuseTable {
         let target_schema = target_meta.schema.as_ref();
         let target_column_ids: HashSet<ColumnId> =
             target_schema.to_column_ids().into_iter().collect();
+
+        if let Some(ttl) = &target_meta.ttl {
+            validate_stored_ttl_expr(ctx.clone(), target_meta.schema.clone(), ttl).map_err(
+                |e| {
+                    ErrorCode::IllegalReference(format!(
+                        "Cannot flashback: TTL '{ttl}' is invalid for the target schema: {}. \
+                     Please REMOVE TTL before proceeding.",
+                        e.message()
+                    ))
+                },
+            )?;
+        }
 
         validate_constraints_by_schema(
             ctx.clone(),

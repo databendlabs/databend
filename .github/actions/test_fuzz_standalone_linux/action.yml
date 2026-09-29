@@ -5,12 +5,7 @@ runs:
   steps:
     - uses: ./.github/actions/setup_test
 
-    - name: Test setup
-      shell: bash
-      run: |
-        bash ./scripts/setup/dev_setup.sh -yd
-
-    - name: Run fuzz Tests with Standalone mode with embedded meta-store
+    - name: Run metamorphic oracle tests (TLP / NoREC) in standalone mode
       shell: bash
       run: |
         bash ./scripts/ci/ci-run-fuzz-tests.sh

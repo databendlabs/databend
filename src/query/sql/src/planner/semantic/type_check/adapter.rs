@@ -390,6 +390,16 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
                 roles.sort();
                 Ok(Scalar::String(to_string(&roles)?))
             }
+            AuthFunction::CurrentTenantId => {
+                // Resolved from the server-side session tenant (see
+                // `SessionContext::get_current_tenant`), which is fixed at
+                // authentication time and is not affected by switching roles,
+                // databases, or warehouses.
+                let table_access: &dyn TableContextTableAccess = self.ctx.as_ref();
+                Ok(Scalar::String(
+                    table_access.get_tenant().tenant_name().to_string(),
+                ))
+            }
         }
     }
 

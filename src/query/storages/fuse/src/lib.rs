@@ -25,7 +25,6 @@
 #![feature(deref_patterns)]
 #![allow(clippy::large_enum_variant)]
 #![recursion_limit = "256"]
-#![feature(try_blocks)]
 
 mod constants;
 mod fuse_column;

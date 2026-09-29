@@ -1,0 +1,463 @@
+# Float key semantics: `-0.0`/`+0.0` and every NaN payload form one equality
+# class at every key boundary (comparison, hash functions, GROUP BY, DISTINCT,
+# joins, IN, REPLACE INTO, MERGE INTO, Bloom pruning).
+# See docs/designs/20260921-float-value-semantics.md.
+
+# Text casts preserve the negative-zero sign, unlike decimal literals.
+query BBBB
+SELECT siphash64('-0.0'::FLOAT) = siphash64('0.0'::FLOAT),
+       xxhash32('-0.0'::FLOAT) = xxhash32('0.0'::FLOAT),
+       xxhash64('-0.0'::FLOAT) = xxhash64('0.0'::FLOAT),
+       city64withseed('-0.0'::FLOAT, 42) = city64withseed('0.0'::FLOAT, 42)
+----
+1 1 1 1
+
+query BBBB
+SELECT siphash64('-0.0'::DOUBLE) = siphash64('0.0'::DOUBLE),
+       xxhash32('-0.0'::DOUBLE) = xxhash32('0.0'::DOUBLE),
+       xxhash64('-0.0'::DOUBLE) = xxhash64('0.0'::DOUBLE),
+       city64withseed('-0.0'::DOUBLE, 42) = city64withseed('0.0'::DOUBLE, 42)
+----
+1 1 1 1
+
+statement ok
+DROP TABLE IF EXISTS signed_zero
+
+statement ok
+CREATE TABLE signed_zero (id INT, f FLOAT NOT NULL, d DOUBLE NOT NULL, n DOUBLE, s STRING NOT NULL) bloom_index_columns='f,d,n'
+
+# Each block has at least two distinct values so a Bloom index is built.
+# Keep the two zero signs in separate blocks to check both probe directions.
+statement ok
+INSERT INTO signed_zero VALUES (1, '-0.0', '-0.0', '-0.0', 'k'), (2, 1, 1, 1, 'k')
+
+statement ok
+INSERT INTO signed_zero VALUES (3, '0.0', '0.0', '0.0', 'k'), (4, 2, 2, NULL, 'k')
+
+query I
+SELECT id FROM signed_zero WHERE f = '0.0'::FLOAT ORDER BY id
+----
+1
+3
+
+query I
+SELECT id FROM signed_zero WHERE f = '-0.0'::FLOAT ORDER BY id
+----
+1
+3
+
+query I
+SELECT id FROM signed_zero WHERE d = '0.0'::DOUBLE ORDER BY id
+----
+1
+3
+
+query I
+SELECT id FROM signed_zero WHERE d = '-0.0'::DOUBLE ORDER BY id
+----
+1
+3
+
+query I
+SELECT id FROM signed_zero WHERE n = '0.0'::DOUBLE ORDER BY id
+----
+1
+3
+
+statement ok
+SET max_inlist_to_or = 3
+
+query I
+SELECT id FROM signed_zero WHERE d IN ('0.0'::DOUBLE, 100) ORDER BY id
+----
+1
+3
+
+query I
+SELECT id FROM signed_zero WHERE d IN ('-0.0'::DOUBLE, 100, 101, 102) ORDER BY id
+----
+1
+3
+
+statement ok
+UNSET max_inlist_to_or
+
+# Hash functions must also normalize column inputs, not only folded constants.
+query IIII
+SELECT count(DISTINCT siphash64(d)), count(DISTINCT xxhash32(d)),
+       count(DISTINCT xxhash64(d)), count(DISTINCT city64withseed(d, 42))
+FROM signed_zero
+----
+3 3 3 3
+
+query I
+SELECT count(*) FROM (SELECT f FROM signed_zero GROUP BY f)
+----
+3
+
+query I
+SELECT count(*) FROM (SELECT d FROM signed_zero GROUP BY d)
+----
+3
+
+query I
+SELECT count(*) FROM (SELECT n FROM signed_zero GROUP BY n)
+----
+3
+
+query I
+SELECT count(*) FROM (SELECT d, s FROM signed_zero GROUP BY d, s)
+----
+3
+
+# Nested equality and multi-argument DISTINCT must agree with scalar equality.
+query IIII
+SELECT count(DISTINCT d, s), uniq(d, s), count(DISTINCT [d]), uniq([d]) FROM signed_zero
+----
+3 3 3 3
+
+query III
+SELECT count(DISTINCT (d, s)), count(DISTINCT map([s], [d])), approx_count_distinct([d]) FROM signed_zero
+----
+3 3 3
+
+query I
+SELECT count(*) FROM (SELECT [d] FROM signed_zero GROUP BY [d])
+----
+3
+
+# Single, nullable, fixed composite and serialized composite hash join keys.
+statement ok
+SET nested_loop_join_threshold = 0
+
+statement ok
+SET inlist_runtime_filter_threshold = 0
+
+statement ok
+SET join_runtime_filter_selectivity_threshold = 101
+
+statement ok
+SET enforce_shuffle_join = 1
+
+query I
+SELECT count(*) FROM signed_zero a JOIN signed_zero b ON a.f = b.f
+----
+6
+
+query I
+SELECT count(*) FROM signed_zero a JOIN signed_zero b ON a.d = b.d
+----
+6
+
+query I
+SELECT count(*) FROM signed_zero a JOIN signed_zero b ON a.n = b.n
+----
+5
+
+query I
+SELECT count(*) FROM signed_zero a JOIN signed_zero b ON a.f = b.f AND a.d = b.d
+----
+6
+
+query I
+SELECT count(*) FROM signed_zero a JOIN signed_zero b ON a.d = b.d AND a.s = b.s
+----
+6
+
+query I
+SELECT count(*) FROM signed_zero a JOIN signed_zero b ON [a.d] = [b.d]
+----
+6
+
+statement ok
+UNSET (nested_loop_join_threshold, inlist_runtime_filter_threshold, join_runtime_filter_selectivity_threshold, enforce_shuffle_join)
+
+# REPLACE INTO uses a separate row hash for detecting conflicts.
+statement ok
+REPLACE INTO signed_zero ON (f, d) VALUES (5, '0.0', '0.0', '0.0', 'k')
+
+query I
+SELECT id FROM signed_zero ORDER BY id
+----
+2
+4
+5
+
+statement ok
+REPLACE INTO signed_zero ON (f, d) VALUES (6, '-0.0', '-0.0', '-0.0', 'k')
+
+query I
+SELECT id FROM signed_zero ORDER BY id
+----
+2
+4
+6
+
+# MERGE INTO matches on hash join keys and must treat both zero signs as one key.
+statement ok
+MERGE INTO signed_zero USING (SELECT 7 AS id, '-0.0'::FLOAT AS f, '-0.0'::DOUBLE AS d, '-0.0'::DOUBLE AS n, 'm' AS s) src
+ON signed_zero.f = src.f AND signed_zero.d = src.d
+WHEN MATCHED THEN UPDATE SET signed_zero.s = src.s
+WHEN NOT MATCHED THEN INSERT VALUES (src.id, src.f, src.d, src.n, src.s)
+
+query IT
+SELECT id, s FROM signed_zero ORDER BY id
+----
+2 k
+4 k
+6 m
+
+statement ok
+DROP TABLE signed_zero
+
+# NaN: every payload (positive, negative, sqrt(-1)) is one equality class.
+query BBBB
+SELECT siphash64('nan'::DOUBLE) = siphash64(-('nan'::DOUBLE)),
+       xxhash32('nan'::DOUBLE) = xxhash32(sqrt(-1)),
+       xxhash64('nan'::DOUBLE) = xxhash64(-('nan'::DOUBLE)),
+       city64withseed('nan'::DOUBLE, 42) = city64withseed(sqrt(-1), 42)
+----
+1 1 1 1
+
+query BBBB
+SELECT siphash64('nan'::FLOAT) = siphash64(-('nan'::FLOAT)),
+       xxhash32('nan'::FLOAT) = xxhash32(-('nan'::FLOAT)),
+       xxhash64('nan'::FLOAT) = xxhash64(-('nan'::FLOAT)),
+       city64withseed('nan'::FLOAT, 42) = city64withseed(-('nan'::FLOAT), 42)
+----
+1 1 1 1
+
+query BBBB
+SELECT 'nan'::DOUBLE = -('nan'::DOUBLE), 'nan'::DOUBLE <> sqrt(-1),
+       'nan'::DOUBLE = '0.0'::DOUBLE, 'nan'::FLOAT = -('nan'::FLOAT)
+----
+1 0 0 1
+
+statement ok
+DROP TABLE IF EXISTS float_nan
+
+statement ok
+CREATE TABLE float_nan (id INT, f FLOAT NOT NULL, d DOUBLE NOT NULL, n DOUBLE, s STRING NOT NULL) bloom_index_columns='f,d,n'
+
+# Keep the NaN payloads in separate blocks to check both probe directions.
+statement ok
+INSERT INTO float_nan VALUES (1, 'nan', 'nan', 'nan', 'k'), (2, 1, 1, 1, 'k')
+
+statement ok
+INSERT INTO float_nan VALUES (3, -('nan'::FLOAT), -('nan'::DOUBLE), sqrt(-1), 'k'), (4, 2, 2, NULL, 'k')
+
+query I
+SELECT id FROM float_nan WHERE f = 'nan'::FLOAT ORDER BY id
+----
+1
+3
+
+query I
+SELECT id FROM float_nan WHERE f = -('nan'::FLOAT) ORDER BY id
+----
+1
+3
+
+query I
+SELECT id FROM float_nan WHERE d = 'nan'::DOUBLE ORDER BY id
+----
+1
+3
+
+query I
+SELECT id FROM float_nan WHERE d = sqrt(-1) ORDER BY id
+----
+1
+3
+
+query I
+SELECT id FROM float_nan WHERE n = -('nan'::DOUBLE) ORDER BY id
+----
+1
+3
+
+query I
+SELECT id FROM float_nan WHERE d <> 'nan'::DOUBLE ORDER BY id
+----
+2
+4
+
+statement ok
+SET max_inlist_to_or = 3
+
+query I
+SELECT id FROM float_nan WHERE d IN ('nan'::DOUBLE, 100) ORDER BY id
+----
+1
+3
+
+query I
+SELECT id FROM float_nan WHERE d IN (sqrt(-1), 100, 101, 102) ORDER BY id
+----
+1
+3
+
+statement ok
+UNSET max_inlist_to_or
+
+query IIII
+SELECT count(DISTINCT siphash64(d)), count(DISTINCT xxhash32(d)),
+       count(DISTINCT xxhash64(d)), count(DISTINCT city64withseed(d, 42))
+FROM float_nan
+----
+3 3 3 3
+
+query I
+SELECT count(*) FROM (SELECT f FROM float_nan GROUP BY f)
+----
+3
+
+query I
+SELECT count(*) FROM (SELECT d FROM float_nan GROUP BY d)
+----
+3
+
+query I
+SELECT count(*) FROM (SELECT n FROM float_nan GROUP BY n)
+----
+3
+
+query I
+SELECT count(*) FROM (SELECT d, s FROM float_nan GROUP BY d, s)
+----
+3
+
+query IIII
+SELECT count(DISTINCT d, s), uniq(d, s), count(DISTINCT [d]), uniq([d]) FROM float_nan
+----
+3 3 3 3
+
+query III
+SELECT count(DISTINCT (d, s)), count(DISTINCT map([s], [d])), approx_count_distinct([d]) FROM float_nan
+----
+3 3 3
+
+query I
+SELECT count(*) FROM (SELECT [d] FROM float_nan GROUP BY [d])
+----
+3
+
+statement ok
+SET nested_loop_join_threshold = 0
+
+statement ok
+SET inlist_runtime_filter_threshold = 0
+
+statement ok
+SET join_runtime_filter_selectivity_threshold = 101
+
+statement ok
+SET enforce_shuffle_join = 1
+
+query I
+SELECT count(*) FROM float_nan a JOIN float_nan b ON a.f = b.f
+----
+6
+
+query I
+SELECT count(*) FROM float_nan a JOIN float_nan b ON a.d = b.d
+----
+6
+
+query I
+SELECT count(*) FROM float_nan a JOIN float_nan b ON a.n = b.n
+----
+5
+
+query I
+SELECT count(*) FROM float_nan a JOIN float_nan b ON a.f = b.f AND a.d = b.d
+----
+6
+
+query I
+SELECT count(*) FROM float_nan a JOIN float_nan b ON a.d = b.d AND a.s = b.s
+----
+6
+
+query I
+SELECT count(*) FROM float_nan a JOIN float_nan b ON [a.d] = [b.d]
+----
+6
+
+statement ok
+UNSET (nested_loop_join_threshold, inlist_runtime_filter_threshold, join_runtime_filter_selectivity_threshold, enforce_shuffle_join)
+
+statement ok
+REPLACE INTO float_nan ON (f, d) VALUES (5, 'nan', 'nan', 'nan', 'k')
+
+query I
+SELECT id FROM float_nan ORDER BY id
+----
+2
+4
+5
+
+statement ok
+REPLACE INTO float_nan ON (f, d) VALUES (6, -('nan'::FLOAT), sqrt(-1), 'nan', 'k')
+
+query I
+SELECT id FROM float_nan ORDER BY id
+----
+2
+4
+6
+
+statement ok
+MERGE INTO float_nan USING (SELECT 7 AS id, -('nan'::FLOAT) AS f, sqrt(-1) AS d, 'nan'::DOUBLE AS n, 'm' AS s) src
+ON float_nan.f = src.f AND float_nan.d = src.d
+WHEN MATCHED THEN UPDATE SET float_nan.s = src.s
+WHEN NOT MATCHED THEN INSERT VALUES (src.id, src.f, src.d, src.n, src.s)
+
+query IT
+SELECT id, s FROM float_nan ORDER BY id
+----
+2 k
+4 k
+6 m
+
+statement ok
+DROP TABLE float_nan
+
+# Structured row hashes must distinguish NULL positions, including NULL from zero.
+statement ok
+CREATE TABLE signed_zero_tuple_keys(id INT, k TUPLE(a INT NULL, b INT NULL)) bloom_index_columns=''
+
+statement ok
+REPLACE INTO signed_zero_tuple_keys ON(k) VALUES (1, (NULL, 1)), (2, (1, NULL)), (3, (0, 1))
+
+query I
+SELECT id FROM signed_zero_tuple_keys ORDER BY id
+----
+1
+2
+3
+
+statement error .*duplicated data detected.*
+REPLACE INTO signed_zero_tuple_keys ON(k) VALUES (4, (NULL, 1)), (5, (NULL, 1))
+
+statement ok
+DROP TABLE signed_zero_tuple_keys
+
+statement ok
+CREATE TABLE signed_zero_array_keys(id INT, k ARRAY(INT NULL)) bloom_index_columns=''
+
+statement ok
+REPLACE INTO signed_zero_array_keys ON(k) VALUES (1, [NULL, 1]), (2, [1, NULL]), (3, [0, 1])
+
+query I
+SELECT id FROM signed_zero_array_keys ORDER BY id
+----
+1
+2
+3
+
+statement error .*duplicated data detected.*
+REPLACE INTO signed_zero_array_keys ON(k) VALUES (4, [NULL, 1]), (5, [NULL, 1])
+
+statement ok
+DROP TABLE signed_zero_array_keys

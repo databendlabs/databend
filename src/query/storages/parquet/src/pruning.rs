@@ -19,10 +19,10 @@ use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_pruner::RangeIndexInput;
 use databend_storages_common_pruner::RangePruner;
 use databend_storages_common_pruner::RangePrunerCreator;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
@@ -58,7 +58,6 @@ impl ParquetPruner {
         leaf_fields: Arc<Vec<TableField>>,
         push_down: &Option<PushDownInfo>,
         options: ParquetReadOptions,
-        partition_columns: Vec<String>,
     ) -> Result<Self> {
         // Build `RangePruner` by `filter`.
         let filter = push_down
@@ -82,12 +81,6 @@ impl ParquetPruner {
                         leaf_fields
                             .iter()
                             .position(|f| f.name.eq_ignore_ascii_case(&name))
-                            .or_else(|| {
-                                // check partition columns
-                                partition_columns
-                                    .iter()
-                                    .position(|c| c.eq_ignore_ascii_case(&name))
-                            })
                     })
                     .collect::<Vec<_>>();
                 predicate_columns.sort();
@@ -114,13 +107,10 @@ impl ParquetPruner {
     /// Return the selected row groups' indices in the meta and omit filter flags.
     ///
     /// If `stats` is not [None], we use this statistics to prune but not collect again.
-    ///
-    /// `partition_values` is used only for Delta table engine.
     pub fn prune_row_groups(
         &self,
         meta: &ParquetMetaData,
         stats: Option<&[StatisticsOfColumns]>,
-        partition_values: Option<&HashMap<String, Scalar>>,
     ) -> Result<(Vec<usize>, Vec<bool>, Vec<u64>)> {
         let default_selection = (0..meta.num_row_groups()).collect();
         let default_omits = vec![false; meta.num_row_groups()];
@@ -150,12 +140,12 @@ impl ParquetPruner {
                 let mut start_rows = Vec::with_capacity(meta.num_row_groups());
                 if let Some(row_group_stats) = stats {
                     for (i, row_group) in row_group_stats.iter().enumerate() {
-                        if pruner.should_keep_with_partition_columns(row_group, partition_values) {
+                        let input = RangeIndexInput::from_columns(row_group);
+                        if pruner.should_keep(&input, None) {
                             selection.push(i);
                             start_rows.push(default_start_rows[i]);
 
-                            let omit = !inverted_pruner
-                                .should_keep_with_partition_columns(row_group, partition_values);
+                            let omit = !inverted_pruner.should_keep(&input, None);
                             omits.push(omit);
                         }
                     }
@@ -166,12 +156,12 @@ impl ParquetPruner {
                     Some(&self.predicate_columns),
                 ) {
                     for (i, row_group) in row_group_stats.iter().enumerate() {
-                        if pruner.should_keep_with_partition_columns(row_group, partition_values) {
+                        let input = RangeIndexInput::from_columns(row_group);
+                        if pruner.should_keep(&input, None) {
                             selection.push(i);
                             start_rows.push(default_start_rows[i]);
 
-                            let omit = !inverted_pruner
-                                .should_keep_with_partition_columns(row_group, partition_values);
+                            let omit = !inverted_pruner.should_keep(&input, None);
                             omits.push(omit);
                         }
                     }
@@ -186,12 +176,10 @@ impl ParquetPruner {
     /// Prune pages of a parquet file.
     ///
     /// Return a vector of [`RowSelection`] to represent rows to read.
-    /// `partition_values` is used only for Delta table engine.
     pub fn prune_pages(
         &self,
         meta: &ParquetMetaData,
         row_groups: &[usize],
-        partition_values: Option<&HashMap<String, Scalar>>,
     ) -> Result<Option<RowSelection>> {
         if !self.prune_pages {
             return Ok(None);
@@ -231,10 +219,10 @@ impl ParquetPruner {
                             let page_num_rows = pages_num_rows[page_idx];
                             match stat {
                                 Some(s) => {
-                                    if !pruner.should_keep_with_partition_columns(
-                                        &HashMap::from([(*col_idx as u32, s)]),
-                                        partition_values,
-                                    ) {
+                                    let stats = HashMap::from([(*col_idx as u32, s)]);
+                                    if !pruner
+                                        .should_keep(&RangeIndexInput::from_columns(&stats), None)
+                                    {
                                         sel_of_cur_col.push(RowSelector::skip(page_num_rows));
                                     } else {
                                         sel_of_cur_col.push(RowSelector::select(page_num_rows));

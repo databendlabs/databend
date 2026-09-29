@@ -37,6 +37,7 @@ use crate::types::DateType;
 use crate::types::DecimalDataKind;
 use crate::types::DecimalScalar;
 use crate::types::DecimalView;
+use crate::types::IntervalType;
 use crate::types::NumberColumn;
 use crate::types::NumberScalar;
 use crate::types::NumberType;
@@ -178,6 +179,13 @@ pub(super) unsafe fn serialize_column_to_rowformat(
             }
         }
         Column::Date(buffer) => {
+            for row in select_vector {
+                unsafe {
+                    address[*row].write(offset, &buffer[*row]);
+                }
+            }
+        }
+        Column::Interval(buffer) => {
             for row in select_vector {
                 unsafe {
                     address[*row].write(offset, &buffer[*row]);
@@ -440,6 +448,9 @@ impl<'s> CompareState<'s> {
             Column::Date(buffer) => {
                 self.match_column_type::<DateType>(buffer, col_offset, validity, counts)
             }
+            Column::Interval(buffer) => {
+                self.match_column_type::<IntervalType>(buffer, col_offset, validity, counts)
+            }
             Column::String(str_view) => {
                 self.match_validity_with(counts, validity, |row, row_ptr| unsafe {
                     row_ptr.eq_string_view(col_offset, str_view, *row)
@@ -497,6 +508,9 @@ impl<'s> CompareState<'s> {
                 self.match_scalar_type::<TimestampType>(value, col_offset, counts)
             }
             Scalar::Date(value) => self.match_scalar_type::<DateType>(value, col_offset, counts),
+            Scalar::Interval(value) => {
+                self.match_scalar_type::<IntervalType>(value, col_offset, counts)
+            }
             Scalar::String(value) => self.match_with(counts, |_, row_ptr| unsafe {
                 row_ptr.is_bytes_eq(col_offset, value.as_bytes())
             }),

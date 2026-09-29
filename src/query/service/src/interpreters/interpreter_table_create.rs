@@ -199,6 +199,27 @@ impl Interpreter for CreateTableInterpreter {
                 }
             }
 
+            if self.plan.ttl.is_some() {
+                // TTL definitions are currently supported only by persistent FUSE tables.
+                if self.plan.engine != Engine::Fuse {
+                    return Err(ErrorCode::UnsupportedEngineParams(format!(
+                        "Unsupported TTL for engine: {}",
+                        self.plan.engine
+                    )));
+                }
+                // TTL is currently supported only for persistent, non-transient tables.
+                if self.plan.options.contains_key("TRANSIENT") {
+                    return Err(ErrorCode::BadArguments(
+                        "TTL is not supported for TRANSIENT tables",
+                    ));
+                }
+                if self.plan.options.contains_key(OPT_KEY_TEMP_PREFIX) {
+                    return Err(ErrorCode::BadArguments(
+                        "TTL is not supported for TEMPORARY tables",
+                    ));
+                }
+            }
+
             match &self.plan.as_select {
                 Some(select_plan_node) => {
                     self.create_table_as_select(select_plan_node.clone()).await
@@ -610,6 +631,8 @@ impl CreateTableInterpreter {
             table_meta.cluster_key_seq += 1;
             table_meta.cluster_key_v2 = Some((table_meta.cluster_key_seq, cluster_key.clone()));
         }
+
+        table_meta.ttl = self.plan.ttl.clone();
 
         let req = CreateTableReq {
             create_option: self.plan.create_option,

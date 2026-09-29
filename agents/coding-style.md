@@ -18,6 +18,16 @@
 - When adding helpers over collections, expose borrowed iterator forms first.
   Add owned collection-returning helpers only when callers genuinely need owned
   materialized results.
+- Keep stable identifiers and positions apart. `ColumnId` is a stable id that
+  survives projection and schema evolution; a `usize` position into
+  `TableSchema.fields`, a `DataBlock`, a bloom index file, or a parquet leaf
+  list is not, and neither is a subsystem id (tantivy field id, parquet
+  `field_id`). Never bridge them with a cast such as `idx as ColumnId`. When a
+  subsystem defines its own ordinal, wrap it in a local newtype without
+  `From`/`Deref` to the raw integer (see `BloomIndexColumnOrdinal`), and when
+  the subsystem can hand back its own handle, use that instead of recomputing
+  the position (see how the inverted index uses the `Field`s returned by
+  `create_index_schema`).
 
 ## Tests and Fixtures
 - Keep SQL suite file prefixes consistent with the existing numeric ordering in `tests/suites/`.

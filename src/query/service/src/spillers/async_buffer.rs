@@ -44,6 +44,7 @@ use databend_common_storages_parquet::parquet_reader::RowGroupCore;
 use databend_common_storages_parquet::parquet_reader::row_group::get_ranges;
 use fastrace::Span;
 use fastrace::future::FutureExt;
+use opendal::Buffer;
 use opendal::Metadata;
 use opendal::Operator;
 use opendal::Writer;
@@ -273,6 +274,21 @@ impl SpillsBufferPool {
             target,
             settings,
         )
+    }
+
+    pub(super) fn read_buffer(
+        &self,
+        op: Operator,
+        path: String,
+    ) -> async_channel::Receiver<Result<Buffer>> {
+        let (sender, receiver) = async_channel::bounded(1);
+        self.operator(BufferOperator::ReadBuffer(ReadBufferOperator {
+            span: Span::enter_with_local_parent("ReadBuffer"),
+            op,
+            path,
+            sender,
+        }));
+        receiver
     }
 
     pub fn fetch_ranges(
@@ -625,6 +641,13 @@ pub struct CreateWriterOperator {
     response: Arc<BufferOperatorResp<opendal::Result<Writer>>>,
 }
 
+pub struct ReadBufferOperator {
+    span: Span,
+    op: Operator,
+    path: String,
+    sender: async_channel::Sender<Result<Buffer>>,
+}
+
 pub struct FetchOperator {
     span: Span,
     location: String,
@@ -680,7 +703,7 @@ impl<T> BufferOperatorResp<T> {
         let locked = self.mutex.lock();
         let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
 
-        if locked.is_none() {
+        while locked.is_none() {
             let waited = self.condvar.wait(locked);
             locked = waited.unwrap_or_else(PoisonError::into_inner);
         }
@@ -693,6 +716,7 @@ pub enum BufferOperator {
     WriterTask(BufferWriterTaskOperator),
     CreateWriter(CreateWriterOperator),
     Fetch(FetchOperator),
+    ReadBuffer(ReadBufferOperator),
     ReaderTask(ReaderTaskOperator),
 }
 
@@ -702,6 +726,7 @@ impl BufferOperator {
             BufferOperator::WriterTask(op) => &op.span,
             BufferOperator::CreateWriter(op) => &op.span,
             BufferOperator::Fetch(op) => &op.span,
+            BufferOperator::ReadBuffer(op) => &op.span,
             BufferOperator::ReaderTask(op) => &op.span,
         }
     }
@@ -730,6 +755,16 @@ impl Background {
                             op.response.done(writer);
                         },
                     ),
+                );
+            }
+            BufferOperator::ReadBuffer(op) => {
+                spawn(
+                    async_backtrace::location!(String::from("read_buffer")).frame(async move {
+                        if !op.sender.is_closed() {
+                            let result = op.op.read(&op.path).await.map_err(ErrorCode::from);
+                            let _ = op.sender.send(result).await;
+                        }
+                    }),
                 );
             }
             BufferOperator::Fetch(op) => {
