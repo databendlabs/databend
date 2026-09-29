@@ -689,6 +689,7 @@ pub fn validate_stored_ttl_expr(
     let names = NameResolutionContext::preserve_identifier_case();
     let mut binder = ScalarBinder::new(&mut bind_context, ctx, &names, metadata, &[]);
     binder.forbid_udf();
+    binder.forbid_virtual_computed_column();
     let (scalar, _) = binder.bind(&ast)?;
     validate_ttl_expr(&scalar, &format!("{ast:#}"))
 }

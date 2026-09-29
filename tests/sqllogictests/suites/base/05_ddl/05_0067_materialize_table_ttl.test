@@ -1,0 +1,149 @@
+# A virtual computed column cannot be used as a TTL expiration time.
+# This must fail during binding, before the computed-column license check.
+statement error 1065
+CREATE TABLE ttl_materialize_virtual_rejected (ts TIMESTAMP, expires TIMESTAMP AS (ts) VIRTUAL) TTL expires
+
+# MATERIALIZE TTL applies the stored TTL definition without modifying it.
+statement ok
+ALTER TABLE IF EXISTS ttl_materialize_absent MATERIALIZE TTL
+
+statement ok
+DROP TABLE IF EXISTS ttl_materialize_test
+
+statement ok
+DROP TABLE IF EXISTS ttl_materialize_date
+
+statement ok
+DROP TABLE IF EXISTS ttl_materialize_tz
+
+statement ok
+CREATE TABLE ttl_materialize_test (id INT, expires TIMESTAMP) TTL expires
+
+statement ok
+INSERT INTO ttl_materialize_test VALUES (1, '2000-01-01 00:00:00'), (2, '2099-01-01 00:00:00'), (3, NULL)
+
+statement ok
+BEGIN
+
+statement error 1002
+ALTER TABLE ttl_materialize_test MATERIALIZE TTL
+
+statement ok
+ROLLBACK
+
+statement ok
+ALTER TABLE ttl_materialize_test MATERIALIZE TTL
+
+query I
+SELECT id FROM ttl_materialize_test ORDER BY id
+----
+2
+3
+
+# Retrying after the first pass does not remove NULL or future rows.
+statement ok
+ALTER TABLE ttl_materialize_test MATERIALIZE TTL
+
+query I
+SELECT count(*) FROM ttl_materialize_test
+----
+2
+
+statement ok
+ALTER TABLE ttl_materialize_test SET TTL expires + INTERVAL 1 DAY
+
+statement ok
+ALTER TABLE ttl_materialize_test MATERIALIZE TTL
+
+query I
+SELECT count(*) FROM ttl_materialize_test
+----
+2
+
+statement ok
+ALTER TABLE ttl_materialize_test REMOVE TTL
+
+statement error 1065
+ALTER TABLE ttl_materialize_test MATERIALIZE TTL
+
+statement ok
+DROP TABLE ttl_materialize_test
+
+# DATE uses the same cutoff as TIMESTAMP and preserves NULL.
+statement ok
+CREATE TABLE ttl_materialize_empty (expires TIMESTAMP) TTL expires
+
+statement ok
+ALTER TABLE ttl_materialize_empty MATERIALIZE TTL
+
+statement ok
+DROP TABLE ttl_materialize_empty
+
+statement ok
+CREATE TABLE ttl_materialize_date (id INT, expires DATE) TTL expires
+
+statement ok
+INSERT INTO ttl_materialize_date VALUES (1, '2000-01-01'), (2, '2099-01-01'), (3, NULL)
+
+statement ok
+ALTER TABLE ttl_materialize_date MATERIALIZE TTL
+
+query I
+SELECT id FROM ttl_materialize_date ORDER BY id
+----
+2
+3
+
+statement ok
+DROP TABLE ttl_materialize_date
+
+statement ok
+CREATE TABLE ttl_materialize_tz (id INT, expires TIMESTAMP_TZ) TTL expires
+
+statement ok
+INSERT INTO ttl_materialize_tz VALUES (1, '2000-01-01 00:00:00+00:00'), (2, '2099-01-01 00:00:00+00:00')
+
+statement ok
+ALTER TABLE ttl_materialize_tz MATERIALIZE TTL
+
+query I
+SELECT id FROM ttl_materialize_tz ORDER BY id
+----
+2
+
+statement ok
+DROP TABLE ttl_materialize_tz
+
+# Persisted TTL identifiers use the storage dialect, not the executor's SQL dialect.
+# Under MySQL, "2000-01-01" would otherwise be a string literal and could expire every row.
+statement ok
+SET sql_dialect = 'PostgreSQL'
+
+statement ok
+CREATE TABLE ttl_materialize_quoted (id INT, "2000-01-01" TIMESTAMP, "ExpireAt" TIMESTAMP) TTL greatest("2000-01-01", "ExpireAt")
+
+statement ok
+INSERT INTO ttl_materialize_quoted VALUES (1, '2000-01-01 00:00:00', '2000-01-01 00:00:00'), (2, '2099-01-01 00:00:00', '2099-01-01 00:00:00')
+
+statement ok
+SET sql_dialect = 'MySQL'
+
+statement ok
+SET quoted_ident_case_sensitive = 0
+
+statement ok
+ALTER TABLE ttl_materialize_quoted MATERIALIZE TTL
+
+query I
+SELECT id FROM ttl_materialize_quoted ORDER BY id
+----
+2
+
+statement ok
+SET sql_dialect = 'PostgreSQL'
+
+statement ok
+SET quoted_ident_case_sensitive = 1
+
+statement ok
+DROP TABLE ttl_materialize_quoted

@@ -31,6 +31,7 @@ use databend_common_ast::ast::ConstraintDefinition;
 use databend_common_ast::ast::ConstraintType as AstConstraintType;
 use databend_common_ast::ast::CreateTableSource;
 use databend_common_ast::ast::CreateTableStmt;
+use databend_common_ast::ast::DeleteStmt;
 use databend_common_ast::ast::DescribeTableStmt;
 use databend_common_ast::ast::DropTableStmt;
 use databend_common_ast::ast::Engine;
@@ -66,6 +67,8 @@ use databend_common_ast::ast::VacuumTablesStmt;
 use databend_common_ast::ast::VacuumTemporaryFiles;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::QuotedString;
+use databend_common_ast::parser::Dialect;
+use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::runtime::GlobalIORuntime;
@@ -116,6 +119,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_WRITE_DISTRIBUTION_MODE;
 use databend_storages_common_table_meta::table::TableCompression;
 use databend_storages_common_table_meta::table::WriteDistributionMode;
+use databend_storages_common_table_meta::table::is_fuse_backed_engine;
 use databend_storages_common_table_meta::table::is_reserved_opt_key;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
@@ -1572,6 +1576,69 @@ impl Binder {
                     ttl,
                 })))
             }
+            AlterTableAction::MaterializeTableTtl => {
+                if self.ctx.txn_mgr().lock().is_active() {
+                    return Err(ErrorCode::Unimplemented(
+                        "MATERIALIZE TTL is not supported inside explicit transactions",
+                    ));
+                }
+                let tbl = match self.ctx.get_table(&catalog, &database, &table).await {
+                    Ok(tbl) => tbl,
+                    Err(e)
+                        if *if_exists
+                            && matches!(
+                                e.code(),
+                                ErrorCode::UNKNOWN_CATALOG
+                                    | ErrorCode::UNKNOWN_DATABASE
+                                    | ErrorCode::UNKNOWN_TABLE
+                            ) =>
+                    {
+                        return Ok(Plan::AlterTableTtl(Box::new(AlterTableTtlPlan {
+                            catalog,
+                            database,
+                            table,
+                            if_exists: true,
+                            table_id: None,
+                            ttl: None,
+                        })));
+                    }
+                    Err(e) => return Err(e),
+                };
+                if !is_fuse_backed_engine(tbl.engine())
+                    || tbl.is_temp()
+                    || tbl.get_table_info().meta.options.contains_key("TRANSIENT")
+                {
+                    return Err(ErrorCode::Unimplemented(
+                        "MATERIALIZE TTL is only supported for persistent Fuse tables",
+                    ));
+                }
+                let ttl = tbl
+                    .get_table_info()
+                    .meta
+                    .ttl
+                    .clone()
+                    .ok_or_else(|| ErrorCode::SemanticError("Table has no TTL definition"))?;
+                // Bind the stored definition against the current table, just like DELETE.
+                // A literal cutoff keeps all blocks in the mutation on the same time boundary.
+                let cutoff = self.ctx.get_function_context()?.now.timestamp_micros();
+                let filter = format!("CAST(({ttl}) AS TIMESTAMP) <= to_timestamp({cutoff}, 6)");
+                let selection = parse_expr(&tokenize_sql(&filter)?, Dialect::default())?;
+                let table_ref = match table_reference {
+                    TableReference::Table { table, .. } => table,
+                    _ => unreachable!(),
+                };
+                let stmt = DeleteStmt {
+                    hints: None,
+                    catalog: table_ref.catalog.clone(),
+                    database: table_ref.database.clone(),
+                    table: table_ref.table.clone(),
+                    table_alias: None,
+                    selection: Some(selection),
+                    with: None,
+                };
+                self.bind_delete_with_ttl(bind_context, &stmt, Some(ttl))
+                    .await
+            }
             AlterTableAction::ReclusterTable {
                 is_final,
                 selection,
@@ -2479,6 +2546,7 @@ impl Binder {
             &[],
         );
         scalar_binder.forbid_udf();
+        scalar_binder.forbid_virtual_computed_column();
         let (scalar, _) = scalar_binder.bind(ttl_expr)?;
         if scalar.used_columns().is_empty() {
             return Err(ErrorCode::SemanticError(format!(

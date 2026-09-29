@@ -134,6 +134,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
     // Recluster may rewrite disjoint segment sets concurrently. Serialize only the final
     // refresh, sequence validation, and metadata CAS.
     acquire_commit_lock: bool,
+    expected_ttl: Option<String>,
 }
 
 #[derive(Debug)]
@@ -158,6 +159,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
         deduplicated_label: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
         acquire_commit_lock: bool,
+        expected_ttl: Option<String>,
     ) -> Result<ProcessorPtr> {
         let purge_mode = Self::purge_mode(ctx.as_ref(), table, &snapshot_gen)?;
         let enable_auto_analyze = Self::enable_auto_analyze(ctx.clone(), table, &snapshot_gen);
@@ -198,6 +200,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
             vacuum_handler,
             pending_noop_commit: false,
             acquire_commit_lock,
+            expected_ttl,
         })))
     }
 
@@ -855,6 +858,13 @@ where F: SnapshotGenerator + Send + Sync + 'static
             }
             State::RefreshTable => {
                 self.table = self.table.refresh(self.ctx.as_ref()).await?;
+                if let Some(expected) = &self.expected_ttl {
+                    if self.table.get_table_info().meta.ttl.as_deref() != Some(expected.as_str()) {
+                        return Err(ErrorCode::SemanticError(
+                            "TTL definition changed; retry MATERIALIZE TTL",
+                        ));
+                    }
+                }
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
                 let previous = fuse_table.read_table_snapshot().await?;
                 let table_stats_gen = fuse_table

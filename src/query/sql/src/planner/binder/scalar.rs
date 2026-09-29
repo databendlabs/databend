@@ -34,6 +34,8 @@ pub struct ScalarBinder<'a> {
     metadata: MetadataRef,
     aliases: &'a [(String, ScalarExpr)],
     forbid_udf: bool,
+    forbid_virtual_computed_column: bool,
+    apply_masking_policy: bool,
 }
 
 impl<'a> ScalarBinder<'a> {
@@ -51,11 +53,22 @@ impl<'a> ScalarBinder<'a> {
             metadata,
             aliases,
             forbid_udf: false,
+            forbid_virtual_computed_column: false,
+            apply_masking_policy: true,
         }
     }
 
     pub fn forbid_udf(&mut self) {
         self.forbid_udf = true;
+    }
+
+    pub fn forbid_virtual_computed_column(&mut self) {
+        self.forbid_virtual_computed_column = true;
+    }
+
+    /// Table maintenance predicates evaluate stored values, not user-visible masked values.
+    pub fn without_masking_policy(&mut self) {
+        self.apply_masking_policy = false;
     }
 
     pub fn bind(&mut self, expr: &Expr) -> Result<(ScalarExpr, DataType)> {
@@ -67,6 +80,8 @@ impl<'a> ScalarBinder<'a> {
             self.aliases,
             self.forbid_udf,
         )?;
+        type_checker.set_apply_masking_policy(self.apply_masking_policy);
+        type_checker.set_forbid_virtual_computed_column(self.forbid_virtual_computed_column);
         Ok(*type_checker.resolve(expr)?)
     }
 

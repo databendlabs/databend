@@ -551,6 +551,7 @@ impl ReclusterTableInterpreter {
                 acquire_commit_lock,
             }),
             meta: PhysicalPlanMeta::new("CommitSink"),
+            expected_ttl: None,
         }))
     }
 

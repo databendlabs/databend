@@ -264,6 +264,7 @@ impl Walk for AlterTableAction {
             AlterTableAction::ModifyTableComment { .. }
             | AlterTableAction::DropTableClusterKey
             | AlterTableAction::RemoveTableTtl
+            | AlterTableAction::MaterializeTableTtl
             | AlterTableAction::RefreshTableCache
             | AlterTableAction::SetOptions { .. }
             | AlterTableAction::ModifyConnection { .. }
@@ -376,6 +377,7 @@ impl WalkMut for AlterTableAction {
             AlterTableAction::ModifyTableComment { .. }
             | AlterTableAction::DropTableClusterKey
             | AlterTableAction::RemoveTableTtl
+            | AlterTableAction::MaterializeTableTtl
             | AlterTableAction::RefreshTableCache
             | AlterTableAction::SetOptions { .. }
             | AlterTableAction::ModifyConnection { .. }
