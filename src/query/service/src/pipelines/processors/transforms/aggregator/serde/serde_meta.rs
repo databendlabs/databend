@@ -19,6 +19,7 @@ use databend_common_expression::BlockMetaInfoPtr;
 pub const BUCKET_TYPE: usize = 1;
 pub const SPILLED_TYPE: usize = 2;
 pub const PARTITIONED_AGGREGATE_TYPE: usize = 3;
+pub const RAW_TYPE: usize = 4;
 
 // Cannot change to enum, because bincode cannot deserialize custom enum.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -63,6 +64,19 @@ impl AggregateSerdeMeta {
             buckets: vec![],
             payload_row_counts: vec![],
             shuffle_bucket,
+        })
+    }
+
+    /// Raw rows of several buckets concatenated in one block (see `RawPayload`).
+    pub fn create_raw(buckets: Vec<isize>, payload_row_counts: Vec<usize>) -> BlockMetaInfoPtr {
+        Box::new(AggregateSerdeMeta {
+            typ: RAW_TYPE,
+            bucket: 0,
+            max_partition_count: 0,
+            is_empty: false,
+            buckets,
+            payload_row_counts,
+            shuffle_bucket: 0,
         })
     }
 

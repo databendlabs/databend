@@ -30,8 +30,10 @@ use super::row_ptr::RowLayout;
 use crate::ProjectedBlock;
 use crate::types::DataType;
 
+/// Maps a group hash to its radix partition. Every producer of rows for the same partitioned
+/// aggregate (payloads and raw rows) must use the same mask so that a key lands in one bucket.
 #[derive(Debug, Clone, Copy)]
-struct PartitionMask {
+pub struct PartitionMask {
     mask: u64,
     shift: u64,
 }
@@ -41,7 +43,7 @@ impl PartitionMask {
         Self::with_start_bit(partition_count, 0)
     }
 
-    fn with_start_bit(partition_count: u64, start_bit: u64) -> Self {
+    pub fn with_start_bit(partition_count: u64, start_bit: u64) -> Self {
         let radix_bits = partition_count.trailing_zeros() as u64;
         debug_assert_eq!(1 << radix_bits, partition_count);
         debug_assert!(start_bit + radix_bits <= 48);
@@ -52,7 +54,7 @@ impl PartitionMask {
         Self { mask, shift }
     }
 
-    fn index(&self, hash: u64) -> usize {
+    pub fn index(&self, hash: u64) -> usize {
         ((hash & self.mask) >> self.shift) as _
     }
 }

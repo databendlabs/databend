@@ -67,6 +67,10 @@ impl AggregationStatistics {
         );
     }
 
+    pub fn log_partial_finish_statistics(&mut self, output_rows: usize, hash_index_resizes: usize) {
+        self.log_finish(output_rows, hash_index_resizes, None);
+    }
+
     pub fn log_final_finish_statistics(
         &mut self,
         task_id: Option<u64>,
