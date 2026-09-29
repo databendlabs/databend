@@ -196,6 +196,7 @@ impl IPhysicalPlan for Mutation {
 
         // 2. Add cluster‘s blocksort if it's a cluster table
         builder.build_compact_and_cluster_sort_in_merge_into(
+            tbl.clone(),
             table,
             self.need_match,
             serialize_len,
