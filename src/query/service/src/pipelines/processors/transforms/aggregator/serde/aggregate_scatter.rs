@@ -118,6 +118,28 @@ impl AggregateRowScatter {
                     .collect())
             }
             AggregateMeta::Partitioned { bucket, data } => match data {
+                PartitionedData::Raw(payloads) => {
+                    // Same routing as `Payload::scatter_into_buckets`: group hash modulo.
+                    let buckets = self.buckets as u64;
+                    let mut partitions = Vec::with_capacity(self.buckets);
+                    partitions.resize_with(self.buckets, Vec::new);
+                    for payload in payloads {
+                        let scattered =
+                            payload.scatter(self.buckets, |hash| (hash % buckets) as usize)?;
+                        for (index, payload) in scattered.into_iter().enumerate() {
+                            if payload.data_block.num_rows() != 0 {
+                                partitions[index].push(payload);
+                            }
+                        }
+                    }
+                    Ok(partitions
+                        .into_iter()
+                        .map(|payloads| AggregateMeta::Partitioned {
+                            bucket,
+                            data: PartitionedData::Raw(payloads),
+                        })
+                        .collect())
+                }
                 PartitionedData::Empty => Ok((0..self.buckets)
                     .map(|_| AggregateMeta::Partitioned {
                         bucket,
@@ -354,6 +376,26 @@ impl AggregateBucketScatter {
                             AggregateMeta::Partitioned {
                                 bucket: None,
                                 data: PartitionedData::AggregatePayload(payload),
+                            }
+                            .into_datablock()
+                        })
+                        .collect()
+                }
+                PartitionedData::Raw(payloads) => {
+                    let mut chunks = (0..self.buckets).map(|_| vec![]).collect::<Vec<_>>();
+                    for mut payload in payloads {
+                        let bucket = payload.bucket as usize;
+                        if !is_local {
+                            payload.bucket /= self.buckets as isize;
+                        }
+                        chunks[bucket % self.buckets].push(payload);
+                    }
+                    chunks
+                        .into_iter()
+                        .map(|payloads| {
+                            AggregateMeta::Partitioned {
+                                bucket: None,
+                                data: PartitionedData::Raw(payloads),
                             }
                             .into_datablock()
                         })

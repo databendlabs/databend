@@ -1,0 +1,73 @@
+# run-with-settings: partial_aggregate_mode=legacy
+# run-with-settings: partial_aggregate_mode=bypass
+# run-with-settings: partial_aggregate_mode=bypass, force_aggregate_shuffle_mode=row
+
+# Partial aggregation strategies must not change results. The default pass runs the adaptive
+# strategy; the passes above run the legacy strategy and forward every row as raw input, also
+# through the row shuffle. Two threads and small blocks make the partial table fill up.
+
+statement ok
+set max_block_size = 4096
+
+statement ok
+set max_threads = 2
+
+query IIIIII
+select count(), sum(c), sum(s), min(mn), max(mx), sum(dc) from (select number % 30011 as k, count() c, sum(number) s, min(number) mn, max(number) mx, count(distinct number % 7) dc from numbers(100000) group by k)
+----
+30011	100000	4999950000	0	99999	100000
+
+query IIT
+select count(), sum(length(a)), max(m) from (select to_string(number % 1000) as k, array_agg(number) a, max(to_string(number)) m from numbers(100000) group by k)
+----
+1000	100000	99999
+
+query II
+select count(), sum(c) from (select if(number % 3 = 0, null, number % 1000) as k1, number % 7 as k2, count() c from numbers(100000) group by k1, k2)
+----
+7007	100000
+
+query II
+select count(), sum(c) from (select number % 100 a, number % 7 b, count() c from numbers(100000) group by grouping sets ((a), (b), ()))
+----
+108	300000
+
+query II
+select count(), sum(s) from (select number k, sum(number) s from numbers(100000) group by k)
+----
+100000	4999950000
+
+query II
+select sum(av)::Int64, sum(u) from (select number % 500 k, avg(number) av, uniq(number % 13) u from numbers(100000) group by k)
+----
+24999750	6500
+
+statement ok
+unset max_block_size
+
+# Keys recur beyond the initial table: the adaptive strategy grows the table at once.
+query II
+select count(), sum(c) from (select number % 50000 as k, count() c from numbers(2000000) group by k)
+----
+50000	2000000
+
+# Mostly unique input: the adaptive strategy forwards raw rows after its first checkpoint.
+query II
+select count(), sum(s) from (select number k, sum(number) s from numbers(2000000) group by k)
+----
+2000000	1999999000000
+
+# Memory pressure spills the partial table like any other operator.
+statement ok
+set force_aggregate_data_spill = 1
+
+query IIIIII
+select count(), sum(c), sum(s), min(mn), max(mx), sum(dc) from (select number % 30011 as k, count() c, sum(number) s, min(number) mn, max(number) mx, count(distinct number % 7) dc from numbers(100000) group by k)
+----
+30011	100000	4999950000	0	99999	100000
+
+statement ok
+unset force_aggregate_data_spill
+
+statement ok
+unset max_threads
