@@ -204,7 +204,7 @@ explain(decorrelated,verbose) select a, exists(select * from numbers(1000) where
 ----
 EvalScalar
 ├── scalars: [t.a (#0) AS (#0), is_true(marker (#6)) AS (#3)]
-├── output columns: [b (#5), mark (#3), marker (#6), numbers.number (#2), t.a (#0), t.b (#1)]
+├── output columns: [mark (#3), marker (#6), t.a (#0), t.b (#1)]
 ├── outer columns: []
 ├── used columns: [a (#4), b (#5), mark (#3), marker (#6), numbers.number (#2), t.a (#0), t.b (#1)]
 ├── cardinality: 0.000
@@ -214,7 +214,7 @@ EvalScalar
     ├── build keys: [b (#5)]
     ├── probe keys: [t.b (#1)]
     ├── other filters: []
-    ├── output columns: [b (#5), marker (#6), numbers.number (#2), t.a (#0), t.b (#1)]
+    ├── output columns: [marker (#6), t.a (#0), t.b (#1)]
     ├── outer columns: []
     ├── used columns: [a (#4), b (#5), numbers.number (#2), t.a (#0), t.b (#1)]
     ├── cardinality: 0.000

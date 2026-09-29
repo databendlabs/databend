@@ -501,10 +501,14 @@ impl Operator for Join {
         let mut input_columns = left_prop.output_columns.clone();
         input_columns.extend(right_prop.output_columns.iter().copied());
         // Semi/anti joins only produce rows from the retained side. The other side is
-        // available to join conditions, but not to operators above the join.
+        // available to join conditions, but not to operators above the join. A mark join
+        // likewise only carries the side its marker is computed against plus the marker
+        // itself, as `PhysicalHashJoin::create_output_schema` builds it.
         let mut output_columns = match self.join_type {
             JoinType::LeftSemi | JoinType::LeftAnti => left_prop.output_columns.clone(),
             JoinType::RightSemi | JoinType::RightAnti => right_prop.output_columns.clone(),
+            JoinType::LeftMark => right_prop.output_columns.clone(),
+            JoinType::RightMark => left_prop.output_columns.clone(),
             _ => input_columns.clone(),
         };
         if self.join_type.is_mark_join()
@@ -524,7 +528,8 @@ impl Operator for Join {
         for condition in &self.non_equi_conditions {
             condition.collect_used_columns(&mut outer_columns);
         }
-        // The discarded side of a semi/anti join is local to its conditions, not outer.
+        // The discarded side of a semi/anti or mark join is local to its conditions and
+        // its marker, not outer.
         outer_columns
             .retain(|column| !input_columns.contains(column) && !output_columns.contains(column));
 

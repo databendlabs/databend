@@ -341,6 +341,59 @@ mod tests {
     }
 
     #[test]
+    fn mark_join_only_exposes_the_retained_side_and_marker() -> Result<()> {
+        let metadata = metadata_with_columns(3);
+        // A mark join carries the side its marker is computed against plus the marker,
+        // not both inputs, which is what `PhysicalHashJoin::create_output_schema` builds.
+        for (join_type, retained, dropped) in
+            [(JoinType::LeftMark, 1, 0), (JoinType::RightMark, 0, 1)]
+        {
+            let join = SExpr::create_binary(
+                Arc::new(RelOperator::Join(Join {
+                    join_type,
+                    equi_conditions: vec![JoinEquiCondition::new(column(0), column(1), false)],
+                    marker_index: Some(Symbol::new(2)),
+                    ..Default::default()
+                })),
+                scan(&[0]),
+                scan(&[1]),
+            );
+            let prop = join.derive_relational_prop()?;
+            assert_eq!(
+                prop.output_columns,
+                [Symbol::new(retained), Symbol::new(2)]
+                    .into_iter()
+                    .collect(),
+                "{join_type:?} must expose the retained side and the marker"
+            );
+
+            // The marker is a real output.
+            SExpr::create_unary(
+                Arc::new(RelOperator::Filter(Filter {
+                    predicates: vec![column(2)],
+                })),
+                join.clone(),
+            )
+            .validate_column_scope(&metadata)?;
+
+            // The discarded side is not, so referencing it above the join is a violation.
+            let invalid = SExpr::create_unary(
+                Arc::new(RelOperator::Filter(Filter {
+                    predicates: vec![column(dropped)],
+                })),
+                join,
+            );
+            let err = invalid.validate_column_scope(&metadata).unwrap_err();
+            assert!(
+                err.message().contains("Filter")
+                    && err.message().contains(&format!("{dropped} (c{dropped})")),
+                "{err}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
     fn window_group_scalar_items_only_read_child_columns() -> Result<()> {
         let metadata = metadata_with_columns(4);
         let group = |item_input| WindowGroup {

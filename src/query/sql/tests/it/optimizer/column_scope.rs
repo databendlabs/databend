@@ -17,8 +17,11 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::SExprVisitor;
+use databend_common_sql::optimizer::ir::VisitAction;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::ScalarExpr;
 
 use crate::framework::golden::SqlTestCase;
 use crate::framework::golden::setup_context;
@@ -145,6 +148,110 @@ async fn test_optimizer_accepts_correlated_and_lateral_scopes() -> Result<()> {
         let ctx = setup_context(&case).await?;
         let plan = ctx.bind_sql(case.sql).await?;
         ctx.optimize_plan(plan).await?;
+    }
+    Ok(())
+}
+
+/// Collects `EvalScalar` items that project a column their own child does not produce,
+/// and counts the expression scans so a test can prove it exercised the lateral `VALUES`
+/// path rather than passing vacuously.
+#[derive(Default)]
+struct DeadProjectionCollector {
+    dead: Vec<String>,
+    expression_scans: usize,
+}
+
+impl SExprVisitor for DeadProjectionCollector {
+    fn visit(&mut self, s_expr: &SExpr) -> Result<VisitAction> {
+        match s_expr.plan() {
+            RelOperator::ExpressionScan(_) => self.expression_scans += 1,
+            RelOperator::EvalScalar(eval_scalar) => {
+                let child_outputs = s_expr
+                    .child(0)?
+                    .derive_relational_prop()?
+                    .output_columns
+                    .clone();
+                for item in &eval_scalar.items {
+                    let ScalarExpr::BoundColumnRef(column_ref) = &item.scalar else {
+                        continue;
+                    };
+                    if column_ref.column.index == item.index && !child_outputs.contains(&item.index)
+                    {
+                        self.dead.push(item.index.to_string());
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(VisitAction::Continue)
+    }
+}
+
+/// `Binder::construct_expression_scan` projects every derived outer column of a flattened
+/// lateral `VALUES` as an identity `EvalScalar` item, then prunes the cache columns the
+/// values do not use, which leaves some of those items referencing a column nothing
+/// computes. The binder drops them; this asserts the post-condition directly, because
+/// the scope check that would otherwise catch a regression is compiled out of release
+/// builds.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_lateral_values_drops_unresolvable_projection_items() -> Result<()> {
+    let cases = [
+        // A literal first column leaves `t1.a` projected by the flattening but pruned from
+        // the rebuilt join, so the identity item for it cannot be resolved.
+        SqlTestCase {
+            name: "left_lateral_values_literal_column",
+            description: "",
+            setup_sqls: &[TABLE],
+            sql: "SELECT t1.a, v1.c1 FROM scope_t t1
+                LEFT JOIN LATERAL (VALUES ('b', t1.b), ('c', t1.c)) AS v1(tag, c1)
+                ON t1.a = v1.c1",
+        },
+        SqlTestCase {
+            name: "left_lateral_values_literal_column_join_on_literal",
+            description: "",
+            setup_sqls: &[TABLE],
+            sql: "SELECT t1.a, v1.c1 FROM scope_t t1
+                LEFT JOIN LATERAL (VALUES ('b', t1.b), ('c', t1.c)) AS v1(tag, c1)
+                ON t1.a = v1.tag",
+        },
+        SqlTestCase {
+            name: "inner_lateral_values_literal_column",
+            description: "",
+            setup_sqls: &[TABLE],
+            sql: "SELECT t1.a, v1.c1 FROM scope_t t1
+                JOIN LATERAL (VALUES ('b', t1.b), ('c', t1.c)) AS v1(tag, c1)
+                ON t1.a = v1.c1",
+        },
+        SqlTestCase {
+            name: "lateral_values_only_outer_columns",
+            description: "",
+            setup_sqls: &[TABLE],
+            sql: "SELECT t1.a, v1.c1 FROM scope_t t1
+                JOIN LATERAL (VALUES (t1.b, t1.c)) AS v1(c1, c2)
+                ON t1.a = v1.c1",
+        },
+    ];
+    for case in cases {
+        let ctx = setup_context(&case).await?;
+        let plan = ctx.bind_sql(case.sql).await?;
+        let Plan::Query { s_expr, .. } = ctx.optimize_plan(plan).await? else {
+            unreachable!("expected a query plan");
+        };
+
+        let mut collector = DeadProjectionCollector::default();
+        s_expr.accept(&mut collector)?;
+        // Proves the case reached the lateral `VALUES` branch of the binder.
+        assert!(
+            collector.expression_scans > 0,
+            "{}: expected a lateral VALUES expression scan",
+            case.name
+        );
+        assert!(
+            collector.dead.is_empty(),
+            "{}: kept projection items no input produces: {:?}",
+            case.name,
+            collector.dead
+        );
     }
     Ok(())
 }
