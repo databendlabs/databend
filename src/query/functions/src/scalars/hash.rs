@@ -492,7 +492,7 @@ impl DFHash for i256 {
 impl DFHash for F32 {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let u = self.to_bits();
+        let u = self.canonicalize().to_bits();
         Hash::hash(&u, state);
     }
 }
@@ -500,7 +500,7 @@ impl DFHash for F32 {
 impl DFHash for F64 {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let u = self.to_bits();
+        let u = self.canonicalize().to_bits();
         Hash::hash(&u, state);
     }
 }

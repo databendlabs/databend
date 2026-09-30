@@ -852,3 +852,15 @@ pub struct WindowPartition {
     pub top: Option<usize>,
     pub func: WindowFuncType,
 }
+
+impl WindowPartition {
+    /// Hash keys for shuffling the sort input. The input has already evaluated
+    /// the partition items, so hash their columns rather than re-evaluating the
+    /// expressions, which would keep the source columns alive across the exchange.
+    pub fn distribution_keys(&self) -> Result<Vec<ScalarExpr>> {
+        self.partition_by
+            .iter()
+            .map(|item| item.bound_column_expr("window_partition_key".to_string()))
+            .collect()
+    }
+}

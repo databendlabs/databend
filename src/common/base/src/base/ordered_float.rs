@@ -112,6 +112,21 @@ impl<T: FloatCore> OrderedFloat<T> {
     pub fn into_inner(self) -> T {
         self.0
     }
+
+    /// Map every member of an equality class to one representative value.
+    ///
+    /// `-0.0` becomes `+0.0` and every NaN payload becomes `T::nan()`. All
+    /// other values are returned unchanged. Equality keys and hash inputs
+    /// must be derived from the bits of the returned value so that values
+    /// which compare equal under `Ord`/`Eq` also produce identical keys.
+    #[inline]
+    pub fn canonicalize(self) -> Self {
+        if self.0.is_nan() {
+            Self(T::nan())
+        } else {
+            Self(canonicalize_signed_zero(self.0))
+        }
+    }
 }
 
 impl<T: FloatCore> AsRef<T> for OrderedFloat<T> {
@@ -2232,5 +2247,68 @@ impl Unmarshal<OrderedFloat<f64>> for OrderedFloat<f64> {
     fn unmarshal(scratch: &[u8]) -> Self {
         let bits = u64::from_le_bytes(scratch.try_into().unwrap());
         f64::from_bits(bits).into()
+    }
+}
+
+#[cfg(test)]
+mod canonicalize_tests {
+    use super::OrderedFloat;
+
+    #[test]
+    fn canonicalize_f64_collapses_zero_and_nan_classes() {
+        let zero = OrderedFloat(0.0f64).canonicalize().0.to_bits();
+        assert_eq!(OrderedFloat(-0.0f64).canonicalize().0.to_bits(), zero);
+        assert_eq!(zero, 0.0f64.to_bits());
+
+        let nan = OrderedFloat(f64::NAN).canonicalize().0.to_bits();
+        for bits in [
+            f64::NAN.to_bits(),
+            (-f64::NAN).to_bits(),
+            0x7ff8_0000_0000_0001u64,
+            0xfff0_0000_0000_0001u64,
+            (-1.0f64).sqrt().to_bits(),
+        ] {
+            let value = OrderedFloat(f64::from_bits(bits));
+            assert!(value.is_nan());
+            assert_eq!(value.canonicalize().0.to_bits(), nan, "{bits:#x}");
+        }
+
+        for value in [
+            1.0f64,
+            -1.0,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::MIN_POSITIVE,
+        ] {
+            assert_eq!(
+                OrderedFloat(value).canonicalize().0.to_bits(),
+                value.to_bits()
+            );
+        }
+    }
+
+    #[test]
+    fn canonicalize_f32_collapses_zero_and_nan_classes() {
+        let zero = OrderedFloat(0.0f32).canonicalize().0.to_bits();
+        assert_eq!(OrderedFloat(-0.0f32).canonicalize().0.to_bits(), zero);
+
+        let nan = OrderedFloat(f32::NAN).canonicalize().0.to_bits();
+        for bits in [
+            f32::NAN.to_bits(),
+            (-f32::NAN).to_bits(),
+            0x7fc0_0001u32,
+            0xff80_0001u32,
+        ] {
+            let value = OrderedFloat(f32::from_bits(bits));
+            assert!(value.is_nan());
+            assert_eq!(value.canonicalize().0.to_bits(), nan, "{bits:#x}");
+        }
+
+        for value in [1.0f32, -1.0, f32::INFINITY, f32::NEG_INFINITY] {
+            assert_eq!(
+                OrderedFloat(value).canonicalize().0.to_bits(),
+                value.to_bits()
+            );
+        }
     }
 }

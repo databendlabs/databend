@@ -331,5 +331,99 @@ a e r2021 NULL
 a e r2022 NULL
 a e r2023 NULL
 
+# NULL correlation values must reconnect the flattened lateral subquery to the outer row.
+statement ok
+create or replace table nullable_lateral_outer(id int, k int null)
+
+statement ok
+insert into nullable_lateral_outer values (1, 1), (2, NULL), (3, 5)
+
+statement ok
+create or replace table nullable_lateral_inner(k int null, v int)
+
+statement ok
+insert into nullable_lateral_inner values (1, 10), (NULL, 20), (NULL, 30)
+
+statement ok
+set enable_experimental_new_join = 0
+
+query II
+select o.id, t.x from nullable_lateral_outer o, lateral (select o.k as x) t order by o.id
+----
+1 1
+2 NULL
+3 5
+
+query II
+select o.id, t.v from nullable_lateral_outer o, lateral (select v from nullable_lateral_inner i where o.k is null) t order by o.id, t.v
+----
+2 10
+2 20
+2 30
+
+query II
+select o.id, t.v from nullable_lateral_outer o, lateral (select v from nullable_lateral_inner i where i.v > o.k or o.k is null) t order by o.id, t.v
+----
+1 10
+1 20
+1 30
+2 10
+2 20
+2 30
+3 10
+3 20
+3 30
+
+query II
+select o.id, t.v from nullable_lateral_outer o left join lateral (select v from nullable_lateral_inner i where o.k is null) t on true order by o.id, t.v
+----
+1 NULL
+2 10
+2 20
+2 30
+3 NULL
+
+statement ok
+set enable_experimental_new_join = 1
+
+query II
+select o.id, t.x from nullable_lateral_outer o, lateral (select o.k as x) t order by o.id
+----
+1 1
+2 NULL
+3 5
+
+query II
+select o.id, t.v from nullable_lateral_outer o, lateral (select v from nullable_lateral_inner i where o.k is null) t order by o.id, t.v
+----
+2 10
+2 20
+2 30
+
+query II
+select o.id, t.v from nullable_lateral_outer o, lateral (select v from nullable_lateral_inner i where i.v > o.k or o.k is null) t order by o.id, t.v
+----
+1 10
+1 20
+1 30
+2 10
+2 20
+2 30
+3 10
+3 20
+3 30
+
+query II
+select o.id, t.v from nullable_lateral_outer o left join lateral (select v from nullable_lateral_inner i where o.k is null) t on true order by o.id, t.v
+----
+1 NULL
+2 10
+2 20
+2 30
+3 NULL
+
+statement ok
+unset enable_experimental_new_join
+
 statement ok
 drop database test_lateral

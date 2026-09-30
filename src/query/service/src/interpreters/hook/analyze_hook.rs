@@ -23,12 +23,10 @@ use databend_common_exception::Result;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::operations::AnalyzeHistogramInfo;
-use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
+use databend_common_storages_fuse::operations::AnalyzeOptions;
 use log::info;
+use log::warn;
 
-use crate::interpreters::common::table_option_validation::analyze_count_min_sketch_error_rate_from_options;
-use crate::interpreters::common::table_option_validation::analyze_top_n_size_from_options;
 use crate::interpreters::hook::resolve_current_table_name_by_id;
 use crate::interpreters::hook::table_id_matches_target;
 use crate::pipelines::executor::ExecutorSettings;
@@ -76,7 +74,7 @@ pub(crate) async fn execute_analyze_hook(ctx: Arc<QueryContext>, desc: AnalyzeDe
             info!("Analyze job completed successfully");
         }
         Err(e) => {
-            info!("Analyze job failed: {:?}", e);
+            warn!("Analyze job failed (code {}): {}", e.code(), e);
         }
     }
 
@@ -107,35 +105,28 @@ pub(crate) async fn do_analyze(ctx: Arc<QueryContext>, desc: AnalyzeDesc) -> Res
         return Ok(());
     }
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let table_options = fuse_table.get_table_info().options();
-    let top_n_size = analyze_top_n_size_from_options(table_options)?;
-    let count_min_sketch_error_rate =
-        analyze_count_min_sketch_error_rate_from_options(table_options)?;
-    let frequency_columns = table_options
-        .get(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS)
-        .cloned();
-    let mut pipeline = Pipeline::create();
-    let Some(table_snapshot) = fuse_table.read_table_snapshot().await? else {
+    let options =
+        AnalyzeOptions::from_table_options(fuse_table.get_table_info().options())?.no_scan();
+    execute_analyze(ctx, fuse_table, options).await
+}
+
+/// Run ANALYZE over the table's current snapshot to completion. A table without a
+/// snapshot has nothing to analyze.
+pub(crate) async fn execute_analyze(
+    ctx: Arc<QueryContext>,
+    table: &FuseTable,
+    options: AnalyzeOptions,
+) -> Result<()> {
+    let Some(snapshot) = table.read_table_snapshot().await? else {
         return Ok(());
     };
-    fuse_table.do_analyze(
-        ctx.clone(),
-        table_snapshot,
-        &mut pipeline,
-        AnalyzeHistogramInfo::None,
-        top_n_size,
-        frequency_columns,
-        count_min_sketch_error_rate,
-        true,
-        false,
-    )?;
+    let mut pipeline = Pipeline::create();
+    table.do_analyze(ctx.clone(), snapshot, &mut pipeline, options)?;
     pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
     let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
-    let pipelines = vec![pipeline];
-    let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
-    ctx.set_executor(complete_executor.get_inner())?;
-    complete_executor.execute().await?;
-    Ok(())
+    let executor = PipelineCompleteExecutor::from_pipelines(vec![pipeline], executor_settings)?;
+    ctx.set_executor(executor.get_inner())?;
+    executor.execute().await
 }
 
 async fn resolve_analyze_desc(

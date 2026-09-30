@@ -316,7 +316,11 @@ jobs:
           version=${{ needs.create_release.outputs.version }}
           pkg_name="databend-testsuite-${version}-${target}"
           cp -r ./tests/sqllogictests/suites ./distro/
-          tar -C ./distro -czvf ${pkg_name}.tar.gz bin suites
+          mkdir -p ./distro/tests/nox
+          cp ./tests/nox/noxfile.py ./distro/tests/nox/
+          cp -r ./tests/nox/sqllogic ./distro/tests/nox/
+          cp -r ./tests/data ./distro/tests/
+          tar -C ./distro -czvf ${pkg_name}.tar.gz bin suites tests
           sha256sum ${pkg_name}.tar.gz >> sha256-${pkg_name}.txt
       - name: post sha256
         uses: actions/upload-artifact@v7

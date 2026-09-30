@@ -223,6 +223,11 @@ pub struct AggregateStateDataType {
     pub params: Vec<AggregateFunctionParam>,
     pub argument_types: Vec<DataType>,
     pub state_type: Box<DataType>,
+    /// Version of the serialized aggregate-state protocol.
+    ///
+    /// Version 0 is the protocol used before aggregate states carried an explicit version.
+    #[serde(default)]
+    pub state_version: u64,
 }
 
 impl AggregateStateDataType {
@@ -483,6 +488,7 @@ impl DataType {
                         .map(|ty| ty.remove_generics(generics))
                         .collect(),
                     state_type: Box::new(state.state_type.remove_generics(generics)),
+                    state_version: state.state_version,
                 }))
             }
         }

@@ -1060,6 +1060,10 @@ SELECT * from s;"#,
         r#"ALTER NOTIFICATION INTEGRATION SampleNotification SET enabled = true"#,
         r#"ALTER NOTIFICATION INTEGRATION SampleNotification SET webhook = (url = 'https://example.com')"#,
         r#"ALTER NOTIFICATION INTEGRATION SampleNotification SET comment = '1'"#,
+        r#"CREATE NOTIFICATION INTEGRATION SampleNotification type = webhook enabled = true webhook = (url = 'https://example.com', method = 'POST') webhook_body_template = '{"msg_type":"text","content":{"text":"DATABEND_WEBHOOK_MESSAGE"}}' COMMENT = 'notify'"#,
+        r#"ALTER NOTIFICATION INTEGRATION SampleNotification SET WEBHOOK_BODY_TEMPLATE = '{"text":"DATABEND_WEBHOOK_MESSAGE"}'"#,
+        r#"ALTER NOTIFICATION INTEGRATION SampleNotification SET WEBHOOK_BODY_TEMPLATE = '{"text":"it\'s DATABEND_WEBHOOK_MESSAGE","path":"C:\\tmp"}'"#,
+        r#"ALTER NOTIFICATION INTEGRATION SampleNotification UNSET WEBHOOK_BODY_TEMPLATE"#,
         r#"DROP NOTIFICATION INTEGRATION SampleNotification"#,
         r#"DESC NOTIFICATION INTEGRATION SampleNotification"#,
         "--各环节转各环节转各环节转各环节转各\n  select 34343",
@@ -1441,7 +1445,6 @@ fn test_removed_vacuum_syntax() {
         "VACUUM ALL LIMIT 10",
         "VACUUM DROP TABLE DRY RUN",
         "VACUUM DROP TABLE DRY RUN SUMMARY",
-        "VACUUM DROP TABLE FROM db LIMIT 10",
         "VACUUM DROP TABLE FROM catalog.db",
         "VACUUM DROPPED OBJECTS FROM db LIMIT 10",
         "VACUUM DROPPED OBJECTS FROM catalog.db",
@@ -1458,6 +1461,24 @@ fn test_removed_vacuum_syntax() {
             parse_sql(&tokens, Dialect::PostgreSQL).is_err(),
             "removed syntax should fail to parse: {case}"
         );
+    }
+}
+
+#[test]
+fn test_vacuum_drop_table_legacy_limit_ignored() {
+    let cases = [
+        ("VACUUM DROP TABLE LIMIT 1000", "VACUUM DROP TABLE"),
+        (
+            "VACUUM DROP TABLE FROM db LIMIT 10",
+            "VACUUM DROP TABLE FROM db",
+        ),
+    ];
+
+    for (sql, expected) in cases {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        assert!(matches!(stmt, Statement::VacuumDropTable(_)), "{sql}");
+        assert_eq!(stmt.to_string(), expected, "{sql}");
     }
 }
 

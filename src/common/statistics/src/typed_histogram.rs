@@ -345,11 +345,17 @@ fn float_overlap_counts(
     num_values: f64,
     num_distinct: f64,
 ) -> (f64, f64) {
-    let bucket_width = bucket_max.into_inner() - bucket_min.into_inner();
+    // Buckets touching NaN or infinity have no usable width; keep the whole
+    // bucket rather than scaling by an undefined selectivity.
+    let (Some(bucket_width), Some(overlap_width)) = (
+        NumericValue::distance(&bucket_min, &bucket_max),
+        NumericValue::distance(&new_min, &new_max),
+    ) else {
+        return (num_values, num_distinct);
+    };
     if bucket_width <= 0.0 {
         return (num_values, num_distinct);
     }
-    let overlap_width = new_max.into_inner() - new_min.into_inner();
     let selectivity = overlap_width / bucket_width;
     debug_assert!(
         (0.0..=1.0).contains(&selectivity),
@@ -839,7 +845,8 @@ impl Value for OrderedFloat<f64> {
 
     fn avg_spacing(min: &Self, max: &Self, num_buckets: usize) -> Option<f64> {
         (max > min && num_buckets > 0)
-            .then(|| (max.into_inner() - min.into_inner()) / num_buckets as f64)
+            .then(|| Self::distance(min, max).map(|width| width / num_buckets as f64))
+            .flatten()
     }
 
     fn estimate_overlap_coverages(
@@ -855,8 +862,12 @@ impl Value for OrderedFloat<f64> {
 }
 
 impl NumericValue for OrderedFloat<f64> {
+    /// Ranges touching NaN or infinity have no usable width: NaN sorts above
+    /// every finite value, so `[1.0, NaN]` is a valid bucket whose distance is
+    /// undefined rather than infinite.
     fn distance(start: &Self, end: &Self) -> Option<f64> {
-        Some(end.into_inner() - start.into_inner())
+        let width = end.into_inner() - start.into_inner();
+        width.is_finite().then_some(width)
     }
 
     fn as_wide_integer(&self) -> i128 {

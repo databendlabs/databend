@@ -318,6 +318,8 @@ impl SchemaApiTestSuite {
             + 'static,
     {
         self.table_commit_table_meta(&b.build().await).await?;
+        self.vacuum_skips_recent_ctas_orphan(&b.build().await)
+            .await?;
         self.table_commit_after_drop_different_engine(&b.build().await)
             .await?;
         self.table_commit_table_meta_engine_mismatch(&b.build().await)
@@ -6649,6 +6651,10 @@ impl SchemaApiTestSuite {
             let db_id = orphan_util.db_id();
             let tenant = orphan_util.tenant();
 
+            // CTAS staging tables are protected from vacuum for the default retention
+            // period (1 day), so create it as if it were dropped 2 days ago.
+            let orphan_created_on = Utc::now() - Duration::days(2);
+
             let create_table_req = CreateTableReq {
                 create_option: CreateOption::CreateOrReplace,
                 catalog_name: Some("default".to_string()),
@@ -6657,7 +6663,7 @@ impl SchemaApiTestSuite {
                     db_name: db_name.to_string(),
                     table_name: tbl_name.to_string(),
                 },
-                table_meta: drop_table_meta(created_on),
+                table_meta: drop_table_meta(orphan_created_on),
                 source_table_option: None,
                 as_dropped: true,
                 materialized_view: None,
@@ -6704,6 +6710,88 @@ impl SchemaApiTestSuite {
             };
             let seqv = mt.get_kv(&table_key.to_string_key()).await?;
             assert!(seqv.is_none());
+        }
+
+        Ok(())
+    }
+
+    /// A vacuum with retention 0 must not collect the staging table of an in-progress CTAS,
+    /// otherwise its data is removed while the CTAS is still writing.
+    async fn vacuum_skips_recent_ctas_orphan<
+        MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + GarbageCollectionApi,
+    >(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant_name = "vacuum_skips_recent_ctas_orphan_tenant";
+        let db_name = "db1";
+        let tbl_name = "t1";
+
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "");
+        util.create_db().await?;
+        let tenant = util.tenant();
+
+        let staging_table_req = |drop_on: DateTime<Utc>| CreateTableReq {
+            create_option: CreateOption::CreateOrReplace,
+            catalog_name: Some("default".to_string()),
+            name_ident: TableNameIdent {
+                tenant: tenant.clone(),
+                db_name: db_name.to_string(),
+                table_name: tbl_name.to_string(),
+            },
+            table_meta: TableMeta {
+                schema: Arc::new(TableSchema::new(vec![TableField::new(
+                    "number",
+                    TableDataType::Number(NumberDataType::UInt64),
+                )])),
+                engine: "JSON".to_string(),
+                created_on: drop_on,
+                drop_on: Some(drop_on),
+                ..TableMeta::default()
+            },
+            source_table_option: None,
+            as_dropped: true,
+            materialized_view: None,
+            table_properties: None,
+            table_partition: None,
+        };
+
+        let dropped_table_ids = |drop_ids: &[DroppedId]| -> Vec<u64> {
+            drop_ids
+                .iter()
+                .filter_map(|id| match id {
+                    DroppedId::Table { id, .. } => Some(id.table_id),
+                    DroppedId::Db { .. } => None,
+                })
+                .collect()
+        };
+
+        info!("--- a just created CTAS staging table is not collected with retention 0");
+        {
+            let req = staging_table_req(Utc::now());
+            let resp = mt.create_table(req.clone()).await?;
+
+            let list_req =
+                ListDroppedTableReq::new4(&tenant, None::<String>, Some(Utc::now()), None);
+            let list_resp = mt.get_drop_table_infos(list_req).await?;
+            assert!(
+                !dropped_table_ids(&list_resp.drop_ids).contains(&resp.table_id),
+                "in-progress CTAS staging table must not be vacuumed"
+            );
+
+            // the CTAS can still be committed
+            mt.commit_table_meta(CommitTableMetaReq {
+                name_ident: req.name_ident.clone(),
+                db_id: resp.db_id,
+                table_id: resp.table_id,
+                prev_table_id: resp.prev_table_id,
+                orphan_table_name: resp.orphan_table_name.clone(),
+            })
+            .await?;
+
+            let table_key = TableId::new(resp.table_id);
+            let seqv = mt.get_pb(&table_key).await?.unwrap();
+            assert!(seqv.data.drop_on.is_none());
         }
 
         Ok(())

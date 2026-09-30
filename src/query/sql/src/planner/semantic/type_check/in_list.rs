@@ -230,6 +230,7 @@ where A: super::TypeCheckAdapter
             child_expr: Some(Box::new(child_scalar)),
             compare_op: Some(SubqueryComparisonOp::Equal),
             output_column: value_column,
+            row_columns: vec![],
             projection_index: None,
             data_type: Box::new(if child_type.is_nullable() {
                 common_type.wrap_nullable()

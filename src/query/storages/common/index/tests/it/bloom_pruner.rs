@@ -33,6 +33,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
+use databend_common_expression::converts::datavalues::scalar_to_datavalue;
 use databend_common_expression::type_check;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::AnyType;
@@ -61,6 +62,10 @@ use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::NgramHashAlgorithm;
+use databend_storages_common_index::filters::Filter;
+use databend_storages_common_index::filters::FilterBuilder;
+use databend_storages_common_index::filters::FilterImpl;
+use databend_storages_common_index::filters::Xor8Builder;
 use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use goldenfile::Mint;
@@ -74,6 +79,169 @@ fn test_bloom_filter() {
     test_specify(file);
     test_long_string(file);
     test_cast(file);
+}
+
+/// Pins the raw-bit digests that pre-canonicalization writers persisted for
+/// zero and NaN class members. `BloomIndex::find` probes these when reading
+/// existing V3/V4 filters, so they must never drift.
+#[test]
+fn test_bloom_filter_raw_bits_digest_golden_vectors() {
+    let f64_vectors: [(f64, u64); 6] = [
+        (0.0, 0xbd60_acb6_58c7_9e45),
+        (-0.0, 0xef08_26fa_9ec0_9086),
+        (f64::NAN, 0xe958_07fc_db9b_69f5),
+        (-f64::NAN, 0x9e6c_f27b_2190_3322),
+        (f64::INFINITY, 0x5845_4220_dbdd_1e32),
+        (f64::NEG_INFINITY, 0x2659_e363_3561_49e9),
+    ];
+    for (value, expected) in f64_vectors {
+        assert_eq!(
+            BloomIndex::raw_bits_digest(&value.to_bits()),
+            expected,
+            "f64 {value:?} ({:#x})",
+            value.to_bits()
+        );
+    }
+    let f32_vectors: [(f32, u64); 6] = [
+        (0.0, 0xcc22_47b7_9ac4_8af0),
+        (-0.0, 0x189c_380b_6dec_58b3),
+        (f32::NAN, 0x8cdf_dbd6_3bde_4733),
+        (-f32::NAN, 0x1ee6_34d9_faee_78f5),
+        (f32::INFINITY, 0x8f4c_fa33_eeb7_5ea4),
+        (f32::NEG_INFINITY, 0x0e00_3b0a_987b_db5e),
+    ];
+    for (value, expected) in f32_vectors {
+        assert_eq!(
+            BloomIndex::raw_bits_digest(&value.to_bits()),
+            expected,
+            "f32 {value:?} ({:#x})",
+            value.to_bits()
+        );
+    }
+}
+
+/// Filters written before float canonicalization hold raw-bit digests.
+/// Probing them must stay sound: a zero target finds either sign of zero, a
+/// NaN target never prunes (any payload may have been stored), and unrelated
+/// values are still pruned.
+#[test]
+fn test_bloom_filter_legacy_float_classes() -> anyhow::Result<()> {
+    #[derive(Clone, Copy, Debug)]
+    enum Class {
+        Zero,
+        Nan,
+        One,
+    }
+    fn class_of(value: f64) -> Class {
+        if value.is_nan() {
+            Class::Nan
+        } else if value == 0.0 {
+            Class::Zero
+        } else {
+            Class::One
+        }
+    }
+
+    let func_ctx = FunctionContext::default();
+    for number_type in [NumberDataType::Float32, NumberDataType::Float64] {
+        let data_type = DataType::Number(number_type);
+        let field = TableField::new("x", TableDataType::Number(number_type));
+        let schema = Arc::new(TableSchema::new(vec![field.clone()]));
+        // f32 payloads are derived from the f64 ones by keeping the sign and
+        // the quiet bit, so every stored/probe pair still has distinct bits.
+        let scalar = |value: f64| {
+            Scalar::Number(match number_type {
+                NumberDataType::Float32 => NumberScalar::Float32((value as f32).into()),
+                NumberDataType::Float64 => NumberScalar::Float64(value.into()),
+                _ => unreachable!(),
+            })
+        };
+        let stored_values = [0.0, -0.0, 1.0, f64::from_bits(0x7ff8_0000_0000_0001)];
+        let probes = [0.0, -0.0, 1.0, f64::NAN, -f64::NAN, (-1.0f64).sqrt()];
+
+        for version in [2, 3, 4] {
+            // Reproduce the old writer: V2 hashed DataValue; V3/V4 hashed raw bits.
+            for stored in stored_values {
+                let mut builder = Xor8Builder::create();
+                for value in [stored, 2.0] {
+                    if version == 2 {
+                        builder.add_key(&scalar_to_datavalue(&scalar(value)));
+                    } else {
+                        let digest = match number_type {
+                            NumberDataType::Float32 => {
+                                BloomIndex::raw_bits_digest(&(value as f32).to_bits())
+                            }
+                            NumberDataType::Float64 => {
+                                BloomIndex::raw_bits_digest(&value.to_bits())
+                            }
+                            _ => unreachable!(),
+                        };
+                        builder.add_digest(digest);
+                    }
+                }
+                let bytes = builder.build()?.to_bytes()?;
+                let filter = FilterImpl::from_bytes(&bytes)?.0;
+                let filter_schema = Arc::new(TableSchema::new(vec![TableField::new(
+                    &BloomIndex::build_filter_bloom_name(version, &field)?,
+                    TableDataType::Binary,
+                )]));
+                let index = BloomIndex::from_filter_block(
+                    func_ctx.clone(),
+                    filter_schema,
+                    vec![Arc::new(filter)],
+                    version,
+                )?;
+
+                for probe in probes {
+                    let target = scalar(probe);
+                    let digest =
+                        BloomIndex::calculate_scalar_digest(&func_ctx, &target, &data_type)?;
+                    let expr = check_function(
+                        None,
+                        "eq",
+                        &[],
+                        &[
+                            Expr::ColumnRef(ColumnRef {
+                                span: None,
+                                id: "x".to_string(),
+                                data_type: data_type.clone(),
+                                display_name: "x".to_string(),
+                            }),
+                            Expr::Constant(Constant {
+                                span: None,
+                                scalar: target.clone(),
+                                data_type: data_type.clone(),
+                            }),
+                        ],
+                        &BUILTIN_FUNCTIONS,
+                    )?;
+                    let result = index.apply(
+                        expr,
+                        &HashMap::from([(target, digest)]),
+                        &HashMap::new(),
+                        &[],
+                        &HashMap::new(),
+                        schema.clone(),
+                    )?;
+                    let expected = match (class_of(stored), class_of(probe)) {
+                        (_, Class::Nan) => FilterEvalResult::Uncertain,
+                        (Class::Zero, Class::Zero) | (Class::One, Class::One) => {
+                            FilterEvalResult::Uncertain
+                        }
+                        _ => FilterEvalResult::MustFalse,
+                    };
+                    assert_eq!(
+                        result,
+                        expected,
+                        "v{version} {number_type:?}: stored={stored:?} ({:#x}), probe={probe:?} ({:#x})",
+                        stored.to_bits(),
+                        probe.to_bits()
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 #[test]

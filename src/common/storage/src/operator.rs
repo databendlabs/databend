@@ -62,6 +62,7 @@ use crate::StorageHttpClient;
 use crate::concurrent_limit_layer::ConcurrentLimitLayer;
 use crate::config::CredentialChainConfig;
 use crate::config::EndpointPolicyScope;
+use crate::fault_injection_layer::FaultInjectionLayer;
 use crate::http_client::get_storage_http_client;
 use crate::metrics_layer::METRICS_LAYER;
 use crate::operator_cache::get_operator_cache;
@@ -239,6 +240,9 @@ fn build_operator<B: Builder>(
         // storage operator so that all underlying storage operations
         // will send to storage runtime.
         .layer(RuntimeLayer::new(GlobalIORuntime::instance()))
+        // Test-only fault injection; inert unless a test installs a rule. Below the retry
+        // layer so that injected temporary errors are retried like real ones.
+        .layer(FaultInjectionLayer)
         .finish();
 
     // Make sure the http client has been updated.
@@ -782,12 +786,12 @@ impl IcebergFileIO {
             let bucket = url
                 .host_str()
                 .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "missing bucket in URL"))?;
-            let prefix = format!("{}://{}/", scheme, bucket);
-            let relative_path_pos = if location.starts_with(&prefix) {
-                prefix.len()
-            } else {
-                url.scheme().len() + 3 + bucket.len() + 1
-            };
+            // The relative path starts after the authority, which can carry userinfo:
+            // abfss://<filesystem>@<account>.dfs.core.windows.net/<path>.
+            let authority_start = scheme.len() + 3;
+            let relative_path_pos = location[authority_start..]
+                .find('/')
+                .map_or(location.len(), |i| authority_start + i + 1);
             (Some(bucket), relative_path_pos)
         };
 
@@ -867,6 +871,10 @@ impl IcebergFileIO {
                 "adls.account-name" | "azure.account-name" => Some("account_name"),
                 "adls.account-key" | "azure.account-key" => Some("account_key"),
                 "adls.sas-token" | "azure.sas-token" => Some("sas_token"),
+                "adls.tenant-id" => Some("tenant_id"),
+                "adls.client-id" => Some("client_id"),
+                "adls.client-secret" => Some("client_secret"),
+                "adls.authority-host" => Some("authority_host"),
                 _ => {
                     opendal_config.insert(key.clone(), value.clone());
                     None
@@ -875,6 +883,26 @@ impl IcebergFileIO {
 
             if let Some(opendal_key) = opendal_key {
                 opendal_config.insert(opendal_key.to_string(), value.clone());
+            }
+        }
+
+        // Azdls names the container `filesystem` and needs the account endpoint; both are in
+        // the location (`abfss://<filesystem>@<host>/...`), as iceberg-rust's own Azdls
+        // storage reads them.
+        if matches!(scheme, "abfs" | "abfss" | "wasb" | "wasbs") {
+            if !url.username().is_empty() {
+                opendal_config
+                    .entry("filesystem".to_string())
+                    .or_insert_with(|| url.username().to_string());
+            }
+            if let Some(host) = url.host_str() {
+                let http = match scheme {
+                    "abfs" | "wasb" => "http",
+                    _ => "https",
+                };
+                opendal_config
+                    .entry("endpoint".to_string())
+                    .or_insert_with(|| format!("{http}://{host}"));
             }
         }
 
@@ -939,6 +967,27 @@ mod tests {
         assert!(res.is_ok(), "operator build failed: {:?}", res.err());
         let (_, path_pos) = res.unwrap();
         assert_eq!(path_pos, "s3://bucket/".len());
+    }
+
+    #[test]
+    fn iceberg_file_io_azdls_path_skips_filesystem_in_authority() {
+        let file_io = IcebergFileIO {
+            scheme: "abfss".to_string(),
+            props: HashMap::from([("adls.sas-token".to_string(), "sv=token".to_string())]),
+        };
+
+        for prefix in [
+            "abfss://myfs@myaccount.dfs.core.windows.net/",
+            "abfss://myfs@onelake.dfs.fabric.microsoft.com/",
+        ] {
+            let location = format!("{prefix}lakehouse/Tables/ns/t/data/file.parquet");
+            let res = file_io.build_operator(&location);
+
+            assert!(res.is_ok(), "operator build failed: {:?}", res.err());
+            let (op, path_pos) = res.unwrap();
+            assert_eq!(path_pos, prefix.len());
+            assert_eq!(op.info().name(), "myfs");
+        }
     }
 
     #[test]

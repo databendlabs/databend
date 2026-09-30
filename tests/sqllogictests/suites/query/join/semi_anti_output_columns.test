@@ -1,0 +1,31 @@
+# A semi/anti join may read both sides in ON, but only the retained side is visible
+# to the filter and projection above it.
+query I
+SELECT l.number FROM numbers(4) AS l
+LEFT SEMI JOIN numbers(2) AS r ON l.number = r.number
+WHERE l.number >= 1 ORDER BY l.number;
+----
+1
+
+query I
+SELECT l.number FROM numbers(4) AS l
+LEFT ANTI JOIN numbers(2) AS r ON l.number = r.number
+WHERE l.number >= 1 ORDER BY l.number;
+----
+2
+3
+
+query I
+SELECT r.number FROM numbers(2) AS l
+RIGHT SEMI JOIN numbers(4) AS r ON l.number = r.number
+WHERE r.number >= 1 ORDER BY r.number;
+----
+1
+
+query I
+SELECT r.number FROM numbers(2) AS l
+RIGHT ANTI JOIN numbers(4) AS r ON l.number = r.number
+WHERE r.number >= 1 ORDER BY r.number;
+----
+2
+3

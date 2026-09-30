@@ -21,6 +21,7 @@ use chrono::Utc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
+use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
@@ -82,7 +83,9 @@ use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use parquet::arrow::ArrowSchemaConverter;
 
+use crate::clusters::ClusterHelper;
 use crate::interpreters::Interpreter;
+use crate::interpreters::build_insert_select_physical_plan;
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::common::cluster_key_referenced_columns;
 use crate::interpreters::common::stored_computed_column_references;
@@ -90,10 +93,8 @@ use crate::interpreters::common::ttl_referenced_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::interpreters::interpreter_table_add_column::update_table_meta;
 use crate::meta_service_error;
-use crate::physical_plans::DistributedInsertSelect;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
-use crate::physical_plans::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
@@ -1276,9 +1277,49 @@ pub(crate) async fn build_select_insert_plan(
     prev_snapshot_id: Option<SnapshotId>,
     table_meta_timestamps: TableMetaTimestamps,
 ) -> Result<PipelineBuildResult> {
+    let (mut insert_plan, new_table) = build_modify_column_physical_plan(
+        ctx.clone(),
+        &sql,
+        table_info,
+        new_schema,
+        table_meta_timestamps,
+    )
+    .await?;
+
+    let mut index = 0;
+    insert_plan.adjust_plan_id(&mut index);
+    let mut build_res = build_query_pipeline_without_render_result_set(&ctx, &insert_plan).await?;
+
+    // commit new meta schema and snapshots
+    new_table.commit_insertion(
+        ctx.clone(),
+        &mut build_res.main_pipeline,
+        None,
+        vec![],
+        true,
+        prev_snapshot_id,
+        None,
+        table_meta_timestamps,
+    )?;
+
+    Ok(build_res)
+}
+
+/// Build the physical plan that rewrites a Fuse table with `new_schema`.
+///
+/// Reuses the INSERT SELECT plan builder: with a top Merge exchange, the schema
+/// conversion and block writes are pushed down to every node, and only the
+/// writer metas are merged back to the coordinator for the commit.
+pub async fn build_modify_column_physical_plan(
+    ctx: Arc<QueryContext>,
+    sql: &str,
+    table_info: TableInfo,
+    new_schema: TableSchemaRef,
+    table_meta_timestamps: TableMetaTimestamps,
+) -> Result<(PhysicalPlan, Arc<dyn Table>)> {
     // 1. build plan by sql
     let mut planner = Planner::new(ctx.clone());
-    let (plan, _extras) = planner.plan_sql(&sql).await?;
+    let (plan, _extras) = planner.plan_sql(sql).await?;
     let select_schema = plan.schema();
 
     // 2. build physical plan by plan
@@ -1298,40 +1339,26 @@ pub(crate) async fn build_select_insert_plan(
         _ => unreachable!(),
     };
 
-    // 3. define select schema and insert schema of DistributedInsertSelect plan
-    let new_table = FuseTable::create_and_refresh_table_info(
+    // 3. the table carrying the new schema, used by writers and the final commit
+    let new_table: Arc<dyn Table> = FuseTable::create_and_refresh_table_info(
         table_info,
         ctx.get_settings().get_s3_storage_class()?,
-    )?;
+    )?
+    .into();
 
-    // 4. build DistributedInsertSelect plan
-    let mut insert_plan = PhysicalPlan::new(DistributedInsertSelect {
-        input: select_plan,
-        table_info: new_table.get_table_info().clone(),
+    // 4. build the insert plan like INSERT SELECT
+    let distributed = ctx.get_cluster().get_nodes().len() > 1;
+    let insert_plan = build_insert_select_physical_plan(
+        select_plan,
         select_schema,
         select_column_bindings,
-        insert_schema: Arc::new(new_schema.into()),
-        cast_needed: true,
-        input_prepared: false,
-        table_meta_timestamps,
-        meta: PhysicalPlanMeta::new("DistributedInsertSelect"),
-    });
-
-    let mut index = 0;
-    insert_plan.adjust_plan_id(&mut index);
-    let mut build_res = build_query_pipeline_without_render_result_set(&ctx, &insert_plan).await?;
-
-    // 5. commit new meta schema and snapshots
-    new_table.commit_insertion(
-        ctx.clone(),
-        &mut build_res.main_pipeline,
-        None,
-        vec![],
+        Arc::new(new_schema.into()),
+        new_table.clone(),
         true,
-        prev_snapshot_id,
-        None,
+        false,
         table_meta_timestamps,
+        distributed,
     )?;
 
-    Ok(build_res)
+    Ok((insert_plan, new_table))
 }

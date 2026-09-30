@@ -37,10 +37,13 @@ Skip part of the matched files.
 databend-sqllogictests --run 'tests/sqllogictests/suites/base/**/*.test' --skip 'tests/sqllogictests/suites/base/01_system'
 ```
 ---
-Run tests under a specific directory name found under `--suites`.
+Run one or more complete suites by paths relative to `--suites`.
 ```shell
-databend-sqllogictests --run_dir <dir_name>
+databend-sqllogictests --run_suite query,dictionaries
 ```
+ It cannot be
+combined with `--run`, `--skip`, `--run_dir`, `--run_file`, `--skip_dir`, or
+`--skip_file`. Use `--run_dir` for nested directory-name selection.
 ---
 Run tests under a specific file name found under `--suites`.
 ```shell
@@ -61,6 +64,35 @@ For more information, run help command:
 ```shell
 databend-sqllogictests --help
 ```
+
+### Suite hooks
+
+A suite is a direct child directory of `--suites`. A suite can contain one
+optional top-level `hook.toml`; hook files are not discovered recursively.
+`--run` and `--run_suite` only filter test files and do not change suite
+ownership. Files selected outside `--suites` do not run a hook.
+
+```toml
+name = "TPC-H"
+prepare = ["nox", "-f", "tests/nox/noxfile.py", "-s", "sqllogic_hook", "--", "prepare", "tpch"]
+```
+
+`name` is only a display label. `prepare` is required and `cleanup` is optional.
+The runner executes only declared phases: `prepare` before all selected handlers
+and `cleanup`, when present, after them in reverse suite order. It does not
+assume that the commands use nox; any executable argv is valid. If preparation
+fails, cleanup is attempted for hooks that declare it, including the failing
+hook, which may have partially prepared resources. Cleanup is also attempted
+when SQL tests fail.
+
+Business-specific preparation for the built-in TPCH, TPCDS, Stage, native UDF,
+and Dictionaries suites is implemented under `tests/nox/sqllogic/` and requires
+`nox==2025.5.1`. SQL hooks use the pinned Databend Python driver rather
+than the `bendsql` CLI; TPCH and TPCDS data generation uses the pinned DuckDB
+Python package. Generated CSV data is cached under `tests/nox/cache/` and reused
+when every expected table CSV exists and is non-empty; otherwise it is rebuilt.
+The Dictionaries suite is a top-level suite and can be selected with
+`--run_suite dictionaries`.
 
 ### Parallel
 If you want to run test files in parallel, please add the following args:

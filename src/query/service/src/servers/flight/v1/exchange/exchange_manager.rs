@@ -466,10 +466,16 @@ impl DataExchangeManager {
 
                 if let Some(query_info) = query_info.as_mut() {
                     let query_id = env.query_id.clone();
+                    // The coordinator sends INIT_QUERY_FRAGMENTS to nodes one by one and each
+                    // node may run heavy work (e.g. lazy block pruning of a large DELETE) before
+                    // START_PREPARED_QUERY is sent, so this timeout must be tunable per query.
+                    let leak_timeout =
+                        Duration::from_secs(settings.get_flight_query_leak_timeout_secs()?);
                     query_info.remove_leak_query_worker =
                         Some(GlobalIORuntime::instance().spawn(async move {
-                            let _ = tokio::time::sleep(Duration::from_secs(180)).await;
-                            DataExchangeManager::instance().remove_if_leak_query(query_id);
+                            let _ = tokio::time::sleep(leak_timeout).await;
+                            DataExchangeManager::instance()
+                                .remove_if_leak_query(query_id, leak_timeout);
                         }));
                 }
 
@@ -505,7 +511,7 @@ impl DataExchangeManager {
         Ok(())
     }
 
-    fn remove_if_leak_query(&self, query_id: String) {
+    fn remove_if_leak_query(&self, query_id: String, leak_timeout: Duration) {
         let leak_query_id = {
             let queries_coordinator_guard = self.queries_coordinator.lock();
             let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -523,17 +529,13 @@ impl DataExchangeManager {
         };
 
         if let Some(query_id) = leak_query_id {
-            warn!(
-                "Query {} cannot start command while in 180 seconds",
-                query_id
+            let message = format!(
+                "Query {} cannot start command while in {} seconds (flight_query_leak_timeout_secs)",
+                query_id,
+                leak_timeout.as_secs()
             );
-            self.on_finished_query(
-                &query_id,
-                Some(ErrorCode::Internal(format!(
-                    "Query {} cannot start command while in 180 seconds",
-                    query_id
-                ))),
-            );
+            warn!("{}", message);
+            self.on_finished_query(&query_id, Some(ErrorCode::Internal(message)));
         }
     }
 

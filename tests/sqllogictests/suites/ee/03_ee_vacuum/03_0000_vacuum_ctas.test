@@ -12,7 +12,8 @@
 ## See the License for the specific language governing permissions and
 ## limitations under the License.
 
-# test orphan data created by failed CTAS could be vacuumed
+# test orphan data created by CTAS is not vacuumed within the minimum retention period (1 day),
+# even if data_retention_time_in_days = 0, since the CTAS may still be running concurrently.
 statement ok
 drop database if exists ctas_test;
 
@@ -35,7 +36,7 @@ select count() from system.tables_with_history where database = 'ctas_test' and 
 ----
 0
 
-# verify the orphan files could be vacuumed
+# vacuum with retention 0 must not touch the CTAS staging data
 
 statement ok
 set data_retention_time_in_days = 0;
@@ -44,7 +45,7 @@ statement ok
 vacuum drop table from ctas_test;
 
 
-# the dropped table ctas_test.t should be vacuumed
+# there is still no visible table ctas_test.t
 query I
 select count() from system.tables_with_history where database = 'ctas_test' and name = 't';
 ----
@@ -55,15 +56,14 @@ statement ok
 create stage ctas_stage url='fs:///tmp/ctas/';
 
 
-# The data of the dropped table should be purged:
-# Listing the stage should return an empty result set,
-# except for the verification key '_v_d77aa11285c22e0e1d4593a035c98c0d',
-# which is 1 byte in size.
+# The data of the CTAS staging table should be kept:
+# besides the verification key '_v_d77aa11285c22e0e1d4593a035c98c0d',
+# the data files written by the CTAS are still there.
 
-query TI
-SELECT name, size FROM LIST_STAGE(location => '@ctas_stage')
+query B
+SELECT count() > 1 FROM LIST_STAGE(location => '@ctas_stage')
 ----
-_v_d77aa11285c22e0e1d4593a035c98c0d 1
+1
 
 statement ok
 drop database ctas_test;

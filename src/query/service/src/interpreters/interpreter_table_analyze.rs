@@ -30,17 +30,15 @@ use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::AnalyzeHistogramInfo;
+use databend_common_storages_fuse::operations::AnalyzeOptions;
 use databend_common_storages_fuse::operations::HistogramInfoSink;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
-use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_ALGORITHM;
 use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_HISTOGRAM_KLL_RELATIVE_ERROR;
 use log::info;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::common::table_option_validation::analyze_count_min_sketch_error_rate_from_options;
-use crate::interpreters::common::table_option_validation::analyze_top_n_size_from_options;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuildResult;
@@ -203,12 +201,7 @@ impl Interpreter for AnalyzeTableInterpreter {
             let collect_histogram = plan.histogram_requested
                 || has_table_histogram_policy(table_options)
                 || self.ctx.get_settings().get_enable_analyze_histogram()?;
-            let top_n_size = analyze_top_n_size_from_options(table_options)?;
-            let count_min_sketch_error_rate =
-                analyze_count_min_sketch_error_rate_from_options(table_options)?;
-            let frequency_columns = table_options
-                .get(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS)
-                .cloned();
+            let mut options = AnalyzeOptions::from_table_options(table_options)?;
             if collect_histogram {
                 if self.plan.no_scan {
                     return Err(ErrorCode::BadArguments(
@@ -291,26 +284,20 @@ impl Interpreter for AnalyzeTableInterpreter {
                     }
                 }
             }
-            if self.plan.no_scan
-                && (top_n_size.is_some() || count_min_sketch_error_rate.is_some())
-                && frequency_columns
-                    .as_ref()
-                    .is_some_and(|columns| !columns.trim().is_empty())
-            {
-                return Err(ErrorCode::BadArguments(
-                    "ANALYZE TABLE NOSCAN cannot be used with frequency statistics collection because frequency statistics collection must scan table data",
-                ));
+            if self.plan.no_scan {
+                if options.frequency.is_some() {
+                    return Err(ErrorCode::BadArguments(
+                        "ANALYZE TABLE NOSCAN cannot be used with frequency statistics collection because frequency statistics collection must scan table data",
+                    ));
+                }
+                options = options.no_scan();
             }
+            options = options.with_histogram(histogram_info);
             table.do_analyze(
                 self.ctx.clone(),
                 snapshot,
                 &mut build_res.main_pipeline,
-                histogram_info,
-                top_n_size,
-                frequency_columns,
-                count_min_sketch_error_rate,
-                self.plan.no_scan,
-                true,
+                options,
             )?;
             Ok(build_res)
         })

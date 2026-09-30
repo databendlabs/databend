@@ -1283,13 +1283,10 @@ impl Table for FuseTable {
         _ctx: Arc<dyn TableContext>,
     ) -> Result<Box<dyn ColumnStatisticsProvider>> {
         let provider = if let Some(snapshot) = self.read_table_snapshot().await? {
-            let mut stats = snapshot.summary.col_stats.clone();
-            // add virtual column stats
-            if let Some(virtual_col_stats) = &snapshot.summary.virtual_col_stats {
-                for (col_id, stat) in virtual_col_stats {
-                    stats.insert(*col_id, stat.clone());
-                }
-            }
+            // Snapshot-level virtual column statistics are ignored: current persisted ids are
+            // segment-local and can collide with table column ids here. Even older persisted
+            // ids cannot be reliably matched to paths using query-time virtual column ids.
+            let stats = snapshot.summary.col_stats.clone();
             let table_statistics = self.read_table_snapshot_statistics(Some(&snapshot)).await?;
             let additional_stats_meta = snapshot.summary.additional_stats_meta.as_ref();
             let column_distinct_values = match additional_stats_meta.and_then(|v| v.hll.as_ref()) {

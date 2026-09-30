@@ -49,6 +49,7 @@ fn test_decode_v182_schema() -> anyhow::Result<()> {
                     TableDataType::Boolean,
                 ],
             }),
+            state_version: 0,
         };
         TableSchema::new(vec![TableField::new("sum_state", state_type)])
     };
@@ -77,6 +78,7 @@ fn test_decode_v182_schema_with_parameter() -> anyhow::Result<()> {
             ))],
             argument_types: vec![TableDataType::Number(NumberDataType::UInt64)],
             state_type: Box::new(TableDataType::Binary),
+            state_version: 0,
         };
         TableSchema::new(vec![TableField::new("state", state_type)])
     };
@@ -132,6 +134,7 @@ fn test_aggregate_state_all_parameter_types_roundtrip() -> anyhow::Result<()> {
         params,
         argument_types: vec![TableDataType::Number(NumberDataType::UInt64)],
         state_type: Box::new(TableDataType::Binary),
+        state_version: 7,
     };
     let schema = TableSchema::new(vec![TableField::new("state", state_type)]);
 
