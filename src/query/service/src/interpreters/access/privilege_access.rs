@@ -1960,6 +1960,30 @@ impl AccessChecker for PrivilegeAccess {
                 if !plan.options.contains_key(OPT_KEY_TEMP_PREFIX) {
                     self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Create, false).await?;
                 }
+                if let Some(clone) = &plan.clone {
+                    // CLONE reads source snapshots directly rather than through as_select.
+                    // Anchor authorization to the captured source ID, not the destination.
+                    let source = &clone.table_info;
+                    // `database_id` in TableMeta is the storage prefix, not necessarily the
+                    // current database after a cross-database RENAME TABLE.
+                    let db_id = clone.source_database_id;
+                    let privilege = UserPrivilegeType::Select;
+                    match self.validate_access(
+                        &GrantObject::TableById(source.catalog().to_string(), db_id, source.ident.table_id),
+                        privilege, false, false,
+                    ).await {
+                        Ok(()) => {}
+                        Err(err) if err.code() == ErrorCode::PERMISSION_DENIED => {
+                            // Use the name resolved by the binder, not the physical storage db
+                            // or TableInfo.desc (database names may contain dots).
+                            self.validate_access(
+                                &GrantObject::Table(source.catalog().to_string(), clone.source_database.clone(), source.name.clone()),
+                                privilege, false, false,
+                            ).await?;
+                        }
+                        Err(err) => return Err(err),
+                    }
+                }
                 if let Some(query) = &plan.as_select {
                     self.check(ctx, query).await?;
                 }

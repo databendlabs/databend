@@ -27,6 +27,7 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -370,7 +371,7 @@ async fn build_update_temp_table_req(
     insert_top_n: &BlockTopN,
 ) -> Result<PreparedTableCommit<UpdateTempTableReq>> {
     let table_info = table.get_table_info();
-    let prepared = write_new_snapshot_and_build_table_meta(
+    let (prepared, _) = write_new_snapshot_and_build_table_meta(
         table,
         snapshot_generator,
         txn_mgr,
@@ -403,7 +404,7 @@ async fn build_update_table_meta_req(
     insert_top_n: &BlockTopN,
 ) -> Result<PreparedTableCommit<UpdateTableMetaReq>> {
     let fuse_table = FuseTable::try_from_table(table)?;
-    let prepared = write_new_snapshot_and_build_table_meta(
+    let (prepared, lvt_check) = write_new_snapshot_and_build_table_meta(
         table,
         snapshot_generator,
         txn_mgr,
@@ -421,7 +422,7 @@ async fn build_update_table_meta_req(
         seq: MatchSeq::Exact(table_version),
         new_table_meta: prepared.update,
         base_snapshot_location: fuse_table.snapshot_loc(),
-        lvt_check: None,
+        lvt_check,
     };
     Ok(PreparedTableCommit {
         update: req,
@@ -438,7 +439,7 @@ async fn write_new_snapshot_and_build_table_meta(
     insert_hll: &BlockHLL,
     insert_rows: u64,
     insert_top_n: &BlockTopN,
-) -> Result<PreparedTableCommit<TableMeta>> {
+) -> Result<(PreparedTableCommit<TableMeta>, Option<TableLvtCheck>)> {
     let fuse_table = FuseTable::try_from_table(table)?;
     let previous = fuse_table.read_table_snapshot().await?;
     // Match single-table commits: transaction commits may collapse intermediate snapshot
@@ -464,6 +465,7 @@ async fn write_new_snapshot_and_build_table_meta(
         table_meta_timestamps,
         table_stats_gen,
     )?;
+    let lvt_check = FuseTable::build_table_lvt_check(table_info, snapshot.timestamp)?;
     stamp_table_statistics_with_snapshot_predecessor(&mut table_statistics, &snapshot);
     snapshot.ensure_segments_unique()?;
     let imperfect_count = snapshot.summary.block_count - snapshot.summary.perfect_block_count;
@@ -481,11 +483,18 @@ async fn write_new_snapshot_and_build_table_meta(
             .await?;
     }
 
-    Ok(PreparedTableCommit {
-        update: FuseTable::build_new_table_meta(&fuse_table.table_info.meta, &location, &snapshot),
-        imperfect_count,
-        logical_delta,
-    })
+    Ok((
+        PreparedTableCommit {
+            update: FuseTable::build_new_table_meta(
+                &fuse_table.table_info.meta,
+                &location,
+                &snapshot,
+            ),
+            imperfect_count,
+            logical_delta,
+        },
+        lvt_check,
+    ))
 }
 
 #[cfg(test)]

@@ -301,6 +301,13 @@ impl TestFixture {
         self.default_session.clone()
     }
 
+    pub fn enable_experimental_clone_table(&self) -> Result<()> {
+        self.default_session.get_settings().set_setting(
+            "enable_experimental_clone_table".to_string(),
+            "1".to_string(),
+        )
+    }
+
     /// returns new QueryContext of default session
     pub async fn new_query_ctx(&self) -> Result<Arc<QueryContext>> {
         self.default_session.create_query_context(&BUILD_INFO).await
@@ -396,6 +403,7 @@ impl TestFixture {
             ttl: None,
             table_indexes: None,
             table_constraints: None,
+            clone: None,
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,
@@ -426,6 +434,7 @@ impl TestFixture {
             ttl: None,
             table_indexes: None,
             table_constraints: None,
+            clone: None,
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,
@@ -472,6 +481,7 @@ impl TestFixture {
             ttl: None,
             table_indexes: None,
             table_constraints: None,
+            clone: None,
             attached_columns: None,
             table_partition: None,
         }
@@ -513,6 +523,7 @@ impl TestFixture {
             ttl: None,
             table_indexes: None,
             table_constraints: None,
+            clone: None,
             attached_columns: None,
             table_properties: Default::default(),
         }
@@ -562,6 +573,7 @@ impl TestFixture {
             ttl: None,
             table_indexes: None,
             table_constraints: None,
+            clone: None,
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,
