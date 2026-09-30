@@ -37,6 +37,7 @@ pub use row_shuffle_reader_transform::RowShuffleReaderTransform;
 pub use transform_aggregate_expand::TransformExpandGroupingSets;
 pub use transform_aggregate_final::TransformFinalAggregate;
 pub use transform_aggregate_partial::TransformPartialAggregate;
+pub use transform_aggregate_partial::parse_partial_aggregate_mode;
 pub use transform_single_key::FinalSingleStateAggregator;
 pub use transform_single_key::PartialSingleStateAggregator;
 

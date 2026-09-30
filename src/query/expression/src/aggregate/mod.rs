@@ -19,6 +19,7 @@ mod aggregate_meta;
 mod group_hash;
 mod hash_index;
 mod hash_index_adapter;
+mod partial_controller;
 mod partitioned_payload;
 mod payload;
 mod payload_flush;
@@ -35,6 +36,7 @@ pub use aggregate_function_state::*;
 pub use aggregate_hashtable::*;
 pub use aggregate_meta::*;
 pub use group_hash::*;
+pub use partial_controller::*;
 pub use partitioned_payload::*;
 pub use payload::*;
 pub use payload_flush::*;
@@ -77,6 +79,9 @@ pub struct HashTableConfig {
     pub block_fill_factor: f64,
     pub partial_agg: bool,
     pub max_partial_capacity: usize,
+    // Adaptive partial aggregation: the caller drives how rows are handled and how the index
+    // grows. When false, the legacy bounded-capacity clear-on-full behavior applies.
+    pub partial_adaptive: bool,
 }
 
 impl Default for HashTableConfig {
@@ -90,6 +95,7 @@ impl Default for HashTableConfig {
             block_fill_factor: 1.8,
             partial_agg: false,
             max_partial_capacity: 131072,
+            partial_adaptive: false,
         }
     }
 }
@@ -116,6 +122,13 @@ impl HashTableConfig {
             max_partial_capacity: capacity,
             ..Default::default()
         }
+    }
+
+    /// Switch a partial aggregate config to adaptive mode.
+    pub fn with_partial_adaptive(mut self) -> Self {
+        debug_assert!(self.partial_agg);
+        self.partial_adaptive = true;
+        self
     }
 
     pub fn with_initial_radix_bits(mut self, initial_radix_bits: u64) -> Self {

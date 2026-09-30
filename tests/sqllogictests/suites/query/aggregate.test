@@ -1,3 +1,5 @@
+# run-with-settings: partial_aggregate_mode=bypass
+
 # # non-grouping column error
 statement error must appear in the GROUP BY clause or be used in an aggregate function
 select number from numbers(10) group by number+1
