@@ -14,11 +14,7 @@
 
 use std::collections::HashMap;
 use std::collections::VecDeque;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
 use std::time::Instant;
 
 use databend_common_base::runtime::GlobalIORuntime;
@@ -38,7 +34,6 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::column_oriented_segment::VirtualBlockInput;
-use futures::Stream;
 use futures::StreamExt;
 use log::info;
 use opendal::Operator;
@@ -47,6 +42,7 @@ use tokio::sync::SemaphorePermit;
 use tokio::task::JoinHandle;
 
 use crate::TableContext;
+use crate::io::AbortOnDrop;
 use crate::io::CachedMetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -56,6 +52,7 @@ use crate::operations::CompactOptions;
 use crate::statistics::reducers::generate_virtual_column_statistics;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::same_partition;
+use crate::statistics::sort_by_cluster_stats;
 
 // A segment taking part in compaction: base snapshot index, summary, location.
 type SegmentEntry = (usize, Arc<CompactSegmentInfo>, Location);
@@ -159,15 +156,10 @@ impl SegmentCompactMutator {
     }
 }
 
-// Segments compactor that preserves the order of ingestion.
-//
-// Since the order of segments( and the order of blocks as well) should be preserved,
-// if only segments of size "threshold" are allowed to be generated during compaction,
-// there might be cases that to compact one fragmented segment, a large amount of
-// non-fragmented segments have to be split into pieces and re-compacted.
-//
-// To avoid this "ripple effects", consecutive segments are allowed to be compacted into
-// a new segment, if the size of compacted segment is lesser than 2 * threshold (exclusive).
+// Metadata-only compaction preserves ingestion order for unclustered tables;
+// clustered tables retain the original chunk-local cluster-stat ordering.
+// Allow merged segments below 2 * threshold instead of splitting existing
+// segments just to reach threshold, avoiding cascading rewrites.
 
 pub struct SegmentCompactor<'a> {
     // Size of compacted segment should be in range R == [threshold, 2 * threshold)
@@ -182,9 +174,6 @@ pub struct SegmentCompactor<'a> {
     accumulated_num_blocks: u64,
     // number of segments planned so far, for progress reporting
     num_planned: usize,
-    // Storage requests in flight for this compaction: segment and stats reads
-    // plus merge output writes.
-    max_io_requests: usize,
     // Schema used to decode the segments being compacted.
     schema: TableSchemaRef,
     // Runs planned merge groups concurrently and cleans up on failure.
@@ -221,7 +210,6 @@ impl<'a> SegmentCompactor<'a> {
             accumulated_num_blocks: 0,
             num_planned: 0,
             fragmented_segments: vec![],
-            max_io_requests,
             schema,
             merge_tasks,
             operator,
@@ -246,18 +234,9 @@ impl<'a> SegmentCompactor<'a> {
         let selected = limit
             .map(|n| n.max(2).min(segments.len()))
             .unwrap_or(segments.len());
-        let mut reads = read_segments_oldest_first(
-            self.operator.clone(),
-            self.schema.clone(),
-            self.merge_tasks.io_permits.clone(),
-            self.max_io_requests,
-            &segments[..selected],
-        );
         let result = self
-            .plan_and_merge(&mut reads, selected, &status_callback)
+            .plan_and_merge(&segments[..selected], &status_callback)
             .await;
-        // Abort outstanding reads before cleaning up merge outputs.
-        drop(reads);
         if let Err(err) = result {
             log::warn!(
                 "compact segment failed: selected:{selected}, processed:{}, merged_groups:{}, error:{err}",
@@ -275,30 +254,58 @@ impl<'a> SegmentCompactor<'a> {
         Ok(self.compacted_state)
     }
 
-    // Plan merge groups in snapshot order while earlier groups merge
-    // concurrently, then wait for the rest and apply them in plan order.
+    // Plan in chunks of max_threads * 4, retaining the original chunk-local
+    // cluster-stat ordering when configured. Fragments may span chunks; merge
+    // groups execute concurrently and their results are applied in plan order.
     #[async_backtrace::framed]
-    async fn plan_and_merge<S, T>(
+    async fn plan_and_merge<T>(
         &mut self,
-        reads: &mut S,
-        selected: usize,
+        segments: &[Location],
         status_callback: &T,
     ) -> Result<()>
     where
-        S: Stream<Item = Result<SegmentEntry>> + Unpin,
         T: Fn(String),
     {
-        while let Some(result) = reads.next().await {
-            let (idx, segment, location) = result?;
-            self.add(idx, segment, location).await?;
-            self.num_planned += 1;
-            if self.num_planned.is_multiple_of(self.max_io_requests) || self.num_planned == selected
-            {
-                status_callback(format!(
-                    "compact segment: processed segments:{}/{selected}",
-                    self.num_planned
-                ));
+        let selected = segments.len();
+        let chunk_size = self.merge_tasks.capacity * 4;
+        let key_id = self
+            .cluster_key_info
+            .as_ref()
+            .map(|key| key.cluster_key_id());
+        let mut chunk_end = selected;
+        for locations in segments.rchunks(chunk_size) {
+            let chunk_start = chunk_end - locations.len();
+            chunk_end = chunk_start;
+            let mut chunk = SegmentsIO::read_segments_with_semaphore::<Arc<CompactSegmentInfo>>(
+                self.operator.clone(),
+                self.schema.clone(),
+                locations,
+                false,
+                self.merge_tasks.io_permits.clone(),
+            )
+            .await?
+            .into_iter()
+            .enumerate()
+            .rev()
+            .map(|(idx, segment)| segment.map(|segment| (chunk_start + idx, segment)))
+            .collect::<Result<Vec<_>>>()?;
+            if let Some(key_id) = key_id {
+                chunk.sort_by(|a, b| {
+                    sort_by_cluster_stats(
+                        a.1.summary.cluster_stats.as_ref(),
+                        b.1.summary.cluster_stats.as_ref(),
+                        key_id,
+                    )
+                });
             }
+            for (idx, segment) in chunk {
+                self.add(idx, segment, &segments[idx]).await?;
+                self.num_planned += 1;
+            }
+            status_callback(format!(
+                "compact segment: processed segments:{}/{selected}",
+                self.num_planned
+            ));
         }
         self.compact_fragments().await?;
         while let Some(result) = self.merge_tasks.next().await? {
@@ -314,7 +321,7 @@ impl<'a> SegmentCompactor<'a> {
         &mut self,
         segment_idx: usize,
         segment_info: Arc<CompactSegmentInfo>,
-        location: Location,
+        location: &Location,
     ) -> Result<()> {
         let num_blocks_current_segment = segment_info.summary.block_count;
 
@@ -345,27 +352,20 @@ impl<'a> SegmentCompactor<'a> {
             self.compact_fragments().await?;
         }
 
-        let s = self.accumulated_num_blocks + num_blocks_current_segment;
-
-        if s < self.threshold {
-            // not enough blocks yet, just keep this segment for later compaction
-            self.accumulated_num_blocks = s;
-            self.fragmented_segments
-                .push((segment_idx, segment_info, location));
-        } else if s >= self.threshold && s < 2 * self.threshold {
-            // compact the fragmented segments
-            self.fragmented_segments
-                .push((segment_idx, segment_info, location));
-            self.compact_fragments().await?;
-        } else {
-            // JackTan25: I think this won't happen, right? so need to remove this branch??
-            // no choice but to compact the fragmented segments collected so far.
-            // in this situation, after compaction, the size of compacted segments may be
-            // lesser than threshold. this happens if the size of segment BEFORE compaction
-            // is already larger than threshold.
-            self.compact_fragments().await?;
+        let total_blocks = self.accumulated_num_blocks + num_blocks_current_segment;
+        if total_blocks >= 2 * self.threshold {
+            // Adding this segment would exceed the target range. Flush the
+            // pending fragments and leave this segment unchanged.
+            return self.compact_fragments().await;
         }
 
+        self.fragmented_segments
+            .push((segment_idx, segment_info, location.clone()));
+        if total_blocks < self.threshold {
+            self.accumulated_num_blocks = total_blocks;
+        } else {
+            self.compact_fragments().await?;
+        }
         Ok(())
     }
 
@@ -407,26 +407,6 @@ impl<'a> SegmentCompactor<'a> {
             .removed_segment_indexes
             .extend(result.indexes.into_iter().filter(|idx| *idx != replace_idx));
         self.compacted_state.new_segment_paths.push(result.location);
-    }
-}
-
-// Dropping a JoinHandle detaches its task. Wrap compaction's segment reads,
-// merge groups and HLL reads so failure or cancellation aborts them.
-struct AbortOnDrop<T>(JoinHandle<T>);
-
-impl<T> Drop for AbortOnDrop<T> {
-    fn drop(&mut self) {
-        self.0.abort();
-    }
-}
-
-impl<T> Future for AbortOnDrop<T> {
-    type Output = Result<T>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        Pin::new(&mut self.0)
-            .poll(cx)
-            .map_err(|e| ErrorCode::Internal(format!("compact segment task failed: {e}")))
     }
 }
 
@@ -745,31 +725,4 @@ async fn read_merged_stats(
         block_top_ns.extend(stats.block_top_ns.iter().cloned());
     }
     Ok(SegmentStatistics::new(block_hlls, block_top_ns))
-}
-
-// Read `segments` (snapshot order) oldest first. Reads are spawned tasks, so
-// they keep running while the planner waits for a merge slot; the window is
-// twice the IO limit so one slow GET at the head does not leave storage idle.
-fn read_segments_oldest_first(
-    operator: Operator,
-    schema: TableSchemaRef,
-    io_permits: Arc<Semaphore>,
-    max_io_requests: usize,
-    segments: &[Location],
-) -> impl Stream<Item = Result<SegmentEntry>> + Unpin + '_ {
-    let runtime = GlobalIORuntime::instance();
-    futures::stream::iter(segments.iter().cloned().enumerate().rev())
-        .map(move |(idx, location)| {
-            let dal = operator.clone();
-            let schema = schema.clone();
-            let permits = io_permits.clone();
-            AbortOnDrop(runtime.spawn(async move {
-                let _permit = acquire_io(&permits).await?;
-                let segment =
-                    SegmentsIO::read_compact_segment(dal, location.clone(), schema, false).await?;
-                Ok::<_, ErrorCode>((idx, segment, location))
-            }))
-        })
-        .buffered(max_io_requests * 2)
-        .map(|result| result.and_then(|inner| inner))
 }

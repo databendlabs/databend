@@ -1511,8 +1511,8 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
             })
             .await?;
 
-        // A cluster key must not reorder the original blocks, even when a
-        // limit selects only part of the snapshot.
+        // Chunk-local cluster sorting may reorder blocks. Compaction must
+        // still preserve every original block exactly once and all statistics.
         let mut input_block_id = Vec::with_capacity(number_of_blocks);
         for segment in &segments {
             input_block_id.extend(segment.blocks.iter().map(|b| b.location.clone()));
@@ -1540,6 +1540,8 @@ async fn test_compact_segment_with_cluster() -> anyhow::Result<()> {
             output_block_id.extend(segment.blocks.iter().map(|b| b.location.clone()));
         }
 
+        input_block_id.sort();
+        output_block_id.sort();
         assert_eq!(input_block_id, output_block_id);
         assert_eq!(summary, statistics_of_segments);
     }
