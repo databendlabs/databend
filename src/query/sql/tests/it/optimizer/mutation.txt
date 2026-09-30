@@ -1,0 +1,1297 @@
+=== direct_update ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: UPDATE target SET v = v + 1 WHERE k > 10
+requested_distributed: false
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched update: [condition: None,update set v = plus(target.v (#1), 1)]
+└── Filter
+    ├── filters: [gt(target.k (#0), 10)]
+    └── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "k", default_expr: None, data_type: Number(Int64), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "v", default_expr: None, data_type: Number(Int64), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Update, secure_predicates: [], user_predicates: [], predicate_column_index: None, read_partition_columns: {} })
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched update: [condition: None,update set v = plus(target.v (#1), 1)]
+└── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "k", default_expr: None, data_type: Number(Int64), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "v", default_expr: None, data_type: Number(Int64), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Update, secure_predicates: [], user_predicates: [FunctionCall(FunctionCall { span: None, func_name: "gt", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(34..35), column: ColumnBinding { database_name: Some("default"), table_name: Some("target"), column_position: Some(1), table_index: Some(0), column_name: "k", column_name_lower: None, index: 0, data_type: Number(Int64), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: None, value: Number(10_i64) })] })], predicate_column_index: Some(2), read_partition_columns: {0} })
+
+mutation_state: strategy=Direct, distributed=false, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=Some(2), direct_filter_count=1, matched_update_count=1
+
+=== direct_update_false ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: UPDATE target SET v = v + 1 WHERE false
+requested_distributed: false
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched update: [condition: None,update set v = plus(target.v (#1), 1)]
+└── Filter
+    ├── filters: [false]
+    └── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "k", default_expr: None, data_type: Number(Int64), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "v", default_expr: None, data_type: Number(Int64), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Update, secure_predicates: [], user_predicates: [], predicate_column_index: None, read_partition_columns: {} })
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched update: [condition: None,update set v = plus(target.v (#1), 1)]
+└── EmptyResultScan
+
+mutation_state: strategy=Direct, distributed=false, row_id_shuffle=true, no_effect=true, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=1
+
+=== direct_delete_filter ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: DELETE FROM target WHERE k > 10
+requested_distributed: false
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── Filter
+    ├── filters: [gt(target.k (#0), 10)]
+    └── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "k", default_expr: None, data_type: Number(Int64), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "v", default_expr: None, data_type: Number(Int64), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Delete, secure_predicates: [], user_predicates: [], predicate_column_index: None, read_partition_columns: {} })
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "k", default_expr: None, data_type: Number(Int64), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "v", default_expr: None, data_type: Number(Int64), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Delete, secure_predicates: [], user_predicates: [FunctionCall(FunctionCall { span: None, func_name: "gt", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(25..26), column: ColumnBinding { database_name: Some("default"), table_name: Some("target"), column_position: Some(1), table_index: Some(0), column_name: "k", column_name_lower: None, index: 0, data_type: Number(Int64), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: None, value: Number(10_i64) })] })], predicate_column_index: None, read_partition_columns: {0} })
+
+mutation_state: strategy=Direct, distributed=false, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=1, matched_update_count=0
+
+=== direct_delete_all ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: DELETE FROM target
+requested_distributed: false
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "k", default_expr: None, data_type: Number(Int64), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "v", default_expr: None, data_type: Number(Int64), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Delete, secure_predicates: [], user_predicates: [], predicate_column_index: None, read_partition_columns: {} })
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "k", default_expr: None, data_type: Number(Int64), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "v", default_expr: None, data_type: Number(Int64), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Delete, secure_predicates: [], user_predicates: [], predicate_column_index: None, read_partition_columns: {} })
+
+mutation_state: strategy=Direct, distributed=false, row_id_shuffle=true, no_effect=false, truncate=true, predicate_column=None, direct_filter_count=0, matched_update_count=0
+
+=== direct_delete_true ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: DELETE FROM target WHERE true
+requested_distributed: false
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── Filter
+    ├── filters: [true]
+    └── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "k", default_expr: None, data_type: Number(Int64), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "v", default_expr: None, data_type: Number(Int64), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Delete, secure_predicates: [], user_predicates: [], predicate_column_index: None, read_partition_columns: {} })
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "k", default_expr: None, data_type: Number(Int64), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "v", default_expr: None, data_type: Number(Int64), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Delete, secure_predicates: [], user_predicates: [], predicate_column_index: None, read_partition_columns: {} })
+
+mutation_state: strategy=Direct, distributed=false, row_id_shuffle=true, no_effect=false, truncate=true, predicate_column=None, direct_filter_count=0, matched_update_count=0
+
+=== direct_delete_false ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: DELETE FROM target WHERE false
+requested_distributed: false
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── Filter
+    ├── filters: [false]
+    └── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "k", default_expr: None, data_type: Number(Int64), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "v", default_expr: None, data_type: Number(Int64), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Delete, secure_predicates: [], user_predicates: [], predicate_column_index: None, read_partition_columns: {} })
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── EmptyResultScan
+
+mutation_state: strategy=Direct, distributed=false, row_id_shuffle=true, no_effect=true, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=0
+
+=== subquery_update ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: UPDATE target SET v = v + 1 WHERE k IN (SELECT k FROM source)
+requested_distributed: false
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched update: [condition: None,update set v = plus(target.v (#1), 1)]
+└── Filter
+    ├── filters: [marker (#5)]
+    └── Join(RightMark)
+        ├── build keys: [source.k (#2)]
+        ├── probe keys: [target.k (#0)]
+        ├── other filters: []
+        ├── EvalScalar
+        │   ├── scalars: [source.k (#2) AS (#2)]
+        │   └── Scan
+        │       ├── table: default.source (#1)
+        │       ├── filters: []
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Scan
+            ├── table: default.target (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched update: [condition: None,update set v = plus(target.v (#1), 1)]
+└── Join(LeftSemi)
+    ├── build keys: [source.k (#2)]
+    ├── probe keys: [target.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.source (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.target (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+mutation_state: strategy=MatchedOnly, distributed=false, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=1
+
+=== subquery_delete ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: DELETE FROM target WHERE k IN (SELECT k FROM source)
+requested_distributed: false
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── Filter
+    ├── filters: [marker (#5)]
+    └── Join(RightMark)
+        ├── build keys: [source.k (#2)]
+        ├── probe keys: [target.k (#0)]
+        ├── other filters: []
+        ├── EvalScalar
+        │   ├── scalars: [source.k (#2) AS (#2)]
+        │   └── Scan
+        │       ├── table: default.source (#1)
+        │       ├── filters: []
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Scan
+            ├── table: default.target (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── Join(LeftSemi)
+    ├── build keys: [source.k (#2)]
+    ├── probe keys: [target.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.source (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.target (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+mutation_state: strategy=MatchedOnly, distributed=false, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=0
+
+=== matched_merge ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: MERGE INTO target t USING source s ON t.k = s.k WHEN MATCHED THEN UPDATE SET v = s.v
+requested_distributed: false
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set v = source.v (#1)]
+└── Join(Inner)
+    ├── build keys: [source.k (#0)]
+    ├── probe keys: [target.k (#2)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.source (#0)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.target (#1)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set v = source.v (#1)]
+└── Join(Inner)
+    ├── build keys: [source.k (#0)]
+    ├── probe keys: [target.k (#2)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.source (#0)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.target (#1)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+mutation_state: strategy=MatchedOnly, distributed=false, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=1
+
+=== insert_only_merge ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: MERGE INTO target t USING source s ON t.k = s.k WHEN NOT MATCHED THEN INSERT (k, v) VALUES (s.k, s.v)
+requested_distributed: false
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(source.k (#0) AS Int64),CAST(source.v (#1) AS Int64))]
+└── Join(RightAnti)
+    ├── build keys: [source.k (#0)]
+    ├── probe keys: [target.k (#2)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.source (#0)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.target (#1)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(source.k (#0) AS Int64),CAST(source.v (#1) AS Int64))]
+└── Join(LeftAnti)
+    ├── build keys: [target.k (#2)]
+    ├── probe keys: [source.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.target (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.source (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+mutation_state: strategy=NotMatchedOnly, distributed=false, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=0
+
+=== mixed_merge ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: MERGE INTO target t USING source s ON t.k = s.k WHEN MATCHED THEN UPDATE SET v = s.v WHEN NOT MATCHED THEN INSERT (k, v) VALUES (s.k, s.v)
+requested_distributed: false
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set v = source.v (#1)]
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(source.k (#0) AS Int64),CAST(source.v (#1) AS Int64))]
+└── Join(Right)
+    ├── build keys: [source.k (#0)]
+    ├── probe keys: [target.k (#2)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.source (#0)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.target (#1)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set v = source.v (#1)]
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(source.k (#0) AS Int64),CAST(source.v (#1) AS Int64))]
+└── Join(Left)
+    ├── build keys: [target.k (#2)]
+    ├── probe keys: [source.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.target (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.source (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+mutation_state: strategy=MixedMatched, distributed=false, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=1
+
+=== aggregate_source_local_retry ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: MERGE INTO target t USING (SELECT max(k) AS k, max(v) AS v FROM source) s ON t.k = s.k WHEN MATCHED THEN UPDATE SET v = s.v WHEN NOT MATCHED THEN INSERT (k, v) VALUES (s.k, s.v)
+requested_distributed: false
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set v = max(v) (#3)]
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(max(k) (#2) AS Int64),CAST(max(v) (#3) AS Int64))]
+└── Join(Right)
+    ├── build keys: [max(k) (#2)]
+    ├── probe keys: [target.k (#4)]
+    ├── other filters: []
+    ├── EvalScalar
+    │   ├── scalars: [max(k) (#2) AS (#2), max(v) (#3) AS (#3)]
+    │   └── Aggregate(Initial)
+    │       ├── group items: []
+    │       ├── aggregate functions: [max(source.k (#0)) AS (#2), max(source.v (#1)) AS (#3)]
+    │       └── EvalScalar
+    │           ├── scalars: [source.k (#0) AS (#0), source.v (#1) AS (#1)]
+    │           └── Scan
+    │               ├── table: default.source (#0)
+    │               ├── filters: []
+    │               ├── order by: []
+    │               └── limit: NONE
+    └── Scan
+        ├── table: default.target (#1)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set v = max(v) (#3)]
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(max(k) (#2) AS Int64),CAST(max(v) (#3) AS Int64))]
+└── Join(Left)
+    ├── build keys: [target.k (#4)]
+    ├── probe keys: [max(k) (#2)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.target (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Aggregate(Final)
+        ├── group items: []
+        ├── aggregate functions: [max(source.k (#0)) AS (#2), max(source.v (#1)) AS (#3)]
+        └── Aggregate(Partial)
+            ├── group items: []
+            ├── aggregate functions: [max(source.k (#0)) AS (#2), max(source.v (#1)) AS (#3)]
+            └── Scan
+                ├── table: default.source (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+mutation_state: strategy=MixedMatched, distributed=false, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=1
+
+=== empty_target_local_retry ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: MERGE INTO target t USING (SELECT max(k) AS k, max(v) AS v FROM source) s ON t.k = s.k AND t.k > 10 AND t.k < 0 WHEN MATCHED THEN UPDATE SET v = s.v WHEN NOT MATCHED THEN INSERT (k, v) VALUES (s.k, s.v)
+requested_distributed: false
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set v = max(v) (#3)]
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(max(k) (#2) AS Int64),CAST(max(v) (#3) AS Int64))]
+└── Join(Right)
+    ├── build keys: [max(k) (#2)]
+    ├── probe keys: [target.k (#4)]
+    ├── other filters: []
+    ├── EvalScalar
+    │   ├── scalars: [max(k) (#2) AS (#2), max(v) (#3) AS (#3)]
+    │   └── Aggregate(Initial)
+    │       ├── group items: []
+    │       ├── aggregate functions: [max(source.k (#0)) AS (#2), max(source.v (#1)) AS (#3)]
+    │       └── EvalScalar
+    │           ├── scalars: [source.k (#0) AS (#0), source.v (#1) AS (#1)]
+    │           └── Scan
+    │               ├── table: default.source (#0)
+    │               ├── filters: []
+    │               ├── order by: []
+    │               └── limit: NONE
+    └── Filter
+        ├── filters: [gt(target.k (#4), 10), lt(target.k (#4), 0)]
+        └── Scan
+            ├── table: default.target (#1)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(max(k) (#2) AS Int64),CAST(max(v) (#3) AS Int64))]
+└── Join(Left)
+    ├── build keys: [target.k (#4)]
+    ├── probe keys: [max(k) (#2)]
+    ├── other filters: []
+    ├── EmptyResultScan
+    └── Aggregate(Final)
+        ├── group items: []
+        ├── aggregate functions: [max(source.k (#0)) AS (#2), max(source.v (#1)) AS (#3)]
+        └── Aggregate(Partial)
+            ├── group items: []
+            ├── aggregate functions: [max(source.k (#0)) AS (#2), max(source.v (#1)) AS (#3)]
+            └── Scan
+                ├── table: default.source (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+mutation_state: strategy=MixedMatched, distributed=false, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=0
+
+=== empty_target_merge ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: MERGE INTO target t USING source s ON t.k = s.k AND t.k > 10 AND t.k < 0 WHEN MATCHED THEN UPDATE SET v = s.v WHEN NOT MATCHED THEN INSERT (k, v) VALUES (s.k, s.v)
+requested_distributed: false
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set v = source.v (#1)]
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(source.k (#0) AS Int64),CAST(source.v (#1) AS Int64))]
+└── Join(Right)
+    ├── build keys: [source.k (#0)]
+    ├── probe keys: [target.k (#2)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.source (#0)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Filter
+        ├── filters: [gt(target.k (#2), 10), lt(target.k (#2), 0)]
+        └── Scan
+            ├── table: default.target (#1)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(source.k (#0) AS Int64),CAST(source.v (#1) AS Int64))]
+└── Join(Left)
+    ├── build keys: [target.k (#2)]
+    ├── probe keys: [source.k (#0)]
+    ├── other filters: []
+    ├── EmptyResultScan
+    └── Scan
+        ├── table: default.source (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+mutation_state: strategy=MixedMatched, distributed=false, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=0
+
+=== empty_source_merge ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: MERGE INTO target t USING (SELECT * FROM source WHERE false) s ON t.k = s.k WHEN MATCHED THEN UPDATE SET v = s.v WHEN NOT MATCHED THEN INSERT (k, v) VALUES (s.k, s.v)
+requested_distributed: false
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set v = source.v (#1)]
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(source.k (#0) AS Int64),CAST(source.v (#1) AS Int64))]
+└── Join(Right)
+    ├── build keys: [source.k (#0)]
+    ├── probe keys: [target.k (#2)]
+    ├── other filters: []
+    ├── EvalScalar
+    │   ├── scalars: [source.k (#0) AS (#0), source.v (#1) AS (#1)]
+    │   └── Filter
+    │       ├── filters: [false]
+    │       └── Scan
+    │           ├── table: default.source (#0)
+    │           ├── filters: []
+    │           ├── order by: []
+    │           └── limit: NONE
+    └── Scan
+        ├── table: default.target (#1)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set v = source.v (#1)]
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(source.k (#0) AS Int64),CAST(source.v (#1) AS Int64))]
+└── EmptyResultScan
+
+mutation_state: strategy=MixedMatched, distributed=false, row_id_shuffle=true, no_effect=true, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=1
+
+=== direct_update ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: UPDATE target SET v = v + 1 WHERE k > 10
+requested_distributed: true
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched update: [condition: None,update set v = plus(target.v (#1), 1)]
+└── Filter
+    ├── filters: [gt(target.k (#0), 10)]
+    └── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "k", default_expr: None, data_type: Number(Int64), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "v", default_expr: None, data_type: Number(Int64), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Update, secure_predicates: [], user_predicates: [], predicate_column_index: None, read_partition_columns: {} })
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: true
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched update: [condition: None,update set v = plus(target.v (#1), 1)]
+└── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "k", default_expr: None, data_type: Number(Int64), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "v", default_expr: None, data_type: Number(Int64), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Update, secure_predicates: [], user_predicates: [FunctionCall(FunctionCall { span: None, func_name: "gt", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(34..35), column: ColumnBinding { database_name: Some("default"), table_name: Some("target"), column_position: Some(1), table_index: Some(0), column_name: "k", column_name_lower: None, index: 0, data_type: Number(Int64), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: None, value: Number(10_i64) })] })], predicate_column_index: Some(2), read_partition_columns: {0} })
+
+mutation_state: strategy=Direct, distributed=true, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=Some(2), direct_filter_count=1, matched_update_count=1
+
+=== direct_update_false ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: UPDATE target SET v = v + 1 WHERE false
+requested_distributed: true
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched update: [condition: None,update set v = plus(target.v (#1), 1)]
+└── Filter
+    ├── filters: [false]
+    └── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "k", default_expr: None, data_type: Number(Int64), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "v", default_expr: None, data_type: Number(Int64), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Update, secure_predicates: [], user_predicates: [], predicate_column_index: None, read_partition_columns: {} })
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: true
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched update: [condition: None,update set v = plus(target.v (#1), 1)]
+└── EmptyResultScan
+
+mutation_state: strategy=Direct, distributed=true, row_id_shuffle=true, no_effect=true, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=1
+
+=== direct_delete_filter ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: DELETE FROM target WHERE k > 10
+requested_distributed: true
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── Filter
+    ├── filters: [gt(target.k (#0), 10)]
+    └── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "k", default_expr: None, data_type: Number(Int64), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "v", default_expr: None, data_type: Number(Int64), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Delete, secure_predicates: [], user_predicates: [], predicate_column_index: None, read_partition_columns: {} })
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: true
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "k", default_expr: None, data_type: Number(Int64), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "v", default_expr: None, data_type: Number(Int64), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Delete, secure_predicates: [], user_predicates: [FunctionCall(FunctionCall { span: None, func_name: "gt", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(25..26), column: ColumnBinding { database_name: Some("default"), table_name: Some("target"), column_position: Some(1), table_index: Some(0), column_name: "k", column_name_lower: None, index: 0, data_type: Number(Int64), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: None, value: Number(10_i64) })] })], predicate_column_index: None, read_partition_columns: {0} })
+
+mutation_state: strategy=Direct, distributed=true, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=1, matched_update_count=0
+
+=== direct_delete_all ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: DELETE FROM target
+requested_distributed: true
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "k", default_expr: None, data_type: Number(Int64), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "v", default_expr: None, data_type: Number(Int64), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Delete, secure_predicates: [], user_predicates: [], predicate_column_index: None, read_partition_columns: {} })
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: true
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "k", default_expr: None, data_type: Number(Int64), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "v", default_expr: None, data_type: Number(Int64), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Delete, secure_predicates: [], user_predicates: [], predicate_column_index: None, read_partition_columns: {} })
+
+mutation_state: strategy=Direct, distributed=true, row_id_shuffle=true, no_effect=false, truncate=true, predicate_column=None, direct_filter_count=0, matched_update_count=0
+
+=== direct_delete_true ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: DELETE FROM target WHERE true
+requested_distributed: true
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── Filter
+    ├── filters: [true]
+    └── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "k", default_expr: None, data_type: Number(Int64), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "v", default_expr: None, data_type: Number(Int64), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Delete, secure_predicates: [], user_predicates: [], predicate_column_index: None, read_partition_columns: {} })
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: true
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "k", default_expr: None, data_type: Number(Int64), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "v", default_expr: None, data_type: Number(Int64), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Delete, secure_predicates: [], user_predicates: [], predicate_column_index: None, read_partition_columns: {} })
+
+mutation_state: strategy=Direct, distributed=true, row_id_shuffle=true, no_effect=false, truncate=true, predicate_column=None, direct_filter_count=0, matched_update_count=0
+
+=== direct_delete_false ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: DELETE FROM target WHERE false
+requested_distributed: true
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── Filter
+    ├── filters: [false]
+    └── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "k", default_expr: None, data_type: Number(Int64), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "v", default_expr: None, data_type: Number(Int64), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Delete, secure_predicates: [], user_predicates: [], predicate_column_index: None, read_partition_columns: {} })
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: true
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── EmptyResultScan
+
+mutation_state: strategy=Direct, distributed=true, row_id_shuffle=true, no_effect=true, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=0
+
+=== subquery_update ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: UPDATE target SET v = v + 1 WHERE k IN (SELECT k FROM source)
+requested_distributed: true
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched update: [condition: None,update set v = plus(target.v (#1), 1)]
+└── Filter
+    ├── filters: [marker (#5)]
+    └── Join(RightMark)
+        ├── build keys: [source.k (#2)]
+        ├── probe keys: [target.k (#0)]
+        ├── other filters: []
+        ├── EvalScalar
+        │   ├── scalars: [source.k (#2) AS (#2)]
+        │   └── Scan
+        │       ├── table: default.source (#1)
+        │       ├── filters: []
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Scan
+            ├── table: default.target (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: true
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched update: [condition: None,update set v = plus(target.v (#1), 1)]
+└── Join(LeftSemi)
+    ├── build keys: [source.k (#2)]
+    ├── probe keys: [target.k (#0)]
+    ├── other filters: []
+    ├── Exchange(Broadcast)
+    │   └── Scan
+    │       ├── table: default.source (#1)
+    │       ├── filters: []
+    │       ├── order by: []
+    │       └── limit: NONE
+    └── Exchange(Hash)
+        ├── Exchange(Hash): keys: [target.k (#0)]
+        └── Scan
+            ├── table: default.target (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+mutation_state: strategy=MatchedOnly, distributed=true, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=1
+
+=== subquery_delete ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: DELETE FROM target WHERE k IN (SELECT k FROM source)
+requested_distributed: true
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── Filter
+    ├── filters: [marker (#5)]
+    └── Join(RightMark)
+        ├── build keys: [source.k (#2)]
+        ├── probe keys: [target.k (#0)]
+        ├── other filters: []
+        ├── EvalScalar
+        │   ├── scalars: [source.k (#2) AS (#2)]
+        │   └── Scan
+        │       ├── table: default.source (#1)
+        │       ├── filters: []
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Scan
+            ├── table: default.target (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: true
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── Join(LeftSemi)
+    ├── build keys: [source.k (#2)]
+    ├── probe keys: [target.k (#0)]
+    ├── other filters: []
+    ├── Exchange(Broadcast)
+    │   └── Scan
+    │       ├── table: default.source (#1)
+    │       ├── filters: []
+    │       ├── order by: []
+    │       └── limit: NONE
+    └── Exchange(Hash)
+        ├── Exchange(Hash): keys: [target.k (#0)]
+        └── Scan
+            ├── table: default.target (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+mutation_state: strategy=MatchedOnly, distributed=true, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=0
+
+=== matched_merge ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: MERGE INTO target t USING source s ON t.k = s.k WHEN MATCHED THEN UPDATE SET v = s.v
+requested_distributed: true
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set v = source.v (#1)]
+└── Join(Inner)
+    ├── build keys: [source.k (#0)]
+    ├── probe keys: [target.k (#2)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.source (#0)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.target (#1)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: true
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set v = source.v (#1)]
+└── Join(Inner)
+    ├── build keys: [source.k (#0)]
+    ├── probe keys: [target.k (#2)]
+    ├── other filters: []
+    ├── Exchange(Broadcast)
+    │   └── Scan
+    │       ├── table: default.source (#0)
+    │       ├── filters: []
+    │       ├── order by: []
+    │       └── limit: NONE
+    └── Exchange(Hash)
+        ├── Exchange(Hash): keys: [target.k (#2)]
+        └── Scan
+            ├── table: default.target (#1)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+mutation_state: strategy=MatchedOnly, distributed=true, row_id_shuffle=false, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=1
+
+=== insert_only_merge ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: MERGE INTO target t USING source s ON t.k = s.k WHEN NOT MATCHED THEN INSERT (k, v) VALUES (s.k, s.v)
+requested_distributed: true
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(source.k (#0) AS Int64),CAST(source.v (#1) AS Int64))]
+└── Join(RightAnti)
+    ├── build keys: [source.k (#0)]
+    ├── probe keys: [target.k (#2)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.source (#0)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.target (#1)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: true
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(source.k (#0) AS Int64),CAST(source.v (#1) AS Int64))]
+└── Join(LeftAnti)
+    ├── build keys: [target.k (#2)]
+    ├── probe keys: [source.k (#0)]
+    ├── other filters: []
+    ├── Exchange(Hash)
+    │   ├── Exchange(Hash): keys: [target.k (#2)]
+    │   └── Scan
+    │       ├── table: default.target (#1)
+    │       ├── filters: []
+    │       ├── order by: []
+    │       └── limit: NONE
+    └── Exchange(Hash)
+        ├── Exchange(Hash): keys: [source.k (#0)]
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [source.k (#0)]
+            └── Scan
+                ├── table: default.source (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+mutation_state: strategy=NotMatchedOnly, distributed=true, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=0
+
+=== mixed_merge ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: MERGE INTO target t USING source s ON t.k = s.k WHEN MATCHED THEN UPDATE SET v = s.v WHEN NOT MATCHED THEN INSERT (k, v) VALUES (s.k, s.v)
+requested_distributed: true
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set v = source.v (#1)]
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(source.k (#0) AS Int64),CAST(source.v (#1) AS Int64))]
+└── Join(Right)
+    ├── build keys: [source.k (#0)]
+    ├── probe keys: [target.k (#2)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.source (#0)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.target (#1)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: true
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set v = source.v (#1)]
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(source.k (#0) AS Int64),CAST(source.v (#1) AS Int64))]
+└── Join(Left)
+    ├── build keys: [target.k (#2)]
+    ├── probe keys: [source.k (#0)]
+    ├── other filters: []
+    ├── Exchange(Hash)
+    │   ├── Exchange(Hash): keys: [target.k (#2)]
+    │   └── Scan
+    │       ├── table: default.target (#1)
+    │       ├── filters: []
+    │       ├── order by: []
+    │       └── limit: NONE
+    └── Exchange(Hash)
+        ├── Exchange(Hash): keys: [source.k (#0)]
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [source.k (#0)]
+            └── Scan
+                ├── table: default.source (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+mutation_state: strategy=MixedMatched, distributed=true, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=1
+
+=== aggregate_source_local_retry ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: MERGE INTO target t USING (SELECT max(k) AS k, max(v) AS v FROM source) s ON t.k = s.k WHEN MATCHED THEN UPDATE SET v = s.v WHEN NOT MATCHED THEN INSERT (k, v) VALUES (s.k, s.v)
+requested_distributed: true
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set v = max(v) (#3)]
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(max(k) (#2) AS Int64),CAST(max(v) (#3) AS Int64))]
+└── Join(Right)
+    ├── build keys: [max(k) (#2)]
+    ├── probe keys: [target.k (#4)]
+    ├── other filters: []
+    ├── EvalScalar
+    │   ├── scalars: [max(k) (#2) AS (#2), max(v) (#3) AS (#3)]
+    │   └── Aggregate(Initial)
+    │       ├── group items: []
+    │       ├── aggregate functions: [max(source.k (#0)) AS (#2), max(source.v (#1)) AS (#3)]
+    │       └── EvalScalar
+    │           ├── scalars: [source.k (#0) AS (#0), source.v (#1) AS (#1)]
+    │           └── Scan
+    │               ├── table: default.source (#0)
+    │               ├── filters: []
+    │               ├── order by: []
+    │               └── limit: NONE
+    └── Scan
+        ├── table: default.target (#1)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set v = max(v) (#3)]
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(max(k) (#2) AS Int64),CAST(max(v) (#3) AS Int64))]
+└── Join(Left)
+    ├── build keys: [target.k (#4)]
+    ├── probe keys: [max(k) (#2)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.target (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Aggregate(Final)
+        ├── group items: []
+        ├── aggregate functions: [max(source.k (#0)) AS (#2), max(source.v (#1)) AS (#3)]
+        └── Aggregate(Partial)
+            ├── group items: []
+            ├── aggregate functions: [max(source.k (#0)) AS (#2), max(source.v (#1)) AS (#3)]
+            └── Scan
+                ├── table: default.source (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+mutation_state: strategy=MixedMatched, distributed=false, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=1
+
+=== empty_target_local_retry ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: MERGE INTO target t USING (SELECT max(k) AS k, max(v) AS v FROM source) s ON t.k = s.k AND t.k > 10 AND t.k < 0 WHEN MATCHED THEN UPDATE SET v = s.v WHEN NOT MATCHED THEN INSERT (k, v) VALUES (s.k, s.v)
+requested_distributed: true
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set v = max(v) (#3)]
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(max(k) (#2) AS Int64),CAST(max(v) (#3) AS Int64))]
+└── Join(Right)
+    ├── build keys: [max(k) (#2)]
+    ├── probe keys: [target.k (#4)]
+    ├── other filters: []
+    ├── EvalScalar
+    │   ├── scalars: [max(k) (#2) AS (#2), max(v) (#3) AS (#3)]
+    │   └── Aggregate(Initial)
+    │       ├── group items: []
+    │       ├── aggregate functions: [max(source.k (#0)) AS (#2), max(source.v (#1)) AS (#3)]
+    │       └── EvalScalar
+    │           ├── scalars: [source.k (#0) AS (#0), source.v (#1) AS (#1)]
+    │           └── Scan
+    │               ├── table: default.source (#0)
+    │               ├── filters: []
+    │               ├── order by: []
+    │               └── limit: NONE
+    └── Filter
+        ├── filters: [gt(target.k (#4), 10), lt(target.k (#4), 0)]
+        └── Scan
+            ├── table: default.target (#1)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(max(k) (#2) AS Int64),CAST(max(v) (#3) AS Int64))]
+└── Join(Left)
+    ├── build keys: [target.k (#4)]
+    ├── probe keys: [max(k) (#2)]
+    ├── other filters: []
+    ├── EmptyResultScan
+    └── Aggregate(Final)
+        ├── group items: []
+        ├── aggregate functions: [max(source.k (#0)) AS (#2), max(source.v (#1)) AS (#3)]
+        └── Aggregate(Partial)
+            ├── group items: []
+            ├── aggregate functions: [max(source.k (#0)) AS (#2), max(source.v (#1)) AS (#3)]
+            └── Scan
+                ├── table: default.source (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+mutation_state: strategy=MixedMatched, distributed=false, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=0
+
+=== empty_target_merge ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: MERGE INTO target t USING source s ON t.k = s.k AND t.k > 10 AND t.k < 0 WHEN MATCHED THEN UPDATE SET v = s.v WHEN NOT MATCHED THEN INSERT (k, v) VALUES (s.k, s.v)
+requested_distributed: true
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set v = source.v (#1)]
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(source.k (#0) AS Int64),CAST(source.v (#1) AS Int64))]
+└── Join(Right)
+    ├── build keys: [source.k (#0)]
+    ├── probe keys: [target.k (#2)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.source (#0)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Filter
+        ├── filters: [gt(target.k (#2), 10), lt(target.k (#2), 0)]
+        └── Scan
+            ├── table: default.target (#1)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: true
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(source.k (#0) AS Int64),CAST(source.v (#1) AS Int64))]
+└── Join(Left)
+    ├── build keys: [target.k (#2)]
+    ├── probe keys: [source.k (#0)]
+    ├── other filters: []
+    ├── Exchange(Hash)
+    │   ├── Exchange(Hash): keys: [target.k (#2)]
+    │   └── EmptyResultScan
+    └── Exchange(Hash)
+        ├── Exchange(Hash): keys: [source.k (#0)]
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [source.k (#0)]
+            └── Scan
+                ├── table: default.source (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+mutation_state: strategy=MixedMatched, distributed=true, row_id_shuffle=true, no_effect=false, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=0
+
+=== empty_source_merge ===
+description: Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.
+sql: MERGE INTO target t USING (SELECT * FROM source WHERE false) s ON t.k = s.k WHEN MATCHED THEN UPDATE SET v = s.v WHEN NOT MATCHED THEN INSERT (k, v) VALUES (s.k, s.v)
+requested_distributed: true
+raw_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set v = source.v (#1)]
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(source.k (#0) AS Int64),CAST(source.v (#1) AS Int64))]
+└── Join(Right)
+    ├── build keys: [source.k (#0)]
+    ├── probe keys: [target.k (#2)]
+    ├── other filters: []
+    ├── EvalScalar
+    │   ├── scalars: [source.k (#0) AS (#0), source.v (#1) AS (#1)]
+    │   └── Filter
+    │       ├── filters: [false]
+    │       └── Scan
+    │           ├── table: default.source (#0)
+    │           ├── filters: []
+    │           ├── order by: []
+    │           └── limit: NONE
+    └── Scan
+        ├── table: default.target (#1)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+MergeInto:
+target_table: default.default.target
+├── distributed: true
+├── target_build_optimization: false
+├── can_try_update_column_only: true
+├── matched update: [condition: None,update set v = source.v (#1)]
+├── unmatched insert: [condition: None,insert into (k,v) values(CAST(source.k (#0) AS Int64),CAST(source.v (#1) AS Int64))]
+└── EmptyResultScan
+
+mutation_state: strategy=MixedMatched, distributed=true, row_id_shuffle=true, no_effect=true, truncate=false, predicate_column=None, direct_filter_count=0, matched_update_count=1
+

@@ -16,6 +16,7 @@ databend_common_tracing::register_module_tag!("[OPTIMIZER]");
 
 mod cost;
 pub mod ir;
+mod mutation;
 #[allow(clippy::module_inception)]
 mod optimizer;
 mod optimizer_api;

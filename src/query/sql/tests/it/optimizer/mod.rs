@@ -28,6 +28,7 @@ mod eager_aggregation;
 mod hierarchical_grouping_sets;
 mod join_cardinality;
 mod materialized_cte_distribution;
+mod mutation;
 mod normalize_scalar;
 mod outer_join_to_anti;
 mod planning_context;
