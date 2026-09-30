@@ -140,7 +140,8 @@ pub fn apply_statement_settings(ctx: Arc<dyn TableContext>, stmt: &Statement) ->
     }
 
     ctx.get_shared_settings()
-        .set_batch_settings(&resolved, true)
+        .set_batch_settings(&resolved, true)?;
+    ctx.apply_query_memory_limit()
 }
 
 fn resolve_settings(

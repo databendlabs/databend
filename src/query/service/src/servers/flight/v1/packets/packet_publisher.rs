@@ -43,6 +43,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextSettings;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Edge {
@@ -210,6 +211,8 @@ impl QueryEnv {
             GlobalConfig::version(),
             Some(self.query_created_time),
         )?;
+
+        query_ctx.apply_query_memory_limit()?;
 
         query_ctx.update_init_query_id(self.query_id.clone());
         query_ctx.attach_query_str(self.query_kind, "".to_string());

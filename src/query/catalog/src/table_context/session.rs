@@ -51,6 +51,11 @@ pub trait TableContextSettings: Send + Sync {
     fn get_session_settings(&self) -> Arc<Settings>;
 
     fn get_shared_settings(&self) -> Arc<Settings>;
+
+    /// Apply the effective query budget after statement settings have been resolved.
+    fn apply_query_memory_limit(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
