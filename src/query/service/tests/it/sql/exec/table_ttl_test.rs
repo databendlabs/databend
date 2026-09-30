@@ -423,14 +423,13 @@ async fn test_ttl_schema_compatibility() -> Result<()> {
     let ttl = table.get_table_info().meta.ttl.clone().unwrap();
     databend_common_sql::validate_stored_ttl_expr(ctx, table.schema(), &ttl)?;
 
-    // CREATE/SET bind directly against a schema before a concrete table exists.
-    // Revalidation must use the same semantics instead of expanding a virtual
-    // computed column and reaching a different conclusion.
+    // Stored computed columns remain eligible for TTL. CREATE and schema
+    // revalidation must agree even before a concrete table exists.
     let ctx = fixture.new_query_ctx().await?;
     let (plan, _) = Planner::new(ctx.clone())
         .plan_sql(
-            "CREATE TABLE default.ttl_virtual (ts TIMESTAMP, \
-             v TIMESTAMP AS (ts) VIRTUAL) TTL v",
+            "CREATE TABLE default.ttl_stored (ts TIMESTAMP, \
+             v TIMESTAMP AS (ts) STORED) TTL v",
         )
         .await?;
     let databend_common_sql::plans::Plan::CreateTable(plan) = plan else {
