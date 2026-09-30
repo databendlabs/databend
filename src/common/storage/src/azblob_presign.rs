@@ -155,7 +155,7 @@ impl WorkloadIdentity {
         Self::from_lookup(|name| std::env::var(name).ok())
     }
 
-    /// Variables injected by the AKS Workload Identity webhook; blank values
+    /// Variables injected by the Azure Workload Identity webhook; blank values
     /// count as missing.
     fn from_lookup(lookup: impl Fn(&str) -> Option<String>) -> Option<Self> {
         let var = |name: &str| lookup(name).filter(|v| !v.trim().is_empty());
