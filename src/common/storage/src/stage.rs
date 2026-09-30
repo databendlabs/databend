@@ -110,13 +110,21 @@ pub fn init_stage_operator(stage_info: &StageInfo) -> Result<Operator> {
             EndpointPolicyScope::External,
         )?)
     } else {
-        let stage_prefix = stage_info.stage_prefix();
-        let param = DataOperator::instance()
-            .params()
-            .map_root(|path| format!("{path}/{stage_prefix}"));
-
-        Ok(init_operator(&param)?)
+        Ok(init_operator(&stage_root_params(stage_info))?)
     }
+}
+
+/// Storage params backing an internal or user stage, rooted at the stage
+/// prefix. Returns `None` for external stages.
+pub fn internal_stage_storage_params(stage_info: &StageInfo) -> Option<StorageParams> {
+    (stage_info.stage_type != StageType::External).then(|| stage_root_params(stage_info))
+}
+
+fn stage_root_params(stage_info: &StageInfo) -> StorageParams {
+    let stage_prefix = stage_info.stage_prefix();
+    DataOperator::instance()
+        .params()
+        .map_root(|path| format!("{path}/{stage_prefix}"))
 }
 
 pub fn is_stage_path_traversal(path: &str) -> bool {

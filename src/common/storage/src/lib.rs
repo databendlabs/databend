@@ -40,6 +40,11 @@ mod auth;
 pub use auth::RefreshableToken;
 pub use auth::TokenFile;
 
+mod azblob_presign;
+pub use azblob_presign::AzblobPresignOp;
+pub use azblob_presign::azblob_user_delegation_presign;
+pub use azblob_presign::azblob_user_delegation_presign_supported;
+
 mod config;
 mod endpoint_policy;
 pub use config::EndpointPolicyScope;
@@ -97,6 +102,7 @@ pub use stage::StageFileStatus;
 pub use stage::StageFilesInfo;
 pub use stage::ensure_no_stage_path_traversal;
 pub use stage::init_stage_operator;
+pub use stage::internal_stage_storage_params;
 pub use stage::is_stage_path_traversal;
 
 mod copy;
