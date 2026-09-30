@@ -176,12 +176,16 @@ pub fn register(registry: &mut FunctionRegistry) {
             match format.to_ascii_lowercase().as_str() {
                 "hex" => eval_unhex(val, ctx),
                 "base64" => eval_from_base64(val, ctx),
+                "latin1" | "latin-1" | "iso-8859-1" => eval_latin1_bytes(val, ctx),
                 "utf-8" => match val {
                     Value::Scalar(val) => Value::Scalar(val.as_bytes().to_vec()),
                     Value::Column(col) => Value::Column(col.into()),
                 },
                 _ => {
-                    ctx.set_error(0, "The format option only supports hex, base64, and utf-8");
+                    ctx.set_error(
+                        0,
+                        "The format option only supports hex, base64, latin1, and utf-8",
+                    );
                     Value::Scalar(Vec::new())
                 }
             }
@@ -212,6 +216,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             match format.to_ascii_lowercase().as_str() {
                 "hex" => error_to_null(eval_unhex)(val, ctx),
                 "base64" => error_to_null(eval_from_base64)(val, ctx),
+                "latin1" | "latin-1" | "iso-8859-1" => error_to_null(eval_latin1_bytes)(val, ctx),
                 "utf-8" => match val {
                     Value::Scalar(val) => Value::Scalar(Some(val.as_bytes().to_vec())),
                     Value::Column(col) => {
@@ -351,6 +356,26 @@ fn eval_utf8_bytes_nullable(val: Value<StringType>) -> Value<NullableType<Binary
             Value::Column(NullableColumn::new_unchecked(col.into(), validity))
         }
     }
+}
+
+fn eval_latin1_bytes(val: Value<StringType>, ctx: &mut EvalContext) -> Value<BinaryType> {
+    vectorize_string_to_binary(
+        |col| col.total_bytes_len(),
+        |val, output, ctx| {
+            for ch in val.chars() {
+                let code_point = u32::from(ch);
+                if code_point > u32::from(u8::MAX) {
+                    ctx.set_error(
+                        output.len(),
+                        format!("character U+{code_point:04X} cannot be encoded as latin1"),
+                    );
+                    break;
+                }
+                output.data.push(code_point as u8);
+            }
+            output.commit_row();
+        },
+    )(val, ctx)
 }
 
 fn eval_unhex(val: Value<StringType>, ctx: &mut EvalContext) -> Value<BinaryType> {
