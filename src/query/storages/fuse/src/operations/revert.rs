@@ -69,7 +69,20 @@ impl FuseTable {
         // Publish the historical metadata.
         catalog
             .update_single_table_meta(&tenant, req, &self.table_info)
-            .await?;
+            .await
+            .map_err(|err| {
+                if let NavigationPoint::TableTag(name) = &navigation_descriptor.point
+                    && err.code() == ErrorCode::TABLE_SNAPSHOT_EXPIRED
+                {
+                    return err.add_message(format!(
+                        "Cannot FLASHBACK to TAG '{name}': its snapshot is below the table's \
+                         least visible time (LVT). An active TAG preserves historical reads, \
+                         but does not allow restoring history below LVT. \
+                         Use AT (TAG => ...) to query the retained data."
+                    ));
+                }
+                err
+            })?;
 
         // Leave a hint file indicating the latest snapshot location.
         let snapshot_hint_writer =
