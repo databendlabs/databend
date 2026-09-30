@@ -471,12 +471,18 @@ impl ParquetSource {
             let need_row_number = self
                 .internal_columns
                 .contains(&InternalColumnType::FileRowNumber);
-            let mut builder = ParquetReaderBuilder::create(
+            // ArrowSchemaConverter chooses the writer's physical types (e.g. INT64 for
+            // decimal(15,2)), which may differ from this file's physical types.
+            // Keep the actual file descriptor when rebuilding the reader.
+            let mut builder = ParquetReaderBuilder::create_with_parquet_schema(
                 self.ctx.clone(),
                 self.op_registry.clone(),
                 self.table_schema.clone(),
-                arrow_schema,
-            )?
+                meta.file_metadata().schema_descr_ptr(),
+                Some(arrow_schema),
+                None,
+                false,
+            )
             .with_options(read_options)
             .with_push_downs(self.push_downs.as_ref());
 
