@@ -221,14 +221,22 @@ SELECT id FROM news_replace WHERE match(content, 'AI') ORDER BY id
 ----
 1
 
-# Temporary index registration is unsupported. Failure after staging must keep the old table.
+# Temporary dictionary-backed indexes are rejected in the binder, before creating a table.
+statement error Inverted indexes with user_dictionary are not supported on temporary tables
+CREATE TEMPORARY TABLE news_temp (
+    id INT,
+    content STRING,
+    INVERTED INDEX idx (content) tokenizer = 'japanese' user_dictionary = '@data/csv/japanese/userdict.csv'
+)
+
+# Reusing the name without IF NOT EXISTS verifies the rejected CREATE left no table behind.
 statement ok
 CREATE TEMPORARY TABLE news_temp (id INT, content STRING)
 
 statement ok
 INSERT INTO news_temp VALUES (99, 'old temporary table')
 
-statement error 3902
+statement error Inverted indexes with user_dictionary are not supported on temporary tables
 CREATE OR REPLACE TEMPORARY TABLE news_temp (
     id INT,
     content STRING,
@@ -240,7 +248,7 @@ SELECT id, content FROM news_temp
 ----
 99 old temporary table
 
-statement ok
+statement error Inverted indexes with user_dictionary are not supported on temporary tables
 CREATE TEMPORARY TABLE IF NOT EXISTS news_temp (
     id INT,
     content STRING,
@@ -251,6 +259,32 @@ query IT
 SELECT id, content FROM news_temp
 ----
 99 old temporary table
+
+# The same binder check applies to CTAS and must preserve an existing replacement target.
+statement error Inverted indexes with user_dictionary are not supported on temporary tables
+CREATE OR REPLACE TEMPORARY TABLE news_temp (
+    id INT,
+    content STRING,
+    INVERTED INDEX idx (content) tokenizer = 'japanese' user_dictionary = '@data/csv/japanese/userdict.csv'
+) AS SELECT id, content FROM news WHERE id <= 5
+
+query IT
+SELECT id, content FROM news_temp
+----
+99 old temporary table
+
+statement error Inverted indexes with user_dictionary are not supported on temporary tables
+CREATE TEMPORARY TABLE news_temp_ctas (
+    id INT,
+    content STRING,
+    INVERTED INDEX idx (content) tokenizer = 'japanese' user_dictionary = '@data/csv/japanese/userdict.csv'
+) AS SELECT id, content FROM news WHERE id <= 5
+
+statement ok
+CREATE TEMPORARY TABLE news_temp_ctas (id INT, content STRING)
+
+statement ok
+DROP TABLE news_temp_ctas
 
 statement ok
 DROP TABLE news_temp

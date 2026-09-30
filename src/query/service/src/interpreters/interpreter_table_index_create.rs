@@ -21,6 +21,7 @@ use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::CreateTableIndexPlan;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::InvertedIndexUserDictionary;
+use databend_common_storages_fuse::io::MAX_INVERTED_INDEX_USER_DICTIONARY_SIZE;
 use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION;
 
 use crate::interpreters::Interpreter;
@@ -72,7 +73,9 @@ impl Interpreter for CreateTableIndexInterpreter {
             // The dictionary is written to the table storage before the index is registered.
             let mut options = self.plan.index_options.clone();
             if let Some(user_dictionary) = &self.plan.user_dictionary {
-                let content = user_dictionary.read().await?;
+                let content = user_dictionary
+                    .read(MAX_INVERTED_INDEX_USER_DICTIONARY_SIZE)
+                    .await?;
                 let dictionary = InvertedIndexUserDictionary::try_new(content)?;
                 let table = self
                     .ctx

@@ -20,6 +20,7 @@ mod snapshots;
 mod write;
 
 pub use inverted_index_user_dictionary::InvertedIndexUserDictionary;
+pub use inverted_index_user_dictionary::MAX_INVERTED_INDEX_USER_DICTIONARY_SIZE;
 pub use inverted_index_user_dictionary::resolve_inverted_index_user_dictionary;
 pub use inverted_index_user_dictionary::resolve_inverted_index_user_dictionary_blocking;
 pub use locations::TableMetaLocationGenerator;

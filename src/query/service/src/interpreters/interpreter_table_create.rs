@@ -54,6 +54,7 @@ use databend_common_storages_fuse::FuseSegmentFormat;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::InvertedIndexUserDictionary;
+use databend_common_storages_fuse::io::MAX_INVERTED_INDEX_USER_DICTIONARY_SIZE;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -312,11 +313,23 @@ impl CreateTableInterpreter {
 
         // The staged table is not visible yet, so the dictionary-backed indexes are in place
         // strictly before any data is written through `table_info`.
-        if let Some(table_meta) = self
+        match self
             .register_dictionary_indexes(catalog.as_ref(), &table_info, dictionary_indexes)
-            .await?
+            .await
         {
-            table_info.meta = table_meta;
+            Ok(Some(table_meta)) => table_info.meta = table_meta,
+            Ok(None) => {}
+            Err(e) => {
+                if let Some(prefix) = &temp_prefix {
+                    cleanup_staged_temp_table(
+                        self.ctx.get_current_session().temp_tbl_mgr(),
+                        table_id,
+                        prefix,
+                    )
+                    .await?;
+                }
+                return Err(e);
+            }
         }
 
         let insert_plan = Insert {
@@ -591,7 +604,9 @@ impl CreateTableInterpreter {
             let Some(index) = table_meta.indexes.remove(name) else {
                 continue;
             };
-            let content = user_dictionary.read().await?;
+            let content = user_dictionary
+                .read(MAX_INVERTED_INDEX_USER_DICTIONARY_SIZE)
+                .await?;
             indexes.push((
                 name.clone(),
                 index,

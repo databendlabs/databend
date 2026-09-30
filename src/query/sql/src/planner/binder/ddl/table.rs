@@ -896,6 +896,16 @@ impl Binder {
             },
         };
 
+        if matches!(table_type, TableType::Temporary)
+            && index_user_dictionaries
+                .as_ref()
+                .is_some_and(|dictionaries| !dictionaries.is_empty())
+        {
+            return Err(ErrorCode::StorageUnsupported(
+                "Inverted indexes with user_dictionary are not supported on temporary tables",
+            ));
+        }
+
         if engine == Engine::Memory {
             let db = catalog
                 .get_database(&self.ctx.get_tenant(), &database)

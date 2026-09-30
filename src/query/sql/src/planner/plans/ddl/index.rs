@@ -90,9 +90,17 @@ pub struct IndexUserDictionary {
 }
 
 impl IndexUserDictionary {
-    /// Reads the dictionary file from its stage.
-    pub async fn read(&self) -> Result<Vec<u8>> {
+    /// Reads the dictionary file from its stage, rejecting oversized files before downloading.
+    pub async fn read(&self, max_size: usize) -> Result<Vec<u8>> {
         let operator = init_stage_operator(&self.stage_info)?;
+        self.read_from_operator(&operator, max_size).await
+    }
+
+    async fn read_from_operator(
+        &self,
+        operator: &opendal::Operator,
+        max_size: usize,
+    ) -> Result<Vec<u8>> {
         let meta = operator.stat(&self.path).await.map_err(|e| {
             ErrorCode::IndexOptionInvalid(format!(
                 "failed to read user dictionary `{}`: {e}",
@@ -103,6 +111,14 @@ impl IndexUserDictionary {
             return Err(ErrorCode::IndexOptionInvalid(format!(
                 "user dictionary `{}` is a directory, expected a CSV file",
                 self.location
+            )));
+        }
+        if meta.content_length() > max_size as u64 {
+            return Err(ErrorCode::IndexOptionInvalid(format!(
+                "user dictionary `{}` is {} bytes, exceeds the {} bytes limit",
+                self.location,
+                meta.content_length(),
+                max_size
             )));
         }
         Ok(operator.read(&self.path).await?.to_vec())

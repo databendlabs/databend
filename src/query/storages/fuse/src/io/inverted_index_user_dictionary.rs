@@ -45,7 +45,7 @@ use crate::io::TableMetaLocationGenerator;
 
 /// Upper bound on a user dictionary CSV. Dictionaries are typically a few KiB; MeCab-style
 /// domain dictionaries can reach a few MiB.
-const MAX_INVERTED_INDEX_USER_DICTIONARY_SIZE: usize = 16 * 1024 * 1024;
+pub const MAX_INVERTED_INDEX_USER_DICTIONARY_SIZE: usize = 16 * 1024 * 1024;
 
 const USER_DICTIONARY_CACHE_CAPACITY: usize = 64;
 
