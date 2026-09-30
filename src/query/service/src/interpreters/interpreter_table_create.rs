@@ -20,7 +20,6 @@ use chrono::Utc;
 use databend_common_ast::ast::Engine;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table::Table;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRefExt;
@@ -41,7 +40,6 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TablePartition;
-use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::ExecutionInfo;
@@ -57,12 +55,10 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FuseSegmentFormat;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_attach_table::get_attach_table_handler;
 use databend_meta_client::types::MatchSeq;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::abort_staged_temp_table;
 use databend_storages_common_table_meta::meta::ClusterKeyInfo;
@@ -274,7 +270,7 @@ impl CreateTableInterpreter {
 
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
-        let mut req = self.build_request(None)?;
+        let mut req = self.build_request()?;
 
         // create a dropped table first.
         req.as_dropped = true;
@@ -712,41 +708,10 @@ impl CreateTableInterpreter {
     #[async_backtrace::framed]
     async fn create_table(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
-        let mut stat = None;
-        if !GlobalConfig::instance().query.common.management_mode {
-            if let Some(snapshot_loc) = self.plan.options.get(OPT_KEY_SNAPSHOT_LOCATION) {
-                // using application level data operator is a temp workaround
-                // please see discussions https://github.com/datafuselabs/databend/pull/10424
-                let operator = self.ctx.get_application_level_data_operator()?.operator();
-                let reader = MetaReaders::table_snapshot_reader(operator);
-
-                let params = LoadParams {
-                    location: snapshot_loc.clone(),
-                    len_hint: None,
-                    ver: TableSnapshot::VERSION,
-                    put_cache: true,
-                };
-
-                let snapshot = reader.read(&params).await?;
-                stat = Some(TableStatistics {
-                    number_of_rows: snapshot.summary.row_count,
-                    data_bytes: snapshot.summary.uncompressed_byte_size,
-                    compressed_data_bytes: snapshot.summary.compressed_byte_size,
-                    index_data_bytes: snapshot.summary.index_size,
-                    bloom_index_size: snapshot.summary.bloom_index_size,
-                    ngram_index_size: snapshot.summary.ngram_index_size,
-                    inverted_index_size: snapshot.summary.inverted_index_size,
-                    vector_index_size: snapshot.summary.vector_index_size,
-                    virtual_column_size: snapshot.summary.virtual_column_size,
-                    number_of_segments: Some(snapshot.segments.len() as u64),
-                    number_of_blocks: Some(snapshot.summary.block_count),
-                });
-            }
-        }
         let req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {
             self.build_attach_request(storage_prefix).await
         } else {
-            self.build_request(stat)
+            self.build_request()
         }?;
 
         if !catalog.support_partition()
@@ -776,10 +741,7 @@ impl CreateTableInterpreter {
     ///
     /// - Rebuild `DataSchema` with default exprs.
     /// - Update cluster key of table meta.
-    pub(crate) fn build_request(
-        &self,
-        statistics: Option<TableStatistics>,
-    ) -> Result<CreateTableReq> {
+    pub(crate) fn build_request(&self) -> Result<CreateTableReq> {
         let fields = self.plan.schema.fields().clone();
         let field_comments = if self.plan.field_comments.is_empty() {
             vec!["".to_string(); fields.len()]
@@ -826,7 +788,7 @@ impl CreateTableInterpreter {
             field_comments,
             field_stats_truncate_len,
             drop_on: None,
-            statistics: statistics.unwrap_or_default(),
+            statistics: Default::default(),
             comment: comment.unwrap_or_default(),
             indexes,
             constraints,

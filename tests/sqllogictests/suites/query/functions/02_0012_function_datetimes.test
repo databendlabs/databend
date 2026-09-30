@@ -862,6 +862,53 @@ select add_hours(to_datetime('9999-12-29 23:59:59'), 1)
 ----
 9999-12-30 00:59:59.000000
 
+# String inputs to time arithmetic must retain the time component.
+query T
+select subtract_minutes('2026-09-26 08:34:00', 5)
+----
+2026-09-26 08:29:00.000000
+
+query IIIIII
+select
+    add_hours('2026-09-26 08:34:00', 1) = add_hours(to_timestamp('2026-09-26 08:34:00'), 1),
+    add_minutes('2026-09-26 08:34:00', 1) = add_minutes(to_timestamp('2026-09-26 08:34:00'), 1),
+    add_seconds('2026-09-26 08:34:00', 1) = add_seconds(to_timestamp('2026-09-26 08:34:00'), 1),
+    subtract_hours('2026-09-26 08:34:00', 1) = subtract_hours(to_timestamp('2026-09-26 08:34:00'), 1),
+    subtract_minutes('2026-09-26 08:34:00', 1) = subtract_minutes(to_timestamp('2026-09-26 08:34:00'), 1),
+    subtract_seconds('2026-09-26 08:34:00', 1) = subtract_seconds(to_timestamp('2026-09-26 08:34:00'), 1)
+----
+1 1 1 1 1 1
+
+query T
+select date_sub(minute, 5, '2026-09-26 08:34:00')
+----
+2026-09-26 08:29:00.000000
+
+query T
+select date_add(minute, 5, '2026-09-26 08:34:00')
+----
+2026-09-26 08:39:00.000000
+
+query T
+select date_sub(minute, 5, to_date('2026-09-26'))
+----
+2026-09-25 23:55:00.000000
+
+query T
+select date_add(minute, 5, to_date('2026-09-26'))
+----
+2026-09-26 00:05:00.000000
+
+query T
+select subtract_minutes('2026-09-26', 5)
+----
+2026-09-25 23:55:00.000000
+
+query T
+select subtract_minutes(to_date('2026-09-26'), 5)
+----
+2026-09-25 23:55:00.000000
+
 # 2020-2-29T10:00:00 - 1 minutes
 query ?
 select subtract_minutes(to_datetime(1582970400000000), cast(1, INT32))

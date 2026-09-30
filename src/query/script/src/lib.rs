@@ -16,6 +16,7 @@ pub mod ir;
 
 mod compiler;
 pub use compiler::compile;
+pub use compiler::compile_block;
 
 mod executor;
 pub use executor::Client;

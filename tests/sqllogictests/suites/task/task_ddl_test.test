@@ -158,3 +158,105 @@ DROP TASK mytask
 
 statement ok
 DROP TASK sessionTask
+
+# Task SQL is only parsed: string-literal EXECUTE IMMEDIATE scripts are expanded and
+# compiled, nothing is bound or executed. Missing objects, UDFs, runtime script
+# variables and dynamic identifiers are all accepted.
+statement ok
+DROP TABLE IF EXISTS task_validation_deferred_table
+
+statement ok
+DROP TASK IF EXISTS task_validation_deferred
+
+statement ok
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh'
+AS INSERT INTO task_validation_deferred_table SELECT task_validation_udf_not_created_yet(1)
+
+query T
+select definition from system.tasks where name = 'task_validation_deferred'
+----
+INSERT INTO task_validation_deferred_table SELECT task_validation_udf_not_created_yet(1)
+
+statement ok
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$
+BEGIN
+    CREATE TABLE task_validation_deferred_table (a INT);
+    INSERT INTO task_validation_deferred_table VALUES (1);
+END;
+$$
+
+query I
+SELECT count(*) FROM system.tables WHERE database = current_database() AND name = 'task_validation_deferred_table'
+----
+0
+
+statement ok
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$
+DECLARE t := 'task_validation_deferred_table';
+BEGIN
+    FOR i IN 1 TO 2 DO
+        SELECT :i FROM IDENTIFIER(:t);
+    END FOR;
+    RETURN t;
+END;
+$$
+
+# Scripts that are not a string literal are left to runtime.
+statement ok
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE 'SELECT ' || 'FROM'
+
+statement ok
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS SETTINGS (enable_auto_materialize_cte = 1) EXECUTE IMMEDIATE 'SELECT 1'
+
+# Syntax errors inside constant scripts, including nested ones and every statement of a
+# task script block.
+statement error 1005
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE 'SELECT FROM'
+
+# SETTINGS wraps the statement; it must not bypass literal-script validation.
+statement error 1005
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS SETTINGS (enable_auto_materialize_cte = 1) EXECUTE IMMEDIATE 'SELECT FROM'
+
+statement error 1005
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS SETTINGS (enable_auto_materialize_cte = 1) EXECUTE IMMEDIATE $$ BEGIN IF FALSE THEN SELECT FROM; END IF; END; $$
+
+statement error 1005
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN IF FALSE THEN SELECT FROM; END IF; END; $$
+
+statement error 1005
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN EXECUTE IMMEDIATE 'BEGIN SELECT FROM; END;'; END; $$
+
+statement error 1005
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS BEGIN SELECT 1; EXECUTE IMMEDIATE 'SELECT FROM'; END;
+
+statement error 1005
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS BEGIN SELECT 1; SETTINGS (enable_auto_materialize_cte = 1) EXECUTE IMMEDIATE 'SELECT FROM'; END;
+
+statement error 1005
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN IF TRUE THEN SETTINGS (enable_auto_materialize_cte = 1) EXECUTE IMMEDIATE 'SELECT FROM'; END IF; END; $$
+
+# Script compilation: undeclared variables and control flow outside a loop.
+statement error 3128
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN RETURN unknown_variable; END; $$
+
+statement error 3128
+CREATE OR REPLACE TASK task_validation_deferred WAREHOUSE = 'mywh' AS EXECUTE IMMEDIATE $$ BEGIN LOOP EXECUTE IMMEDIATE 'BEGIN CONTINUE; END;'; END LOOP; END; $$
+
+# ALTER TASK ... MODIFY AS applies the same checks.
+statement ok
+ALTER TASK task_validation_deferred MODIFY AS SELECT * FROM task_validation_deferred_table
+
+statement error 1005
+ALTER TASK task_validation_deferred MODIFY AS EXECUTE IMMEDIATE 'SELECT FROM'
+
+statement error 1005
+ALTER TASK task_validation_deferred MODIFY AS SETTINGS (enable_auto_materialize_cte = 1) EXECUTE IMMEDIATE 'SELECT FROM'
+
+statement error 1005
+ALTER TASK task_validation_deferred MODIFY AS BEGIN SELECT 1; SETTINGS (enable_auto_materialize_cte = 1) EXECUTE IMMEDIATE 'SELECT FROM'; END;
+
+statement error 3128
+ALTER TASK task_validation_deferred MODIFY AS EXECUTE IMMEDIATE $$ BEGIN BREAK; END; $$
+
+statement ok
+DROP TASK task_validation_deferred

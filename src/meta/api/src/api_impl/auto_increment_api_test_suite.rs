@@ -108,7 +108,9 @@ impl AutoIncrementApiTestSuite {
             drop_on: Some(created_on),
             ..TableMeta::default()
         };
-        let created_on = Utc::now();
+        // CTAS staging tables are protected from vacuum for the default retention
+        // period (1 day), so create it as if it were dropped 2 days ago.
+        let created_on = Utc::now() - chrono::Duration::days(2);
 
         // verify the auto increment will be vacuum
         {

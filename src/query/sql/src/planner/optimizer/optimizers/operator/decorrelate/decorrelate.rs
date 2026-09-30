@@ -30,6 +30,8 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::DerivedColumnScope;
+use super::row_value::row_value_equality;
+use super::row_value::row_value_fields;
 use crate::ColumnSet;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::JoinPredicate;
@@ -421,11 +423,18 @@ impl SubqueryDecorrelatorOptimizer {
                 let op = subquery.compare_op.as_ref().unwrap().clone();
                 // Make <child_expr op right_condition> as non_equi_conditions even if op is equal operator.
                 // Because it's not null-safe.
-                let non_equi_conditions = vec![ScalarExpr::FunctionCall(op.to_func_call(
-                    subquery.span,
-                    child_expr,
-                    right_condition,
-                )?)];
+                let non_equi_conditions = if subquery.row_columns.is_empty() {
+                    vec![ScalarExpr::FunctionCall(op.to_func_call(
+                        subquery.span,
+                        child_expr,
+                        right_condition,
+                    )?)]
+                } else {
+                    // Row values are compared field by field so a NULL field
+                    // yields NULL instead of the tuple comparison result.
+                    let (left, right) = row_value_fields(subquery)?;
+                    vec![row_value_equality(subquery, &left, &right)?]
+                };
 
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx

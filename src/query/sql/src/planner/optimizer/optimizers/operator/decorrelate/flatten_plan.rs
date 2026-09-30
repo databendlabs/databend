@@ -1202,7 +1202,7 @@ impl SubqueryDecorrelatorOptimizer {
     }
 
     #[recursive::recursive]
-    fn clone_outer_recursive(
+    pub(super) fn clone_outer_recursive(
         &mut self,
         outer: &SExpr,
         derived_columns: &mut DerivedColumnScope,

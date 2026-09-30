@@ -1470,9 +1470,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     let vacuum_all = value(Statement::VacuumAll(VacuumAllStmt), rule! { VACUUM ~ ALL });
     let vacuum_drop_table = map(
         rule! {
-            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#ident)?
+            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#ident)? ~ (LIMIT ~ #literal_u64)?
         },
-        |(_, _, _, database_option)| {
+        // `LIMIT` is accepted for compatibility with clients that still send the
+        // legacy `VACUUM DROP TABLE [FROM db] LIMIT n` syntax; the value is ignored.
+        |(_, _, _, database_option, _limit)| {
             Statement::VacuumDropTable(VacuumDropTableStmt {
                 database: database_option.map(|(_, database)| database),
             })
