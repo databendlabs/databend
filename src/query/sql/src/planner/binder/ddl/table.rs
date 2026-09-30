@@ -674,6 +674,12 @@ impl Binder {
             .get_table(&self.ctx.get_tenant(), &source_database, &source_table)
             .await?;
         let source_info = source.get_table_info().clone();
+        let source_database_id = catalog
+            .get_database(&self.ctx.get_tenant(), &source_database)
+            .await?
+            .get_db_info()
+            .database_id
+            .db_id;
         if source.engine() != "FUSE"
             || source.is_read_only()
             || source_info.meta.storage_params.is_some()
@@ -737,6 +743,8 @@ impl Binder {
             ttl: None,
             clone: Some(CloneTableSource {
                 table_info: source_info,
+                source_database,
+                source_database_id,
                 navigation,
             }),
             attached_columns: None,

@@ -20,8 +20,10 @@ use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::LeastVisibleTime;
+use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetSecurityPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_sql::Planner;
@@ -31,6 +33,7 @@ use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::test_kits::TestFixture;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG;
@@ -70,7 +73,7 @@ async fn test_clone_source_privileges() -> anyhow::Result<()> {
     let session = fixture.default_session();
     let mut admin = session.get_current_user()?;
     admin.grants.grant_role("account_admin".to_string());
-    session.set_authed_user(admin, None).await?;
+    session.set_authed_user(admin.clone(), None).await?;
     session.set_current_role_checked("account_admin").await?;
     for sql in [
         "CREATE DATABASE `clone.source`",
@@ -144,6 +147,73 @@ async fn test_clone_source_privileges() -> anyhow::Result<()> {
         session.set_authed_user(authorized, None).await?;
         fixture.execute_command(&sql).await?;
         assert!(catalog.exists_table(&tenant, "clone_target", name).await?);
+    }
+
+    // RENAME across databases does not rewrite the FUSE storage database_id. That option
+    // must not authorize a clone of the table under its new, current database.
+    session.set_authed_user(admin, None).await?;
+    session.set_current_role_checked("account_admin").await?;
+    fixture
+        .execute_command("CREATE DATABASE clone_moved")
+        .await?;
+    // SQL currently rejects cross-database RENAME, but Meta supports it and the authorization
+    // must be correct for tables that have already been moved through that API.
+    catalog
+        .rename_table(RenameTableReq {
+            if_exists: false,
+            name_ident: TableNameIdent::new(&tenant, "clone.source", "secret"),
+            new_db_name: "clone_moved".to_string(),
+            new_table_name: "secret".to_string(),
+        })
+        .await?;
+    session.set_current_role_checked("public").await?;
+    let moved_db_id = catalog
+        .get_database(&tenant, "clone_moved")
+        .await?
+        .get_db_info()
+        .database_id
+        .db_id;
+    let moved = catalog.get_table(&tenant, "clone_moved", "secret").await?;
+    assert_eq!(
+        moved.get_table_info().meta.options[OPT_KEY_DATABASE_ID],
+        source_db.to_string()
+    );
+    let sql = "CREATE TABLE clone_target.moved CLONE clone_moved.secret";
+    let mut old_db_reader = creator.clone();
+    old_db_reader.grants.grant_privileges(
+        &GrantObject::DatabaseById("default".into(), source_db),
+        UserPrivilegeType::Select.into(),
+    );
+    old_db_reader.grants.grant_privileges(
+        &GrantObject::Database("default".into(), "clone.source".into()),
+        UserPrivilegeType::Select.into(),
+    );
+    session.set_authed_user(old_db_reader, None).await?;
+    assert_eq!(
+        fixture.execute_command(sql).await.unwrap_err().code(),
+        ErrorCode::PERMISSION_DENIED
+    );
+
+    for (name, grant) in [
+        (
+            "moved",
+            GrantObject::DatabaseById("default".into(), moved_db_id),
+        ),
+        (
+            "moved_by_name",
+            GrantObject::Database("default".into(), "clone_moved".into()),
+        ),
+    ] {
+        let mut moved_reader = creator.clone();
+        moved_reader
+            .grants
+            .grant_privileges(&grant, UserPrivilegeType::Select.into());
+        session.set_authed_user(moved_reader, None).await?;
+        fixture
+            .execute_command(&format!(
+                "CREATE TABLE clone_target.{name} CLONE clone_moved.secret"
+            ))
+            .await?;
     }
     Ok(())
 }

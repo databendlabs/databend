@@ -761,6 +761,42 @@ async fn test_vacuum2_preserves_clone_only_inverted_index() -> anyhow::Result<()
             "clone VACUUM crossed into the source inverted-index prefix: {location}"
         );
     }
+
+    // The dedicated dropped-index cleanup bypasses VACUUM TABLE's segment protection. It must
+    // defer the entire index version while a clone can still use it, including its retry marker.
+    fixture
+        .execute_command(&format!("DROP INVERTED INDEX idx ON {db}.index_source"))
+        .await?;
+    let cleanup =
+        format!("SELECT count() FROM fuse_vacuum_drop_inverted_index('{db}', 'index_source')");
+    fixture.execute_command(&cleanup).await?;
+    assert!(
+        catalog
+            .list_marked_deleted_table_indexes(&tenant, Some(source.get_id()))
+            .await?
+            .table_indexes
+            .contains_key(&source.get_id())
+    );
+    for location in &index_locations {
+        assert!(source.get_operator_ref().exists(location).await?);
+    }
+
+    // SQLLogic covers same-name replacement and transitive references. Here only check the
+    // physical files and retry marker after the last definition is dropped on a still-live clone.
+    fixture
+        .execute_command(&format!("DROP INVERTED INDEX idx ON {db}.index_clone"))
+        .await?;
+    fixture.execute_command(&cleanup).await?;
+    for location in &index_locations {
+        assert!(!source.get_operator_ref().exists(location).await?);
+    }
+    assert!(
+        catalog
+            .list_marked_deleted_table_indexes(&tenant, Some(source.get_id()))
+            .await?
+            .table_indexes
+            .is_empty()
+    );
     Ok(())
 }
 

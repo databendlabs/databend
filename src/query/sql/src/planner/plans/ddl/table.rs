@@ -49,6 +49,9 @@ pub const CLONE_EXPERIMENTAL_DISABLED_MESSAGE: &str = "CREATE TABLE ... CLONE is
 #[derive(Clone, Debug)]
 pub struct CloneTableSource {
     pub table_info: TableInfo,
+    /// Database in which the source was resolved, not the database in its storage prefix.
+    pub source_database: String,
+    pub source_database_id: u64,
     pub navigation: Option<NavigationPoint>,
 }
 

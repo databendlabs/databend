@@ -156,5 +156,65 @@ SELECT id FROM purge_source ORDER BY id
 ----
 4
 
+# Dropped-index cleanup must not remove a source index version still used by a clone.
+statement ok
+CREATE TABLE index_source(content STRING)
+
+statement ok
+INSERT INTO index_source VALUES ('clone token')
+
+statement ok
+CREATE INVERTED INDEX clone_idx ON index_source(content)
+
+statement ok
+REFRESH INVERTED INDEX clone_idx ON index_source
+
+statement ok
+CREATE TABLE index_clone CLONE index_source
+
+statement ok
+CREATE TABLE index_grandchild CLONE index_clone
+
+statement ok
+DROP INVERTED INDEX clone_idx ON index_source
+
+# Replacing the child's same-name index releases the old version only on that child.
+statement ok
+CREATE OR REPLACE INVERTED INDEX clone_idx ON index_clone(content) index_record = 'basic'
+
+statement ok
+REFRESH INVERTED INDEX clone_idx ON index_clone
+
+# The grandchild still uses the old version; checking only direct children would delete it.
+query I
+SELECT count() FROM fuse_vacuum_drop_inverted_index('db_03_vacuum_clone', 'index_source')
+----
+0
+
+query I
+SELECT count() FROM index_grandchild WHERE match(content, 'clone')
+----
+1
+
+# Removing the last inherited definition allows cleanup while both descendants remain alive.
+statement ok
+DROP INVERTED INDEX clone_idx ON index_grandchild
+
+query I
+SELECT count() FROM fuse_vacuum_drop_inverted_index('db_03_vacuum_clone', 'index_source')
+----
+1
+
+# The child's replacement version must remain usable after the old version is removed.
+query I
+SELECT count() FROM index_clone WHERE match(content, 'token')
+----
+1
+
+query I
+SELECT count() FROM index_grandchild
+----
+1
+
 statement ok
 DROP DATABASE db_03_vacuum_clone

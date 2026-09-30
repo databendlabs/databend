@@ -1964,9 +1964,9 @@ impl AccessChecker for PrivilegeAccess {
                     // CLONE reads source snapshots directly rather than through as_select.
                     // Anchor authorization to the captured source ID, not the destination.
                     let source = &clone.table_info;
-                    let db_id = source.meta.options.get(OPT_KEY_DATABASE_ID)
-                        .ok_or_else(|| ErrorCode::Internal("Clone source database ID is missing"))?
-                        .parse::<u64>()?;
+                    // `database_id` in TableMeta is the storage prefix, not necessarily the
+                    // current database after a cross-database RENAME TABLE.
+                    let db_id = clone.source_database_id;
                     let privilege = UserPrivilegeType::Select;
                     match self.validate_access(
                         &GrantObject::TableById(source.catalog().to_string(), db_id, source.ident.table_id),
@@ -1974,12 +1974,10 @@ impl AccessChecker for PrivilegeAccess {
                     ).await {
                         Ok(()) => {}
                         Err(err) if err.code() == ErrorCode::PERMISSION_DENIED => {
-                            // Legacy name-based grants still apply. Resolve the database by ID
-                            // rather than parsing TableInfo.desc (names may contain dots).
-                            let catalog = self.ctx.get_catalog(source.catalog()).await?;
-                            let database = catalog.get_db_name_by_id(db_id).await?;
+                            // Use the name resolved by the binder, not the physical storage db
+                            // or TableInfo.desc (database names may contain dots).
                             self.validate_access(
-                                &GrantObject::Table(source.catalog().to_string(), database, source.name.clone()),
+                                &GrantObject::Table(source.catalog().to_string(), clone.source_database.clone(), source.name.clone()),
                                 privilege, false, false,
                             ).await?;
                         }
