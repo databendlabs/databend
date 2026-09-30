@@ -45,5 +45,29 @@ EXPLAIN SELECT id FROM computed_partitioned WHERE p = 0
 ----
 <slt:ignore>partitions total: 2<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 2 to 1<slt:ignore>
 
+# MERGE INTO and INSERT ALL also generate the stored partition column before the
+# hash write layout.
+statement ok
+MERGE INTO computed_partitioned t USING (SELECT (number + 10)::INT id FROM numbers(4)) s ON t.id = s.id
+WHEN NOT MATCHED THEN INSERT (id) VALUES (s.id)
+
+statement ok
+INSERT ALL INTO computed_partitioned(id) VALUES (id) SELECT (number + 20)::INT id FROM numbers(4)
+
+query IIII
+SELECT count(*), min(p), max(p), count_if(p != id % 2) FROM computed_partitioned
+----
+12 0 1 0
+
+query I
+SELECT count_if(partition_values != 1)
+FROM (
+    SELECT _block_name, count(DISTINCT p) AS partition_values
+    FROM computed_partitioned
+    GROUP BY _block_name
+)
+----
+0
+
 statement ok
 DROP DATABASE computed_partition_by

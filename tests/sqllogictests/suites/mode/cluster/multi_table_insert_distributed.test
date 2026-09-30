@@ -237,9 +237,8 @@ select a from mti_partition_src;
 query II
 select to_int64(h.row_count = n.row_count),
        to_int64(h.block_count < n.block_count)
-from fuse_snapshot('mti_distributed', 'mti_hash_compare') h
-cross join fuse_snapshot('mti_distributed', 'mti_none_compare') n
-limit 1;
+from (select row_count, block_count from fuse_snapshot('mti_distributed', 'mti_hash_compare') order by timestamp desc limit 1) h
+cross join (select row_count, block_count from fuse_snapshot('mti_distributed', 'mti_none_compare') order by timestamp desc limit 1) n;
 ----
 1 1
 
