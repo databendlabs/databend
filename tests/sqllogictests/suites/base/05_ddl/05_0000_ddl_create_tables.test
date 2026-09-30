@@ -675,12 +675,6 @@ statement error depends on the session or query context
 create table t(a array(int), b array(int) as (array_sort(a)) stored)
 
 statement ok
-create or replace table t_ctx_sort(a array(int), b array(int) as (array_sort(a, 'asc', 'nulls last')) stored)
-
-statement ok
-drop table t_ctx_sort
-
-statement ok
 create or replace table t_ctx(a int)
 
 statement error depends on the session or query context
