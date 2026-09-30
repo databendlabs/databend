@@ -34,7 +34,7 @@ use databend_common_base::runtime::IoStats;
 use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::PerfConfig;
-use databend_common_base::runtime::PerfEvent;
+use databend_common_base::runtime::PerfSamples;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::drop_guard;
 use databend_common_catalog::catalog::Catalog;
@@ -73,7 +73,6 @@ use crate::clusters::ClusterDiscovery;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::executor::PlanNodeMemoryUsage;
 use crate::pipelines::processors::transforms::MaterializedCtePayload;
-use crate::servers::flight::v1::packets::NodePerfCounters;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::Session;
 use crate::sessions::query_affect::QueryAffect;
@@ -179,8 +178,7 @@ pub struct QueryContextShared {
 
     // QueryPerf configuration (profiler + hw counters)
     pub(super) perf_config: Mutex<PerfConfig>,
-    pub(super) nodes_perf: Arc<Mutex<HashMap<String, String>>>,
-    pub(super) nodes_perf_counters: Arc<Mutex<HashMap<String, NodePerfCounters>>>,
+    pub(super) nodes_perf: Arc<Mutex<HashMap<String, PerfSamples>>>,
 
     pub(super) materialized_cte_receivers:
         Arc<Mutex<HashMap<String, Vec<Receiver<MaterializedCtePayload>>>>>,
@@ -269,7 +267,6 @@ impl QueryContextShared {
             broadcast_registry: Default::default(),
             perf_config: Mutex::new(PerfConfig::default()),
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
-            nodes_perf_counters: Arc::new(Mutex::new(HashMap::new())),
             materialized_cte_receivers: Arc::new(Mutex::new(HashMap::new())),
             recursive_cte_temp_tables: Arc::new(RwLock::new(Vec::new())),
             logical_recursive_cte_runtime_ids: Arc::new(RwLock::new(HashMap::new())),
@@ -892,60 +889,13 @@ impl QueryContextShared {
         self.perf_config.lock().profiler_enabled
     }
 
-    pub fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, String>>> {
+    pub fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, PerfSamples>>> {
         self.nodes_perf.clone()
     }
 
-    pub fn set_nodes_perf(&self, node: String, perf: String) {
+    pub fn set_nodes_perf(&self, node: String, samples: PerfSamples) {
         let mut nodes_perf = self.nodes_perf.lock();
-        nodes_perf.insert(node, perf);
-    }
-
-    pub fn set_nodes_perf_counters(&self, node: String, counters: NodePerfCounters) {
-        let mut guard = self.nodes_perf_counters.lock();
-        guard.insert(node, counters);
-    }
-
-    pub fn get_nodes_perf_counters(&self) -> HashMap<String, NodePerfCounters> {
-        self.nodes_perf_counters.lock().clone()
-    }
-
-    pub fn collect_local_perf_counters(&self, node_id: String) {
-        if let Some(executor) = self.executor.read().upgrade() {
-            let new = executor.fetch_perf_counters();
-            if !new.counters.is_empty() {
-                let mut guard = self.nodes_perf_counters.lock();
-                match guard.entry(node_id) {
-                    std::collections::hash_map::Entry::Vacant(e) => {
-                        e.insert(new);
-                    }
-                    std::collections::hash_map::Entry::Occupied(mut e) => {
-                        let existing = e.get_mut();
-                        for (plan_key, new_events) in new.counters {
-                            if let Some((_, existing_events)) =
-                                existing.counters.iter_mut().find(|(k, _)| *k == plan_key)
-                            {
-                                for (event, pv) in new_events {
-                                    let e = existing_events.entry(event).or_default();
-                                    e.count += pv.count;
-                                    e.multiplexed = e.multiplexed || pv.multiplexed;
-                                }
-                            } else {
-                                existing.counters.push((plan_key, new_events));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn set_perf_events(&self, event_groups: Vec<Vec<PerfEvent>>) {
-        self.perf_config.lock().event_groups = event_groups;
-    }
-
-    pub fn get_perf_events(&self) -> Vec<Vec<PerfEvent>> {
-        self.perf_config.lock().event_groups.clone()
+        nodes_perf.insert(node, samples);
     }
 }
 

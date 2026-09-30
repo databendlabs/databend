@@ -1,0 +1,17 @@
+statement ok
+create or replace table t_explain_perf (k int, s string);
+
+statement ok
+insert into t_explain_perf select number % 1000, concat('value_', number::string) from numbers(1000000);
+
+statement ok
+explain perf memory (format='table', limit=2) select k, count(*), max(s) from t_explain_perf group by k;
+
+statement ok
+explain perf memory select k, count(*), max(s) from t_explain_perf group by k;
+
+statement ok
+explain perf cpu (format='table', limit=3) select k, count(*), max(s) from t_explain_perf group by k;
+
+statement ok
+drop table t_explain_perf;

@@ -410,7 +410,7 @@ async fn test_sync_process_observes_graph_interrupt() -> anyhow::Result<()> {
         1,
         Arc::new("test-sync-process-interrupt".to_string()),
         None,
-        vec![],
+        false,
     )?;
     let mut queue = unsafe { graph.clone().init_schedule_queue(0)? };
     let processor = queue
@@ -514,7 +514,7 @@ async fn test_format_top_memory_plan_nodes() -> anyhow::Result<()> {
         1,
         Arc::new("test-top-memory-plan-nodes".to_string()),
         None,
-        vec![],
+        false,
     )?;
 
     let mut context = ExecutorWorkerContext::create(1, WorkersCondvar::create(1));
@@ -558,7 +558,7 @@ fn create_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     pipeline.add_pipe(create_transform_pipe(1)?);
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None, vec![])
+    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None, false)
 }
 
 fn create_parallel_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
@@ -570,7 +570,7 @@ fn create_parallel_simple_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<Running
     pipeline.add_pipe(create_transform_pipe(2)?);
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None, vec![])
+    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None, false)
 }
 
 fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
@@ -586,7 +586,7 @@ fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<Arc<RunningGraph>> {
     pipeline.try_resize(2)?;
     pipeline.add_pipe(sink_pipe);
 
-    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None, vec![])
+    RunningGraph::create(pipeline, 1, Arc::new("".to_string()), None, false)
 }
 
 fn create_memory_tracking_pipeline(
@@ -753,7 +753,7 @@ async fn create_executor_with_simple_pipeline(
         enable_queries_executor: false,
         max_threads: 8,
         executor_node_id: "".to_string(),
-        perf_event_groups: vec![],
+        perf_enabled: false,
     };
     QueryPipelineExecutor::create(pipeline, settings)
 }

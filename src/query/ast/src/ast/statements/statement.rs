@@ -777,12 +777,21 @@ impl Display for Statement {
                     ExplainKind::Join => write!(f, " JOIN")?,
                     ExplainKind::Memo(_) => write!(f, " MEMO")?,
                     ExplainKind::Graphical => write!(f, " GRAPHICAL")?,
-                    ExplainKind::Perf { event_groups } => {
-                        write!(f, " PERF")?;
-                        if !event_groups.is_empty() {
-                            let groups_str: Vec<String> =
-                                event_groups.iter().map(|g| g.join("+")).collect();
-                            write!(f, "(events='{}')", groups_str.join(","))?;
+                    ExplainKind::Perf {
+                        mode,
+                        format,
+                        limit,
+                    } => {
+                        write!(f, " PERF {mode}")?;
+                        let mut options = Vec::new();
+                        if *format != ExplainPerfFormat::default() {
+                            options.push(format!("format='{format}'"));
+                        }
+                        if let Some(limit) = limit {
+                            options.push(format!("limit={limit}"));
+                        }
+                        if !options.is_empty() {
+                            write!(f, " ({})", options.join(", "))?;
                         }
                     }
                 }

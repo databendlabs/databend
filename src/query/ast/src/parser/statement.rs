@@ -151,7 +151,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     Some(TokenKind::MEMO) => ExplainKind::Memo("".to_string()),
                     Some(TokenKind::GRAPHICAL) => ExplainKind::Graphical,
                     Some(TokenKind::PERF) => ExplainKind::Perf {
-                        event_groups: vec![],
+                        mode: ExplainPerfMode::Cpu,
+                        format: ExplainPerfFormat::Html,
+                        limit: None,
                     },
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
@@ -3116,7 +3118,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ).parse(i),
         HintPrefix | LParen | FROM => query_statement(i),
         EXPLAIN => rule!(
-            #explain_perf : "`EXPLAIN PERF [(events='<event>,...')] <statement>`"
+            #explain_perf : "`EXPLAIN PERF [CPU | MEMORY] [(format = 'html | table', limit = <n>)] <statement>`"
             | #explain : "`EXPLAIN [VERBOSE | (<option>, ...)] [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
         ).parse(i),
@@ -6753,33 +6755,65 @@ pub fn explain_option(i: Input) -> IResult<ExplainOption> {
 }
 
 pub fn explain_perf(i: Input) -> IResult<Statement> {
+    enum PerfOption {
+        Format(String),
+        Limit(u64),
+    }
+
+    // `FORMAT` and `LIMIT` are reserved keywords, they are not parsed as identifiers.
+    let option = alt((
+        map(
+            rule! { FORMAT ~ "=" ~ ^#literal_string },
+            |(_, _, format)| PerfOption::Format(format),
+        ),
+        map(rule! { LIMIT ~ "=" ~ ^#literal_u64 }, |(_, _, limit)| {
+            PerfOption::Limit(limit)
+        }),
+    ));
+
     map_res(
         rule! {
-            EXPLAIN ~ PERF ~ ( "(" ~ ^#ident ~ "=" ~ ^#literal_string ~ ")" )? ~ #statement
+            EXPLAIN ~ PERF ~ ( CPU | MEMORY )? ~ ( "(" ~ ^#comma_separated_list1(option) ~ ^")" )? ~ #statement
         },
-        |(_, _, opt_options, statement)| {
-            let event_groups = if let Some((_, key, _, value, _)) = opt_options {
-                if key.name.to_lowercase() != "events" {
-                    return Err(nom::Err::Failure(ErrorKind::other(
-                        "expected 'events' as the option key for EXPLAIN PERF",
-                    )));
-                }
-                value
-                    .split(',')
-                    .map(|group| {
-                        group
-                            .split('+')
-                            .map(|s| s.trim().to_string())
-                            .filter(|s| !s.is_empty())
-                            .collect::<Vec<_>>()
-                    })
-                    .filter(|g| !g.is_empty())
-                    .collect()
-            } else {
-                vec![]
+        |(_, _, opt_mode, opt_options, statement)| {
+            let mode = match opt_mode.map(|token| token.kind) {
+                Some(TokenKind::MEMORY) => ExplainPerfMode::Memory,
+                _ => ExplainPerfMode::Cpu,
             };
+
+            let mut format = None;
+            let mut limit = None;
+            for option in opt_options.map(|(_, options, _)| options).unwrap_or_default() {
+                match option {
+                    PerfOption::Format(value) if format.is_none() => {
+                        format = Some(ExplainPerfFormat::from_name(&value).ok_or_else(|| {
+                            nom::Err::Failure(ErrorKind::other(
+                                "expected 'html' or 'table' as the format of EXPLAIN PERF",
+                            ))
+                        })?);
+                    }
+                    PerfOption::Limit(value) if limit.is_none() => {
+                        if value == 0 {
+                            return Err(nom::Err::Failure(ErrorKind::other(
+                                "expected a positive integer as the limit of EXPLAIN PERF",
+                            )));
+                        }
+                        limit = Some(value);
+                    }
+                    _ => {
+                        return Err(nom::Err::Failure(ErrorKind::other(
+                            "duplicate option of EXPLAIN PERF",
+                        )));
+                    }
+                }
+            }
+
             Ok(Statement::Explain {
-                kind: ExplainKind::Perf { event_groups },
+                kind: ExplainKind::Perf {
+                    mode,
+                    format: format.unwrap_or_default(),
+                    limit,
+                },
                 options: Default::default(),
                 query: Box::new(statement.stmt),
             })

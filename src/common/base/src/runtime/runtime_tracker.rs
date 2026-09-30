@@ -62,9 +62,11 @@ use crate::runtime::MemStatBuffer;
 use crate::runtime::OutOfLimit;
 use crate::runtime::QueryPerf;
 use crate::runtime::TimeSeriesProfiles;
+use crate::runtime::memory::AllocProfile;
 use crate::runtime::memory::GlobalStatBuffer;
 use crate::runtime::memory::MemStat;
 use crate::runtime::metrics::ScopedRegistry;
+use crate::runtime::perf::PerfTargets;
 use crate::runtime::profile::Profile;
 use crate::runtime::time_series::QueryTimeSeriesProfile;
 use crate::runtime::workload_group::WorkloadGroupResource;
@@ -150,6 +152,8 @@ pub struct TrackingPayload {
     pub workload_group_resource: Option<Arc<WorkloadGroupResource>>,
     pub processor_interrupt: Option<Arc<AtomicBool>>,
     pub perf_enabled: bool,
+    /// Samples the allocations of the thread, set by `EXPLAIN PERF MEMORY`.
+    pub alloc_profile: Option<Arc<AllocProfile>>,
     pub process_rows: AtomicUsize,
 }
 
@@ -328,11 +332,20 @@ impl Clone for TrackingPayload {
             workload_group_resource: self.workload_group_resource.clone(),
             processor_interrupt: self.processor_interrupt.clone(),
             perf_enabled: self.perf_enabled,
+            alloc_profile: self.alloc_profile.clone(),
             process_rows: AtomicUsize::new(
                 self.process_rows.load(std::sync::atomic::Ordering::SeqCst),
             ),
         }
     }
+}
+
+/// Updates the thread-local profiling state of `EXPLAIN PERF` and the admin API for `payload`.
+#[inline]
+fn sync_profiling(payload: &TrackingPayload) {
+    let profiling = PerfTargets::resolve(payload);
+    QueryPerf::sync_from_payload(profiling.cpu);
+    AllocProfile::sync_current(profiling.alloc);
 }
 
 pub struct TrackingGuard {
@@ -359,7 +372,7 @@ impl Drop for TrackingGuard {
             std::mem::swap(&mut thread_tracker.payload, &mut self.saved);
 
             // Sync perf flag when restoring the previous payload
-            QueryPerf::sync_from_payload(thread_tracker.payload.perf_enabled);
+            sync_profiling(&thread_tracker.payload);
         });
     }
 }
@@ -415,6 +428,7 @@ impl ThreadTracker {
                 workload_group_resource: None,
                 processor_interrupt: None,
                 perf_enabled: false,
+                alloc_profile: None,
                 process_rows: AtomicUsize::new(0),
             }),
         }
@@ -447,7 +461,7 @@ impl ThreadTracker {
             std::mem::swap(&mut thread_tracker.payload, &mut guard.saved);
 
             // Sync perf flag from the new payload to thread_local PERF_FLAG
-            QueryPerf::sync_from_payload(thread_tracker.payload.perf_enabled);
+            sync_profiling(&thread_tracker.payload);
 
             guard
         })
@@ -509,6 +523,21 @@ impl ThreadTracker {
             borrow_mut.out_of_limit_desc = desc;
             old
         })
+    }
+
+    /// Calls `f` with the query id and the plan node of the current thread. Does nothing if the
+    /// tracker is being updated.
+    pub(crate) fn with_query_and_plan(f: impl FnOnce(Option<&str>, Option<(u32, &str)>)) {
+        let _ = TRACKER.try_with(|tracker| {
+            let Ok(tracker) = tracker.try_borrow() else {
+                return;
+            };
+            let plan = tracker.payload.profile.as_ref().and_then(|profile| {
+                let name = profile.plan_name.as_deref().unwrap_or_default();
+                profile.plan_id.map(|id| (id, name))
+            });
+            f(tracker.payload.query_id.as_deref(), plan);
+        });
     }
 
     pub fn mem_stat() -> Option<&'static Arc<MemStat>> {
