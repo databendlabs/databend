@@ -158,6 +158,103 @@ SELECT id FROM news_inline WHERE match(content, 'Cloud') ORDER BY id
 ----
 5
 
+# Replacing an existing name must publish the dictionary-backed index with the new table.
+statement ok
+CREATE TABLE news_replace (id INT, content STRING)
+
+statement ok
+INSERT INTO news_replace VALUES (99, 'old table')
+
+statement ok
+CREATE OR REPLACE TABLE news_replace (
+    id INT,
+    content STRING,
+    INVERTED INDEX idx (content) tokenizer = 'japanese' filters = 'japanese_stop,japanese_stemmer' user_dictionary = '@data/csv/japanese/userdict.csv'
+)
+
+query TT
+SHOW CREATE TABLE news_replace
+----
+news_replace CREATE TABLE news_replace ( id INT NULL, content VARCHAR NULL, SYNC INVERTED INDEX idx (content) filters = 'japanese_stop,japanese_stemmer', tokenizer = 'japanese', user_dictionary = '@data/csv/japanese/userdict.csv' ) ENGINE=FUSE
+
+query I
+SELECT count(*) FROM news_replace
+----
+0
+
+statement ok
+INSERT INTO news_replace VALUES (1, 'OpenAI が新しいモデルを発表した')
+
+query I
+SELECT id FROM news_replace WHERE match(content, 'AI') ORDER BY id
+----
+1
+
+# IF NOT EXISTS must leave the existing data and dictionary unchanged.
+statement ok
+CREATE TABLE IF NOT EXISTS news_replace (
+    id INT,
+    content STRING,
+    INVERTED INDEX idx (content) tokenizer = 'japanese' user_dictionary = '@data/csv/japanese/userdict_small.csv'
+)
+
+query TT
+SHOW CREATE TABLE news_replace
+----
+news_replace CREATE TABLE news_replace ( id INT NULL, content VARCHAR NULL, SYNC INVERTED INDEX idx (content) filters = 'japanese_stop,japanese_stemmer', tokenizer = 'japanese', user_dictionary = '@data/csv/japanese/userdict.csv' ) ENGINE=FUSE
+
+query I
+SELECT id FROM news_replace WHERE match(content, 'AI') ORDER BY id
+----
+1
+
+# Dictionary validation failures must not replace the visible table.
+statement error 1603
+CREATE OR REPLACE TABLE news_replace (
+    id INT,
+    content STRING,
+    INVERTED INDEX idx (content) tokenizer = 'japanese' user_dictionary = '@data/csv/japanese/does_not_exist.csv'
+)
+
+query I
+SELECT id FROM news_replace WHERE match(content, 'AI') ORDER BY id
+----
+1
+
+# Temporary index registration is unsupported. Failure after staging must keep the old table.
+statement ok
+CREATE TEMPORARY TABLE news_temp (id INT, content STRING)
+
+statement ok
+INSERT INTO news_temp VALUES (99, 'old temporary table')
+
+statement error 3902
+CREATE OR REPLACE TEMPORARY TABLE news_temp (
+    id INT,
+    content STRING,
+    INVERTED INDEX idx (content) tokenizer = 'japanese' user_dictionary = '@data/csv/japanese/userdict.csv'
+)
+
+query IT
+SELECT id, content FROM news_temp
+----
+99 old temporary table
+
+statement ok
+CREATE TEMPORARY TABLE IF NOT EXISTS news_temp (
+    id INT,
+    content STRING,
+    INVERTED INDEX idx (content) tokenizer = 'japanese' user_dictionary = '@data/csv/japanese/userdict_small.csv'
+)
+
+query IT
+SELECT id, content FROM news_temp
+----
+99 old temporary table
+
+statement ok
+DROP TABLE news_temp
+
 # CREATE TABLE ... AS SELECT with an inline dictionary.
 statement ok
 CREATE TABLE news_ctas (

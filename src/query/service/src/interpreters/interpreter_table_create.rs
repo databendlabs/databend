@@ -34,7 +34,6 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableInfo;
@@ -508,50 +507,67 @@ impl CreateTableInterpreter {
             )));
         }
 
+        let staged = !dictionary_indexes.is_empty();
+        if staged {
+            req.as_dropped = true;
+            req.table_meta.drop_on = Some(Utc::now());
+        }
         let reply = catalog.create_table(req.clone()).await?;
+        if staged {
+            // Replacements have `new_table == false` too; only IF NOT EXISTS keeps the old table.
+            if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
+                return Ok(PipelineBuildResult::create());
+            }
+            let temp_prefix = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX);
+            let result: Result<()> = async {
+                if let Some(prefix) = temp_prefix {
+                    self.register_temp_table(prefix).await?;
+                }
+                let table_info = TableInfo::new(
+                    &self.plan.database,
+                    &self.plan.table,
+                    TableIdent::new(
+                        reply.table_id,
+                        reply.table_id_seq.ok_or_else(|| {
+                            ErrorCode::Internal("Staged table creation did not return table_id_seq")
+                        })?,
+                    ),
+                    req.table_meta.clone(),
+                );
+                self.register_dictionary_indexes(catalog.as_ref(), &table_info, dictionary_indexes)
+                    .await?;
+                if temp_prefix.is_none() && !catalog.is_external() {
+                    self.process_ownership(&self.ctx.get_tenant(), reply.clone()).await?;
+                }
+                // Publish only after every index is ready; until then the old table stays visible.
+                catalog
+                    .commit_table_meta(CommitTableMetaReq {
+                        name_ident: req.name_ident.clone(),
+                        db_id: reply.db_id,
+                        table_id: reply.table_id,
+                        prev_table_id: reply.prev_table_id,
+                        orphan_table_name: reply.orphan_table_name.clone(),
+                    })
+                    .await?;
+                Ok(())
+            }
+            .await;
+            if let Err(e) = result {
+                if let Some(prefix) = temp_prefix {
+                    cleanup_staged_temp_table(
+                        self.ctx.get_current_session().temp_tbl_mgr(),
+                        reply.table_id,
+                        prefix,
+                    )
+                    .await?;
+                }
+                // Persistent staged tables remain dropped and are reclaimed by vacuum.
+                return Err(e);
+            }
+            return Ok(PipelineBuildResult::create());
+        }
         if let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX) {
             self.register_temp_table(prefix).await?;
-        }
-
-        // `new_table == false` means an existing table was kept (IF NOT EXISTS); its own
-        // indexes are untouched.
-        if reply.new_table && !dictionary_indexes.is_empty() {
-            let table_info = TableInfo::new(
-                &self.plan.database,
-                &self.plan.table,
-                TableIdent::new(reply.table_id, reply.table_id_seq.unwrap_or_default()),
-                req.table_meta.clone(),
-            );
-            if let Err(e) = self
-                .register_dictionary_indexes(catalog.as_ref(), &table_info, dictionary_indexes)
-                .await
-            {
-                // Keep CREATE TABLE all-or-nothing: the table was created moments ago by this
-                // statement, so drop it instead of leaving one behind without its indexes.
-                let dropped = catalog
-                    .drop_table_by_id(DropTableByIdReq {
-                        if_exists: true,
-                        tenant: self.ctx.get_tenant(),
-                        tb_id: reply.table_id,
-                        table_name: self.plan.table.clone(),
-                        db_id: reply.db_id,
-                        db_name: self.plan.database.clone(),
-                        engine: req.table_meta.engine.clone(),
-                        temp_prefix: req
-                            .table_meta
-                            .options
-                            .get(OPT_KEY_TEMP_PREFIX)
-                            .cloned()
-                            .unwrap_or_default(),
-                    })
-                    .await;
-                return Err(match dropped {
-                    Ok(_) => e,
-                    Err(drop_err) => e.add_message_back(format!(
-                        "; rolling back the new table also failed: {drop_err}"
-                    )),
-                });
-            }
         }
 
         // iceberg table do not need to generate ownership.
