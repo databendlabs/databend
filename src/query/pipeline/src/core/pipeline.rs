@@ -25,7 +25,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::info;
 use petgraph::Direction;
-use petgraph::graph::EdgeIndex;
 use petgraph::matrix_graph::Zero;
 use petgraph::prelude::StableGraph;
 use petgraph::stable_graph::NodeIndex;
@@ -52,7 +51,6 @@ use crate::core::processor::ProcessorPtr;
 use crate::core::profile::PlanScope;
 use crate::core::waker::ProxyWakeCallback;
 
-#[derive(Clone)]
 pub struct Node {
     pub proc: ProcessorPtr,
     pub inputs: Vec<Arc<InputPort>>,
@@ -62,7 +60,7 @@ pub struct Node {
 
 impl Debug for Node {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", unsafe { self.proc.name() })
+        write!(f, "{}", self.proc.name())
     }
 }
 
@@ -205,20 +203,22 @@ impl Pipeline {
     pub fn add_pipe(&mut self, pipe: Pipe) {
         let plan_scope = PlanScope::get_plan_scope();
         let mut new_sinks = VecDeque::with_capacity(pipe.output_length);
-        for item in &pipe.items {
+        for item in pipe.items {
+            let inputs_len = item.inputs_port.len();
+            let outputs_len = item.outputs_port.len();
             let index = self.graph.add_node(Node {
-                proc: item.processor.clone(),
-                inputs: item.inputs_port.clone(),
-                outputs: item.outputs_port.clone(),
+                proc: item.processor,
+                inputs: item.inputs_port,
+                outputs: item.outputs_port,
                 scope: plan_scope.clone(),
             });
 
-            for (input_port_index, _) in item.inputs_port.iter().enumerate() {
+            for input_port_index in 0..inputs_len {
                 let Some((out_index, output_port_index)) = self.sinks.pop_front() else {
                     unreachable!();
                 };
 
-                let single_input = item.inputs_port.len() == 1;
+                let single_input = inputs_len == 1;
                 let single_output = self.graph[out_index].outputs.len() == 1;
 
                 self.graph.add_edge(out_index, index, Edge {
@@ -228,7 +228,7 @@ impl Pipeline {
                 });
             }
 
-            for idx in 0..item.outputs_port.len() {
+            for idx in 0..outputs_len {
                 new_sinks.push_back((index, idx));
             }
         }
@@ -585,6 +585,27 @@ impl Pipeline {
         chain
     }
 
+    /// Moves every node out of the graph, in index order, together with the edges between them.
+    pub fn take_graph(&mut self) -> (Vec<Node>, Vec<(NodeIndex, NodeIndex, Edge)>) {
+        let mut graph = std::mem::take(&mut self.graph);
+        let edges = graph
+            .edge_indices()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .filter_map(|edge| {
+                let (source, target) = graph.edge_endpoints(edge)?;
+                Some((source, target, graph.remove_edge(edge)?))
+            })
+            .collect();
+        let nodes = graph
+            .node_indices()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .filter_map(|node| graph.remove_node(node))
+            .collect();
+        (nodes, edges)
+    }
+
     pub fn take_sinks(&mut self) -> VecDeque<(NodeIndex, usize)> {
         std::mem::take(&mut self.sinks)
     }
@@ -608,21 +629,15 @@ impl Pipeline {
             other_sinks.push_back((NodeIndex::new(offset + index.index()), v));
         }
 
-        for node in other.graph.node_weights() {
-            self.graph.add_node(node.clone());
+        let (nodes, edges) = other.take_graph();
+        for node in nodes {
+            self.graph.add_node(node);
         }
 
-        for edge in other.graph.edge_indices() {
-            let index = EdgeIndex::new(edge.index());
-            if let Some((source, target)) = other.graph.edge_endpoints(index) {
-                let source = NodeIndex::new(offset + source.index());
-                let target = NodeIndex::new(offset + target.index());
-                let edge_weight = other
-                    .graph
-                    .edge_weight(index)
-                    .expect("Edge weight must exist for valid edge index");
-                self.graph.add_edge(source, target, edge_weight.clone());
-            }
+        for (source, target, edge) in edges {
+            let source = NodeIndex::new(offset + source.index());
+            let target = NodeIndex::new(offset + target.index());
+            self.graph.add_edge(source, target, edge);
         }
 
         self.lock_guards.extend(other.take_lock_guards());

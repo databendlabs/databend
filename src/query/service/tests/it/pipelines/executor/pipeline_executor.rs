@@ -12,19 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
+use databend_common_base::runtime::spawn_blocking;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::SyncSenderSink;
 use databend_common_pipeline::sources::SyncReceiverSource;
@@ -93,6 +98,125 @@ async fn test_always_call_on_finished() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_cancel_async_process_when_outputs_finished() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    let settings = ExecutorSettings {
+        query_id: Arc::new("test-cancel-async-process".to_string()),
+        max_execute_time_in_seconds: Duration::from_secs(30),
+        enable_queries_executor: false,
+        max_threads: 2,
+        executor_node_id: "".to_string(),
+        perf_event_groups: vec![],
+    };
+
+    let async_process_dropped = Arc::new(AtomicBool::new(false));
+    let mut pipeline = Pipeline::create();
+    let output = OutputPort::create();
+    pipeline.add_pipe(Pipe::create(0, 1, vec![PipeItem::create(
+        ProcessorPtr::create(Box::new(PendingAsyncSource {
+            output: output.clone(),
+            async_process_dropped: async_process_dropped.clone(),
+        })),
+        vec![],
+        vec![output],
+    )]));
+    let input = InputPort::create();
+    pipeline.add_pipe(Pipe::create(1, 0, vec![PipeItem::create(
+        ProcessorPtr::create(Box::new(DelayedFinishSink {
+            input: input.clone(),
+            waited: false,
+        })),
+        vec![input],
+        vec![],
+    )]));
+    pipeline.set_max_threads(2);
+
+    // The source waits forever. It only finishes because the executor drops its pending
+    // `async_process` once the sink finished the source's only output; otherwise the query hits
+    // the execution time limit.
+    let executor = QueryPipelineExecutor::create(pipeline, settings)?;
+    let result = spawn_blocking(move || executor.execute()).await?;
+    result?;
+    assert!(async_process_dropped.load(Ordering::SeqCst));
+
+    Ok(())
+}
+
+struct SetOnDrop(Arc<AtomicBool>);
+
+impl Drop for SetOnDrop {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+}
+
+struct PendingAsyncSource {
+    output: Arc<OutputPort>,
+    async_process_dropped: Arc<AtomicBool>,
+}
+
+#[async_trait::async_trait]
+impl Processor for PendingAsyncSource {
+    fn name(&self) -> String {
+        "PendingAsyncSource".to_string()
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        if self.output.is_finished() {
+            return Ok(Event::Finished);
+        }
+        Ok(Event::Async)
+    }
+
+    async fn async_process(&mut self) -> Result<()> {
+        let _dropped = SetOnDrop(self.async_process_dropped.clone());
+        std::future::pending::<()>().await;
+        Ok(())
+    }
+
+    fn cancel_async_on_outputs_finished(&self) -> bool {
+        true
+    }
+}
+
+struct DelayedFinishSink {
+    input: Arc<InputPort>,
+    waited: bool,
+}
+
+#[async_trait::async_trait]
+impl Processor for DelayedFinishSink {
+    fn name(&self) -> String {
+        "DelayedFinishSink".to_string()
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        if !self.waited {
+            // Let the source start its async work before finishing its output.
+            self.input.set_need_data();
+            return Ok(Event::Async);
+        }
+        self.input.finish();
+        Ok(Event::Finished)
+    }
+
+    async fn async_process(&mut self) -> Result<()> {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        self.waited = true;
+        Ok(())
+    }
 }
 
 fn create_pipeline() -> (Arc<AtomicBool>, Pipeline) {
