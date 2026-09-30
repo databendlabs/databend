@@ -629,7 +629,7 @@ TopN(Final)
                         │           ├── read size: < 1 KiB
                         │           ├── partitions total: 1
                         │           ├── partitions scanned: 1
-                        │           ├── pruning stats: [segments: <read cost: 1 ms, decompress cost: 1 ms, range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+                        │           ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                         │           ├── push downs: [filters: [is_true(explain_agg_rank_r.flag (#3))], limit: NONE]
                         │           └── estimated rows: 4.50
                         └── AggregateFinal(Probe)
@@ -649,7 +649,7 @@ TopN(Final)
                                     ├── read size: < 1 KiB
                                     ├── partitions total: 1
                                     ├── partitions scanned: 1
-                                    ├── pruning stats: [segments: <read cost: 1 ms, decompress cost: 1 ms, range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+                                    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                                     ├── push downs: [filters: [], limit: NONE]
                                     ├── apply join filters: [#0]
                                     └── estimated rows: 9.00
