@@ -22,7 +22,6 @@ use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::FromData;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::PartialAggregateController;
 use databend_common_expression::PartialAggregateMode;
@@ -33,7 +32,6 @@ use databend_common_expression::PartitionedPayload;
 use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::group_hash_entries;
-use databend_common_expression::types::UInt64Type;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
@@ -298,8 +296,10 @@ impl TransformPartialAggregate {
 
         if adaptive.controller.state() == PartialState::Bypass {
             adaptive.output_rows += rows_num;
-            adaptive.group_hashes.resize(rows_num, 0);
-            group_hash_entries(group_columns, &mut adaptive.group_hashes);
+            if adaptive.partition_count > 1 {
+                adaptive.group_hashes.resize(rows_num, 0);
+                group_hash_entries(group_columns, &mut adaptive.group_hashes);
+            }
             return Ok(vec![Self::raw_block(block, adaptive)?]);
         }
 
@@ -350,9 +350,8 @@ impl TransformPartialAggregate {
         Ok(blocks)
     }
 
-    /// The rows of `block` with their group hashes, split into the buckets of the table.
-    fn raw_block(mut block: DataBlock, adaptive: &AdaptiveState) -> Result<DataBlock> {
-        block.add_column(UInt64Type::from_data(adaptive.group_hashes.clone()));
+    /// The rows of `block`, split into the buckets of the table by their group hashes.
+    fn raw_block(block: DataBlock, adaptive: &AdaptiveState) -> Result<DataBlock> {
         let payload = RawPayload {
             bucket: 0,
             data_block: block,
@@ -363,7 +362,9 @@ impl TransformPartialAggregate {
         } else {
             let mask = adaptive.partition_mask;
             payload
-                .scatter(adaptive.partition_count, |hash| mask.index(hash))?
+                .scatter(&adaptive.group_hashes, adaptive.partition_count, |hash| {
+                    mask.index(hash)
+                })?
                 .into_iter()
                 .enumerate()
                 .filter(|(_, payload)| payload.data_block.num_rows() != 0)

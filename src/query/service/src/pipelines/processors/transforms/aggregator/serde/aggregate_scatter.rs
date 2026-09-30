@@ -21,7 +21,9 @@ use databend_common_expression::AggregatePayload;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Payload;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::SerializedPayload;
+use databend_common_expression::group_hash_entries;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -123,9 +125,14 @@ impl AggregateRowScatter {
                     let buckets = self.buckets as u64;
                     let mut partitions = Vec::with_capacity(self.buckets);
                     partitions.resize_with(self.buckets, Vec::new);
+                    let mut hashes = vec![];
                     for payload in payloads {
-                        let scattered =
-                            payload.scatter(self.buckets, |hash| (hash % buckets) as usize)?;
+                        hashes.resize(payload.data_block.num_rows(), 0);
+                        let group_columns =
+                            ProjectedBlock::project(&params.group_columns, &payload.data_block);
+                        group_hash_entries(group_columns, &mut hashes);
+                        let scattered = payload
+                            .scatter(&hashes, self.buckets, |hash| (hash % buckets) as usize)?;
                         for (index, payload) in scattered.into_iter().enumerate() {
                             if payload.data_block.num_rows() != 0 {
                                 partitions[index].push(payload);
