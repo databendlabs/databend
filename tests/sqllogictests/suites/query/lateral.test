@@ -422,8 +422,303 @@ select o.id, t.v from nullable_lateral_outer o left join lateral (select v from 
 2 30
 3 NULL
 
+# A scalar aggregate (no GROUP BY) returns one row for every outer row, even for empty input.
+statement ok
+set enable_experimental_new_join = 0
+
+query II
+select o.id, t.c from nullable_lateral_outer o, lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k) t order by o.id
+----
+1 1
+2 0
+3 0
+
+query II
+select o.id, t.c from nullable_lateral_outer o, lateral (select count(*) c from nullable_lateral_inner i where o.k is null) t order by o.id
+----
+1 0
+2 3
+3 0
+
+query II
+select o.id, t.s from nullable_lateral_outer o, lateral (select sum(v) s from nullable_lateral_inner i where i.k = o.k) t order by o.id
+----
+1 10
+2 NULL
+3 NULL
+
+query II
+select o.id, t.c from nullable_lateral_outer o left join lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k) t on true order by o.id
+----
+1 1
+2 0
+3 0
+
+query II
+select o.id, t.c from nullable_lateral_outer o, lateral (select count(*) + 1 c from nullable_lateral_inner i where i.k = o.k) t order by o.id
+----
+1 2
+2 1
+3 1
+
+query IT
+select o.id, t.a from nullable_lateral_outer o, lateral (select array_agg(v) a from nullable_lateral_inner i where i.k = o.k) t order by o.id
+----
+1 [10]
+2 []
+3 []
+
+query II
+select o.id, t.c from nullable_lateral_outer o, lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k having count(*) = 0) t order by o.id
+----
+2 0
+3 0
+
+query II
+select o.id, t.c from nullable_lateral_outer o join lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k) t on t.c = 0 order by o.id
+----
+2 0
+3 0
+
+query III
+select o.id, t.c, t.m from nullable_lateral_outer o, lateral (select count(v) c, max(v) m from nullable_lateral_inner i where i.v > o.k) t order by o.id
+----
+1 3 30
+2 0 NULL
+3 3 30
+
+statement ok
+set enable_experimental_new_join = 1
+
+query II
+select o.id, t.c from nullable_lateral_outer o, lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k) t order by o.id
+----
+1 1
+2 0
+3 0
+
+query II
+select o.id, t.c from nullable_lateral_outer o, lateral (select count(*) c from nullable_lateral_inner i where o.k is null) t order by o.id
+----
+1 0
+2 3
+3 0
+
+query II
+select o.id, t.s from nullable_lateral_outer o, lateral (select sum(v) s from nullable_lateral_inner i where i.k = o.k) t order by o.id
+----
+1 10
+2 NULL
+3 NULL
+
+query II
+select o.id, t.c from nullable_lateral_outer o left join lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k) t on true order by o.id
+----
+1 1
+2 0
+3 0
+
+query II
+select o.id, t.c from nullable_lateral_outer o, lateral (select count(*) + 1 c from nullable_lateral_inner i where i.k = o.k) t order by o.id
+----
+1 2
+2 1
+3 1
+
+query IT
+select o.id, t.a from nullable_lateral_outer o, lateral (select array_agg(v) a from nullable_lateral_inner i where i.k = o.k) t order by o.id
+----
+1 [10]
+2 []
+3 []
+
+query II
+select o.id, t.c from nullable_lateral_outer o, lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k having count(*) = 0) t order by o.id
+----
+2 0
+3 0
+
+query II
+select o.id, t.c from nullable_lateral_outer o join lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k) t on t.c = 0 order by o.id
+----
+2 0
+3 0
+
+query III
+select o.id, t.c, t.m from nullable_lateral_outer o, lateral (select count(v) c, max(v) m from nullable_lateral_inner i where i.v > o.k) t order by o.id
+----
+1 3 30
+2 0 NULL
+3 3 30
+
+# LEFT JOIN LATERAL keeps the outer row and NULL-extends the right side when HAVING or the
+# ON condition fails, also for the rows whose aggregate input is empty.
+statement ok
+set enable_experimental_new_join = 0
+
+query II
+select o.id, t.c from nullable_lateral_outer o left join lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k) t on t.c = 0 order by o.id
+----
+1 NULL
+2 0
+3 0
+
+query II
+select o.id, t.c from nullable_lateral_outer o left join lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k having count(*) = 0) t on true order by o.id
+----
+1 NULL
+2 0
+3 0
+
+# The projection above HAVING isn't evaluated on rows HAVING rejects.
+query II
+select o.id, t.c from nullable_lateral_outer o left join lateral (select (10 / count(*))::int c from nullable_lateral_inner i where i.k = o.k having count(*) > 0) t on true order by o.id
+----
+1 10
+2 NULL
+3 NULL
+
+query II
+select o.id, t.c from nullable_lateral_outer o left join lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k) t on o.id = 2 order by o.id
+----
+1 NULL
+2 0
+3 NULL
+
+query III
+select o.id, t.c, t.s from nullable_lateral_outer o left join lateral (select count(*) c, sum(v) s from nullable_lateral_inner i where i.k = o.k) t on t.c > 0 and o.id < 3 order by o.id
+----
+1 1 10
+2 NULL NULL
+3 NULL NULL
+
+query II
+select o.id, t.c from nullable_lateral_outer o left join lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k) t on t.c = 0 where t.c is null order by o.id
+----
+1 NULL
+
+statement ok
+set enable_experimental_new_join = 1
+
+query II
+select o.id, t.c from nullable_lateral_outer o left join lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k) t on t.c = 0 order by o.id
+----
+1 NULL
+2 0
+3 0
+
+query II
+select o.id, t.c from nullable_lateral_outer o left join lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k having count(*) = 0) t on true order by o.id
+----
+1 NULL
+2 0
+3 0
+
+query II
+select o.id, t.c from nullable_lateral_outer o left join lateral (select (10 / count(*))::int c from nullable_lateral_inner i where i.k = o.k having count(*) > 0) t on true order by o.id
+----
+1 10
+2 NULL
+3 NULL
+
+query II
+select o.id, t.c from nullable_lateral_outer o left join lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k) t on o.id = 2 order by o.id
+----
+1 NULL
+2 0
+3 NULL
+
+query III
+select o.id, t.c, t.s from nullable_lateral_outer o left join lateral (select count(*) c, sum(v) s from nullable_lateral_inner i where i.k = o.k) t on t.c > 0 and o.id < 3 order by o.id
+----
+1 1 10
+2 NULL NULL
+3 NULL NULL
+
+query II
+select o.id, t.c from nullable_lateral_outer o left join lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k) t on t.c = 0 where t.c is null order by o.id
+----
+1 NULL
+
 statement ok
 unset enable_experimental_new_join
+
+# ORDER BY / LIMIT n over the aggregate and an explicit CROSS JOIN LATERAL.
+query II
+select o.id, t.c from nullable_lateral_outer o, lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k order by c limit 1) t order by o.id
+----
+1 1
+2 0
+3 0
+
+query II
+select o.id, t.c from nullable_lateral_outer o left join lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k order by c desc limit 5) t on true order by o.id
+----
+1 1
+2 0
+3 0
+
+query II
+select o.id, t.c from nullable_lateral_outer o cross join lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k) t order by o.id
+----
+1 1
+2 0
+3 0
+
+# Later references to the NULL-extended right side columns of a LEFT lateral join: another
+# lateral subquery, `t.*`, and USING.
+query III
+select o.id, t.c, u.d from nullable_lateral_outer o left join lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k) t on t.c = 0 left join lateral (select count(*) d from nullable_lateral_inner i2 where i2.v > t.c) u on true order by o.id
+----
+1 NULL 0
+2 0 3
+3 0 3
+
+query III
+select o.id, t.c, u.d from nullable_lateral_outer o left join lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k) t on t.c = 0, lateral (select t.c + 1 d) u order by o.id
+----
+1 NULL NULL
+2 0 1
+3 0 1
+
+query III
+select o.id, t.* from nullable_lateral_outer o left join lateral (select count(*) c, sum(v) s from nullable_lateral_inner i where i.k = o.k) t on t.c > 0 order by o.id
+----
+1 1 10
+2 NULL NULL
+3 NULL NULL
+
+query II
+select o.id, t.id from nullable_lateral_outer o left join lateral (select count(*) id from nullable_lateral_inner i where i.k = o.k) t using (id) order by o.id
+----
+1 1
+2 NULL
+3 NULL
+
+query II
+select * from nullable_lateral_outer o left join lateral (select count(*) id from nullable_lateral_inner i where i.k = o.k) t using (id) order by id
+----
+1 1
+2 NULL
+3 5
+
+# The ON condition of a LEFT lateral join may read a virtual column of the outer side while the
+# right side columns are NULL-extended.
+statement ok
+create or replace table lateral_vc_outer(id int, k int null, j json) storage_format = 'parquet' enable_virtual_column = true
+
+statement ok
+insert into lateral_vc_outer values (1, 1, '{"a":1}'), (2, NULL, '{"a":0}'), (3, 5, '{"a":5}')
+
+query III
+select o.id, o.j['a']::int a, t.c from lateral_vc_outer o left join lateral (select count(*) c from nullable_lateral_inner i where i.k = o.k) t on t.c = o.j['a']::int order by o.id
+----
+1 1 1
+2 0 0
+3 5 NULL
+
+statement ok
+drop table lateral_vc_outer
 
 statement ok
 drop database test_lateral

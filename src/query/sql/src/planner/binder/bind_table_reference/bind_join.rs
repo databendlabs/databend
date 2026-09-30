@@ -30,6 +30,7 @@ use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnSet;
 use crate::MetadataRef;
+use crate::Symbol;
 use crate::binder::Any;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
@@ -156,7 +157,7 @@ impl Binder {
         let build_side_cache_info = self.expression_scan_context.generate_cache_info(cache_idx);
 
         let join_type = join_type(&join.op);
-        let s_expr = self.bind_join_with_type(
+        let (s_expr, replacements) = self.bind_join_with_type(
             join_type,
             join_conditions,
             (left_child, &mut left_context),
@@ -171,6 +172,7 @@ impl Binder {
             left_context.clone(),
             right_context.clone(),
         );
+        replacements.apply(&mut bind_context);
 
         bind_context
             .cte_context
@@ -216,7 +218,7 @@ impl Binder {
         )?;
 
         let join_type = join_type(&join_op);
-        let s_expr = self.bind_join_with_type(
+        let (s_expr, replacements) = self.bind_join_with_type(
             join_type,
             join_conditions,
             (left_child, &mut left_context),
@@ -224,8 +226,9 @@ impl Binder {
             vec![],
             None,
         )?;
-        let bind_context =
+        let mut bind_context =
             join_bind_context(join_type, bind_context, left_context.clone(), right_context);
+        replacements.apply(&mut bind_context);
         Ok((s_expr, bind_context))
     }
 
@@ -364,7 +367,7 @@ impl Binder {
         (mut right_child, right_context): (SExpr, &mut BindContext),
         mut is_null_equal: Vec<usize>,
         build_side_cache_info: Option<HashJoinBuildCacheInfo>,
-    ) -> Result<SExpr> {
+    ) -> Result<(SExpr, RightColumnReplacements)> {
         match join_type {
             JoinType::Cross if !left_conditions.is_empty() || !right_conditions.is_empty() => {
                 return Err(ErrorCode::SemanticError(
@@ -393,6 +396,27 @@ impl Binder {
         )?;
 
         let right_prop = RelExpr::with_s_expr(&right_child).derive_relational_prop()?;
+        if !right_prop.outer_columns.is_empty()
+            && is_null_equal.is_empty()
+            && build_side_cache_info.is_none()
+            && self.expression_scan_context.used_cache_indexes.is_empty()
+            && let Some(bound) = self.try_bind_lateral_scalar_aggregate(
+                join_type,
+                &left_child,
+                &right_child,
+                right_context,
+                (&left_conditions, &right_conditions),
+                &non_equi_conditions,
+            )?
+        {
+            if !other_condition_columns.is_empty() {
+                self.metadata
+                    .write()
+                    .add_non_lazy_columns(other_condition_columns);
+            }
+            return Ok(bound);
+        }
+
         let mut is_lateral = false;
         if !right_prop.outer_columns.is_empty() {
             // If there are outer columns in right child, then the join is a correlated lateral join
@@ -495,15 +519,16 @@ impl Binder {
             spatial_join: None,
         };
 
-        if logical_join.join_type.is_asof_join() {
-            self.rewrite_asof(logical_join, left_child, (right_child, right_context))
+        let s_expr = if logical_join.join_type.is_asof_join() {
+            self.rewrite_asof(logical_join, left_child, (right_child, right_context))?
         } else {
-            Ok(SExpr::create_binary(
+            SExpr::create_binary(
                 Arc::new(logical_join.into()),
                 Arc::new(left_child),
                 Arc::new(right_child),
-            ))
-        }
+            )
+        };
+        Ok((s_expr, RightColumnReplacements::default()))
     }
 
     fn push_down_other_conditions(
@@ -1148,6 +1173,34 @@ fn join_type(join_type: &JoinOperator) -> JoinType {
         JoinOperator::LeftAny => JoinType::LeftAny,
         JoinOperator::RightAny => JoinType::RightAny,
         JoinOperator::InnerAny => JoinType::InnerAny,
+    }
+}
+
+/// Right side column bindings replaced by `bind_join_with_type`.
+///
+/// A LEFT lateral join over a scalar aggregate NULL-extends its right side columns into new
+/// columns (see `try_bind_lateral_scalar_aggregate`). Bind contexts built from the right side
+/// bindings before the call, such as the join output context, must apply the replacements.
+/// The replaced columns are derived columns of the lateral subquery, never base table or
+/// virtual columns, so `bound_virtual_columns` doesn't need to change.
+#[must_use]
+#[derive(Default)]
+pub(crate) struct RightColumnReplacements(pub(crate) Vec<(Symbol, ColumnBinding)>);
+
+impl RightColumnReplacements {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub(crate) fn apply(&self, bind_context: &mut BindContext) {
+        for (old_index, column) in self.0.iter() {
+            for binding in bind_context.columns.iter_mut() {
+                if binding.index == *old_index {
+                    binding.index = column.index;
+                    binding.data_type = column.data_type.clone();
+                }
+            }
+        }
     }
 }
 
