@@ -1103,6 +1103,9 @@ impl EagerAnalysis {
                 })
                 .cloned()
                 .collect(),
+            // A rank limit on the final aggregate only holds for the groups that survive
+            // the join. Applying it below the join could drop groups that would match.
+            rank_limit: None,
             ..self.final_agg.clone()
         }
     }
