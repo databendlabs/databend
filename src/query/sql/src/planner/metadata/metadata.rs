@@ -33,6 +33,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::display::display_tuple_field_name;
 use databend_common_expression::is_stream_column_id;
 use databend_common_expression::types::DataType;
+use databend_common_meta_app::schema::is_materialized_view_engine;
 use jsonb::keypath::OwnedKeyPaths;
 use parking_lot::RwLock;
 
@@ -118,6 +119,19 @@ impl Metadata {
 
     pub fn tables(&self) -> &[TableEntry] {
         self.tables.as_slice()
+    }
+
+    /// Return the logical source table IDs referenced by the query.
+    ///
+    /// Materialized-view rewrite adds candidate read plans to the same metadata. Those
+    /// candidates may register their physical MV tables, but the MV tables are optimizer
+    /// implementation details rather than logical dependencies of the query.
+    pub fn source_table_ids(&self) -> BTreeSet<u64> {
+        self.tables
+            .iter()
+            .filter(|entry| !is_materialized_view_engine(entry.table().engine()))
+            .map(|entry| entry.table().get_id())
+            .collect()
     }
 
     pub fn table_index_by_column_indexes(&self, column_indexes: &ColumnSet) -> Option<IndexType> {
