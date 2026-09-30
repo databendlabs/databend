@@ -29,7 +29,6 @@ use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::ColumnStat;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::ir::StatInfo;
 use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
 use databend_common_sql::optimizer::optimizers::rule::RuleID;
@@ -182,7 +181,7 @@ async fn write_case(file: &mut impl Write, case: &StatsCase) -> Result<()> {
     let target = find_operator(&s_expr, case.operator.clone()).ok_or_else(|| {
         ErrorCode::Internal(format!("cannot find {:?} in optimized plan", case.operator))
     })?;
-    let stats = RelExpr::with_s_expr(target).derive_cardinality(&StatContext::default())?;
+    let stats = RelExpr::with_s_expr(target).derive_cardinality(&ctx.stat_context()?)?;
 
     write_case_title(file, case.name, case.description)?;
     writeln!(file, "sql: {}", case.sql)?;

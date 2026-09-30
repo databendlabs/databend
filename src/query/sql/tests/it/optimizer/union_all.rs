@@ -193,7 +193,7 @@ fn write_stat_info(file: &mut impl Write, metadata: &Metadata, stat_info: &StatI
     Ok(())
 }
 
-fn format_node(metadata: &MetadataRef, expr: &SExpr) -> Result<String> {
+fn format_node(metadata: &MetadataRef, expr: &SExpr, stat_context: &StatContext) -> Result<String> {
     Plan::Query {
         s_expr: Box::new(expr.clone()),
         metadata: metadata.clone(),
@@ -202,7 +202,7 @@ fn format_node(metadata: &MetadataRef, expr: &SExpr) -> Result<String> {
         formatted_ast: None,
         ignore_result: false,
     }
-    .format_indent(FormatOptions::default(), &StatContext::default())
+    .format_indent(FormatOptions::default(), stat_context)
 }
 
 fn write_derived_stats(
@@ -210,6 +210,7 @@ fn write_derived_stats(
     metadata: &MetadataRef,
     root: &SExpr,
     target: &StatTarget,
+    stat_context: &StatContext,
 ) -> Result<()> {
     let mut expr = root;
     for (depth, child) in target.path.iter().enumerate() {
@@ -239,8 +240,8 @@ fn write_derived_stats(
 
     writeln!(file, "path: {:?}", target.path)?;
     writeln!(file, "node:")?;
-    writeln!(file, "{}", format_node(metadata, expr)?)?;
-    let stat_info = RelExpr::with_s_expr(expr).derive_cardinality(&StatContext::default())?;
+    writeln!(file, "{}", format_node(metadata, expr, stat_context)?)?;
+    let stat_info = RelExpr::with_s_expr(expr).derive_cardinality(stat_context)?;
     write_stat_info(file, &metadata.read(), &stat_info)?;
     Ok(())
 }
@@ -259,10 +260,11 @@ async fn write_case(file: &mut impl Write, case: UnionCase) -> Result<()> {
         unreachable!("UNION ALL query should bind to a query plan");
     };
 
+    let stat_context = ctx.stat_context()?;
     write_case_title(file, case.name, case.description)?;
     writeln!(file, "sql: {}", case.sql)?;
     for target in &case.targets {
-        write_derived_stats(file, &metadata, &s_expr, target)?;
+        write_derived_stats(file, &metadata, &s_expr, target, &stat_context)?;
     }
     writeln!(file)?;
     Ok(())

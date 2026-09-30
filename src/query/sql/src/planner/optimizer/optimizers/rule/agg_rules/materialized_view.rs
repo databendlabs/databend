@@ -1056,8 +1056,11 @@ mod tests {
             Arc::new(scan.clone()),
         );
         assert!(
-            estimate_compute_cost(&scan, &StatContext::default())
-                < estimate_compute_cost(&with_aggregate, &StatContext::default())
+            estimate_compute_cost(&scan, &StatContext::without_settings(Default::default()))
+                < estimate_compute_cost(
+                    &with_aggregate,
+                    &StatContext::without_settings(Default::default())
+                )
         );
     }
 
