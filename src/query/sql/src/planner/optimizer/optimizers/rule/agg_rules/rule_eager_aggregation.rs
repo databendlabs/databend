@@ -348,6 +348,19 @@ impl<'a> EagerInput<'a> {
             return Ok(vec![]);
         }
 
+        // An eager aggregate that keeps no group column on its side is a scalar
+        // aggregate: it emits exactly one row even when its input is empty. For an
+        // inner/cross join that turns an empty build side into a one-row build side,
+        // so the join emits probe rows the original plan filtered out (see #20483).
+        // Only sides that retain at least one group column preserve emptiness, because
+        // a grouped aggregate over an empty input produces zero rows.
+        let keeps_empty_side = Pair::new_with(|side| {
+            final_agg
+                .group_items
+                .iter()
+                .any(|item| join_columns[side].contains(&item.index))
+        });
+
         let eager_aggregation_variants = eager_candidates.assignments();
         Ok(eager_aggregation_variants
             .into_iter()
@@ -358,6 +371,7 @@ impl<'a> EagerInput<'a> {
                     &join_columns,
                     &eager_extra_eval_scalar_expr,
                     &can_eager,
+                    &keeps_empty_side,
                     assignment,
                 )
             })
@@ -401,33 +415,34 @@ impl<'a> EagerInput<'a> {
         join_columns: &Pair<ColumnSet>,
         eager_extra_eval_scalar_expr: &Pair<EvalScalar>,
         can_eager: &Pair<bool>,
+        keeps_empty_side: &Pair<bool>,
         assignment: EagerAssignment,
     ) -> Vec<EagerAnalysis> {
+        let analysis = |rewrite_kind| EagerAnalysis {
+            final_agg: final_agg.clone(),
+            original_group_items_len,
+            join_columns: join_columns.clone(),
+            eager_extra_eval_scalar_expr: eager_extra_eval_scalar_expr.clone(),
+            eager_aggregations: assignment.eager_aggregations.clone(),
+            can_eager: can_eager.clone(),
+            rewrite_kind,
+        };
+
         let can_push_down = Pair {
             left: !assignment.eager_aggregations[Side::Left].is_empty() && can_eager[Side::Left],
             right: !assignment.eager_aggregations[Side::Right].is_empty() && can_eager[Side::Right],
         };
 
-        if can_push_down[Side::Left] && can_push_down[Side::Right] {
+        // `keeps_empty_side` must hold for every side this rewrite replaces with an
+        // eager aggregate, otherwise the join would gain rows the input never had.
+        if can_push_down[Side::Left]
+            && can_push_down[Side::Right]
+            && keeps_empty_side[Side::Left]
+            && keeps_empty_side[Side::Right]
+        {
             return vec![
-                EagerAnalysis {
-                    final_agg: final_agg.clone(),
-                    original_group_items_len,
-                    join_columns: join_columns.clone(),
-                    eager_extra_eval_scalar_expr: eager_extra_eval_scalar_expr.clone(),
-                    eager_aggregations: assignment.eager_aggregations.clone(),
-                    can_eager: can_eager.clone(),
-                    rewrite_kind: EagerRewriteKind::DoubleGroupByCount(Side::Left),
-                },
-                EagerAnalysis {
-                    final_agg: final_agg.clone(),
-                    original_group_items_len,
-                    join_columns: join_columns.clone(),
-                    eager_extra_eval_scalar_expr: eager_extra_eval_scalar_expr.clone(),
-                    eager_aggregations: assignment.eager_aggregations.clone(),
-                    can_eager: can_eager.clone(),
-                    rewrite_kind: EagerRewriteKind::DoubleSplit(Side::Left),
-                },
+                analysis(EagerRewriteKind::DoubleGroupByCount(Side::Left)),
+                analysis(EagerRewriteKind::DoubleSplit(Side::Left)),
             ];
         }
 
@@ -443,40 +458,22 @@ impl<'a> EagerInput<'a> {
             return vec![];
         }
 
-        let mut analyses = vec![EagerAnalysis {
-            final_agg: final_agg.clone(),
-            original_group_items_len,
-            join_columns: join_columns.clone(),
-            eager_extra_eval_scalar_expr: eager_extra_eval_scalar_expr.clone(),
-            eager_aggregations: assignment.eager_aggregations.clone(),
-            can_eager: can_eager.clone(),
-            rewrite_kind: EagerRewriteKind::SingleGroupBy(d),
-        }];
+        // `SingleGroupBy` only rewrites side `d`.
+        if !keeps_empty_side[d] {
+            return vec![];
+        }
 
-        if can_eager[d.opposite()] {
+        let mut analyses = vec![analysis(EagerRewriteKind::SingleGroupBy(d))];
+
+        // `SingleCount` and `SingleDouble` also rewrite side `d^1`.
+        if can_eager[d.opposite()] && keeps_empty_side[d.opposite()] {
             if self.has_sum_aggregate(final_agg) {
-                analyses.push(EagerAnalysis {
-                    final_agg: final_agg.clone(),
-                    original_group_items_len,
-                    join_columns: join_columns.clone(),
-                    eager_extra_eval_scalar_expr: eager_extra_eval_scalar_expr.clone(),
-                    eager_aggregations: assignment.eager_aggregations.clone(),
-                    can_eager: can_eager.clone(),
-                    rewrite_kind: EagerRewriteKind::SingleCount(d),
-                });
+                analyses.push(analysis(EagerRewriteKind::SingleCount(d)));
             }
             if assignment.allow_double_eager
                 && self.needs_eager_count_sum(final_agg, &assignment, d)
             {
-                analyses.push(EagerAnalysis {
-                    final_agg: final_agg.clone(),
-                    original_group_items_len,
-                    join_columns: join_columns.clone(),
-                    eager_extra_eval_scalar_expr: eager_extra_eval_scalar_expr.clone(),
-                    eager_aggregations: assignment.eager_aggregations.clone(),
-                    can_eager: can_eager.clone(),
-                    rewrite_kind: EagerRewriteKind::SingleDouble(d),
-                });
+                analyses.push(analysis(EagerRewriteKind::SingleDouble(d)));
             }
         }
 
