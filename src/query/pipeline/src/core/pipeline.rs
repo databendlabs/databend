@@ -596,8 +596,8 @@ impl Pipeline {
     /// This only rearranges the port list while the pipeline is being built and adds no
     /// processor. If `build` changes the number of ports (e.g. `resize`), the ports after
     /// the range shift accordingly, so callers must account for the new width.
-    pub fn build_on_outputs<T, F>(&mut self, range: std::ops::Range<usize>, build: F) -> Result<T>
-    where F: FnOnce(&mut Pipeline) -> Result<T> {
+    pub fn build_on_outputs<F>(&mut self, range: std::ops::Range<usize>, build: F) -> Result<()>
+    where F: FnOnce(&mut Pipeline) -> Result<()> {
         if range.start >= range.end || range.end > self.output_len() {
             return Err(ErrorCode::Internal("Invalid pipeline output range"));
         }

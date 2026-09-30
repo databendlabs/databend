@@ -163,7 +163,7 @@ impl IPhysicalPlan for ReplaceDeduplicate {
             PipelineBuilder::build_table_write_layout_with_schema(
                 builder.ctx.clone(),
                 &mut builder.main_pipeline,
-                tbl.clone(),
+                tbl.as_ref(),
                 modified_schema.as_ref().clone(),
             )?;
         }

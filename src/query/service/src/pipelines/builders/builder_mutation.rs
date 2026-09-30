@@ -204,7 +204,6 @@ impl PipelineBuilder {
 
     pub fn build_compact_and_cluster_sort_in_merge_into(
         &mut self,
-        tbl: Arc<dyn Table>,
         table: &FuseTable,
         need_match: bool,
         transform_len: usize,
@@ -219,7 +218,7 @@ impl PipelineBuilder {
                 Self::build_table_write_layout_with_schema(
                     self.ctx.clone(),
                     data,
-                    tbl,
+                    table,
                     DataSchema::from(table.schema_with_stream()),
                 )?;
                 data.try_resize(transform_len)
