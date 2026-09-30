@@ -64,6 +64,8 @@ use crate::binder::ScalarBinder;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::FullTypeCheckAdapter;
 use crate::planner::semantic::NameResolutionContext;
+use crate::planner::semantic::PersistedTypeCheckAdapter;
+use crate::planner::semantic::TypeCheckAdapter;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::LambdaFunc;
 use crate::plans::Visitor as ScalarVisitor;
@@ -242,7 +244,12 @@ pub fn parse_exprs(
     let names = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
     // Also used for default expressions, which may legitimately depend on the
     // session (e.g. `DEFAULT current_user()`), so no context policy here.
-    parse_ast_exprs_with_context(ctx, table_meta, ast_exprs, &names, false)
+    parse_ast_exprs_with_adapter(
+        FullTypeCheckAdapter::new(ctx)?,
+        table_meta,
+        ast_exprs,
+        &names,
+    )
 }
 
 pub fn parse_exprs_to_field_index(
@@ -256,15 +263,13 @@ pub fn parse_exprs_to_field_index(
         .collect()
 }
 
-fn parse_ast_exprs_with_context(
-    ctx: Arc<dyn TableContext>,
+fn parse_ast_exprs_with_adapter<A: TypeCheckAdapter>(
+    adapter: A,
     table_meta: Arc<dyn Table>,
     ast_exprs: Vec<AExpr>,
     names: &NameResolutionContext,
-    context_independent: bool,
 ) -> Result<Vec<Expr<ColumnBinding>>> {
     let (mut bind_context, metadata) = bind_table(table_meta)?;
-    let adapter = FullTypeCheckAdapter::new(ctx)?.with_context_independent(context_independent);
     let mut type_checker =
         TypeChecker::try_create_with_adapter(&mut bind_context, adapter, names, metadata, &[])?;
 
@@ -289,7 +294,8 @@ pub fn parse_to_filters(
     let names = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
     // Storage-level filters drive pruning, so they must be context independent
     // and deterministic.
-    let exprs = parse_ast_exprs_with_context(ctx, table_meta, ast_exprs, &names, true)?
+    let adapter = PersistedTypeCheckAdapter::new(&ctx.get_settings(), ctx.get_function_context()?)?;
+    let exprs = parse_ast_exprs_with_adapter(adapter, table_meta, ast_exprs, &names)?
         .into_iter()
         .map(|expr| {
             if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
@@ -428,7 +434,7 @@ pub fn parse_computed_expr_to_string(
     let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     // Computed columns are persisted and re-evaluated in other sessions.
-    let adapter = FullTypeCheckAdapter::new(ctx)?.with_context_independent(true);
+    let adapter = PersistedTypeCheckAdapter::new(&settings, ctx.get_function_context()?)?;
     let mut type_checker = TypeChecker::try_create_with_adapter(
         &mut bind_context,
         adapter,
@@ -551,13 +557,18 @@ pub fn bind_normalized_key_exprs(
     let names = NameResolutionContext::preserve_identifier_case();
     // Runtime rebinding of already persisted keys: keep permissive so tables
     // created before the definition-time check stay readable and writable.
-    parse_ast_exprs_with_context(ctx, table_meta, ast_exprs, &names, false)?
-        .into_iter()
-        .map(|expr| {
-            expr.project_column_ref(|col| schema.index_of(&col.column_name))
-                .and_then(normalize_key_expr)
-        })
-        .collect()
+    parse_ast_exprs_with_adapter(
+        FullTypeCheckAdapter::new(ctx)?,
+        table_meta,
+        ast_exprs,
+        &names,
+    )?
+    .into_iter()
+    .map(|expr| {
+        expr.project_column_ref(|col| schema.index_of(&col.column_name))
+            .and_then(normalize_key_expr)
+    })
+    .collect()
 }
 
 /// Bind and normalize cluster-key SQL using the caller-provided name rules.
@@ -569,9 +580,7 @@ pub fn analyze_cluster_keys(
 ) -> Result<(String, Vec<Expr<Symbol>>)> {
     let ast_exprs = parse_cluster_key_exprs(sql)?;
     let (mut bind_context, metadata) = bind_table(table_meta)?;
-    let adapter = FullTypeCheckAdapter::new(ctx)?
-        .with_forbid_udf(true)
-        .with_context_independent(true);
+    let adapter = PersistedTypeCheckAdapter::new(&ctx.get_settings(), ctx.get_function_context()?)?;
     let mut type_checker = TypeChecker::try_create_with_adapter(
         &mut bind_context,
         adapter,
@@ -709,9 +718,8 @@ pub fn validate_stored_ttl_expr(
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let mut bind_context = bind_context_from_schema(&schema, &metadata);
     let names = NameResolutionContext::preserve_identifier_case();
-    let mut binder = ScalarBinder::new(&mut bind_context, ctx, &names, metadata, &[]);
-    binder.forbid_udf();
-    binder.require_context_independent();
+    let adapter = PersistedTypeCheckAdapter::new(&ctx.get_settings(), ctx.get_function_context()?)?;
+    let mut binder = ScalarBinder::with_adapter(&mut bind_context, adapter, &names, metadata, &[]);
     let (scalar, _) = binder.bind(&ast)?;
     validate_ttl_expr(&scalar, &format!("{ast:#}"))
 }

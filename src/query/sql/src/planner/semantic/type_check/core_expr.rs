@@ -601,7 +601,15 @@ where A: TypeCheckAdapter
                 Ok(Box::new((agg_func.into(), data_type)))
             }
             CoreExpr::ColumnRef { span, column } => self.resolve_column_ref(*span, column),
-            CoreExpr::SpecialFunction { span, function } => function.resolve(self, arena, *span),
+            CoreExpr::SpecialFunction { span, function } => {
+                function.resolve(self, arena, *span).map_err(|err| {
+                    if err.span().is_some() {
+                        err
+                    } else {
+                        err.set_span(*span)
+                    }
+                })
+            }
             CoreExpr::UdfCall {
                 span,
                 name,
@@ -625,9 +633,15 @@ where A: TypeCheckAdapter
             CoreExpr::SearchFunction { span, function } => {
                 self.resolve_core_search_function(arena, *span, function)
             }
-            CoreExpr::AsyncFunction { span, function } => {
-                self.resolve_async_function(arena, *span, function)
-            }
+            CoreExpr::AsyncFunction { span, function } => self
+                .resolve_async_function(arena, *span, function)
+                .map_err(|err| {
+                    if err.span().is_some() {
+                        err
+                    } else {
+                        err.set_span(*span)
+                    }
+                }),
             CoreExpr::InList {
                 span,
                 expr,
@@ -646,6 +660,13 @@ where A: TypeCheckAdapter
                     .transpose()?
                     .map(|resolved| *resolved);
                 self.resolve_subquery(*span, *typ, subquery, child_expr, compare_op.clone())
+                    .map_err(|err| {
+                        if err.span().is_some() {
+                            err
+                        } else {
+                            err.set_span(*span)
+                        }
+                    })
             }
             CoreExpr::AggregateWindowFunction {
                 display_name,

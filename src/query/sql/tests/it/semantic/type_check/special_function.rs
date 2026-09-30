@@ -169,15 +169,9 @@ async fn test_type_check_special_function() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_type_check_context_independent_policy() -> Result<()> {
     init_testing_globals();
-    let context_udf = UserDefinedFunction::create_lambda_udf(
-        "context_udf",
-        vec!["x".to_string()],
-        "concat(x, current_database())",
-        "",
-    );
-    let adapter = TestTypeCheckAdapter::new(Settings::create(Tenant::new_literal("default")))
-        .with_udf_adapter(TestUdfAdapter::with_definitions([context_udf]))
-        .with_context_independent(true);
+    let settings = Settings::create(Tenant::new_literal("default"));
+    let adapter =
+        databend_common_sql::PersistedTypeCheckAdapter::new(&settings, FunctionContext::default())?;
 
     let cases = [
         SqlTestCase {
@@ -283,10 +277,34 @@ async fn test_type_check_context_independent_policy() -> Result<()> {
             sql: "number + $x",
         },
         SqlTestCase {
-            name: "sql_udf_body_rejected",
-            description: "A context function inside a SQL UDF body must be rejected when the UDF is expanded.",
+            name: "sql_udf_rejected",
+            description: "The persisted-expression adapter has no UDF loading capability.",
             setup_sqls: &[],
             sql: "context_udf(text)",
+        },
+        SqlTestCase {
+            name: "sequence_capability_unavailable",
+            description: "The persisted adapter cannot resolve a sequence even if Full gains that capability.",
+            setup_sqls: &[],
+            sql: "nextval(seq)",
+        },
+        SqlTestCase {
+            name: "dictionary_capability_unavailable",
+            description: "The persisted adapter has no dictionary resolver.",
+            setup_sqls: &[],
+            sql: "dict_get(dict, 'field', number)",
+        },
+        SqlTestCase {
+            name: "stage_capability_unavailable",
+            description: "The persisted adapter has no stage resolver.",
+            setup_sqls: &[],
+            sql: "read_file('@stage', 'file.txt')",
+        },
+        SqlTestCase {
+            name: "subquery_capability_unavailable",
+            description: "The persisted adapter has no subquery planner.",
+            setup_sqls: &[],
+            sql: "(SELECT 1)",
         },
         SqlTestCase {
             name: "array_sort_default_nulls_order_rejected",
@@ -327,7 +345,16 @@ async fn test_type_check_context_independent_policy() -> Result<()> {
         }
         write_case_header(&mut file, case)?;
         let mut bind_context = test_bind_context(ExprContext::Unknown);
-        let outcome = match resolve_type_check_sql(case.sql, adapter.clone(), &mut bind_context) {
+        let expr = parse_expr(&tokenize_sql(case.sql)?, adapter.sql_dialect()?)?;
+        let names = NameResolutionContext::try_from(settings.as_ref())?;
+        let mut checker = TypeChecker::try_create_with_adapter(
+            &mut bind_context,
+            adapter.clone(),
+            &names,
+            Arc::new(RwLock::new(Metadata::default())),
+            &[],
+        )?;
+        let outcome = match checker.resolve(&expr).map(|resolved| *resolved) {
             Ok((scalar, data_type)) => SqlTestOutcome::Plan(format!(
                 "scalar: {}\ntype: {}",
                 format_scalar(&scalar),

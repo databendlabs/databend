@@ -37,7 +37,6 @@ use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
-use databend_common_settings::Settings;
 use databend_common_users::UserApiProvider;
 use databend_common_users::security_policy_cache::CachedSecurityPolicy;
 use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
@@ -64,6 +63,8 @@ mod date;
 mod in_list;
 mod lambda;
 mod literal;
+mod persisted;
+pub use persisted::PersistedTypeCheckAdapter;
 mod resolve;
 mod rewrite_function;
 mod scalar_function;
@@ -314,7 +315,6 @@ pub struct FullTypeCheckAdapter {
     ctx: Arc<dyn TableContext>,
     dependencies: FullTypeCheckAdapterDependencies,
     forbid_udf: bool,
-    context_independent: bool,
     skip_sequence_check: bool,
 }
 
@@ -331,7 +331,14 @@ struct FullTypeCheckAdapterDependencies {
 }
 
 fn missing_type_check_adapter_dependency(name: &str) -> ErrorCode {
-    ErrorCode::Internal(format!("type check adapter does not provide {name}"))
+    ErrorCode::SemanticError(format!("type check adapter does not provide {name}"))
+}
+
+fn unsupported_context_function(name: &str, hint: Option<&str>) -> ErrorCode {
+    let hint = hint.map(|hint| format!("; {hint}")).unwrap_or_default();
+    ErrorCode::SemanticError(format!(
+        "`{name}` depends on the session or query context and is not allowed in persisted or storage-level expressions{hint}"
+    ))
 }
 
 pub trait UdfAdapter: Clone {
@@ -376,7 +383,24 @@ pub trait TypeCheckAdapter: Clone + Sized {
 
     fn function_context(&self) -> Result<FunctionContext>;
 
-    fn settings(&self) -> Arc<Settings>;
+    fn sql_dialect(&self) -> Result<Dialect>;
+
+    fn inlist_to_join_threshold(&self) -> Result<usize>;
+
+    fn max_inlist_to_or(&self) -> Result<u64>;
+
+    fn enable_decimal_sum_widening(&self) -> Result<bool>;
+
+    fn timezone(&self) -> Result<String> {
+        Err(unsupported_context_function("timezone()", None))
+    }
+
+    fn default_nulls_first(&self, _asc: bool) -> Result<bool> {
+        Err(unsupported_context_function(
+            "array_sort()",
+            Some("specify NULLS FIRST or NULLS LAST explicitly"),
+        ))
+    }
 
     fn aggregate_function_registry(&self) -> &'static AggregateRegistry;
 
@@ -387,16 +411,6 @@ pub trait TypeCheckAdapter: Clone + Sized {
     }
 
     fn forbid_udf(&self) -> bool {
-        false
-    }
-
-    /// Whether the expression must not depend on session or query context.
-    ///
-    /// Context values such as `current_database()` or `getvariable()` are folded
-    /// into literals during resolution, after which `Expr::is_deterministic` can
-    /// no longer detect them. Persisted and storage-level expressions enable this;
-    /// `TypeChecker::check_context_access` then rejects each context read.
-    fn require_context_independent(&self) -> bool {
         false
     }
 
@@ -427,29 +441,23 @@ pub trait TypeCheckAdapter: Clone + Sized {
         Err(missing_type_check_adapter_dependency("subquery planner"))
     }
 
-    // Context resolvers below: callers in `TypeChecker` must call
-    // `check_context_access` first so `require_context_independent` is honored.
-    fn resolve_namespace_function(&self, _function: NamespaceFunction) -> Result<Scalar> {
-        Err(missing_type_check_adapter_dependency("namespace function"))
+    fn resolve_namespace_function(&self, function: NamespaceFunction) -> Result<Scalar> {
+        Err(unsupported_context_function(function.name(), None))
     }
 
-    fn resolve_session_function(&self, _function: SessionFunction<'_>) -> Result<Scalar> {
-        Err(missing_type_check_adapter_dependency("session function"))
+    fn resolve_session_function(&self, function: SessionFunction<'_>) -> Result<Scalar> {
+        Err(unsupported_context_function(function.name(), None))
     }
 
-    fn resolve_authorization_function(&self, _function: AuthFunction) -> Result<Scalar> {
-        Err(missing_type_check_adapter_dependency(
-            "authorization function",
-        ))
+    fn resolve_authorization_function(&self, function: AuthFunction) -> Result<Scalar> {
+        Err(unsupported_context_function(function.name(), None))
     }
 
     fn resolve_effective_role_names(&self) -> Result<Vec<String>> {
-        Err(missing_type_check_adapter_dependency(
-            "effective role names",
-        ))
+        Err(unsupported_context_function("is_role_in_session()", None))
     }
 
-    fn set_result_cache_uncacheable(&self);
+    fn set_result_cache_uncacheable(&self) {}
 
     fn resolve_data_mask_policy(
         &self,

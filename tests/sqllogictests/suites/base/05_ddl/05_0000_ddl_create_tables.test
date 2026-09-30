@@ -670,6 +670,19 @@ create table t(a string, b string as (concat(a, current_user())) virtual)
 statement error depends on the session or query context
 create table t(a int, b int null as (a + getvariable('x')) stored)
 
+# Persisted expressions have no UDF loading capability, including pure SQL UDFs.
+statement ok
+create or replace function ctx_pure_udf as (x) -> x + 1
+
+statement error UDFs are not allowed in persisted or storage-level expressions
+create table t(a int, b int as (ctx_pure_udf(a)) stored)
+
+statement error UDFs are not allowed in persisted or storage-level expressions
+create table t(a int) cluster by (ctx_pure_udf(a))
+
+statement ok
+drop function ctx_pure_udf
+
 # The default null order of array_sort() is a session setting.
 statement error depends on the session or query context
 create table t(a array(int), b array(int) as (array_sort(a)) stored)

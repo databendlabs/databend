@@ -358,23 +358,6 @@ impl SpecialFunction {
 impl<'a, A> TypeChecker<'a, A>
 where A: TypeCheckAdapter
 {
-    /// Gate for every read of session or query context during resolution.
-    ///
-    /// Such values are folded into literals, so `Expr::is_deterministic` cannot
-    /// detect them afterwards. Checking at the read site (instead of classifying
-    /// functions up front) means new context-dependent resolution is covered as
-    /// long as it reads context through here.
-    fn check_context_access(&self, span: Span, func_name: &str, hint: Option<&str>) -> Result<()> {
-        if !self.adapter.require_context_independent() {
-            return Ok(());
-        }
-        let hint = hint.map(|hint| format!("; {hint}")).unwrap_or_default();
-        Err(ErrorCode::SemanticError(format!(
-            "`{func_name}` depends on the session or query context and is not allowed in persisted or storage-level expressions{hint}"
-        ))
-        .set_span(span))
-    }
-
     fn resolve_special_function(
         &mut self,
         arena: &CoreExprArena<'_>,
@@ -382,38 +365,25 @@ where A: TypeCheckAdapter
         function: &SpecialFunction,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match function {
-            SpecialFunction::Namespace(namespace_function) => {
-                self.check_context_access(span, namespace_function.name(), None)?;
-                self.resolve_special_literal(
-                    span,
-                    self.adapter
-                        .resolve_namespace_function(*namespace_function)?,
-                )
-            }
-            SpecialFunction::Session(session_function) => {
-                self.check_context_access(span, session_function.name(), None)?;
-                self.resolve_special_literal(
-                    span,
-                    self.adapter.resolve_session_function(*session_function)?,
-                )
-            }
-            SpecialFunction::Auth(authorization_function) => {
-                self.check_context_access(span, authorization_function.name(), None)?;
-                self.resolve_special_literal(
-                    span,
-                    self.adapter
-                        .resolve_authorization_function(*authorization_function)?,
-                )
-            }
+            SpecialFunction::Namespace(namespace_function) => self.resolve_special_literal(
+                span,
+                self.adapter
+                    .resolve_namespace_function(*namespace_function)?,
+            ),
+            SpecialFunction::Session(session_function) => self.resolve_special_literal(
+                span,
+                self.adapter.resolve_session_function(*session_function)?,
+            ),
+            SpecialFunction::Auth(authorization_function) => self.resolve_special_literal(
+                span,
+                self.adapter
+                    .resolve_authorization_function(*authorization_function)?,
+            ),
             SpecialFunction::IsRoleInSession { role } => {
                 self.resolve_is_role_in_session(arena, span, role)
             }
             SpecialFunction::Timezone => {
-                self.check_context_access(span, "timezone()", None)?;
-                self.resolve_special_literal(
-                    span,
-                    Scalar::String(self.adapter.settings().get_timezone().unwrap()),
-                )
+                self.resolve_special_literal(span, Scalar::String(self.adapter.timezone()?))
             }
             SpecialFunction::LastQueryId { arg } => {
                 let scalar = match arg {
@@ -537,7 +507,6 @@ where A: TypeCheckAdapter
         span: Span,
         role: &CoreDisplayExprArg,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        self.check_context_access(span, "is_role_in_session()", None)?;
         let effective_roles = self.adapter.resolve_effective_role_names()?;
         let (_, role, _) = self.resolve_display_arg(arena, role)?;
         let mut predicate_levels =
@@ -585,7 +554,6 @@ where A: TypeCheckAdapter
             -1
         };
         let function = SessionFunction::LastQueryId(index as i32);
-        self.check_context_access(span, function.name(), None)?;
         self.resolve_special_literal(span, self.adapter.resolve_session_function(function)?)
     }
 
@@ -745,15 +713,7 @@ where A: TypeCheckAdapter
         }
         let nulls_first = match nulls_first {
             Some(nulls_first) => nulls_first,
-            None => {
-                // The default null order is a session setting.
-                self.check_context_access(
-                    span,
-                    "array_sort()",
-                    Some("specify NULLS FIRST or NULLS LAST explicitly"),
-                )?;
-                self.adapter.settings().get_nulls_first()(asc)
-            }
+            None => self.adapter.default_nulls_first(asc)?,
         };
         let func_name = match (asc, nulls_first) {
             (true, true) => "array_sort_asc_null_first",
@@ -829,7 +789,6 @@ where A: TypeCheckAdapter
             && let Scalar::String(var_name) = arg.value
         {
             let function = SessionFunction::Variable(&var_name);
-            self.check_context_access(span, function.name(), None)?;
             let var_value = self.adapter.resolve_session_function(function)?;
             let var_value = shrink_scalar(var_value);
             let data_type = var_value.as_ref().infer_data_type();

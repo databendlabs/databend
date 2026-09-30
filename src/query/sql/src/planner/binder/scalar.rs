@@ -24,21 +24,22 @@ use crate::MetadataRef;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::FullTypeCheckAdapter;
 use crate::planner::semantic::NameResolutionContext;
+use crate::planner::semantic::TypeCheckAdapter;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::ScalarExpr;
 
-/// Helper for binding scalar expression with `BindContext`.
-pub struct ScalarBinder<'a> {
+/// Helper for binding scalar expressions with explicitly supplied capabilities.
+pub struct ScalarBinder<'a, A = FullTypeCheckAdapter> {
     bind_context: &'a mut BindContext,
-    ctx: Arc<dyn TableContext>,
+    // Preserve the infallible legacy constructor, reporting initialization errors
+    // when binding. `with_adapter` always stores an already constructed adapter.
+    adapter: Result<A>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
     aliases: &'a [(String, ScalarExpr)],
-    forbid_udf: bool,
-    context_independent: bool,
 }
 
-impl<'a> ScalarBinder<'a> {
+impl<'a> ScalarBinder<'a, FullTypeCheckAdapter> {
     pub fn new(
         bind_context: &'a mut BindContext,
         ctx: Arc<dyn TableContext>,
@@ -46,34 +47,44 @@ impl<'a> ScalarBinder<'a> {
         metadata: MetadataRef,
         aliases: &'a [(String, ScalarExpr)],
     ) -> Self {
-        ScalarBinder {
+        Self {
             bind_context,
-            ctx,
+            adapter: FullTypeCheckAdapter::new(ctx),
             name_resolution_ctx,
             metadata,
             aliases,
-            forbid_udf: false,
-            context_independent: false,
         }
     }
 
     pub fn forbid_udf(&mut self) {
-        self.forbid_udf = true;
+        self.adapter = self
+            .adapter
+            .clone()
+            .map(|adapter| adapter.with_forbid_udf(true));
     }
+}
 
-    /// Reject session/query context functions such as `current_database()`,
-    /// for expressions that are persisted or evaluated at the storage level.
-    pub fn require_context_independent(&mut self) {
-        self.context_independent = true;
+impl<'a, A: TypeCheckAdapter> ScalarBinder<'a, A> {
+    pub fn with_adapter(
+        bind_context: &'a mut BindContext,
+        adapter: A,
+        name_resolution_ctx: &'a NameResolutionContext,
+        metadata: MetadataRef,
+        aliases: &'a [(String, ScalarExpr)],
+    ) -> Self {
+        Self {
+            bind_context,
+            adapter: Ok(adapter),
+            name_resolution_ctx,
+            metadata,
+            aliases,
+        }
     }
 
     pub fn bind(&mut self, expr: &Expr) -> Result<(ScalarExpr, DataType)> {
-        let adapter = FullTypeCheckAdapter::new(self.ctx.clone())?
-            .with_forbid_udf(self.forbid_udf)
-            .with_context_independent(self.context_independent);
         let mut type_checker = TypeChecker::try_create_with_adapter(
             self.bind_context,
-            adapter,
+            self.adapter.clone()?,
             self.name_resolution_ctx,
             self.metadata.clone(),
             self.aliases,
@@ -82,6 +93,6 @@ impl<'a> ScalarBinder<'a> {
     }
 
     pub fn get_func_ctx(&self) -> Result<FunctionContext> {
-        self.ctx.get_function_context()
+        self.adapter.clone()?.function_context()
     }
 }

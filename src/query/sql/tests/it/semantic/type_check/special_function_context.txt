@@ -117,12 +117,40 @@ status: error
 code: 1065
 message: `getvariable()` depends on the session or query context and is not allowed in persisted or storage-level expressions
 
-=== sql_udf_body_rejected ===
-description: A context function inside a SQL UDF body must be rejected when the UDF is expanded.
+=== sql_udf_rejected ===
+description: The persisted-expression adapter has no UDF loading capability.
 sql: context_udf(text)
 status: error
 code: 1065
-message: `current_database()` depends on the session or query context and is not allowed in persisted or storage-level expressions
+message: UDFs are not allowed in persisted or storage-level expressions
+
+=== sequence_capability_unavailable ===
+description: The persisted adapter cannot resolve a sequence even if Full gains that capability.
+sql: nextval(seq)
+status: error
+code: 1065
+message: type check adapter does not provide sequence resolver
+
+=== dictionary_capability_unavailable ===
+description: The persisted adapter has no dictionary resolver.
+sql: dict_get(dict, 'field', number)
+status: error
+code: 1065
+message: type check adapter does not provide dictionary resolver
+
+=== stage_capability_unavailable ===
+description: The persisted adapter has no stage resolver.
+sql: read_file('@stage', 'file.txt')
+status: error
+code: 1065
+message: type check adapter does not provide stage resolver
+
+=== subquery_capability_unavailable ===
+description: The persisted adapter has no subquery planner.
+sql: (SELECT 1)
+status: error
+code: 1065
+message: type check adapter does not provide subquery planner
 
 === array_sort_default_nulls_order_rejected ===
 description: array_sort() without NULLS FIRST/LAST reads the session null-order setting.
