@@ -23,7 +23,6 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::aggregate::aggregate_function::AggregateCallRef;
 use databend_common_expression::aggregate::aggregate_function::get_states_layout;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_functions::aggregates::StatesLayout;
 use databend_common_sql::IndexType;
 use itertools::Itertools;
@@ -93,17 +92,6 @@ impl AggregatorParams {
 
     pub fn num_states(&self) -> usize {
         self.aggregate_functions.len()
-    }
-
-    /// Schema of raw rows forwarded by the partial aggregate: its input columns followed by
-    /// the group hash (see `RawPayload`).
-    pub fn raw_schema(&self) -> DataSchemaRef {
-        let mut fields = self.input_schema.fields().clone();
-        fields.push(DataField::new(
-            "_group_hash",
-            DataType::Number(NumberDataType::UInt64),
-        ));
-        DataSchemaRefExt::create(fields)
     }
 
     pub fn spill_schema(&self) -> DataSchemaRef {
