@@ -20,11 +20,9 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::VariantType;
-use databend_common_meta_app::storage::StorageAzblobConfig;
-use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::AzblobPresignOp;
 use databend_common_storage::azblob_user_delegation_presign;
-use databend_common_storage::azblob_user_delegation_presign_supported;
+use databend_common_storage::azblob_user_delegation_presign_config;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::internal_stage_storage_params;
 use jsonb::Value as JsonbValue;
@@ -63,17 +61,6 @@ impl PresignInterpreter {
             }
         })
     }
-
-    /// Azure internal/user stage without a static credential, where presign
-    /// falls back to a Workload Identity user delegation SAS.
-    fn user_delegation_config(&self) -> Option<StorageAzblobConfig> {
-        match internal_stage_storage_params(&self.plan.stage)? {
-            StorageParams::Azblob(cfg) if azblob_user_delegation_presign_supported(&cfg) => {
-                Some(cfg)
-            }
-            _ => None,
-        }
-    }
 }
 
 #[async_trait::async_trait]
@@ -96,7 +83,9 @@ impl Interpreter for PresignInterpreter {
             let start_time = std::time::Instant::now();
             let presigned_req = if op.info().full_capability().presign {
                 self.presign_with_operator(&op).await?
-            } else if let Some(cfg) = self.user_delegation_config() {
+            } else if let Some(cfg) = azblob_user_delegation_presign_config(
+                internal_stage_storage_params(&self.plan.stage),
+            ) {
                 // Workload Identity deployments have no static credential to
                 // presign with; mint a short-lived user delegation SAS.
                 let op = match self.plan.action {

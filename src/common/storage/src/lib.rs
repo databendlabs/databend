@@ -43,7 +43,7 @@ pub use auth::TokenFile;
 mod azblob_presign;
 pub use azblob_presign::AzblobPresignOp;
 pub use azblob_presign::azblob_user_delegation_presign;
-pub use azblob_presign::azblob_user_delegation_presign_supported;
+pub use azblob_presign::azblob_user_delegation_presign_config;
 
 mod config;
 mod endpoint_policy;

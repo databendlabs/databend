@@ -400,7 +400,20 @@ fn stdin_stage_info() -> StageFileInfo {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_meta_app::principal::StageInfo;
+    use databend_common_meta_app::storage::StorageFsConfig;
+    use databend_common_meta_app::storage::StorageParams;
+
+    use super::internal_stage_storage_params;
     use super::is_stage_path_traversal;
+
+    #[test]
+    fn external_stage_has_no_internal_storage_params() {
+        // Must not touch the global DataOperator for external stages.
+        let stage =
+            StageInfo::new_external_stage(StorageParams::Fs(StorageFsConfig::default()), false);
+        assert!(internal_stage_storage_params(&stage).is_none());
+    }
 
     #[test]
     fn test_is_stage_path_traversal() {
