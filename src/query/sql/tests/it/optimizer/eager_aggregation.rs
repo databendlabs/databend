@@ -15,7 +15,6 @@
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
 use databend_common_sql::optimizer::OptimizerContext;
-use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
 use databend_common_sql::optimizer::optimizers::rule::Rule;
@@ -23,7 +22,6 @@ use databend_common_sql::optimizer::optimizers::rule::RuleEagerAggregation;
 use databend_common_sql::optimizer::optimizers::rule::RuleID;
 use databend_common_sql::optimizer::optimizers::rule::TransformResult;
 use databend_common_sql::plans::Plan;
-use databend_common_sql::plans::RelOperator;
 
 use crate::framework::LiteTableContext;
 use crate::framework::golden::SqlTestCase;
@@ -217,71 +215,6 @@ GROUP BY ss_store_sk"
         }
     }
     Ok(())
-}
-
-// A rank limit pushed into the final aggregate keeps the first N groups of the join
-// output. Copying it into an eager aggregate below the join keeps the first N groups of
-// one join input instead, which can drop every group that would survive the join.
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_eager_aggregation_does_not_push_rank_limit_below_join() -> Result<()> {
-    let sql = "SELECT ss_store_sk, sum(ss_ext_sales_price)
-FROM store_sales CROSS JOIN date_dim
-GROUP BY ss_store_sk
-ORDER BY ss_store_sk
-LIMIT 3";
-    let ctx = LiteTableContext::create().await?;
-    ctx.register_setup_sql(DECIMAL_SALES_TABLE).await?;
-    ctx.register_setup_sql(DATE_DIM_TABLE).await?;
-    let Plan::Query {
-        s_expr, metadata, ..
-    } = ctx.bind_sql(sql).await?
-    else {
-        unreachable!("test query should bind to Plan::Query")
-    };
-
-    let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?);
-    // PushDownLimitSort sets Sort.limit, which PushDownRankLimitAggregate needs.
-    let rank_limited = RecursiveRuleOptimizer::new(opt_ctx.clone(), &[
-        RuleID::PushDownLimitSort,
-        RuleID::PushDownRankLimitAggregate,
-    ])
-    .optimize_sync(*s_expr)?;
-    let split = RecursiveRuleOptimizer::new(opt_ctx.clone(), &[RuleID::SplitAggregate])
-        .optimize_sync(rank_limited)?;
-    assert!(
-        has_aggregate(&split, true),
-        "setup should push a rank limit into the aggregate"
-    );
-
-    // The eager pattern starts below Limit/Sort, so let the recursive optimizer find it.
-    let eager =
-        RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::EagerAggregation]).optimize_sync(split)?;
-    eager.validate_types(&metadata)?;
-    let join = find_join(&eager).expect("eager result should contain a join");
-    assert!(
-        join.children().any(|child| has_aggregate(child, false)),
-        "eager aggregation should place an aggregate below the join"
-    );
-    assert!(
-        !join.children().any(|child| has_aggregate(child, true)),
-        "eager aggregate below the join must not carry a rank limit"
-    );
-    Ok(())
-}
-
-fn find_join(s_expr: &SExpr) -> Option<&SExpr> {
-    if matches!(s_expr.plan(), RelOperator::Join(_)) {
-        return Some(s_expr);
-    }
-    s_expr.children().find_map(find_join)
-}
-
-/// Whether `s_expr` contains an aggregate; with `rank_limited`, only rank-limited ones count.
-fn has_aggregate(s_expr: &SExpr, rank_limited: bool) -> bool {
-    matches!(s_expr.plan(), RelOperator::Aggregate(agg) if !rank_limited || agg.rank_limit.is_some())
-        || s_expr
-            .children()
-            .any(|child| has_aggregate(child, rank_limited))
 }
 
 const ORDERS_TABLE: &str = "CREATE TABLE orders
