@@ -129,8 +129,7 @@ impl Operator for MaterializedCTERef {
         _rel_expr: &RelExpr,
         _required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
-        Err(ErrorCode::Internal(
-            "Cannot compute required property for children of cte_consumer".to_string(),
-        ))
+        // The producer is executed by Sequence; a reference has no child to optimize.
+        Ok(vec![vec![]])
     }
 }
