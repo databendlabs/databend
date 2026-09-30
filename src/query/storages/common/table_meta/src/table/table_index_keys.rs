@@ -30,9 +30,8 @@ pub const INVERTED_INDEX_OPT_MODE: &str = "mode";
 /// User-facing stage location of a Japanese user dictionary, e.g. `@ja_dict/userdict.csv`.
 /// Kept for `SHOW CREATE TABLE`; the analyzer never reads it.
 pub const INVERTED_INDEX_OPT_USER_DICTIONARY: &str = "user_dictionary";
-/// Internal: storage location of the dictionary snapshot taken when the index was created. The
-/// object lives under the table's own storage prefix and is named after the content digest, so a
-/// dictionary change produces a new location, hence new index options and a new index version.
+/// Internal: storage location of the dictionary snapshot taken when the index was created.
+/// Each upload uses a fresh UUID-v7 object under the table's own storage prefix.
 pub const INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION: &str = "user_dictionary_location";
 
 // Ngram index.

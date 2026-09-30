@@ -34,6 +34,7 @@ use databend_storages_common_index::ExternalFile;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::meta::try_extract_uuid_v7_timestamp_from_path;
 use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION;
 use futures_util::TryStreamExt;
@@ -274,6 +275,7 @@ pub async fn do_vacuum2(
             .meta_location_generator()
             .inverted_index_dict_location_prefix(),
         &protected_dictionaries,
+        gc_root_timestamp,
         gc_root_meta_ts,
     )
     .await?;
@@ -363,14 +365,14 @@ pub async fn do_vacuum2(
 
 /// Removes user dictionary objects under `prefix` that no current index definition references.
 ///
-/// Dictionary objects are content addressed and never carry a UUID, so the only age signal is
-/// the object's own `last_modified`; an object younger than the gc root may belong to a
-/// `CREATE INVERTED INDEX` that has uploaded but not yet committed, and is kept.
+/// Fresh UUID-v7 objects are kept even if their index has not committed yet. Legacy dictionary
+/// names fall back to the object's `last_modified` with the transaction safety margin.
 async fn purge_inverted_index_dict_objects(
     operator: &Operator,
     ctx: &Arc<dyn TableContext>,
     prefix: &str,
     protected_locations: &HashSet<String>,
+    gc_root_timestamp: DateTime<Utc>,
     gc_root_meta_ts: DateTime<Utc>,
 ) -> Result<usize> {
     let file_remover = Files::create(Arc::clone(ctx), operator.clone());
@@ -386,6 +388,25 @@ async fn purge_inverted_index_dict_objects(
         }
         if entry.metadata().is_dir() || protected_locations.contains(entry.path()) {
             continue;
+        }
+        if entry
+            .path()
+            .rsplit('/')
+            .next()
+            .is_some_and(|name| name.starts_with(VACUUM2_OBJECT_KEY_PREFIX))
+        {
+            match try_extract_uuid_v7_timestamp_from_path(entry.path()) {
+                Ok(Some(timestamp)) if timestamp < gc_root_timestamp => {}
+                Ok(_) => continue,
+                Err(error) => {
+                    warn!(
+                        "skip user dictionary with unparsable UUID during vacuum: path={}, error={}",
+                        entry.path(),
+                        error
+                    );
+                    continue;
+                }
+            }
         }
         if !is_gc_candidate_segment_block(&entry, operator, gc_root_meta_ts).await? {
             continue;
@@ -827,8 +848,59 @@ mod tests {
             let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
             let query_ctx = fixture.new_query_ctx().await?;
             let ctx: Arc<dyn TableContext> = query_ctx;
-            // Dictionary objects are not UUID-named, so the purge falls back to `last_modified`,
-            // which the memory backend does not report; use a filesystem backend instead.
+            let dal = Operator::new(Memory::default())?.finish();
+            let cutoff = Utc
+                .with_ymd_and_hms(2025, 1, 2, 0, 0, 0)
+                .single()
+                .expect("valid gc-root timestamp");
+            let location = |timestamp| {
+                let uuid =
+                    databend_storages_common_table_meta::meta::uuid_from_date_time(timestamp);
+                format!("{PREFIX}h{}.csv", uuid.simple())
+            };
+            let referenced = location(cutoff - chrono::Duration::minutes(2));
+            let orphan = location(cutoff - chrono::Duration::minutes(1));
+            let at_cutoff = location(cutoff);
+            let recent = location(cutoff + chrono::Duration::seconds(1));
+            let malformed = format!("{PREFIX}hnot-a-uuid.csv");
+            let non_v7 = format!("{PREFIX}h00000000000040008000000000000000.csv");
+            let outside = "1/2/_i_i_v2/gen/hdeadbeef.index".to_string();
+            let content = b"AI,noun,AI\n".to_vec();
+            for path in [&referenced, &orphan, &malformed, &non_v7, &outside] {
+                dal.write(path, content.clone()).await?;
+            }
+
+            // Vacuum captured its protection set before a new DDL uploaded the same dictionary.
+            // The new upload must have a fresh path and survive even without a protected reference.
+            let protected = HashSet::from([referenced.clone()]);
+            dal.write(&at_cutoff, content.clone()).await?;
+            dal.write(&recent, content.clone()).await?;
+            let removed = purge_inverted_index_dict_objects(
+                &dal,
+                &ctx,
+                PREFIX,
+                &protected,
+                cutoff,
+                Utc::now() + chrono::Duration::days(4),
+            )
+            .await?;
+            assert_eq!(removed, 1);
+            assert!(!dal.exists(&orphan).await?);
+            for path in [&referenced, &at_cutoff, &recent, &malformed, &non_v7, &outside] {
+                assert!(dal.exists(path).await?);
+            }
+            assert_eq!(dal.read(&recent).await?.to_vec(), content);
+            Ok(())
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn inverted_index_dict_gc_handles_legacy_names() -> anyhow::Result<()> {
+            const PREFIX: &str = "1/2/_i_i_d/";
+
+            let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+            let query_ctx = fixture.new_query_ctx().await?;
+            let ctx: Arc<dyn TableContext> = query_ctx;
+            // Legacy dictionary objects use `last_modified`, which Memory does not report.
             let root = tempfile::tempdir()?;
             let dal = Operator::new(Fs::default().root(root.path().to_str().expect("utf-8 path")))?
                 .finish();
@@ -849,6 +921,7 @@ mod tests {
                 PREFIX,
                 &protected,
                 Utc::now() - chrono::Duration::days(1),
+                Utc::now() - chrono::Duration::days(1),
             )
             .await?;
             assert_eq!(removed, 0);
@@ -860,6 +933,7 @@ mod tests {
                 &ctx,
                 PREFIX,
                 &protected,
+                Utc::now() + chrono::Duration::days(4),
                 Utc::now() + chrono::Duration::days(4),
             )
             .await?;

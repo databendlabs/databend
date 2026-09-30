@@ -349,9 +349,14 @@ impl TableMetaLocationGenerator {
         &self.inverted_index_dict_location_prefix
     }
 
-    /// Location of a content-addressed inverted index user dictionary object.
-    pub fn gen_inverted_index_dict_location(&self, digest: &str) -> String {
-        format!("{}{}.csv", self.inverted_index_dict_location_prefix, digest)
+    /// Generates a fresh immutable location for a user dictionary snapshot.
+    pub fn gen_inverted_index_dict_location(&self) -> String {
+        format!(
+            "{}{}{}.csv",
+            self.inverted_index_dict_location_prefix,
+            VACUUM2_OBJECT_KEY_PREFIX,
+            Uuid::now_v7().as_simple(),
+        )
     }
 
     pub fn gen_specific_inverted_index_v2_prefix(&self, index_version: &str) -> String {

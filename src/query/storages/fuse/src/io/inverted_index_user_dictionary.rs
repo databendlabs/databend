@@ -17,10 +17,9 @@
 //! A user dictionary is a small Lindera CSV (`surface,part_of_speech,reading` per line) that
 //! adds vocabulary the embedded IPADIC does not know. The tokenizer must see exactly the same
 //! dictionary at index time and at query time, so index creation snapshots the file from the
-//! user's stage into the table's own storage under `_i_i_d/<sha256>.csv` and records that
-//! location in the index options. The object is content addressed: it is immutable, safe to
-//! cache for the lifetime of the process, and a different dictionary yields a different
-//! location, hence different options and a new index version.
+//! user's stage into the table's own storage under `_i_i_d/h<uuid_v7>.csv` and records that
+//! location in the index options. Each upload uses a fresh immutable object so a new index
+//! never reuses an old dictionary that a concurrent vacuum may already be deleting.
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -40,8 +39,6 @@ use log::info;
 use lru::LruCache;
 use opendal::Operator;
 use parking_lot::Mutex;
-use sha2::Digest;
-use sha2::Sha256;
 
 use crate::FuseTable;
 use crate::io::TableMetaLocationGenerator;
@@ -56,8 +53,8 @@ pub(crate) static JAPANESE_DICTIONARY: LazyLock<Dictionary> = LazyLock::new(|| {
     load_dictionary("embedded://ipadic").expect("the embedded IPADIC dictionary must be available")
 });
 
-/// Built dictionaries keyed by storage location. Locations are content addressed, so entries
-/// never go stale; the LRU bound only limits memory for tenants with many dictionaries.
+/// Built dictionaries keyed by immutable storage location. The LRU bound limits memory for
+/// tenants with many dictionaries.
 static USER_DICTIONARY_CACHE: LazyLock<Mutex<LruCache<String, Arc<UserDictionary>>>> =
     LazyLock::new(|| {
         Mutex::new(LruCache::new(
@@ -68,28 +65,20 @@ static USER_DICTIONARY_CACHE: LazyLock<Mutex<LruCache<String, Arc<UserDictionary
 /// A validated user dictionary read from the user's stage, ready to be uploaded.
 pub struct InvertedIndexUserDictionary {
     content: Vec<u8>,
-    digest: String,
 }
 
 impl InvertedIndexUserDictionary {
-    /// Validates `content` (size, encoding and Lindera CSV format) and computes its digest.
+    /// Validates `content` (size, encoding and Lindera CSV format).
     pub fn try_new(content: Vec<u8>) -> Result<Self> {
         build_inverted_index_user_dictionary(&content)?;
-        let digest = inverted_index_user_dictionary_digest(&content);
-        Ok(Self { content, digest })
-    }
-
-    /// Hex SHA-256 of the content; the object is named after it.
-    pub fn digest(&self) -> &str {
-        &self.digest
+        Ok(Self { content })
     }
 
     /// Snapshots the dictionary into the storage of `table` and returns the location to record
     /// in the index options.
     ///
-    /// Writing is idempotent: the object name is the content digest, so re-creating an index
-    /// with the same dictionary, or two indexes sharing one dictionary, reuse a single object.
-    /// An object left behind by a failed DDL is unreferenced and reclaimed by vacuum.
+    /// Always writes a new object, even for identical content, to protect in-flight DDL from
+    /// vacuum. Objects left behind by failed DDL are reclaimed by vacuum.
     pub async fn upload(&self, table: &FuseTable) -> Result<String> {
         self.upload_to(table.get_operator_ref(), table.meta_location_generator())
             .await
@@ -100,11 +89,7 @@ impl InvertedIndexUserDictionary {
         operator: &Operator,
         location_generator: &TableMetaLocationGenerator,
     ) -> Result<String> {
-        let location = location_generator.gen_inverted_index_dict_location(&self.digest);
-        if operator.exists(&location).await? {
-            info!("inverted index user dictionary already exists: {location}");
-            return Ok(location);
-        }
+        let location = location_generator.gen_inverted_index_dict_location();
         operator.write(&location, self.content.clone()).await?;
         info!(
             "uploaded inverted index user dictionary: {location}, size={} bytes",
@@ -112,11 +97,6 @@ impl InvertedIndexUserDictionary {
         );
         Ok(location)
     }
-}
-
-/// Hex SHA-256 of the dictionary content; used as the object name.
-fn inverted_index_user_dictionary_digest(content: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(content))
 }
 
 /// Parses and builds a Lindera user dictionary from CSV bytes against the embedded IPADIC.
@@ -153,9 +133,6 @@ fn build_inverted_index_user_dictionary(content: &[u8]) -> Result<UserDictionary
 }
 
 /// Loads the dictionary stored at `location`, building it on first use and caching the result.
-///
-/// The object name is its content digest, which is verified after reading so a corrupted or
-/// tampered object is rejected instead of silently changing tokenization.
 async fn load_inverted_index_user_dictionary(
     operator: &Operator,
     location: &str,
@@ -164,17 +141,6 @@ async fn load_inverted_index_user_dictionary(
         return Ok(dictionary.clone());
     }
     let content = operator.read(location).await?.to_vec();
-    let expected = location
-        .rsplit('/')
-        .next()
-        .and_then(|name| name.strip_suffix(".csv"))
-        .unwrap_or_default();
-    let actual = inverted_index_user_dictionary_digest(&content);
-    if actual != expected {
-        return Err(ErrorCode::StorageOther(format!(
-            "inverted index user dictionary {location} is corrupted: content digest {actual} does not match its name"
-        )));
-    }
     let dictionary = Arc::new(build_inverted_index_user_dictionary(&content)?);
     USER_DICTIONARY_CACHE
         .lock()
@@ -235,24 +201,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_upload_is_idempotent_and_load_is_cached() -> Result<()> {
+    async fn test_upload_uses_fresh_locations_and_load_is_cached() -> Result<()> {
         let operator = Operator::new(opendal::services::Memory::default())?.finish();
         let location_generator = TableMetaLocationGenerator::new("1/2".to_string());
         let dictionary = InvertedIndexUserDictionary::try_new(DICT.to_vec())?;
-        assert_eq!(dictionary.digest().len(), 64);
-
         let location = dictionary.upload_to(&operator, &location_generator).await?;
-        assert_eq!(location, format!("1/2/_i_i_d/{}.csv", dictionary.digest()));
         let again = dictionary.upload_to(&operator, &location_generator).await?;
-        assert_eq!(location, again);
+        assert_ne!(location, again);
+        for path in [&location, &again] {
+            assert!(path.starts_with("1/2/_i_i_d/h"));
+            assert!(path.ends_with(".csv"));
+            assert!(
+                databend_storages_common_table_meta::meta::try_extract_uuid_v7_timestamp_from_path(
+                    path,
+                )?
+                .is_some()
+            );
+            assert_eq!(operator.read(path).await?.to_vec(), DICT);
+        }
 
         let first = load_inverted_index_user_dictionary(&operator, &location).await?;
         let second = load_inverted_index_user_dictionary(&operator, &location).await?;
         assert!(Arc::ptr_eq(&first, &second));
 
-        // An object whose content does not match its name is rejected.
-        let bad_location = location_generator.gen_inverted_index_dict_location(&"0".repeat(64));
-        operator.write(&bad_location, DICT.to_vec()).await?;
+        // Invalid CSV is still rejected when loading a stored dictionary.
+        let bad_location = location_generator.gen_inverted_index_dict_location();
+        operator.write(&bad_location, b"AI,noun\n".to_vec()).await?;
         assert!(
             load_inverted_index_user_dictionary(&operator, &bad_location)
                 .await
