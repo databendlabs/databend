@@ -690,10 +690,25 @@ impl IPhysicalPlan for ChunkAppendData {
             Vec::with_capacity(self.target_tables.len());
         let mut partition_num = 0;
 
-        for append_data in self.target_tables.iter() {
+        // Every target table owns an equally sized, contiguous group of ports. The write layout
+        // exchanges and sorts all ports it sees, so it must only see the ports of its own table.
+        let chunk_size = builder.main_pipeline.output_len() / self.target_tables.len();
+
+        for (index, append_data) in self.target_tables.iter().enumerate() {
             let table = builder
                 .ctx
                 .build_table_by_table_info(&append_data.target_table_info, None)?;
+            builder.main_pipeline.build_on_outputs(
+                index * chunk_size..(index + 1) * chunk_size,
+                |lanes| {
+                    PipelineBuilder::build_table_write_layout(
+                        builder.ctx.clone(),
+                        lanes,
+                        table.clone(),
+                    )?;
+                    lanes.try_resize(chunk_size)
+                },
+            )?;
             let block_thresholds = table.get_block_thresholds();
             compact_task_builders.push(Box::new(
                 builder.block_compact_task_builder(block_thresholds)?,

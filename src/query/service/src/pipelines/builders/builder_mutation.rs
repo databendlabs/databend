@@ -209,6 +209,21 @@ impl PipelineBuilder {
         transform_len: usize,
         block_thresholds: BlockThresholds,
     ) -> Result<()> {
+        // Regroup hash-partitioned rows like a plain INSERT. The row_id port (index 0, present
+        // when `need_match`) carries no rows to write and must bypass the layout.
+        let data_start = usize::from(need_match);
+        let data_end = self.main_pipeline.output_len();
+        self.main_pipeline
+            .build_on_outputs(data_start..data_end, |data| {
+                Self::build_table_write_layout_with_schema(
+                    self.ctx.clone(),
+                    data,
+                    table,
+                    DataSchema::from(table.schema_with_stream()),
+                )?;
+                data.try_resize(transform_len)
+            })?;
+
         // we should avoid too much little block write, because for s3 write, there are too many
         // little blocks, it will cause high latency.
         let mut origin_len = transform_len;

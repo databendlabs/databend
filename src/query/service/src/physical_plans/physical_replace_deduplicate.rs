@@ -157,6 +157,17 @@ impl IPhysicalPlan for ReplaceDeduplicate {
             Arc::new(self.target_schema.clone().into()),
         )?;
 
+        // Only the node that writes new rows needs the layout. In distributed REPLACE the other
+        // nodes receive the same broadcast source but only mutate existing blocks.
+        if self.need_insert {
+            PipelineBuilder::build_table_write_layout_with_schema(
+                builder.ctx.clone(),
+                &mut builder.main_pipeline,
+                tbl.as_ref(),
+                modified_schema.as_ref().clone(),
+            )?;
+        }
+
         let block_thresholds = table.get_block_thresholds();
         build_compact_block_pipeline(&mut builder.main_pipeline, block_thresholds)?;
 
