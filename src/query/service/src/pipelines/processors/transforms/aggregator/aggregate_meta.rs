@@ -15,7 +15,6 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregatePayload;
@@ -26,34 +25,34 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::Payload;
 use databend_common_expression::SerializedPayload;
-use databend_common_expression::types::AccessType;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::StringType;
-use databend_common_expression::types::UInt64Type;
 use databend_common_storages_parquet::serialize_row_group_meta_to_bytes;
 use parquet::file::metadata::RowGroupMetaData;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 
 /// Rows the partial aggregate did not aggregate, for the final aggregate to aggregate as
-/// single-stage input. `data_block` has the partial aggregate's input columns followed by a
-/// `UInt64` column of group hashes, which are used to route the rows.
+/// single-stage input. `data_block` has the partial aggregate's input columns. Group hashes are
+/// not carried: they are random and would not compress on the exchange, and the receiver
+/// recomputes them.
 pub struct RawPayload {
     pub bucket: isize,
     pub data_block: DataBlock,
 }
 
 impl RawPayload {
-    pub fn hashes(&self) -> Buffer<u64> {
-        UInt64Type::try_downcast_column(self.data_block.get_last_column())
-            .expect("raw aggregate payload must end with a UInt64 hash column")
-    }
-
-    /// Split the rows by `partition(hash)` into `partitions` payloads, keeping `bucket`.
-    pub fn scatter(self, partitions: usize, partition: impl Fn(u64) -> usize) -> Result<Vec<Self>> {
+    /// Split the rows by `partition(hash)` of their group `hashes` into `partitions` payloads,
+    /// keeping `bucket`.
+    pub fn scatter(
+        self,
+        hashes: &[u64],
+        partitions: usize,
+        partition: impl Fn(u64) -> usize,
+    ) -> Result<Vec<Self>> {
         let mut indices = vec![Vec::<u32>::new(); partitions];
-        for (row, hash) in self.hashes().iter().enumerate() {
+        for (row, hash) in hashes.iter().enumerate() {
             indices[partition(*hash)].push(row as u32);
         }
         indices

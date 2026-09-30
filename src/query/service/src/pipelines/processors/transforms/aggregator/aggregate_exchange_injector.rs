@@ -134,7 +134,7 @@ impl ExchangeInjector for AggregateInjector {
                 input,
                 output,
                 &params.schema,
-                &self.aggregator_params.raw_schema(),
+                &self.aggregator_params.input_schema,
             )
         })
     }
@@ -149,7 +149,7 @@ impl ExchangeInjector for AggregateInjector {
                 input,
                 output,
                 &params.schema,
-                &self.aggregator_params.raw_schema(),
+                &self.aggregator_params.input_schema,
             )
         })?;
         Ok(())
