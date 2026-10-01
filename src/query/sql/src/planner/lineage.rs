@@ -602,6 +602,7 @@ impl<'a> RelationExtractor<'a> {
             Plan::DataMutation {
                 s_expr, metadata, ..
             } => {
+                let s_expr = s_expr.logical()?;
                 let Some(mutation) = find_mutation(s_expr) else {
                     return Ok(None);
                 };
@@ -1234,7 +1235,7 @@ fn query_parts(plan: &Plan) -> Result<(&SExpr, &MetadataRef, &BindContext)> {
             metadata,
             bind_context,
             ..
-        } => Ok((s_expr, metadata, bind_context)),
+        } => Ok((s_expr.logical()?, metadata, bind_context)),
         _ => Err(ErrorCode::Internal(
             "Lineage extraction expects a query plan".to_string(),
         )),
@@ -2192,7 +2193,7 @@ mod tests {
             ..Default::default()
         };
         Plan::Query {
-            s_expr: Box::new(s_expr),
+            s_expr: Box::new(s_expr.into()),
             metadata,
             bind_context: Box::new(bind_context),
             rewrite_kind: None,

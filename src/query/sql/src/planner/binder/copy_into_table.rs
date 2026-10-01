@@ -559,7 +559,7 @@ impl Binder {
         output_context.columns = from_context.columns;
 
         plan.query = Some(Box::new(Plan::Query {
-            s_expr: Box::new(s_expr),
+            s_expr: Box::new(s_expr.into()),
             metadata: self.metadata.clone(),
             bind_context: Box::new(output_context),
             rewrite_kind: None,

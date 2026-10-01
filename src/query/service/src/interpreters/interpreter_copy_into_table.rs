@@ -221,7 +221,7 @@ impl CopyIntoTableInterpreter {
         let select_interpreter = SelectInterpreter::try_create(
             self.ctx.clone(),
             *(bind_context.clone()),
-            *s_expr.clone(),
+            s_expr.planned()?.clone(),
             metadata.clone(),
             formatted_ast.clone(),
             false,

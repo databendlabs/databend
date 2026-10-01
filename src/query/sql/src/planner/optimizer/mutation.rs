@@ -18,16 +18,17 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 
 use super::optimizer::query_logical_pipeline;
-use super::optimizer::query_planning_pipeline;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
-use crate::binder::target_probe;
 use crate::optimizer::OptimizerContext;
+use crate::optimizer::PhysicalPlanner;
+use crate::optimizer::ir::MutationPlan;
+use crate::optimizer::ir::PExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::distributed::BroadcastToShuffleOptimizer;
 use crate::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
 use crate::optimizer::optimizers::rule::RuleID;
-use crate::optimizer::pipeline::OptimizerPipeline;
+use crate::optimizer::pipeline::configure_distributed_optimization;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::MatchedEvaluator;
@@ -81,16 +82,17 @@ impl PreparedMutation {
     }
 }
 
-/// Select and finalize the input using the legacy mutation distribution policy. A local
+/// Select and finalize the input using the mutation distribution policy. A local
 /// retry reuses the prepared logical input, rather than rerunning preparation on raw SQL.
-async fn plan_input(opt_ctx: Arc<OptimizerContext>, input: SExpr, local: bool) -> Result<SExpr> {
-    let pipeline = OptimizerPipeline::new(opt_ctx.clone(), input).await?;
-    if local {
-        // Pipeline configuration must not re-enable distribution for warehouse tables.
-        opt_ctx.set_enable_distributed_optimization(false);
-    }
-    let mut pipeline = query_planning_pipeline(opt_ctx, pipeline)?;
-    pipeline.execute().await
+async fn plan_input(opt_ctx: Arc<OptimizerContext>, input: SExpr, local: bool) -> Result<PExpr> {
+    configure_distributed_optimization(&opt_ctx, &input).await?;
+    let mut planner = PhysicalPlanner::new(opt_ctx);
+    let planned = if local {
+        planner.plan_local(input).await?
+    } else {
+        planner.plan(input).await?
+    };
+    Ok(planned.into_expr())
 }
 
 pub(super) async fn optimize_mutation(
@@ -102,29 +104,29 @@ pub(super) async fn optimize_mutation(
         input,
         schema,
     } = PreparedMutation::prepare(opt_ctx.clone(), &s_expr).await?;
-    let mut input_s_expr = plan_input(opt_ctx.clone(), input.clone(), false).await?;
+    let mut planned_input = plan_input(opt_ctx.clone(), input.clone(), false).await?;
 
-    // Preserve the legacy mutation consumer policy until requirements are part of
+    // Apply the mutation consumer policy until requirements are part of
     // physical search: discard the query-root Exchange and retry locally if necessary.
-    if matches!(input_s_expr.plan(), RelOperator::Exchange(_)) {
-        input_s_expr = input_s_expr.child(0)?.clone();
+    if matches!(planned_input.plan(), RelOperator::Exchange(_)) {
+        planned_input = planned_input.child(0)?.clone();
     }
-    if input_s_expr.has_merge_exchange() {
-        input_s_expr = plan_input(opt_ctx.clone(), input, true).await?;
+    if planned_input.has_merge_exchange() {
+        planned_input = plan_input(opt_ctx.clone(), input, true).await?;
     }
     mutation.distributed = opt_ctx.get_enable_distributed_optimization();
-    let inner_rel_op = input_s_expr.plan.rel_op();
-    input_s_expr = match mutation.mutation_type {
+    let inner_rel_op = planned_input.plan.rel_op();
+    planned_input = match mutation.mutation_type {
         MutationType::Merge => {
             if mutation.distributed && inner_rel_op == RelOp::Join {
-                let join = Join::try_from(input_s_expr.plan().clone())?;
+                let join = Join::try_from(planned_input.plan().clone())?;
                 let broadcast_to_shuffle = BroadcastToShuffleOptimizer::create();
-                let is_broadcast = broadcast_to_shuffle.matcher.matches(&input_s_expr)
-                    && broadcast_to_shuffle.is_broadcast(&input_s_expr)?;
+                let is_broadcast = broadcast_to_shuffle.matcher.matches(&planned_input)
+                    && broadcast_to_shuffle.is_broadcast(&planned_input)?;
 
                 // If the mutation strategy is matched only, the join type is inner join, if it is a broadcast
                 // join and the target table on the probe side, we can avoid row id shuffle after the join.
-                let target_probe = target_probe(&input_s_expr, mutation.target_table_index)?;
+                let target_probe = target_probe(&planned_input, mutation.target_table_index)?;
                 if is_broadcast
                     && target_probe
                     && mutation.strategy == MutationStrategy::MatchedOnly
@@ -135,23 +137,23 @@ pub(super) async fn optimize_mutation(
                 // Change broadcast join to shuffle join if the join type is left or left-anti join, because
                 // broadcast join can not deduplicate row ids.
                 if is_broadcast && matches!(join.join_type, JoinType::Left | JoinType::LeftAnti) {
-                    broadcast_to_shuffle.optimize(&input_s_expr)?
+                    broadcast_to_shuffle.optimize(&planned_input)?
                 } else {
-                    input_s_expr
+                    planned_input
                 }
             } else {
-                input_s_expr
+                planned_input
             }
         }
-        MutationType::Update | MutationType::Delete => input_s_expr,
+        MutationType::Update | MutationType::Delete => planned_input,
     };
 
     Ok(Plan::DataMutation {
         schema,
-        s_expr: Box::new(SExpr::create_unary(
+        s_expr: Box::new(MutationPlan::Planned(PExpr::create_unary(
             Arc::new(RelOperator::Mutation(mutation)),
-            Arc::new(input_s_expr),
-        )),
+            Arc::new(planned_input),
+        ))),
         metadata: opt_ctx.get_metadata(),
     })
 }
@@ -210,4 +212,22 @@ fn prepare_direct_source(s_expr: &SExpr, mutation: &mut Mutation) -> Result<Opti
         }
         _ => Ok(None),
     }
+}
+
+fn target_probe(s_expr: &PExpr, target_table_index: usize) -> Result<bool> {
+    if !matches!(s_expr.plan(), RelOperator::Join(_)) {
+        return Ok(false);
+    }
+
+    fn contains_target_table(s_expr: &PExpr, target_table_index: usize) -> bool {
+        if let RelOperator::Scan(scan) = s_expr.plan() {
+            scan.table_index == target_table_index
+        } else {
+            s_expr
+                .children()
+                .any(|child| contains_target_table(child, target_table_index))
+        }
+    }
+
+    Ok(contains_target_table(s_expr.child(0)?, target_table_index))
 }

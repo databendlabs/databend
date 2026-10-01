@@ -18,6 +18,7 @@ use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::optimizer::OptimizerContext;
+use databend_common_sql::optimizer::ir::MutationPlan;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::optimize;
 use databend_common_sql::plans::Plan;
@@ -153,8 +154,8 @@ async fn test_mutation_preparation() -> Result<()> {
             },
         ),
     ];
-    for distributed in [false, true] {
-        for (name, sql, expected) in cases {
+    for (name, sql, expected) in cases {
+        for distributed in [false, true] {
             let case = SqlTestCase {
                 name,
                 description: "Mutation logical preparation precedes plan selection; distribution finalization keeps its legacy policy.",
@@ -172,11 +173,25 @@ async fn test_mutation_preparation() -> Result<()> {
             }
             let raw = ctx.bind_sql(sql).await?;
             let Plan::DataMutation {
-                metadata, schema, ..
+                s_expr: bound_expr,
+                metadata,
+                schema,
             } = &raw
             else {
                 unreachable!()
             };
+            assert!(matches!(bound_expr.as_ref(), MutationPlan::Logical(_)));
+            assert!(
+                bound_expr.planned().is_err(),
+                "bound mutation must not reach execution"
+            );
+            raw.capture_bound_query_lineage();
+            let bound_lineage = raw.query_lineage()?;
+            let bound_udfs = bound_expr
+                .input_udfs()?
+                .into_iter()
+                .cloned()
+                .collect::<std::collections::HashSet<_>>();
             let opt_ctx =
                 OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?)
                     .with_settings(&ctx.get_settings())?;
@@ -190,6 +205,17 @@ async fn test_mutation_preparation() -> Result<()> {
             else {
                 unreachable!()
             };
+            assert!(matches!(s_expr.as_ref(), MutationPlan::Planned(_)));
+            assert!(
+                s_expr.logical().is_err(),
+                "planned mutation must not reenter logical preparation"
+            );
+            assert_eq!(bound_lineage, optimized.query_lineage()?);
+            assert_eq!(
+                bound_udfs,
+                s_expr.input_udfs()?.into_iter().cloned().collect()
+            );
+            let s_expr = s_expr.planned()?;
             let mutation = s_expr.plan().as_mutation().unwrap();
             assert_eq!(
                 schema, optimized_schema,
@@ -235,13 +261,15 @@ async fn test_mutation_preparation() -> Result<()> {
             }
             s_expr.child(0)?.validate_types(metadata)?;
             s_expr.child(0)?.validate_column_scope(metadata)?;
-            write_case_header(&mut file, &case)?;
+            if !distributed {
+                write_case_header(&mut file, &case)?;
+                writeln!(
+                    file,
+                    "raw_plan:\n{}",
+                    raw.format_indent(Default::default(), &StatContext::default())?
+                )?;
+            }
             writeln!(file, "requested_distributed: {distributed}")?;
-            writeln!(
-                file,
-                "raw_plan:\n{}",
-                raw.format_indent(Default::default(), &StatContext::default())?
-            )?;
             writeln!(
                 file,
                 "optimized_plan:\n{}",

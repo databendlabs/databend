@@ -1,16 +1,16 @@
 === no_subquery ===
 description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
 sql: INSERT ALL WHEN k > 0 THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
+raw_source:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
 cbo: false, distributed: false
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Scan
 ├── table: default.t (#0)
@@ -19,19 +19,7 @@ Scan
 └── limit: NONE
 
 when_0: t.k (#0) > CAST(0 AS Int64 NULL)
-=== no_subquery ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN k > 0 THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
 cbo: false, distributed: true
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Scan
 ├── table: default.t (#0)
@@ -40,19 +28,7 @@ Scan
 └── limit: NONE
 
 when_0: t.k (#0) > CAST(0 AS Int64 NULL)
-=== no_subquery ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN k > 0 THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
 cbo: true, distributed: false
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Scan
 ├── table: default.t (#0)
@@ -61,19 +37,7 @@ Scan
 └── limit: NONE
 
 when_0: t.k (#0) > CAST(0 AS Int64 NULL)
-=== no_subquery ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN k > 0 THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
 cbo: true, distributed: true
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Scan
 ├── table: default.t (#0)
@@ -85,16 +49,16 @@ when_0: t.k (#0) > CAST(0 AS Int64 NULL)
 === constant_subquery ===
 description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
 sql: INSERT ALL WHEN k = (SELECT 1) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
+raw_source:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
 cbo: false, distributed: false
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Scan
 ├── table: default.t (#0)
@@ -103,19 +67,7 @@ Scan
 └── limit: NONE
 
 when_0: t.k (#0) = CAST(1 AS Int64 NULL)
-=== constant_subquery ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN k = (SELECT 1) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
 cbo: false, distributed: true
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Scan
 ├── table: default.t (#0)
@@ -124,19 +76,7 @@ Scan
 └── limit: NONE
 
 when_0: t.k (#0) = CAST(1 AS Int64 NULL)
-=== constant_subquery ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN k = (SELECT 1) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
 cbo: true, distributed: false
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Scan
 ├── table: default.t (#0)
@@ -145,19 +85,7 @@ Scan
 └── limit: NONE
 
 when_0: t.k (#0) = CAST(1 AS Int64 NULL)
-=== constant_subquery ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN k = (SELECT 1) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
 cbo: true, distributed: true
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Scan
 ├── table: default.t (#0)
@@ -169,7 +97,6 @@ when_0: t.k (#0) = CAST(1 AS Int64 NULL)
 === in_subquery ===
 description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
 sql: INSERT ALL WHEN k IN (SELECT k FROM lookup) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
-cbo: false, distributed: false
 raw_source:
 EvalScalar
 ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
@@ -179,6 +106,7 @@ EvalScalar
     ├── order by: []
     └── limit: NONE
 
+cbo: false, distributed: false
 planned_source:
 Join(RightMark)
 ├── build keys: [lookup.k (#2)]
@@ -196,19 +124,7 @@ Join(RightMark)
     └── limit: NONE
 
 when_0: 4 (#4)
-=== in_subquery ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN k IN (SELECT k FROM lookup) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
 cbo: false, distributed: true
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Join(RightMark)
 ├── build keys: [lookup.k (#2)]
@@ -226,19 +142,7 @@ Join(RightMark)
     └── limit: NONE
 
 when_0: 4 (#4)
-=== in_subquery ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN k IN (SELECT k FROM lookup) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
 cbo: true, distributed: false
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Join(RightMark)
 ├── build keys: [lookup.k (#2)]
@@ -256,19 +160,7 @@ Join(RightMark)
     └── limit: NONE
 
 when_0: 4 (#4)
-=== in_subquery ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN k IN (SELECT k FROM lookup) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
 cbo: true, distributed: true
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Join(RightMark)
 ├── build keys: [lookup.k (#2)]
@@ -289,7 +181,6 @@ when_0: 4 (#4)
 === correlated_exists ===
 description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
 sql: INSERT ALL WHEN EXISTS (SELECT 1 FROM lookup WHERE lookup.k = s.k) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t s
-cbo: false, distributed: false
 raw_source:
 EvalScalar
 ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
@@ -299,6 +190,7 @@ EvalScalar
     ├── order by: []
     └── limit: NONE
 
+cbo: false, distributed: false
 planned_source:
 Join(RightMark)
 ├── build keys: [lookup.k (#2)]
@@ -320,19 +212,7 @@ Join(RightMark)
     └── limit: NONE
 
 when_0: is_true(5 (#5))
-=== correlated_exists ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN EXISTS (SELECT 1 FROM lookup WHERE lookup.k = s.k) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t s
 cbo: false, distributed: true
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Join(RightMark)
 ├── build keys: [lookup.k (#2)]
@@ -354,19 +234,7 @@ Join(RightMark)
     └── limit: NONE
 
 when_0: is_true(5 (#5))
-=== correlated_exists ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN EXISTS (SELECT 1 FROM lookup WHERE lookup.k = s.k) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t s
 cbo: true, distributed: false
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Join(RightMark)
 ├── build keys: [lookup.k (#2)]
@@ -388,19 +256,7 @@ Join(RightMark)
     └── limit: NONE
 
 when_0: is_true(5 (#5))
-=== correlated_exists ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN EXISTS (SELECT 1 FROM lookup WHERE lookup.k = s.k) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t s
 cbo: true, distributed: true
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Join(RightMark)
 ├── build keys: [lookup.k (#2)]
@@ -425,7 +281,6 @@ when_0: is_true(5 (#5))
 === scalar_aggregate ===
 description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
 sql: INSERT ALL WHEN k > (SELECT max(k) FROM lookup) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
-cbo: false, distributed: false
 raw_source:
 EvalScalar
 ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
@@ -435,6 +290,7 @@ EvalScalar
     ├── order by: []
     └── limit: NONE
 
+cbo: false, distributed: false
 planned_source:
 Join(RightSingle)
 ├── build keys: []
@@ -458,19 +314,7 @@ Join(RightSingle)
             └── limit: NONE
 
 when_0: t.k (#0) > scalar_subquery_3 (#3)
-=== scalar_aggregate ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN k > (SELECT max(k) FROM lookup) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
 cbo: false, distributed: true
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Join(RightSingle)
 ├── build keys: []
@@ -494,19 +338,7 @@ Join(RightSingle)
             └── limit: NONE
 
 when_0: t.k (#0) > scalar_subquery_3 (#3)
-=== scalar_aggregate ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN k > (SELECT max(k) FROM lookup) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
 cbo: true, distributed: false
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Join(RightSingle)
 ├── build keys: []
@@ -530,19 +362,7 @@ Join(RightSingle)
             └── limit: NONE
 
 when_0: t.k (#0) > scalar_subquery_3 (#3)
-=== scalar_aggregate ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN k > (SELECT max(k) FROM lookup) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
 cbo: true, distributed: true
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Join(RightSingle)
 ├── build keys: []
@@ -569,7 +389,6 @@ when_0: t.k (#0) > scalar_subquery_3 (#3)
 === multiple_first ===
 description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
 sql: INSERT FIRST WHEN k IN (SELECT k FROM lookup) THEN INTO dst WHEN k > (SELECT min(k) FROM lookup) THEN INTO dst2 ELSE INTO dst SELECT k, v FROM t
-cbo: false, distributed: false
 raw_source:
 EvalScalar
 ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
@@ -579,6 +398,7 @@ EvalScalar
     ├── order by: []
     └── limit: NONE
 
+cbo: false, distributed: false
 planned_source:
 Join(RightSingle)
 ├── build keys: []
@@ -612,19 +432,7 @@ Join(RightSingle)
 
 when_0: 6 (#6)
 when_1: t.k (#0) > scalar_subquery_4 (#4)
-=== multiple_first ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT FIRST WHEN k IN (SELECT k FROM lookup) THEN INTO dst WHEN k > (SELECT min(k) FROM lookup) THEN INTO dst2 ELSE INTO dst SELECT k, v FROM t
 cbo: false, distributed: true
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Join(RightSingle)
 ├── build keys: []
@@ -658,19 +466,7 @@ Join(RightSingle)
 
 when_0: 6 (#6)
 when_1: t.k (#0) > scalar_subquery_4 (#4)
-=== multiple_first ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT FIRST WHEN k IN (SELECT k FROM lookup) THEN INTO dst WHEN k > (SELECT min(k) FROM lookup) THEN INTO dst2 ELSE INTO dst SELECT k, v FROM t
 cbo: true, distributed: false
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Join(RightSingle)
 ├── build keys: []
@@ -704,19 +500,7 @@ Join(RightSingle)
 
 when_0: 6 (#6)
 when_1: t.k (#0) > scalar_subquery_4 (#4)
-=== multiple_first ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT FIRST WHEN k IN (SELECT k FROM lookup) THEN INTO dst WHEN k > (SELECT min(k) FROM lookup) THEN INTO dst2 ELSE INTO dst SELECT k, v FROM t
 cbo: true, distributed: true
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Join(RightSingle)
 ├── build keys: []
@@ -753,7 +537,6 @@ when_1: t.k (#0) > scalar_subquery_4 (#4)
 === nullable_not_in ===
 description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
 sql: INSERT ALL WHEN k NOT IN (SELECT k FROM lookup) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
-cbo: false, distributed: false
 raw_source:
 EvalScalar
 ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
@@ -763,6 +546,7 @@ EvalScalar
     ├── order by: []
     └── limit: NONE
 
+cbo: false, distributed: false
 planned_source:
 Join(RightMark)
 ├── build keys: [lookup.k (#2)]
@@ -780,19 +564,7 @@ Join(RightMark)
     └── limit: NONE
 
 when_0: NOT 4 (#4)
-=== nullable_not_in ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN k NOT IN (SELECT k FROM lookup) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
 cbo: false, distributed: true
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Join(RightMark)
 ├── build keys: [lookup.k (#2)]
@@ -810,19 +582,7 @@ Join(RightMark)
     └── limit: NONE
 
 when_0: NOT 4 (#4)
-=== nullable_not_in ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN k NOT IN (SELECT k FROM lookup) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
 cbo: true, distributed: false
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Join(RightMark)
 ├── build keys: [lookup.k (#2)]
@@ -840,19 +600,7 @@ Join(RightMark)
     └── limit: NONE
 
 when_0: NOT 4 (#4)
-=== nullable_not_in ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN k NOT IN (SELECT k FROM lookup) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
 cbo: true, distributed: true
-raw_source:
-EvalScalar
-├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-└── Scan
-    ├── table: default.t (#0)
-    ├── filters: []
-    ├── order by: []
-    └── limit: NONE
-
 planned_source:
 Join(RightMark)
 ├── build keys: [lookup.k (#2)]
@@ -873,7 +621,6 @@ when_0: NOT 4 (#4)
 === source_limit ===
 description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
 sql: INSERT ALL WHEN k IN (SELECT k FROM lookup) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t ORDER BY k LIMIT 2
-cbo: false, distributed: false
 raw_source:
 Limit
 ├── limit: [2]
@@ -889,6 +636,7 @@ Limit
             ├── order by: []
             └── limit: NONE
 
+cbo: false, distributed: false
 planned_source:
 Join(RightMark)
 ├── build keys: [lookup.k (#2)]
@@ -910,25 +658,7 @@ Join(RightMark)
         └── limit: 2
 
 when_0: 4 (#4)
-=== source_limit ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN k IN (SELECT k FROM lookup) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t ORDER BY k LIMIT 2
 cbo: false, distributed: true
-raw_source:
-Limit
-├── limit: [2]
-├── offset: [0]
-└── Sort
-    ├── sort keys: [t.k (#0) ASC NULLS LAST]
-    ├── limit: [NONE]
-    └── EvalScalar
-        ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-        └── Scan
-            ├── table: default.t (#0)
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
-
 planned_source:
 Join(RightMark)
 ├── build keys: [lookup.k (#2)]
@@ -950,25 +680,7 @@ Join(RightMark)
         └── limit: 2
 
 when_0: 4 (#4)
-=== source_limit ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN k IN (SELECT k FROM lookup) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t ORDER BY k LIMIT 2
 cbo: true, distributed: false
-raw_source:
-Limit
-├── limit: [2]
-├── offset: [0]
-└── Sort
-    ├── sort keys: [t.k (#0) ASC NULLS LAST]
-    ├── limit: [NONE]
-    └── EvalScalar
-        ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-        └── Scan
-            ├── table: default.t (#0)
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
-
 planned_source:
 Join(RightMark)
 ├── build keys: [lookup.k (#2)]
@@ -990,25 +702,7 @@ Join(RightMark)
         └── limit: 2
 
 when_0: 4 (#4)
-=== source_limit ===
-description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
-sql: INSERT ALL WHEN k IN (SELECT k FROM lookup) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t ORDER BY k LIMIT 2
 cbo: true, distributed: true
-raw_source:
-Limit
-├── limit: [2]
-├── offset: [0]
-└── Sort
-    ├── sort keys: [t.k (#0) ASC NULLS LAST]
-    ├── limit: [NONE]
-    └── EvalScalar
-        ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
-        └── Scan
-            ├── table: default.t (#0)
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
-
 planned_source:
 Join(RightMark)
 ├── build keys: [lookup.k (#2)]

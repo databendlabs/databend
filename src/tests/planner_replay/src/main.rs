@@ -20,7 +20,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::FormatOptions;
 use databend_common_sql::MetadataRef;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::Plan;
@@ -145,10 +145,10 @@ fn format_join_explain(plan: Plan) -> Result<String> {
         ));
     };
 
-    Ok(join_format_tree(&s_expr, &metadata)?.format_pretty()?)
+    Ok(join_format_tree(s_expr.planned()?.expr(), &metadata)?.format_pretty()?)
 }
 
-fn join_format_tree(s_expr: &SExpr, metadata: &MetadataRef) -> Result<FormatTreeNode> {
+fn join_format_tree(s_expr: &PExpr, metadata: &MetadataRef) -> Result<FormatTreeNode> {
     match s_expr.plan() {
         RelOperator::Join(join) => {
             let build_child =

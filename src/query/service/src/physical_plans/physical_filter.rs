@@ -27,7 +27,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -147,7 +147,7 @@ impl IPhysicalPlan for Filter {
 impl PhysicalPlanBuilder {
     pub async fn build_filter(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         filter: &databend_common_sql::plans::Filter,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,

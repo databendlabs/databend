@@ -23,17 +23,17 @@ use log::info;
 
 use crate::InsertInputSource;
 use crate::optimizer::OptimizerContext;
+use crate::optimizer::PhysicalPlanner;
 use crate::optimizer::ir::Memo;
+use crate::optimizer::ir::PlannedQuery;
+use crate::optimizer::ir::QueryPlan;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::mutation::optimize_mutation;
 use crate::optimizer::optimizers::CTEFilterPushdownOptimizer;
-use crate::optimizer::optimizers::CascadesOptimizer;
 use crate::optimizer::optimizers::CommonSubexpressionOptimizer;
 use crate::optimizer::optimizers::DPhpyOptimizer;
 use crate::optimizer::optimizers::EliminateSelfJoinOptimizer;
-use crate::optimizer::optimizers::operator::CleanupUnusedCTEOptimizer;
 use crate::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
-use crate::optimizer::optimizers::operator::FinalizeSpatialJoinOptimizer;
 use crate::optimizer::optimizers::operator::PullUpFilterOptimizer;
 use crate::optimizer::optimizers::operator::RuleNormalizeAggregateOptimizer;
 use crate::optimizer::optimizers::operator::RuleStatsAggregateOptimizer;
@@ -70,8 +70,13 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
                 .collect();
             Ok(Plan::Query {
                 s_expr: Box::new(
-                    optimize_query_with_output_columns(opt_ctx, *s_expr, query_output_columns)
-                        .await?,
+                    optimize_query_with_output_columns(
+                        opt_ctx,
+                        (*s_expr).into_logical()?,
+                        query_output_columns,
+                    )
+                    .await
+                    .map(QueryPlan::Planned)?,
                 ),
                 bind_context,
                 metadata,
@@ -101,7 +106,8 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
 
                 let s_expr = Box::new(
                     SubqueryDecorrelatorOptimizer::new(opt_ctx.clone(), None)
-                        .optimize_sync(*s_expr)?,
+                        .optimize_sync((*s_expr).into_logical()?)?
+                        .into(),
                 );
                 Ok(Plan::Explain {
                     kind,
@@ -118,7 +124,8 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
             }
             ExplainKind::Memo(_) => {
                 if let deref!( Plan::Query { ref s_expr, .. }) = plan {
-                    let memo = get_optimized_memo(opt_ctx.clone(), *s_expr.clone()).await?;
+                    let memo =
+                        get_optimized_memo(opt_ctx.clone(), s_expr.logical()?.clone()).await?;
                     Ok(Plan::Explain {
                         config,
                         kind: ExplainKind::Memo(memo.display()?),
@@ -173,7 +180,9 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
             }
             Ok(Plan::CopyIntoTable(plan))
         }
-        Plan::DataMutation { s_expr, .. } => optimize_mutation(opt_ctx, *s_expr).await,
+        Plan::DataMutation { s_expr, .. } => {
+            optimize_mutation(opt_ctx, (*s_expr).into_logical()?).await
+        }
 
         // distributed insert will be optimized in `physical_plan_builder`
         Plan::Insert(mut plan) => {
@@ -207,10 +216,10 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
                 for when in &plan.whens {
                     output_columns.extend(when.condition.used_columns());
                 }
-                let input = s_expr.as_ref().clone();
+                let input = s_expr.logical()?.clone();
                 let planned =
                     optimize_query_with_output_columns(opt_ctx, input, output_columns).await?;
-                *s_expr = Box::new(planned);
+                *s_expr = Box::new(QueryPlan::Planned(planned));
             } else {
                 plan.input_source = optimize(opt_ctx, plan.input_source.clone()).await?;
             }
@@ -270,7 +279,7 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
     }
 }
 
-pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<SExpr> {
+pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<PlannedQuery> {
     optimize_query_inner(opt_ctx, s_expr, None).await
 }
 
@@ -278,7 +287,7 @@ async fn optimize_query_with_output_columns(
     opt_ctx: Arc<OptimizerContext>,
     s_expr: SExpr,
     output_columns: std::collections::HashSet<Symbol>,
-) -> Result<SExpr> {
+) -> Result<PlannedQuery> {
     optimize_query_inner(opt_ctx, s_expr, Some(output_columns)).await
 }
 
@@ -286,10 +295,13 @@ async fn optimize_query_inner(
     opt_ctx: Arc<OptimizerContext>,
     s_expr: SExpr,
     output_columns: Option<std::collections::HashSet<Symbol>>,
-) -> Result<SExpr> {
-    let pipeline = query_logical_pipeline(opt_ctx.clone(), s_expr, output_columns).await?;
-    let mut pipeline = query_planning_pipeline(opt_ctx, pipeline)?;
-    pipeline.execute().await
+) -> Result<PlannedQuery> {
+    let mut pipeline = query_logical_pipeline(opt_ctx.clone(), s_expr, output_columns).await?;
+    let input = pipeline.execute().await?;
+    PhysicalPlanner::new(opt_ctx)
+        .with_trace_collector(pipeline.get_trace_collector(), pipeline.num_optimizers())
+        .plan(input)
+        .await
 }
 
 /// Build the common logical passes without selecting distributions or execution plans.
@@ -353,26 +365,6 @@ pub(super) async fn query_logical_pipeline(
     Ok(pipeline)
 }
 
-/// Append the existing planning and cleanup passes. Ordinary queries keep a single
-/// pipeline; mutation inputs enter here only after their logical preparation.
-pub(super) fn query_planning_pipeline(
-    opt_ctx: Arc<OptimizerContext>,
-    pipeline: OptimizerPipeline,
-) -> Result<OptimizerPipeline> {
-    Ok(pipeline
-        // Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
-        .add(CascadesOptimizer::new(opt_ctx.clone())?)
-        // Eliminate unnecessary scalar calculations to clean up the final plan
-        .add(RecursiveRuleOptimizer::new(
-            opt_ctx.clone(),
-            [RuleID::EliminateEvalScalar].as_slice(),
-        ))
-        // Clean up unused CTEs
-        .add(CleanupUnusedCTEOptimizer)
-        // Finalize derived join annotations after all logical rewrites.
-        .add(FinalizeSpatialJoinOptimizer::new(opt_ctx.clone())))
-}
-
 fn rewrite_insert_multi_table_whens(
     opt_ctx: Arc<OptimizerContext>,
     plan: &mut crate::plans::InsertMultiTable,
@@ -381,7 +373,7 @@ fn rewrite_insert_multi_table_whens(
         return Ok(());
     };
 
-    let mut source_expr = s_expr.as_ref().clone();
+    let mut source_expr = s_expr.logical()?.clone();
     let mut rewritten_any = false;
 
     for (idx, when) in plan.whens.iter_mut().enumerate() {
@@ -420,7 +412,7 @@ fn rewrite_insert_multi_table_whens(
     }
 
     if rewritten_any {
-        *s_expr = Box::new(source_expr);
+        *s_expr = Box::new(QueryPlan::Logical(source_expr));
     }
 
     Ok(())
@@ -446,10 +438,11 @@ async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
             RuleID::SplitAggregate,
         ]))
         // Cost based optimization
-        .add(DPhpyOptimizer::new(opt_ctx.clone()))
-        .add(CascadesOptimizer::new(opt_ctx.clone())?);
+        .add(DPhpyOptimizer::new(opt_ctx.clone()));
 
-    let _s_expr = pipeline.execute().await?;
-
-    Ok(pipeline.memo())
+    let input = pipeline.execute().await?;
+    PhysicalPlanner::new(opt_ctx)
+        .with_trace_collector(pipeline.get_trace_collector(), pipeline.num_optimizers())
+        .search_memo(input)
+        .await
 }

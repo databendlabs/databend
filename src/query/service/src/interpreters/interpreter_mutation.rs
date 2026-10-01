@@ -31,7 +31,7 @@ use databend_common_pipeline::sinks::EmptySink;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::planner::MetadataRef;
 use databend_common_sql::plans;
 use databend_common_sql::plans::Mutation;
@@ -60,7 +60,7 @@ use crate::stream::DataBlockStream;
 
 pub struct MutationInterpreter {
     ctx: Arc<QueryContext>,
-    s_expr: SExpr,
+    s_expr: PExpr,
     schema: DataSchemaRef,
     metadata: MetadataRef,
     materialized_view_refresh_target: Option<u64>,
@@ -69,7 +69,7 @@ pub struct MutationInterpreter {
 impl MutationInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
-        s_expr: SExpr,
+        s_expr: PExpr,
         schema: DataSchemaRef,
         metadata: MetadataRef,
     ) -> Result<MutationInterpreter> {
@@ -84,7 +84,7 @@ impl MutationInterpreter {
 
     pub fn try_create_materialized_view_refresh(
         ctx: Arc<QueryContext>,
-        s_expr: SExpr,
+        s_expr: PExpr,
         schema: DataSchemaRef,
         metadata: MetadataRef,
         target_table_id: u64,

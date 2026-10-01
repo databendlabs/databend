@@ -29,7 +29,7 @@ use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::AggregateFunctionSignature;
 use databend_common_sql::executor::physical_plans::SortDesc;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::plans::Aggregate;
 use databend_common_sql::plans::AggregateMode;
 use databend_common_sql::plans::ConstantTableScan;
@@ -210,7 +210,7 @@ impl IPhysicalPlan for AggregateFinal {
 impl PhysicalPlanBuilder {
     pub async fn build_aggregate(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         agg: &Aggregate,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
@@ -235,7 +235,7 @@ impl PhysicalPlanBuilder {
             let mut s =
                 ConstantTableScan::new_empty_scan(DataSchemaRef::default(), ColumnSet::new());
             s.num_rows = 1;
-            let expr = SExpr::create_leaf(s);
+            let expr = PExpr::create_leaf(s);
             return self.build(&expr, required).await;
         }
 

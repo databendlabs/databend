@@ -28,7 +28,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::types::NumberScalar;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::plans::Mutation;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
@@ -355,7 +355,7 @@ pub async fn append_sample_data(num_blocks: usize, fixture: &TestFixture) -> Res
 
 pub async fn do_mutation(
     ctx: Arc<QueryContext>,
-    s_expr: SExpr,
+    s_expr: PExpr,
     schema: DataSchemaRef,
 ) -> Result<()> {
     let mutation: Mutation = s_expr.plan().clone().try_into()?;

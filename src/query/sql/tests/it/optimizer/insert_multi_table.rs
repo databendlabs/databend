@@ -17,10 +17,10 @@ use std::io::Write;
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
 use databend_common_sql::optimizer::OptimizerContext;
-use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::ir::SExprVisitor;
+use databend_common_sql::optimizer::ir::ExprVisitor;
+use databend_common_sql::optimizer::ir::PExpr;
+use databend_common_sql::optimizer::ir::PVisitAction as VisitAction;
 use databend_common_sql::optimizer::ir::StatContext;
-use databend_common_sql::optimizer::ir::VisitAction;
 use databend_common_sql::optimizer::optimize;
 use databend_common_sql::plans::AggregateMode;
 use databend_common_sql::plans::Plan;
@@ -120,7 +120,7 @@ async fn test_when_subqueries_are_planned_with_source() -> Result<()> {
                     unreachable!()
                 };
                 assert_eq!(source_columns, bind_context.result_columns());
-                let source = s_expr.as_ref();
+                let source = s_expr.planned()?.expr();
                 source.validate_types(&insert.meta_data)?;
                 source.validate_column_scope(&insert.meta_data)?;
                 let property = source.derive_relational_prop()?;
@@ -137,8 +137,8 @@ async fn test_when_subqueries_are_planned_with_source() -> Result<()> {
                 struct Check {
                     joins: usize,
                 }
-                impl SExprVisitor for Check {
-                    fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
+                impl ExprVisitor<databend_common_sql::optimizer::ir::Physical> for Check {
+                    fn visit(&mut self, expr: &PExpr) -> Result<VisitAction> {
                         self.joins += usize::from(expr.plan().as_join().is_some());
                         if let Some(aggregate) = expr.plan().as_aggregate() {
                             assert_ne!(
@@ -153,15 +153,17 @@ async fn test_when_subqueries_are_planned_with_source() -> Result<()> {
                 let mut check = Check { joins: 0 };
                 source.accept(&mut check)?;
                 assert_eq!(check.joins > 0, has_join, "{name}");
-                write_case_header(&mut file, &case)?;
+                if !cbo && !distributed {
+                    write_case_header(&mut file, &case)?;
+                    writeln!(
+                        file,
+                        "raw_source:\n{}",
+                        bound
+                            .input_source
+                            .format_indent(Default::default(), &StatContext::default())?
+                    )?;
+                }
                 writeln!(file, "cbo: {cbo}, distributed: {distributed}")?;
-                writeln!(
-                    file,
-                    "raw_source:\n{}",
-                    bound
-                        .input_source
-                        .format_indent(Default::default(), &StatContext::default())?
-                )?;
                 writeln!(
                     file,
                     "planned_source:\n{}",
