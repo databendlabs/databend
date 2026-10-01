@@ -26,6 +26,7 @@ mod decorrelate_correlated_aliases;
 mod distributed_join;
 mod eager_aggregation;
 mod hierarchical_grouping_sets;
+mod insert_multi_table;
 mod join_cardinality;
 mod materialized_cte_distribution;
 mod mutation;

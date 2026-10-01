@@ -191,8 +191,29 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
             Ok(Plan::Insert(plan))
         }
         Plan::InsertMultiTable(mut plan) => {
-            plan.input_source = optimize(opt_ctx.clone(), plan.input_source.clone()).await?;
-            rewrite_insert_multi_table_whens(opt_ctx, plan.as_mut())?;
+            // WHEN subqueries introduce logical joins/aggregates. Rewrite them before
+            // selecting the source implementation so those nodes participate in CBO.
+            rewrite_insert_multi_table_whens(opt_ctx.clone(), plan.as_mut())?;
+            if let Plan::Query {
+                s_expr,
+                bind_context,
+                ..
+            } = &mut plan.input_source
+            {
+                let mut output_columns = bind_context
+                    .column_set()
+                    .into_iter()
+                    .collect::<std::collections::HashSet<_>>();
+                for when in &plan.whens {
+                    output_columns.extend(when.condition.used_columns());
+                }
+                let input = s_expr.as_ref().clone();
+                let planned =
+                    optimize_query_with_output_columns(opt_ctx, input, output_columns).await?;
+                *s_expr = Box::new(planned);
+            } else {
+                plan.input_source = optimize(opt_ctx, plan.input_source.clone()).await?;
+            }
             Ok(Plan::InsertMultiTable(plan))
         }
         Plan::Replace(mut plan) => {
