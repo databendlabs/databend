@@ -23,7 +23,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::TypeCheck;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::format::ExpressionScanFormatter;
@@ -114,7 +114,7 @@ impl IPhysicalPlan for ExpressionScan {
 impl PhysicalPlanBuilder {
     pub async fn build_expression_scan(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         scan: &databend_common_sql::plans::ExpressionScan,
         required: ColumnSet,
     ) -> Result<PhysicalPlan> {

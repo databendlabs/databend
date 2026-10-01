@@ -21,7 +21,7 @@ use databend_common_expression::type_check::common_super_type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::wrap_cast;
-use crate::optimizer::ir::expr::SExpr;
+use crate::optimizer::ir::PExpr;
 use crate::optimizer::ir::property::Distribution;
 use crate::optimizer::ir::property::PhysicalProperty;
 use crate::optimizer::ir::property::RelExpr;
@@ -94,17 +94,17 @@ impl PropertyEnforcer {
         Self { ctx }
     }
 
-    /// Require and enforce physical property from a physical `SExpr`
+    /// Require and enforce physical property from a physical `PExpr`
     #[recursive::recursive]
-    pub fn require_property(&self, required: &RequiredProperty, s_expr: &SExpr) -> Result<SExpr> {
-        // First, we will require the child SExpr with input `RequiredProperty`.
+    pub fn require_property(&self, required: &RequiredProperty, s_expr: &PExpr) -> Result<PExpr> {
+        // First, we will require the child PExpr with input `RequiredProperty`.
         let children = s_expr
             .children()
             .map(|child| Ok(Arc::new(self.require_property(required, child)?)))
             .collect::<Result<Vec<_>>>()?;
 
-        let s_expr = SExpr::create(Arc::new(s_expr.plan().clone()), children, None, None, None);
-        let rel_expr = RelExpr::with_s_expr(&s_expr);
+        let s_expr = PExpr::create(Arc::new(s_expr.plan().clone()), children, None, None, None);
+        let rel_expr = RelExpr::with_p_expr(&s_expr);
 
         // Prepare containers for child properties
         let mut children = Vec::with_capacity(s_expr.arity());
@@ -182,11 +182,11 @@ impl PropertyEnforcer {
             children.push(Arc::new(enforced_child));
         }
 
-        Ok(SExpr::create(Arc::new(plan), children, None, None, None))
+        Ok(PExpr::create(Arc::new(plan), children, None, None, None))
     }
 
-    /// Try to enforce physical property from a physical `SExpr`
-    pub fn enforce_property(&self, s_expr: &SExpr, required: &RequiredProperty) -> Result<SExpr> {
+    /// Try to enforce physical property from a physical `PExpr`
+    pub fn enforce_property(&self, s_expr: &PExpr, required: &RequiredProperty) -> Result<PExpr> {
         // Enforce distribution if needed
         let s_expr = if !required.distribution.satisfied_by(&Distribution::Any) {
             self.enforce_distribution(&required.distribution, s_expr)?
@@ -201,9 +201,9 @@ impl PropertyEnforcer {
     pub fn enforce_distribution(
         &self,
         distribution: &Distribution,
-        s_expr: &SExpr,
-    ) -> Result<SExpr> {
-        let physical_prop = RelExpr::with_s_expr(s_expr).derive_physical_prop()?;
+        s_expr: &PExpr,
+    ) -> Result<PExpr> {
+        let physical_prop = RelExpr::with_p_expr(s_expr).derive_physical_prop()?;
 
         // Check if enforcement is needed
         if distribution.satisfied_by(&physical_prop.distribution) {
@@ -215,7 +215,7 @@ impl PropertyEnforcer {
 
         // Apply the enforcer
         let exchange_op = enforcer.enforce()?;
-        let result = SExpr::create_unary(Arc::new(exchange_op), Arc::new(s_expr.clone()));
+        let result = PExpr::create_unary(Arc::new(exchange_op), Arc::new(s_expr.clone()));
 
         Ok(result)
     }

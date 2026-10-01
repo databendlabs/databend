@@ -1,0 +1,170 @@
+=== query_boundary: distributed=false, cbo=false ===
+sql: SELECT k, sum(v) FROM t GROUP BY k ORDER BY k LIMIT 5
+raw_plan:
+Limit
+├── limit: [5]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [t.k (#0) ASC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2)]
+        └── Aggregate(Initial)
+            ├── group items: [t.k (#0) AS (#0)]
+            ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+            └── EvalScalar
+                ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+                └── Scan
+                    ├── table: default.t (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+planned_query:
+TopN
+├── sort keys: [t.k (#0) ASC NULLS LAST]
+├── limit: [5]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [t.k (#0) AS (#0)]
+    ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+    └── Aggregate(Partial)
+        ├── group items: [t.k (#0) AS (#0)]
+        ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: [t.k (#0) ASC]
+            └── limit: NONE
+
+=== query_boundary: distributed=false, cbo=true ===
+sql: SELECT k, sum(v) FROM t GROUP BY k ORDER BY k LIMIT 5
+raw_plan:
+Limit
+├── limit: [5]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [t.k (#0) ASC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2)]
+        └── Aggregate(Initial)
+            ├── group items: [t.k (#0) AS (#0)]
+            ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+            └── EvalScalar
+                ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+                └── Scan
+                    ├── table: default.t (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+planned_query:
+TopN
+├── sort keys: [t.k (#0) ASC NULLS LAST]
+├── limit: [5]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [t.k (#0) AS (#0)]
+    ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+    └── Aggregate(Partial)
+        ├── group items: [t.k (#0) AS (#0)]
+        ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: [t.k (#0) ASC]
+            └── limit: NONE
+
+=== query_boundary: distributed=true, cbo=false ===
+sql: SELECT k, sum(v) FROM t GROUP BY k ORDER BY k LIMIT 5
+raw_plan:
+Limit
+├── limit: [5]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [t.k (#0) ASC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2)]
+        └── Aggregate(Initial)
+            ├── group items: [t.k (#0) AS (#0)]
+            ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+            └── EvalScalar
+                ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+                └── Scan
+                    ├── table: default.t (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+planned_query:
+TopN
+├── sort keys: [t.k (#0) ASC NULLS LAST]
+├── limit: [5]
+├── offset: [0]
+└── Exchange(Merge)
+    └── TopN
+        ├── sort keys: [t.k (#0) ASC NULLS LAST]
+        ├── limit: [5]
+        ├── offset: [0]
+        └── Aggregate(Final)
+            ├── group items: [t.k (#0) AS (#0)]
+            ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+            └── Aggregate(Partial)
+                ├── group items: [t.k (#0) AS (#0)]
+                ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+                └── Exchange(Hash)
+                    ├── Exchange(Hash): keys: [t.k (#0)]
+                    └── Scan
+                        ├── table: default.t (#0)
+                        ├── filters: []
+                        ├── order by: [t.k (#0) ASC]
+                        └── limit: NONE
+
+=== query_boundary: distributed=true, cbo=true ===
+sql: SELECT k, sum(v) FROM t GROUP BY k ORDER BY k LIMIT 5
+raw_plan:
+Limit
+├── limit: [5]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [t.k (#0) ASC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2)]
+        └── Aggregate(Initial)
+            ├── group items: [t.k (#0) AS (#0)]
+            ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+            └── EvalScalar
+                ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+                └── Scan
+                    ├── table: default.t (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+planned_query:
+TopN
+├── sort keys: [t.k (#0) ASC NULLS LAST]
+├── limit: [5]
+├── offset: [0]
+└── Exchange(Merge)
+    └── TopN
+        ├── sort keys: [t.k (#0) ASC NULLS LAST]
+        ├── limit: [5]
+        ├── offset: [0]
+        └── Aggregate(Final)
+            ├── group items: [t.k (#0) AS (#0)]
+            ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+            └── Aggregate(Partial)
+                ├── group items: [t.k (#0) AS (#0)]
+                ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+                └── Exchange(Hash)
+                    ├── Exchange(Hash): keys: [t.k (#0)]
+                    └── Scan
+                        ├── table: default.t (#0)
+                        ├── filters: []
+                        ├── order by: [t.k (#0) ASC]
+                        └── limit: NONE
+

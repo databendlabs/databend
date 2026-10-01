@@ -28,7 +28,7 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::plans::UDFType;
 use databend_query_script_udf_support::ScriptUdfFunctionDesc;
 use itertools::Itertools;
@@ -181,7 +181,7 @@ impl From<UdfFunctionDesc> for ScriptUdfFunctionDesc {
 impl PhysicalPlanBuilder {
     pub async fn build_udf(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         udf_plan: &databend_common_sql::plans::Udf,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,

@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::optimizer::ir::Matcher;
-use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::PExpr;
 use crate::plans::Exchange;
 use crate::plans::Limit;
 use crate::plans::RelOp;
@@ -117,7 +117,7 @@ impl SortAndLimitPushDownOptimizer {
     }
 
     #[recursive::recursive]
-    pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn optimize(&self, s_expr: &PExpr) -> Result<PExpr> {
         let mut replaced_children = Vec::with_capacity(s_expr.arity());
         for child in s_expr.children.iter() {
             let new_child = self.optimize(child)?;
@@ -129,7 +129,7 @@ impl SortAndLimitPushDownOptimizer {
         self.apply_limit(&apply_topn_res)
     }
 
-    fn apply_sort(&self, s_expr: &SExpr) -> Result<SExpr> {
+    fn apply_sort(&self, s_expr: &PExpr) -> Result<PExpr> {
         if !self.sort_matcher.matches(s_expr) {
             return Ok(s_expr.clone());
         }
@@ -148,9 +148,9 @@ impl SortAndLimitPushDownOptimizer {
 
         let sort = s_expr.plan.as_sort().unwrap();
 
-        let new_exchange = SExpr::create_unary(
+        let new_exchange = PExpr::create_unary(
             Arc::new(Exchange::MergeSort.into()),
-            SExpr::create_unary(
+            PExpr::create_unary(
                 Arc::new(
                     Sort {
                         after_exchange: Some(false),
@@ -161,7 +161,7 @@ impl SortAndLimitPushDownOptimizer {
                 exchange_sexpr.unary_child_arc(),
             ),
         );
-        Ok(SExpr::create_unary(
+        Ok(PExpr::create_unary(
             Arc::new(
                 Sort {
                     after_exchange: Some(true),
@@ -173,7 +173,7 @@ impl SortAndLimitPushDownOptimizer {
         ))
     }
 
-    fn apply_topn(&self, s_expr: &SExpr) -> Result<SExpr> {
+    fn apply_topn(&self, s_expr: &PExpr) -> Result<PExpr> {
         if !self.topn_matcher.matches(s_expr) {
             return Ok(s_expr.clone());
         }
@@ -191,9 +191,9 @@ impl SortAndLimitPushDownOptimizer {
 
         let top_n = s_expr.plan.as_top_n().unwrap();
 
-        let new_exchange = SExpr::create_unary(
+        let new_exchange = PExpr::create_unary(
             Arc::new(Exchange::Merge.into()),
-            SExpr::create_unary(
+            PExpr::create_unary(
                 Arc::new(
                     TopN {
                         after_exchange: Some(false),
@@ -204,7 +204,7 @@ impl SortAndLimitPushDownOptimizer {
                 exchange_sexpr.unary_child_arc(),
             ),
         );
-        Ok(SExpr::create_unary(
+        Ok(PExpr::create_unary(
             Arc::new(
                 TopN {
                     after_exchange: Some(true),
@@ -216,7 +216,7 @@ impl SortAndLimitPushDownOptimizer {
         ))
     }
 
-    fn apply_limit(&self, s_expr: &SExpr) -> Result<SExpr> {
+    fn apply_limit(&self, s_expr: &PExpr) -> Result<PExpr> {
         if !self.limit_matcher.matches(s_expr) {
             return Ok(s_expr.clone());
         }
@@ -240,7 +240,7 @@ impl SortAndLimitPushDownOptimizer {
 
         debug_assert!(exchange_sexpr.children.len() == 1);
         let child = exchange_sexpr.child(0)?.clone();
-        let new_child = SExpr::create_unary(Arc::new(limit.into()), Arc::new(child));
+        let new_child = PExpr::create_unary(Arc::new(limit.into()), Arc::new(child));
         let new_exchange = exchange_sexpr.replace_children(vec![Arc::new(new_child)]);
         Ok(s_expr.replace_children(vec![Arc::new(new_exchange)]))
     }
