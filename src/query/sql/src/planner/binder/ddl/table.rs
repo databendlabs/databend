@@ -139,6 +139,7 @@ use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr_to_string;
 use crate::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
 use crate::planner::binder::ddl::database::DEFAULT_STORAGE_PATH;
+use crate::planner::semantic::PersistedTypeCheckAdapter;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::AddColumnOption;
 use crate::plans::AddTableColumnPlan;
@@ -2471,14 +2472,18 @@ impl Binder {
         let metadata = Arc::new(RwLock::new(self.metadata.read().clone()));
         let mut bind_context = crate::bind_context_from_schema(&schema, &metadata);
 
-        let mut scalar_binder = ScalarBinder::new(
+        let adapter = PersistedTypeCheckAdapter::new(
+            &self.ctx.get_settings(),
+            self.ctx.get_function_context()?,
+        )?;
+        let mut scalar_binder = ScalarBinder::with_adapter(
             &mut bind_context,
-            self.ctx.clone(),
+            adapter,
             &self.name_resolution_ctx,
             metadata,
             &[],
         );
-        scalar_binder.forbid_udf();
+
         let (scalar, _) = scalar_binder.bind(ttl_expr)?;
         if scalar.used_columns().is_empty() {
             return Err(ErrorCode::SemanticError(format!(
@@ -2536,15 +2541,17 @@ impl Binder {
         // Build a temporary BindContext to resolve the expr
         let metadata = Arc::new(RwLock::new(self.metadata.read().clone()));
         let mut bind_context = crate::bind_context_from_schema(&schema, &metadata);
-        let mut scalar_binder = ScalarBinder::new(
+        let adapter = PersistedTypeCheckAdapter::new(
+            &self.ctx.get_settings(),
+            self.ctx.get_function_context()?,
+        )?;
+        let mut scalar_binder = ScalarBinder::with_adapter(
             &mut bind_context,
-            self.ctx.clone(),
+            adapter,
             &self.name_resolution_ctx,
             metadata,
             &[],
         );
-        // Table keys cannot be a UDF expression.
-        scalar_binder.forbid_udf();
 
         let mut normalizer = StoredKeyNormalizer::new(&self.name_resolution_ctx);
         let mut table_keys = Vec::with_capacity(expr_len);
