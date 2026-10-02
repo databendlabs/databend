@@ -707,7 +707,7 @@ where A: super::TypeCheckAdapter
 
         let udf = self
             .resolve_udf_from_cache(&udf_name)
-            .map_err(|err| err.set_span(span))?;
+            .map_err(|err| super::with_semantic_span(err, span))?;
         let Some(udf) = udf else {
             return Err(self.unknown_function_error(span, &udf_name));
         };

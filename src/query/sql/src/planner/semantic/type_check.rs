@@ -330,6 +330,16 @@ struct FullTypeCheckAdapterDependencies {
     cloud_control_api_provider: Option<Arc<CloudControlApiProvider>>,
 }
 
+/// Attach a location to semantic diagnostics without changing runtime/access
+/// errors or replacing a more precise location from a nested expression.
+fn with_semantic_span(err: ErrorCode, span: Span) -> ErrorCode {
+    if err.code() == ErrorCode::SemanticError("").code() && err.span().is_none() {
+        err.set_span(span)
+    } else {
+        err
+    }
+}
+
 fn missing_type_check_adapter_dependency(name: &str) -> ErrorCode {
     ErrorCode::SemanticError(format!("type check adapter does not provide {name}"))
 }
@@ -498,4 +508,32 @@ pub struct TypeChecker<'a, A> {
     // true if currently resolving a masking policy expression.
     // This prevents infinite recursion when a masking policy references the masked column itself.
     in_masking_policy: bool,
+}
+
+#[cfg(test)]
+mod diagnostic_tests {
+    use super::*;
+
+    #[test]
+    fn semantic_span_preserves_nested_locations_and_permission_errors() {
+        let span = Some((0..10).into());
+        let nested_span = Some((2..5).into());
+        assert_eq!(
+            with_semantic_span(ErrorCode::SemanticError("unsupported capability"), span).span(),
+            span
+        );
+        assert_eq!(
+            with_semantic_span(
+                ErrorCode::SemanticError("nested context").set_span(nested_span),
+                span,
+            )
+            .span(),
+            nested_span
+        );
+        let permission = ErrorCode::PermissionDenied("ACCESS SEQUENCE is required");
+        let unchanged = with_semantic_span(permission.clone(), span);
+        assert_eq!(unchanged.span(), permission.span());
+        assert_eq!(unchanged.code(), permission.code());
+        assert_eq!(unchanged.message(), permission.message());
+    }
 }

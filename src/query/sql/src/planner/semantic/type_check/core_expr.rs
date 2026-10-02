@@ -45,6 +45,7 @@ use super::literal::infer_literal_data_type;
 use super::scalar_rewrite::binary_op_core_function;
 use super::scalar_rewrite::can_lower_binary_op;
 use super::variant::json_op_core_function;
+use super::with_semantic_span;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryComparisonOp;
 use crate::plans::SubqueryType;
@@ -601,15 +602,9 @@ where A: TypeCheckAdapter
                 Ok(Box::new((agg_func.into(), data_type)))
             }
             CoreExpr::ColumnRef { span, column } => self.resolve_column_ref(*span, column),
-            CoreExpr::SpecialFunction { span, function } => {
-                function.resolve(self, arena, *span).map_err(|err| {
-                    if err.span().is_some() {
-                        err
-                    } else {
-                        err.set_span(*span)
-                    }
-                })
-            }
+            CoreExpr::SpecialFunction { span, function } => function
+                .resolve(self, arena, *span)
+                .map_err(|err| with_semantic_span(err, *span)),
             CoreExpr::UdfCall {
                 span,
                 name,
@@ -635,13 +630,7 @@ where A: TypeCheckAdapter
             }
             CoreExpr::AsyncFunction { span, function } => self
                 .resolve_async_function(arena, *span, function)
-                .map_err(|err| {
-                    if err.span().is_some() {
-                        err
-                    } else {
-                        err.set_span(*span)
-                    }
-                }),
+                .map_err(|err| with_semantic_span(err, *span)),
             CoreExpr::InList {
                 span,
                 expr,
@@ -660,13 +649,7 @@ where A: TypeCheckAdapter
                     .transpose()?
                     .map(|resolved| *resolved);
                 self.resolve_subquery(*span, *typ, subquery, child_expr, compare_op.clone())
-                    .map_err(|err| {
-                        if err.span().is_some() {
-                            err
-                        } else {
-                            err.set_span(*span)
-                        }
-                    })
+                    .map_err(|err| with_semantic_span(err, *span))
             }
             CoreExpr::AggregateWindowFunction {
                 display_name,
