@@ -444,4 +444,6 @@ pub struct TypeChecker<'a, A> {
     // true if currently resolving a masking policy expression.
     // This prevents infinite recursion when a masking policy references the masked column itself.
     in_masking_policy: bool,
+    apply_masking_policy: bool,
+    forbid_virtual_computed_column: bool,
 }

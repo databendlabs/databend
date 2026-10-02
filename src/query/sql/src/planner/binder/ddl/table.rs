@@ -31,6 +31,7 @@ use databend_common_ast::ast::ConstraintDefinition;
 use databend_common_ast::ast::ConstraintType as AstConstraintType;
 use databend_common_ast::ast::CreateTableSource;
 use databend_common_ast::ast::CreateTableStmt;
+use databend_common_ast::ast::DeleteStmt;
 use databend_common_ast::ast::DescribeTableStmt;
 use databend_common_ast::ast::DropTableStmt;
 use databend_common_ast::ast::Engine;
@@ -116,6 +117,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_WRITE_DISTRIBUTION_MODE;
 use databend_storages_common_table_meta::table::TableCompression;
 use databend_storages_common_table_meta::table::WriteDistributionMode;
+use databend_storages_common_table_meta::table::is_fuse_backed_engine;
 use databend_storages_common_table_meta::table::is_reserved_opt_key;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
@@ -130,11 +132,13 @@ use crate::DefaultExprBinder;
 use crate::Planner;
 use crate::SelectBuilder;
 use crate::StoredKeyNormalizer;
+use crate::bind_ttl_definition;
 use crate::binder::Binder;
 use crate::binder::ConstraintExprBinder;
 use crate::binder::StageResolver;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::util::legacy_table_ref_removed_error;
+use crate::materialize_ttl_predicate;
 use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr_to_string;
 use crate::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
@@ -185,7 +189,6 @@ use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTablesPlan;
 use crate::plans::VacuumTemporaryFilesPlan;
-use crate::validate_ttl_expr;
 
 #[derive(Visitor)]
 #[visitor(FunctionCall(enter))]
@@ -1572,6 +1575,65 @@ impl Binder {
                     ttl,
                 })))
             }
+            AlterTableAction::MaterializeTableTtl => {
+                if self.ctx.txn_mgr().lock().is_active() {
+                    return Err(ErrorCode::Unimplemented(
+                        "MATERIALIZE TTL is not supported inside explicit transactions",
+                    ));
+                }
+                let tbl = match self.ctx.get_table(&catalog, &database, &table).await {
+                    Ok(tbl) => tbl,
+                    Err(e)
+                        if *if_exists
+                            && matches!(
+                                e.code(),
+                                ErrorCode::UNKNOWN_CATALOG
+                                    | ErrorCode::UNKNOWN_DATABASE
+                                    | ErrorCode::UNKNOWN_TABLE
+                            ) =>
+                    {
+                        return Ok(Plan::AlterTableTtl(Box::new(AlterTableTtlPlan {
+                            catalog,
+                            database,
+                            table,
+                            if_exists: true,
+                            table_id: None,
+                            ttl: None,
+                        })));
+                    }
+                    Err(e) => return Err(e),
+                };
+                if !is_fuse_backed_engine(tbl.engine())
+                    || tbl.is_temp()
+                    || tbl.get_table_info().meta.options.contains_key("TRANSIENT")
+                {
+                    return Err(ErrorCode::Unimplemented(
+                        "MATERIALIZE TTL is only supported for persistent Fuse tables",
+                    ));
+                }
+                let ttl = tbl
+                    .get_table_info()
+                    .meta
+                    .ttl
+                    .clone()
+                    .ok_or_else(|| ErrorCode::SemanticError("Table has no TTL definition"))?;
+                let selection = materialize_ttl_predicate(self.ctx.clone(), &tbl.schema(), &ttl)?;
+                let table_ref = match table_reference {
+                    TableReference::Table { table, .. } => table,
+                    _ => unreachable!(),
+                };
+                let stmt = DeleteStmt {
+                    hints: None,
+                    catalog: table_ref.catalog.clone(),
+                    database: table_ref.database.clone(),
+                    table: table_ref.table.clone(),
+                    table_alias: None,
+                    selection: Some(selection),
+                    with: None,
+                };
+                self.bind_delete_with_ttl(bind_context, &stmt, Some(ttl))
+                    .await
+            }
             AlterTableAction::ReclusterTable {
                 is_final,
                 selection,
@@ -2467,25 +2529,12 @@ impl Binder {
         ttl_expr: &AstExpr,
         schema: TableSchemaRef,
     ) -> Result<String> {
-        let display = format!("{ttl_expr:#}");
-        let metadata = Arc::new(RwLock::new(self.metadata.read().clone()));
-        let mut bind_context = crate::bind_context_from_schema(&schema, &metadata);
-
-        let mut scalar_binder = ScalarBinder::new(
-            &mut bind_context,
+        bind_ttl_definition(
             self.ctx.clone(),
+            &schema,
+            ttl_expr,
             &self.name_resolution_ctx,
-            metadata,
-            &[],
-        );
-        scalar_binder.forbid_udf();
-        let (scalar, _) = scalar_binder.bind(ttl_expr)?;
-        if scalar.used_columns().is_empty() {
-            return Err(ErrorCode::SemanticError(format!(
-                "TTL expression `{display}` must reference at least one column"
-            )));
-        }
-        validate_ttl_expr(&scalar, &display)?;
+        )?;
 
         // Resolve names with the defining session, then store them canonically.
         let mut normalized = ttl_expr.clone();

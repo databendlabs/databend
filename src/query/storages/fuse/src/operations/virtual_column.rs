@@ -477,6 +477,7 @@ pub async fn commit_refresh_virtual_column(
             None,
             table_meta_timestamps,
             false,
+            None,
         )
     })?;
 
@@ -548,6 +549,7 @@ pub async fn do_vacuum_virtual_column(
                 None,
                 table_meta_timestamps,
                 false,
+                None,
             )
         })?;
     }
