@@ -34,6 +34,7 @@ pub use read::VirtualBlockReadResult;
 pub use read::VirtualColumnReader;
 pub use read::build_columns_meta;
 pub use read::read_segment_stats;
+pub(crate) use segments::AbortOnDrop;
 pub use segments::SegmentsIO;
 pub use segments::SerializedSegment;
 pub use snapshots::SnapshotLiteExtended;
