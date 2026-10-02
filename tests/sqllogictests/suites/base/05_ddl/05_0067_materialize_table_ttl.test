@@ -120,10 +120,36 @@ statement ok
 SET sql_dialect = 'PostgreSQL'
 
 statement ok
-CREATE TABLE ttl_materialize_quoted (id INT, "2000-01-01" TIMESTAMP, "ExpireAt" TIMESTAMP) TTL greatest("2000-01-01", "ExpireAt")
+CREATE TABLE ttl_materialize_quoted (id INT, "2000-01-01" TIMESTAMP, "ExpireAt" TIMESTAMP) TTL "2000-01-01"
 
 statement ok
 INSERT INTO ttl_materialize_quoted VALUES (1, '2000-01-01 00:00:00', '2000-01-01 00:00:00'), (2, '2099-01-01 00:00:00', '2099-01-01 00:00:00')
+
+statement ok
+SET sql_dialect = 'MySQL'
+
+statement ok
+SET quoted_ident_case_sensitive = 0
+
+statement ok
+ALTER TABLE ttl_materialize_quoted MATERIALIZE TTL
+
+query I
+SELECT id FROM ttl_materialize_quoted ORDER BY id
+----
+2
+
+statement ok
+SET sql_dialect = 'PostgreSQL'
+
+statement ok
+SET quoted_ident_case_sensitive = 1
+
+statement ok
+ALTER TABLE ttl_materialize_quoted SET TTL "ExpireAt" + INTERVAL 1 DAY
+
+statement ok
+INSERT INTO ttl_materialize_quoted VALUES (3, '2000-01-01', '2000-01-01')
 
 statement ok
 SET sql_dialect = 'MySQL'

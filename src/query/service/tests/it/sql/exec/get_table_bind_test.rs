@@ -1140,6 +1140,174 @@ async fn test_ttl_virtual_computed_column_revalidation() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_materialize_retention_ttl_cutoff_and_pruning() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command(
+            "CREATE TABLE ttl_retention (id INT, ts TIMESTAMP) TTL ts + INTERVAL 1 MONTH",
+        )
+        .await?;
+    for values in [
+        "(1, '2025-01-20 00:00:00'), (2, '2025-01-28 11:00:00')",
+        "(3, '2025-01-31 10:00:00'), (4, '2025-03-01 00:00:00')",
+        "(5, '2025-01-27 00:00:00'), (6, '2025-01-28 12:00:00')",
+    ] {
+        fixture
+            .execute_command(&format!("INSERT INTO ttl_retention VALUES {values}"))
+            .await?;
+    }
+    let base_ctx = fixture.new_query_ctx().await?;
+    let cutoff = chrono::DateTime::parse_from_rfc3339("2025-02-28T12:00:00Z").unwrap();
+    let ctx = fixture
+        .default_session()
+        .create_query_context_with_cluster(
+            base_ctx.get_cluster(),
+            &BUILD_INFO,
+            Some(cutoff.into()),
+        )?;
+    let settings = fixture.default_session().get_settings();
+    settings.set_setting("timezone".into(), "UTC".into())?;
+    settings.set_setting("enable_compact_after_write".into(), "0".into())?;
+    settings.set_setting("enable_auto_analyze".into(), "0".into())?;
+    let (plan, _) = Planner::new(ctx.clone())
+        .plan_sql("ALTER TABLE ttl_retention MATERIALIZE TTL")
+        .await?;
+    InterpreterFactory::get(ctx.clone(), &plan)
+        .await?
+        .execute(ctx.clone())
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+    // The cutoff is Jan 28 noon, not a per-row addition of one month.
+    // Range pruning skips the future segment and deletes the expired segment
+    // without reading it; only the two-row mixed block should be read.
+    assert_eq!(ctx.get_scan_progress_value().rows, 2);
+    let blocks = fixture
+        .execute_query("SELECT id FROM ttl_retention ORDER BY id")
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+    let ids = blocks
+        .iter()
+        .flat_map(|block| {
+            (0..block.num_rows()).map(|row| block.get_by_offset(0).index(row).unwrap().to_owned())
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        ids,
+        [3, 4, 6].map(|id| Scalar::Number(NumberScalar::Int32(id)))
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_retention_ttl_calendar_boundaries() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    for (column_type, interval, cutoff, timezone, before, boundary, after) in [
+        (
+            "TIMESTAMP",
+            "1 QUARTER",
+            "2025-05-31T12:00:00Z",
+            "UTC",
+            "2025-02-28 11:59:59",
+            "2025-02-28 12:00:00",
+            "2025-03-01 00:00:00",
+        ),
+        (
+            "TIMESTAMP",
+            "1 YEAR",
+            "2024-02-29T12:00:00Z",
+            "UTC",
+            "2023-02-28 11:59:59",
+            "2023-02-28 12:00:00",
+            "2023-03-01 00:00:00",
+        ),
+        (
+            "TIMESTAMP",
+            "1 DAY",
+            "2024-03-10T16:00:00Z",
+            "America/New_York",
+            "2024-03-09 16:59:59",
+            "2024-03-09 17:00:00",
+            "2024-03-09 17:00:01",
+        ),
+        (
+            "DATE",
+            "1 MONTH",
+            "2025-03-31T00:00:00Z",
+            "UTC",
+            "2025-02-27",
+            "2025-02-28",
+            "2025-03-01",
+        ),
+        (
+            "TIMESTAMP_TZ",
+            "1 MONTH",
+            "2025-03-31T12:00:00Z",
+            "UTC",
+            "2025-02-28 12:59:59+01:00",
+            "2025-02-28 13:00:00+01:00",
+            "2025-03-01 00:00:00+00:00",
+        ),
+    ] {
+        // Input TIMESTAMP strings are UTC; only cleanup uses the requested zone.
+        fixture
+            .default_session()
+            .get_settings()
+            .set_setting("timezone".into(), "UTC".into())?;
+        fixture
+            .execute_command(&format!(
+                "CREATE TABLE ttl_calendar (id INT, ts {column_type}) TTL ts + INTERVAL {interval}"
+            ))
+            .await?;
+        fixture.execute_command(&format!(
+            "INSERT INTO ttl_calendar VALUES (1, '{before}'), (2, '{boundary}'), (3, '{after}'), (4, NULL)"
+        )).await?;
+        let base_ctx = fixture.new_query_ctx().await?;
+        let cutoff = chrono::DateTime::parse_from_rfc3339(cutoff).unwrap();
+        let ctx = fixture
+            .default_session()
+            .create_query_context_with_cluster(
+                base_ctx.get_cluster(),
+                &BUILD_INFO,
+                Some(cutoff.into()),
+            )?;
+        fixture
+            .default_session()
+            .get_settings()
+            .set_setting("timezone".into(), timezone.into())?;
+        let (plan, _) = Planner::new(ctx.clone())
+            .plan_sql("ALTER TABLE ttl_calendar MATERIALIZE TTL")
+            .await?;
+        InterpreterFactory::get(ctx.clone(), &plan)
+            .await?
+            .execute(ctx)
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        let blocks = fixture
+            .execute_query("SELECT id FROM ttl_calendar ORDER BY id")
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        let ids = blocks
+            .iter()
+            .flat_map(|block| {
+                (0..block.num_rows())
+                    .map(|row| block.get_by_offset(0).index(row).unwrap().to_owned())
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            ids,
+            [2, 3, 4].map(|id| Scalar::Number(NumberScalar::Int32(id))),
+            "{column_type} {interval} {timezone}"
+        );
+        fixture.execute_command("DROP TABLE ttl_calendar").await?;
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_materialize_ttl_requires_alter_not_delete() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture
