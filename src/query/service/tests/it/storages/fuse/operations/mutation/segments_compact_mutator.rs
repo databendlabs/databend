@@ -321,6 +321,51 @@ async fn test_compact_segment_parallel_groups_preserve_hll_and_top_n_order() -> 
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_compact_segment_single_group_many_sources() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let dal = ctx.get_application_level_data_operator()?.operator();
+    let thresholds = BlockThresholds {
+        block_per_segment: 16,
+        ..Default::default()
+    };
+    let (locations, _, segments) = CompactSegmentTestFixture::gen_segments(
+        ctx,
+        vec![1; 16],
+        vec![1; 16],
+        thresholds,
+        None,
+        false,
+    )
+    .await?;
+    let expected = segments
+        .iter()
+        .flat_map(|s| s.blocks.iter().cloned())
+        .collect::<Vec<_>>();
+    let snapshot_segments = locations.into_iter().rev().collect::<Vec<_>>();
+    for max_threads in [1, 4] {
+        let state = compact_segments(
+            &dal,
+            thresholds.block_per_segment,
+            max_threads,
+            &snapshot_segments,
+            None,
+        )
+        .await?;
+        assert_eq!(state.new_segment_paths.len(), 1);
+        let merged = SegmentsIO::read_compact_segment(
+            dal.clone(),
+            (state.new_segment_paths[0].clone(), SegmentInfo::VERSION),
+            TestFixture::default_table_schema(),
+            false,
+        )
+        .await?;
+        assert_eq!(merged.block_metas()?, expected);
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_skips_incomplete_stats() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;

@@ -324,24 +324,7 @@ impl<'a> SegmentCompactor<'a> {
         location: &Location,
     ) -> Result<()> {
         let num_blocks_current_segment = segment_info.summary.block_count;
-
-        if num_blocks_current_segment == 0 {
-            // Removing this segment is destructive: verify that the summary does
-            // not hide any blocks before dropping its location from the snapshot.
-            let blocks = segment_info.block_metas()?;
-            if !blocks.is_empty() {
-                return Err(ErrorCode::StorageOther(format!(
-                    "segment {} has zero blocks in its summary but {} blocks in its metadata",
-                    location.0,
-                    blocks.len()
-                )));
-            }
-            self.compacted_state
-                .removed_segment_indexes
-                .push(segment_idx);
-            return Ok(());
-        }
-
+        debug_assert!(num_blocks_current_segment > 0);
         if let Some((_, previous, _)) = self.fragmented_segments.last()
             && !same_partition(
                 previous.summary.partition_stats.as_ref(),
@@ -417,6 +400,8 @@ struct MergeTasks {
     // Bounds all storage requests of one compaction: segment reads, stats
     // reads and merge output writes.
     io_permits: Arc<Semaphore>,
+    // Shared by every group's segment metadata decode.
+    decode_permits: Arc<Semaphore>,
     cluster_key_info: Option<ClusterKeyInfo>,
     // Merge groups executed concurrently.
     capacity: usize,
@@ -443,6 +428,7 @@ impl MergeTasks {
         Self {
             operator,
             io_permits: Arc::new(Semaphore::new(max_io_requests)),
+            decode_permits: Arc::new(Semaphore::new(max_threads)),
             cluster_key_info,
             capacity: max_threads,
             // Stats reads are IO bound: queue as many as one compaction may
@@ -474,6 +460,7 @@ impl MergeTasks {
             self.cluster_key_info.clone(),
             self.io_permits.clone(),
             self.stats_read_window,
+            self.decode_permits.clone(),
         );
         self.in_flight
             .push_back(AbortOnDrop(GlobalIORuntime::instance().spawn(task)));
@@ -558,31 +545,51 @@ struct DecodedGroup {
     stats_locations: Option<Vec<Location>>,
 }
 
-// Runs on the blocking pool: decoding block metas is CPU bound.
-fn decode_fragments(
+// Decode segments in parallel, sharing one CPU budget across merge groups.
+// Acquire before spawn so the blocking pool cannot accumulate unbounded work.
+async fn decode_fragments(
     fragments: Vec<SegmentEntry>,
-    cluster_key_info: Option<&ClusterKeyInfo>,
+    cluster_key_info: Option<ClusterKeyInfo>,
+    decode_permits: Arc<Semaphore>,
 ) -> Result<DecodedGroup> {
-    // Each fragment in a merge group contains at least one block. Reserve
-    // this lower bound without trusting an unvalidated summary block count.
-    let mut blocks = Vec::with_capacity(fragments.len());
-    let mut virtual_inputs = Vec::with_capacity(fragments.len());
+    let mut tasks = Vec::with_capacity(fragments.len());
+    for (_, segment, location) in fragments {
+        let permit = decode_permits.clone().acquire_owned().await.map_err(|e| {
+            ErrorCode::Internal(format!("compact segment decode permits closed: {e}"))
+        })?;
+        tasks.push(AbortOnDrop(databend_common_base::runtime::spawn_blocking(
+            move || {
+                // Started blocking work cannot be cancelled; keep its permit until
+                // it finishes, even if the enclosing merge group is aborted.
+                let _permit = permit;
+                let blocks = segment.block_metas()?;
+                if segment.summary.block_count != blocks.len() as u64 {
+                    return Err(ErrorCode::StorageOther(format!(
+                        "segment {} has {} blocks in its summary but {} blocks in its metadata",
+                        location.0,
+                        segment.summary.block_count,
+                        blocks.len()
+                    )));
+                }
+                Ok::<_, ErrorCode>((segment, blocks))
+            },
+        )));
+    }
+    let decoded = futures::future::try_join_all(tasks)
+        .await?
+        .into_iter()
+        .collect::<Result<Vec<_>>>()?;
+    // Reduce in source order after parallel decoding. No additional task or
+    // decode permit is needed for statistics and virtual-schema assembly.
+    let mut blocks = Vec::with_capacity(decoded.len());
+    let mut virtual_inputs = Vec::with_capacity(decoded.len());
     let mut statistics = Statistics::default();
-    // A merged stats file is only valid if every source has stats. Avoid
-    // allocating or cloning further locations after the first missing one.
+    // A merged stats file is only valid if every source has stats.
     let mut stats_locations = Some(Vec::new());
-    for (_, segment, fragment_location) in fragments {
-        merge_statistics_mut(&mut statistics, &segment.summary, cluster_key_info);
+    // try_join_all preserves source order, independently of decode completion.
+    for (segment, segment_blocks) in decoded {
+        merge_statistics_mut(&mut statistics, &segment.summary, cluster_key_info.as_ref());
         let virtual_schema = segment.summary.virtual_segment_schema.clone().map(Arc::new);
-        let segment_blocks = segment.block_metas()?;
-        if segment.summary.block_count != segment_blocks.len() as u64 {
-            return Err(ErrorCode::StorageOther(format!(
-                "segment {} has {} blocks in its summary but {} blocks in its metadata",
-                fragment_location.0,
-                segment.summary.block_count,
-                segment_blocks.len()
-            )));
-        }
         virtual_inputs.extend(
             (0..segment_blocks.len()).map(|_| VirtualBlockInput::Existing {
                 schema: virtual_schema.clone(),
@@ -623,17 +630,14 @@ async fn merge_group(
     cluster_key_info: Option<ClusterKeyInfo>,
     io_permits: Arc<Semaphore>,
     stats_read_window: usize,
+    decode_permits: Arc<Semaphore>,
 ) -> Result<MergeResult> {
     let indexes = fragments.iter().map(|(idx, _, _)| *idx).collect::<Vec<_>>();
     let DecodedGroup {
         blocks,
         mut statistics,
         stats_locations,
-    } = databend_common_base::runtime::spawn_blocking(move || {
-        decode_fragments(fragments, cluster_key_info.as_ref())
-    })
-    .await
-    .map_err(|err| ErrorCode::Internal(format!("compact block decode failed: {err}")))??;
+    } = decode_fragments(fragments, cluster_key_info, decode_permits).await?;
     let mut stats_output = None;
     if let Some(stats_locations) = stats_locations {
         let stats = read_merged_stats(
