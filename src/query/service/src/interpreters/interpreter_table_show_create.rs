@@ -54,6 +54,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table::StreamMode;
 use databend_storages_common_table_meta::table::is_internal_opt_key;
+use databend_storages_common_table_meta::table::is_internal_table_index_option;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 use itertools::Itertools;
@@ -309,7 +310,10 @@ impl ShowCreateTableInterpreter {
                 let column_names_str = column_names.join(", ").to_string();
                 let mut options = Vec::with_capacity(index_field.options.len());
                 for (key, value) in index_field.options.iter() {
-                    let option = format!("{} = '{}'", key, value);
+                    if is_internal_table_index_option(key) {
+                        continue;
+                    }
+                    let option = format!("{} = {}", key, QuotedString(value, '\''));
                     options.push(option);
                 }
                 let mut index_str = format!(
