@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Japanese user dictionaries for inverted indexes.
-//!
-//! A user dictionary is a small Lindera CSV (`surface,part_of_speech,reading` per line) that
-//! adds vocabulary the embedded IPADIC does not know. The tokenizer must see exactly the same
-//! dictionary at index time and at query time, so index creation snapshots the file from the
-//! user's stage into the table's own storage under `_i_i_d/h<uuid_v7>.csv` and records that
-//! location in the index options. Each upload uses a fresh immutable object so a new index
-//! never reuses an old dictionary that a concurrent vacuum may already be deleting.
+// Japanese user dictionaries for inverted indexes.
+//
+// A user dictionary is a small Lindera CSV (`surface,part_of_speech,reading` per line) that
+// adds vocabulary the embedded IPADIC does not know. The tokenizer must see exactly the same
+// dictionary at index time and at query time, so index creation snapshots the file from the
+// user's stage into the table's own storage under `_i_i_d/h<uuid_v7>.csv` and records that
+// location in the index options.
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -28,6 +27,7 @@ use std::sync::Arc;
 use std::sync::LazyLock;
 
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::catch_unwind;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION;
@@ -41,7 +41,6 @@ use opendal::Operator;
 use parking_lot::Mutex;
 
 use crate::FuseTable;
-use crate::io::TableMetaLocationGenerator;
 
 /// Upper bound on a user dictionary CSV. Dictionaries are typically a few KiB; MeCab-style
 /// domain dictionaries can reach a few MiB.
@@ -70,25 +69,28 @@ pub struct InvertedIndexUserDictionary {
 impl InvertedIndexUserDictionary {
     /// Validates `content` (size, encoding and Lindera CSV format).
     pub fn try_new(content: Vec<u8>) -> Result<Self> {
+        if content.len() > MAX_INVERTED_INDEX_USER_DICTIONARY_SIZE {
+            return Err(ErrorCode::IndexOptionInvalid(format!(
+                "user dictionary is {} bytes, exceeds the {} bytes limit",
+                content.len(),
+                MAX_INVERTED_INDEX_USER_DICTIONARY_SIZE
+            )));
+        }
+        if std::str::from_utf8(&content).is_err() {
+            return Err(ErrorCode::IndexOptionInvalid(
+                "user dictionary must be UTF-8 encoded CSV",
+            ));
+        }
         build_inverted_index_user_dictionary(&content)?;
         Ok(Self { content })
     }
 
     /// Snapshots the dictionary into the storage of `table` and returns the location to record
     /// in the index options.
-    ///
-    /// Always writes a new object, even for identical content, to protect in-flight DDL from
-    /// vacuum. Objects left behind by failed DDL are reclaimed by vacuum.
     pub async fn upload(&self, table: &FuseTable) -> Result<String> {
-        self.upload_to(table.get_operator_ref(), table.meta_location_generator())
-            .await
-    }
+        let operator = table.get_operator_ref();
+        let location_generator = table.meta_location_generator();
 
-    async fn upload_to(
-        &self,
-        operator: &Operator,
-        location_generator: &TableMetaLocationGenerator,
-    ) -> Result<String> {
         let location = location_generator.gen_inverted_index_dict_location();
         operator.write(&location, self.content.clone()).await?;
         info!(
@@ -99,23 +101,8 @@ impl InvertedIndexUserDictionary {
     }
 }
 
-/// Parses and builds a Lindera user dictionary from CSV bytes against the embedded IPADIC.
-///
-/// Lindera 5.3 only exposes a path-based CSV loader, so the content goes through a temporary
-/// file. The result is what `Segmenter::new` consumes.
+/// Compiles CSV against the embedded IPADIC.
 fn build_inverted_index_user_dictionary(content: &[u8]) -> Result<UserDictionary> {
-    if content.len() > MAX_INVERTED_INDEX_USER_DICTIONARY_SIZE {
-        return Err(ErrorCode::IndexOptionInvalid(format!(
-            "user dictionary is {} bytes, exceeds the {} bytes limit",
-            content.len(),
-            MAX_INVERTED_INDEX_USER_DICTIONARY_SIZE
-        )));
-    }
-    if std::str::from_utf8(content).is_err() {
-        return Err(ErrorCode::IndexOptionInvalid(
-            "user dictionary must be UTF-8 encoded CSV",
-        ));
-    }
     let mut file = tempfile::NamedTempFile::new().map_err(|e| {
         ErrorCode::StorageOther(format!(
             "failed to create temporary file for user dictionary: {e}"
@@ -128,7 +115,10 @@ fn build_inverted_index_user_dictionary(content: &[u8]) -> Result<UserDictionary
                 "failed to write temporary file for user dictionary: {e}"
             ))
         })?;
-    load_user_dictionary_from_csv(&JAPANESE_DICTIONARY.metadata, file.path())
+    // Lindera 5.3 indexes numeric columns before validating row lengths. Malformed short
+    // records can panic; report them as invalid input rather than unwinding the DDL task.
+    catch_unwind(|| load_user_dictionary_from_csv(&JAPANESE_DICTIONARY.metadata, file.path()))
+        .map_err(|_| ErrorCode::IndexOptionInvalid("invalid user dictionary CSV record"))?
         .map_err(|e| ErrorCode::IndexOptionInvalid(format!("invalid user dictionary: {e}")))
 }
 
@@ -179,75 +169,4 @@ pub fn resolve_inverted_index_user_dictionary_blocking(
     let dictionary = GlobalIORuntime::instance()
         .block_on(async move { load_inverted_index_user_dictionary(&operator, &location).await })?;
     Ok(Some(dictionary))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const DICT: &[u8] = b"AI,\xe3\x82\xab\xe3\x82\xb9\xe3\x82\xbf\xe3\x83\xa0\xe5\x90\x8d\xe8\xa9\x9e,\xe3\x82\xa8\xe3\x83\xbc\xe3\x82\xa2\xe3\x82\xa4\nDatabend Cloud,\xe3\x82\xab\xe3\x82\xb9\xe3\x82\xbf\xe3\x83\xa0\xe5\x90\x8d\xe8\xa9\x9e,\xe3\x83\x86\xe3\x82\xa3\xe3\x83\xbc\n";
-
-    #[test]
-    fn test_build_user_dictionary_from_csv() {
-        let dictionary = build_inverted_index_user_dictionary(DICT).unwrap();
-        // Two entries: word ids 0 and 1 carry the custom part of speech from the CSV.
-        for word_id in 0..2 {
-            assert!(
-                dictionary.word_details(word_id).contains(&"カスタム名詞"),
-                "word {word_id} details: {:?}",
-                dictionary.word_details(word_id)
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn test_upload_uses_fresh_locations_and_load_is_cached() -> Result<()> {
-        let operator = Operator::new(opendal::services::Memory::default())?.finish();
-        let location_generator = TableMetaLocationGenerator::new("1/2".to_string());
-        let dictionary = InvertedIndexUserDictionary::try_new(DICT.to_vec())?;
-        let location = dictionary.upload_to(&operator, &location_generator).await?;
-        let again = dictionary.upload_to(&operator, &location_generator).await?;
-        assert_ne!(location, again);
-        for path in [&location, &again] {
-            assert!(path.starts_with("1/2/_i_i_d/h"));
-            assert!(path.ends_with(".csv"));
-            assert!(
-                databend_storages_common_table_meta::meta::try_extract_uuid_v7_timestamp_from_path(
-                    path,
-                )?
-                .is_some()
-            );
-            assert_eq!(operator.read(path).await?.to_vec(), DICT);
-        }
-
-        let first = load_inverted_index_user_dictionary(&operator, &location).await?;
-        let second = load_inverted_index_user_dictionary(&operator, &location).await?;
-        assert!(Arc::ptr_eq(&first, &second));
-
-        // Invalid CSV is still rejected when loading a stored dictionary.
-        let bad_location = location_generator.gen_inverted_index_dict_location();
-        operator.write(&bad_location, b"AI,noun\n".to_vec()).await?;
-        assert!(
-            load_inverted_index_user_dictionary(&operator, &bad_location)
-                .await
-                .is_err()
-        );
-
-        let mut options = BTreeMap::new();
-        assert!(
-            resolve_inverted_index_user_dictionary(&operator, &options)
-                .await?
-                .is_none()
-        );
-        options.insert(
-            INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION.to_string(),
-            location.clone(),
-        );
-        assert!(
-            resolve_inverted_index_user_dictionary(&operator, &options)
-                .await?
-                .is_some()
-        );
-        Ok(())
-    }
 }

@@ -93,8 +93,6 @@ pub struct InvertedIndexBuilder {
     pub(crate) version: String,
     pub(crate) schema: DataSchema,
     pub(crate) options: BTreeMap<String, String>,
-    /// Japanese user dictionary referenced by `options`, resolved once per builder so every block
-    /// writer shares it.
     pub(crate) user_dictionary: Option<Arc<UserDictionary>>,
 }
 
@@ -191,10 +189,6 @@ impl BlockIndexWriter for InvertedIndexBlockWriter {
     }
 }
 
-/// Builders for every synchronously maintained inverted index of `table`.
-///
-/// User dictionaries are resolved here, during pipeline construction, so block writers never
-/// touch object storage themselves.
 pub fn create_inverted_index_builders(table: &FuseTable) -> Result<Vec<InvertedIndexBuilder>> {
     let table_meta = &table.table_info.meta;
     let mut inverted_index_builders = Vec::with_capacity(table_meta.indexes.len());
@@ -398,11 +392,10 @@ impl InvertedIndexWriter {
     }
 }
 
-/// Create tokenizers for English, Chinese, and Japanese.
-///
-/// `user_dictionary` is the dictionary referenced by `index_options`, if any; it only affects the
-/// Japanese tokenizer. Callers resolve it through `resolve_inverted_index_user_dictionary` so the
-/// same snapshot is used when writing and when querying an index.
+// Create tokenizers for English, Chinese, and Japanese.
+//
+// `user_dictionary` is the dictionary referenced by `index_options`,
+// it only affects the Japanese tokenizer.
 pub(crate) fn create_tokenizer_manager(
     index_options: &BTreeMap<String, String>,
     user_dictionary: Option<Arc<UserDictionary>>,

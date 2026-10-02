@@ -673,7 +673,6 @@ impl QueryEntry {
             | Plan::VacuumAll(_)
             | Plan::VacuumDropTable(_)
             | Plan::VacuumTemporaryFiles(_)
-            | Plan::RefreshIndex(_)
             | Plan::ReclusterTable(_)
             | Plan::TruncateTable(_) => {
                 return true;

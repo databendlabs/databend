@@ -28,6 +28,7 @@ use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableIndexReq;
@@ -306,23 +307,34 @@ impl CreateTableInterpreter {
 
         // The staged table is not visible yet, so the dictionary-backed indexes are in place
         // strictly before any data is written through `table_info`.
-        match self
+        let has_dictionary_indexes = !dictionary_indexes.is_empty();
+        let mut result = self
             .register_dictionary_indexes(catalog.as_ref(), &table_info, dictionary_indexes)
-            .await
-        {
-            Ok(Some(table_meta)) => table_info.meta = table_meta,
-            Ok(None) => {}
-            Err(e) => {
-                if let Some(prefix) = &temp_prefix {
-                    cleanup_staged_temp_table(
-                        self.ctx.get_current_session().temp_tbl_mgr(),
-                        table_id,
-                        prefix,
-                    )
-                    .await?;
-                }
-                return Err(e);
+            .await;
+        if result.is_ok() && has_dictionary_indexes {
+            result = catalog
+                .get_table_meta_by_id(table_id)
+                .await
+                .and_then(|meta| {
+                    meta.ok_or_else(|| {
+                        ErrorCode::UnknownTable(format!(
+                            "table `{}` disappeared while registering its inverted indexes",
+                            table_info.desc
+                        ))
+                    })
+                })
+                .map(|meta| table_info.meta = meta.data);
+        }
+        if let Err(e) = result {
+            if let Some(prefix) = &temp_prefix {
+                cleanup_staged_temp_table(
+                    self.ctx.get_current_session().temp_tbl_mgr(),
+                    table_id,
+                    prefix,
+                )
+                .await?;
             }
+            return Err(e);
         }
 
         let insert_plan = Insert {
@@ -336,9 +348,9 @@ impl CreateTableInterpreter {
             table_info: Some(table_info),
             lineage_target_table_id: None,
             lineage_target_catalog_type: if self.plan.engine == Engine::Iceberg {
-                databend_common_meta_app::schema::CatalogType::Iceberg
+                CatalogType::Iceberg
             } else {
-                databend_common_meta_app::schema::CatalogType::Default
+                CatalogType::Default
             },
         };
 
@@ -488,70 +500,68 @@ impl CreateTableInterpreter {
             req.table_meta.drop_on = Some(Utc::now());
         }
         let reply = catalog.create_table(req.clone()).await?;
-        if staged {
-            // Replacements have `new_table == false` too; only IF NOT EXISTS keeps the old table.
-            if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
-                return Ok(PipelineBuildResult::create());
-            }
-            let temp_prefix = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX);
-            let result: Result<()> = async {
-                if let Some(prefix) = temp_prefix {
-                    self.register_temp_table(prefix).await?;
-                }
-                let table_info = TableInfo::new(
-                    &self.plan.database,
-                    &self.plan.table,
-                    TableIdent::new(
-                        reply.table_id,
-                        reply.table_id_seq.ok_or_else(|| {
-                            ErrorCode::Internal("Staged table creation did not return table_id_seq")
-                        })?,
-                    ),
-                    req.table_meta.clone(),
-                );
-                self.register_dictionary_indexes(catalog.as_ref(), &table_info, dictionary_indexes)
-                    .await?;
-                if temp_prefix.is_none() && !catalog.is_external() {
-                    self.process_ownership(&self.ctx.get_tenant(), reply.clone()).await?;
-                }
-                // Publish only after every index is ready; until then the old table stays visible.
-                catalog
-                    .commit_table_meta(CommitTableMetaReq {
-                        name_ident: req.name_ident.clone(),
-                        db_id: reply.db_id,
-                        table_id: reply.table_id,
-                        prev_table_id: reply.prev_table_id,
-                        orphan_table_name: reply.orphan_table_name.clone(),
-                    })
-                    .await?;
-                Ok(())
-            }
-            .await;
-            if let Err(e) = result {
-                if let Some(prefix) = temp_prefix {
-                    cleanup_staged_temp_table(
-                        self.ctx.get_current_session().temp_tbl_mgr(),
-                        reply.table_id,
-                        prefix,
-                    )
-                    .await?;
-                }
-                // Persistent staged tables remain dropped and are reclaimed by vacuum.
-                return Err(e);
-            }
+        if staged && !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
             return Ok(PipelineBuildResult::create());
         }
-        if let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX) {
-            self.register_temp_table(prefix).await?;
-        }
-
-        // iceberg table do not need to generate ownership.
-        if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) && !catalog.is_external() {
-            let tenant = self.ctx.get_tenant();
-            self.process_ownership(&tenant, reply).await?;
+        if let Err(e) = self
+            .finish_create_table(catalog.as_ref(), &req, &reply, dictionary_indexes)
+            .await
+        {
+            if staged && let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX) {
+                cleanup_staged_temp_table(
+                    self.ctx.get_current_session().temp_tbl_mgr(),
+                    reply.table_id,
+                    prefix,
+                )
+                .await?;
+            }
+            // Persistent staged tables remain dropped and are reclaimed by vacuum.
+            return Err(e);
         }
 
         Ok(PipelineBuildResult::create())
+    }
+
+    /// Initializes the created table and publishes it after its dictionary indexes are ready.
+    async fn finish_create_table(
+        &self,
+        catalog: &dyn Catalog,
+        req: &CreateTableReq,
+        reply: &CreateTableReply,
+        dictionary_indexes: Vec<(String, TableIndex, InvertedIndexUserDictionary)>,
+    ) -> Result<()> {
+        let temp_prefix = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX);
+        if let Some(prefix) = temp_prefix {
+            self.register_temp_table(prefix).await?;
+        }
+        if temp_prefix.is_none() && !catalog.is_external() {
+            self.process_ownership(&self.ctx.get_tenant(), reply.clone())
+                .await?;
+        }
+        if req.as_dropped {
+            let table_id_seq = reply.table_id_seq.ok_or_else(|| {
+                ErrorCode::Internal("Staged table creation did not return table_id_seq")
+            })?;
+            let table_info = TableInfo::new(
+                &self.plan.database,
+                &self.plan.table,
+                TableIdent::new(reply.table_id, table_id_seq),
+                req.table_meta.clone(),
+            );
+            self.register_dictionary_indexes(catalog, &table_info, dictionary_indexes)
+                .await?;
+            // Publish only after every index is ready, until then the old table stays visible.
+            catalog
+                .commit_table_meta(CommitTableMetaReq {
+                    name_ident: req.name_ident.clone(),
+                    db_id: reply.db_id,
+                    table_id: reply.table_id,
+                    prev_table_id: reply.prev_table_id,
+                    orphan_table_name: reply.orphan_table_name.clone(),
+                })
+                .await?;
+        }
+        Ok(())
     }
 
     /// Takes the inline indexes that declare a `user_dictionary` out of `table_meta`, together
@@ -569,26 +579,21 @@ impl CreateTableInterpreter {
             let content = user_dictionary
                 .read(MAX_INVERTED_INDEX_USER_DICTIONARY_SIZE)
                 .await?;
-            indexes.push((
-                name.clone(),
-                index,
-                InvertedIndexUserDictionary::try_new(content)?,
-            ));
+            let user_dictionary = InvertedIndexUserDictionary::try_new(content)?;
+            indexes.push((name.clone(), index, user_dictionary));
         }
         Ok(indexes)
     }
 
-    /// Uploads each dictionary into the table storage and registers its index with the
-    /// resulting location. Returns the refreshed table meta, or `None` if there was nothing to
-    /// register.
+    /// Uploads each dictionary and registers its index with the resulting location.
     async fn register_dictionary_indexes(
         &self,
         catalog: &dyn Catalog,
         table_info: &TableInfo,
         indexes: Vec<(String, TableIndex, InvertedIndexUserDictionary)>,
-    ) -> Result<Option<TableMeta>> {
+    ) -> Result<()> {
         if indexes.is_empty() {
-            return Ok(None);
+            return Ok(());
         }
         let table = catalog.get_table_by_info(table_info)?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -600,30 +605,19 @@ impl CreateTableInterpreter {
                 INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION.to_string(),
                 location,
             );
-            catalog
-                .create_table_index(CreateTableIndexReq {
-                    create_option: CreateOption::Create,
-                    index_type: index.index_type,
-                    tenant: tenant.clone(),
-                    table_id: table_info.ident.table_id,
-                    name,
-                    column_ids: index.column_ids,
-                    sync_creation: index.sync_creation,
-                    options: index.options,
-                })
-                .await?;
+            let req = CreateTableIndexReq {
+                create_option: CreateOption::Create,
+                index_type: index.index_type,
+                tenant: tenant.clone(),
+                table_id: table_info.ident.table_id,
+                name,
+                column_ids: index.column_ids,
+                sync_creation: index.sync_creation,
+                options: index.options,
+            };
+            catalog.create_table_index(req).await?;
         }
-        let table_meta = catalog
-            .get_table_meta_by_id(table_info.ident.table_id)
-            .await?
-            .map(|meta| meta.data)
-            .ok_or_else(|| {
-                ErrorCode::UnknownTable(format!(
-                    "table `{}` disappeared while registering its inverted indexes",
-                    table_info.desc
-                ))
-            })?;
-        Ok(Some(table_meta))
+        Ok(())
     }
 
     /// Build CreateTableReq from CreateTablePlanV2.

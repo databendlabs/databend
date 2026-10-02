@@ -276,7 +276,6 @@ pub async fn do_vacuum2(
             .inverted_index_dict_location_prefix(),
         &protected_dictionaries,
         gc_root_timestamp,
-        gc_root_meta_ts,
     )
     .await?;
     ctx.set_status_info(&format!(
@@ -365,15 +364,13 @@ pub async fn do_vacuum2(
 
 /// Removes user dictionary objects under `prefix` that no current index definition references.
 ///
-/// Fresh UUID-v7 objects are kept even if their index has not committed yet. Legacy dictionary
-/// names fall back to the object's `last_modified` with the transaction safety margin.
+/// Fresh UUID-v7 objects are kept even if their index has not committed yet.
 async fn purge_inverted_index_dict_objects(
     operator: &Operator,
     ctx: &Arc<dyn TableContext>,
     prefix: &str,
     protected_locations: &HashSet<String>,
     gc_root_timestamp: DateTime<Utc>,
-    gc_root_meta_ts: DateTime<Utc>,
 ) -> Result<usize> {
     let file_remover = Files::create(Arc::clone(ctx), operator.clone());
     let mut lister = operator.lister_with(prefix).recursive(true).await?;
@@ -389,27 +386,25 @@ async fn purge_inverted_index_dict_objects(
         if entry.metadata().is_dir() || protected_locations.contains(entry.path()) {
             continue;
         }
-        if entry
+        if !entry
             .path()
             .rsplit('/')
             .next()
             .is_some_and(|name| name.starts_with(VACUUM2_OBJECT_KEY_PREFIX))
         {
-            match try_extract_uuid_v7_timestamp_from_path(entry.path()) {
-                Ok(Some(timestamp)) if timestamp < gc_root_timestamp => {}
-                Ok(_) => continue,
-                Err(error) => {
-                    warn!(
-                        "skip user dictionary with unparsable UUID during vacuum: path={}, error={}",
-                        entry.path(),
-                        error
-                    );
-                    continue;
-                }
-            }
-        }
-        if !is_gc_candidate_segment_block(&entry, operator, gc_root_meta_ts).await? {
             continue;
+        }
+        match try_extract_uuid_v7_timestamp_from_path(entry.path()) {
+            Ok(Some(timestamp)) if timestamp < gc_root_timestamp => {}
+            Ok(_) => continue,
+            Err(error) => {
+                warn!(
+                    "skip user dictionary with unparsable UUID during vacuum: path={}, error={}",
+                    entry.path(),
+                    error
+                );
+                continue;
+            }
         }
         pending.push(entry.path().to_string());
         if pending.len() == VACUUM2_BLOCK_DELETE_CHUNK_SIZE {
@@ -751,7 +746,6 @@ mod tests {
     use chrono::TimeZone;
     use databend_query::test_kits::TestFixture;
     use futures_util::StreamExt;
-    use opendal::services::Fs;
     use opendal::services::Memory;
 
     use super::*;
@@ -863,10 +857,8 @@ mod tests {
             let at_cutoff = location(cutoff);
             let recent = location(cutoff + chrono::Duration::seconds(1));
             let malformed = format!("{PREFIX}hnot-a-uuid.csv");
-            let non_v7 = format!("{PREFIX}h00000000000040008000000000000000.csv");
-            let outside = "1/2/_i_i_v2/gen/hdeadbeef.index".to_string();
             let content = b"AI,noun,AI\n".to_vec();
-            for path in [&referenced, &orphan, &malformed, &non_v7, &outside] {
+            for path in [&referenced, &orphan, &malformed] {
                 dal.write(path, content.clone()).await?;
             }
 
@@ -875,72 +867,14 @@ mod tests {
             let protected = HashSet::from([referenced.clone()]);
             dal.write(&at_cutoff, content.clone()).await?;
             dal.write(&recent, content.clone()).await?;
-            let removed = purge_inverted_index_dict_objects(
-                &dal,
-                &ctx,
-                PREFIX,
-                &protected,
-                cutoff,
-                Utc::now() + chrono::Duration::days(4),
-            )
-            .await?;
+            let removed =
+                purge_inverted_index_dict_objects(&dal, &ctx, PREFIX, &protected, cutoff).await?;
             assert_eq!(removed, 1);
             assert!(!dal.exists(&orphan).await?);
-            for path in [&referenced, &at_cutoff, &recent, &malformed, &non_v7, &outside] {
+            for path in [&referenced, &at_cutoff, &recent, &malformed] {
                 assert!(dal.exists(path).await?);
             }
             assert_eq!(dal.read(&recent).await?.to_vec(), content);
-            Ok(())
-        }
-
-        #[tokio::test(flavor = "multi_thread")]
-        async fn inverted_index_dict_gc_handles_legacy_names() -> anyhow::Result<()> {
-            const PREFIX: &str = "1/2/_i_i_d/";
-
-            let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
-            let query_ctx = fixture.new_query_ctx().await?;
-            let ctx: Arc<dyn TableContext> = query_ctx;
-            // Legacy dictionary objects use `last_modified`, which Memory does not report.
-            let root = tempfile::tempdir()?;
-            let dal = Operator::new(Fs::default().root(root.path().to_str().expect("utf-8 path")))?
-                .finish();
-
-            let referenced = format!("{PREFIX}{}.csv", "a".repeat(64));
-            let orphan = format!("{PREFIX}{}.csv", "b".repeat(64));
-            let outside = "1/2/_i_i_v2/gen/hdeadbeef.index".to_string();
-            dal.write(&referenced, vec![1]).await?;
-            dal.write(&orphan, vec![2]).await?;
-            dal.write(&outside, vec![3]).await?;
-
-            let protected = HashSet::from([referenced.clone()]);
-
-            // A gc root in the past: every object was written after it, so nothing is old enough.
-            let removed = purge_inverted_index_dict_objects(
-                &dal,
-                &ctx,
-                PREFIX,
-                &protected,
-                Utc::now() - chrono::Duration::days(1),
-                Utc::now() - chrono::Duration::days(1),
-            )
-            .await?;
-            assert_eq!(removed, 0);
-            assert!(dal.exists(&orphan).await?);
-
-            // A gc root far in the future: unreferenced objects are reclaimed, referenced kept.
-            let removed = purge_inverted_index_dict_objects(
-                &dal,
-                &ctx,
-                PREFIX,
-                &protected,
-                Utc::now() + chrono::Duration::days(4),
-                Utc::now() + chrono::Duration::days(4),
-            )
-            .await?;
-            assert_eq!(removed, 1);
-            assert!(dal.exists(&referenced).await?);
-            assert!(!dal.exists(&orphan).await?);
-            assert!(dal.exists(&outside).await?);
             Ok(())
         }
 

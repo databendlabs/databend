@@ -26,43 +26,9 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_app::schema::IndexMeta;
-use databend_common_meta_app::schema::TableInfo;
 use databend_common_storage::init_stage_operator;
 use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::meta::Location;
-
-use crate::plans::Plan;
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CreateIndexPlan {
-    pub create_option: CreateOption,
-    pub index_type: TableIndexType,
-    pub index_name: String,
-    pub original_query: String,
-    pub query: String,
-    pub table_id: MetaId,
-    pub sync_creation: bool,
-}
-
-/// Drop.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DropIndexPlan {
-    pub if_exists: bool,
-    pub index: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct RefreshIndexPlan {
-    pub index_id: u64,
-    pub index_name: String,
-    pub index_meta: IndexMeta,
-    pub limit: Option<u64>,
-    pub table_info: TableInfo,
-    pub query_plan: Box<Plan>,
-    pub segment_locs: Option<Vec<Location>>,
-    pub user_defined_block_name: bool,
-}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableIndexPlan {
@@ -93,14 +59,6 @@ impl IndexUserDictionary {
     /// Reads the dictionary file from its stage, rejecting oversized files before downloading.
     pub async fn read(&self, max_size: usize) -> Result<Vec<u8>> {
         let operator = init_stage_operator(&self.stage_info)?;
-        self.read_from_operator(&operator, max_size).await
-    }
-
-    async fn read_from_operator(
-        &self,
-        operator: &opendal::Operator,
-        max_size: usize,
-    ) -> Result<Vec<u8>> {
         let meta = operator.stat(&self.path).await.map_err(|e| {
             ErrorCode::IndexOptionInvalid(format!(
                 "failed to read user dictionary `{}`: {e}",
@@ -121,7 +79,8 @@ impl IndexUserDictionary {
                 max_size
             )));
         }
-        Ok(operator.read(&self.path).await?.to_vec())
+        let data = operator.read(&self.path).await?;
+        Ok(data.to_vec())
     }
 }
 

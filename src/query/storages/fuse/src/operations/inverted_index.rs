@@ -198,7 +198,6 @@ impl FuseTable {
         let max_threads = std::cmp::min(block_nums, max_threads);
         pipeline.try_resize(max_threads)?;
         let meta_location_generator = self.meta_location_generator.clone();
-        // Resolved once here, in async context; the sync transform only clones the `Arc`.
         let user_dictionary =
             resolve_inverted_index_user_dictionary(operator, index_options).await?;
         pipeline.add_transformer(|| {
