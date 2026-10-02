@@ -67,8 +67,6 @@ use databend_common_ast::ast::VacuumTablesStmt;
 use databend_common_ast::ast::VacuumTemporaryFiles;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::QuotedString;
-use databend_common_ast::parser::Dialect;
-use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::runtime::GlobalIORuntime;
@@ -134,11 +132,13 @@ use crate::DefaultExprBinder;
 use crate::Planner;
 use crate::SelectBuilder;
 use crate::StoredKeyNormalizer;
+use crate::bind_ttl_definition;
 use crate::binder::Binder;
 use crate::binder::ConstraintExprBinder;
 use crate::binder::StageResolver;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::util::legacy_table_ref_removed_error;
+use crate::materialize_ttl_predicate;
 use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr_to_string;
 use crate::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
@@ -189,7 +189,6 @@ use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTablesPlan;
 use crate::plans::VacuumTemporaryFilesPlan;
-use crate::validate_ttl_expr;
 
 #[derive(Visitor)]
 #[visitor(FunctionCall(enter))]
@@ -1618,11 +1617,7 @@ impl Binder {
                     .ttl
                     .clone()
                     .ok_or_else(|| ErrorCode::SemanticError("Table has no TTL definition"))?;
-                // Bind the stored definition against the current table, just like DELETE.
-                // A literal cutoff keeps all blocks in the mutation on the same time boundary.
-                let cutoff = self.ctx.get_function_context()?.now.timestamp_micros();
-                let filter = format!("CAST(({ttl}) AS TIMESTAMP) <= to_timestamp({cutoff}, 6)");
-                let selection = parse_expr(&tokenize_sql(&filter)?, Dialect::default())?;
+                let selection = materialize_ttl_predicate(self.ctx.clone(), &tbl.schema(), &ttl)?;
                 let table_ref = match table_reference {
                     TableReference::Table { table, .. } => table,
                     _ => unreachable!(),
@@ -2534,26 +2529,12 @@ impl Binder {
         ttl_expr: &AstExpr,
         schema: TableSchemaRef,
     ) -> Result<String> {
-        let display = format!("{ttl_expr:#}");
-        let metadata = Arc::new(RwLock::new(self.metadata.read().clone()));
-        let mut bind_context = crate::bind_context_from_schema(&schema, &metadata);
-
-        let mut scalar_binder = ScalarBinder::new(
-            &mut bind_context,
+        bind_ttl_definition(
             self.ctx.clone(),
+            &schema,
+            ttl_expr,
             &self.name_resolution_ctx,
-            metadata,
-            &[],
-        );
-        scalar_binder.forbid_udf();
-        scalar_binder.forbid_virtual_computed_column();
-        let (scalar, _) = scalar_binder.bind(ttl_expr)?;
-        if scalar.used_columns().is_empty() {
-            return Err(ErrorCode::SemanticError(format!(
-                "TTL expression `{display}` must reference at least one column"
-            )));
-        }
-        validate_ttl_expr(&scalar, &display)?;
+        )?;
 
         // Resolve names with the defining session, then store them canonically.
         let mut normalized = ttl_expr.clone();
