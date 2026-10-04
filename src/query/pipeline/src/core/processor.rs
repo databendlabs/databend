@@ -92,7 +92,8 @@ pub trait Processor: Send {
     /// arrives after downstream stops consuming (e.g. a channel receive). When enabled, the
     /// executor drops the pending `async_process` future as soon as all outputs are finished and
     /// then calls `event()` as usual, so the processor must tolerate being dropped at any await
-    /// point and its `event()` must return `Finished` once all outputs are finished.
+    /// point and its `event()` must return `Finished` once all outputs are finished. Returning
+    /// `Async` again after a cancellation fails the query with an internal error.
     ///
     /// Leave it `false` when `async_process` does work that must complete even after downstream
     /// finished, such as `on_finish` cleanup.

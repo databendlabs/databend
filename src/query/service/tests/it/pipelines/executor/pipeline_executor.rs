@@ -38,6 +38,7 @@ use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextProgress;
 use databend_query::test_kits::TestFixture;
+use tokio::sync::Notify;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::channel;
@@ -104,21 +105,65 @@ async fn test_always_call_on_finished() -> anyhow::Result<()> {
 async fn test_cancel_async_process_when_outputs_finished() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
-    let settings = ExecutorSettings {
-        query_id: Arc::new("test-cancel-async-process".to_string()),
+    // The source waits forever. It only finishes because the executor drops its pending
+    // `async_process` once the sink finished the source's only output; otherwise the query hits
+    // the execution time limit.
+    let (async_process_dropped, pipeline) = create_pending_source_pipeline(true);
+    let executor = QueryPipelineExecutor::create(
+        pipeline,
+        cancel_async_executor_settings("test-cancel-async-process"),
+    )?;
+    let result = spawn_blocking(move || executor.execute()).await?;
+    result?;
+    assert!(async_process_dropped.load(Ordering::SeqCst));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_async_event_after_cancel_is_an_error() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    // The source keeps asking for `async_process` although its output finished. Every such call
+    // would be cancelled right away, so the executor fails the query instead of spinning.
+    let (async_process_dropped, pipeline) = create_pending_source_pipeline(false);
+    let executor = QueryPipelineExecutor::create(
+        pipeline,
+        cancel_async_executor_settings("test-async-event-after-cancel"),
+    )?;
+    let result = spawn_blocking(move || executor.execute()).await?;
+    let error = result.expect_err("Event::Async after a cancellation must fail the query");
+    assert_eq!(error.code(), ErrorCode::INTERNAL);
+    assert!(error.message().contains("PendingAsyncSource"));
+    assert!(async_process_dropped.load(Ordering::SeqCst));
+
+    Ok(())
+}
+
+fn cancel_async_executor_settings(query_id: &str) -> ExecutorSettings {
+    ExecutorSettings {
+        query_id: Arc::new(query_id.to_string()),
         max_execute_time_in_seconds: Duration::from_secs(30),
         enable_queries_executor: false,
         max_threads: 2,
         executor_node_id: "".to_string(),
         perf_event_groups: vec![],
-    };
+    }
+}
 
+/// `PendingAsyncSource -> FinishAfterSourceStartedSink`. Returns the flag set when the source's
+/// pending `async_process` is dropped.
+fn create_pending_source_pipeline(finish_on_outputs_finished: bool) -> (Arc<AtomicBool>, Pipeline) {
     let async_process_dropped = Arc::new(AtomicBool::new(false));
+    let source_started = Arc::new(Notify::new());
+
     let mut pipeline = Pipeline::create();
     let output = OutputPort::create();
     pipeline.add_pipe(Pipe::create(0, 1, vec![PipeItem::create(
         ProcessorPtr::create(Box::new(PendingAsyncSource {
             output: output.clone(),
+            finish_on_outputs_finished,
+            started: source_started.clone(),
             async_process_dropped: async_process_dropped.clone(),
         })),
         vec![],
@@ -126,8 +171,9 @@ async fn test_cancel_async_process_when_outputs_finished() -> anyhow::Result<()>
     )]));
     let input = InputPort::create();
     pipeline.add_pipe(Pipe::create(1, 0, vec![PipeItem::create(
-        ProcessorPtr::create(Box::new(DelayedFinishSink {
+        ProcessorPtr::create(Box::new(FinishAfterSourceStartedSink {
             input: input.clone(),
+            source_started,
             waited: false,
         })),
         vec![input],
@@ -135,15 +181,7 @@ async fn test_cancel_async_process_when_outputs_finished() -> anyhow::Result<()>
     )]));
     pipeline.set_max_threads(2);
 
-    // The source waits forever. It only finishes because the executor drops its pending
-    // `async_process` once the sink finished the source's only output; otherwise the query hits
-    // the execution time limit.
-    let executor = QueryPipelineExecutor::create(pipeline, settings)?;
-    let result = spawn_blocking(move || executor.execute()).await?;
-    result?;
-    assert!(async_process_dropped.load(Ordering::SeqCst));
-
-    Ok(())
+    (async_process_dropped, pipeline)
 }
 
 struct SetOnDrop(Arc<AtomicBool>);
@@ -156,6 +194,9 @@ impl Drop for SetOnDrop {
 
 struct PendingAsyncSource {
     output: Arc<OutputPort>,
+    /// `false` breaks the `cancel_async_on_outputs_finished` contract on purpose.
+    finish_on_outputs_finished: bool,
+    started: Arc<Notify>,
     async_process_dropped: Arc<AtomicBool>,
 }
 
@@ -170,7 +211,7 @@ impl Processor for PendingAsyncSource {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if self.output.is_finished() {
+        if self.finish_on_outputs_finished && self.output.is_finished() {
             return Ok(Event::Finished);
         }
         Ok(Event::Async)
@@ -178,6 +219,8 @@ impl Processor for PendingAsyncSource {
 
     async fn async_process(&mut self) -> Result<()> {
         let _dropped = SetOnDrop(self.async_process_dropped.clone());
+        // `notify_one` keeps a permit, so the sink sees it even if it has not started waiting.
+        self.started.notify_one();
         std::future::pending::<()>().await;
         Ok(())
     }
@@ -187,15 +230,17 @@ impl Processor for PendingAsyncSource {
     }
 }
 
-struct DelayedFinishSink {
+/// Finishes its input only after the source's `async_process` is running.
+struct FinishAfterSourceStartedSink {
     input: Arc<InputPort>,
+    source_started: Arc<Notify>,
     waited: bool,
 }
 
 #[async_trait::async_trait]
-impl Processor for DelayedFinishSink {
+impl Processor for FinishAfterSourceStartedSink {
     fn name(&self) -> String {
-        "DelayedFinishSink".to_string()
+        "FinishAfterSourceStartedSink".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -204,7 +249,6 @@ impl Processor for DelayedFinishSink {
 
     fn event(&mut self) -> Result<Event> {
         if !self.waited {
-            // Let the source start its async work before finishing its output.
             self.input.set_need_data();
             return Ok(Event::Async);
         }
@@ -213,7 +257,7 @@ impl Processor for DelayedFinishSink {
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        self.source_started.notified().await;
         self.waited = true;
         Ok(())
     }

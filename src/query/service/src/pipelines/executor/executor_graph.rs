@@ -142,6 +142,10 @@ impl AsyncCancel {
         self.notify.notify_waiters();
     }
 
+    fn is_requested(&self) -> bool {
+        self.requested.load(Ordering::Acquire)
+    }
+
     async fn cancelled(&self) {
         loop {
             // Created before checking the flag: `notify_waiters` wakes every `Notified` that
@@ -640,6 +644,17 @@ impl ExecutingGraph {
                         State::Processing
                     }
                     Event::Async => {
+                        // The request is sticky, so this `async_process` would be cancelled at
+                        // once and the node would come straight back here, spinning forever.
+                        if node.async_cancel.is_requested() {
+                            return Err(ErrorCode::Internal(format!(
+                                "Processor {} (node {}) returned Event::Async after all its outputs finished, \
+                                 which cancel_async_on_outputs_finished does not allow",
+                                node.name(),
+                                schedule_index.index()
+                            )));
+                        }
+
                         let slot = state_guard_cache.as_mut().unwrap();
                         schedule_queue.push_async(ProcessorWrapper::create(
                             schedule_index,
