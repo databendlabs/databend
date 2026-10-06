@@ -35,6 +35,7 @@ pub use block::FuseLowLevelClusterKeyReader;
 pub use block::FuseLowLevelColumnBatchReader;
 pub use block::FuseLowLevelColumnReader;
 pub use block::FuseLowLevelDataReader;
+pub use block::FuseLowLevelFullRowReader;
 pub(crate) use block::GranuleDataReader;
 pub use block::RowSelection;
 pub use block::column_chunks_to_record_batch;

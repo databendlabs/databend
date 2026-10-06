@@ -851,6 +851,10 @@ impl Settings {
         self.set_setting("recluster_method".to_string(), value.to_string())
     }
 
+    pub fn get_enable_recluster_multiway_merge(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_recluster_multiway_merge")? != 0)
+    }
+
     pub fn set_recluster_block_size(&self, val: u64) -> Result<()> {
         self.try_set_u64("recluster_block_size", val)
     }

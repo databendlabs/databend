@@ -37,6 +37,7 @@ pub use read::FuseLowLevelClusterKeyReader;
 pub use read::FuseLowLevelColumnBatchReader;
 pub use read::FuseLowLevelColumnReader;
 pub use read::FuseLowLevelDataReader;
+pub use read::FuseLowLevelFullRowReader;
 pub(crate) use read::GranuleDataReader;
 pub use read::InvertedIndexReader;
 pub use read::MetaReaders;

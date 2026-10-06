@@ -56,6 +56,7 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_io::ChunkedRangeReader;
+use databend_storages_common_io::OperatorRangeReader;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use opendal::Operator;
@@ -98,6 +99,7 @@ pub struct FuseLowLevelBlockReadOptions {
     window_size: usize,
     max_prefetch: usize,
     populate_cache: bool,
+    direct_read: bool,
 }
 
 impl FuseLowLevelBlockReadOptions {
@@ -114,6 +116,7 @@ impl FuseLowLevelBlockReadOptions {
             window_size: DEFAULT_WINDOW_SIZE,
             max_prefetch: DEFAULT_MAX_PREFETCH,
             populate_cache: true,
+            direct_read: false,
         }
     }
 
@@ -151,6 +154,12 @@ impl FuseLowLevelBlockReadOptions {
     /// still serve existing entries when disabled.
     pub fn with_populate_cache(mut self, populate_cache: bool) -> Self {
         self.populate_cache = populate_cache;
+        self
+    }
+
+    /// Bypass the optional shared disk-cache range layer.
+    pub fn with_direct_read(mut self) -> Self {
+        self.direct_read = true;
         self
     }
 
@@ -220,6 +229,7 @@ pub struct FuseLowLevelBlockReader {
     window_size: usize,
     max_prefetch: usize,
     populate_cache: bool,
+    direct_read: bool,
 }
 
 impl FuseLowLevelBlockReader {
@@ -313,6 +323,7 @@ impl FuseLowLevelBlockReader {
             window_size: options.window_size,
             max_prefetch: options.max_prefetch,
             populate_cache: options.populate_cache,
+            direct_read: options.direct_read,
         })
     }
 
@@ -355,6 +366,18 @@ impl FuseLowLevelBlockReader {
         self.create_column_batch_reader(field_index)
     }
 
+    /// Read all logical columns over the same absolute row range.
+    pub fn read_full_rows(&self) -> Result<FuseLowLevelFullRowReader> {
+        let readers = (0..self.schema.num_fields())
+            .map(|field| self.create_column_batch_reader(field))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(FuseLowLevelFullRowReader {
+            readers,
+            position: 0,
+            expected_rows: self.row_count,
+        })
+    }
+
     fn create_column_batch_reader(
         &self,
         field_index: usize,
@@ -373,6 +396,8 @@ impl FuseLowLevelBlockReader {
         )
         .with_window_size(self.window_size)
         .with_max_prefetch(self.max_prefetch);
+        options.direct_read = self.direct_read;
+        options.populate_cache = self.populate_cache;
         if let Some(default_values) = &self.default_values {
             options = options.with_default_values(vec![default_values[field_index].clone()]);
         }
@@ -789,6 +814,10 @@ impl FuseLowLevelColumnReader {
 
     /// Return the next page-driven physical batch or the synthesized default batch.
     pub fn read(&mut self) -> Result<Option<Column>> {
+        self.read_with_hint(usize::MAX)
+    }
+
+    fn read_with_hint(&mut self, rows: usize) -> Result<Option<Column>> {
         if self.finished {
             return Ok(None);
         }
@@ -798,9 +827,29 @@ impl FuseLowLevelColumnReader {
             return Ok(None);
         }
 
-        let column = self
-            .source
-            .read(&self.field, self.rows_returned, self.expected_rows)?;
+        // Physical leaves retain their natural decoding boundaries. Synthetic columns
+        // must not materialize the entire remaining block for a small batch request.
+        let column = match &mut self.source {
+            FuseLowLevelColumnSource::Default { scalar, data_type } => ColumnBuilder::repeat(
+                &scalar.as_ref(),
+                rows.min(self.expected_rows - self.rows_returned),
+                data_type,
+            )
+            .build(),
+            FuseLowLevelColumnSource::Stream(reader) if reader.physical.is_none() => {
+                let rows = rows.min(self.expected_rows - self.rows_returned);
+                materialize_stream_field(
+                    reader.column_id,
+                    None,
+                    &reader.source_location,
+                    self.rows_returned..self.rows_returned + rows,
+                    reader.table_version,
+                )?
+            }
+            _ => self
+                .source
+                .read(&self.field, self.rows_returned, self.expected_rows)?,
+        };
 
         self.rows_returned += column.len();
         if self.rows_returned > self.expected_rows {
@@ -873,7 +922,7 @@ impl FuseLowLevelColumnBatchReader {
             let column = match self.buffered.take() {
                 Some(column) => column,
                 None => {
-                    let Some(column) = self.reader.read()? else {
+                    let Some(column) = self.reader.read_with_hint(remaining)? else {
                         return Err(ErrorCode::ParquetFileInvalid(format!(
                             "column {} reached EOF while assembling a batch",
                             self.reader.field.name()
@@ -897,6 +946,51 @@ impl FuseLowLevelColumnBatchReader {
         }
     }
 
+    /// Consume whole logical decoding batches until at least `min_rows` are
+    /// available. The final batch is never split; EOF may return a shorter tail.
+    pub fn read_min_rows(&mut self, min_rows: usize) -> Result<Option<Column>> {
+        if min_rows == 0 {
+            return Err(ErrorCode::BadArguments(
+                "min_rows must be greater than zero",
+            ));
+        }
+        if self.position == self.expected_rows {
+            if self.reader.read()?.is_some() {
+                return Err(ErrorCode::ParquetFileInvalid("unexpected trailing rows"));
+            }
+            return Ok(None);
+        }
+        let mut parts = Vec::new();
+        let mut rows = 0;
+        while rows < min_rows && self.position + rows < self.expected_rows {
+            let column = match self.buffered.take() {
+                Some(column) => column,
+                None => self
+                    .reader
+                    .read_with_hint(min_rows - rows)?
+                    .ok_or_else(|| {
+                        ErrorCode::ParquetFileInvalid("premature EOF in minimum-row batch")
+                    })?,
+            };
+            rows += column.len();
+            parts.push(column);
+        }
+        self.position += rows;
+        if parts.len() == 1 {
+            Ok(parts.pop())
+        } else {
+            Ok(Some(Column::concat_columns(parts.into_iter())?))
+        }
+    }
+
+    fn is_physical(&self) -> bool {
+        match &self.reader.source {
+            FuseLowLevelColumnSource::Physical(_) => true,
+            FuseLowLevelColumnSource::Stream(reader) => reader.physical.is_some(),
+            FuseLowLevelColumnSource::Default { .. } => false,
+        }
+    }
+
     pub fn finish(self) -> Result<()> {
         if self.position != self.expected_rows {
             return Err(ErrorCode::BadArguments(format!(
@@ -913,6 +1007,64 @@ impl FuseLowLevelColumnBatchReader {
             )));
         }
         self.reader.finish()?.finish()
+    }
+}
+
+/// Incremental complete-row batches. Minimum batches preserve every physical
+/// logical column's first minimum read, then align to the largest row count.
+/// Additional decoding while aligning must not keep extending that target.
+pub struct FuseLowLevelFullRowReader {
+    readers: Vec<FuseLowLevelColumnBatchReader>,
+    position: usize,
+    expected_rows: usize,
+}
+
+impl FuseLowLevelFullRowReader {
+    pub fn read(&mut self, rows: usize, minimum: bool) -> Result<Option<DataBlock>> {
+        if rows == 0 {
+            return Err(ErrorCode::BadArguments(
+                "batch rows must be greater than zero",
+            ));
+        }
+        if self.position == self.expected_rows {
+            return Ok(None);
+        }
+        let min_rows = rows.min(self.expected_rows - self.position);
+        let mut actual_rows = min_rows;
+        let mut batches = Vec::with_capacity(self.readers.len());
+        for reader in &mut self.readers {
+            let batch = if minimum && reader.is_physical() {
+                let column = reader.read_min_rows(min_rows)?.ok_or_else(|| {
+                    ErrorCode::ParquetFileInvalid("premature EOF in full-row reader")
+                })?;
+                actual_rows = actual_rows.max(column.len());
+                Some(column)
+            } else {
+                None
+            };
+            batches.push(batch);
+        }
+        let mut columns = Vec::with_capacity(self.readers.len());
+        for (reader, batch) in self.readers.iter_mut().zip(batches) {
+            let column = match batch {
+                Some(column) if column.len() == actual_rows => column,
+                Some(column) => {
+                    let tail = reader.read_rows(actual_rows - column.len())?;
+                    Column::concat_columns([column, tail].into_iter())?
+                }
+                None => reader.read_rows(actual_rows)?,
+            };
+            columns.push(column);
+        }
+        self.position += actual_rows;
+        Ok(Some(DataBlock::new_from_columns(columns)))
+    }
+
+    pub fn finish(self) -> Result<()> {
+        for reader in self.readers {
+            reader.finish()?;
+        }
+        Ok(())
     }
 }
 
@@ -1381,17 +1533,25 @@ impl ParquetLeafRowGroupAdapter {
         num_values: u64,
     ) -> Result<Self> {
         let len = range.end - range.start;
-        let chain = create_file_range_reader(
-            reader.operator.clone(),
-            reader.path.clone(),
-            reader.block_meta.file_size,
-            reader.max_prefetch,
-            reader.window_size as u64,
-            reader
-                .window_size
-                .saturating_mul(reader.max_prefetch.saturating_add(2)),
-            reader.populate_cache,
-        )?;
+        let chain: Box<dyn databend_storages_common_io::RangeReader> = if reader.direct_read {
+            Box::new(OperatorRangeReader::new(
+                reader.operator.clone(),
+                reader.path.clone(),
+                reader.max_prefetch.saturating_add(1),
+            ))
+        } else {
+            create_file_range_reader(
+                reader.operator.clone(),
+                reader.path.clone(),
+                reader.block_meta.file_size,
+                reader.max_prefetch,
+                reader.window_size as u64,
+                reader
+                    .window_size
+                    .saturating_mul(reader.max_prefetch.saturating_add(2)),
+                reader.populate_cache,
+            )?
+        };
         let input = ChunkedRangeReader::with_range(
             chain,
             range,
@@ -1714,6 +1874,48 @@ mod tests {
     }
 
     #[test]
+    fn test_minimum_batches_and_complete_rows() {
+        crate::test_utils::init_test_globals().unwrap();
+        let operator = Operator::new(Memory::default()).unwrap().finish();
+        let (schema, columns) = test_data();
+        let mut meta = write_columns(
+            operator.clone(),
+            schema.clone(),
+            "minimum-read.parquet",
+            &columns,
+        );
+        meta.granule_index = None;
+        let block = FuseLowLevelBlockReader::create(
+            read_options(operator, schema, meta).with_direct_read(),
+        )
+        .unwrap();
+        let mut column = block.read_column(0).unwrap();
+        assert!(column.read_min_rows(0).is_err());
+        let first = column.read_rows(1).unwrap();
+        let mut parts = vec![first];
+        while let Some(part) = column.read_min_rows(2).unwrap() {
+            parts.push(part);
+        }
+        assert_eq!(
+            Column::concat_columns(parts.into_iter()).unwrap(),
+            columns[0]
+        );
+        column.finish().unwrap();
+
+        let mut reader = block.read_full_rows().unwrap();
+        let mut batches = Vec::new();
+        while let Some(batch) = reader.read(2, true).unwrap() {
+            batches.push(batch);
+        }
+        reader.finish().unwrap();
+        let actual = DataBlock::concat(&batches).unwrap();
+        assert_eq!(actual.num_rows(), columns[0].len());
+        for (field, expected) in columns.iter().enumerate() {
+            assert_eq!(&actual.get_by_offset(field).to_column(), expected);
+        }
+    }
+
+    #[test]
     fn test_cluster_key_reader_batches_keys_and_payload_independently() {
         crate::test_utils::init_test_globals().unwrap();
         let operator = Operator::new(Memory::default()).unwrap().finish();
@@ -1931,6 +2133,45 @@ mod tests {
             column_meta.num_values = 5;
             meta.col_metas
                 .insert(column_id, ColumnMeta::Parquet(column_meta));
+        }
+
+        // Separate logical columns have different page boundaries. The largest
+        // initial minimum batch sets the target, independent of schema order.
+        let ids = schema.to_leaf_column_ids();
+        for order in [[0, 1], [1, 0]] {
+            let fields = order
+                .iter()
+                .map(|&index| {
+                    TableField::new_from_column_id(
+                        &format!("leaf_{index}"),
+                        TableDataType::Number(NumberDataType::Int32),
+                        ids[index],
+                    )
+                })
+                .collect();
+            let flat_schema = Arc::new(TableSchema::new_from_column_ids(
+                fields,
+                Default::default(),
+                schema.next_column_id,
+            ));
+            let block = FuseLowLevelBlockReader::create(
+                read_options(operator.clone(), flat_schema, meta.clone()).with_direct_read(),
+            )
+            .unwrap();
+            let mut rows = block.read_full_rows().unwrap();
+            let first = rows.read(2, true).unwrap().unwrap();
+            assert_eq!(first.num_rows(), 3);
+            let second = rows.read(2, true).unwrap().unwrap();
+            assert_eq!(second.num_rows(), 2);
+            assert!(rows.read(2, true).unwrap().is_none());
+            rows.finish().unwrap();
+            let actual = DataBlock::concat(&[first, second]).unwrap();
+            let Column::Tuple(leaves) = &expected else {
+                unreachable!()
+            };
+            for (field, &index) in order.iter().enumerate() {
+                assert_eq!(actual.get_by_offset(field).to_column(), leaves[index]);
+            }
         }
 
         let mut reader = FuseLowLevelBlockReader::create(read_options(operator, schema, meta))

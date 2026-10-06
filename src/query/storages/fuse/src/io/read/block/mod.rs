@@ -32,5 +32,6 @@ pub use low_level_block_reader::FuseLowLevelClusterKeyReader;
 pub use low_level_block_reader::FuseLowLevelColumnBatchReader;
 pub use low_level_block_reader::FuseLowLevelColumnReader;
 pub use low_level_block_reader::FuseLowLevelDataReader;
+pub use low_level_block_reader::FuseLowLevelFullRowReader;
 pub use parquet::RowSelection;
 pub use parquet::column_chunks_to_record_batch;

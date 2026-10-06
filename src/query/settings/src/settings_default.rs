@@ -1046,6 +1046,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("enable_recluster_multiway_merge", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable streaming multiway merge for horizontal recluster MergeBlocks tasks.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("recluster_method", DefaultSettingValue {
                     value: UserSettingValue::String("auto".to_string()),
                     desc: "Selects recluster execution: auto (default, currently horizontal), horizontal, or vertical.",
