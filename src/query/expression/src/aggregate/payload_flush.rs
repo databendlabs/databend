@@ -34,6 +34,7 @@ use crate::types::DataType;
 use crate::types::DateType;
 use crate::types::DecimalDataKind;
 use crate::types::DecimalSize;
+use crate::types::IntervalType;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::ReturnType;
@@ -260,6 +261,7 @@ impl Payload {
             },
             DataType::Timestamp => self.flush_type_column::<TimestampType>(col_offset, state),
             DataType::Date => self.flush_type_column::<DateType>(col_offset, state),
+            DataType::Interval => self.flush_type_column::<IntervalType>(col_offset, state),
             DataType::Binary => Column::Binary(self.flush_binary_column(col_offset, state)),
             DataType::String => Column::String(self.flush_string_column(col_offset, state)),
             DataType::Bitmap => Column::Bitmap(self.flush_binary_column(col_offset, state)),

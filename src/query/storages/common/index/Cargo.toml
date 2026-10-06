@@ -51,6 +51,7 @@ self_cell = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tantivy = { workspace = true }
+tantivy-common = { workspace = true }
 thiserror = { workspace = true }
 unicase = { workspace = true }
 xorf = { workspace = true }

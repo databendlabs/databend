@@ -27,6 +27,7 @@ use super::AggregateEval;
 use super::AggregateMetadata;
 use super::AggregateSignature;
 use super::AggregateStateDescription;
+use super::AggregateStateSettings;
 use super::FunctionInputLayout;
 use super::StateCombinatorPlan;
 use super::if_combinator;
@@ -60,6 +61,13 @@ pub(crate) trait Combinator {
     /// The evaluator consumes nullable columns itself. Retain them through
     /// input adaptors so input-presence and non-null presence stay distinct.
     fn with_native_null_input(self) -> Self
+    where Self: Sized {
+        self
+    }
+
+    /// The caller selected explicit write-side settings. MERGE also uses
+    /// them when resolving declared older physical layouts.
+    fn with_state_settings(self, _settings: AggregateStateSettings) -> Self
     where Self: Sized {
         self
     }
@@ -371,6 +379,7 @@ impl StateCombinator {
             &signature.params,
             signature.args_type.clone(),
             physical_type,
+            state.state_version(),
         )?;
         let signature = AggregateSignature {
             return_type,

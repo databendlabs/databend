@@ -18,6 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::aggregate::aggregate_function::AggregateCallRef;
 use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
+use databend_common_expression::aggregate_function::AggregateStateSettings;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
@@ -37,7 +38,17 @@ use super::UnaryOrNull;
 use super::UnaryState;
 use super::UnaryStateEval;
 use super::input_rows::InputRowsEval;
-use super::input_rows::PRESERVE_V1_INPUT_ROWS_FLAG;
+
+fn with_selected_version(
+    state: AggregateStateDescription,
+    settings: AggregateStateSettings,
+) -> AggregateStateDescription {
+    if settings.state_version != 0 {
+        state.with_state_version(settings.state_version)
+    } else {
+        state
+    }
+}
 
 fn build_signature(request: &RawAggregateCall<'_>, return_type: DataType) -> AggregateSignature {
     AggregateSignature {
@@ -71,7 +82,14 @@ where C: Combinator
             metadata,
             combinator,
             input_type: arg_type.remove_nullable(),
+            state_settings: AggregateStateSettings::v0_compatibility(),
         })
+    }
+
+    /// Apply the caller's write-side state settings.
+    pub(crate) fn with_state_settings(mut self, settings: AggregateStateSettings) -> Self {
+        self.state_settings = settings;
+        self
     }
 
     pub(crate) fn name(&self) -> &str {
@@ -97,9 +115,11 @@ where C: Combinator
         I: AccessType,
         R: ValueType,
     {
+        let state = with_selected_version(state, self.state_settings);
         // Native nullable results (stddev) still had v1's outer OrNull flag,
         // even for non-nullable input. Keep the kernel's own empty-state logic.
-        let input_rows_flag = return_type.is_nullable();
+        let input_rows_flag =
+            return_type.is_nullable() && self.state_settings.preserve_nullable_input_rows_flag;
         let state = if input_rows_flag {
             state.with_null_flag()
         } else {
@@ -111,7 +131,8 @@ where C: Combinator
             self.combinator.with_native_null_input()
         } else {
             self.combinator
-        };
+        }
+        .with_state_settings(self.state_settings);
         let signature = build_signature(&self.call, return_type);
         if signature.args_type[0].is_nullable_or_null() {
             let eval =
@@ -148,17 +169,19 @@ where C: Combinator
         let signature = build_signature(&self.call, return_type);
         let nested = UnaryStateEval::<S, I, R, false>::new(Arc::new(function_info));
         let eval = UnaryEvalAdapter::new(UnaryOrNull::new(nested));
+        let nullable_input = self.call.args_type.iter().any(DataType::is_nullable);
         let input_rows_flag =
-            PRESERVE_V1_INPUT_ROWS_FLAG && self.call.args_type.iter().any(DataType::is_nullable);
+            nullable_input && self.state_settings.preserve_nullable_input_rows_flag;
         let state = state.with_null_flag();
         let state = if input_rows_flag {
             state.with_null_flag()
         } else {
             state
         };
+        let state = with_selected_version(state, self.state_settings);
+        let combinator = self.combinator.with_state_settings(self.state_settings);
         let eval = InputRowsEval::new(eval, input_rows_flag);
-        self.combinator
-            .create::<false>(signature, self.metadata, state, eval)
+        combinator.create::<false>(signature, self.metadata, state, eval)
     }
 
     pub(crate) fn create_unary_or_null_with_eval<I, R, U>(
@@ -174,16 +197,18 @@ where C: Combinator
     {
         let signature = build_signature(&self.call, return_type);
         let eval = UnaryEvalAdapter::new(UnaryOrNull::new(eval));
-        let input_rows_flag =
-            PRESERVE_V1_INPUT_ROWS_FLAG && self.call.args_type.iter().any(DataType::is_nullable);
+        let input_rows_flag = self.state_settings.preserve_nullable_input_rows_flag
+            && self.call.args_type.iter().any(DataType::is_nullable);
         let state = state.with_null_flag();
         let state = if input_rows_flag {
             state.with_null_flag()
         } else {
             state
         };
+        let state = with_selected_version(state, self.state_settings);
         let eval = InputRowsEval::new(eval, input_rows_flag);
         self.combinator
+            .with_state_settings(self.state_settings)
             .create::<false>(signature, self.metadata, state, eval)
     }
 
@@ -198,6 +223,7 @@ where C: Combinator
         I: AccessType,
         R: ValueType,
     {
+        let state = with_selected_version(state, self.state_settings);
         let signature = build_signature(&self.call, return_type);
         let distinct_args_type = vec![self.input_type.clone()];
         super::create_unary_distinct_or_null_aggregate_function::<S, I, R, _>(
@@ -219,6 +245,7 @@ where C: Combinator
         input_types: &'a [DataType],
         metadata: AggregateMetadata,
         combinator: C,
+        state_settings: AggregateStateSettings,
     ) -> Self {
         let input_types = input_types.iter().map(DataType::remove_nullable).collect();
         Self {
@@ -226,6 +253,7 @@ where C: Combinator
             metadata,
             combinator,
             input_types,
+            state_settings,
         }
     }
 
@@ -252,20 +280,23 @@ where C: Combinator
     {
         let signature = build_signature(&self.call, return_type);
         debug_assert!(signature.order_by.is_empty());
-        let input_rows_flag =
-            PRESERVE_V1_INPUT_ROWS_FLAG && self.call.args_type.iter().any(DataType::is_nullable);
+        let input_rows_flag = self.state_settings.preserve_nullable_input_rows_flag
+            && self.call.args_type.iter().any(DataType::is_nullable);
         let state = state.with_null_flag();
         let state = if input_rows_flag {
             state.with_null_flag()
         } else {
             state
         };
-        self.combinator.create::<false>(
-            signature,
-            self.metadata,
-            state,
-            InputRowsEval::new(MultiArgOrNullEval::new(eval), input_rows_flag),
-        )
+        let state = with_selected_version(state, self.state_settings);
+        self.combinator
+            .with_state_settings(self.state_settings)
+            .create::<false>(
+                signature,
+                self.metadata,
+                state,
+                InputRowsEval::new(MultiArgOrNullEval::new(eval), input_rows_flag),
+            )
     }
 }
 
@@ -277,12 +308,14 @@ where C: Combinator
         input_types: &'a [DataType],
         metadata: AggregateMetadata,
         combinator: C,
+        state_settings: AggregateStateSettings,
     ) -> Self {
         Self {
             call: request,
             metadata,
             combinator,
             input_types,
+            state_settings,
         }
     }
 
@@ -307,6 +340,7 @@ where C: Combinator
     where
         I: AggregateEval,
     {
+        let state = with_selected_version(state, self.state_settings);
         let signature = build_signature(&self.call, return_type);
         self.combinator
             .create::<false>(signature, self.metadata, state, eval)
@@ -320,14 +354,18 @@ where C: Combinator
         state: AggregateStateDescription,
         eval: I,
     ) -> Result<AggregateCallRef> {
+        let state = with_selected_version(state, self.state_settings);
         debug_assert!(return_type.is_nullable());
-        let enabled = PRESERVE_V1_INPUT_ROWS_FLAG;
+        let enabled = self.state_settings.preserve_nullable_input_rows_flag;
         let state = if enabled {
             state.with_null_flag()
         } else {
             state
         };
-        let combinator = self.combinator.with_native_null_input();
+        let combinator = self
+            .combinator
+            .with_native_null_input()
+            .with_state_settings(self.state_settings);
         combinator.create::<false>(
             build_signature(&self.call, return_type),
             self.metadata,
@@ -345,9 +383,10 @@ where C: Combinator
     where
         I: AggregateEval,
     {
+        let state = with_selected_version(state, self.state_settings);
         // string_agg owns its non-null flag but still needs v1's outer flag.
         // Inspect the original call: _state may already have stripped input NULLs.
-        let input_rows_flag = PRESERVE_V1_INPUT_ROWS_FLAG
+        let input_rows_flag = self.state_settings.preserve_nullable_input_rows_flag
             && return_type.is_nullable()
             && self.call.args_type.iter().any(DataType::is_nullable);
         let state = if input_rows_flag {
@@ -356,12 +395,14 @@ where C: Combinator
             state
         };
         let signature = build_signature(&self.call, return_type);
-        self.combinator.create::<true>(
-            signature,
-            self.metadata,
-            state,
-            InputRowsEval::new(eval, input_rows_flag),
-        )
+        self.combinator
+            .with_state_settings(self.state_settings)
+            .create::<true>(
+                signature,
+                self.metadata,
+                state,
+                InputRowsEval::new(eval, input_rows_flag),
+            )
     }
 }
 

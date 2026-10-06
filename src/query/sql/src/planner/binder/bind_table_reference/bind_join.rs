@@ -420,11 +420,20 @@ impl Binder {
                 &mut right_conditions,
                 &mut left_conditions,
             )?;
+            // These conditions reconnect the flattened lateral subquery to the outer row. They
+            // are internal correlation keys rather than user-written equality predicates, so
+            // NULL correlation groups must match each other.
             if build_side_cache_info.is_some() {
-                let num_conditions = left_conditions.len();
-                for i in original_num_conditions..num_conditions {
-                    is_null_equal.push(i);
-                }
+                is_null_equal.extend(original_num_conditions..left_conditions.len());
+            } else {
+                is_null_equal.extend(
+                    SubqueryDecorrelatorOptimizer::nullable_condition_indexes(
+                        &left_conditions[original_num_conditions..],
+                        &right_conditions[original_num_conditions..],
+                    )
+                    .into_iter()
+                    .map(|index| index + original_num_conditions),
+                );
             }
             if join_type == JoinType::Cross {
                 join_type = JoinType::Inner;

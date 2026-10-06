@@ -695,7 +695,6 @@ pub async fn get_storage_params_from_options(
         UriLocation::from_uri(location.to_string(), BTreeMap::new())?
     };
     let sp =
-        parse_storage_params_from_uri(&mut location, "when loading/creating ICEBERG/DELTA table")
-            .await?;
+        parse_storage_params_from_uri(&mut location, "when loading/creating ICEBERG table").await?;
     Ok(sp)
 }

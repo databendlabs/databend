@@ -66,8 +66,8 @@ impl PipelineBuilder {
                 let function = match &agg_func.sig.udaf {
                     None => AGGR_REGISTRY.resolve(RawAggregateCall {
                         name: agg_func.sig.name.as_str(),
-                        params: &agg_func.sig.params.clone(),
-                        args_type: &agg_func.sig.args.clone(),
+                        params: &agg_func.sig.params,
+                        args_type: &agg_func.sig.args,
                         distinct: false,
                         order_by: &agg_func.sig.order_by,
                     }),

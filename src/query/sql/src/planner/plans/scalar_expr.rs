@@ -1303,6 +1303,10 @@ pub struct SubqueryExpr {
     pub compare_op: Option<SubqueryComparisonOp>,
     // Output column of Any/All and scalar subqueries.
     pub output_column: ColumnBinding,
+    // All output columns when a row value is compared positionally against a
+    // multi-column subquery, such as `(a, b) IN (SELECT x, y FROM t)`.
+    // Empty for every other subquery, including a single tuple-typed column.
+    pub row_columns: Vec<ColumnBinding>,
     pub projection_index: Option<Symbol>,
     pub(crate) data_type: Box<DataType>,
     #[educe(Hash(method = "hash_column_set"))]
@@ -1856,6 +1860,8 @@ impl<'a> Visitor<'a> for IndexPredicateChecker {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use databend_common_expression::types::number::NumberDataType;
 
     use super::*;
@@ -1916,6 +1922,21 @@ mod tests {
             expr.data_type().as_ref(),
             expr.as_expr().unwrap().data_type()
         );
+    }
+
+    #[test]
+    fn test_typed_constant_expr_hash_map_lookup() {
+        let expr = ScalarExpr::TypedConstantExpr(
+            ConstantExpr {
+                span: None,
+                value: Scalar::Number(NumberScalar::Int64(1)),
+            },
+            DataType::Number(NumberDataType::Int64),
+        );
+        let mut expr_index = HashMap::new();
+        expr_index.insert(expr.clone(), 0);
+
+        assert_eq!(expr_index.get(&expr), Some(&0));
     }
 
     #[test]

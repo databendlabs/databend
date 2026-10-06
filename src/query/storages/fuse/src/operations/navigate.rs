@@ -76,8 +76,12 @@ impl FuseTable {
             }
             NavigationPoint::TableTag(tag_name) => {
                 let snapshot_loc = self.get_tag_snapshot_location(ctx, tag_name).await?;
-                let (snapshot, format_version) =
-                    SnapshotsIO::read_snapshot(snapshot_loc, self.get_operator(), true).await?;
+                let (snapshot, format_version) = Self::read_navigation_snapshot(
+                    snapshot_loc,
+                    self.get_operator(),
+                    &format!("TAG '{tag_name}'"),
+                )
+                .await?;
                 self.load_table_by_snapshot(
                     snapshot.as_ref(),
                     format_version,
@@ -104,7 +108,7 @@ impl FuseTable {
             return Ok(table.into());
         };
         let (snapshot, format_version) =
-            SnapshotsIO::read_snapshot(snapshot_loc.clone(), self.get_operator(), true).await?;
+            Self::read_navigation_snapshot(snapshot_loc, self.get_operator(), "STREAM").await?;
         self.load_table_by_snapshot(
             snapshot.as_ref(),
             format_version,
@@ -335,7 +339,8 @@ impl FuseTable {
         match first_snapshot_after {
             Some(location) => {
                 let (snapshot, _format_version) =
-                    Self::read_snapshot_for_no_check(location, op.clone()).await?;
+                    Self::read_navigation_snapshot(location, op.clone(), "TIMESTAMP with NO_CHECK")
+                        .await?;
 
                 match snapshot.prev_snapshot_id {
                     Some((prev_id, prev_ver)) => {
@@ -348,8 +353,12 @@ impl FuseTable {
                         let prev_location = self
                             .meta_location_generator()
                             .gen_snapshot_location(&prev_id, prev_ver)?;
-                        let (prev_snapshot, prev_format_version) =
-                            Self::read_snapshot_for_no_check(prev_location, op).await?;
+                        let (prev_snapshot, prev_format_version) = Self::read_navigation_snapshot(
+                            prev_location,
+                            op,
+                            "TIMESTAMP with NO_CHECK",
+                        )
+                        .await?;
                         self.load_table_by_snapshot(
                             prev_snapshot.as_ref(),
                             prev_format_version,
@@ -369,27 +378,32 @@ impl FuseTable {
                     ));
                 };
                 let (snapshot, format_version) =
-                    Self::read_snapshot_for_no_check(location, op).await?;
+                    Self::read_navigation_snapshot(location, op, "TIMESTAMP with NO_CHECK").await?;
                 self.load_table_by_snapshot(snapshot.as_ref(), format_version, s3_storage_class)
             }
         }
     }
 
-    /// Read a snapshot for NO_CHECK navigation.
+    /// Read a snapshot that a navigation point (TAG, STREAM, NO_CHECK lookup, revert target)
+    /// resolved to.
     ///
-    /// Missing objects are mapped to `TableHistoricalDataNotFound` so vacuumed
-    /// predecessor snapshots do not surface as raw `StorageNotFound` errors.
-    async fn read_snapshot_for_no_check(
+    /// The snapshot chain and the pointers into it (tags, streams, predecessor ids) can
+    /// outlive the objects once vacuum removes them. A missing object is therefore a
+    /// "historical data is gone" condition and is reported as
+    /// `TableHistoricalDataNotFound`, never as a raw `StorageNotFound` from the object
+    /// store. Every navigation path that reads a snapshot by location goes through here.
+    pub(crate) async fn read_navigation_snapshot(
         location: String,
         op: opendal::Operator,
+        point: &str,
     ) -> Result<(Arc<TableSnapshot>, u64)> {
-        match SnapshotsIO::read_snapshot(location, op, true).await {
+        match SnapshotsIO::read_snapshot(location.clone(), op, true).await {
             Ok(v) => Ok(v),
             Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
-                Err(ErrorCode::TableHistoricalDataNotFound(
-                    "No historical data found at given point with NO_CHECK \
-                     (snapshot object is missing, possibly vacuumed)",
-                ))
+                Err(ErrorCode::TableHistoricalDataNotFound(format!(
+                    "No historical data found at {point}: snapshot {location} is missing \
+                     (possibly vacuumed)"
+                )))
             }
             Err(e) => Err(e),
         }

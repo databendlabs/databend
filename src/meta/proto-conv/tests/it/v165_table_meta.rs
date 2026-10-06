@@ -53,6 +53,7 @@ fn test_decode_v165_cluster_key_id() -> anyhow::Result<()> {
         cluster_key: None,
         cluster_key_v2: Some((2, "(a + 2, b)".to_string())),
         cluster_key_seq: 3,
+        ttl: None,
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
         comment: s(""),

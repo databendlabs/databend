@@ -94,9 +94,7 @@ impl MergeIOReader {
             // Fetch the raw data for the raw range.
             let start = (column_range.start - merged_range.start) as usize;
             let end = (column_range.end - merged_range.start) as usize;
-            let column_id = *raw_idx as ColumnId;
-            let range = start..end;
-            columns_chunk_offsets.insert(column_id, (merged_range_idx, range));
+            columns_chunk_offsets.insert(*raw_idx, (merged_range_idx, start..end));
         }
 
         let read_res =

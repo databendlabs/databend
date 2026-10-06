@@ -16,3 +16,24 @@ pub mod block_filter_reader;
 mod column_filter_reader;
 
 pub use block_filter_reader::BloomBlockFilterReader;
+
+/// Position of a column inside one bloom index file (`BloomIndexMeta::columns`).
+///
+/// This is an ordinal into the index file's own column list, not a table `ColumnId`: the
+/// list only contains the indexed columns, in the order the index writer emitted them.
+/// It is deliberately not convertible from/to `ColumnId` or `usize` implicitly; reading it
+/// back as a parquet leaf index is the one place where the raw value is needed.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) struct BloomIndexColumnOrdinal(usize);
+
+impl BloomIndexColumnOrdinal {
+    pub(crate) const fn new(ordinal: usize) -> Self {
+        Self(ordinal)
+    }
+
+    /// The parquet leaf index of this column in the bloom index file.
+    pub(crate) const fn as_parquet_leaf_index(self) -> usize {
+        self.0
+    }
+}

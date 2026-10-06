@@ -14,16 +14,27 @@
 
 use super::*;
 
-// Keep v1's redundant outer input-presence flag for nullable aggregates.
-// Native unary nullable results (stddev) always retain their flag: it distinguishes
-// empty input from all-NULL input and is part of result semantics.
-// Nullable-input ownership is independent of this layout switch. This must gate
-// both the state description and evaluator: MV refresh, reads and compaction
-// must agree on the persisted layout, including ordinary aggregation.
-// This switch covers only this compatibility stage, not all v1 state formats.
-// TODO: define and validate the non-compatible layout before disabling this.
-// Correctness with this hard switch off is intentionally not guaranteed yet.
-pub(super) const PRESERVE_V1_INPUT_ROWS_FLAG: bool = true;
+/// Physical layout of v0 state when the outer input-rows flag is present.
+/// This describes a migration, not a setting selecting the output format.
+pub(crate) fn state_type_with_input_rows_flag(current: &DataType) -> DataType {
+    let mut fields = match current {
+        DataType::Tuple(fields) => fields.clone(),
+        other => vec![other.clone()],
+    };
+    fields.push(DataType::Boolean);
+    DataType::Tuple(fields)
+}
+
+/// Convert a v0 state by filtering rows whose outer flag is false and
+/// projecting away that flag before merging into a newer layout.
+pub(crate) fn remove_serialized_input_rows_flag(
+    state: &BlockEntry,
+    validity: Option<&Bitmap>,
+) -> (BlockEntry, Option<Bitmap>) {
+    let flag = serialized_field_count(state) - 1;
+    let validity = combined_serialized_flag_filter(state, validity, flag);
+    (project_serialized_fields(state, 0, flag), validity)
+}
 
 /// Preserve v1's outer input-presence flag separately from the nested non-null
 /// flag. An all-NULL batch can have input rows without contributing a value.
@@ -33,7 +44,7 @@ pub(super) const PRESERVE_V1_INPUT_ROWS_FLAG: bool = true;
 /// represent different facts and cannot be collapsed or reconstructed from each
 /// other. Keep this compatibility detail out of the nested aggregate evaluator.
 /// `enabled` must match the extra flag in the state description; the builder
-/// controls both; semantically required flags are independent of the switch.
+/// controls both; semantically required flags are independent of the setting.
 pub(super) struct InputRowsEval<I> {
     nested: I,
     enabled: bool,

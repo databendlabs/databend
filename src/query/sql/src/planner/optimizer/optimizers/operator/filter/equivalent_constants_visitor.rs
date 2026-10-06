@@ -54,15 +54,38 @@ impl VisitorMut<'_> for EquivalentConstantsVisitor {
     }
 }
 
-#[derive(Default)]
 pub struct EquivalentConstantsVisitorInner {
     eq_constants: HashMap<BoundColumnRef, ScalarExpr>,
     left_visit_order: bool,
+    /// Whether the expression being visited must be true for the row to be kept.
+    ///
+    /// Only then does `col = const` assert anything about the row, so only then may it be
+    /// recorded as an equivalence. A conjunction nested under another function, e.g.
+    /// `is_null(a = 1 AND a = 2)`, `if(a = 1 AND a = 2, ...)`, is merely evaluated: folding
+    /// it to `false` would erase the difference between FALSE and NULL that the enclosing
+    /// function observes. Inherited equivalences may still be *substituted* anywhere,
+    /// because they hold for every row that reaches the expression.
+    asserted: bool,
+}
+
+impl Default for EquivalentConstantsVisitorInner {
+    fn default() -> Self {
+        Self {
+            eq_constants: HashMap::new(),
+            left_visit_order: false,
+            asserted: true,
+        }
+    }
 }
 
 impl EquivalentConstantsVisitorInner {
     fn eq_constants(mut self, eq_constants: HashMap<BoundColumnRef, ScalarExpr>) -> Self {
         self.eq_constants = eq_constants;
+        self
+    }
+
+    fn asserted(mut self, asserted: bool) -> Self {
+        self.asserted = asserted;
         self
     }
 
@@ -123,7 +146,8 @@ impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
             "or" | "or_filters" => {
                 for expr in &mut func.arguments {
                     let mut visitor = EquivalentConstantsVisitorInner::default()
-                        .left_visit_order(self.left_visit_order);
+                        .left_visit_order(self.left_visit_order)
+                        .asserted(self.asserted);
                     visitor.visit(expr)?;
                 }
             }
@@ -142,7 +166,8 @@ impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
                 for expr in &mut func.arguments {
                     let mut visitor = EquivalentConstantsVisitorInner::default()
                         .eq_constants(self.eq_constants.clone())
-                        .left_visit_order(self.left_visit_order);
+                        .left_visit_order(self.left_visit_order)
+                        .asserted(false);
                     visitor.visit(expr)?;
                 }
                 let Some(op) = ComparisonOp::try_from_func_name(&func.func_name) else {
@@ -157,7 +182,7 @@ impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
                 if right != func.arguments[1] {
                     func.arguments[1] = right;
                 }
-                if !matches!(op, ComparisonOp::Equal) {
+                if !matches!(op, ComparisonOp::Equal) || !self.asserted {
                     return func.refresh_return_type();
                 }
 
@@ -219,7 +244,8 @@ impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
         for argument in &mut lambda.args {
             let mut visitor = EquivalentConstantsVisitorInner::default()
                 .eq_constants(self.eq_constants.clone())
-                .left_visit_order(self.left_visit_order);
+                .left_visit_order(self.left_visit_order)
+                .asserted(false);
             visitor.visit(argument)?;
         }
         lambda.refresh_return_type()

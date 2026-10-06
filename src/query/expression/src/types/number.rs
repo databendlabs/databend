@@ -1096,6 +1096,14 @@ pub trait Number:
     const FLOATING: bool;
     const NEGATIVE: bool;
 
+    /// Map the value to the representative of its equality class before deriving
+    /// an equality key or hash. Floats collapse `-0.0` to `+0.0` and every NaN
+    /// payload to one NaN; other numbers are returned unchanged.
+    #[inline]
+    fn canonicalize(self) -> Self {
+        self
+    }
+
     fn data_type() -> NumberDataType;
     fn try_downcast_scalar(scalar: &NumberScalar) -> Option<Self>;
     fn try_downcast_column(col: &NumberColumn) -> Option<&Buffer<Self>>;
@@ -1536,6 +1544,11 @@ impl Number for F32 {
     const FLOATING: bool = true;
     const NEGATIVE: bool = true;
 
+    #[inline]
+    fn canonicalize(self) -> Self {
+        OrderedFloat::canonicalize(self)
+    }
+
     fn data_type() -> NumberDataType {
         NumberDataType::Float32
     }
@@ -1593,6 +1606,11 @@ impl Number for F64 {
     const MAX: Self = OrderedFloat(f64::NAN);
     const FLOATING: bool = true;
     const NEGATIVE: bool = true;
+
+    #[inline]
+    fn canonicalize(self) -> Self {
+        OrderedFloat::canonicalize(self)
+    }
 
     fn data_type() -> NumberDataType {
         NumberDataType::Float64

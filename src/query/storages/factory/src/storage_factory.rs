@@ -28,7 +28,6 @@ use databend_common_storages_basic::NullTable;
 use databend_common_storages_basic::RandomTable;
 use databend_common_storages_basic::RecursiveCteMemoryTable;
 use databend_common_storages_basic::view_table::ViewTable;
-use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_iceberg::IcebergTable;
 use databend_common_storages_paimon::PaimonTable;
 use databend_common_storages_stream::stream_table::StreamTable;
@@ -188,12 +187,6 @@ impl StorageFactory {
         creators.insert("ICEBERG".to_string(), Storage {
             creator: Arc::new(IcebergTable::try_create),
             descriptor: Arc::new(IcebergTable::description),
-        });
-
-        // Register DELTA table engine
-        creators.insert("DELTA".to_string(), Storage {
-            creator: Arc::new(DeltaTable::try_create),
-            descriptor: Arc::new(DeltaTable::description),
         });
 
         // Register PAIMON table engine

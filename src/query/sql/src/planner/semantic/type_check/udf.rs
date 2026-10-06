@@ -846,6 +846,15 @@ where A: super::TypeCheckAdapter
         )?
         .resolve(&expr)?;
 
+        // The definition body is resolved with its own `BindContext`, so any runtime
+        // rewrite requirement discovered there (script/server UDF calls, async
+        // functions) is recorded on the inner context. Propagate it to the caller,
+        // otherwise `rewrite_udf` / async function rewrite is skipped and the nested
+        // call leaks into the plan as an unresolved dummy column reference.
+        self.bind_context.have_udf_script |= bind_context.have_udf_script;
+        self.bind_context.have_udf_server |= bind_context.have_udf_server;
+        self.bind_context.have_async_func |= bind_context.have_async_func;
+
         let (scalar, data_type) = if let Some(return_type) = return_type {
             let expr = CastExpr {
                 span,

@@ -703,7 +703,7 @@ impl FuseBlockWriteOptions {
         // output together. Bloom is always configured; inverted, vector, and
         // spatial writers are optional. Granule Bloom indexes retain one output
         // per bound physical column. Every OpenDAL blocking output retains a
-        // current 4 MiB chunk, its bounded channel, and one worker-owned chunk.
+        // current service-sized chunk, its bounded channel, and one worker-owned chunk.
         let granule_blocking_writers = if self.write_settings.index_granularity.is_some() {
             self.granule_index_specs
                 .iter()
@@ -718,6 +718,7 @@ impl FuseBlockWriteOptions {
             .saturating_add(self.spatial_index_builder.is_some() as usize)
             .saturating_add(granule_blocking_writers);
         let writer_buffers = databend_storages_common_io::blocking_write_retained_bytes(
+            &self.operator,
             databend_storages_common_io::BLOCKING_WRITE_MAX_CHUNKS,
         )
         .saturating_mul(active_blocking_writers);

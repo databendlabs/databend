@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Start and control a local databend-meta cluster for benchmarking.
+"""Start and control a local databend-meta cluster.
 
 Node configs are generated from a ClusterSpec rather than read from preset
 files, so a benchmark can change ports, raft dirs, and raft knobs without
@@ -8,10 +8,8 @@ editing a config file that other tooling shares.
 A spec is built from a TOML file, from command-line options, or from both, the
 options overriding the file.
 
-Cluster only starts nodes and reports their addresses and state. Choosing a
-workload, parsing its output, and reporting results belong to the caller; what
-the entry points share for the rest lives here beside it — their common
-command-line options, an input check, and a workload runner that tees output.
+The process lifecycle comes from the shared databend test helper. This module
+adds benchmark configuration, command-line parsing, and workload execution.
 
     spec = ClusterSpec.uniform(Path("./target/debug/databend-meta"), node_count=3)
     with Cluster(spec) as cluster:
@@ -20,19 +18,19 @@ command-line options, an input check, and a workload runner that tees output.
 
 import argparse
 import json
-import os
-import shutil
-import signal
-import socket
 import subprocess
 import sys
-import time
 import tomllib
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
 from dataclasses import field
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parents[2] / "databend_test_helper" / "src"))
+from databend_test_helper import (  # noqa: E402
+    LocalMetaCluster,
+    LocalMetaNode,
+    MetaNodePorts,
+)
 
 DEFAULT_WORK_DIR = Path("./.databend")
 DEFAULT_PORT_BASE = 28101
@@ -45,15 +43,7 @@ METACTL_BIN_NAME = "databend-metactl"
 # Ports of one node are consecutive; the next node starts a stride later.
 PORT_STRIDE = 100
 
-HEALTH_TIMEOUT_SEC = 60
-CLUSTER_TIMEOUT_SEC = 90
 TRANSFER_LEADER_TIMEOUT_SEC = 30
-STOP_TIMEOUT_SEC = 8
-POLL_INTERVAL_SEC = 0.5
-HTTP_TIMEOUT_SEC = 1
-PORT_PROBE_TIMEOUT_SEC = 0.3
-
-_NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 # Raft knobs every benchmark cluster pins, so numbers stay comparable across runs
 # and across entry points. `snapshot_logs_since_last` decides what is measured:
@@ -134,111 +124,21 @@ class ClusterSpec:
         return cls(nodes=nodes, **kwargs)
 
 
-class Cluster:
+class Cluster(LocalMetaCluster):
     """One local meta cluster, started and stopped as a context manager."""
 
     def __init__(self, spec: ClusterSpec) -> None:
         _validate_spec(spec)
 
         self.spec = spec
-        self.work_dir = spec.work_dir.expanduser().resolve()
-        self.node_ids = [node.node_id for node in spec.nodes]
-        self._procs: list[tuple[int, subprocess.Popen]] = []
-
-    # --- addresses -------------------------------------------------------
-
-    def admin_port(self, node_id: int) -> int:
-        return self.spec.port_base + (node_id - 1) * PORT_STRIDE
-
-    def grpc_port(self, node_id: int) -> int:
-        return self.admin_port(node_id) + 1
-
-    def raft_port(self, node_id: int) -> int:
-        return self.admin_port(node_id) + 2
-
-    def admin_address(self, node_id: int) -> str:
-        return f"127.0.0.1:{self.admin_port(node_id)}"
-
-    def grpc_address(self, node_id: int | None = None) -> str:
-        """gRPC address of `node_id`, or of the current leader when omitted."""
-        target_node = self.leader_id() if node_id is None else node_id
-        return f"127.0.0.1:{self.grpc_port(target_node)}"
-
-    def node_log_dir(self, node_id: int) -> Path:
-        return self.work_dir / f"logs{node_id}"
+        raft_config = BENCHMARK_RAFT_CONFIG | spec.raft_config
+        nodes = [self._local_node(node, raft_config) for node in spec.nodes]
+        super().__init__(nodes, spec.work_dir, reset_work_dir=spec.reset_work_dir)
 
     def raft_dir(self, node_id: int) -> Path:
         return self.work_dir / f"raft{node_id}"
 
-    # --- lifecycle -------------------------------------------------------
-
-    def __enter__(self) -> "Cluster":
-        self.start()
-        return self
-
-    def __exit__(self, *exc) -> None:
-        self.stop()
-
-    def start(self) -> None:
-        """Bring up every node and return once the cluster has elected a leader."""
-        self._check_ports_free()
-        self._prepare_work_dir()
-
-        if self.spec.seed_file is not None:
-            self._import_seed()
-
-        self._write_configs()
-
-        try:
-            self._spawn_nodes()
-            self._wait_ready()
-        except BaseException:
-            self.stop()
-            raise
-
-    def stop(self) -> None:
-        """Terminate every node this cluster started."""
-        for node_id, node_process in reversed(self._procs):
-            _terminate(node_process)
-            print(
-                f"[teardown] node{node_id}: exited (rc={node_process.returncode})",
-                flush=True,
-            )
-        self._procs = []
-
     # --- cluster state ---------------------------------------------------
-
-    def status(self, node_id: int | None = None) -> dict:
-        """Cluster status as seen by `node_id`, or by the first node when omitted."""
-        target_node = self.node_ids[0] if node_id is None else node_id
-        status_url = f"http://{self.admin_address(target_node)}/v1/cluster/status"
-        with _http_get(status_url) as response:
-            return json.loads(response.read())
-
-    def binary_versions(self) -> dict[int, str]:
-        """Each node's self-reported binary version, keyed by node id.
-
-        Only works while the cluster runs; capture it before teardown.
-        """
-        versions = {}
-        for node_id in self.node_ids:
-            node_status = self.status(node_id)
-            versions[node_id] = node_status.get("binary_version", "unknown")
-        return versions
-
-    def leader_id(self) -> int:
-        """Node id of the current leader; raises when the cluster has none."""
-        leader = _extract_leader(self.status())
-        if leader is None:
-            raise RuntimeError("cluster has no leader")
-        return leader
-
-    def _leader_id_or_none(self) -> int | None:
-        """leader_id() for polling loops: None while the cluster is not answering."""
-        status = _swallow_transient(self.status)
-        if status is None:
-            return None
-        return _extract_leader(status)
 
     def transfer_leader_to(self, node_id: int) -> None:
         """Move leadership to `node_id`, then wait until the move is visible."""
@@ -256,40 +156,18 @@ class Cluster:
         ]
         subprocess.run(cmd, check=True)
 
-        deadline = time.time() + TRANSFER_LEADER_TIMEOUT_SEC
-        while time.time() < deadline:
-            if self._leader_id_or_none() == node_id:
-                return
-            time.sleep(POLL_INTERVAL_SEC)
-
-        raise TimeoutError(f"leader did not move to node{node_id}")
+        self._wait_until(
+            lambda: self._leader_id_or_none() == node_id,
+            self.node_ids,
+            f"the leader to move to node{node_id}",
+            timeout=TRANSFER_LEADER_TIMEOUT_SEC,
+        )
 
     # --- start() steps ---------------------------------------------------
 
-    def _check_ports_free(self) -> None:
-        """Fail before touching the work dir, so a refused start destroys nothing."""
-        occupied_ports = []
-        for node_id in self.node_ids:
-            node_ports = (
-                self.admin_port(node_id),
-                self.grpc_port(node_id),
-                self.raft_port(node_id),
-            )
-            occupied_ports.extend(port for port in node_ports if _port_in_use(port))
-
-        if occupied_ports:
-            port_list = ", ".join(str(port) for port in occupied_ports)
-            raise RuntimeError(f"ports already in use: {port_list}")
-
-    def _prepare_work_dir(self) -> None:
-        """Create the work dir, wiping any earlier run's data only when asked."""
-        if self.spec.reset_work_dir:
-            print(f"[workdir] reset {self.work_dir}", flush=True)
-            shutil.rmtree(self.work_dir, ignore_errors=True)
-
-        self.work_dir.mkdir(parents=True, exist_ok=True)
-        for node_id in self.node_ids:
-            self.node_log_dir(node_id).mkdir(exist_ok=True)
+    def _prepare_data(self) -> None:
+        if self.spec.seed_file is not None:
+            self._import_seed()
 
     def _import_seed(self) -> None:
         """Load the seed export into every node's raft dir before the nodes start."""
@@ -314,126 +192,47 @@ class Cluster:
             print(f"[seed] import node{node_id}", flush=True)
             subprocess.run(cmd, check=True)
 
-    def _write_configs(self) -> None:
-        """Write one config file per node into the work dir."""
-        first_id = self.node_ids[0]
-        raft_config = BENCHMARK_RAFT_CONFIG | self.spec.raft_config
-        for node_id in self.node_ids:
-            if node_id == first_id:
-                bootstrap_mode = "single = true"
-            else:
-                bootstrap_mode = f'join = ["127.0.0.1:{self.raft_port(first_id)}"]'
+    def _local_node(self, node: NodeSpec, raft_config: dict) -> LocalMetaNode:
+        """Describe one node to the shared lifecycle: ports, files, and config."""
+        node_id = node.node_id
+        return LocalMetaNode(
+            node_id=node_id,
+            meta_bin=node.meta_bin,
+            ports=self._node_ports(node_id),
+            config_path=Path(f"node{node_id}.toml"),
+            config_text=self._render_config(node_id, raft_config),
+            stdout_path=Path(f"node{node_id}.stdout.log"),
+            label=node.label,
+            wait_for_voter=self.spec.seed_file is None,
+        )
 
-            config_text = NODE_TOML.format(
-                node_id=node_id,
-                admin_port=self.admin_port(node_id),
-                grpc_port=self.grpc_port(node_id),
-                raft_port=self.raft_port(node_id),
-                raft_dir=self.raft_dir(node_id),
-                log_dir=self.node_log_dir(node_id),
-                log_level=self.spec.log_level,
-                bootstrap_mode=bootstrap_mode,
-                extra_raft_config=_render_raft_config(raft_config),
-            )
-            self._config_path(node_id).write_text(config_text)
+    def _node_ports(self, node_id: int) -> MetaNodePorts:
+        admin_port = self.spec.port_base + (node_id - 1) * PORT_STRIDE
+        return MetaNodePorts(admin=admin_port, grpc=admin_port + 1, raft=admin_port + 2)
 
-    def _spawn_nodes(self) -> None:
-        """Start the nodes one at a time, each fully joined before the next.
+    def _render_config(self, node_id: int, raft_config: dict) -> str:
+        """Render one node's config file."""
+        first_id = self.spec.nodes[0].node_id
+        if node_id == first_id:
+            bootstrap_mode = "single = true"
+        else:
+            first_raft_port = self._node_ports(first_id).raft
+            bootstrap_mode = f'join = ["127.0.0.1:{first_raft_port}"]'
 
-        A node configured with `join` sends an add-node request as soon as it
-        boots. Starting them together makes a second request arrive while the
-        first membership change is still in flight, which the leader rejects
-        with "the cluster is already undergoing a configuration change", taking
-        down the whole startup.
-        """
-        for node in self.spec.nodes:
-            label_suffix = f" {node.label}" if node.label else ""
-            print(
-                f"[start] node{node.node_id}{label_suffix} {node.meta_bin}", flush=True
-            )
-            node_process = self._spawn(node)
-            self._procs.append((node.node_id, node_process))
-
-            self._wait_health(node.node_id)
-
-            # Seeded nodes already carry the full membership, so none of them
-            # joins and there is no membership change to wait for. Waiting here
-            # would deadlock: a seeded node1 alone cannot elect a leader.
-            if self.spec.seed_file is None:
-                self._wait_voter(node.node_id)
-
-    def _spawn(self, node: NodeSpec) -> subprocess.Popen:
-        """Launch one node process."""
-        stdout_path = self.work_dir / f"node{node.node_id}.stdout.log"
-        meta_bin = node.meta_bin.expanduser().resolve()
-        cmd = [str(meta_bin), "-c", str(self._config_path(node.node_id))]
-
-        with stdout_path.open("w") as stdout_file:
-            return subprocess.Popen(
-                cmd,
-                cwd=self.work_dir,
-                stdout=stdout_file,
-                stderr=subprocess.STDOUT,
-                start_new_session=True,
-            )
-
-    def _wait_voter(self, node_id: int) -> None:
-        """Wait until `node_id` is a committed voter and a leader is in place."""
-        deadline = time.time() + CLUSTER_TIMEOUT_SEC
-
-        while time.time() < deadline:
-            status = _swallow_transient(self.status)
-            if status is not None:
-                joined = node_id in _extract_voters(status)
-                elected = _extract_leader(status) is not None
-                if joined and elected:
-                    return
-            time.sleep(POLL_INTERVAL_SEC)
-
-        raise TimeoutError(f"node{node_id} did not join the cluster membership")
-
-    def _wait_ready(self) -> None:
-        """Wait for the cluster to form, then print the membership it settled on."""
-        self._wait_cluster()
-
-        status = self.status()
-        voters = sorted(_extract_voters(status))
-        print(f"[cluster] leader={_extract_leader(status)} voters={voters}", flush=True)
-
-    def _wait_health(self, node_id: int) -> None:
-        """Wait until `node_id` answers its health endpoint."""
-        health_url = f"http://{self.admin_address(node_id)}/v1/health"
-        deadline = time.time() + HEALTH_TIMEOUT_SEC
-
-        while time.time() < deadline:
-            if _http_ok(health_url):
-                return
-            time.sleep(POLL_INTERVAL_SEC)
-
-        raise TimeoutError(f"node{node_id}: timeout waiting for {health_url}")
-
-    def _wait_cluster(self) -> None:
-        """Wait until some node reports full membership with a leader elected."""
-        want_voters = len(self.node_ids)
-        deadline = time.time() + CLUSTER_TIMEOUT_SEC
-
-        while time.time() < deadline:
-            for node_id in self.node_ids:
-                status = _swallow_transient(self.status, node_id)
-                if status is None:
-                    continue
-                if len(_extract_voters(status)) < want_voters:
-                    continue
-                if _extract_leader(status) is not None:
-                    return
-            time.sleep(POLL_INTERVAL_SEC)
-
-        raise TimeoutError(f"timeout waiting for a {want_voters}-node cluster")
+        ports = self._node_ports(node_id)
+        return NODE_TOML.format(
+            node_id=node_id,
+            admin_port=ports.admin,
+            grpc_port=ports.grpc,
+            raft_port=ports.raft,
+            raft_dir=f"raft{node_id}",
+            log_dir=f"logs{node_id}",
+            log_level=self.spec.log_level,
+            bootstrap_mode=bootstrap_mode,
+            extra_raft_config=_render_raft_config(raft_config),
+        )
 
     # --- helpers ---------------------------------------------------------
-
-    def _config_path(self, node_id: int) -> Path:
-        return self.work_dir / f"node{node_id}.toml"
 
     def metactl_bin(self) -> Path:
         """The databend-metactl that goes with this cluster's nodes."""
@@ -540,8 +339,7 @@ def load_cluster_toml(config_path: Path) -> dict:
     if unknown_keys:
         known_keys = sorted(CLUSTER_TOML_KEYS)
         raise ValueError(
-            f"{config_path}: unknown keys {unknown_keys}; "
-            f"known keys are {known_keys}"
+            f"{config_path}: unknown keys {unknown_keys}; known keys are {known_keys}"
         )
 
     config_dir = config_path.parent.expanduser().resolve()
@@ -680,8 +478,6 @@ def _validate_spec(spec: ClusterSpec) -> None:
 
     for node in spec.nodes:
         meta_bin = node.meta_bin.expanduser()
-        if not meta_bin.exists():
-            raise FileNotFoundError(f"node{node.node_id} {META_BIN_NAME}: {meta_bin}")
         if "debug" in meta_bin.parts:
             print(
                 f"[warn] node{node.node_id} runs a debug build ({meta_bin}); "
@@ -711,71 +507,3 @@ def _toml_literal(python_value) -> str:
     if isinstance(python_value, str):
         return json.dumps(python_value)
     raise TypeError(f"unsupported raft_config value: {python_value!r}")
-
-
-def _port_in_use(port: int) -> bool:
-    """Report whether something already listens on `port`."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe_socket:
-        probe_socket.settimeout(PORT_PROBE_TIMEOUT_SEC)
-        return probe_socket.connect_ex(("127.0.0.1", port)) == 0
-
-
-def _http_get(url: str):
-    """GET `url` directly, ignoring any proxy configured in the environment."""
-    return _NO_PROXY_OPENER.open(url, timeout=HTTP_TIMEOUT_SEC)
-
-
-def _http_ok(url: str) -> bool:
-    """Report whether `url` answers with a success status."""
-    try:
-        with _http_get(url) as response:
-            return 200 <= response.status < 300
-    except (urllib.error.URLError, OSError):
-        return False
-
-
-def _swallow_transient(status_call, *call_args):
-    """Run `status_call`, returning None while the node is not answering yet."""
-    try:
-        return status_call(*call_args)
-    except (urllib.error.URLError, OSError, json.JSONDecodeError):
-        return None
-
-
-def _terminate(node_process: subprocess.Popen) -> None:
-    """Stop one node process and wait for it to exit."""
-    if node_process.poll() is not None:
-        return
-
-    _kill_group(node_process, signal.SIGTERM)
-    try:
-        node_process.wait(timeout=STOP_TIMEOUT_SEC)
-    except subprocess.TimeoutExpired:
-        _kill_group(node_process, signal.SIGKILL)
-        node_process.wait()
-
-
-def _kill_group(node_process: subprocess.Popen, signal_number: int) -> None:
-    """Signal a node's whole process group, tolerating a process that already exited."""
-    try:
-        os.killpg(node_process.pid, signal_number)
-    except ProcessLookupError:
-        pass
-
-
-# The status response is a serialized MetaNodeStatus: `voters` is always
-# present, `leader` is null until one is known, and a node's `name` is its
-# raft id printed as a string.
-
-
-def _extract_voters(status: dict) -> set[int]:
-    """Read the voter node ids out of a cluster status response."""
-    return {int(voter["name"]) for voter in status["voters"]}
-
-
-def _extract_leader(status: dict) -> int | None:
-    """Read the leader node id out of a cluster status response."""
-    leader = status.get("leader")
-    if leader is None:
-        return None
-    return int(leader["name"])

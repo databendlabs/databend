@@ -12,23 +12,37 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_io::prelude::borsh_deserialize_from_slice;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_statistics::Datum;
 use databend_common_storage::MetaHLL12;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::MetaWriter;
+use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::operations::AnalyzeHistogramInfo;
+use databend_common_storages_fuse::operations::AnalyzeOptions;
+use databend_common_storages_fuse::operations::commit_refresh_virtual_column;
+use databend_common_storages_fuse::operations::prepare_refresh_virtual_column;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
+use databend_query::pipelines::PipelineBuildResult;
+use databend_query::pipelines::executor::ExecutorSettings;
+use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::sessions::TableContextTableManagement;
 use databend_query::sql::Planner;
@@ -41,6 +55,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::testing::TableSnapshotStatisticsV3;
+use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_table_modify_column_ndv_statistics() -> anyhow::Result<()> {
@@ -328,6 +343,536 @@ async fn test_table_analyze_without_prev_table_seq() -> anyhow::Result<()> {
     let table = table.refresh(ctx.as_ref()).await?;
     let expected = HashMap::from([(0, 4_u64)]);
     check_column_ndv_statistics(ctx.clone(), table.clone(), expected.clone()).await?;
+    Ok(())
+}
+
+fn no_scan_options() -> AnalyzeOptions {
+    AnalyzeOptions::from_table_options(&BTreeMap::new())
+        .unwrap()
+        .no_scan()
+}
+
+/// Run ANALYZE with `snapshot` as the collection baseline, whatever the table's current
+/// snapshot is. This is how a stale baseline is reproduced deterministically.
+async fn execute_analyze_from_snapshot(
+    ctx: Arc<QueryContext>,
+    table: &FuseTable,
+    snapshot: Arc<TableSnapshot>,
+    options: AnalyzeOptions,
+) -> Result<()> {
+    let mut pipeline = Pipeline::create();
+    table.do_analyze(ctx.clone(), snapshot, &mut pipeline, options)?;
+    pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
+    let settings = ExecutorSettings::try_create(ctx.clone())?;
+    let executor = PipelineCompleteExecutor::from_pipelines(vec![pipeline], settings)?;
+    ctx.set_executor(executor.get_inner())?;
+    executor.execute().await
+}
+
+async fn latest_fuse_table(ctx: &Arc<QueryContext>, name: &str) -> Result<FuseTable> {
+    ctx.evict_table_from_cache("default", "default", name)?;
+    let table = ctx
+        .get_catalog("default")
+        .await?
+        .get_table(&ctx.get_tenant(), "default", name)
+        .await?;
+    Ok(FuseTable::try_from_table(table.as_ref())?.clone())
+}
+
+/// The table's current snapshot and the statistics file it points to.
+async fn latest_statistics(
+    ctx: &Arc<QueryContext>,
+    name: &str,
+) -> Result<(FuseTable, Arc<TableSnapshot>, TableSnapshotStatistics)> {
+    let table = latest_fuse_table(ctx, name).await?;
+    let snapshot = table.read_table_snapshot().await?.unwrap();
+    let location = snapshot.table_statistics_location.as_ref().unwrap();
+    let statistics = MetaReaders::table_snapshot_statistics_reader(table.get_operator())
+        .read(&LoadParams {
+            location: location.clone(),
+            len_hint: None,
+            ver: TableMetaLocationGenerator::table_statistics_version(location),
+            put_cache: false,
+        })
+        .await?;
+    Ok((table, snapshot, statistics.as_ref().clone()))
+}
+
+/// Final content of the table built by `setup_stale_baseline`.
+const STALE_BASELINE_ROWS: u64 = 28;
+const STALE_BASELINE_NDV: u64 = 20;
+
+/// True frequency of a value in the table built by `setup_stale_baseline`.
+fn stale_baseline_frequency(value: i32) -> u64 {
+    match value {
+        0 => 5,
+        1 | 2 => 3,
+        _ => 1,
+    }
+}
+
+/// Build a table whose statistics snapshot is `base`, then append rows so that the table
+/// moves ahead of `base` before ANALYZE commits. Returns the stale table handle and baseline.
+///
+/// Final content: 10 + 5 + 10 + 3 = 28 rows, values 0..20, with 0 -> 5 copies and 1, 2 -> 3
+/// copies each so Top-N has a clear order.
+async fn setup_stale_baseline(
+    fixture: &TestFixture,
+    ctx: &Arc<QueryContext>,
+    name: &str,
+) -> Result<(FuseTable, Arc<TableSnapshot>)> {
+    fixture
+        .execute_command(&format!(
+            "create table {name}(c int) approx_distinct_columns = 'c' \
+             analyze_frequency_columns = 'c' analyze_top_n_size = 3 \
+             analyze_count_min_sketch_error_rate = '0.01'"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {name} select number::int from numbers(10)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {name} values (0), (0), (0), (1), (1)"
+        ))
+        .await?;
+
+    let table = latest_fuse_table(ctx, name).await?;
+    let base = table.read_table_snapshot().await?.unwrap();
+
+    // The table moves on before the statistics are committed.
+    fixture
+        .execute_command(&format!(
+            "insert into {name} select number::int + 10 from numbers(10)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!("insert into {name} values (0), (2), (2)"))
+        .await?;
+    Ok((table, base))
+}
+
+/// Frequency statistics as configured on the table, plus the given histogram.
+fn table_options_with_histogram(
+    table: &FuseTable,
+    histogram: AnalyzeHistogramInfo,
+) -> Result<AnalyzeOptions> {
+    Ok(
+        AnalyzeOptions::from_table_options(table.get_table_info().options())?
+            .with_histogram(histogram),
+    )
+}
+
+/// The hook path: NOSCAN, HLL and column statistics only.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_analyze_rebases_append_only_snapshot() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_enable_table_snapshot_stats(1)?;
+    let (stale_table, base) = setup_stale_baseline(&fixture, &ctx, "t_rebase").await?;
+
+    execute_analyze_from_snapshot(ctx.clone(), &stale_table, base, no_scan_options()).await?;
+
+    let (table, snapshot, statistics) = latest_statistics(&ctx, "t_rebase").await?;
+    assert_eq!(snapshot.summary.row_count, STALE_BASELINE_ROWS);
+    let col_stats = snapshot.summary.col_stats.get(&0).unwrap();
+    assert_eq!(col_stats.min(), &Scalar::Number(NumberScalar::Int32(0)));
+    assert_eq!(col_stats.max(), &Scalar::Number(NumberScalar::Int32(19)));
+    assert_eq!(
+        snapshot
+            .summary
+            .additional_stats_meta
+            .as_ref()
+            .map(|meta| meta.row_count),
+        Some(STALE_BASELINE_ROWS)
+    );
+    assert!(statistics.is_fresh_for(&snapshot));
+    check_column_ndv_statistics(
+        ctx,
+        Arc::new(table),
+        HashMap::from([(0, STALE_BASELINE_NDV)]),
+    )
+    .await?;
+    Ok(())
+}
+
+/// The manual path: Top-N, count-min sketch and KLL sketches all follow the appended
+/// segments.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_analyze_rebases_frequency_and_kll_fast_statistics() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let (stale_table, base) = setup_stale_baseline(&fixture, &ctx, "t_rebase_freq").await?;
+    let options = table_options_with_histogram(&stale_table, AnalyzeHistogramInfo::KllFast {
+        relative_error: 0.01,
+    })?;
+
+    execute_analyze_from_snapshot(ctx.clone(), &stale_table, base, options).await?;
+
+    let (_, snapshot, statistics) = latest_statistics(&ctx, "t_rebase_freq").await?;
+    assert!(statistics.is_fresh_for(&snapshot));
+    assert_eq!(statistics.row_count, STALE_BASELINE_ROWS);
+    // HLL is an estimate; 20 distinct values merged from four block sketches.
+    let ndv = statistics.hll.get(&0).unwrap().count() as u64;
+    assert!(
+        (STALE_BASELINE_NDV - 1..=STALE_BASELINE_NDV + 2).contains(&ndv),
+        "unexpected NDV estimate {ndv}"
+    );
+
+    // Top-N is a space-saving style summary: counts are upper bounds whose exact values
+    // depend on the block merge order, so check the guarantees rather than exact counts.
+    let top_n = statistics.top_n.get(&0).unwrap();
+    assert_eq!(top_n.capacity, 3);
+    assert_eq!(
+        top_n.values.first().map(|entry| &entry.scalar),
+        Some(&Scalar::Number(NumberScalar::Int32(0)))
+    );
+    for entry in &top_n.values {
+        let value = *entry.scalar.as_number().unwrap().as_int32().unwrap();
+        let truth = stale_baseline_frequency(value);
+        assert!(
+            entry.count.saturating_sub(entry.error) <= truth && truth <= entry.count,
+            "top-n entry {entry:?} does not bound the true frequency {truth}"
+        );
+    }
+
+    // Count-min sketch merges exactly under the same parameters; with 20 distinct values
+    // and a 1% error rate these estimates are exact.
+    let cms = statistics.count_min_sketch.get(&0).unwrap();
+    for value in [0, 1, 2, 15, 19] {
+        assert_eq!(
+            cms.estimate(&Scalar::Number(NumberScalar::Int32(value))),
+            Some(stale_baseline_frequency(value))
+        );
+    }
+
+    // KLL fast: buckets are derived from the merged sketch and cover every row.
+    assert_eq!(
+        statistics.histograms.get(&0).unwrap().num_values(),
+        STALE_BASELINE_ROWS as f64
+    );
+    Ok(())
+}
+
+/// A column that is all NULL in the baseline has no KLL sketch there, so its bucket
+/// boundaries come from the appended rows instead.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_analyze_rebases_kll_full_histogram_over_null_baseline() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    fixture
+        .execute_command("create table t_rebase_full_null(a int null, b int)")
+        .await?;
+    fixture
+        .execute_command("insert into t_rebase_full_null values (null, 1), (null, 2), (null, 3)")
+        .await?;
+    let table = latest_fuse_table(&ctx, "t_rebase_full_null").await?;
+    let base = table.read_table_snapshot().await?.unwrap();
+
+    fixture
+        .execute_command(
+            "insert into t_rebase_full_null select number::int, number::int from numbers(10)",
+        )
+        .await?;
+
+    let options = table_options_with_histogram(&table, AnalyzeHistogramInfo::KllFull {
+        relative_error: 0.01,
+    })?;
+    execute_analyze_from_snapshot(ctx.clone(), &table, base, options).await?;
+
+    let (_, snapshot, statistics) = latest_statistics(&ctx, "t_rebase_full_null").await?;
+    assert!(statistics.is_fresh_for(&snapshot));
+    assert_eq!(statistics.row_count, 13);
+    // `a`: collector created during the rebase, covering only the non-NULL appended rows.
+    assert_eq!(statistics.histograms.get(&0).unwrap().num_values(), 10.0);
+    // `b`: collector from the baseline, extended with the appended rows.
+    assert_eq!(statistics.histograms.get(&1).unwrap().num_values(), 13.0);
+    Ok(())
+}
+
+/// Every value is counted into the first bucket whose routing upper bound is not below it,
+/// so the observed `[lower, upper]` ranges of the buckets are disjoint and each bucket holds
+/// exactly the column values inside its range, whatever order the blocks were counted in.
+async fn assert_kll_full_buckets_match_table(
+    fixture: &TestFixture,
+    ctx: &Arc<QueryContext>,
+    name: &str,
+) -> anyhow::Result<()> {
+    let (_, snapshot, statistics) = latest_statistics(ctx, name).await?;
+    assert!(statistics.is_fresh_for(&snapshot));
+    let histogram = statistics.histograms.get(&0).unwrap();
+    assert!(histogram.num_buckets() > 1);
+
+    let int = |datum: Datum| match datum {
+        Datum::Int(value) => value,
+        other => panic!("unexpected bound {other:?}"),
+    };
+    let buckets: Vec<(i64, i64, f64)> = histogram
+        .bucket_iter()
+        .map(|bucket| {
+            (
+                int(bucket.lower_bound()),
+                int(bucket.upper_bound()),
+                bucket.num_values(),
+            )
+        })
+        .collect();
+    let mut select = vec!["count(a)".to_string(), "count(*)".to_string()];
+    select.extend(
+        buckets
+            .iter()
+            .map(|(lower, upper, _)| format!("count_if(a between {lower} and {upper})")),
+    );
+    let blocks = fixture
+        .execute_query(&format!("select {} from {name}", select.join(", ")))
+        .await?
+        .try_collect::<Vec<DataBlock>>()
+        .await?;
+    let row = &blocks[0];
+    let count = |offset: usize| -> f64 {
+        row.get_by_offset(offset)
+            .index(0)
+            .unwrap()
+            .to_string()
+            .parse()
+            .unwrap()
+    };
+
+    assert_eq!(histogram.num_values(), count(0));
+    assert_eq!(statistics.row_count as f64, count(1));
+    for (offset, (lower, upper, num_values)) in buckets.iter().enumerate() {
+        assert_eq!(
+            *num_values,
+            count(offset + 2),
+            "bucket [{lower}, {upper}] of {name}"
+        );
+    }
+    Ok(())
+}
+
+/// The KLL full bucket scan counts blocks in parallel; the buckets must still hold
+/// exactly the table's values, with and without a rebase over appended blocks.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_analyze_kll_full_histogram_over_many_blocks() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let name = "t_kll_full_blocks";
+    fixture
+        .execute_command(&format!(
+            "create table {name}(a int null) row_per_block = 37 block_per_segment = 3"
+        ))
+        .await?;
+    // Repeated values and NULLs, spread over many blocks and segments.
+    fixture
+        .execute_command(&format!(
+            "insert into {name} select if(number % 10 = 0, null, (number * 7919 % 1000)::int) \
+             from numbers(3000)"
+        ))
+        .await?;
+    let table = latest_fuse_table(&ctx, name).await?;
+    let base = table.read_table_snapshot().await?.unwrap();
+    // A different distribution, including values outside the baseline range, makes the
+    // rebase validate that appended rows land in the correct fixed-boundary buckets.
+    fixture
+        .execute_command(&format!(
+            "insert into {name} select if(number % 7 = 0, null, (number * 4813 % 1500)::int - 250) \
+             from numbers(3000)"
+        ))
+        .await?;
+    let snapshot = latest_fuse_table(&ctx, name)
+        .await?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+    // Far more blocks than the scan keeps in flight (2 * max_threads), in both scans below.
+    assert!(base.summary.block_count > 64);
+    assert!(snapshot.summary.block_count - base.summary.block_count > 64);
+
+    let kll_full = AnalyzeHistogramInfo::KllFull {
+        relative_error: 0.01,
+    };
+    for max_threads in [1, 4] {
+        ctx.get_settings().set_max_threads(max_threads)?;
+        // Rebase: buckets from `base`, then the appended blocks are counted into them; and
+        // without rebase: the whole table is counted by the bucket scan.
+        for from in [&base, &snapshot] {
+            let options = table_options_with_histogram(&table, kll_full.clone())?;
+            execute_analyze_from_snapshot(ctx.clone(), &table, from.clone(), options).await?;
+            assert_kll_full_buckets_match_table(&fixture, &ctx, name).await?;
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_analyze_rejects_non_append_snapshot_change() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    fixture
+        .execute_command("create table t_rebase_delete(c int) approx_distinct_columns = 'c'")
+        .await?;
+    fixture
+        .execute_command("insert into t_rebase_delete select number::int from numbers(10)")
+        .await?;
+    let table = latest_fuse_table(&ctx, "t_rebase_delete").await?;
+    let base = table.read_table_snapshot().await?.unwrap();
+
+    fixture
+        .execute_command("delete from t_rebase_delete where c < 5")
+        .await?;
+
+    let err = execute_analyze_from_snapshot(ctx, &table, base, no_scan_options())
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), ErrorCode::UNRESOLVABLE_CONFLICT);
+    Ok(())
+}
+
+/// Virtual column ids are local to each segment, so ANALYZE must not merge them by id into
+/// the snapshot summary, where they would also collide with table column ids.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_analyze_does_not_publish_virtual_column_statistics() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_enable_experimental_virtual_column(1)?;
+    let ctx = fixture.new_query_ctx().await?;
+    let name = "t_analyze_virtual";
+    fixture
+        .execute_command(&format!(
+            "create table {name}(id int, v variant) enable_virtual_column = true"
+        ))
+        .await?;
+    // Two segments whose virtual columns have different paths but the same type.
+    // Type-conflict checks alone cannot detect that their segment-local ids collide.
+    fixture
+        .execute_command(&format!(
+            "insert into {name} select number::int + 1, \
+             parse_json('{{\"a\":\"x' || number::string || '\"}}') from numbers(10)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {name} select number::int + 11, \
+             parse_json('{{\"b\":\"y' || number::string || '\"}}') from numbers(10)"
+        ))
+        .await?;
+
+    // INSERT alone does not materialize the virtual columns. Refresh the blocks first so
+    // the two segment summaries contain virtual stats to exercise the ANALYZE path.
+    let table = latest_fuse_table(&ctx, name).await?;
+    let results = prepare_refresh_virtual_column(ctx.clone(), &table, None, true, None).await?;
+    assert_eq!(results.len(), 2);
+    let mut build_res = PipelineBuildResult::create();
+    commit_refresh_virtual_column(ctx.clone(), &table, &mut build_res.main_pipeline, results)
+        .await?;
+    build_res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
+    let settings = ExecutorSettings::try_create(ctx.clone())?;
+    let executor =
+        PipelineCompleteExecutor::from_pipelines(vec![build_res.main_pipeline], settings)?;
+    ctx.set_executor(executor.get_inner())?;
+    executor.execute().await?;
+
+    let table = latest_fuse_table(&ctx, name).await?;
+    let snapshot = table.read_table_snapshot().await?.unwrap();
+    assert_eq!(snapshot.segments.len(), 2);
+    let segment_reader =
+        MetaReaders::segment_info_reader(table.get_operator(), table.schema_with_stream());
+    let mut segment_virtual_ids = Vec::new();
+    let mut segment_paths = Vec::new();
+    for (location, ver) in snapshot.segments.iter() {
+        let segment = segment_reader
+            .read(&LoadParams {
+                location: location.clone(),
+                len_hint: None,
+                ver: *ver,
+                put_cache: false,
+            })
+            .await?;
+        let summary = SegmentInfo::try_from(segment)?.summary;
+        let schema = summary
+            .virtual_segment_schema
+            .expect("segment virtual schema");
+        let (source_column_id, path) = schema.field_of_column_id(0).unwrap();
+        assert_eq!(source_column_id, 1);
+        segment_paths.push(path.path.clone());
+        let virtual_col_stats = summary.virtual_col_stats.expect("segment virtual stats");
+        segment_virtual_ids.push(virtual_col_stats.keys().copied().collect::<Vec<_>>());
+    }
+    // Different paths share the same segment-local id, which is also the id of `id`.
+    assert_eq!(segment_virtual_ids, vec![vec![0], vec![0]]);
+    segment_paths.sort();
+    assert_eq!(segment_paths, ["a", "b"]);
+
+    fixture
+        .execute_command(&format!("analyze table default.{name}"))
+        .await?;
+
+    let table = latest_fuse_table(&ctx, name).await?;
+    let snapshot = table.read_table_snapshot().await?.unwrap();
+    assert!(snapshot.summary.virtual_col_stats.is_none());
+    let id_stats = snapshot.summary.col_stats.get(&0).unwrap();
+    assert_eq!(id_stats.min(), &Scalar::Number(NumberScalar::Int32(1)));
+    assert_eq!(id_stats.max(), &Scalar::Number(NumberScalar::Int32(20)));
+    Ok(())
+}
+
+/// Old snapshots can still contain virtual stats keyed by a real column id. Verify the
+/// statistics provider ignores them even before ANALYZE replaces the snapshot summary.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_column_statistics_provider_ignores_snapshot_virtual_stats() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let name = "t_snapshot_virtual_stats";
+    fixture
+        .execute_command(&format!("create table {name}(id int)"))
+        .await?;
+    fixture
+        .execute_command(&format!("insert into {name} values (1), (2)"))
+        .await?;
+
+    let table = latest_fuse_table(&ctx, name).await?;
+    let original = table.read_table_snapshot().await?.unwrap();
+    let real_stat = original.summary.col_stats.get(&0).unwrap().clone();
+    let mut conflicting_stat = real_stat.clone();
+    conflicting_stat.min = Scalar::Number(NumberScalar::Int32(-99));
+    conflicting_stat.max = Scalar::Number(NumberScalar::Int32(-99));
+    let mut snapshot = TableSnapshot::try_from_previous(
+        original,
+        table.cluster_key_info(),
+        None,
+        TestFixture::default_table_meta_timestamps(),
+    )?;
+    snapshot.summary.virtual_col_stats = Some(HashMap::from([(0, conflicting_stat)]));
+    table
+        .commit_to_meta_server(
+            ctx.as_ref(),
+            table.get_table_info(),
+            table.meta_location_generator(),
+            snapshot,
+            None,
+            &None,
+            &table.get_operator(),
+        )
+        .await?;
+
+    let table = latest_fuse_table(&ctx, name).await?;
+    assert!(
+        table
+            .read_table_snapshot()
+            .await?
+            .unwrap()
+            .summary
+            .virtual_col_stats
+            .is_some()
+    );
+    let provider = table.column_statistics_provider(ctx.clone()).await?;
+    let id_stats = provider.column_statistics(0).unwrap();
+    assert_eq!(id_stats.min, Some(Datum::Int(1)));
+    assert_eq!(id_stats.max, Some(Datum::Int(2)));
     Ok(())
 }
 

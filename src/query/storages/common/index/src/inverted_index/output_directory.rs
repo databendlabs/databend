@@ -29,7 +29,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use bytes::Bytes;
-use databend_storages_common_io::BLOCKING_WRITE_CHUNK_SIZE;
 use databend_storages_common_io::BLOCKING_WRITE_MAX_CHUNKS;
 use databend_storages_common_io::BlockingWrite;
 use databend_storages_common_io::OpenDalBlockingWrite;
@@ -56,7 +55,7 @@ use tantivy::directory::error::OpenWriteError;
 use super::bundle::ExternalFile;
 
 /// Files up to this size stay inline; streamed files retain this many trailing bytes.
-pub const INVERTED_INDEX_STREAM_THRESHOLD: usize = BLOCKING_WRITE_CHUNK_SIZE;
+pub const INVERTED_INDEX_STREAM_THRESHOLD: usize = 4 * 1024 * 1024;
 
 /// Bytes retained from the file start and from after every `flush` of a streamed file.
 ///

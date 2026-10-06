@@ -83,6 +83,7 @@ message AggregateState {
   repeated AggregateFunctionParam params = 2;
   repeated DataType argument_types = 3;
   DataType state_type = 4;
+  uint64 state_version = 5;
 }
 
 message AggregateFunctionParam {

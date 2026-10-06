@@ -41,6 +41,8 @@ mod vertical_recluster;
 mod virtual_column;
 
 pub use analyze::AnalyzeHistogramInfo;
+pub use analyze::AnalyzeOptions;
+pub use analyze::FrequencyOptions;
 pub use analyze::HistogramInfoSink;
 pub use changes::ChangesDesc;
 pub use changes::ChangesQuery;

@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::hash::DefaultHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
+
 use databend_common_base::base::OrderedFloat;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
@@ -601,25 +605,20 @@ impl AggHash for i256 {
     }
 }
 
+// Float keys hash the bits of the canonical class representative so that
+// `-0.0`/`+0.0` and every NaN payload share one hash. See
+// `OrderedFloat::canonicalize`.
 impl AggHash for OrderedFloat<f32> {
     #[inline(always)]
     fn agg_hash(&self) -> u64 {
-        if self.is_nan() {
-            f32::NAN.to_bits().agg_hash()
-        } else {
-            self.to_bits().agg_hash()
-        }
+        self.canonicalize().to_bits().agg_hash()
     }
 }
 
 impl AggHash for OrderedFloat<f64> {
     #[inline(always)]
     fn agg_hash(&self) -> u64 {
-        if self.is_nan() {
-            f64::NAN.to_bits().agg_hash()
-        } else {
-            self.to_bits().agg_hash()
-        }
+        self.canonicalize().to_bits().agg_hash()
     }
 }
 
@@ -632,7 +631,9 @@ impl AggHash for OpaqueScalarRef<'_> {
 impl AggHash for ScalarRef<'_> {
     #[inline(always)]
     fn agg_hash(&self) -> u64 {
-        self.to_string().as_bytes().agg_hash()
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+        hasher.finish()
     }
 }
 

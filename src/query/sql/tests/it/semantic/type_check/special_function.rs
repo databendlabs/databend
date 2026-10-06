@@ -34,6 +34,18 @@ async fn test_type_check_special_function() -> Result<()> {
             sql: "current_role()",
         },
         SqlTestCase {
+            name: "current_tenant_id_rewrites_to_literal",
+            description: "current_tenant_id() should resolve the session tenant through the type-check adapter.",
+            setup_sqls: &[],
+            sql: "current_tenant_id()",
+        },
+        SqlTestCase {
+            name: "current_tenant_id_rejects_arguments",
+            description: "current_tenant_id() takes no arguments and must not allow tenant lookup by argument.",
+            setup_sqls: &[],
+            sql: "current_tenant_id('other')",
+        },
+        SqlTestCase {
             name: "is_role_in_session_matches_effective_role",
             description: "is_role_in_session should compare its argument against effective roles through the type-check adapter.",
             setup_sqls: &[],

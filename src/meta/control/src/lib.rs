@@ -21,6 +21,7 @@ pub mod export_from_disk;
 pub mod export_from_grpc;
 pub mod filter_tenant;
 pub mod grpc_client_auth;
+pub mod grpc_client_config;
 pub mod import;
 mod import_v004;
 pub mod keys_layout_from_grpc;

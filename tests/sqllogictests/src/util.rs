@@ -14,17 +14,14 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
 use bollard::Docker;
-use bollard::container::ListContainersOptions;
 use bollard::container::RemoveContainerOptions;
 use glob::glob;
-use redis::Commands;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -36,9 +33,6 @@ use testcontainers::core::WaitFor;
 use testcontainers::core::client::docker_client_instance;
 use testcontainers::core::logs::consumer::logging_consumer::LoggingConsumer;
 use testcontainers::runners::AsyncRunner;
-use testcontainers_modules::mysql::Mysql;
-use testcontainers_modules::redis::REDIS_PORT;
-use testcontainers_modules::redis::Redis;
 use walkdir::WalkDir;
 
 use crate::arg::SqlLogicTestArgs;
@@ -106,11 +100,7 @@ fn find_specific_dir(dir: &str, suit: PathBuf) -> Result<PathBuf> {
 fn get_legacy_files(suit: PathBuf, args: &SqlLogicTestArgs) -> Result<Vec<PathBuf>> {
     let mut files = vec![];
     let dirs = match args.dir {
-        Some(ref dir) => {
-            // Find specific dir
-            // If didn't find specific dir, return empty vec.
-            find_specific_dir(dir, suit).ok()
-        }
+        Some(ref dir) => find_specific_dir(dir, suit).ok(),
         None => Some(suit),
     };
     let target = match dirs {
@@ -122,12 +112,10 @@ fn get_legacy_files(suit: PathBuf, args: &SqlLogicTestArgs) -> Result<Vec<PathBu
         .max_depth(100)
         .sort_by(|a, b| a.file_name().cmp(b.file_name()))
         .into_iter()
-        .filter_entry(|e| {
+        .filter_entry(|entry| {
             if let Some(skipped_dir) = args.skipped_dir.as_ref() {
-                let dirs = skipped_dir.split(',').collect::<Vec<&str>>();
-                if dirs.contains(&e.file_name().to_str().unwrap()) {
-                    return false;
-                }
+                let dirs = skipped_dir.split(',').collect::<Vec<_>>();
+                return !dirs.contains(&entry.file_name().to_str().unwrap());
             }
             true
         })
@@ -193,9 +181,40 @@ fn get_glob_files(args: &SqlLogicTestArgs) -> Result<Vec<PathBuf>> {
     Ok(selected.into_iter().collect())
 }
 
+fn get_suite_files(args: &SqlLogicTestArgs, suites: &[String]) -> Result<Vec<PathBuf>> {
+    let suites_root = Path::new(&args.suites).canonicalize()?;
+    let mut files = BTreeSet::new();
+    for suite in suites {
+        let relative = Path::new(suite);
+        if relative.is_absolute() {
+            return Err(DSqlLogicTestError::SelfError(format!(
+                "Suite '{suite}' must be relative to {}",
+                suites_root.display()
+            )));
+        }
+        let suite_path = suites_root.join(relative).canonicalize().map_err(|error| {
+            DSqlLogicTestError::SelfError(format!(
+                "Failed to resolve suite '{suite}' under {}: {error}",
+                suites_root.display()
+            ))
+        })?;
+        if !suite_path.starts_with(&suites_root) || !suite_path.is_dir() {
+            return Err(DSqlLogicTestError::SelfError(format!(
+                "Suite '{suite}' must be a directory under {}",
+                suites_root.display()
+            )));
+        }
+        expand_path(&suite_path, &mut files)?;
+    }
+    Ok(files.into_iter().collect())
+}
+
 pub fn collect_files(args: &SqlLogicTestArgs) -> Result<Vec<PathBuf>> {
     if args.run.is_some() {
         return get_glob_files(args);
+    }
+    if let Some(suites) = args.run_suite.as_ref() {
+        return get_suite_files(args, suites);
     }
 
     let mut files = vec![];
@@ -206,42 +225,29 @@ pub fn collect_files(args: &SqlLogicTestArgs) -> Result<Vec<PathBuf>> {
     Ok(files)
 }
 
-static PREPARE_TPCH: std::sync::Once = std::sync::Once::new();
-static PREPARE_TPCDS: std::sync::Once = std::sync::Once::new();
-static PREPARE_STAGE: std::sync::Once = std::sync::Once::new();
-static PREPARE_WASM: std::sync::Once = std::sync::Once::new();
-
-#[derive(Eq, Hash, PartialEq)]
-pub enum LazyDir {
-    Tpch,
-    Tpcds,
-    Stage,
-    UdfNative,
-    Dictionaries,
-}
-
-pub fn collect_lazy_dir(file_path: &Path, lazy_dirs: &mut HashSet<LazyDir>) -> Result<()> {
-    let file_path = file_path.to_str().unwrap_or_default();
-    if file_path.contains("tpch/") || file_path.contains("tpch_spill/") {
-        if !lazy_dirs.contains(&LazyDir::Tpch) {
-            lazy_dirs.insert(LazyDir::Tpch);
+pub fn collect_test_files(args: &SqlLogicTestArgs) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    for file in collect_files(args)? {
+        let file_name = file
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default();
+        if !file_name.ends_with(".test") {
+            continue;
         }
-    } else if file_path.contains("tpcds/") {
-        if !lazy_dirs.contains(&LazyDir::Tpcds) {
-            lazy_dirs.insert(LazyDir::Tpcds);
+        if let Some(specific_file) = &args.file
+            && !specific_file.split(',').any(|name| name == file_name)
+        {
+            continue;
         }
-    } else if file_path.contains("stage/") || file_path.contains("stage_parquet/") {
-        if !lazy_dirs.contains(&LazyDir::Stage) {
-            lazy_dirs.insert(LazyDir::Stage);
+        if let Some(skipped_file) = &args.skipped_file
+            && skipped_file.split(',').any(|name| name == file_name)
+        {
+            continue;
         }
-    } else if file_path.contains("udf_native/") {
-        if !lazy_dirs.contains(&LazyDir::UdfNative) {
-            lazy_dirs.insert(LazyDir::UdfNative);
-        }
-    } else if file_path.contains("dictionaries/") && !lazy_dirs.contains(&LazyDir::Dictionaries) {
-        lazy_dirs.insert(LazyDir::Dictionaries);
+        files.push(file);
     }
-    Ok(())
+    Ok(files)
 }
 
 #[cfg(test)]
@@ -255,6 +261,7 @@ mod tests {
     fn make_args(suites: String) -> SqlLogicTestArgs {
         SqlLogicTestArgs {
             run: None,
+            run_suite: None,
             skip: None,
             dir: None,
             file: None,
@@ -282,19 +289,101 @@ mod tests {
     }
 
     #[test]
-    fn collect_files_keeps_legacy_directory_lookup() {
+    fn collect_files_supports_run_dir_and_skip_dir() {
         let temp = tempdir().unwrap();
         let suites = temp.path().join("suites");
-        write_test_file(&suites.join("base/00_dummy/00_0000_dummy.test"));
-        write_test_file(&suites.join("base/00_other/00_0001_other.test"));
+        let selected = suites.join("base/selected/selected.test");
+        let skipped = suites.join("base/selected/skipped/skipped.test");
+        let other = suites.join("base/other/other.test");
+        write_test_file(&selected);
+        write_test_file(&skipped);
+        write_test_file(&other);
 
         let mut args = make_args(suites.to_string_lossy().into_owned());
-        args.dir = Some("00_dummy".to_string());
+        args.dir = Some("selected".to_string());
+        args.skipped_dir = Some("skipped".to_string());
 
-        let files = collect_files(&args).unwrap();
+        assert_eq!(collect_test_files(&args).unwrap(), vec![selected]);
+    }
 
-        assert_eq!(files.len(), 1);
-        assert!(files[0].ends_with("00_0000_dummy.test"));
+    #[test]
+    fn collect_test_files_applies_run_file_and_skip_file() {
+        let temp = tempdir().unwrap();
+        let suites = temp.path().join("suites");
+        let first = suites.join("base/first.test");
+        let second = suites.join("base/second.test");
+        write_test_file(&first);
+        write_test_file(&second);
+
+        let mut args = make_args(suites.to_string_lossy().into_owned());
+        args.file = Some("first.test,second.test".to_string());
+        args.skipped_file = Some("first.test".to_string());
+
+        assert_eq!(collect_test_files(&args).unwrap(), vec![second]);
+    }
+
+    #[test]
+    fn collect_files_supports_multiple_top_level_suites() {
+        let temp = tempdir().unwrap();
+        let suites = temp.path().join("suites");
+        let base = suites.join("base/base.test");
+        let query = suites.join("query/query.test");
+        write_test_file(&base);
+        write_test_file(&query);
+
+        let mut args = make_args(suites.to_string_lossy().into_owned());
+        args.run_suite = Some(vec![
+            "base".to_string(),
+            "query".to_string(),
+            "base".to_string(),
+        ]);
+
+        assert_eq!(collect_files(&args).unwrap(), vec![base, query]);
+    }
+
+    #[test]
+    fn collect_files_rejects_suite_outside_root() {
+        let temp = tempdir().unwrap();
+        let suites = temp.path().join("suites");
+        let external = temp.path().join("external/external.test");
+        fs::create_dir_all(&suites).unwrap();
+        write_test_file(&external);
+
+        let mut args = make_args(suites.to_string_lossy().into_owned());
+        args.run_suite = Some(vec!["../external".to_string()]);
+
+        assert!(collect_files(&args).is_err());
+    }
+
+    #[test]
+    fn collect_files_rejects_absolute_suite_path() {
+        let temp = tempdir().unwrap();
+        let suites = temp.path().join("suites");
+        let external = temp.path().join("external");
+        fs::create_dir_all(&suites).unwrap();
+        fs::create_dir_all(&external).unwrap();
+
+        let mut args = make_args(suites.to_string_lossy().into_owned());
+        args.run_suite = Some(vec![external.to_string_lossy().into_owned()]);
+
+        let error = collect_files(&args).unwrap_err().to_string();
+        assert!(error.contains("must be relative to"), "{error}");
+    }
+
+    #[test]
+    fn collect_files_rejects_missing_suite() {
+        let temp = tempdir().unwrap();
+        let suites = temp.path().join("suites");
+        fs::create_dir_all(&suites).unwrap();
+
+        let mut args = make_args(suites.to_string_lossy().into_owned());
+        args.run_suite = Some(vec!["missing".to_string()]);
+
+        let error = collect_files(&args).unwrap_err().to_string();
+        assert!(
+            error.contains("Failed to resolve suite 'missing'"),
+            "{error}"
+        );
     }
 
     #[test]
@@ -328,9 +417,9 @@ mod tests {
         let temp = tempdir().unwrap();
         let suites = temp.path().join("ignored-suites");
         let keep_file = temp.path().join("cases/base/00_dummy/00_keep.test");
-        let skip_file = temp.path().join("cases/base/00_dummy/00_skip.test");
+        let skipped_glob = temp.path().join("cases/base/00_dummy/00_skip.test");
         write_test_file(&keep_file);
-        write_test_file(&skip_file);
+        write_test_file(&skipped_glob);
 
         let mut args = make_args(suites.to_string_lossy().into_owned());
         args.run = Some(vec![
@@ -340,74 +429,12 @@ mod tests {
                 .into_owned(),
             keep_file.to_string_lossy().into_owned(),
         ]);
-        args.skip = Some(vec![skip_file.to_string_lossy().into_owned()]);
+        args.skip = Some(vec![skipped_glob.to_string_lossy().into_owned()]);
 
         let files = collect_files(&args).unwrap();
 
         assert_eq!(files, vec![keep_file]);
     }
-}
-
-pub fn lazy_prepare_data(lazy_dirs: &HashSet<LazyDir>, force_load: bool) -> Result<()> {
-    let force_load_flag = if force_load { "1" } else { "0" };
-    for lazy_dir in lazy_dirs {
-        match lazy_dir {
-            LazyDir::Tpch => {
-                PREPARE_TPCH.call_once(|| {
-                    println!("Calling the script prepare_tpch_data.sh ...");
-                    run_script("prepare_tpch_data.sh", &["tpch_test", force_load_flag]).unwrap();
-                });
-            }
-            LazyDir::Tpcds => {
-                PREPARE_TPCDS.call_once(|| {
-                    println!("Calling the script prepare_tpcds_data.sh ...");
-                    run_script("prepare_tpcds_data.sh", &["tpcds", force_load_flag]).unwrap();
-                });
-            }
-            LazyDir::Stage => {
-                PREPARE_STAGE.call_once(|| {
-                    println!("Calling the script prepare_stage.sh ...");
-                    run_script("prepare_stage.sh", &[]).unwrap();
-                });
-            }
-            LazyDir::UdfNative => {
-                println!("wasm context Calling the script prepare_stage.sh ...");
-                PREPARE_WASM.call_once(|| run_script("prepare_stage.sh", &[]).unwrap())
-            }
-            _ => {}
-        }
-    }
-    Ok(())
-}
-
-fn run_script(name: &str, args: &[&str]) -> Result<()> {
-    let path = format!("tests/sqllogictests/scripts/{}", name);
-    let mut new_args = vec![path.as_str()];
-    new_args.extend_from_slice(args);
-
-    let output = std::process::Command::new("bash")
-        .args(new_args)
-        .output()
-        .expect("failed to execute process");
-    if !output.status.success() {
-        return Err(DSqlLogicTestError::SelfError(format!(
-            "Failed to run {}: {}",
-            name,
-            String::from_utf8(output.stderr).unwrap()
-        )));
-    } else {
-        println!(
-            "script stdout:\n {}",
-            String::from_utf8(output.stdout).unwrap()
-        );
-        if !output.stderr.is_empty() {
-            println!(
-                "script stderr:\n {}",
-                String::from_utf8(output.stderr).unwrap()
-            );
-        }
-    }
-    Ok(())
 }
 
 pub async fn run_ttc_container(
@@ -485,193 +512,24 @@ pub async fn run_ttc_container(
     Err(format!("Start {container_name} failed").into())
 }
 
-#[allow(dead_code)]
-pub struct DictionaryContainer {
-    pub redis: ContainerAsync<Redis>,
-    pub mysql: ContainerAsync<Mysql>,
-}
-
-pub async fn lazy_run_dictionary_containers(
-    lazy_dirs: &HashSet<LazyDir>,
-) -> Result<Option<DictionaryContainer>> {
-    if !lazy_dirs.contains(&LazyDir::Dictionaries) {
-        return Ok(None);
-    }
-    println!("Start run dictionary source server container");
-    let docker = docker_client_instance().await?;
-    let redis = run_redis_server(&docker).await?;
-    let mysql = run_mysql_server(&docker).await?;
-    let dict_container = DictionaryContainer { redis, mysql };
-
-    Ok(Some(dict_container))
-}
-
-async fn run_redis_server(docker: &Docker) -> Result<ContainerAsync<Redis>> {
-    let start = Instant::now();
-    let container_name = "redis".to_string();
-    println!("Start container {container_name}");
-
-    stop_container(docker, &container_name).await;
-
-    let mut i = 1;
-    loop {
-        let redis_res = Redis::default()
-            .with_network("host")
-            .with_startup_timeout(Duration::from_secs(CONTAINER_STARTUP_TIMEOUT_SECONDS))
-            .with_container_name(&container_name)
-            .start()
-            .await;
-
-        let duration = start.elapsed().as_secs();
-        match redis_res {
-            Ok(redis) => {
-                let host_ip = redis.get_host().await.unwrap();
-                let url = format!("redis://{}:{}", host_ip, REDIS_PORT);
-                let client = redis::Client::open(url.as_ref()).unwrap();
-                let mut con = client.get_connection().unwrap();
-
-                // Add some key values for test.
-                let keys = vec!["a", "b", "c", "1", "2"];
-                for key in keys {
-                    let val = format!("{}_value", key);
-                    con.set::<_, _, ()>(key, val).unwrap();
-                }
-                println!(
-                    "Start container {} using {} secs success",
-                    container_name, duration
-                );
-                return Ok(redis);
-            }
-            Err(err) => {
-                eprintln!(
-                    "Start container {} using {} secs failed: {}",
-                    container_name, duration, err
-                );
-                stop_container(docker, &container_name).await;
-                if i == CONTAINER_RETRY_TIMES || duration >= CONTAINER_TIMEOUT_SECONDS {
-                    break;
-                } else {
-                    i += 1;
-                }
-            }
-        }
-    }
-    Err(format!("Start {container_name} failed").into())
-}
-
-async fn run_mysql_server(docker: &Docker) -> Result<ContainerAsync<Mysql>> {
-    let start = Instant::now();
-    let container_name = "mysql".to_string();
-    println!("Start container {container_name}");
-
-    stop_container(docker, &container_name).await;
-
-    // Add a table for test.
-    // CREATE TABLE test.user(
-    //   id INT,
-    //   name VARCHAR(100),
-    //   age SMALLINT UNSIGNED,
-    //   salary DOUBLE,
-    //   active BOOL
-    // );
-    //
-    // +------+-------+------+---------+--------+
-    // | id   | name  | age  | salary  | active |
-    // +------+-------+------+---------+--------+
-    // |    1 | Alice |   24 |     100 |      1 |
-    // |    2 | Bob   |   35 |   200.1 |      0 |
-    // |    3 | Lily  |   41 |  1000.2 |      1 |
-    // |    4 | Tom   |   55 | 3000.55 |      0 |
-    // |    5 | NULL  | NULL |    NULL |   NULL |
-    // +------+-------+------+---------+--------+
-    let mut i = 1;
-    loop {
-        let mysql_res = Mysql::default()
-            .with_init_sql(
-    "CREATE TABLE test.user(id INT, name VARCHAR(100), age SMALLINT UNSIGNED, salary DOUBLE, active BOOL); \
-    INSERT INTO test.user VALUES \
-    (1, 'Alice', 24, 100, true), \
-    (2, 'Bob', 35, 200.1, false), \
-    (3, 'Lily', 41, 1000.2, true), \
-    (4, 'Tom', 55, 3000.55, false), \
-    (5, NULL, NULL, NULL, NULL);"
-                .to_string()
-                .into_bytes(),
-            )
-            .with_network("host")
-            .with_startup_timeout(Duration::from_secs(CONTAINER_STARTUP_TIMEOUT_SECONDS))
-            .with_container_name(&container_name)
-            .start().await;
-
-        let duration = start.elapsed().as_secs();
-        match mysql_res {
-            Ok(mysql) => {
-                println!(
-                    "Start container {} using {} secs success",
-                    container_name, duration
-                );
-                return Ok(mysql);
-            }
-            Err(err) => {
-                eprintln!(
-                    "Start container {} using {} secs failed: {}",
-                    container_name, duration, err
-                );
-                stop_container(docker, &container_name).await;
-                if i == CONTAINER_RETRY_TIMES || duration >= CONTAINER_TIMEOUT_SECONDS {
-                    break;
-                } else {
-                    i += 1;
-                }
-            }
-        }
-    }
-    Err(format!("Start {container_name} failed").into())
-}
-
-// Stop the running container to avoid conflict
 async fn stop_container(docker: &Docker, container_name: &str) {
-    let opts = Some(ListContainersOptions::<String> {
-        all: true,
-        ..Default::default()
-    });
-    let containers = docker.list_containers(opts).await;
-    if let Ok(containers) = containers
-        && !containers.is_empty()
+    if docker
+        .inspect_container(container_name, None)
+        .await
+        .is_err()
     {
-        println!("==> list containers");
-        for container in containers {
-            if let Some(names) = container.names {
-                println!(
-                    " -> container name: {:?}, status: {:?}",
-                    names, container.state
-                );
-            }
-        }
+        return;
     }
-
-    let container = docker.inspect_container(container_name, None).await;
-    if let Ok(container) = container {
-        println!(
-            "Stopping previous container {container_name}: {:?}",
-            container.state
-        );
-        if let Err(err) = docker.stop_container(container_name, None).await {
-            eprintln!("Failed to stop container {container_name}: {err}");
-        }
-        let options = Some(RemoveContainerOptions {
-            force: true,
-            ..Default::default()
-        });
-        match docker.remove_container(container_name, options).await {
-            Ok(_) => {
-                println!("Removed container {container_name}");
-            }
-            Err(err) => {
-                eprintln!("Failed to remove container {container_name}: {err}");
-            }
-        }
-    }
+    let _ = docker.stop_container(container_name, None).await;
+    let _ = docker
+        .remove_container(
+            container_name,
+            Some(RemoveContainerOptions {
+                force: true,
+                ..Default::default()
+            }),
+        )
+        .await;
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]

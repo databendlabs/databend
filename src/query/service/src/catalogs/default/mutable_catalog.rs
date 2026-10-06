@@ -676,20 +676,8 @@ impl Catalog for MutableCatalog {
     async fn get_drop_table_infos(
         &self,
         req: ListDroppedTableReq,
-    ) -> Result<(Vec<Arc<dyn Table>>, Vec<DroppedId>)> {
-        let ctx = DatabaseContext {
-            meta: self.ctx.meta.clone(),
-            storage_factory: self.ctx.storage_factory.clone(),
-            tenant: self.tenant.clone(),
-            disable_table_info_refresh: true,
-        };
-
-        let resp = ctx.meta.get_drop_table_infos(req).await?;
-
-        let drop_ids = resp.drop_ids.clone();
-
-        let storage = ctx.storage_factory;
-
+    ) -> Result<(Vec<TableInfo>, Vec<DroppedId>)> {
+        let resp = self.ctx.meta.get_drop_table_infos(req).await?;
         let mut tables = vec![];
         for (db_name_ident, niv) in resp.vacuum_tables {
             let table_info = TableInfo::new_full(
@@ -700,9 +688,9 @@ impl Catalog for MutableCatalog {
                 self.info(),
                 DatabaseType::NormalDB,
             );
-            tables.push(storage.get_table(&table_info, ctx.disable_table_info_refresh)?);
+            tables.push(table_info);
         }
-        Ok((tables, drop_ids))
+        Ok((tables, resp.drop_ids))
     }
 
     async fn gc_drop_tables(&self, req: GcDroppedTableReq) -> Result<usize> {

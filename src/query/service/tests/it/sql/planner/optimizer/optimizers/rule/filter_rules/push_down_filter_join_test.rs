@@ -21,6 +21,7 @@ use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::optimizers::rule::Rule;
 use databend_common_sql::optimizer::optimizers::rule::RulePushDownFilterJoin;
 use databend_common_sql::optimizer::optimizers::rule::TransformResult;
@@ -281,7 +282,7 @@ fn run_join_filter_test(test_case: &JoinFilterTestCase, metadata: &MetadataRef) 
     let filter = builder.filter(join, vec![test_case.filter_expr.clone()]);
 
     // Apply rule
-    let rule = RulePushDownFilterJoin::new(metadata.clone());
+    let rule = RulePushDownFilterJoin::new(metadata.clone(), StatContext::default());
     let mut result = TransformResult::default();
     rule.apply(&filter, &mut result)?;
 
@@ -649,7 +650,7 @@ fn test_single_join_is_null_filter_not_pushed_down() -> anyhow::Result<()> {
     );
     let left_single_filter = builder.filter(left_single, vec![is_null(t2_id.clone())]);
 
-    let rule = RulePushDownFilterJoin::new(metadata.clone());
+    let rule = RulePushDownFilterJoin::new(metadata.clone(), StatContext::default());
     let mut result = TransformResult::default();
     rule.apply(&left_single_filter, &mut result)?;
     assert!(
@@ -1279,7 +1280,7 @@ fn test_push_down_complex_or_expressions() -> anyhow::Result<()> {
     "#;
 
     // Apply rule
-    let rule = RulePushDownFilterJoin::new(metadata);
+    let rule = RulePushDownFilterJoin::new(metadata, StatContext::default());
     let mut result = TransformResult::default();
     rule.apply(&filter, &mut result)?;
 

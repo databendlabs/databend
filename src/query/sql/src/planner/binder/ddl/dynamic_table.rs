@@ -259,6 +259,7 @@ impl Binder {
             field_comments,
             field_stats_truncate_len: vec![],
             cluster_key,
+            ttl: None,
             as_select,
             table_indexes: None,
             table_constraints: None,

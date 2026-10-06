@@ -18,6 +18,8 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
+use crate::ast::quote::QuotedString;
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateNotificationStmt {
     pub if_not_exists: bool,
@@ -25,6 +27,7 @@ pub struct CreateNotificationStmt {
     pub notification_type: String,
     pub enabled: bool,
     pub webhook_opts: Option<NotificationWebhookOptions>,
+    pub webhook_body_template: Option<String>,
     pub comments: Option<String>,
 }
 
@@ -39,6 +42,13 @@ impl Display for CreateNotificationStmt {
         write!(f, " ENABLED = {}", self.enabled)?;
         if let Some(webhook_opts) = &self.webhook_opts {
             write!(f, " {}", webhook_opts)?;
+        }
+        if let Some(template) = &self.webhook_body_template {
+            write!(
+                f,
+                " WEBHOOK_BODY_TEMPLATE = {}",
+                QuotedString(template, '\'')
+            )?;
         }
         if let Some(comments) = &self.comments {
             write!(f, " COMMENTS = '{comments}'")?;
@@ -126,11 +136,13 @@ pub struct AlterNotificationStmt {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum AlterNotificationOptions {
     Set(AlterNotificationSetOptions),
+    Unset(AlterNotificationUnsetOptions),
 }
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct AlterNotificationSetOptions {
     pub enabled: Option<bool>,
     pub webhook_opts: Option<NotificationWebhookOptions>,
+    pub webhook_body_template: Option<String>,
     pub comments: Option<String>,
 }
 
@@ -139,6 +151,7 @@ impl AlterNotificationSetOptions {
         AlterNotificationSetOptions {
             enabled: Some(enabled),
             webhook_opts: None,
+            webhook_body_template: None,
             comments: None,
         }
     }
@@ -147,6 +160,16 @@ impl AlterNotificationSetOptions {
         AlterNotificationSetOptions {
             enabled: None,
             webhook_opts: Some(webhook_opts),
+            webhook_body_template: None,
+            comments: None,
+        }
+    }
+
+    pub fn webhook_body_template(template: String) -> Self {
+        AlterNotificationSetOptions {
+            enabled: None,
+            webhook_opts: None,
+            webhook_body_template: Some(template),
             comments: None,
         }
     }
@@ -155,9 +178,33 @@ impl AlterNotificationSetOptions {
         AlterNotificationSetOptions {
             enabled: None,
             webhook_opts: None,
+            webhook_body_template: None,
             comments: Some(comments),
         }
     }
+
+    /// Returns true when applying this `SET` would change nothing.
+    ///
+    /// `WEBHOOK = (...)` is a field-level patch, so a clause without any known
+    /// key is treated the same as no `WEBHOOK` clause at all.
+    pub fn is_empty(&self) -> bool {
+        let webhook_is_empty = match &self.webhook_opts {
+            None => true,
+            Some(opts) => {
+                opts.url.is_none() && opts.method.is_none() && opts.authorization_header.is_none()
+            }
+        };
+        self.enabled.is_none()
+            && webhook_is_empty
+            && self.webhook_body_template.is_none()
+            && self.comments.is_none()
+    }
+}
+
+/// Options that can be cleared with `ALTER NOTIFICATION INTEGRATION ... UNSET`.
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub struct AlterNotificationUnsetOptions {
+    pub webhook_body_template: bool,
 }
 
 impl Display for AlterNotificationStmt {
@@ -172,8 +219,21 @@ impl Display for AlterNotificationStmt {
                 if let Some(webhook_opts) = &set_opts.webhook_opts {
                     write!(f, " {}", webhook_opts)?;
                 }
+                if let Some(template) = &set_opts.webhook_body_template {
+                    write!(
+                        f,
+                        "WEBHOOK_BODY_TEMPLATE = {}",
+                        QuotedString(template, '\'')
+                    )?;
+                }
                 if let Some(comments) = &set_opts.comments {
                     write!(f, " COMMENTS = '{}'", comments)?;
+                }
+            }
+            AlterNotificationOptions::Unset(unset_opts) => {
+                write!(f, " UNSET")?;
+                if unset_opts.webhook_body_template {
+                    write!(f, " WEBHOOK_BODY_TEMPLATE")?;
                 }
             }
         }

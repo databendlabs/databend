@@ -17,6 +17,8 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::local_block_meta_serde;
 use enum_as_inner::EnumAsInner;
+pub use merge_sorter::MergeSortStatus;
+pub use merge_sorter::MergeSorter;
 pub use sort_broadcast::*;
 pub use sort_collect::*;
 pub use sort_k_way_merge::*;
@@ -36,6 +38,7 @@ use self::core::Bounds;
 pub use self::core::utils;
 
 pub mod core;
+mod merge_sorter;
 mod sort_broadcast;
 mod sort_collect;
 mod sort_k_way_merge;

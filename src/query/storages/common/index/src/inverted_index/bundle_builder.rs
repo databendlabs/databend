@@ -23,11 +23,11 @@ use tantivy::Index;
 
 use super::bundle::BundleExternalFiles;
 use super::bundle::BundleFileRanges;
+use super::bundle::ExternalFile;
 use super::bundle::InvertedIndexBundleFooter;
 use super::bundle::MANAGED_JSON_PATH;
 use super::bundle::META_JSON_PATH;
 use super::directory::collect_index_open_slices;
-use super::output_directory::InvertedIndexOutputDirectory;
 
 pub struct BundleSizes {
     /// Bytes of the bundle object itself.
@@ -37,16 +37,19 @@ pub struct BundleSizes {
 }
 
 /// Packs one committed single-segment index into the bundle object: inline files in lookup
-/// priority order, then the footer and trailer. Streamed files are only referenced.
-pub struct InvertedIndexBundleBuilder {
-    directory: InvertedIndexOutputDirectory,
+/// priority order, then the footer and trailer. Files listed in `external_files` already live
+/// in sibling objects and are only referenced.
+pub struct InvertedIndexBundleBuilder<D: Directory + Clone> {
+    directory: D,
     index: Index,
+    external_files: BTreeMap<PathBuf, ExternalFile>,
 }
 
-impl InvertedIndexBundleBuilder {
+impl<D: Directory + Clone> InvertedIndexBundleBuilder<D> {
     pub fn try_create(
-        directory: InvertedIndexOutputDirectory,
+        directory: D,
         index: Index,
+        external_files: BTreeMap<PathBuf, ExternalFile>,
     ) -> tantivy::Result<Self> {
         let segments = index.load_metas()?.segments.len();
         if segments != 1 {
@@ -54,32 +57,38 @@ impl InvertedIndexBundleBuilder {
                 format!("inverted index bundle expects one Tantivy segment, got {segments}");
             return Err(io::Error::new(io::ErrorKind::InvalidData, message).into());
         }
-        Ok(Self { directory, index })
+        Ok(Self {
+            directory,
+            index,
+            external_files,
+        })
     }
 
     pub fn write_to<W: Write>(self, sink: &mut W) -> tantivy::Result<BundleSizes> {
         // Opaque ranges Tantivy reads while opening the index; Databend never interprets them.
         let open_slices = collect_index_open_slices(self.directory.clone())?;
-        let ram = self.directory.ram_directory();
-        let managed_json = ram.atomic_read(Path::new(MANAGED_JSON_PATH))?;
-        let meta_json = ram.atomic_read(Path::new(META_JSON_PATH))?;
-        let external_files = self.directory.external_files();
+        let managed_json = self.directory.atomic_read(Path::new(MANAGED_JSON_PATH))?;
+        let meta_json = self.directory.atomic_read(Path::new(META_JSON_PATH))?;
+        let external_files = self.external_files;
 
         // ManagedDirectory can briefly retain stale paths, so only include files that still exist.
         let mut paths = Vec::new();
         for path in self.index.directory().list_managed_files() {
             let index_level =
                 path == Path::new(MANAGED_JSON_PATH) || path == Path::new(META_JSON_PATH);
-            if !index_level && !external_files.contains_key(&path) && ram.exists(&path)? {
+            if !index_level
+                && !external_files.contains_key(&path)
+                && self.directory.exists(&path)?
+            {
                 paths.push(path);
             }
         }
-        Self::sort_bundle_paths(&mut paths);
+        sort_bundle_paths(&mut paths);
 
         let mut file_ranges = BTreeMap::new();
         let mut written = 0u64;
         for path in paths {
-            let bytes = ram.open_read(&path)?.read_bytes()?;
+            let bytes = self.directory.open_read(&path)?.read_bytes()?;
             sink.write_all(&bytes)?;
             let end = written + bytes.len() as u64;
             file_ranges.insert(path, written..end);
@@ -106,33 +115,30 @@ impl InvertedIndexBundleBuilder {
             siblings,
         })
     }
+}
 
-    /// Small, high-reuse lookup components go last so the normal 1 MiB tail read brings them in
-    /// with the footer. Ordering is deterministic within each priority.
-    fn sort_bundle_paths(paths: &mut [PathBuf]) {
-        paths.sort_unstable_by(|left, right| {
-            let by_priority =
-                Self::bundle_path_priority(left).cmp(&Self::bundle_path_priority(right));
-            by_priority.then_with(|| left.cmp(right))
-        });
-    }
+/// Small, high-reuse lookup components go last so the normal 1 MiB tail read brings them in
+/// with the footer. Ordering is deterministic within each priority.
+fn sort_bundle_paths(paths: &mut [PathBuf]) {
+    paths.sort_unstable_by(|left, right| {
+        let by_priority = bundle_path_priority(left).cmp(&bundle_path_priority(right));
+        by_priority.then_with(|| left.cmp(right))
+    });
+}
 
-    fn bundle_path_priority(path: &Path) -> u8 {
-        match path.extension().and_then(|extension| extension.to_str()) {
-            Some("store") => 1,
-            Some("fast") => 2,
-            Some("fieldnorm") => 3,
-            Some("term") => 4,
-            _ => 0,
-        }
+fn bundle_path_priority(path: &Path) -> u8 {
+    match path.extension().and_then(|extension| extension.to_str()) {
+        Some("store") => 1,
+        Some("fast") => 2,
+        Some("fieldnorm") => 3,
+        Some("term") => 4,
+        _ => 0,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
-
-    use super::InvertedIndexBundleBuilder;
 
     #[test]
     fn test_sort_bundle_paths_places_lookup_components_near_footer() {
@@ -145,7 +151,7 @@ mod tests {
             PathBuf::from("segment.custom"),
             PathBuf::from("segment.fast"),
         ];
-        InvertedIndexBundleBuilder::sort_bundle_paths(&mut paths);
+        super::sort_bundle_paths(&mut paths);
         assert_eq!(paths, vec![
             PathBuf::from("segment.custom"),
             PathBuf::from("segment.idx"),
@@ -227,10 +233,12 @@ mod streaming_tests {
         }
         let index = writer.finalize().unwrap();
         let mut bundle = Vec::new();
-        let sizes = InvertedIndexBundleBuilder::try_create(directory.clone(), index)
-            .unwrap()
-            .write_to(&mut bundle)
-            .unwrap();
+        let external_files = directory.external_files();
+        let sizes =
+            InvertedIndexBundleBuilder::try_create(directory.clone(), index, external_files)
+                .unwrap()
+                .write_to(&mut bundle)
+                .unwrap();
         (operator, directory, bundle, sizes.bundle, sizes.siblings)
     }
 

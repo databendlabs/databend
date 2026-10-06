@@ -38,7 +38,9 @@ pub(crate) fn aggregate_state_data_type(
     params: &[databend_common_expression::Scalar],
     argument_types: Vec<DataType>,
     physical_type: DataType,
+    state_version: u64,
 ) -> Result<DataType> {
+    debug_assert_ne!(state_version, EXECUTION_ONLY_STATE_VERSION);
     let params = params
         .iter()
         .cloned()
@@ -49,6 +51,7 @@ pub(crate) fn aggregate_state_data_type(
         params,
         argument_types,
         state_type: Box::new(physical_type),
+        state_version,
     })))
 }
 
@@ -282,12 +285,15 @@ pub(crate) fn nullable_input_state_description(
     fields.push(AggrStateType::Bool);
     let mut serde_items = state.serde_items().to_vec();
     serde_items.push(StateSerdeItem::DataType(DataType::Boolean));
-    AggregateStateDescription::new(fields, serde_items).with_manual_drop(state.need_manual_drop())
+    AggregateStateDescription::new(fields, serde_items)
+        .with_manual_drop(state.need_manual_drop())
+        .with_state_version(state.state_version())
 }
 
 pub(crate) fn create_state_null_result_function(
     request: RawAggregateCall<'_>,
     call_metadata: AggregateMetadata,
+    state_version: u64,
 ) -> Result<AggregateCallRef> {
     let (data_type, result) = call_metadata.null_argument_result.value();
     let serde_item = StateSerdeItem::DataType(data_type.clone());
@@ -301,6 +307,7 @@ pub(crate) fn create_state_null_result_function(
         request.params,
         request.args_type.to_vec(),
         physical_type,
+        state_version,
     )?;
     let signature = AggregateSignature {
         name: request.name.to_string(),
@@ -313,7 +320,8 @@ pub(crate) fn create_state_null_result_function(
     let state =
         AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<u8>())], vec![
             serde_item,
-        ]);
+        ])
+        .with_state_version(state_version);
     Ok(Arc::new(AggregateCallInstance::new(
         signature,
         FunctionInputLayout::Identity,

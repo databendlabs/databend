@@ -371,9 +371,9 @@ impl<'a> Selector<'a> {
         if value.is_scalar_null() {
             return Ok(0);
         }
-        let column = value
-            .into_column()
-            .map_err(|v| ErrorCode::Internal(format!("Can not convert to column: {v}")))?;
+        // The operand is usually a column, but a block may carry it as a constant (e.g. the
+        // replicated side of a cross join); the LIKE fast path then applies to every row.
+        let column = value.convert_to_full_column(&data_type, self.num_rows);
 
         let (column, validity) = FilterHelpers::split_nullable_string_column(column);
 

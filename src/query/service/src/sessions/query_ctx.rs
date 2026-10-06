@@ -118,7 +118,6 @@ use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline::core::LockGuard;
@@ -132,7 +131,6 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_basic::ResultScan;
-use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_iceberg::IcebergTable;
 use databend_common_storages_orc::OrcTable;
@@ -744,7 +742,7 @@ impl QueryContext {
         // but there is no way to access dyn TableContext.
         Ok(match table.engine() {
             "PAIMON" => databend_common_storages_paimon::table_from_info(table.get_table_info())?,
-            engine @ ("ICEBERG" | "DELTA") => {
+            "ICEBERG" => {
                 let sp = StageResolver::from_authorization_ref(
                     self.get_tenant(),
                     self.get_current_user()?.identity(),
@@ -757,11 +755,7 @@ impl QueryContext {
                 .await?;
                 let mut info = table.get_table_info().to_owned();
                 info.meta.storage_params = Some(sp);
-                match engine {
-                    "ICEBERG" => IcebergTable::try_create(info)?.into(),
-                    "DELTA" => DeltaTable::try_create(info)?.into(),
-                    _ => unreachable!("engine is already matched"),
-                }
+                IcebergTable::try_create(info)?.into()
             }
             _ => table,
         })

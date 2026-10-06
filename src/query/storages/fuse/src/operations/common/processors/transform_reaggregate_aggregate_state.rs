@@ -21,7 +21,6 @@ use databend_common_expression::AggregateHashTable;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::ProbeState;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::aggregate_function::AggregateCallRef;
@@ -78,21 +77,16 @@ impl TransformReaggregateAggregateStateBlock {
         for (idx, field) in table_schema.fields().iter().enumerate() {
             let data_type = field.data_type();
             match data_type.remove_nullable() {
-                TableDataType::AggregateState {
-                    function_name,
-                    params,
-                    argument_types,
-                    ..
-                } => {
-                    let params = &params.into_iter().map(Scalar::from).collect::<Vec<_>>();
-                    let args_type = &argument_types
-                        .iter()
-                        .map(DataType::from)
-                        .collect::<Vec<_>>();
+                state @ TableDataType::AggregateState { .. } => {
+                    let TableDataType::AggregateState { function_name, .. } = &state else {
+                        unreachable!()
+                    };
+                    let merge_name = format!("{function_name}_merge_state");
+                    let state_type = DataType::from(&state);
                     let function = AGGR_REGISTRY.resolve(RawAggregateCall {
-                        name: &function_name,
-                        params,
-                        args_type,
+                        name: &merge_name,
+                        params: &[],
+                        args_type: std::slice::from_ref(&state_type),
                         distinct: false,
                         order_by: &[],
                     })?;
@@ -273,6 +267,33 @@ mod tests {
         let output = transform.transform(input)?;
         assert_eq!(output.num_rows(), 1);
         assert_eq!(output.num_columns(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn reaggregate_rejects_unsupported_state_version() -> Result<()> {
+        let function = AGGR_REGISTRY.resolve(RawAggregateCall {
+            name: "sum_state",
+            params: &[],
+            args_type: &[DataType::Number(NumberDataType::Int32)],
+            distinct: false,
+            order_by: &[],
+        })?;
+        let DataType::AggregateState(mut state) = function.signature().return_type.clone() else {
+            panic!("sum_state should return AggregateState");
+        };
+        state.state_version = 2;
+        let schema = TableSchema::new(vec![TableField::new(
+            "total",
+            infer_schema_type(&DataType::AggregateState(state))?,
+        )]);
+
+        let error = match TransformReaggregateAggregateStateBlock::try_create(&schema) {
+            Ok(_) => panic!("reaggregate accepted an unsupported aggregate state version"),
+            Err(error) => error,
+        };
+        assert!(error.message().contains("state version 2"));
+        assert!(error.message().contains("expected version 0"));
         Ok(())
     }
 

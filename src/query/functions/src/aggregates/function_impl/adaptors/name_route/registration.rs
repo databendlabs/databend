@@ -15,17 +15,20 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::aggregate_function::AggregateStateSettings;
 
 use super::super::AggregateCallBuilder;
 use super::super::AggregateCallRef;
 use super::super::AggregateDescriptor;
 use super::super::AggregateFeatures;
 use super::super::AggregateRegistry;
+use super::super::AggregateStateAccess;
 use super::super::ArgumentsPattern;
 use super::super::DistinctPolicy;
 use super::super::RawAggregateCall;
 use super::NameRoute;
 use super::suffixed_name;
+use crate::aggregates::aggregate_state_settings::CompatibleStateSettings;
 
 /// The adapter between internal name routing and the external registration API.
 struct RegisteredAggregate {
@@ -45,6 +48,14 @@ impl AggregateCallBuilder for RegisteredAggregate {
 
     fn build(&self, request: RawAggregateCall<'_>) -> Result<AggregateCallRef> {
         self.route.build(request)
+    }
+
+    fn build_with_state_settings(
+        &self,
+        request: RawAggregateCall<'_>,
+        settings: AggregateStateSettings,
+    ) -> Result<AggregateCallRef> {
+        self.route.build_with_state_settings(request, settings)
     }
 }
 
@@ -114,7 +125,25 @@ impl NameRoute {
                     features,
                     route: route.clone(),
                 });
-                AggregateDescriptor::from_builder(name, builder).with_aliases(aliases)
+                // Route semantics, not the aggregate name, decide which state
+                // contract applies: _state writes, _merge reads and returns a
+                // value, and _merge_state reads then writes a new state. Plain
+                // routes only need an execution layout.
+                let access = match suffix {
+                    Some("state") => AggregateStateAccess::Write,
+                    Some("merge") => AggregateStateAccess::Read,
+                    Some("merge_state") => AggregateStateAccess::ReadWrite,
+                    _ => AggregateStateAccess::Execution,
+                };
+                AggregateDescriptor::from_builder(name, builder)
+                    .with_aliases(aliases)
+                    .with_state_access(access)
+                    .with_state_settings(
+                        route
+                            .state_settings
+                            .clone()
+                            .unwrap_or_else(|| Arc::new(CompatibleStateSettings)),
+                    )
             })
             .collect()
     }
@@ -133,11 +162,145 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     use databend_common_exception::ErrorCode;
+    use databend_common_expression::aggregate_function::AggregateStateWritePolicy;
+    use databend_common_expression::aggregate_function::EXECUTION_ONLY_STATE_VERSION;
 
     use super::super::super::DirectBuildContext;
     use super::super::super::DirectBuildFn;
+    use super::super::super::try_create_null_argument_result_function;
     use super::super::*;
     use super::*;
+    use crate::aggregates::aggregate_state_settings::CompatibleStateSettings;
+
+    struct CompactTestSettings;
+
+    impl databend_common_expression::aggregate_function::AggregateStateSettingsSelector
+        for CompactTestSettings
+    {
+        fn execution(&self, _request: &RawAggregateCall<'_>) -> Result<AggregateStateSettings> {
+            Ok(AggregateStateSettings {
+                state_version: EXECUTION_ONLY_STATE_VERSION,
+                preserve_nullable_input_rows_flag: false,
+                input_nullable_input_rows_flag: false,
+            })
+        }
+
+        fn read(
+            &self,
+            _request: &RawAggregateCall<'_>,
+            _version: Option<u64>,
+        ) -> Result<AggregateStateSettings> {
+            Err(ErrorCode::BadDataValueType(
+                "test format has no persisted version",
+            ))
+        }
+
+        fn write(
+            &self,
+            _request: &RawAggregateCall<'_>,
+            _policy: AggregateStateWritePolicy,
+        ) -> Result<AggregateStateSettings> {
+            Err(ErrorCode::BadDataValueType(
+                "test format has no persisted version",
+            ))
+        }
+
+        fn rewrite(
+            &self,
+            _request: &RawAggregateCall<'_>,
+            _policy: AggregateStateWritePolicy,
+            _version: Option<u64>,
+        ) -> Result<AggregateStateSettings> {
+            Err(ErrorCode::BadDataValueType(
+                "test format has no persisted version",
+            ))
+        }
+    }
+
+    #[test]
+    fn test_descriptor_state_settings_are_independent() -> Result<()> {
+        let mut registry = AggregateRegistry::empty();
+        let builder = Arc::new(FixedResultBuilder {
+            arguments: ArgumentsPattern::fixed(vec![]),
+            features: AggregateFeatures::default(),
+        });
+        registry.register(
+            AggregateDescriptor::from_builder("compact_probe", builder.clone())
+                .with_aliases(vec!["compact_alias".to_string()])
+                .with_state_settings(Arc::new(CompactTestSettings)),
+        );
+        registry.register(
+            AggregateDescriptor::from_builder("compatible_probe", builder.clone())
+                .with_state_access(AggregateStateAccess::Write)
+                .with_state_settings(Arc::new(CompatibleStateSettings)),
+        );
+        for name in ["compact_probe", "compact_alias", "compatible_probe"] {
+            let function = registry.resolve(RawAggregateCall {
+                name,
+                params: &[],
+                args_type: &[],
+                distinct: false,
+                order_by: &[],
+            })?;
+            assert_eq!(
+                function.state().state_version(),
+                if name == "compatible_probe" {
+                    0
+                } else {
+                    EXECUTION_ONLY_STATE_VERSION
+                },
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_descriptor_write_policy_is_not_execution_layout() -> Result<()> {
+        let mut registry = AggregateRegistry::empty();
+        let builder = Arc::new(FixedResultBuilder {
+            arguments: ArgumentsPattern::fixed(vec![]),
+            features: AggregateFeatures::default(),
+        });
+        registry.register(
+            AggregateDescriptor::from_builder("execution_probe", builder.clone())
+                .with_state_settings(Arc::new(CompactTestSettings)),
+        );
+        registry.register(
+            AggregateDescriptor::from_builder("writer_probe", builder)
+                .with_state_access(AggregateStateAccess::Write)
+                .with_state_settings(Arc::new(CompatibleStateSettings)),
+        );
+        let call = |name| RawAggregateCall {
+            name,
+            params: &[],
+            args_type: &[],
+            distinct: false,
+            order_by: &[],
+        };
+        assert_eq!(
+            registry
+                .resolve(call("execution_probe"))?
+                .state()
+                .state_version(),
+            EXECUTION_ONLY_STATE_VERSION
+        );
+        assert_eq!(
+            registry
+                .resolve(call("writer_probe"))?
+                .state()
+                .state_version(),
+            0
+        );
+        assert!(
+            registry
+                .resolve_with_state_policy(
+                    call("writer_probe"),
+                    databend_common_expression::aggregate_function::AggregateStateWritePolicy::Latest,
+                )
+                .is_err()
+        );
+        Ok(())
+    }
 
     struct FixedResultBuilder {
         arguments: ArgumentsPattern,
@@ -155,6 +318,19 @@ mod tests {
 
         fn build(&self, request: RawAggregateCall<'_>) -> Result<AggregateCallRef> {
             try_create_null_argument_result_function(request, AggregateMetadata::default())
+        }
+
+        fn build_with_state_settings(
+            &self,
+            request: RawAggregateCall<'_>,
+            settings: AggregateStateSettings,
+        ) -> Result<AggregateCallRef> {
+            super::super::super::null_argument_result::create_with_combinator(
+                request,
+                AggregateMetadata::default(),
+                PlainCombinator,
+                settings.state_version,
+            )
         }
     }
 
@@ -484,10 +660,10 @@ mod tests {
             arguments: arguments.clone(),
             features: AggregateFeatures::default(),
         });
-        registry.register(AggregateDescriptor::from_builder(
-            "deduplicated_test",
-            builder.clone(),
-        ));
+        registry.register(
+            AggregateDescriptor::from_builder("deduplicated_test", builder.clone())
+                .with_state_settings(Arc::new(CompatibleStateSettings)),
+        );
 
         let source_features = AggregateFeatures {
             distinct_policy: DistinctPolicy::redirect("deduplicated_test"),
@@ -495,7 +671,8 @@ mod tests {
         };
         registry.register(
             AggregateDescriptor::from_builder("test", builder)
-                .with_metadata(arguments, source_features),
+                .with_metadata(arguments, source_features)
+                .with_state_settings(Arc::new(CompatibleStateSettings)),
         );
 
         let function = registry

@@ -40,6 +40,11 @@ mod auth;
 pub use auth::RefreshableToken;
 pub use auth::TokenFile;
 
+mod azblob_presign;
+pub use azblob_presign::AzblobPresignOp;
+pub use azblob_presign::azblob_user_delegation_presign;
+pub use azblob_presign::azblob_user_delegation_presign_config;
+
 mod config;
 mod endpoint_policy;
 pub use config::EndpointPolicyScope;
@@ -54,6 +59,13 @@ pub use endpoint_policy::check_storage_params_endpoints;
 
 mod concurrent_limit_layer;
 pub use concurrent_limit_layer::ConcurrentLimitLayer;
+
+mod fault_injection_layer;
+pub use fault_injection_layer::FaultHandle;
+pub use fault_injection_layer::FaultInjection;
+pub use fault_injection_layer::FaultKind;
+pub use fault_injection_layer::FaultOp;
+pub use fault_injection_layer::FaultRule;
 
 mod http_client;
 pub use http_client::StorageHttpClient;
@@ -90,6 +102,7 @@ pub use stage::StageFileStatus;
 pub use stage::StageFilesInfo;
 pub use stage::ensure_no_stage_path_traversal;
 pub use stage::init_stage_operator;
+pub use stage::internal_stage_storage_params;
 pub use stage::is_stage_path_traversal;
 
 mod copy;
