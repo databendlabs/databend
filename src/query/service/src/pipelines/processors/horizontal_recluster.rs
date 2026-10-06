@@ -955,6 +955,25 @@ mod tests {
         let keys = probe.converter.convert(&low)?.to_column();
         assert!(probe.validate_batch(low, keys).is_err());
 
+        // Read failure is propagated, never treated as EOF or silently rebuilt.
+        let missing = ReclusterMergeInputBlock {
+            meta: Arc::new(BlockMeta {
+                location: ("missing-recluster-input.parquet".into(), DataBlock::VERSION),
+                ..input_blocks[0].meta.as_ref().clone()
+            }),
+            ordinal: 0,
+        };
+        let mut missing_stream = ReclusterMergeStream::<R>::new(
+            ReclusterMergeInput::Original {
+                input_block: missing,
+                reader: None,
+                position: 0,
+            },
+            &merge_config,
+            &spiller,
+        )?;
+        assert!(missing_stream.next().is_err());
+
         let mut merge_factory = ReclusterMergeFactory {
             merge_config,
             input_blocks,
