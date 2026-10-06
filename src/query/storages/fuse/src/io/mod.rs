@@ -27,7 +27,6 @@ pub use read::CompactSegmentInfoReader;
 pub use read::DataItem;
 pub use read::FuseLowLevelBlockReadOptions;
 pub use read::FuseLowLevelBlockReader;
-pub use read::FuseLowLevelClusterKeyReader;
 pub use read::FuseLowLevelColumnBatchReader;
 pub use read::FuseLowLevelColumnReader;
 pub use read::FuseLowLevelDataReader;

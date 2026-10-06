@@ -14,7 +14,6 @@
 
 //! Low-level, logical-column-oriented FUSE block reader.
 
-use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::io;
 use std::io::Read;
@@ -39,9 +38,6 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Evaluator;
-use databend_common_expression::Expr;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::ORIGIN_BLOCK_ID_COLUMN_ID;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
 use databend_common_expression::ORIGIN_VERSION_COLUMN_ID;
@@ -54,7 +50,6 @@ use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::decimal::DecimalScalar;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_io::ChunkedRangeReader;
 use databend_storages_common_io::OperatorRangeReader;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -91,9 +86,6 @@ pub struct FuseLowLevelBlockReadOptions {
     block_meta: Arc<BlockMeta>,
     default_values: Option<Vec<Scalar>>,
     stream_table_version: Option<u64>,
-    cluster_key_exprs: Vec<Expr<usize>>,
-    cluster_key_fields: BTreeSet<usize>,
-    cluster_key_func_ctx: Option<FunctionContext>,
     window_size: usize,
     max_prefetch: usize,
 }
@@ -106,9 +98,6 @@ impl FuseLowLevelBlockReadOptions {
             block_meta,
             default_values: None,
             stream_table_version: None,
-            cluster_key_exprs: Vec::new(),
-            cluster_key_fields: BTreeSet::new(),
-            cluster_key_func_ctx: None,
             window_size: DEFAULT_WINDOW_SIZE,
             max_prefetch: DEFAULT_MAX_PREFETCH,
         }
@@ -121,16 +110,6 @@ impl FuseLowLevelBlockReadOptions {
 
     pub fn with_stream_table_version(mut self, table_version: u64) -> Self {
         self.stream_table_version = Some(table_version);
-        self
-    }
-
-    pub fn with_cluster_keys(mut self, exprs: Vec<Expr<usize>>, func_ctx: FunctionContext) -> Self {
-        self.cluster_key_fields = exprs
-            .iter()
-            .flat_map(|expr| expr.column_refs().into_keys())
-            .collect();
-        self.cluster_key_exprs = exprs;
-        self.cluster_key_func_ctx = Some(func_ctx);
         self
     }
 
@@ -169,23 +148,7 @@ impl FuseLowLevelBlockReadOptions {
                 self.schema.num_fields()
             )));
         }
-        if self.cluster_key_func_ctx.is_some() {
-            if self.cluster_key_exprs.is_empty() {
-                return Err(ErrorCode::BadArguments(
-                    "FuseLowLevelBlockReader requires at least one cluster-key expression",
-                ));
-            }
-            if let Some(field) = self
-                .cluster_key_fields
-                .iter()
-                .find(|&&field| field >= self.schema.num_fields())
-            {
-                return Err(ErrorCode::BadArguments(format!(
-                    "cluster-key field {field} is outside the {}-field schema",
-                    self.schema.num_fields()
-                )));
-            }
-        }
+
         Ok(())
     }
 }
@@ -197,9 +160,6 @@ pub struct FuseLowLevelBlockReader {
     block_meta: Arc<BlockMeta>,
     default_values: Option<Vec<Scalar>>,
     stream_table_version: Option<u64>,
-    cluster_key_exprs: Vec<Expr<usize>>,
-    cluster_key_fields: BTreeSet<usize>,
-    cluster_key_func_ctx: Option<FunctionContext>,
     arrow_schema: Arc<Schema>,
     parquet_schema: Arc<SchemaDescriptor>,
     arrow_fields: Vec<Arc<Field>>,
@@ -289,9 +249,6 @@ impl FuseLowLevelBlockReader {
             block_meta: options.block_meta.clone(),
             default_values: options.default_values,
             stream_table_version: options.stream_table_version,
-            cluster_key_exprs: options.cluster_key_exprs,
-            cluster_key_fields: options.cluster_key_fields,
-            cluster_key_func_ctx: options.cluster_key_func_ctx,
             arrow_schema,
             parquet_schema,
             arrow_fields,
@@ -308,28 +265,6 @@ impl FuseLowLevelBlockReader {
         let retained_per_leaf =
             DEFAULT_WINDOW_SIZE.saturating_mul(DEFAULT_MAX_PREFETCH.saturating_add(2));
         retained_per_leaf.saturating_mul(physical_leaves)
-    }
-
-    pub fn read_cluster_keys(mut self) -> Result<FuseLowLevelClusterKeyReader> {
-        let Some(func_ctx) = self.cluster_key_func_ctx.take() else {
-            return Err(ErrorCode::BadArguments(
-                "FuseLowLevelBlockReader has no cluster-key configuration",
-            ));
-        };
-        let fields = std::mem::take(&mut self.cluster_key_fields);
-        let exprs = std::mem::take(&mut self.cluster_key_exprs);
-        let mut key_readers = Vec::with_capacity(fields.len());
-        for &field_index in &fields {
-            key_readers.push((field_index, self.create_column_batch_reader(field_index)?));
-        }
-        Ok(FuseLowLevelClusterKeyReader {
-            block: self,
-            exprs,
-            fields,
-            func_ctx,
-            key_readers,
-            payload_readers: HashMap::new(),
-        })
     }
 
     pub fn read_data(self) -> FuseLowLevelDataReader {
@@ -1043,86 +978,6 @@ impl FuseLowLevelFullRowReader {
     }
 }
 
-/// Reads configured cluster-key dependencies and evaluates key expressions by row batch.
-pub struct FuseLowLevelClusterKeyReader {
-    block: FuseLowLevelBlockReader,
-    exprs: Vec<Expr<usize>>,
-    fields: BTreeSet<usize>,
-    func_ctx: FunctionContext,
-    key_readers: Vec<(usize, FuseLowLevelColumnBatchReader)>,
-    payload_readers: HashMap<usize, FuseLowLevelColumnBatchReader>,
-}
-
-impl FuseLowLevelClusterKeyReader {
-    pub fn read_rows(&mut self, rows: usize) -> Result<(Vec<Column>, HashMap<usize, Column>)> {
-        let mut source_columns = HashMap::with_capacity(self.key_readers.len());
-        for (field_index, reader) in &mut self.key_readers {
-            source_columns.insert(*field_index, reader.read_rows(rows)?);
-        }
-        let keys = evaluate_cluster_keys(&source_columns, &self.exprs, &self.func_ctx, rows)?;
-
-        Ok((keys, source_columns))
-    }
-
-    pub fn read_column_rows(&mut self, field_index: usize, rows: usize) -> Result<Column> {
-        if self.fields.contains(&field_index) {
-            return Err(ErrorCode::BadArguments(format!(
-                "cluster-key field {field_index} must be reused from the key batch"
-            )));
-        }
-        if !self.payload_readers.contains_key(&field_index) {
-            let reader = self.block.create_column_batch_reader(field_index)?;
-            self.payload_readers.insert(field_index, reader);
-        }
-        self.payload_readers
-            .get_mut(&field_index)
-            .expect("payload reader inserted")
-            .read_rows(rows)
-    }
-
-    pub fn finish(self) -> Result<()> {
-        for (_, reader) in self.key_readers {
-            reader.finish()?;
-        }
-        for (_, reader) in self.payload_readers {
-            reader.finish()?;
-        }
-        Ok(())
-    }
-}
-
-fn evaluate_cluster_keys(
-    source_columns: &HashMap<usize, Column>,
-    exprs: &[Expr<usize>],
-    func_ctx: &FunctionContext,
-    rows: usize,
-) -> Result<Vec<Column>> {
-    let mut fields = source_columns.keys().copied().collect::<Vec<_>>();
-    fields.sort_unstable();
-
-    let mut positions = HashMap::with_capacity(fields.len());
-    let mut columns = Vec::with_capacity(fields.len());
-    for (position, field) in fields.into_iter().enumerate() {
-        positions.insert(field, position);
-        columns.push(source_columns[&field].clone());
-    }
-
-    let block = DataBlock::new_from_columns(columns);
-    let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
-    let mut keys = Vec::with_capacity(exprs.len());
-    for expr in exprs {
-        let projected = expr.project_column_ref(|field| match positions.get(field) {
-            Some(position) => Ok(*position),
-            None => Err(ErrorCode::Internal(format!(
-                "cluster-key dependency field {field} is missing"
-            ))),
-        })?;
-        let value = evaluator.run(&projected)?;
-        keys.push(value.into_full_column(projected.data_type(), rows));
-    }
-    Ok(keys)
-}
-
 fn is_origin_column(column_id: ColumnId) -> bool {
     matches!(
         column_id,
@@ -1598,10 +1453,8 @@ mod tests {
     use std::collections::HashMap;
 
     use databend_common_base::runtime::GlobalIORuntime;
-    use databend_common_expression::ColumnRef;
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
-    use databend_common_expression::FunctionContext;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableSchema;
     use databend_common_expression::types::AnyType;
@@ -1848,49 +1701,6 @@ mod tests {
         for (field, expected) in columns.iter().enumerate() {
             assert_eq!(&actual.get_by_offset(field).to_column(), expected);
         }
-    }
-
-    #[test]
-    fn test_cluster_key_reader_batches_keys_and_payload_independently() {
-        crate::test_utils::init_test_globals().unwrap();
-        let operator = Operator::new(Memory::default()).unwrap().finish();
-        let (schema, columns) = test_data();
-        let meta = write_columns(
-            operator.clone(),
-            schema.clone(),
-            "cluster-key-reader.parquet",
-            &columns,
-        );
-        let key_expr = Expr::ColumnRef(ColumnRef {
-            span: None,
-            id: 0,
-            data_type: DataType::Number(NumberDataType::Int32),
-            display_name: "id".to_string(),
-        });
-        let options = read_options(operator, schema, meta)
-            .with_cluster_keys(vec![key_expr], FunctionContext::default());
-        let mut reader = FuseLowLevelBlockReader::create(options)
-            .unwrap()
-            .read_cluster_keys()
-            .unwrap();
-
-        let (first_keys, first_source_columns) = reader.read_rows(2).unwrap();
-        assert_eq!(first_keys, vec![columns[0].slice(0..2)]);
-        assert_eq!(first_source_columns[&0], columns[0].slice(0..2));
-        assert_eq!(
-            reader.read_column_rows(1, 2).unwrap(),
-            columns[1].slice(0..2)
-        );
-
-        let (second_keys, second_source_columns) = reader.read_rows(3).unwrap();
-        assert_eq!(second_keys, vec![columns[0].slice(2..5)]);
-        assert_eq!(second_source_columns[&0], columns[0].slice(2..5));
-        assert_eq!(
-            reader.read_column_rows(1, 3).unwrap(),
-            columns[1].slice(2..5)
-        );
-        assert!(reader.read_column_rows(0, 0).is_err());
-        reader.finish().unwrap();
     }
 
     #[test]

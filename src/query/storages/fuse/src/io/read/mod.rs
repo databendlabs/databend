@@ -31,7 +31,6 @@ pub use block::BlockReader;
 pub use block::DataItem;
 pub use block::FuseLowLevelBlockReadOptions;
 pub use block::FuseLowLevelBlockReader;
-pub use block::FuseLowLevelClusterKeyReader;
 pub use block::FuseLowLevelColumnBatchReader;
 pub use block::FuseLowLevelColumnReader;
 pub use block::FuseLowLevelDataReader;
