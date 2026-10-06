@@ -69,6 +69,10 @@ where
         self.rows.len()
     }
 
+    pub fn rows_column_suffix(&self) -> databend_common_expression::Column {
+        self.rows.slice(self.row_index..self.rows.len()).to_column()
+    }
+
     pub fn cursor_mut(&self) -> CursorMut<'_, R, O> {
         CursorMut {
             row_index: self.row_index,

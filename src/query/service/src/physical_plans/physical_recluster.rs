@@ -65,6 +65,7 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::builders::SortPipelineBuilder;
+use crate::pipelines::processors::horizontal_recluster::HorizontalReclusterSource;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextSettings;
 use crate::spillers::ReclusterSpiller;
@@ -142,7 +143,19 @@ impl IPhysicalPlan for Recluster {
                 // coordinator and cannot see this node's live memory pressure.
                 // Oversized tasks are only tolerable when sort spill can absorb
                 // the pressure; otherwise fail fast instead of risking an OOM kill.
-                if !builder.ctx.get_enable_sort_spill() {
+                let multiway_merge = task.kind == ReclusterTaskKind::MergeBlocks
+                    && settings.get_enable_recluster_multiway_merge()?
+                    && matches!(
+                        table.get_storage_format(),
+                        databend_common_storages_fuse::FuseStorageFormat::Parquet
+                    )
+                    && !table.schema().fields().iter().any(|field| {
+                        matches!(
+                            field.computed_expr(),
+                            Some(databend_common_expression::ComputedExpr::Virtual(_))
+                        )
+                    });
+                if !multiway_merge && !builder.ctx.get_enable_sort_spill() {
                     let max_memory_usage = settings.get_max_memory_usage()? as usize;
                     // `max_memory_usage == 0` means memory usage is unlimited.
                     if max_memory_usage != 0 {
@@ -192,30 +205,6 @@ impl IPhysicalPlan for Recluster {
                     );
                 }
 
-                builder.ctx.set_partitions(plan.parts.clone())?;
-
-                table.read_data(
-                    builder.ctx.clone(),
-                    &plan,
-                    &mut builder.main_pipeline,
-                    false,
-                )?;
-
-                let num_input_columns = schema.fields().len();
-                if table.change_tracking_enabled() {
-                    let stream_ctx = StreamContext::try_create(
-                        builder.ctx.get_function_context()?,
-                        schema,
-                        table_info.ident.seq,
-                        false,
-                        false,
-                    )?;
-
-                    builder
-                        .main_pipeline
-                        .add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));
-                }
-
                 let input_schema = DataSchema::from(table.schema_with_stream()).into();
                 let mut cluster_stats_gen = table.get_cluster_stats_gen(
                     builder.ctx.clone(),
@@ -223,18 +212,61 @@ impl IPhysicalPlan for Recluster {
                     block_thresholds,
                     input_schema,
                 )?;
-                if !cluster_stats_gen.eval_operators.is_empty() {
-                    let eval_operators = cluster_stats_gen.eval_operators.clone();
-                    let func_ctx2 = cluster_stats_gen.func_ctx.clone();
-                    builder.main_pipeline.add_transformer(move || {
-                        CompoundBlockOperator::new(
-                            eval_operators.clone(),
-                            func_ctx2.clone(),
-                            num_input_columns,
-                        )
-                    });
-                }
+                if multiway_merge {
+                    if !cluster_stats_gen.is_linear() {
+                        return Err(ErrorCode::Internal(
+                            "MergeBlocks requires linear cluster keys",
+                        ));
+                    }
+                    builder.main_pipeline.add_source(
+                        |output| {
+                            HorizontalReclusterSource::create(
+                                builder.ctx.clone(),
+                                output,
+                                table.clone(),
+                                task,
+                                &cluster_stats_gen,
+                            )
+                        },
+                        1,
+                    )?;
+                } else {
+                    builder.ctx.set_partitions(plan.parts.clone())?;
 
+                    table.read_data(
+                        builder.ctx.clone(),
+                        &plan,
+                        &mut builder.main_pipeline,
+                        false,
+                    )?;
+
+                    let num_input_columns = schema.fields().len();
+                    if table.change_tracking_enabled() {
+                        let stream_ctx = StreamContext::try_create(
+                            builder.ctx.get_function_context()?,
+                            schema,
+                            table_info.ident.seq,
+                            false,
+                            false,
+                        )?;
+
+                        builder
+                            .main_pipeline
+                            .add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));
+                    }
+
+                    if !cluster_stats_gen.eval_operators.is_empty() {
+                        let eval_operators = cluster_stats_gen.eval_operators.clone();
+                        let func_ctx2 = cluster_stats_gen.func_ctx.clone();
+                        builder.main_pipeline.add_transformer(move || {
+                            CompoundBlockOperator::new(
+                                eval_operators.clone(),
+                                func_ctx2.clone(),
+                                num_input_columns,
+                            )
+                        });
+                    }
+                }
                 let max_threads = settings.get_max_threads()? as usize;
 
                 let (rows_per_block, bytes_per_block) = block_thresholds.calc_rows_for_recluster(
@@ -253,7 +285,16 @@ impl IPhysicalPlan for Recluster {
                     ));
                 }
 
-                if cluster_stats_gen.is_hilbert() {
+                if multiway_merge {
+                    let extra_key_num = cluster_stats_gen.extra_key_num;
+                    builder.main_pipeline.add_accumulating_transformer(move || {
+                        OrderedBlockCompactBuilder::new(compact_thresholds, extra_key_num)
+                    });
+                    builder.main_pipeline.try_resize(max_threads)?;
+                    builder
+                        .main_pipeline
+                        .add_block_meta_transformer(|| TransformCompactBlock);
+                } else if cluster_stats_gen.is_hilbert() {
                     Self::build_hilbert_layout_pipeline(
                         builder,
                         task,

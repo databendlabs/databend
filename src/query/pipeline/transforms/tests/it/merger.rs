@@ -64,6 +64,102 @@ impl SortedStream for TestStream {
     }
 }
 
+#[test]
+fn test_retention_threshold_with_pending_refills() -> Result<()> {
+    let (input, expected) = prepare_input_and_result(
+        vec![
+            (0..100).map(|i| vec![i * 2]).collect(),
+            (0..100).map(|i| vec![i * 2 + 1]).collect(),
+        ],
+        None,
+    );
+    let streams = input
+        .into_iter()
+        .map(|blocks| TestStream::new(blocks.into()))
+        .collect();
+    let mut merger =
+        Merger::<TestLoserTreeSort, _>::new(streams, 1024, None).with_max_retained_bytes(32);
+    let mut output = Vec::new();
+    while !merger.is_finished() {
+        if let Some(block) = merger.next_block()? {
+            assert!(block.num_rows() < 1024);
+            output.push(block);
+        }
+        assert!(merger.retained_bytes() <= 48);
+    }
+    let actual = DataBlock::concat(&output)?;
+    assert_eq!(actual.num_rows(), expected.num_rows());
+    assert_eq!(actual.get_last_column(), expected.get_last_column());
+    Ok(())
+}
+
+#[test]
+fn test_retention_flushes_prefix_before_missing_head() -> Result<()> {
+    // Initial heads occupy 32 bytes. Selecting 0 exhausts route 0, and its
+    // refill crosses the 40-byte threshold while route 1 still has rows.
+    let (input, _) = prepare_input_and_result(
+        vec![vec![vec![0], vec![2, 4, 6, 8]], vec![vec![1, 3, 5]]],
+        None,
+    );
+    let streams = input
+        .into_iter()
+        .map(|blocks| TestStream::new(blocks.into()))
+        .collect();
+    let mut merger =
+        Merger::<TestLoserTreeSort, _>::new(streams, 1024, None).with_max_retained_bytes(40);
+    let prefix = loop {
+        if let Some(block) = merger.next_block()? {
+            break block;
+        }
+    };
+    assert!(!prefix.is_empty());
+    // Recovery requires the selected prefix to have been materialized.
+    assert!(merger.into_remaining_streams().is_ok());
+    Ok(())
+}
+
+#[test]
+fn test_recover_unconsumed_merge_suffixes() -> Result<()> {
+    let (input, expected) = prepare_input_and_result(
+        vec![vec![vec![0, 2, 4], vec![6, 8]], vec![vec![1, 3, 5], vec![
+            7, 9,
+        ]]],
+        None,
+    );
+    let streams = input
+        .into_iter()
+        .map(|blocks| TestStream::new(blocks.into()))
+        .collect();
+    let mut merger = Merger::<TestLoserTreeSort, _>::new(streams, 3, None);
+    let prefix = loop {
+        if let Some(block) = merger.next_block()? {
+            break block;
+        }
+    };
+    let recovered = merger.into_remaining_streams()?;
+    let streams = recovered
+        .into_iter()
+        .map(|recovered| {
+            let mut stream = recovered.stream;
+            if let Some((block, _)) = recovered.head {
+                stream.data.push_front(block);
+            }
+            stream
+        })
+        .collect();
+    let mut suffix = Merger::<TestLoserTreeSort, _>::new(streams, 3, None);
+    let mut output = vec![prefix];
+    while !suffix.is_finished() {
+        if let Some(block) = suffix.next_block()? {
+            output.push(block);
+        }
+    }
+    let actual = DataBlock::concat(&output)?;
+    assert_eq!(actual.num_rows(), expected.num_rows());
+    assert_eq!(actual.get_last_column(), expected.get_last_column());
+    Ok(())
+}
+
 type TestMerger<A> = Merger<A, TestStream>;
 type TestHeapSort = HeapSort<SimpleRowsAsc<Int32Type>>;
 type TestLoserTreeSort = LoserTreeSort<SimpleRowsAsc<Int32Type>>;

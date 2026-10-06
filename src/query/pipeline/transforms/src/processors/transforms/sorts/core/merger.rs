@@ -32,12 +32,21 @@ pub trait SortedStream {
     fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)>;
 }
 
+/// An input stream and its already-decoded, unconsumed head after interrupting
+/// a merge at an output boundary.
+pub struct RecoveredMergeStream<S> {
+    pub stream: S,
+    pub head: Option<(DataBlock, Column)>,
+}
+
 struct BufferState {
     buffer: DataBlockVec,
     stream_to_buffer: Vec<Option<usize>>,
     output_indices: ChunkIndex,
     detach: Vec<usize>,
     free: Vec<usize>,
+    retained_bytes: usize,
+    block_bytes: Vec<usize>,
 }
 
 impl BufferState {
@@ -48,6 +57,8 @@ impl BufferState {
             output_indices: ChunkIndex::default(),
             detach: Vec::new(),
             free: Vec::new(),
+            retained_bytes: 0,
+            block_bytes: Vec::new(),
         }
     }
 
@@ -59,13 +70,23 @@ impl BufferState {
         self.output_indices.num_rows()
     }
 
-    fn attach_stream_block(&mut self, stream_index: usize, block: DataBlock) -> Result<()> {
+    fn attach_stream_block(
+        &mut self,
+        stream_index: usize,
+        block: DataBlock,
+        key_bytes: Option<usize>,
+    ) -> Result<()> {
+        // Ordinary sort callers do not enable retention accounting.
+        let bytes = key_bytes.map_or(0, |key_bytes| block.memory_size().saturating_add(key_bytes));
+        self.retained_bytes = self.retained_bytes.saturating_add(bytes);
         let index = if let Some(index) = self.free.pop() {
+            self.block_bytes[index] = bytes;
             self.buffer.replace(index, block);
             index
         } else {
             let index = self.buffer.block_rows().len();
             self.buffer.push(block)?;
+            self.block_bytes.push(bytes);
             index
         };
         self.stream_to_buffer[stream_index] = Some(index);
@@ -86,6 +107,8 @@ impl BufferState {
     fn build_output(&mut self) -> DataBlock {
         let block = self.buffer.take(&self.output_indices);
         for i in self.detach.iter().copied() {
+            self.retained_bytes = self.retained_bytes.saturating_sub(self.block_bytes[i]);
+            self.block_bytes[i] = 0;
             self.buffer.replace_with_empty(i);
             self.free.push(i);
         }
@@ -116,6 +139,7 @@ where A: SortAlgorithm
 {
     batch_rows: usize,
     limit: Option<usize>,
+    max_retained_bytes: usize,
     unsorted_streams: Vec<S>,
 
     pending_streams: VecDeque<usize>,
@@ -139,9 +163,25 @@ where A: SortAlgorithm
             sorted_cursors,
             batch_rows,
             limit,
+            max_retained_bytes: usize::MAX,
             pending_streams,
             buffers,
         }
+    }
+
+    /// Flush a selected prefix before refilling exhausted streams once this
+    /// soft retention threshold is reached. Existing sort callers are unchanged.
+    pub fn with_max_retained_bytes(mut self, bytes: usize) -> Self {
+        self.max_retained_bytes = bytes;
+        self
+    }
+
+    pub fn retained_bytes(&self) -> usize {
+        self.buffers.retained_bytes
+    }
+
+    fn should_flush(&self) -> bool {
+        self.buffers.has_output() && self.buffers.retained_bytes >= self.max_retained_bytes
     }
 
     #[inline(always)]
@@ -245,6 +285,37 @@ where A: SortAlgorithm
     pub fn streams(self) -> Vec<S> {
         self.unsorted_streams
     }
+
+    /// Recover each stream's unconsumed suffix after flushing the selected
+    /// output prefix. Used by external mergers to reduce fan-in under pressure.
+    pub fn into_remaining_streams(mut self) -> Result<Vec<RecoveredMergeStream<S>>> {
+        if self.buffers.has_output() {
+            return Err(databend_common_exception::ErrorCode::Internal(
+                "flush the selected merge prefix before recovering streams",
+            ));
+        }
+        let mut heads = vec![None; self.unsorted_streams.len()];
+        while let Some(Reverse(cursor)) = self.sorted_cursors.peek() {
+            let stream = cursor.input_index;
+            let buffer = self.buffers.stream_to_buffer[stream].expect("active cursor buffer");
+            let mut indices = ChunkIndex::default();
+            indices.push_merge_range(
+                buffer as _,
+                cursor.row_index as _,
+                (cursor.num_rows() - cursor.row_index) as _,
+            );
+            let block = self.buffers.buffer.take(&indices);
+            let keys = cursor.rows_column_suffix();
+            heads[stream] = Some((block, keys));
+            self.sorted_cursors.pop();
+        }
+        Ok(self
+            .unsorted_streams
+            .into_iter()
+            .zip(heads)
+            .map(|(stream, head)| RecoveredMergeStream { stream, head })
+            .collect())
+    }
 }
 
 impl<A, S> Merger<A, S>
@@ -255,7 +326,14 @@ where
     #[inline]
     pub fn poll_pending_stream(&mut self) -> Result<()> {
         let mut continue_pendings = Vec::new();
-        while let Some(i) = self.pending_streams.pop_front() {
+        while !self.pending_streams.is_empty() {
+            // Do not load every route before the caller can reduce fan-in. A
+            // missing head prevents further selection, but the active suffixes
+            // can still be recovered at an empty output boundary.
+            if self.buffers.retained_bytes >= self.max_retained_bytes {
+                break;
+            }
+            let i = self.pending_streams.pop_front().expect("pending stream");
             debug_assert!(self.buffers.stream_to_buffer[i].is_none());
             let (input, pending) = self.unsorted_streams[i].next()?;
             if pending {
@@ -264,7 +342,9 @@ where
             }
             if let Some((block, col)) = input {
                 let rows = A::Rows::from_column(&col)?;
-                self.buffers.attach_stream_block(i, block)?;
+                let key_bytes =
+                    (self.max_retained_bytes != usize::MAX).then(|| col.memory_size(false));
+                self.buffers.attach_stream_block(i, block, key_bytes)?;
                 let cursor = Cursor::new(i, rows);
                 self.sorted_cursors.push(i, Reverse(cursor));
             }
@@ -282,10 +362,17 @@ where
             return Ok(None);
         }
 
+        if self.should_flush() {
+            return Ok(Some(self.build_output()?));
+        }
         if self.has_pending_stream() {
             self.poll_pending_stream()?;
             if self.has_pending_stream() {
-                return Ok(None);
+                return if self.should_flush() {
+                    Ok(Some(self.build_output()?))
+                } else {
+                    Ok(None)
+                };
             }
         }
 
@@ -299,10 +386,17 @@ where
         }
 
         while self.evaluate_cursor() {
+            if self.should_flush() {
+                return Ok(Some(self.build_output()?));
+            }
             if self.has_pending_stream() {
                 self.poll_pending_stream()?;
                 if self.has_pending_stream() {
-                    return Ok(None);
+                    return if self.should_flush() {
+                        Ok(Some(self.build_output()?))
+                    } else {
+                        Ok(None)
+                    };
                 }
             }
         }
