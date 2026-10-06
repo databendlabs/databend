@@ -1199,6 +1199,79 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_horizontal_merge_read_failure_keeps_snapshot() -> anyhow::Result<()> {
+        use futures::TryStreamExt;
+
+        use crate::test_kits::execute_command;
+        use crate::test_kits::execute_query;
+
+        let fixture = TestFixture::setup().await?;
+        for sql in [
+            "create table default.multiway_failure(k int, payload string) cluster by(k) row_per_block=100",
+            "insert into default.multiway_failure values (1,'a'),(3,'c')",
+            "insert into default.multiway_failure values (2,'b'),(4,'d')",
+        ] {
+            execute_command(fixture.new_query_ctx().await?, sql).await?;
+        }
+        let ctx = fixture.new_query_ctx().await?;
+        let table = ctx
+            .get_table("default", "default", "multiway_failure")
+            .await?;
+        let fuse = FuseTable::try_from_table(table.as_ref())?;
+        let before = fuse.read_table_snapshot().await?.unwrap();
+        let blocks = execute_query(
+            fixture.new_query_ctx().await?,
+            "select block_location from fuse_block('default','multiway_failure') limit 1",
+        )
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+        let location = blocks[0].get_by_offset(0).to_column();
+        let databend_common_expression::ScalarRef::String(location) = location.index(0).unwrap()
+        else {
+            panic!("expected source block path");
+        };
+        let operator = fuse.get_operator();
+        let contents = operator.read(location).await?;
+        operator
+            .write(location, "corrupted recluster test input")
+            .await?;
+        let settings = ctx.get_settings();
+        settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
+        let result = execute_command(
+            ctx.clone(),
+            "alter table default.multiway_failure recluster final",
+        )
+        .await;
+        // Restore even if the expected failure did not occur. The fixture owns
+        // this file exclusively; no other table or test data is touched.
+        operator.write(location, contents).await?;
+        assert!(
+            result.is_err(),
+            "corrupted input cannot successfully commit"
+        );
+        let ctx = fixture.new_query_ctx().await?;
+        let table = ctx
+            .get_table("default", "default", "multiway_failure")
+            .await?;
+        let after = FuseTable::try_from_table(table.as_ref())?
+            .read_table_snapshot()
+            .await?
+            .unwrap();
+        assert_eq!(before.snapshot_id, after.snapshot_id);
+        let blocks = execute_query(ctx, "select count(), sum(k) from default.multiway_failure")
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        let block = DataBlock::concat(&blocks)?;
+        for (field, expected) in [4, 10].into_iter().enumerate() {
+            let column = block.get_by_offset(field).to_column();
+            assert_eq!(column.index(0).unwrap().to_string(), expected.to_string());
+        }
+        Ok(())
+    }
+
     /// Local performance probe, not a CI timing assertion. Run with --ignored
     /// --nocapture to compare identical ordered inputs with the feature off/on.
     #[tokio::test(flavor = "multi_thread")]
