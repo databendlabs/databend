@@ -952,6 +952,24 @@ mod tests {
         )?;
         assert!(missing_stream.next().is_err());
 
+        // Missing spill chunks must also propagate as an execution error.
+        let mut spilled = DataBlock::new_from_columns(vec![
+            Int32Type::from_data(vec![1]),
+            Int32Type::from_data(vec![0]),
+        ]);
+        let keys = probe.converter.convert(&spilled)?.to_column();
+        spilled.add_column(keys);
+        let path = spiller.spill(spilled)?;
+        let operator = databend_common_storage::DataOperator::instance().spill_operator();
+        operator.delete(&path).await?;
+        let mut missing_spill = ReclusterMergeStream::<R>::new(
+            ReclusterMergeInput::Spill(VecDeque::from([path])),
+            &merge_config,
+            &spiller,
+        )?;
+        assert!(missing_spill.next().is_err());
+        ctx.unload_spill_meta();
+
         let mut merge_factory = ReclusterMergeFactory {
             merge_config,
             input_blocks,
