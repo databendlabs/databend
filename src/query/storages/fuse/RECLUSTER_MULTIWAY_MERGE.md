@@ -91,7 +91,8 @@ SQL coverage is in `09_0055_horizontal_merge.test`. Run it against both a standa
 and a cluster, together with `09_0055_recluster_task_kinds.test` and
 `09_0011_change_tracking.test`. Tests cover spill rounds, suffix recovery, equal keys, lineage
 replay, defaults, computed cluster keys, nullable float/Decimal composite keys, nested payload,
-stream origins, ordering errors, missing input and cancellation checks.
+stream origins, ordering errors, missing input, cancellation checks and unchanged snapshots
+on an execution-time corrupt-input failure.
 
 The ignored local probe compares separately generated, identically ordered input tables:
 
