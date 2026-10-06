@@ -97,28 +97,6 @@ pub struct ReclusterRowOriginRange {
     pub rows: std::ops::Range<u32>,
 }
 
-/// Final-output attachment, created only after compact has finished slicing.
-#[derive(Debug)]
-pub struct ReclusterOutputLineage {
-    pub origins: Vec<ReclusterRowOriginRange>,
-}
-
-databend_common_expression::local_block_meta_serde!(ReclusterOutputLineage);
-
-#[typetag::serde(name = "recluster_output_lineage")]
-impl databend_common_expression::BlockMetaInfo for ReclusterOutputLineage {}
-
-pub struct TransformExtractReclusterLineage;
-
-impl Transform for TransformExtractReclusterLineage {
-    const NAME: &'static str = "ExtractReclusterLineage";
-
-    fn transform(&mut self, block: DataBlock) -> Result<DataBlock> {
-        let (block, origins) = extract_recluster_lineage(block)?;
-        block.add_meta(Some(Box::new(ReclusterOutputLineage { origins })))
-    }
-}
-
 /// Extract only after the final compact split/concat has established block
 /// boundaries. No generic DataBlock metadata propagation is relied upon.
 pub fn extract_recluster_lineage(
@@ -1240,6 +1218,10 @@ mod tests {
             .ok()
             .and_then(|value| value.parse::<usize>().ok())
             .unwrap_or(4096);
+        let payload_repeat = std::env::var("RECLUSTER_BENCH_PAYLOAD_REPEAT")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(256);
         for enabled in [false, true] {
             let table = if enabled { "merge_new" } else { "merge_old" };
             let create = format!(
@@ -1248,7 +1230,7 @@ mod tests {
             execute_command(fixture.new_query_ctx().await?, &create).await?;
             for source in 0..16 {
                 let insert = format!(
-                    "insert into default.{table} select number * 16 + {source}, repeat(to_string(number), 256) from numbers({rows_per_source})"
+                    "insert into default.{table} select number * 16 + {source}, repeat(to_string(number), {payload_repeat}) from numbers({rows_per_source})"
                 );
                 execute_command(fixture.new_query_ctx().await?, &insert).await?;
             }
