@@ -33,6 +33,7 @@ use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Aggregate;
 use databend_common_sql::plans::AggregateMode;
 use databend_common_sql::plans::ConstantTableScan;
+use databend_common_sql::plans::GroupingSets;
 use databend_common_sql::plans::ScalarItem;
 use itertools::Itertools;
 
@@ -284,12 +285,7 @@ impl PhysicalPlanBuilder {
                                 *arg = grouping_sets.dup_group_items[pos].0;
                             }
                         }
-                        for item in &mut func.sig.order_by {
-                            if let Some(pos) = group_items.iter().position(|g| *g == item.index) {
-                                item.index = grouping_sets.dup_group_items[pos].0;
-                                item.data_type = grouping_sets.dup_group_items[pos].1.clone();
-                            }
-                        }
+                        remap_grouping_set_order_by(&mut func.sig, &group_items, grouping_sets);
                     }
                 }
 
@@ -429,12 +425,7 @@ impl PhysicalPlanBuilder {
                                 *ty = grouping_sets.dup_group_items[pos].1.clone();
                             }
                         }
-                        for item in &mut func.sig.order_by {
-                            if let Some(pos) = group_items.iter().position(|g| *g == item.index) {
-                                item.index = grouping_sets.dup_group_items[pos].0;
-                                item.data_type = grouping_sets.dup_group_items[pos].1.clone();
-                            }
-                        }
+                        remap_grouping_set_order_by(&mut func.sig, &group_items, grouping_sets);
                     }
                 }
 
@@ -543,6 +534,21 @@ fn determine_shuffle_mode(
     };
 
     Ok(shuffle_mode)
+}
+
+// Use the original grouping columns and types, not AggregateExpand's masked keys.
+fn remap_grouping_set_order_by(
+    signature: &mut AggregateFunctionSignature,
+    group_items: &[Symbol],
+    grouping_sets: &GroupingSets,
+) {
+    for item in &mut signature.order_by {
+        if let Some(pos) = group_items.iter().position(|g| *g == item.index) {
+            let (index, data_type) = &grouping_sets.dup_group_items[pos];
+            item.index = *index;
+            item.data_type = data_type.clone();
+        }
+    }
 }
 
 fn build_aggregate_function(
