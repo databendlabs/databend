@@ -84,8 +84,8 @@ use parquet::schema::types::SchemaDescriptor;
 
 use crate::io::create_file_range_reader;
 
-const DEFAULT_WINDOW_SIZE: usize = 4 * 1024 * 1024;
 const DEFAULT_MAX_PREFETCH: usize = 2;
+const ROW_WINDOW_ALIGNMENT: u128 = 1024 * 1024;
 
 pub struct FuseLowLevelBlockReadOptions {
     operator: Operator,
@@ -96,10 +96,13 @@ pub struct FuseLowLevelBlockReadOptions {
     cluster_key_exprs: Vec<Expr<usize>>,
     cluster_key_fields: BTreeSet<usize>,
     cluster_key_func_ctx: Option<FunctionContext>,
-    window_size: usize,
+    #[cfg(test)]
+    window_size: Option<usize>,
     max_prefetch: usize,
     populate_cache: bool,
     direct_read: bool,
+    merge_settings: Option<databend_storages_common_io::ReadSettings>,
+    window_rows: Option<usize>,
 }
 
 impl FuseLowLevelBlockReadOptions {
@@ -113,10 +116,13 @@ impl FuseLowLevelBlockReadOptions {
             cluster_key_exprs: Vec::new(),
             cluster_key_fields: BTreeSet::new(),
             cluster_key_func_ctx: None,
-            window_size: DEFAULT_WINDOW_SIZE,
+            #[cfg(test)]
+            window_size: None,
             max_prefetch: DEFAULT_MAX_PREFETCH,
             populate_cache: true,
             direct_read: false,
+            merge_settings: None,
+            window_rows: None,
         }
     }
 
@@ -140,8 +146,16 @@ impl FuseLowLevelBlockReadOptions {
         self
     }
 
-    pub fn with_window_size(mut self, window_size: usize) -> Self {
-        self.window_size = window_size;
+    #[cfg(test)]
+    fn with_window_size(mut self, window_size: usize) -> Self {
+        self.window_size = Some(window_size);
+        self
+    }
+
+    /// Derive each physical column's window from its compressed chunk size.
+    /// Does not change backend range boundaries or decode page boundaries.
+    pub fn with_window_rows(mut self, min_rows: usize) -> Self {
+        self.window_rows = Some(min_rows);
         self
     }
 
@@ -157,6 +171,11 @@ impl FuseLowLevelBlockReadOptions {
         self
     }
 
+    pub fn with_merge_io(mut self, settings: databend_storages_common_io::ReadSettings) -> Self {
+        self.merge_settings = Some(settings);
+        self
+    }
+
     /// Bypass the optional shared disk-cache range layer.
     pub fn with_direct_read(mut self) -> Self {
         self.direct_read = true;
@@ -164,9 +183,23 @@ impl FuseLowLevelBlockReadOptions {
     }
 
     fn validate(&self) -> Result<()> {
-        if self.window_size == 0 {
+        if self.window_rows == Some(0) {
+            return Err(ErrorCode::BadArguments(
+                "window rows must be greater than zero",
+            ));
+        }
+        #[cfg(test)]
+        if self.window_size == Some(0) {
             return Err(ErrorCode::BadArguments(
                 "FuseLowLevelBlockReader window_size must be greater than zero",
+            ));
+        }
+        let has_window = self.window_rows.is_some();
+        #[cfg(test)]
+        let has_window = has_window || self.window_size.is_some();
+        if !has_window {
+            return Err(ErrorCode::BadArguments(
+                "low-level reader requires target window rows",
             ));
         }
         if self.max_prefetch == 0 {
@@ -226,10 +259,13 @@ pub struct FuseLowLevelBlockReader {
     parquet_metadata: Arc<ParquetMetaData>,
     row_count: usize,
     compression: ParquetCompression,
-    window_size: usize,
+    #[cfg(test)]
+    window_size: Option<usize>,
     max_prefetch: usize,
     populate_cache: bool,
     direct_read: bool,
+    merge_settings: Option<databend_storages_common_io::ReadSettings>,
+    window_rows: Option<usize>,
 }
 
 impl FuseLowLevelBlockReader {
@@ -320,17 +356,58 @@ impl FuseLowLevelBlockReader {
             parquet_metadata,
             row_count,
             compression,
+            #[cfg(test)]
             window_size: options.window_size,
             max_prefetch: options.max_prefetch,
             populate_cache: options.populate_cache,
             direct_read: options.direct_read,
+            merge_settings: options.merge_settings,
+            window_rows: options.window_rows,
         })
     }
 
-    pub fn retained_window_bytes(physical_leaves: usize) -> usize {
-        let retained_per_leaf =
-            DEFAULT_WINDOW_SIZE.saturating_mul(DEFAULT_MAX_PREFETCH.saturating_add(2));
-        retained_per_leaf.saturating_mul(physical_leaves)
+    pub fn window_bytes_for_rows(
+        compressed_bytes: u64,
+        block_rows: u64,
+        min_rows: usize,
+    ) -> Result<usize> {
+        if min_rows == 0 {
+            return Err(ErrorCode::BadArguments(
+                "window rows must be greater than zero",
+            ));
+        }
+        let rows = (min_rows as u128).min(block_rows as u128);
+        if block_rows == 0 || compressed_bytes == 0 {
+            return Ok(1);
+        }
+        let bytes = (compressed_bytes as u128 * rows).div_ceil(block_rows as u128);
+        // Align the delivery size, not the file offset. The final window and
+        // small chunks remain clipped to the actual compressed column length.
+        let aligned = bytes.div_ceil(ROW_WINDOW_ALIGNMENT) * ROW_WINDOW_ALIGNMENT;
+        let bytes = aligned.min(compressed_bytes as u128).max(1);
+        usize::try_from(bytes)
+            .map_err(|_| ErrorCode::BadArguments("computed window exceeds address space"))
+    }
+
+    /// Estimates only this reader's windows, not decoded pages/dictionaries.
+    pub fn retained_window_bytes(
+        block: &BlockMeta,
+        column_ids: &[ColumnId],
+        min_rows: usize,
+    ) -> Result<usize> {
+        let mut bytes = 0usize;
+        for column_id in column_ids {
+            if let Some(meta) = block.col_metas.get(column_id) {
+                let (_, len) = meta.offset_length();
+                let window = Self::window_bytes_for_rows(len, block.row_count, min_rows)?;
+                bytes = bytes
+                    .checked_add(window.saturating_mul(DEFAULT_MAX_PREFETCH + 2))
+                    .ok_or_else(|| {
+                        ErrorCode::MemoryExceedsLimit("reader window estimate overflow")
+                    })?;
+            }
+        }
+        Ok(bytes)
     }
 
     pub fn read_cluster_keys(mut self) -> Result<FuseLowLevelClusterKeyReader> {
@@ -394,8 +471,13 @@ impl FuseLowLevelBlockReader {
             schema,
             self.block_meta.clone(),
         )
-        .with_window_size(self.window_size)
         .with_max_prefetch(self.max_prefetch);
+        #[cfg(test)]
+        {
+            options.window_size = self.window_size;
+        }
+        options.window_rows = self.window_rows;
+        options.merge_settings = self.merge_settings;
         options.direct_read = self.direct_read;
         options.populate_cache = self.populate_cache;
         if let Some(default_values) = &self.default_values {
@@ -1533,31 +1615,62 @@ impl ParquetLeafRowGroupAdapter {
         num_values: u64,
     ) -> Result<Self> {
         let len = range.end - range.start;
-        let chain: Box<dyn databend_storages_common_io::RangeReader> = if reader.direct_read {
-            Box::new(OperatorRangeReader::new(
-                reader.operator.clone(),
-                reader.path.clone(),
-                reader.max_prefetch.saturating_add(1),
-            ))
-        } else {
-            create_file_range_reader(
-                reader.operator.clone(),
-                reader.path.clone(),
-                reader.block_meta.file_size,
-                reader.max_prefetch,
-                reader.window_size as u64,
-                reader
-                    .window_size
-                    .saturating_mul(reader.max_prefetch.saturating_add(2)),
-                reader.populate_cache,
-            )?
+        let window_rows = match reader.window_rows {
+            Some(rows) => rows,
+            #[cfg(test)]
+            None => 1, // Byte-window test override; never a production fallback.
+            #[cfg(not(test))]
+            None => return Err(ErrorCode::Internal("validated reader missing window rows")),
         };
-        let input = ChunkedRangeReader::with_range(
-            chain,
-            range,
-            reader.window_size as u64,
-            reader.max_prefetch,
+        let window_size = FuseLowLevelBlockReader::window_bytes_for_rows(
+            len,
+            reader.block_meta.row_count,
+            window_rows,
         )?;
+        #[cfg(test)]
+        let window_size = reader.window_size.unwrap_or(window_size);
+        let chain: Box<dyn databend_storages_common_io::RangeReader> =
+            if let Some(settings) = &reader.merge_settings {
+                // Storage range and consumer windows are independent. Merge bounded
+                // adjacent windows before handing them to a continuous stream tail.
+                let mut windows = Vec::new();
+                let mut start = range.start;
+                while start < range.end {
+                    let end = start.saturating_add(window_size as u64).min(range.end);
+                    windows.push(start..end);
+                    start = end;
+                }
+                let tail = OperatorRangeReader::new_streaming(
+                    reader.operator.clone(),
+                    reader.path.clone(),
+                    range.clone(),
+                    reader.max_prefetch.saturating_add(1),
+                )?;
+                Box::new(databend_storages_common_io::MergeRangeReader::new(
+                    tail,
+                    &windows,
+                    settings,
+                    reader.max_prefetch.saturating_add(1),
+                )?)
+            } else if reader.direct_read {
+                Box::new(OperatorRangeReader::new(
+                    reader.operator.clone(),
+                    reader.path.clone(),
+                    reader.max_prefetch.saturating_add(1),
+                ))
+            } else {
+                create_file_range_reader(
+                    reader.operator.clone(),
+                    reader.path.clone(),
+                    reader.block_meta.file_size,
+                    reader.max_prefetch,
+                    window_size as u64,
+                    window_size.saturating_mul(reader.max_prefetch.saturating_add(2)),
+                    reader.populate_cache,
+                )?
+            };
+        let input =
+            ChunkedRangeReader::with_range(chain, range, window_size as u64, reader.max_prefetch)?;
         let Ok(num_values) = i64::try_from(num_values) else {
             return Err(ErrorCode::BadArguments(format!(
                 "Parquet leaf {column_id} num_values does not fit i64"
@@ -1808,6 +1921,7 @@ mod tests {
         meta: BlockMeta,
     ) -> FuseLowLevelBlockReadOptions {
         FuseLowLevelBlockReadOptions::new(operator, schema, Arc::new(meta))
+            .with_window_rows(2)
             .with_window_size(1)
             .with_max_prefetch(2)
     }
@@ -1874,6 +1988,24 @@ mod tests {
     }
 
     #[test]
+    fn test_compressed_window_size_from_rows() {
+        let size = FuseLowLevelBlockReader::window_bytes_for_rows;
+        assert_eq!(size(1000, 100, 10).unwrap(), 1000);
+        assert_eq!(size(3, 100, 10).unwrap(), 3);
+        assert_eq!(size(1001, 100, 10).unwrap(), 1001);
+        let mib = 1024 * 1024;
+        assert_eq!(size(10 * mib, 100, 1).unwrap(), mib as usize);
+        assert_eq!(size(10 * mib, 100, 10).unwrap(), mib as usize);
+        assert_eq!(size(10 * mib, 100, 11).unwrap(), 2 * mib as usize);
+        assert_eq!(size(2 * mib + 1, 100, 100).unwrap(), (2 * mib + 1) as usize);
+        assert_eq!(size(1001, 100, 200).unwrap(), 1001);
+        assert_eq!(size(0, 100, 10).unwrap(), 1);
+        assert_eq!(size(0, 0, 10).unwrap(), 1);
+        assert!(size(1000, 100, 0).is_err());
+        assert_eq!(size(u64::MAX, u64::MAX, 1).unwrap(), mib as usize);
+    }
+
+    #[test]
     fn test_minimum_batches_and_complete_rows() {
         crate::test_utils::init_test_globals().unwrap();
         let operator = Operator::new(Memory::default()).unwrap().finish();
@@ -1886,7 +2018,13 @@ mod tests {
         );
         meta.granule_index = None;
         let block = FuseLowLevelBlockReader::create(
-            read_options(operator, schema, meta).with_direct_read(),
+            read_options(operator, schema, meta)
+                .with_window_rows(2)
+                .with_merge_io(databend_storages_common_io::ReadSettings {
+                    max_gap_size: 48,
+                    max_range_size: 64,
+                    parquet_fast_read_bytes: 0,
+                }),
         )
         .unwrap();
         let mut column = block.read_column(0).unwrap();
@@ -2472,6 +2610,7 @@ mod tests {
                 schema.clone(),
                 Arc::new(meta.clone()),
             )
+            .with_window_rows(2)
             .with_max_prefetch(0),
         )
         .err()
@@ -2569,6 +2708,7 @@ mod tests {
             ORIGIN_BLOCK_ROW_NUM_COLUMN_ID + 1,
         ));
         let options = FuseLowLevelBlockReadOptions::new(operator, schema, Arc::new(meta))
+            .with_window_rows(2)
             .with_default_values(vec![
                 Scalar::Null,
                 Scalar::Number(NumberScalar::Int32(99)),
@@ -2647,7 +2787,8 @@ mod tests {
             std::slice::from_ref(&persisted),
         );
 
-        let mut options = FuseLowLevelBlockReadOptions::new(operator, schema, Arc::new(meta));
+        let mut options =
+            FuseLowLevelBlockReadOptions::new(operator, schema, Arc::new(meta)).with_window_rows(2);
         options = options.with_default_values(vec![Scalar::Null]);
         options = options.with_stream_table_version(42);
         let block_reader = FuseLowLevelBlockReader::create(options).unwrap();

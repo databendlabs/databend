@@ -34,6 +34,7 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -300,12 +301,10 @@ impl VerticalReclusterSource {
         };
 
         let reader_bytes = FuseLowLevelBlockReader::retained_window_bytes(
-            schema
-                .to_leaf_column_ids()
-                .into_iter()
-                .filter(|column_id| source.col_metas.contains_key(column_id))
-                .count(),
-        );
+            &source,
+            &schema.to_leaf_column_ids(),
+            output_rows,
+        )?;
         let writer_bytes = block_options.retained_index_bytes(output_rows);
         let batch_bytes = sort_batch_working_bytes(self.task.total_bytes, rows, output_rows)?;
         let retained_bytes =
@@ -316,6 +315,7 @@ impl VerticalReclusterSource {
             schema.clone(),
             source,
             Some((cluster_key_exprs, cluster_key_func_ctx)),
+            output_rows,
         )?;
         let mut cluster_key_reader = block_reader.read_cluster_keys()?;
 
@@ -429,30 +429,25 @@ impl VerticalReclusterSource {
             .iter()
             .flat_map(|expr| expr.column_refs().into_keys())
             .collect::<BTreeSet<_>>();
-        let key_leaf_count = sources
+        let key_ids = cluster_key_fields
             .iter()
-            .map(|source| cluster_key_physical_leaf_count(&cluster_key_fields, &schema, source))
-            .sum();
-        let key_reader_bytes = FuseLowLevelBlockReader::retained_window_bytes(key_leaf_count);
-        let payload_leaf_count = schema
-            .fields()
-            .iter()
-            .map(|field| {
-                let leaf_ids = field.leaf_column_ids();
-                sources
-                    .iter()
-                    .map(|source| {
-                        leaf_ids
-                            .iter()
-                            .filter(|column_id| source.col_metas.contains_key(column_id))
-                            .count()
-                    })
-                    .sum()
+            .flat_map(|&index| schema.field(index).leaf_column_ids())
+            .collect::<Vec<_>>();
+        let estimate_readers = |ids: &[ColumnId]| -> Result<usize> {
+            sources.iter().try_fold(0usize, |total, source| {
+                let bytes =
+                    FuseLowLevelBlockReader::retained_window_bytes(source, ids, MERGE_BATCH_ROWS)?;
+                total
+                    .checked_add(bytes)
+                    .ok_or_else(|| ErrorCode::MemoryExceedsLimit("reader window estimate overflow"))
             })
-            .max()
-            .unwrap_or(0);
-        let payload_reader_bytes =
-            FuseLowLevelBlockReader::retained_window_bytes(payload_leaf_count);
+        };
+        let key_reader_bytes = estimate_readers(&key_ids)?;
+        let mut payload_reader_bytes = 0;
+        for field in schema.fields() {
+            payload_reader_bytes =
+                payload_reader_bytes.max(estimate_readers(&field.leaf_column_ids())?);
+        }
         let writer_bytes = output_ranges.iter().try_fold(0usize, |total, range| {
             total
                 .checked_add(block_options.retained_index_bytes(range.len()))
@@ -520,6 +515,7 @@ impl VerticalReclusterSource {
                 schema.clone(),
                 sources[index].clone(),
                 Some((cluster_key_exprs, cluster_key_func_ctx)),
+                MERGE_BATCH_ROWS,
             )?;
             let key_reader = block_reader.read_cluster_keys()?;
             key_inputs.push((key_reader, source_rows[index]));
@@ -574,8 +570,13 @@ impl VerticalReclusterSource {
             let mut readers = Vec::with_capacity(sources.len());
             for source in &sources {
                 readers.push(
-                    self.create_block_reader(schema.clone(), source.clone(), None)?
-                        .read_column(field_idx)?,
+                    self.create_block_reader(
+                        schema.clone(),
+                        source.clone(),
+                        None,
+                        MERGE_BATCH_ROWS,
+                    )?
+                    .read_column(field_idx)?,
                 );
             }
 
@@ -614,6 +615,7 @@ impl VerticalReclusterSource {
         schema: TableSchemaRef,
         source: Arc<BlockMeta>,
         cluster_keys: Option<(&[Expr<usize>], &FunctionContext)>,
+        window_rows: usize,
     ) -> Result<FuseLowLevelBlockReader> {
         let mut defaults = Vec::with_capacity(schema.num_fields());
         let mut binder = DefaultExprBinder::try_new(self.ctx.clone())?;
@@ -630,6 +632,7 @@ impl VerticalReclusterSource {
         let mut options =
             FuseLowLevelBlockReadOptions::new(self.table.get_operator(), schema, source)
                 .with_default_values(defaults)
+                .with_window_rows(window_rows)
                 .with_stream_table_version(self.table.get_table_info().ident.seq);
         if let Some((exprs, func_ctx)) = cluster_keys {
             options = options.with_cluster_keys(exprs.to_vec(), func_ctx.clone());
@@ -650,18 +653,6 @@ impl SyncSource for VerticalReclusterSource {
         let block = self.execute()?;
         Ok(Some(block))
     }
-}
-
-fn cluster_key_physical_leaf_count(
-    fields: &BTreeSet<usize>,
-    schema: &TableSchemaRef,
-    block_meta: &BlockMeta,
-) -> usize {
-    fields
-        .iter()
-        .flat_map(|&field_index| schema.field(field_index).leaf_column_ids())
-        .filter(|column_id| block_meta.col_metas.contains_key(column_id))
-        .count()
 }
 
 fn output_rows_by_size(
@@ -1628,6 +1619,7 @@ mod tests {
             display_name: "key".to_string(),
         });
         let options = FuseLowLevelBlockReadOptions::new(operator, schema, meta)
+            .with_window_rows(MERGE_BATCH_ROWS)
             .with_cluster_keys(vec![key_expr], FunctionContext::default());
         let block_reader = FuseLowLevelBlockReader::create(options).unwrap();
         block_reader.read_cluster_keys().unwrap()
@@ -1769,17 +1761,17 @@ mod tests {
         let merged = Column::concat_columns(key_batches.into_iter()).unwrap();
 
         let mut readers = vec![
-            FuseLowLevelBlockReader::create(FuseLowLevelBlockReadOptions::new(
-                operator.clone(),
-                schema.clone(),
-                meta0,
-            ))
+            FuseLowLevelBlockReader::create(
+                FuseLowLevelBlockReadOptions::new(operator.clone(), schema.clone(), meta0)
+                    .with_window_rows(MERGE_BATCH_ROWS),
+            )
             .unwrap()
             .read_column(0)
             .unwrap(),
-            FuseLowLevelBlockReader::create(FuseLowLevelBlockReadOptions::new(
-                operator, schema, meta1,
-            ))
+            FuseLowLevelBlockReader::create(
+                FuseLowLevelBlockReadOptions::new(operator, schema, meta1)
+                    .with_window_rows(MERGE_BATCH_ROWS),
+            )
             .unwrap()
             .read_column(0)
             .unwrap(),
