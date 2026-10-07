@@ -715,6 +715,7 @@ impl FuseBlockWriteOptions {
             properties,
             block_location.clone(),
         );
+        options.set_block_thresholds(self.block_thresholds);
         options.set_statistics(
             self.stats_columns.clone(),
             self.distinct_columns.clone(),

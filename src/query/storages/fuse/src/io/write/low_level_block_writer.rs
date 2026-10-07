@@ -27,6 +27,7 @@ use std::time::Instant;
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnId;
@@ -173,6 +174,7 @@ pub struct FuseLowLevelBlockWriteOptions {
     stats_columns: Vec<(ColumnId, DataType)>,
     distinct_columns: Vec<(ColumnId, DataType)>,
     serialize_hll: bool,
+    block_thresholds: BlockThresholds,
     block_indexes: Vec<Arc<dyn BlockIndexSpec>>,
     index_locations: Option<(TableMetaLocationGenerator, Location)>,
     ndv_columns: BTreeMap<FieldIndex, TableField>,
@@ -203,6 +205,7 @@ impl FuseLowLevelBlockWriteOptions {
             stats_columns: Vec::new(),
             distinct_columns: Vec::new(),
             serialize_hll: false,
+            block_thresholds: BlockThresholds::default(),
             block_indexes: Vec::new(),
             index_locations: None,
             ndv_columns: BTreeMap::new(),
@@ -224,6 +227,10 @@ impl FuseLowLevelBlockWriteOptions {
         self.stats_columns = stats_columns;
         self.distinct_columns = distinct_columns;
         self.serialize_hll = serialize_hll;
+    }
+
+    pub fn set_block_thresholds(&mut self, thresholds: BlockThresholds) {
+        self.block_thresholds = thresholds;
     }
 
     pub fn set_block_indexes(
@@ -610,7 +617,7 @@ impl FuseLowLevelBlockWriter {
             None => None,
         };
 
-        let cluster_stats = match self.options.cluster_keys {
+        let mut cluster_stats = match self.options.cluster_keys {
             Some(options) => match options.stats {
                 Some(stats) => Some(stats),
                 None => match self.cluster_keys_result {
@@ -620,6 +627,15 @@ impl FuseLowLevelBlockWriter {
             },
             None => None,
         };
+        if let Some(stats) = &mut cluster_stats
+            && stats.min() == stats.max()
+            && self
+                .options
+                .block_thresholds
+                .check_large_enough(data.row_count, data.block_size)
+        {
+            stats.level = -1;
+        }
         let draft_virtual_block_meta = data.draft_virtual_block_meta;
         let column_hlls = data.column_hlls;
         let column_top_n = data.column_top_n;
@@ -1863,6 +1879,44 @@ mod tests {
             &virtual_columns.virtual_location.0,
             column.offset
         )));
+    }
+
+    #[test]
+    fn test_constant_cluster_keys_mark_large_blocks_terminal() {
+        crate::test_utils::init_test_globals().unwrap();
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "key",
+            TableDataType::Number(NumberDataType::Int32),
+        )]));
+        for (values, bytes_per_block, expected_level) in [
+            (vec![1, 1, 1], 1024, 3),
+            (vec![1, 1, 1, 1], 1024, -1),
+            (vec![1, 1, 1], 1, -1),
+            (vec![1, 1, 2, 2], 1024, 3),
+        ] {
+            let operator = Operator::new(Memory::default()).unwrap().finish();
+            let mut write_options = options(operator, schema.clone());
+            write_options.set_block_thresholds(BlockThresholds::new(5, bytes_per_block, 1024, 2));
+            write_options.set_cluster_keys(
+                7,
+                vec![DataType::Number(NumberDataType::Int32)],
+                3,
+                None,
+            );
+            let keys = Int32Type::from_data(values);
+            let writer = FuseLowLevelBlockWriter::create(write_options).unwrap();
+            let mut cluster = writer.write_cluster_keys().unwrap();
+            cluster.write_columns(&[keys.clone()]).unwrap();
+            let data = cluster.finish().unwrap().write_data().unwrap();
+            let mut field = data.next_column().unwrap();
+            field.write(&keys).unwrap();
+            let writer = field.finish().unwrap().finish().unwrap();
+            let result = writer.finish().unwrap();
+            assert_eq!(
+                result.block_meta.cluster_stats.unwrap().level,
+                expected_level
+            );
+        }
     }
 
     #[test]
