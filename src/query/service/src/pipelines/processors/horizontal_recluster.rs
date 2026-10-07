@@ -31,14 +31,20 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberColumn;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::UInt32Type;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipe;
+use databend_common_pipeline::core::PipeItem;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::Transform;
@@ -50,6 +56,7 @@ use databend_common_pipeline_transforms::sorts::core::RowsTypeVisitor;
 use databend_common_pipeline_transforms::sorts::core::SortKeyDescription;
 use databend_common_pipeline_transforms::sorts::core::SortedStream;
 use databend_common_pipeline_transforms::sorts::core::select_row_type;
+use databend_common_pipeline_transforms::sorts::try_add_multi_sort_merge_with_budget;
 use databend_common_pipeline_transforms::traits::SortSpiller;
 use databend_common_pipeline_transforms::traits::SpillReader;
 use databend_common_storages_fuse::FuseBlockPartInfo;
@@ -86,6 +93,8 @@ struct ReclusterMergeConfig {
     minimum_batch: bool,
     budget: usize,
     lineage: bool,
+    emit_order: bool,
+    estimated_row_bytes: usize,
 }
 
 /// These ordinals refer to original task inputs, including after every spill
@@ -441,6 +450,18 @@ where R::Converter: Send
             } else {
                 self.final_merge = Some(merger);
             }
+            let block = match block {
+                Some(mut block) => {
+                    if self.merge_config.emit_order
+                        && !self.merge_config.keys.uses_source_sort_col()
+                    {
+                        let converter = R::Converter::new(self.merge_config.keys.clone())?;
+                        block.add_column(converter.convert(&block)?.to_column());
+                    }
+                    Some(block)
+                }
+                None => None,
+            };
             return Ok(block);
         }
         if let Some(mut job) = self.job.take() {
@@ -589,25 +610,69 @@ pub struct HorizontalReclusterSource {
 }
 
 impl HorizontalReclusterSource {
-    pub fn create(
+    /// Build parallel group mergers followed by one nonblocking input-port merger.
+    pub fn build_pipeline(
         ctx: Arc<QueryContext>,
-        output: Arc<OutputPort>,
-        table: FuseTable,
-        task: &ReclusterTask,
-        stats: &ClusterStatsGenerator,
-    ) -> Result<ProcessorPtr> {
-        Self::create_with_lineage(ctx, output, table, task, stats, false)
-    }
-
-    /// Internal opt-in for tests and the subsequent inverted-index integration.
-    pub fn create_with_lineage(
-        ctx: Arc<QueryContext>,
-        output: Arc<OutputPort>,
+        pipeline: &mut Pipeline,
         table: FuseTable,
         task: &ReclusterTask,
         stats: &ClusterStatsGenerator,
         lineage: bool,
-    ) -> Result<ProcessorPtr> {
+    ) -> Result<()> {
+        let merge_factory = ReclusterMergeFactory::prepare(ctx, table, task, stats, lineage)?;
+        let settings = merge_factory.merge_config.ctx.get_settings();
+        let fixed = settings.get_enable_fixed_rows_sort()?;
+        let max_groups = settings.get_max_threads()? as usize;
+        // Four admission units per group leave space for group buffers, output
+        // ports and second-stage heads. Use one group when memory is tight.
+        let groups = max_groups
+            .min(merge_factory.input_blocks.len())
+            .min((merge_factory.fan_in / 4).max(1))
+            .max(1);
+        let merge_keys = merge_factory.merge_config.keys.clone();
+        let output_rows = merge_factory.merge_config.output_batch_rows;
+        let budget = merge_factory.merge_config.budget;
+        let group_factories = merge_factory.into_groups(groups)?;
+        let mut pipe = Vec::with_capacity(groups);
+        for mut factory in group_factories {
+            let output = OutputPort::create();
+            let merge_execution = select_row_type(&mut factory, fixed)?;
+            let source = Self {
+                output: output.clone(),
+                merge_execution,
+                ready: None,
+            };
+            pipe.push(PipeItem::create(
+                ProcessorPtr::create(Box::new(source)),
+                vec![],
+                vec![output],
+            ));
+        }
+        pipeline.add_pipe(Pipe::create(0, groups, pipe));
+        if groups > 1 {
+            try_add_multi_sort_merge_with_budget(
+                pipeline,
+                merge_keys,
+                output_rows,
+                None,
+                true,
+                true,
+                fixed,
+                budget / 4,
+            )?;
+        }
+        Ok(())
+    }
+}
+
+impl ReclusterMergeFactory {
+    fn prepare(
+        ctx: Arc<QueryContext>,
+        table: FuseTable,
+        task: &ReclusterTask,
+        stats: &ClusterStatsGenerator,
+        lineage: bool,
+    ) -> Result<Self> {
         let settings = ctx.get_settings();
         let global_limit = settings.get_max_memory_usage()? as usize;
         let query_limit = settings.get_max_query_memory_usage()? as usize;
@@ -746,6 +811,17 @@ impl HorizontalReclusterSource {
             force_initial
         );
         let fixed = settings.get_enable_fixed_rows_sort()?;
+        let mut merge_fields = stats.out_fields.clone();
+        if lineage {
+            merge_fields.push(DataField::new(
+                "__recluster_source_ordinal",
+                DataType::Number(NumberDataType::UInt32),
+            ));
+            merge_fields.push(DataField::new(
+                "__recluster_source_row",
+                DataType::Number(NumberDataType::UInt32),
+            ));
+        }
         let merge_config = ReclusterMergeConfig {
             ctx: ctx.clone(),
             table,
@@ -758,7 +834,7 @@ impl HorizontalReclusterSource {
             ),
             keys: SortKeyDescription::new(
                 stats.sort_descs().into(),
-                DataSchemaRefExt::create(stats.out_fields.clone()),
+                DataSchemaRefExt::create(merge_fields),
                 fixed,
             )?,
             read_settings,
@@ -767,21 +843,78 @@ impl HorizontalReclusterSource {
             minimum_batch,
             budget,
             lineage,
+            emit_order: false,
+            estimated_row_bytes: row_bytes,
         };
-        let mut merge_factory = ReclusterMergeFactory {
+        Ok(Self {
             merge_config,
             input_blocks,
             spiller: SortSpillerImpl::new(ctx)?,
             fan_in,
             force_initial,
             expected_rows: task.total_rows,
-        };
-        let merge_execution = select_row_type(&mut merge_factory, fixed)?;
-        Ok(ProcessorPtr::create(Box::new(Self {
-            output,
-            merge_execution,
-            ready: None,
-        })))
+        })
+    }
+}
+
+impl ReclusterMergeFactory {
+    fn into_groups(self, groups: usize) -> Result<Vec<Self>> {
+        if groups == 0 || groups > self.input_blocks.len() {
+            return Err(ErrorCode::BadArguments(
+                "invalid recluster merge group count",
+            ));
+        }
+        if groups == 1 {
+            return Ok(vec![self]);
+        }
+        let mut partitions = vec![Vec::new(); groups];
+        let mut group_rows = vec![0usize; groups];
+        let mut inputs = self.input_blocks;
+        inputs.sort_by_key(|input| std::cmp::Reverse(input.meta.row_count));
+        // Greedy row balancing keeps estimated decoded bytes comparable. All
+        // inputs share the task row-width estimate and retain original ordinals.
+        for input in inputs {
+            let index = group_rows
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, rows)| **rows)
+                .unwrap()
+                .0;
+            group_rows[index] += input.meta.row_count as usize;
+            partitions[index].push(input);
+        }
+        let mut factories = Vec::with_capacity(groups);
+        for (input_blocks, rows) in partitions.into_iter().zip(group_rows) {
+            let mut config = self.merge_config.clone();
+            config.budget = self.merge_config.budget / 2 / groups;
+            config.batch_rows = (config.batch_rows / (groups * 2)).max(1);
+            config.output_batch_rows = config
+                .output_batch_rows
+                .min((config.budget / 4 / config.estimated_row_bytes.max(1)).max(1));
+            // Do not allow a whole natural-page batch to consume one group's
+            // share just because the original task had ample headroom.
+            config.minimum_batch = false;
+            config.emit_order = true;
+            let fan_in = self.fan_in.div_ceil(groups).max(2);
+            if !config.ctx.get_enable_sort_spill() && input_blocks.len() > fan_in {
+                return Err(ErrorCode::MemoryExceedsLimit(
+                    "two-level recluster group needs spill",
+                ));
+            }
+            factories.push(Self {
+                merge_config: config,
+                input_blocks,
+                spiller: self.spiller.clone(),
+                fan_in,
+                force_initial: self.force_initial,
+                expected_rows: rows,
+            });
+        }
+        log::info!(
+            "recluster two-level merge: groups={groups}, second_stage_budget={}",
+            self.merge_config.budget / 4
+        );
+        Ok(factories)
     }
 }
 
@@ -847,6 +980,7 @@ mod tests {
         lineage: bool,
         fan_in: usize,
         spill_enabled: bool,
+        groups: usize,
     ) -> anyhow::Result<()>
     where
         R::Converter: Send + 'static,
@@ -902,6 +1036,20 @@ mod tests {
             });
             original.push(block);
         }
+        let mut fields = vec![
+            DataField::new("k", DataType::Number(NumberDataType::Int32)),
+            DataField::new("payload", DataType::Number(NumberDataType::Int32)),
+        ];
+        if lineage {
+            fields.push(DataField::new(
+                "origin",
+                DataType::Number(NumberDataType::UInt32),
+            ));
+            fields.push(DataField::new(
+                "row",
+                DataType::Number(NumberDataType::UInt32),
+            ));
+        }
         let merge_config = ReclusterMergeConfig {
             ctx: ctx.clone(),
             table,
@@ -915,10 +1063,7 @@ mod tests {
                     nulls_first: false,
                 }]
                 .into(),
-                DataSchemaRefExt::create(vec![
-                    DataField::new("k", DataType::Number(NumberDataType::Int32)),
-                    DataField::new("payload", DataType::Number(NumberDataType::Int32)),
-                ]),
+                DataSchemaRefExt::create(fields),
                 false,
             )?,
             read_settings: databend_storages_common_io::ReadSettings {
@@ -937,6 +1082,8 @@ mod tests {
                 256 * 1024 * 1024
             },
             lineage,
+            emit_order: false,
+            estimated_row_bytes: 8,
         };
         let spiller = SortSpillerImpl::new(ctx.clone())?;
         let mut probe = ReclusterMergeStream::<R>::new(
@@ -1009,15 +1156,87 @@ mod tests {
             force_initial,
             expected_rows: 45,
         };
-        let mut merge_execution = merge_factory.visit_type::<R>()?;
         let mut merged = Vec::new();
-        let mut work_units = 0;
-        while !merge_execution.finished() {
-            if let Some(block) = merge_execution.step()? {
+        if groups == 1 {
+            let mut merge_execution = merge_factory.visit_type::<R>()?;
+            let mut work_units = 0;
+            while !merge_execution.finished() {
+                if let Some(block) = merge_execution.step()? {
+                    merged.push(block);
+                }
+                work_units += 1;
+                assert!(work_units < 1000, "external merge must terminate");
+            }
+            ctx.kill(ErrorCode::aborting());
+            assert!(
+                merge_execution.step().is_err(),
+                "merge work must honour cancellation"
+            );
+        } else {
+            use crate::pipelines::PipelineBuildResult;
+            use crate::pipelines::executor::ExecutorSettings;
+            use crate::pipelines::executor::PipelinePullingExecutor;
+            let keys = merge_factory.merge_config.keys.clone();
+            let task_budget = merge_factory.merge_config.budget;
+            let group_factories = merge_factory.into_groups(groups)?;
+            assert_eq!(
+                group_factories
+                    .iter()
+                    .map(|group| group.expected_rows)
+                    .sum::<usize>(),
+                45
+            );
+            assert!(
+                group_factories
+                    .iter()
+                    .map(|group| group.merge_config.budget)
+                    .sum::<usize>()
+                    <= task_budget / 2
+            );
+            let mut ordinals = Vec::new();
+            for group in &group_factories {
+                for input in &group.input_blocks {
+                    ordinals.push(input.ordinal);
+                }
+            }
+            ordinals.sort();
+            assert_eq!(ordinals, (0..9).collect::<Vec<u32>>());
+            let mut pipeline = Pipeline::create();
+            let mut items = Vec::new();
+            for mut factory in group_factories {
+                let output = OutputPort::create();
+                let source = HorizontalReclusterSource {
+                    output: output.clone(),
+                    merge_execution: factory.visit_type::<R>()?,
+                    ready: None,
+                };
+                items.push(PipeItem::create(
+                    ProcessorPtr::create(Box::new(source)),
+                    vec![],
+                    vec![output],
+                ));
+            }
+            pipeline.add_pipe(Pipe::create(0, groups, items));
+            try_add_multi_sort_merge_with_budget(
+                &mut pipeline,
+                keys,
+                3,
+                None,
+                true,
+                true,
+                false,
+                128,
+            )?;
+            pipeline.set_max_threads(1);
+            let mut result = PipelineBuildResult::create();
+            result.main_pipeline = pipeline;
+            let mut executor_settings = ExecutorSettings::try_create(ctx.clone())?;
+            executor_settings.max_threads = 1;
+            let mut executor = PipelinePullingExecutor::from_pipelines(result, executor_settings)?;
+            executor.start();
+            while let Some(block) = executor.pull_data().await? {
                 merged.push(block);
             }
-            work_units += 1;
-            assert!(work_units < 1000, "external merge must terminate");
         }
         assert_eq!(
             !ctx.get_spilled_files().is_empty(),
@@ -1081,11 +1300,6 @@ mod tests {
             }
             assert_eq!(output_rows, 45);
         }
-        ctx.kill(ErrorCode::aborting());
-        assert!(
-            merge_execution.step().is_err(),
-            "merge work must honour cancellation"
-        );
         Ok(())
     }
 
@@ -1396,18 +1610,76 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    async fn test_second_stage_rejects_oversized_heads_without_stalling() -> anyhow::Result<()> {
+        use databend_common_pipeline::sources::BlocksSource;
+
+        use crate::pipelines::PipelineBuildResult;
+        use crate::pipelines::executor::ExecutorSettings;
+        use crate::pipelines::executor::PipelinePullingExecutor;
+
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let mut pipeline = Pipeline::create();
+        let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2, 3])]);
+        pipeline.add_source(
+            |output| {
+                BlocksSource::create(
+                    ctx.get_scan_progress(),
+                    output,
+                    Arc::new(std::sync::Mutex::new(VecDeque::from([block.clone()]))),
+                )
+            },
+            2,
+        )?;
+        let keys = SortKeyDescription::new(
+            vec![databend_common_expression::SortColumnDescription {
+                offset: 0,
+                asc: true,
+                nulls_first: false,
+            }]
+            .into(),
+            DataSchemaRefExt::create(vec![DataField::new(
+                "key",
+                DataType::Number(NumberDataType::Int32),
+            )]),
+            false,
+        )?;
+        try_add_multi_sort_merge_with_budget(&mut pipeline, keys, 3, None, true, true, false, 1)?;
+        pipeline.set_max_threads(1);
+        let mut result = PipelineBuildResult::create();
+        result.main_pipeline = pipeline;
+        let mut executor_settings = ExecutorSettings::try_create(ctx)?;
+        executor_settings.max_threads = 1;
+        let mut executor = PipelinePullingExecutor::from_pipelines(result, executor_settings)?;
+        executor.start();
+        let error = executor.pull_data().await.unwrap_err();
+        assert_eq!(error.code(), ErrorCode::MEMORY_EXCEEDS_LIMIT);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_two_level_merge_variable_keys_spill_and_original_lineage() -> anyhow::Result<()> {
+        check_external_merge::<VariableRows>(true, true, 2, true, 3).await
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_two_level_merge_simple_keys_without_spill() -> anyhow::Result<()> {
+        check_external_merge::<SimpleRowsAsc<Int32Type>>(false, true, 32, false, 3).await
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_external_merge_reduces_fan_in_and_reopens_inputs() -> anyhow::Result<()> {
-        check_external_merge::<SimpleRowsAsc<Int32Type>>(false, true, 16, true).await
+        check_external_merge::<SimpleRowsAsc<Int32Type>>(false, true, 16, true, 1).await
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_external_merge_without_spill() -> anyhow::Result<()> {
-        check_external_merge::<SimpleRowsAsc<Int32Type>>(false, true, 16, false).await
+        check_external_merge::<SimpleRowsAsc<Int32Type>>(false, true, 16, false, 1).await
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_external_merge_rejects_required_spill_when_disabled() {
-        let err = check_external_merge::<SimpleRowsAsc<Int32Type>>(false, false, 2, false)
+        let err = check_external_merge::<SimpleRowsAsc<Int32Type>>(false, false, 2, false, 1)
             .await
             .unwrap_err();
         assert_eq!(
@@ -1418,11 +1690,11 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_external_merge_multiple_rounds_and_lineage() -> anyhow::Result<()> {
-        check_external_merge::<SimpleRowsAsc<Int32Type>>(false, true, 2, true).await
+        check_external_merge::<SimpleRowsAsc<Int32Type>>(false, true, 2, true, 1).await
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_external_merge_forced_spill_variable_rows() -> anyhow::Result<()> {
-        check_external_merge::<VariableRows>(true, false, 2, true).await
+        check_external_merge::<VariableRows>(true, false, 2, true, 1).await
     }
 }

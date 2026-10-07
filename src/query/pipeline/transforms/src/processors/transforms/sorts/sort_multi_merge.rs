@@ -47,6 +47,31 @@ pub fn try_add_multi_sort_merge(
     enable_loser_tree: bool,
     enable_fixed_rows_sort: bool,
 ) -> Result<()> {
+    try_add_multi_sort_merge_with_budget(
+        pipeline,
+        key_desc,
+        block_size,
+        limit,
+        remove_order_col,
+        enable_loser_tree,
+        enable_fixed_rows_sort,
+        usize::MAX,
+    )
+}
+
+/// Bounded retention for consumers whose upstream streams are already sorted.
+/// A selected prefix can be emitted before requesting more input heads.
+#[allow(clippy::too_many_arguments)]
+pub fn try_add_multi_sort_merge_with_budget(
+    pipeline: &mut Pipeline,
+    key_desc: SortKeyDescription,
+    block_size: usize,
+    limit: Option<usize>,
+    remove_order_col: bool,
+    enable_loser_tree: bool,
+    enable_fixed_rows_sort: bool,
+    max_retained_bytes: usize,
+) -> Result<()> {
     match pipeline.output_len() {
         0 => panic!("Cannot resize empty pipe."),
         1 => Ok(()),
@@ -65,6 +90,7 @@ pub fn try_add_multi_sort_merge(
                 limit,
                 remove_order_col,
                 enable_loser_tree,
+                max_retained_bytes,
             };
             pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
                 ProcessorPtr::create(select_row_type(&mut builder, enable_fixed_rows_sort)?),
@@ -84,6 +110,7 @@ struct MultiSortMergeBuilder {
     limit: Option<usize>,
     remove_order_col: bool,
     enable_loser_tree: bool,
+    max_retained_bytes: usize,
 }
 
 impl RowsTypeVisitor for MultiSortMergeBuilder {
@@ -116,13 +143,15 @@ impl MultiSortMergeBuilder {
             .iter()
             .map(|i| InputBlockStream::new(i.clone(), remove_order_col, sort_row_offset))
             .collect::<Vec<_>>();
-        let merger = Merger::<A, _>::new(streams, self.block_size, self.limit);
+        let merger = Merger::<A, _>::new(streams, self.block_size, self.limit)
+            .with_max_retained_bytes(self.max_retained_bytes);
 
         Ok(Box::new(MultiSortMergeProcessor {
             merger,
             inputs: self.inputs.clone(),
             output: self.output.clone(),
             output_data: VecDeque::new(),
+            max_retained_bytes: self.max_retained_bytes,
         }))
     }
 }
@@ -175,6 +204,7 @@ where A: SortAlgorithm
     output: Arc<OutputPort>,
 
     output_data: VecDeque<DataBlock>,
+    max_retained_bytes: usize,
 }
 
 impl<A> Processor for MultiSortMergeProcessor<A>
@@ -213,7 +243,22 @@ where A: SortAlgorithm + 'static
             return Ok(Event::Finished);
         }
 
+        if self.merger.should_flush() {
+            return Ok(Event::Sync);
+        }
         self.merger.poll_pending_stream()?;
+        if self.merger.should_flush() {
+            return Ok(Event::Sync);
+        }
+        // At an empty selection boundary we cannot select around missing
+        // heads. An oversized head working set must fail, not stall forever.
+        if self.merger.has_pending_stream()
+            && self.merger.retained_bytes() >= self.max_retained_bytes
+        {
+            return Err(databend_common_exception::ErrorCode::MemoryExceedsLimit(
+                "multi-sort merge heads exceed the retained memory budget",
+            ));
+        }
 
         if self.merger.has_pending_stream() {
             Ok(Event::NeedData)
