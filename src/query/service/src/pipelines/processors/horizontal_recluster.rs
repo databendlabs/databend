@@ -105,6 +105,33 @@ pub struct ReclusterRowOriginRange {
     pub rows: std::ops::Range<u32>,
 }
 
+pub struct TransformPrepareReclusterIndex {
+    pub merged_names: Vec<String>,
+}
+
+impl Transform for TransformPrepareReclusterIndex {
+    const NAME: &'static str = "PrepareReclusterIndexLineage";
+
+    fn transform(&mut self, block: DataBlock) -> Result<DataBlock> {
+        let (block, origins) = extract_recluster_lineage(block)?;
+        let rows = origins
+            .into_iter()
+            .map(
+                |origin| databend_common_storages_fuse::operations::ReclusterIndexRowRange {
+                    source: origin.source_ordinal,
+                    rows: origin.rows,
+                },
+            )
+            .collect();
+        block.add_meta(Some(Box::new(
+            databend_common_storages_fuse::operations::ReclusterIndexInput {
+                rows,
+                merged_names: self.merged_names.clone(),
+            },
+        )))
+    }
+}
+
 /// Extract only after the final compact split/concat has established block
 /// boundaries. No generic DataBlock metadata propagation is relied upon.
 pub fn extract_recluster_lineage(
@@ -752,7 +779,11 @@ impl ReclusterMergeFactory {
             });
         }
         let estimated_rows = task.total_rows.max(1);
-        let row_bytes = task.total_bytes.div_ceil(estimated_rows).max(1);
+        let row_bytes = task
+            .total_bytes
+            .div_ceil(estimated_rows)
+            .max(1)
+            .saturating_add(if lineage { 8 } else { 0 });
         let merge_limit = usize::try_from(read_settings.max_range_size)
             .map_err(|_| ErrorCode::BadArguments("merge IO range size exceeds address space"))?;
         let desired_fan_in = input_blocks.len().clamp(2, 64);
@@ -1535,6 +1566,326 @@ mod tests {
         for (field, expected) in [4, 10].into_iter().enumerate() {
             let column = block.get_by_offset(field).to_column();
             assert_eq!(column.index(0).unwrap().to_string(), expected.to_string());
+        }
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_recluster_inverted_index_merge_search_and_failure() -> anyhow::Result<()> {
+        use futures::TryStreamExt;
+
+        use crate::test_kits::execute_command;
+        use crate::test_kits::execute_query;
+
+        let fixture = TestFixture::setup().await?;
+        for sql in [
+            "create table default.index_merge(k int, content string, inverted index text_idx(content)) cluster by(k) row_per_block=100 block_per_segment=2",
+            "insert into default.index_merge values (3,'third alpha'),(1,'first alpha')",
+            "insert into default.index_merge values (4,'fourth beta'),(2,'second beta')",
+        ] {
+            execute_command(fixture.new_query_ctx().await?, sql).await?;
+        }
+        // Exercise admission on the exact source metadata, independently of
+        // planner task selection. Missing/old definitions and low budgets rebuild.
+        let admission_ctx = fixture.new_query_ctx().await?;
+        let table = admission_ctx
+            .get_table("default", "default", "index_merge")
+            .await?;
+        let fuse = FuseTable::try_from_table(table.as_ref())?;
+        let snapshot = fuse.read_table_snapshot().await?.unwrap();
+        let segments = databend_common_storages_fuse::io::SegmentsIO::create(
+            admission_ctx.clone(),
+            fuse.get_operator(),
+            fuse.schema(),
+        )
+        .read_segments::<databend_storages_common_table_meta::meta::SegmentInfo>(
+            &snapshot.segments,
+            true,
+        )
+        .await?;
+        let mut blocks = Vec::new();
+        for segment in segments {
+            for block in segment?.blocks {
+                blocks.push((None, block));
+            }
+        }
+        let arrow_schema = arrow_schema::Schema::from(fuse.schema().as_ref());
+        let nodes = databend_common_storage::ColumnNodes::new_from_schema(
+            &arrow_schema,
+            Some(&fuse.schema()),
+        );
+        let (stats, parts) =
+            FuseTable::to_partitions(Some(&fuse.schema()), &blocks, &nodes, None, None);
+        let mut task = databend_common_catalog::plan::ReclusterTask {
+            parts,
+            stats,
+            total_rows: 4,
+            total_bytes: 1024,
+            total_compressed: 512,
+            level: 0,
+            input_level_stats: vec![],
+            kind: databend_common_catalog::plan::ReclusterTaskKind::MergeBlocks,
+            vertical_kind: None,
+            memory_budget: 0,
+            virtual_column_layout: None,
+            inverted_index_sources: blocks
+                .iter()
+                .map(|(_, block)| block.inverted_index_metas.clone().unwrap_or_default())
+                .collect(),
+        };
+        use databend_common_storages_fuse::operations::ReclusterIndexMergeSpec;
+        assert!(
+            ReclusterIndexMergeSpec::try_create(fuse, &task, 128 * 1024 * 1024, 100)?.is_some()
+        );
+        assert!(ReclusterIndexMergeSpec::try_create(fuse, &task, 1, 100)?.is_none());
+        // Direct task collector: two outputs from interleaved original rows.
+        // Output metadata publication must wait for every bundle to finish.
+        use databend_common_storages_fuse::operations::MutationLogs;
+        use databend_common_storages_fuse::operations::ReclusterIndexOutput;
+        use databend_common_storages_fuse::operations::ReclusterIndexRowRange;
+        use databend_common_storages_fuse::operations::TransformReclusterIndexMerge;
+        let spec = ReclusterIndexMergeSpec::try_create(fuse, &task, 128 * 1024 * 1024, 2)?.unwrap();
+        let mut collector =
+            TransformReclusterIndexMerge::new(admission_ctx.clone(), fuse.clone(), spec);
+        for source_row in 0..2 {
+            let mut meta = blocks[0].1.as_ref().clone();
+            meta.row_count = 2;
+            meta.inverted_index_metas = Some(vec![]);
+            meta.inverted_index_size = None;
+            let output = databend_storages_common_table_meta::meta::ExtendedBlockMeta {
+                block_meta: meta,
+                draft_virtual_block_meta: None,
+                column_hlls: None,
+                column_top_n: None,
+            };
+            let rows = (0..2)
+                .map(|source| ReclusterIndexRowRange {
+                    source,
+                    rows: source_row..source_row + 1,
+                })
+                .collect();
+            assert!(
+                collector
+                    .transform(DataBlock::empty_with_meta(Box::new(ReclusterIndexOutput {
+                        meta: output,
+                        rows
+                    })))?
+                    .is_empty()
+            );
+        }
+        let outputs = collector.on_finish(true)?;
+        assert_eq!(outputs.len(), 2);
+        for mut output in outputs {
+            let logs = MutationLogs::downcast_from(output.take_meta().unwrap()).unwrap();
+            let databend_common_storages_fuse::operations::MutationLogEntry::AppendBlock {
+                block_meta,
+                ..
+            } = &logs.entries[0]
+            else {
+                panic!("expected append block");
+            };
+            let meta = block_meta
+                .block_meta
+                .inverted_index_meta("text_idx")
+                .unwrap();
+            let directory = databend_storages_common_index::MergeSourceDirectory::open(
+                fuse.get_operator(),
+                meta.location.0.clone(),
+                meta.size,
+            )?;
+            let index = directory.open_index()?;
+            let searcher = index.reader()?.searcher();
+            assert_eq!(searcher.num_docs(), 2);
+            assert!(block_meta.block_meta.inverted_index_size.unwrap() >= meta.size);
+        }
+        let spec =
+            ReclusterIndexMergeSpec::try_create(fuse, &task, 128 * 1024 * 1024, 100)?.unwrap();
+        let mut cancelled =
+            TransformReclusterIndexMerge::new(admission_ctx.clone(), fuse.clone(), spec.clone());
+        assert!(cancelled.on_finish(false)?.is_empty());
+        let cancelled_ctx = fixture.new_query_ctx().await?;
+        let mut cancelled =
+            TransformReclusterIndexMerge::new(cancelled_ctx.clone(), fuse.clone(), spec);
+        cancelled_ctx.kill(ErrorCode::aborting());
+        assert!(cancelled.on_finish(true).is_err());
+        let source_metas = task.inverted_index_sources.clone();
+        task.inverted_index_sources[0].clear();
+        assert!(
+            ReclusterIndexMergeSpec::try_create(fuse, &task, 128 * 1024 * 1024, 100)?.is_none()
+        );
+        task.inverted_index_sources = source_metas;
+        task.inverted_index_sources[0][0].index_version = "old-definition".into();
+        assert!(
+            ReclusterIndexMergeSpec::try_create(fuse, &task, 128 * 1024 * 1024, 100)?.is_none()
+        );
+
+        let query = "select k,content from default.index_merge where match(content,'alpha OR beta') order by k,content";
+        let before = execute_query(fixture.new_query_ctx().await?, query)
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        let expected =
+            databend_common_expression::block_debug::pretty_format_blocks(&before)?.to_string();
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+        settings.set_setting("recluster_method".into(), "horizontal".into())?;
+        settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
+        settings.set_setting("enable_recluster_inverted_index_merge".into(), "1".into())?;
+        execute_command(ctx, "alter table default.index_merge recluster final").await?;
+        let after = execute_query(fixture.new_query_ctx().await?, query)
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        assert_eq!(
+            databend_common_expression::block_debug::pretty_format_blocks(&after)?.to_string(),
+            expected
+        );
+
+        // Fresh same-level overlapping inputs guarantee selection of the bad bundle.
+        for sql in [
+            "create table default.index_failure(k int, content string, inverted index text_idx(content)) cluster by(k) row_per_block=100 block_per_segment=2",
+            "insert into default.index_failure values (3,'third alpha'),(1,'first alpha')",
+            "insert into default.index_failure values (4,'fourth beta'),(2,'second beta')",
+        ] {
+            execute_command(fixture.new_query_ctx().await?, sql).await?;
+        }
+        let ctx = fixture.new_query_ctx().await?;
+        let table = ctx.get_table("default", "default", "index_failure").await?;
+        let fuse = FuseTable::try_from_table(table.as_ref())?;
+        let snapshot = fuse.read_table_snapshot().await?.unwrap();
+        let segments = databend_common_storages_fuse::io::SegmentsIO::create(
+            ctx.clone(),
+            fuse.get_operator(),
+            fuse.schema(),
+        )
+        .read_segments::<databend_storages_common_table_meta::meta::SegmentInfo>(
+            &snapshot.segments,
+            true,
+        )
+        .await?;
+        let mut source_index = None;
+        for segment in segments {
+            let segment = segment?;
+            for block in &segment.blocks {
+                if let Some(meta) = block.inverted_index_meta("text_idx") {
+                    source_index = Some(meta.location.0.clone());
+                    break;
+                }
+            }
+        }
+        let location = source_index.expect("source inverted index must exist");
+        let operator = fuse.get_operator();
+        let contents = operator.read(&location).await?;
+        operator
+            .write(&location, "corrupt source inverted index")
+            .await?;
+        let settings = ctx.get_settings();
+        settings.set_setting("recluster_method".into(), "horizontal".into())?;
+        settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
+        settings.set_setting("enable_recluster_inverted_index_merge".into(), "1".into())?;
+        let result =
+            execute_command(ctx, "alter table default.index_failure recluster final").await;
+        operator.write(&location, contents).await?;
+        assert!(
+            result.is_err(),
+            "selected source index errors cannot silently rebuild"
+        );
+        let ctx = fixture.new_query_ctx().await?;
+        let table = ctx.get_table("default", "default", "index_failure").await?;
+        let after = FuseTable::try_from_table(table.as_ref())?
+            .read_table_snapshot()
+            .await?
+            .unwrap();
+        assert_eq!(snapshot.snapshot_id, after.snapshot_id);
+
+        // Multiple final output blocks, equal keys, computed cluster key and
+        // forced row spill must retain correct index doc -> output row mapping.
+        for sql in [
+            "create table default.index_multi(k int, content string, inverted index text_idx(content)) cluster by(-k) row_per_block=100 block_per_segment=2",
+            "insert into default.index_multi select number, concat('word',to_string(number),' alpha') from numbers(200)",
+            "insert into default.index_multi select number, concat('word',to_string(number),' beta') from numbers(200)",
+        ] {
+            execute_command(fixture.new_query_ctx().await?, sql).await?;
+        }
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+        settings.set_setting("recluster_method".into(), "horizontal".into())?;
+        settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
+        settings.set_setting("enable_recluster_inverted_index_merge".into(), "1".into())?;
+        settings.set_setting("force_sort_data_spill".into(), "1".into())?;
+        ctx.set_enable_sort_spill(true);
+        execute_command(ctx, "alter table default.index_multi recluster final").await?;
+        for (sql, expected) in [
+            (
+                "select count() from default.index_multi where match(content,'word123') and k=123",
+                2,
+            ),
+            (
+                "select count() from default.index_multi where match(content,'alpha')",
+                200,
+            ),
+            (
+                "select count() from default.index_multi where match(content,'beta')",
+                200,
+            ),
+            (
+                "select count() from default.index_multi where match(content,'missingword')",
+                0,
+            ),
+            (
+                "select count() from default.index_multi where match(content,'\"word123 alpha\"')",
+                1,
+            ),
+        ] {
+            let blocks = execute_query(fixture.new_query_ctx().await?, sql)
+                .await?
+                .try_collect::<Vec<_>>()
+                .await?;
+            let block = DataBlock::concat(&blocks)?;
+            assert_eq!(
+                block
+                    .get_by_offset(0)
+                    .to_column()
+                    .index(0)
+                    .unwrap()
+                    .to_string(),
+                expected.to_string()
+            );
+        }
+        // Merge the existing definition while rebuilding an index missing on
+        // older source blocks. Both output indexes must remain searchable.
+        for sql in [
+            "create table default.index_partial(k int, content string, other string, inverted index existing_idx(content)) cluster by(k) row_per_block=100 block_per_segment=2",
+            "insert into default.index_partial values (3,'alpha','delta'),(1,'alpha','gamma')",
+            "insert into default.index_partial values (4,'beta','delta'),(2,'beta','gamma')",
+            "create inverted index late_idx on default.index_partial(other)",
+        ] {
+            execute_command(fixture.new_query_ctx().await?, sql).await?;
+        }
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+        settings.set_setting("recluster_method".into(), "horizontal".into())?;
+        settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
+        settings.set_setting("enable_recluster_inverted_index_merge".into(), "1".into())?;
+        execute_command(ctx, "alter table default.index_partial recluster final").await?;
+        for sql in [
+            "select count() from default.index_partial where match(content,'alpha')",
+            "select count() from default.index_partial where match(other,'gamma')",
+        ] {
+            let blocks = execute_query(fixture.new_query_ctx().await?, sql)
+                .await?
+                .try_collect::<Vec<_>>()
+                .await?;
+            let block = DataBlock::concat(&blocks)?;
+            assert_eq!(
+                block
+                    .get_by_offset(0)
+                    .to_column()
+                    .index(0)
+                    .unwrap()
+                    .to_string(),
+                "2"
+            );
         }
         Ok(())
     }

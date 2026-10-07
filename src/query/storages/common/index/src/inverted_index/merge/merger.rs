@@ -194,6 +194,32 @@ impl InvertedIndexMerger {
         outputs: Vec<MergeOutput>,
         stream_threshold: usize,
     ) -> tantivy::Result<Self> {
+        Self::create_checked(operator, sources, outputs, stream_threshold, None)
+    }
+
+    /// Validate the current table definition before creating any output index.
+    pub fn try_create_with_schema(
+        operator: Operator,
+        sources: Vec<MergeSource>,
+        outputs: Vec<MergeOutput>,
+        schema: &Schema,
+    ) -> tantivy::Result<Self> {
+        Self::create_checked(
+            operator,
+            sources,
+            outputs,
+            INVERTED_INDEX_STREAM_THRESHOLD,
+            Some(schema),
+        )
+    }
+
+    fn create_checked(
+        operator: Operator,
+        sources: Vec<MergeSource>,
+        outputs: Vec<MergeOutput>,
+        stream_threshold: usize,
+        expected_schema: Option<&Schema>,
+    ) -> tantivy::Result<Self> {
         if outputs.len() > u16::MAX as usize {
             return Err(invalid(format!("{} outputs, at most {}", outputs.len(), u16::MAX)).into());
         }
@@ -276,6 +302,9 @@ impl InvertedIndexMerger {
         }
         let schema = schema.ok_or_else(|| invalid("a merge needs at least one source"))?;
         check_schema(&schema)?;
+        if expected_schema.is_some_and(|expected| *expected != schema) {
+            return Err(invalid("source index schema differs from the current definition").into());
+        }
 
         let settings = opened[0].index.settings().clone();
         let mut created = Vec::with_capacity(outputs.len());
@@ -1181,6 +1210,31 @@ mod tests {
         let (directory, _) = merged.open(0);
         assert_eq!(directory.footer().external_files.files.len(), 2);
         merged.assert_matches(0, &schema, &ids(0..2000), true);
+    }
+
+    #[test]
+    fn test_expected_schema_checked_before_output_creation() {
+        let operator = setup();
+        let schema = schema(IndexRecordOption::WithFreqsAndPositions, false);
+        let source = write_source(
+            &operator,
+            &schema,
+            "s/schema.index",
+            &ids(0..10),
+            usize::MAX,
+        );
+        let wrong = Schema::builder().build();
+        let result = InvertedIndexMerger::try_create_with_schema(
+            operator.clone(),
+            vec![source],
+            vec![output("o/schema.index", vec![(0, 0..10)])],
+            &wrong,
+        );
+        assert!(result.is_err());
+        let exists = GlobalIORuntime::instance()
+            .block_on(async { Ok(operator.exists("o/schema.index").await?) })
+            .unwrap();
+        assert!(!exists);
     }
 
     #[test]

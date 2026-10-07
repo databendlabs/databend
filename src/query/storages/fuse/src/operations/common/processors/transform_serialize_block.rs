@@ -39,6 +39,9 @@ use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
 
+use super::recluster_inverted_index_merge::ReclusterIndexInput;
+use super::recluster_inverted_index_merge::ReclusterIndexOutput;
+use super::recluster_inverted_index_merge::ReclusterIndexRowRange;
 use crate::FuseTable;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
@@ -79,6 +82,8 @@ pub struct TransformSerializeBlock {
     output_data: Option<DataBlock>,
 
     block_builder: BlockBuilder,
+    recluster_index_rows: Option<Vec<ReclusterIndexRowRange>>,
+    recluster_merged_names: Vec<String>,
     dal: Operator,
     table_id: Option<u64>, // Only used in multi table insert
     kind: MutationKind,
@@ -283,6 +288,8 @@ impl TransformSerializeBlock {
             output,
             output_data: None,
             block_builder,
+            recluster_index_rows: None,
+            recluster_merged_names: Vec::new(),
             dal: table.get_operator(),
             table_id: if with_tid { Some(table.get_id()) } else { None },
             kind,
@@ -332,6 +339,15 @@ impl TransformSerializeBlock {
                 bytes,
             });
 
+        if let Some(rows) = self.recluster_index_rows.take() {
+            metrics_inc_recluster_write_block_nums();
+            self.output_data = Some(DataBlock::empty_with_meta(Box::new(ReclusterIndexOutput {
+                meta: extended_block_meta,
+                rows,
+            })));
+            self.recluster_merged_names.clear();
+            return;
+        }
         self.output_data = Some(if let Some(index) = index {
             Self::mutation_logs(
                 MutationLogEntry::ReplacedBlock {
@@ -429,6 +445,23 @@ impl Processor for TransformSerializeBlock {
         let mut input_data = self.input.pull_data().unwrap()?;
         let meta = input_data.take_meta();
         if let Some(meta) = meta {
+            if ReclusterIndexInput::downcast_ref_from(&meta).is_some() {
+                let input = ReclusterIndexInput::downcast_from(meta).unwrap();
+                if !matches!(self.kind, MutationKind::Recluster) {
+                    return Err(ErrorCode::Internal(
+                        "index merge metadata outside recluster",
+                    ));
+                }
+                self.recluster_index_rows = Some(input.rows);
+                self.recluster_merged_names = input.merged_names;
+                self.state = State::NeedSerialize {
+                    block: input_data,
+                    stats_type: ClusterStatsGenType::Generally,
+                    index: None,
+                    virtual_column_layout: None,
+                };
+                return Ok(Event::Sync);
+            }
             let meta = SerializeDataMeta::downcast_from(meta)
                 .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
             match meta {
@@ -521,6 +554,9 @@ impl Processor for TransformSerializeBlock {
                 block.check_valid()?;
 
                 let mut block_builder = self.block_builder.clone();
+                block_builder
+                    .inverted_index_builders
+                    .retain(|builder| !self.recluster_merged_names.contains(&builder.name));
                 if let Some(layout) = virtual_column_layout
                     && let Some(builder) = block_builder.virtual_column_builder.take()
                 {

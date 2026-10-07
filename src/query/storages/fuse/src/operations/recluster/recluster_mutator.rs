@@ -876,6 +876,20 @@ impl ReclusterMutator {
                     vertical_kind: candidate.vertical_kind,
                     memory_budget: self.properties.memory_threshold,
                     virtual_column_layout,
+                    inverted_index_sources: if self
+                        .ctx
+                        .get_settings()
+                        .get_enable_recluster_inverted_index_merge()?
+                    {
+                        block_metas
+                            .iter()
+                            .map(|(_, block)| {
+                                block.inverted_index_metas.clone().unwrap_or_default()
+                            })
+                            .collect()
+                    } else {
+                        vec![]
+                    },
                 });
                 selected_block_count += block_metas.len() as u64;
             }

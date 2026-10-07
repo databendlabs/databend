@@ -12,6 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod recluster_inverted_index_merge;
+pub use recluster_inverted_index_merge::ReclusterIndexInput;
+pub use recluster_inverted_index_merge::ReclusterIndexMergeSpec;
+pub use recluster_inverted_index_merge::ReclusterIndexOutput;
+pub use recluster_inverted_index_merge::ReclusterIndexRowRange;
+pub use recluster_inverted_index_merge::TransformReclusterIndexMerge;
 mod hilbert_range_exchange;
 mod multi_table_insert_commit;
 mod sink_commit;

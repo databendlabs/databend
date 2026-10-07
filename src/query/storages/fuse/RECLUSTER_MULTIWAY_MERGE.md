@@ -58,10 +58,11 @@ prefix without counting it as a second logical scan. IO, decoding, and ordering 
 the task; they are not interpreted as EOF or silently retried by rebuilding indexes.
 
 The ordinary ordered compact, statistics, index rebuilding, serialization and snapshot commit
-chain remains in use. This change does not reuse inverted indexes. Optional internal lineage
+chain remains in use. Optional inverted-index reuse is described below. Internal lineage
 columns identify original source ordinals and absolute row offsets through all spill rounds.
-They are extracted only after the final compact concat/split. Production lineage is disabled;
-row-count-changing aggregate-state reaggregation cannot use it for index reuse.
+They are extracted only after the final compact concat/split. Lineage is enabled only for
+an admitted opt-in index merge; row-count-changing aggregate-state reaggregation cannot
+use it for index reuse.
 
 ## Minimum batch semantics
 
@@ -105,6 +106,58 @@ Do not enable this globally on the assumption that every recluster becomes faste
 identical input snapshots, storage/cache conditions and memory settings for the target workload.
 Keep the switch off if time regression outweighs the observed memory benefit.
 
+## Optional inverted-index reuse
+
+The follow-up integration is independently disabled by default:
+
+```sql
+SET enable_recluster_multiway_merge = 1;
+SET enable_recluster_inverted_index_merge = 1;
+ALTER TABLE my_table RECLUSTER FINAL;
+```
+
+It only applies to horizontal linear `MergeBlocks` using the two-level executor. SortBlocks,
+vertical tasks, unsupported schemas and row-count-changing aggregate-state reaggregation
+retain the old index-building behavior. Source index metadata is transported in task part
+order only when the setting is enabled; old serialized tasks default to no source indexes.
+Compatibility is per index: every source must have the current sync index definition version,
+current outer file format and a nonempty bundle. Missing/old definitions rebuild normally,
+so one output can contain a merged existing index and a rebuilt newly declared index.
+
+When at least one index is admitted, original-source lineage follows complete rows through
+both merge levels and spill. After final compact establishes block boundaries, the internal
+columns are removed and ranges are attached to that block only. Serialization skips admitted
+index builders but builds all others. Written block metadata and its exact row mapping stay
+in a local envelope. A task-level collector holds envelopes until every selected index merge
+finishes, then emits ordinary AppendBlock mutation logs. It retains metadata/mappings, not
+the complete output payload. Parallel serialization completion order is allowed: each bundle
+uses its associated block mapping, not an assumed globally ordered completion ordinal.
+
+The existing Tantivy merger reads each source once per index and merges postings, positions,
+fieldnorms and JSON fast fields without re-tokenizing. The current expected schema is checked
+before any destination index is created, and source doc counts are verified against row counts.
+A selected bundle's IO/corruption/schema error fails the task; it does not silently rebuild.
+No mutation metadata is released before all merges succeed. Already-written uncommitted data
+or index objects on failure remain subject to existing orphan cleanup; the snapshot stays
+unchanged. Cancellation is checked while collecting, between indexes and before publication,
+not inside every Tantivy postings operation or blocking receive.
+
+Resource admission is deliberately conservative and not a hard memory cap: index working
+allowance is 10% of available node/query memory, at most 128 MiB. Estimate includes 64 B/source
+row, twice the largest per-index sum of bundle bytes, and 16 MiB per expected output. Actual
+range-vector capacity and extra output count are checked while collecting. Inputs beyond
+UInt32 doc limits or outputs beyond UInt16 ordinal limits are not admitted. The current merger
+still expands doc mappings and holds all outputs; sibling sizes, decompression, postings scratch
+and backend buffers can exceed the estimate. Default-off rollout requires workload measurements,
+object-store/multi-node tests, write-fault injection and human review. Do not advertise this
+setting as a guaranteed speedup or bounded-memory external index merge.
+
+Regression coverage: search results before/after, doc-to-row mapping with duplicate keys and
+computed cluster keys, forced spill, direct two-output collector metadata, mixed reuse/rebuild,
+missing/old source definitions, low-budget fallback, schema rejection before output creation,
+cancel-before-merge and corrupt-source failure with unchanged snapshot. SQL suite:
+`09_0055_recluster_inverted_merge.test` (service runner execution still required).
+
 ## Parameters requiring workload review
 
 These choices are not demonstrated production-optimal values. Track them separately from
@@ -119,6 +172,10 @@ correctness limits and existing user settings:
 | Retained-segment budget multiplier | 3 | Estimate for hinted/recent segments; backend buffers are additional. |
 | Task working-memory fraction | 30% of currently available memory | Remaining 70% is only a reserve estimate for pages/downstream. |
 | Task working target cap | 256 MiB | Can cause external rounds even on larger nodes. |
+| Index merge allowance | 10% of available memory, cap 128 MiB | Independent estimate; not a hard combined peak guard. |
+| Index merge row estimate | 64 B per source row | Mapping/origin estimate; variable range vectors counted separately. |
+| Index merge bundle estimate | 2 × largest per-index bundle total | Sibling payload and decompression scratch not strictly covered. |
+| Index merge output reserve | 16 MiB per output | Tantivy writer estimate, requires workload validation. |
 | Merge head/retention share | budget / 2 | Soft retention threshold, not an allocation guard. |
 | Output batch byte estimate | budget / 4 | Uses average uncompressed row width, not maximum row width. |
 | Batch row cap | 8192, also capped by max_block_size | Tradeoff between buffering and work/IO handoffs. |
@@ -147,8 +204,8 @@ and every spill round. An encoded key, when necessary, is appended *after* linea
 removed by the second level. The second-stage key schema includes lineage fields so its
 order-column offset cannot accidentally select the source ordinal. Only after final
 compact concat/split are lineage ranges extracted. Equal keys need not be stable, but
-payload and source identity always move together. Production lineage remains disabled;
-`build_pipeline(..., lineage=true)` is the internal next-PR integration entry point.
+payload and source identity always move together. `build_pipeline(..., lineage=true)` is
+used only when the optional index merge admits at least one definition.
 
 Tests run the real three-group/input-port pipeline with forced spill, variable and simple
 key encodings, equal keys and compact replay. They assert original ordinals appear exactly

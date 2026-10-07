@@ -496,6 +496,9 @@ pub struct ReclusterTask {
     #[serde(default)]
     pub memory_budget: usize,
     pub virtual_column_layout: Option<VirtualColumnLayout>,
+    /// Index metadata in the same order as `parts`; absent for legacy tasks.
+    #[serde(default)]
+    pub inverted_index_sources: Vec<Vec<databend_storages_common_table_meta::meta::BlockIndexMeta>>,
 }
 
 pub type BlockMetaWithHLL = (Arc<BlockMeta>, Option<RawBlockHLL>);
@@ -542,6 +545,14 @@ mod tests {
             kind: ReclusterTaskKind::MergeBlocks,
             vertical_kind: Some(VerticalReclusterKind::MergeBlocks),
             memory_budget: 64 * 1024 * 1024,
+            inverted_index_sources: vec![vec![
+                databend_storages_common_table_meta::meta::BlockIndexMeta {
+                    index_name: "text_idx".into(),
+                    location: ("source.index".into(), 2),
+                    size: 123,
+                    index_version: "definition-v1".into(),
+                },
+            ]],
         };
 
         let encoded = serde_json::to_vec(&task).unwrap();
@@ -550,6 +561,7 @@ mod tests {
         assert_eq!(decoded.kind, task.kind);
         assert_eq!(decoded.vertical_kind, task.vertical_kind);
         assert_eq!(decoded.memory_budget, task.memory_budget);
+        assert_eq!(decoded.inverted_index_sources, task.inverted_index_sources);
     }
 
     #[test]
@@ -569,5 +581,6 @@ mod tests {
         assert_eq!(decoded.memory_budget, 0);
         assert!(decoded.input_level_stats.is_empty());
         assert!(decoded.virtual_column_layout.is_none());
+        assert!(decoded.inverted_index_sources.is_empty());
     }
 }
