@@ -180,7 +180,7 @@ where A: SortAlgorithm
         self.buffers.retained_bytes
     }
 
-    fn should_flush(&self) -> bool {
+    pub(crate) fn should_flush(&self) -> bool {
         self.buffers.has_output() && self.buffers.retained_bytes >= self.max_retained_bytes
     }
 

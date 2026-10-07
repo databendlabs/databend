@@ -247,17 +247,13 @@ impl IPhysicalPlan for Recluster {
                             "MergeBlocks requires linear cluster keys",
                         ));
                     }
-                    builder.main_pipeline.add_source(
-                        |output| {
-                            HorizontalReclusterSource::create(
-                                builder.ctx.clone(),
-                                output,
-                                table.clone(),
-                                task,
-                                &cluster_stats_gen,
-                            )
-                        },
-                        1,
+                    HorizontalReclusterSource::build_pipeline(
+                        builder.ctx.clone(),
+                        &mut builder.main_pipeline,
+                        table.clone(),
+                        task,
+                        &cluster_stats_gen,
+                        false,
                     )?;
                 } else {
                     builder.ctx.set_partitions(plan.parts.clone())?;

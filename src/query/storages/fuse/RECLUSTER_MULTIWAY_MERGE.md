@@ -16,10 +16,22 @@ serialization. Session settings travel to workers in the existing Flight query e
 
 ## Execution
 
-Each original block is an independent sorted stream. Complete rows are decoded incrementally
-using the existing range reader and compared using the ordinary sort-key encoding and loser
-tree. The executor neither sorts each input again nor concatenates overlapping blocks into
-one supposedly sorted route.
+Each original block is an independent sorted stream. A task partitions its inputs into
+row-balanced groups. Each group is a separate source processor: it incrementally reads,
+decodes and merges its original inputs using the existing key encoding and loser tree.
+The second level consumes the resulting sorted streams through pipeline input ports. It
+performs no storage reads; missing heads return `NeedData`, not a blocking receive.
+Only the final globally sorted stream enters ordered compact and parallel serialization.
+Small or memory-constrained tasks use one group and omit the second level. The executor
+neither sorts each input again nor concatenates overlapping blocks into one supposedly
+sorted route.
+
+The node still receives at most one task per round of a recluster statement. Parallelism
+is restored *inside* that task. Group count is capped by input count, `max_threads` and
+memory-admitted fan-in. The task budget is computed once: all groups together get half;
+second-stage retention gets a quarter; the remaining quarter covers inter-stage delivery
+and output construction. Group budgets are not additional per-query memory allowances.
+These are estimates; decoder pages and backend buffers can exceed them as described below.
 
 The read chain is `ChunkedRangeReader -> MergeRangeReader -> OperatorRangeReader` in
 streaming mode. The merge layer coalesces adjacent consumer windows within each column
@@ -81,8 +93,9 @@ budget, **not a hard end-to-end byte limit**. In particular:
 - The downstream block still needs complete serialization/upload before publishing metadata.
 - IO waits are synchronous. Cancellation is checked at work boundaries, not during every
   blocking receive.
-- Each task has one merge core. Reading/decoding and high-interleaving payload selection may
-  lose CPU parallelism compared with the original sorting pipeline.
+- The final merge remains one core, but groups read/decode concurrently. Intermediate group
+  materialization adds a gather step; high-interleaving wide rows can still regress. Group
+  count and batching can affect CPU parallelism, buffering and spill behavior.
 - Streaming range IO in the standalone change does not use the later shared disk-cache wrapper.
   OpenDAL/backend buffers are additional to our window buffers; 1 MiB alignment is not a hard
   total-memory bound. Storage operation duration for a stream includes its response lifetime
@@ -112,6 +125,12 @@ correctness limits and existing user settings:
 | Fan-in cap / minimum | 64 / 2 | Open-reader and memory scaling; one route uses an empty companion. |
 | Batch / fan-in reduction | halve, minimum 1 row / 2 routes | Discrete policy can overcorrect. |
 | Minimum-mode headroom | max source rows × average row bytes <= row budget / 2 | Conservative estimate, not page-size knowledge. |
+| Maximum first-stage groups | min(max_threads, input count, max(1, admitted fan-in / 4)) | Conservative admission; not a new thread pool. |
+| Group budgets | task budget / 2 / groups | Keeps total group allowance at half the task target. |
+| Second-stage retention | task budget / 4 | Oversized head set fails explicitly instead of stalling. |
+| Group input rows | task batch / (2 × groups), at least 1 | Conservative per-group buffering; natural minimum batches disabled for multi-group execution. |
+| Group fan-in | ceil(task fan-in / groups), at least 2 | Do not halve twice: it unnecessarily spills small groups. |
+| Group output rows | min(task output rows, group budget / 4 / estimated row bytes) | Independent of small input batches to avoid tiny spill files. |
 | Removed fixed horizontal window | 256 KiB | Previously coupled delivery windows to backend range requests. |
 | Removed DEFAULT_WINDOW_SIZE | 4 MiB | No production byte-window fallback remains. |
 
@@ -121,7 +140,40 @@ Merge range gap/size limits use `storage_io_min_bytes_for_seek` and
 (e.g. OpenDAL filesystem's current 2 MiB read buffer) are library policy, not controlled by
 these limits. Window rounding and fan-in admission need further workload validation.
 
-## Streaming IO verification
+## Two-level verification
+
+Original-source lineage remains `(source_ordinal, absolute_row_offset)` through both levels
+and every spill round. An encoded key, when necessary, is appended *after* lineage and
+removed by the second level. The second-stage key schema includes lineage fields so its
+order-column offset cannot accidentally select the source ordinal. Only after final
+compact concat/split are lineage ranges extracted. Equal keys need not be stable, but
+payload and source identity always move together. Production lineage remains disabled;
+`build_pipeline(..., lineage=true)` is the internal next-PR integration entry point.
+
+Tests run the real three-group/input-port pipeline with forced spill, variable and simple
+key encodings, equal keys and compact replay. They assert original ordinals appear exactly
+once in the group assignments, budgets sum to at most half the task target, and final rows
+replay to the exact original payload. Executor thread count is explicitly set to one for
+these tests to detect blocking inter-group waits. A separate test rejects an oversized
+second-stage head set without waiting forever.
+
+Optimized-test measurements, 16 inputs and 2,097,152 rows, local filesystem, lineage disabled:
+
+| Payload | Original | Two-level | Original query peak | Two-level query peak |
+| --- | --- | --- | --- | --- |
+| ~2.58 GiB repeated strings, forward | 1.296 s | 1.391 s | 3,885,536,567 B | 1,842,894,752 B |
+| ~2.58 GiB repeated strings, reverse | 1.224 s | 1.401 s | 3,814,010,193 B | 1,855,248,306 B |
+| 2 GiB salted hash strings, forward | 0.845 s | 0.787 s | 5,114,855,782 B | 1,214,487,820 B |
+
+The single-stage streaming implementation took ~2.87 s on repeated strings. Two levels
+reduce that regression substantially, but repeated-string elapsed remains ~7-14% above the
+old path in these limited runs. Hash-string tracked reads remain 48 for both paths. Peak
+memory increases versus the single-stage implementation but remains below the old path.
+Do not turn these local observations into a universal speedup or production release claim.
+An initial group fan-in division by `2 × groups` caused unnecessary intermediate runs and
+~12 s elapsed; corrected to `ceil(task fan-in / groups)` before these measurements.
+
+## Historical single-stage streaming IO verification
 
 The earlier window-per-request measurements below are historical, not current executor
 results. After adding the merge layer, continuous storage streams, metadata-derived windows
