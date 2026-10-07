@@ -61,5 +61,43 @@ select SPLIT(definition, '\n') from system.tasks where name = 'transactionTask'
 ----
 ["BEGIN","SELECT 2024;","BEGIN;","MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *;","DELETE FROM t WHERE c = ';';","ABORT;","END;"]
 
+# Regression for #20502: nested MODIFY AS bodies must not consume the outer
+# statement delimiters or require end-of-input. These tasks are never executed,
+# so the target tasks do not need to exist.
+statement ok
+DROP TASK IF EXISTS nestedModifyAsTask
+
+statement ok
+CREATE TASK nestedModifyAsTask
+  WAREHOUSE = 'mywh'
+  SCHEDULE = USING CRON '0 0 0 1 1 ? 2100'
+  AS BEGIN
+    SELECT 1;
+    ALTER TASK target_a MODIFY AS SELECT 2;
+    ALTER TASK target_b MODIFY AS SELECT 3;
+    SELECT 4;
+  END;
+
+query S
+select SPLIT(definition, '\n') from system.tasks where name = 'nestedModifyAsTask'
+----
+["BEGIN","SELECT 1;","ALTER TASK target_a MODIFY AS SELECT 2;","ALTER TASK target_b MODIFY AS SELECT 3;","SELECT 4;","END;"]
+
+statement ok
+ALTER TASK nestedModifyAsTask MODIFY AS BEGIN
+    SELECT 5;
+    ALTER TASK target_a MODIFY AS SELECT 6;
+    ALTER TASK target_b MODIFY AS SELECT 7;
+    SELECT 8;
+  END;
+
+query S
+select SPLIT(definition, '\n') from system.tasks where name = 'nestedModifyAsTask'
+----
+["BEGIN","SELECT 5;","ALTER TASK target_a MODIFY AS SELECT 6;","ALTER TASK target_b MODIFY AS SELECT 7;","SELECT 8;","END;"]
+
+statement ok
+DROP TASK nestedModifyAsTask
+
 statement ok
 DROP TASK transactionTask

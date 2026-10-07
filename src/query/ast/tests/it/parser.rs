@@ -16,9 +16,11 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
+use databend_common_ast::ast::AlterTaskOptions;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::LambdaArgument;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::TaskSql;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::parser::expr::*;
@@ -65,6 +67,102 @@ fn test_set_ttl_and_modify_column_are_distinct() {
     // MODIFY is exclusively column syntax, not an alias for SET TTL.
     let tokens = tokenize_sql("ALTER TABLE t MODIFY TTL event_time + INTERVAL 7 DAY").unwrap();
     assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err());
+}
+
+#[test]
+fn test_task_block_nested_modify_as() {
+    let expected = TaskSql::ScriptBlock(vec![
+        "SELECT 1".to_string(),
+        "ALTER TASK target_a MODIFY AS SELECT 2".to_string(),
+        "ALTER TASK target_b MODIFY AS SELECT 3".to_string(),
+        "SELECT 4".to_string(),
+    ]);
+
+    for prefix in [
+        "CREATE TASK driver SCHEDULE = 60 MINUTE AS",
+        "ALTER TASK driver MODIFY AS",
+    ] {
+        for terminator in ["", ";"] {
+            let sql = format!(
+                "{prefix} BEGIN
+                    SELECT 1;
+                    ALTER TASK target_a MODIFY AS SELECT 2;
+                    ALTER TASK target_b MODIFY AS SELECT 3;
+                    SELECT 4;
+                END{terminator}"
+            );
+            let tokens = tokenize_sql(&sql).unwrap();
+            let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+            let body = match &stmt {
+                Statement::CreateTask(task) => &task.sql,
+                Statement::AlterTask(task) => match &task.options {
+                    AlterTaskOptions::ModifyAs(body) => body,
+                    _ => panic!("expected MODIFY AS"),
+                },
+                _ => panic!("expected CREATE TASK or ALTER TASK"),
+            };
+            assert_eq!(body, &expected);
+
+            let displayed = stmt.to_string();
+            let tokens = tokenize_sql(&displayed).unwrap();
+            let (reparsed, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+            assert_eq!(reparsed, stmt);
+
+            let TaskSql::ScriptBlock(stmts) = body else {
+                panic!("expected script block");
+            };
+            for (index, stored_sql) in stmts.iter().enumerate() {
+                let tokens = tokenize_sql(stored_sql).unwrap();
+                let (stored_stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+                assert_eq!(stored_stmt.to_string(), *stored_sql);
+                if let Statement::AlterTask(task) = stored_stmt {
+                    assert_eq!(
+                        task.options,
+                        AlterTaskOptions::ModifyAs(TaskSql::SingleStatement(format!(
+                            "SELECT {}",
+                            index + 1
+                        )))
+                    );
+                } else {
+                    assert!(matches!(stored_stmt, Statement::Query(_)));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_task_sql_statement_boundaries() {
+    for prefix in [
+        "CREATE TASK driver SCHEDULE = 60 MINUTE AS",
+        "ALTER TASK driver MODIFY AS",
+    ] {
+        // The top-level parser owns the optional final semicolon. A standalone
+        // BEGIN is still a transaction statement, not a task script block.
+        for body in ["SELECT 1", "SELECT 1;", "BEGIN", "BEGIN;"] {
+            let sql = format!("{prefix} {body}");
+            let tokens = tokenize_sql(&sql).unwrap();
+            assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_ok());
+        }
+
+        for body in [
+            "BEGIN SELECT 1 ALTER TASK target MODIFY AS SELECT 2; END;",
+            "BEGIN SELECT 1; ALTER TASK target MODIFY AS SELECT 2 SELECT 3; END;",
+            "BEGIN SELECT 1; ALTER TASK target MODIFY AS SELECT 2 END;",
+            "BEGIN SELECT 1; ALTER TASK target MODIFY AS SELECT 2;; SELECT 3; END;",
+            "BEGIN SELECT 1; ALTER TASK target MODIFY AS SELECT 2; SELECT 3 END;",
+            "BEGIN SELECT 1; ALTER TASK target MODIFY AS SELECT 2; END; SELECT 3;",
+            "SELECT 1; SELECT 2;",
+            "SELECT 1;;",
+        ] {
+            let sql = format!("{prefix} {body}");
+            let tokens = tokenize_sql(&sql).unwrap();
+            assert!(
+                parse_sql(&tokens, Dialect::PostgreSQL).is_err(),
+                "unexpectedly accepted: {sql}"
+            );
+        }
+    }
 }
 
 fn run_parser<P, O>(file: &mut dyn Write, parser: P, src: &str)
