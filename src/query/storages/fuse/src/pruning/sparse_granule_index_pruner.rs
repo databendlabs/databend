@@ -413,8 +413,14 @@ impl GranulePredicateEvaluator {
 
         let mut page_domains = Vec::new();
         for (index, min, max) in &bounded {
-            let stat = ColumnStatistics::new((*min).clone(), (*max).clone(), 0, 0, None);
-            let domain = statistics_to_domain(vec![&stat], &self.key_columns[*index].1);
+            let data_type = &self.key_columns[*index].1;
+            // A NULL sort boundary can enclose non-NULL rows, unlike column statistics.
+            let domain = if min.is_null() || max.is_null() {
+                Domain::full(data_type)
+            } else {
+                let stat = ColumnStatistics::new((*min).clone(), (*max).clone(), 0, 0, None);
+                statistics_to_domain(vec![&stat], data_type)
+            };
             page_domains.push((*index, domain));
         }
 
@@ -1049,6 +1055,31 @@ mod tests {
 
     fn tuple(values: Vec<Scalar>) -> Scalar {
         Scalar::Tuple(values)
+    }
+
+    #[test]
+    fn test_nullable_granule_bounds_keep_non_null_rows() {
+        let ty = DataType::Number(NumberDataType::Int32).wrap_nullable();
+        let key = column("k", ty.clone());
+        let upper = constant(Scalar::Number(2_i32.into()), ty.clone());
+        for filter in [
+            call("lte", vec![key.clone(), upper.clone()]),
+            call("eq", vec![key.clone(), upper]),
+            call("is_not_null", vec![key.clone()]),
+        ] {
+            let evaluator = GranulePredicateEvaluator::try_create(
+                FunctionContext::default(),
+                vec![key.clone()],
+                filter,
+            )
+            .unwrap();
+            let lower = tuple(vec![Scalar::Number(1_i32.into())]);
+            let null = tuple(vec![Scalar::Null]);
+            assert!(evaluator.eval_single_granule(&lower, &null).unwrap());
+            assert!(evaluator.eval_single_granule(&null, &lower).unwrap());
+            let mins = vec![lower, null.clone()];
+            assert_eq!(evaluator.apply(&mins, &null).unwrap()[0].start, 0);
+        }
     }
 
     #[test]
