@@ -66,8 +66,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
 use crate::spillers::SortSpillerImpl;
 
-const WINDOW_BYTES: usize = 256 * 1024;
-
 #[derive(Clone)]
 struct ReclusterMergeInputBlock {
     meta: Arc<BlockMeta>,
@@ -82,6 +80,7 @@ struct ReclusterMergeConfig {
     defaults: Vec<Scalar>,
     eval: CompoundBlockOperator,
     keys: SortKeyDescription,
+    read_settings: databend_storages_common_io::ReadSettings,
     batch_rows: usize,
     output_batch_rows: usize,
     minimum_batch: bool,
@@ -245,8 +244,9 @@ where R::Converter: Send
                     )
                     .with_default_values(self.merge_config.defaults.clone())
                     .with_stream_table_version(self.merge_config.table.get_table_info().ident.seq)
-                    .with_window_size(WINDOW_BYTES)
-                    .with_max_prefetch(1);
+                    .with_window_rows(self.merge_config.batch_rows)
+                    .with_max_prefetch(1)
+                    .with_merge_io(self.merge_config.read_settings);
                     let mut reopened =
                         FuseLowLevelBlockReader::create(options)?.read_full_rows()?;
                     // Recovered streams can reopen after releasing their page/IO
@@ -650,12 +650,15 @@ impl HorizontalReclusterSource {
             false,
         )?;
         let defaults = block_reader.default_values().to_vec();
+        let read_settings = databend_storages_common_io::ReadSettings {
+            max_gap_size: settings.get_storage_io_min_bytes_for_seek()?,
+            max_range_size: settings.get_storage_io_max_page_bytes_for_read()?,
+            parquet_fast_read_bytes: settings.get_parquet_fast_read_bytes()?,
+        };
         let requested_rows = (settings.get_max_block_size()? as usize).clamp(1, 8192);
         let mut input_blocks = Vec::with_capacity(task.parts.len());
-        let mut max_leaves = 1;
         for (ordinal, part) in task.parts.partitions.iter().enumerate() {
             let part = FuseBlockPartInfo::from_part(part)?;
-            max_leaves = max_leaves.max(part.columns_meta.len());
             let meta = BlockMeta::new(
                 part.nums_rows as _,
                 0,
@@ -685,17 +688,39 @@ impl HorizontalReclusterSource {
         }
         let estimated_rows = task.total_rows.max(1);
         let row_bytes = task.total_bytes.div_ceil(estimated_rows).max(1);
-        let read_window_bytes = max_leaves.saturating_mul(3 * WINDOW_BYTES);
-        // Reduce batch rows before reducing fan-in. Otherwise a wide table
-        // unnecessarily spills even when small batches from every route fit.
+        let merge_limit = usize::try_from(read_settings.max_range_size)
+            .map_err(|_| ErrorCode::BadArguments("merge IO range size exceeds address space"))?;
         let desired_fan_in = input_blocks.len().clamp(2, 64);
         let route_budget = budget / 2 / desired_fan_in;
+        let mut batch_rows = requested_rows;
+        let (read_window_bytes, per_stream) = loop {
+            let mut read_bytes = 0;
+            for input in &input_blocks {
+                let mut source_bytes = 0usize;
+                for meta in input.meta.col_metas.values() {
+                    let (_, len) = meta.offset_length();
+                    let window = FuseLowLevelBlockReader::window_bytes_for_rows(
+                        len,
+                        input.meta.row_count,
+                        batch_rows,
+                    )?;
+                    // Existing RangeMerger may overshoot its limit by one
+                    // window. Count hinted segments plus the recent segment.
+                    let segment = merge_limit.saturating_add(window).min(len as usize);
+                    source_bytes = source_bytes.saturating_add(segment.saturating_mul(3));
+                }
+                read_bytes = read_bytes.max(source_bytes);
+            }
+            let batch_bytes = row_bytes.saturating_mul(batch_rows);
+            let retained = read_bytes
+                .saturating_add(batch_bytes.saturating_mul(2))
+                .max(1);
+            if retained <= route_budget || batch_rows == 1 {
+                break (read_bytes, retained);
+            }
+            batch_rows = (batch_rows / 2).max(1);
+        };
         let row_budget = route_budget.saturating_sub(read_window_bytes);
-        let batch_rows = requested_rows.min((row_budget / 2 / row_bytes).max(1));
-        let batch_bytes = row_bytes.saturating_mul(batch_rows);
-        let per_stream = read_window_bytes
-            .saturating_add(batch_bytes.saturating_mul(2))
-            .max(1);
         let fan_in = (budget / 2 / per_stream).min(64);
         let spill_enabled = ctx.get_enable_sort_spill();
         let force_initial = spill_enabled && settings.get_force_sort_data_spill()?;
@@ -736,6 +761,7 @@ impl HorizontalReclusterSource {
                 DataSchemaRefExt::create(stats.out_fields.clone()),
                 fixed,
             )?,
+            read_settings,
             batch_rows,
             output_batch_rows,
             minimum_batch,
@@ -895,6 +921,11 @@ mod tests {
                 ]),
                 false,
             )?,
+            read_settings: databend_storages_common_io::ReadSettings {
+                max_gap_size: 48,
+                max_range_size: 512 * 1024,
+                parquet_fast_read_bytes: 0,
+            },
             batch_rows: 2,
             output_batch_rows: 2,
             minimum_batch: fan_in != 16,

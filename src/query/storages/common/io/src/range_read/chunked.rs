@@ -39,6 +39,10 @@ pub struct ChunkedRangeReader {
     pending: VecDeque<Range<u64>>,
     /// Number of windows kept hinted ahead of consumption.
     lookahead: usize,
+    /// Every hint is announced once. A saturated batched hint may have accepted
+    /// a prefix, so do not announce later windows until that batch is consumed.
+    announced_end: u64,
+    paused: bool,
     /// Remainder of the window currently drained through `io::Read`.
     current: Option<Buffer>,
 }
@@ -70,6 +74,8 @@ impl ChunkedRangeReader {
             chain,
             pending,
             lookahead: lookahead.max(1),
+            announced_end: range.start,
+            paused: false,
             current: None,
         };
 
@@ -79,8 +85,9 @@ impl ChunkedRangeReader {
         for window in reader.pending.iter().take(reader.lookahead) {
             initial.push(window.clone());
         }
-        if !initial.is_empty() {
-            let _ = reader.chain.prefetch(&initial);
+        if let Some(last) = initial.last() {
+            reader.announced_end = last.end;
+            reader.paused = !reader.chain.prefetch(&initial);
         }
         Ok(reader)
     }
@@ -90,15 +97,27 @@ impl ChunkedRangeReader {
         let Some(window) = self.pending.pop_front() else {
             return Ok(None);
         };
-        // Replenish the lookahead before blocking on this read: the next
-        // window must be announced downstream before this read consumes
-        // their shared boundary chunk, and the worker can run
-        // ahead while this read blocks. After the pop, the window that
-        // extends the maintained lookahead is always at this fixed index.
-        if let Some(next) = self.pending.get(self.lookahead - 1) {
-            let _ = self.chain.prefetch(std::slice::from_ref(next));
-        }
+        let end = window.end;
         let data = self.chain.read(window)?;
+        if self.paused && end >= self.announced_end {
+            self.paused = false;
+        }
+        // Refill in consumption order. Never hint past a possibly rejected
+        // earlier window: a streaming tail would otherwise seek forward and
+        // reopen backwards when that skipped window is eventually demanded.
+        if !self.paused {
+            let hints = self
+                .pending
+                .iter()
+                .take(self.lookahead)
+                .filter(|range| range.end > self.announced_end)
+                .cloned()
+                .collect::<Vec<_>>();
+            if let Some(last) = hints.last() {
+                self.announced_end = last.end;
+                self.paused = !self.chain.prefetch(&hints);
+            }
+        }
         Ok(Some(data))
     }
 }
