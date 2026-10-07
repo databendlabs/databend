@@ -84,6 +84,7 @@ pub struct TransformSerializeBlock {
     block_builder: BlockBuilder,
     recluster_index_rows: Option<Vec<ReclusterIndexRowRange>>,
     recluster_merged_names: Vec<String>,
+    recluster_output_row: u64,
     dal: Operator,
     table_id: Option<u64>, // Only used in multi table insert
     kind: MutationKind,
@@ -290,6 +291,7 @@ impl TransformSerializeBlock {
             block_builder,
             recluster_index_rows: None,
             recluster_merged_names: Vec::new(),
+            recluster_output_row: 0,
             dal: table.get_operator(),
             table_id: if with_tid { Some(table.get_id()) } else { None },
             kind,
@@ -344,6 +346,7 @@ impl TransformSerializeBlock {
             self.output_data = Some(DataBlock::empty_with_meta(Box::new(ReclusterIndexOutput {
                 meta: extended_block_meta,
                 rows,
+                output_row: self.recluster_output_row,
             })));
             self.recluster_merged_names.clear();
             return;
@@ -452,6 +455,7 @@ impl Processor for TransformSerializeBlock {
                         "index merge metadata outside recluster",
                     ));
                 }
+                self.recluster_output_row = input.output_row;
                 self.recluster_index_rows = Some(input.rows);
                 self.recluster_merged_names = input.merged_names;
                 self.state = State::NeedSerialize {

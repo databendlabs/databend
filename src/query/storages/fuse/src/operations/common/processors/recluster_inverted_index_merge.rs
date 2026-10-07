@@ -54,6 +54,7 @@ pub struct ReclusterIndexRowRange {
 #[derive(Debug)]
 pub struct ReclusterIndexInput {
     pub rows: Vec<ReclusterIndexRowRange>,
+    pub output_row: u64,
     pub merged_names: Vec<String>,
 }
 
@@ -66,6 +67,7 @@ impl BlockMetaInfo for ReclusterIndexInput {}
 #[derive(Debug)]
 pub struct ReclusterIndexOutput {
     pub meta: ExtendedBlockMeta,
+    pub output_row: u64,
     pub rows: Vec<ReclusterIndexRowRange>,
 }
 
@@ -87,7 +89,6 @@ pub struct ReclusterIndexMergeSpec {
     source_rows: Vec<u32>,
     budget: usize,
     estimated_bytes: usize,
-    estimated_outputs: usize,
 }
 
 impl ReclusterIndexMergeSpec {
@@ -163,8 +164,7 @@ impl ReclusterIndexMergeSpec {
         let estimated_bytes = task
             .total_rows
             .saturating_mul(64)
-            .saturating_add(largest_bundle_bytes.saturating_mul(2))
-            .saturating_add(outputs.saturating_mul(16 * 1024 * 1024));
+            .saturating_add(largest_bundle_bytes.saturating_mul(2));
         if outputs > u16::MAX as usize || estimated_bytes > budget {
             return Ok(None);
         }
@@ -173,7 +173,6 @@ impl ReclusterIndexMergeSpec {
             source_rows,
             budget,
             estimated_bytes,
-            estimated_outputs: outputs,
         }))
     }
 
@@ -248,12 +247,12 @@ impl AccumulatingTransform for TransformReclusterIndexMerge {
                 .capacity()
                 .saturating_mul(std::mem::size_of::<ReclusterIndexRowRange>()),
         );
-        let extra_outputs = (self.outputs.len() + 1).saturating_sub(self.merge.estimated_outputs);
         let retained = self
             .merge
             .estimated_bytes
-            .saturating_add(self.retained_range_bytes)
-            .saturating_add(extra_outputs.saturating_mul(16 * 1024 * 1024));
+            .saturating_add(self.retained_range_bytes);
+        // Output count alone is not a memory estimate: small output indexes
+        // may retain only a few KiB. Check actual allocation while Tantivy runs.
         if retained > self.merge.budget || self.outputs.len() >= u16::MAX as usize {
             return Err(ErrorCode::MemoryExceedsLimit(
                 "recluster index output mapping exceeds admitted budget",
@@ -307,88 +306,171 @@ impl AccumulatingTransform for TransformReclusterIndexMerge {
                 "recluster index mapping exceeds admitted budget",
             ));
         }
+        self.outputs
+            .sort_unstable_by_key(|output| output.output_row);
+        let mut next_row = 0u64;
+        for output in &self.outputs {
+            if output.output_row != next_row {
+                return Err(ErrorCode::Internal(
+                    "recluster index output order has gaps or overlaps",
+                ));
+            }
+            next_row = next_row
+                .checked_add(output.meta.block_meta.row_count)
+                .ok_or_else(|| ErrorCode::Internal("recluster index output rows overflow"))?;
+        }
+        let mut source_positions = vec![0u32; self.merge.source_rows.len()];
+        for output in &self.outputs {
+            for origin in &output.rows {
+                let position = &mut source_positions[origin.source as usize];
+                if origin.rows.start != *position {
+                    return Err(ErrorCode::Internal(
+                        "recluster index lineage has reordered or missing source rows",
+                    ));
+                }
+                *position = origin.rows.end;
+            }
+        }
+        if source_positions != self.merge.source_rows {
+            return Err(ErrorCode::Internal(
+                "recluster index lineage does not cover all source rows",
+            ));
+        }
         let locations = self.table.meta_location_generator();
         for index in &self.merge.indexes {
             self.ctx
                 .check_aborting()
                 .map_err(|err| err.with_context("recluster index merge"))?;
-            let start = Instant::now();
-            let sources = index
-                .sources
-                .iter()
-                .zip(&self.merge.source_rows)
-                .map(|(meta, &num_rows)| MergeSource {
-                    location: meta.location.0.clone(),
-                    bundle_size: meta.size,
-                    num_rows,
-                })
-                .collect();
-            let mut output_locations = Vec::with_capacity(self.outputs.len());
-            let mut outputs = Vec::with_capacity(self.outputs.len());
-            for output in &self.outputs {
-                let location = locations.gen_inverted_index_v2_location(&index.version);
-                output_locations.push(location.clone());
-                outputs.push(MergeOutput {
-                    location,
-                    rows: output
-                        .rows
-                        .iter()
-                        .map(|origin| SourceRows {
-                            source: origin.source,
-                            rows: origin.rows.clone(),
-                        })
-                        .collect(),
-                });
-            }
-            let sizes = InvertedIndexMerger::try_create_with_schema(
-                self.table.get_operator(),
-                sources,
-                outputs,
-                &index.schema,
+            // Reserve for the two postings/positions upload streams per output.
+            // Do not open all target Tantivy writers simultaneously.
+            let writer_bytes = databend_storages_common_io::blocking_write_retained_bytes(
+                &self.table.get_operator(),
+                databend_storages_common_io::BLOCKING_WRITE_MAX_CHUNKS,
             )
-            .map_err(|err| {
-                ErrorCode::StorageOther(format!("open recluster inverted index merge: {err}"))
-            })?
-            .finish()
-            .map_err(|err| {
-                ErrorCode::StorageOther(format!("finish recluster inverted index merge: {err}"))
-            })?;
-            let elapsed_ms = start.elapsed().as_millis() as u64;
-            metrics_inc_block_inverted_index_generate_milliseconds(elapsed_ms);
-            if sizes.len() != self.outputs.len() {
-                return Err(ErrorCode::Internal("index merger output count mismatch"));
-            }
-            for ((output, location), sizes) in
-                self.outputs.iter_mut().zip(output_locations).zip(sizes)
-            {
-                let total_size = sizes
-                    .bundle
-                    .checked_add(sizes.siblings)
-                    .ok_or_else(|| ErrorCode::Internal("inverted index total size overflow"))?;
-                metrics_inc_block_inverted_index_write_nums(1);
-                metrics_inc_block_inverted_index_write_bytes(total_size);
-                let written = WrittenInvertedIndex {
-                    index_name: index.name.clone(),
-                    index_version: index.version.clone(),
-                    location: (location, INVERTED_INDEX_FILE_FORMAT_VERSION),
-                    bundle_size: sizes.bundle,
-                    total_size,
-                };
-                let block = &mut output.meta.block_meta;
-                block.inverted_index_size = Some(
-                    block
-                        .inverted_index_size
-                        .unwrap_or(0)
-                        .checked_add(written.total_size)
-                        .ok_or_else(|| ErrorCode::Internal("inverted index size overflow"))?,
-                );
-                let metas = block.inverted_index_metas.get_or_insert_with(Vec::new);
-                if metas.iter().any(|meta| meta.index_name == index.name) {
-                    return Err(ErrorCode::Internal("duplicate merged inverted index"));
+            .saturating_mul(2)
+            .max(1);
+            let batch_outputs = (self.merge.budget / 2 / writer_bytes).max(1);
+            let index_start = Instant::now();
+            for output_batch in self.outputs.chunks_mut(batch_outputs) {
+                let start = Instant::now();
+                let sources = index
+                    .sources
+                    .iter()
+                    .zip(&self.merge.source_rows)
+                    .map(|(meta, &num_rows)| MergeSource {
+                        location: meta.location.0.clone(),
+                        bundle_size: meta.size,
+                        num_rows,
+                    })
+                    .collect();
+                let mut output_locations = Vec::with_capacity(output_batch.len());
+                let mut outputs = Vec::with_capacity(output_batch.len());
+                for output in output_batch.iter() {
+                    let location = locations.gen_inverted_index_v2_location(&index.version);
+                    output_locations.push(location.clone());
+                    outputs.push(MergeOutput {
+                        location,
+                        rows: output
+                            .rows
+                            .iter()
+                            .map(|origin| SourceRows {
+                                source: origin.source,
+                                rows: origin.rows.clone(),
+                            })
+                            .collect(),
+                    });
                 }
-                metas.push(written.to_block_index_meta());
-                metas.sort_unstable_by(|a, b| a.index_name.cmp(&b.index_name));
+                let ctx = self.ctx.clone();
+                let budget = self.merge.budget;
+                let memory = databend_common_base::runtime::ThreadTracker::mem_stat().cloned();
+                let parent = memory.clone().map_or(
+                    databend_common_base::runtime::ParentMemStat::StaticRef(
+                        &databend_common_base::runtime::GLOBAL_MEM_STAT,
+                    ),
+                    databend_common_base::runtime::ParentMemStat::Normal,
+                );
+                let merge_memory = databend_common_base::runtime::MemStat::create_child(
+                    Some("recluster inverted index batch".into()),
+                    0,
+                    parent,
+                );
+                let mut payload =
+                    databend_common_base::runtime::ThreadTracker::new_tracking_payload();
+                payload.mem_stat = Some(merge_memory.clone());
+                let _merge_tracking =
+                    databend_common_base::runtime::ThreadTracker::tracking(payload);
+                let settings = ctx.get_settings();
+                let global_limit = settings.get_max_memory_usage()? as usize;
+                let query_limit = settings.get_max_query_memory_usage()? as usize;
+                let check = Box::new(move || -> std::io::Result<()> {
+                    ctx.check_aborting()
+                        .map_err(|err| std::io::Error::other(err.to_string()))?;
+                    let used = memory.as_ref().map_or(0, |stat| stat.get_memory_usage());
+                    let global_used =
+                        databend_common_base::runtime::GLOBAL_MEM_STAT.get_memory_usage();
+                    if (global_limit != 0 && global_used >= global_limit)
+                        || (query_limit != 0 && used >= query_limit)
+                        || merge_memory.get_memory_usage() > budget
+                    {
+                        return Err(std::io::Error::other(format!(
+                            "recluster index merge exceeded memory allowance: used={used}, batch_used={}, budget={budget}, global_used={global_used}, global_limit={global_limit}, query_limit={query_limit}",
+                            merge_memory.get_memory_usage(),
+                        )));
+                    }
+                    Ok(())
+                });
+                let sizes = InvertedIndexMerger::try_create_for_recluster_batch(
+                    self.table.get_operator(),
+                    sources,
+                    outputs,
+                    &index.schema,
+                    check,
+                )
+                .map_err(|err| {
+                    ErrorCode::StorageOther(format!("open recluster inverted index merge: {err}"))
+                })?
+                .finish()
+                .map_err(|err| {
+                    ErrorCode::StorageOther(format!("finish recluster inverted index merge: {err}"))
+                })?;
+                let elapsed_ms = start.elapsed().as_millis() as u64;
+                metrics_inc_block_inverted_index_generate_milliseconds(elapsed_ms);
+                if sizes.len() != output_batch.len() {
+                    return Err(ErrorCode::Internal("index merger output count mismatch"));
+                }
+                for ((output, location), sizes) in
+                    output_batch.iter_mut().zip(output_locations).zip(sizes)
+                {
+                    let total_size = sizes
+                        .bundle
+                        .checked_add(sizes.siblings)
+                        .ok_or_else(|| ErrorCode::Internal("inverted index total size overflow"))?;
+                    metrics_inc_block_inverted_index_write_nums(1);
+                    metrics_inc_block_inverted_index_write_bytes(total_size);
+                    let written = WrittenInvertedIndex {
+                        index_name: index.name.clone(),
+                        index_version: index.version.clone(),
+                        location: (location, INVERTED_INDEX_FILE_FORMAT_VERSION),
+                        bundle_size: sizes.bundle,
+                        total_size,
+                    };
+                    let block = &mut output.meta.block_meta;
+                    block.inverted_index_size = Some(
+                        block
+                            .inverted_index_size
+                            .unwrap_or(0)
+                            .checked_add(written.total_size)
+                            .ok_or_else(|| ErrorCode::Internal("inverted index size overflow"))?,
+                    );
+                    let metas = block.inverted_index_metas.get_or_insert_with(Vec::new);
+                    if metas.iter().any(|meta| meta.index_name == index.name) {
+                        return Err(ErrorCode::Internal("duplicate merged inverted index"));
+                    }
+                    metas.push(written.to_block_index_meta());
+                    metas.sort_unstable_by(|a, b| a.index_name.cmp(&b.index_name));
+                }
             }
+            let elapsed_ms = index_start.elapsed().as_millis() as u64;
             metrics_inc_block_inverted_index_write_milliseconds(elapsed_ms);
             log::info!(
                 "recluster merged inverted index: name={}, sources={}, outputs={}",

@@ -73,6 +73,7 @@ use crate::pipelines::PipelineBuilder;
 use crate::pipelines::builders::SortPipelineBuilder;
 use crate::pipelines::processors::horizontal_recluster::HorizontalReclusterSource;
 use crate::pipelines::processors::horizontal_recluster::TransformPrepareReclusterIndex;
+use crate::pipelines::processors::horizontal_recluster::TransformReclusterOutputOrder;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextSettings;
 use crate::spillers::ReclusterSpiller;
@@ -333,6 +334,11 @@ impl IPhysicalPlan for Recluster {
                             )
                         });
                     }
+                }
+                if index_merge.is_some() {
+                    builder
+                        .main_pipeline
+                        .add_transformer(|| TransformReclusterOutputOrder { next_row: 0 });
                 }
                 let max_threads = settings.get_max_threads()? as usize;
 

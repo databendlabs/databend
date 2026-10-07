@@ -130,33 +130,47 @@ columns are removed and ranges are attached to that block only. Serialization sk
 index builders but builds all others. Written block metadata and its exact row mapping stay
 in a local envelope. A task-level collector holds envelopes until every selected index merge
 finishes, then emits ordinary AppendBlock mutation logs. It retains metadata/mappings, not
-the complete output payload. Parallel serialization completion order is allowed: each bundle
-uses its associated block mapping, not an assumed globally ordered completion ordinal.
+the complete output payload. An internal UInt64 output-row ordinal follows compact concat/split.
+The collector restores this row order after parallel serialization and verifies contiguous output
+ranges and complete, monotonic source coverage before opening index writers.
 
-The existing Tantivy merger reads each source once per index and merges postings, positions,
+The existing Tantivy merger reads sources once per output batch per index and merges postings, positions,
 fieldnorms and JSON fast fields without re-tokenizing. The current expected schema is checked
 before any destination index is created, and source doc counts are verified against row counts.
 A selected bundle's IO/corruption/schema error fails the task; it does not silently rebuild.
 No mutation metadata is released before all merges succeed. Already-written uncommitted data
 or index objects on failure remain subject to existing orphan cleanup; the snapshot stays
-unchanged. Cancellation is checked while collecting, between indexes and before publication,
-not inside every Tantivy postings operation or blocking receive.
+unchanged. Cancellation is checked while collecting, opening/finishing indexes, iterating terms,
+periodically in document/fieldnorm/store loops and before publication. An already-blocked IO
+receive and individual opaque Tantivy operations are not immediately interruptible.
 
-Resource admission is deliberately conservative and not a hard memory cap: index working
-allowance is 10% of available node/query memory, at most 128 MiB. Estimate includes 64 B/source
-row, twice the largest per-index sum of bundle bytes, and 16 MiB per expected output. Actual
-range-vector capacity and extra output count are checked while collecting. Inputs beyond
-UInt32 doc limits or outputs beyond UInt16 ordinal limits are not admitted. The current merger
-still expands doc mappings and holds all outputs; sibling sizes, decompression, postings scratch
-and backend buffers can exceed the estimate. Default-off rollout requires workload measurements,
-object-store/multi-node tests, write-fault injection and human review. Do not advertise this
-setting as a guaranteed speedup or bounded-memory external index merge.
+Resource admission is an estimate, not a hard memory cap: index working allowance is 10% of
+available node/query memory, at most 128 MiB. Estimate includes 64 B/source row and twice the
+largest per-index sum of bundle bytes. Actual range-vector capacities are checked while collecting.
+Inputs beyond UInt32 doc limits or outputs beyond UInt16 ordinal limits are not admitted.
+Target writers are opened in batches, sized from half the allowance divided by twice the
+operator-specific blocking-writer retention estimate. This can reread every source for each
+output batch, trading IO and CPU for reduced simultaneous writer residency. Before each batch,
+a child memory tracker is attached to the query tracker; checkpoints reject batch allocation
+beyond the allowance and enforce current query/global limits. Checkpoints can overshoot and
+do not reserve memory against concurrent tasks.
+
+Persistent sequential index windows detach backend buffers to their actual requested length.
+This prevents fs's 2 MiB buffer allocation per tiny read from multiplying across source components.
+The copy adds transient allocation/bandwidth cost. Mapping expansion, sibling payloads,
+decompression and postings scratch remain additional constraints. Default-off rollout still
+requires release-profile/object-store measurements and human review. Do not advertise this
+setting as a guaranteed speedup or a strict bounded-memory external index merge.
 
 Regression coverage: search results before/after, doc-to-row mapping with duplicate keys and
 computed cluster keys, forced spill, direct two-output collector metadata, mixed reuse/rebuild,
 missing/old source definitions, low-budget fallback, schema rejection before output creation,
-cancel-before-merge and corrupt-source failure with unchanged snapshot. SQL suite:
-`09_0055_recluster_inverted_merge.test` (service runner execution still required).
+cancel-before-merge and corrupt-source failure with unchanged snapshot, cancellation during
+postings, injected index-write failure, monotonic output subsets, and tiny fs-window residency.
+SQL suite: `09_0055_recluster_inverted_merge.test`. The isolated three-node fs service runner
+also covers horizontal merging, task-kind dispatch and change tracking. A 24,000-row forced-spill
+workload verified count/distinct/sum, a unique word and a phrase; remote-worker logs confirm
+actual index merges (including a 24-source, 41-output task), not just cluster membership.
 
 ## Parameters requiring workload review
 
@@ -175,7 +189,7 @@ correctness limits and existing user settings:
 | Index merge allowance | 10% of available memory, cap 128 MiB | Independent estimate; not a hard combined peak guard. |
 | Index merge row estimate | 64 B per source row | Mapping/origin estimate; variable range vectors counted separately. |
 | Index merge bundle estimate | 2 × largest per-index bundle total | Sibling payload and decompression scratch not strictly covered. |
-| Index merge output reserve | 16 MiB per output | Tantivy writer estimate, requires workload validation. |
+| Index output batch fan-out | (allowance / 2) / (2 × operator writer retention), minimum 1 | Reopens sources per batch; backend/scratch peaks still checked at checkpoints. |
 | Merge head/retention share | budget / 2 | Soft retention threshold, not an allocation guard. |
 | Output batch byte estimate | budget / 4 | Uses average uncompressed row width, not maximum row width. |
 | Batch row cap | 8192, also capped by max_block_size | Tradeoff between buffering and work/IO handoffs. |
@@ -292,6 +306,19 @@ Historical pre-streaming optimized-test results (not the production release prof
 These are limited single-run observations, not stable performance claims. Query peak is tracked
 allocation, not process RSS. The old path ran first; cache-order effects and build profile must
 be controlled before rollout. The observed wide-payload time regression remains unresolved.
-Release-profile measurements, object-store tests, blocked-IO cancellation and write-failure
-injection remain rollout requirements. Default-off does not remove the need for human review
-and CI before merge.
+Release-profile measurements, object-store tests, blocked-IO cancellation and end-to-end
+write-failure injection remain rollout requirements. Index-merger write-error propagation is
+covered by an injected OpenDAL write failure; this is not a production object-store fault test.
+Default-off does not remove the need for human review and CI before merge.
+
+### Index integration hardening validation
+
+An isolated debug three-node fs run completed all four SQL suites: index reuse (41 statements/
+queries), horizontal merge (38), task-kind dispatch (33) and change tracking (77). The separate
+24-insert / 24,000-row forced-spill workload passed twice after the source-window fix. Latest
+query ID: `01a1164f7d9c76f08634b9c04bbce3b5`, approximately 21.8 s across all FINAL rounds.
+Node-2 logs confirm actual index merges while the client submitted to node-0, including 24
+sources and 41 target blocks. This establishes remote execution and functional correctness,
+not a speedup or production readiness. Local checks: 24 index merge/source/window tests,
+11 horizontal integration tests (one performance probe ignored), related all-targets Clippy
+with `-D warnings`, formatting and diff checks.

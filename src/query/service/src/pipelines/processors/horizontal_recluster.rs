@@ -105,6 +105,26 @@ pub struct ReclusterRowOriginRange {
     pub rows: std::ops::Range<u32>,
 }
 
+pub struct TransformReclusterOutputOrder {
+    pub next_row: u64,
+}
+
+impl Transform for TransformReclusterOutputOrder {
+    const NAME: &'static str = "ReclusterOutputOrder";
+
+    fn transform(&mut self, mut block: DataBlock) -> Result<DataBlock> {
+        let end = self
+            .next_row
+            .checked_add(block.num_rows() as u64)
+            .ok_or_else(|| ErrorCode::Internal("recluster output row overflow"))?;
+        block.add_column(databend_common_expression::types::UInt64Type::from_data(
+            (self.next_row..end).collect::<Vec<_>>(),
+        ));
+        self.next_row = end;
+        Ok(block)
+    }
+}
+
 pub struct TransformPrepareReclusterIndex {
     pub merged_names: Vec<String>,
 }
@@ -112,7 +132,21 @@ pub struct TransformPrepareReclusterIndex {
 impl Transform for TransformPrepareReclusterIndex {
     const NAME: &'static str = "PrepareReclusterIndexLineage";
 
-    fn transform(&mut self, block: DataBlock) -> Result<DataBlock> {
+    fn transform(&mut self, mut block: DataBlock) -> Result<DataBlock> {
+        let order = block.get_last_column().clone();
+        let Column::Number(NumberColumn::UInt64(order)) = order else {
+            return Err(ErrorCode::Internal("missing recluster output order"));
+        };
+        let output_row = order
+            .first()
+            .copied()
+            .ok_or_else(|| ErrorCode::Internal("empty recluster output order"))?;
+        for (index, &row) in order.iter().enumerate() {
+            if row != output_row + index as u64 {
+                return Err(ErrorCode::Internal("non-contiguous recluster output order"));
+            }
+        }
+        block.pop_columns(1);
         let (block, origins) = extract_recluster_lineage(block)?;
         let rows = origins
             .into_iter()
@@ -126,6 +160,7 @@ impl Transform for TransformPrepareReclusterIndex {
         block.add_meta(Some(Box::new(
             databend_common_storages_fuse::operations::ReclusterIndexInput {
                 rows,
+                output_row,
                 merged_names: self.merged_names.clone(),
             },
         )))
@@ -783,7 +818,7 @@ impl ReclusterMergeFactory {
             .total_bytes
             .div_ceil(estimated_rows)
             .max(1)
-            .saturating_add(if lineage { 8 } else { 0 });
+            .saturating_add(if lineage { 16 } else { 0 });
         let merge_limit = usize::try_from(read_settings.max_range_size)
             .map_err(|_| ErrorCode::BadArguments("merge IO range size exceeds address space"))?;
         let desired_fan_in = input_blocks.len().clamp(2, 64);
@@ -1647,7 +1682,7 @@ mod tests {
         let spec = ReclusterIndexMergeSpec::try_create(fuse, &task, 128 * 1024 * 1024, 2)?.unwrap();
         let mut collector =
             TransformReclusterIndexMerge::new(admission_ctx.clone(), fuse.clone(), spec);
-        for source_row in 0..2 {
+        for source_row in (0..2).rev() {
             let mut meta = blocks[0].1.as_ref().clone();
             meta.row_count = 2;
             meta.inverted_index_metas = Some(vec![]);
@@ -1668,7 +1703,8 @@ mod tests {
                 collector
                     .transform(DataBlock::empty_with_meta(Box::new(ReclusterIndexOutput {
                         meta: output,
-                        rows
+                        rows,
+                        output_row: u64::from(source_row) * 2,
                     })))?
                     .is_empty()
             );
