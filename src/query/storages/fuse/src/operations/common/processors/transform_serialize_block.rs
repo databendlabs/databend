@@ -36,6 +36,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storage::MutationStatus;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
 
@@ -48,10 +49,8 @@ use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
 use crate::io::JsonPathStatisticsBuilder;
 use crate::io::PendingBlockSerialization;
-use crate::io::SpatialIndexBuilder;
-use crate::io::VectorIndexBuilder;
 use crate::io::VirtualColumnBuilder;
-use crate::io::create_inverted_index_builders;
+use crate::io::block_index::create_block_index_specs;
 use crate::io::granule_index::build_granule_index_specs;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
@@ -201,10 +200,7 @@ impl TransformSerializeBlock {
         } else {
             None
         };
-        let ngram_args =
-            FuseTable::create_ngram_index_args(&table.table_info.meta.indexes, &schema, true)?;
-
-        let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
+        let block_index_specs = create_block_index_specs(table, source_schema.clone())?;
         let granule_index_specs = build_granule_index_specs(
             &table.table_info.meta.indexes,
             &table.table_info.meta.schema,
@@ -240,16 +236,6 @@ impl TransformSerializeBlock {
             } else {
                 (None, None)
             };
-        let vector_index_builder = VectorIndexBuilder::try_create(
-            &table.table_info.meta.indexes,
-            source_schema.clone(),
-            true,
-        );
-        let spatial_index_builder = SpatialIndexBuilder::try_create(
-            &table.table_info.meta.indexes,
-            source_schema.clone(),
-            true,
-        );
         let serialize_hll = if matches!(
             kind,
             MutationKind::Insert
@@ -273,13 +259,10 @@ impl TransformSerializeBlock {
             bloom_columns_map,
             ndv_columns_map,
             top_n,
-            ngram_args,
             granule_index_specs,
-            inverted_index_builders,
+            block_index_specs,
             virtual_column_builder,
             json_path_statistics_builder,
-            vector_index_builder,
-            spatial_index_builder,
             table_meta_timestamps,
             serialize_hll,
         };
@@ -317,7 +300,7 @@ impl TransformSerializeBlock {
 
     fn finish_serialized(
         &mut self,
-        extended_block_meta: databend_storages_common_table_meta::meta::ExtendedBlockMeta,
+        extended_block_meta: ExtendedBlockMeta,
         index: Option<BlockMetaIndex>,
     ) {
         let merge_hll = std::mem::take(&mut self.pending_merge_hll);
@@ -558,9 +541,15 @@ impl Processor for TransformSerializeBlock {
                 block.check_valid()?;
 
                 let mut block_builder = self.block_builder.clone();
-                block_builder
-                    .inverted_index_builders
-                    .retain(|builder| !self.recluster_merged_names.contains(&builder.name));
+                block_builder.block_index_specs.retain(|spec| {
+                    let Some(name) = spec.index_name() else {
+                        return true;
+                    };
+                    !self
+                        .recluster_merged_names
+                        .iter()
+                        .any(|merged| merged == name)
+                });
                 if let Some(layout) = virtual_column_layout
                     && let Some(builder) = block_builder.virtual_column_builder.take()
                 {

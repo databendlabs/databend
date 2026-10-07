@@ -47,7 +47,7 @@ pub fn try_add_multi_sort_merge(
     enable_loser_tree: bool,
     enable_fixed_rows_sort: bool,
 ) -> Result<()> {
-    try_add_multi_sort_merge_with_budget(
+    add_multi_sort_merge(
         pipeline,
         key_desc,
         block_size,
@@ -55,14 +55,13 @@ pub fn try_add_multi_sort_merge(
         remove_order_col,
         enable_loser_tree,
         enable_fixed_rows_sort,
-        usize::MAX,
+        false,
     )
 }
 
-/// Bounded retention for consumers whose upstream streams are already sorted.
-/// A selected prefix can be emitted before requesting more input heads.
-#[allow(clippy::too_many_arguments)]
-pub fn try_add_multi_sort_merge_with_budget(
+/// Emit selected prefixes at input refill boundaries for streaming recluster.
+/// No memory allowance or retained-byte threshold is introduced.
+pub fn try_add_multi_sort_merge_with_flush_before_refill(
     pipeline: &mut Pipeline,
     key_desc: SortKeyDescription,
     block_size: usize,
@@ -70,7 +69,29 @@ pub fn try_add_multi_sort_merge_with_budget(
     remove_order_col: bool,
     enable_loser_tree: bool,
     enable_fixed_rows_sort: bool,
-    max_retained_bytes: usize,
+) -> Result<()> {
+    add_multi_sort_merge(
+        pipeline,
+        key_desc,
+        block_size,
+        limit,
+        remove_order_col,
+        enable_loser_tree,
+        enable_fixed_rows_sort,
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn add_multi_sort_merge(
+    pipeline: &mut Pipeline,
+    key_desc: SortKeyDescription,
+    block_size: usize,
+    limit: Option<usize>,
+    remove_order_col: bool,
+    enable_loser_tree: bool,
+    enable_fixed_rows_sort: bool,
+    flush_before_refill: bool,
 ) -> Result<()> {
     match pipeline.output_len() {
         0 => panic!("Cannot resize empty pipe."),
@@ -90,7 +111,7 @@ pub fn try_add_multi_sort_merge_with_budget(
                 limit,
                 remove_order_col,
                 enable_loser_tree,
-                max_retained_bytes,
+                flush_before_refill,
             };
             pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
                 ProcessorPtr::create(select_row_type(&mut builder, enable_fixed_rows_sort)?),
@@ -110,7 +131,7 @@ struct MultiSortMergeBuilder {
     limit: Option<usize>,
     remove_order_col: bool,
     enable_loser_tree: bool,
-    max_retained_bytes: usize,
+    flush_before_refill: bool,
 }
 
 impl RowsTypeVisitor for MultiSortMergeBuilder {
@@ -143,15 +164,16 @@ impl MultiSortMergeBuilder {
             .iter()
             .map(|i| InputBlockStream::new(i.clone(), remove_order_col, sort_row_offset))
             .collect::<Vec<_>>();
-        let merger = Merger::<A, _>::new(streams, self.block_size, self.limit)
-            .with_max_retained_bytes(self.max_retained_bytes);
+        let mut merger = Merger::<A, _>::new(streams, self.block_size, self.limit);
+        if self.flush_before_refill {
+            merger = merger.with_flush_before_refill();
+        }
 
         Ok(Box::new(MultiSortMergeProcessor {
             merger,
             inputs: self.inputs.clone(),
             output: self.output.clone(),
             output_data: VecDeque::new(),
-            max_retained_bytes: self.max_retained_bytes,
         }))
     }
 }
@@ -204,7 +226,6 @@ where A: SortAlgorithm
     output: Arc<OutputPort>,
 
     output_data: VecDeque<DataBlock>,
-    max_retained_bytes: usize,
 }
 
 impl<A> Processor for MultiSortMergeProcessor<A>
@@ -250,16 +271,6 @@ where A: SortAlgorithm + 'static
         if self.merger.should_flush() {
             return Ok(Event::Sync);
         }
-        // At an empty selection boundary we cannot select around missing
-        // heads. An oversized head working set must fail, not stall forever.
-        if self.merger.has_pending_stream()
-            && self.merger.retained_bytes() >= self.max_retained_bytes
-        {
-            return Err(databend_common_exception::ErrorCode::MemoryExceedsLimit(
-                "multi-sort merge heads exceed the retained memory budget",
-            ));
-        }
-
         if self.merger.has_pending_stream() {
             Ok(Event::NeedData)
         } else {

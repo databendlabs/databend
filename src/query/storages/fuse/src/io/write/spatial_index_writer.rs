@@ -209,16 +209,8 @@ impl SpatialIndexBuilder {
         Ok(())
     }
 
-    pub(crate) fn into_write_spec(
-        self,
-        location: Location,
-        num_fields: usize,
-    ) -> SpatialIndexWriteSpec {
-        SpatialIndexWriteSpec {
-            builder: self,
-            location,
-            num_fields,
-        }
+    pub(crate) fn into_write_spec(self) -> SpatialIndexWriteSpec {
+        SpatialIndexWriteSpec { builder: self }
     }
 
     pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
@@ -528,15 +520,13 @@ impl SpatialIndexBuilder {
 
 pub(crate) struct SpatialIndexWriteSpec {
     builder: SpatialIndexBuilder,
-    location: Location,
-    num_fields: usize,
 }
 
 impl BlockIndexSpec for SpatialIndexWriteSpec {
-    fn new_writer(&self, _context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
+    fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
         Ok(Box::new(SpatialIndexWriter {
             builder: self.builder.clone(),
-            location: self.location.clone(),
+            location: context.meta_locations.block_spatial_index_location(),
         }))
     }
 
@@ -544,13 +534,14 @@ impl BlockIndexSpec for SpatialIndexWriteSpec {
         &self,
         context: BlockIndexWriteContext,
     ) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
-        let write = context.create_write(&self.location);
+        let location = context.meta_locations.block_spatial_index_location();
+        let write = context.create_write(&location);
         Ok(Box::new(SpatialIndexLowLevelWriter {
             builder: self.builder.clone(),
-            location: self.location.clone(),
+            location,
             write: Some(write),
             next_field: 0,
-            num_fields: self.num_fields,
+            num_fields: context.physical_schema.num_fields(),
         }))
     }
 }

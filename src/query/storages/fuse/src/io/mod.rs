@@ -91,7 +91,6 @@ pub use write::block_index;
 pub use write::build_column_hlls;
 pub(crate) use write::build_virtual_segment_schema;
 pub(crate) use write::create_index_schema;
-pub(crate) use write::create_inverted_index_builders;
 pub(crate) use write::create_tokenizer_manager;
 pub(crate) use write::num_granules_of;
 pub use write::serialize_block;

@@ -17,6 +17,7 @@ pub mod block_index;
 mod block_writer;
 mod bloom_index_writer;
 mod granule_index_writer;
+mod inverted_index_merge;
 mod inverted_index_writer;
 mod json_path_statistics_builder;
 mod low_level_block_writer;

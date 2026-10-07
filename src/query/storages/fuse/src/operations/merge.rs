@@ -30,9 +30,7 @@ use super::mutation::SegmentIndex;
 use crate::FuseTable;
 use crate::io::BlockBuilder;
 use crate::io::JsonPathStatisticsBuilder;
-use crate::io::SpatialIndexBuilder;
-use crate::io::VectorIndexBuilder;
-use crate::io::create_inverted_index_builders;
+use crate::io::block_index::create_block_index_specs;
 use crate::io::granule_index::build_granule_index_specs;
 use crate::statistics::ClusterStatsGenerator;
 
@@ -99,21 +97,9 @@ impl FuseTable {
         let ndv_columns_map = self
             .approx_distinct_cols()
             .distinct_column_fields(new_schema.clone(), RangeIndex::supported_table_type)?;
-        let ngram_args = FuseTable::create_ngram_index_args(
-            &self.table_info.meta.indexes,
-            &self.table_info.meta.schema,
-            true,
-        )?;
-        let inverted_index_builders = create_inverted_index_builders(&self.table_info.meta);
+        let block_index_specs = create_block_index_specs(self, new_schema.clone())?;
         let granule_index_specs =
             build_granule_index_specs(&self.table_info.meta.indexes, &self.table_info.meta.schema)?;
-        let vector_index_builder =
-            VectorIndexBuilder::try_create(&self.table_info.meta.indexes, new_schema.clone(), true);
-        let spatial_index_builder = SpatialIndexBuilder::try_create(
-            &self.table_info.meta.indexes,
-            new_schema.clone(),
-            true,
-        );
 
         let json_path_statistics_builder = if self.enable_virtual_column() {
             JsonPathStatisticsBuilder::try_create(
@@ -135,11 +121,8 @@ impl FuseTable {
             bloom_columns_map,
             ndv_columns_map,
             top_n: None,
-            ngram_args,
             granule_index_specs,
-            inverted_index_builders,
-            vector_index_builder,
-            spatial_index_builder,
+            block_index_specs,
             virtual_column_builder: None,
             json_path_statistics_builder,
             table_meta_timestamps,

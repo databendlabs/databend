@@ -50,7 +50,6 @@ use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_storages_common_blocks::BlockingWrite;
 use databend_storages_common_blocks::BulkParquetFileWriter;
 use databend_storages_common_blocks::BulkParquetLeafWriter;
-use databend_storages_common_index::NgramArgs;
 use databend_storages_common_io::BLOCKING_WRITE_MAX_CHUNKS;
 use databend_storages_common_io::OpenDalBlockingWrite;
 use databend_storages_common_io::create_blocking_write;
@@ -74,12 +73,8 @@ use parquet::file::properties::WriterPropertiesPtr;
 use parquet::schema::types::ColumnPath;
 
 use super::BlockColumnSketchesBuilder;
-use super::BloomIndexWriteSpec;
 use super::GranuleIndexFileState;
 use super::GranuleIndexFileWriter;
-use super::InvertedIndexBuilder;
-use super::SpatialIndexBuilder;
-use super::VectorIndexBuilder;
 use super::VirtualColumnBuilder;
 use super::WriteSettings;
 use super::block_index::BlockIndexLowLevelWriter;
@@ -178,7 +173,8 @@ pub struct FuseLowLevelBlockWriteOptions {
     stats_columns: Vec<(ColumnId, DataType)>,
     distinct_columns: Vec<(ColumnId, DataType)>,
     serialize_hll: bool,
-    block_indexes: Vec<Box<dyn BlockIndexSpec>>,
+    block_indexes: Vec<Arc<dyn BlockIndexSpec>>,
+    index_locations: Option<(TableMetaLocationGenerator, Location)>,
     ndv_columns: BTreeMap<FieldIndex, TableField>,
     top_n: Option<(BTreeMap<FieldIndex, TableField>, usize)>,
     virtual_columns: Option<VirtualColumnBuilder>,
@@ -208,6 +204,7 @@ impl FuseLowLevelBlockWriteOptions {
             distinct_columns: Vec::new(),
             serialize_hll: false,
             block_indexes: Vec::new(),
+            index_locations: None,
             ndv_columns: BTreeMap::new(),
             top_n: None,
             virtual_columns: None,
@@ -229,15 +226,14 @@ impl FuseLowLevelBlockWriteOptions {
         self.serialize_hll = serialize_hll;
     }
 
-    pub fn set_bloom_indexes(
+    pub fn set_block_indexes(
         &mut self,
-        location: Location,
-        columns: BTreeMap<FieldIndex, TableField>,
-        ngram_args: Vec<NgramArgs>,
+        specs: Vec<Arc<dyn BlockIndexSpec>>,
+        locations: TableMetaLocationGenerator,
+        bloom_location: Location,
     ) {
-        self.block_indexes.push(Box::new(BloomIndexWriteSpec::new(
-            columns, ngram_args, location,
-        )));
+        self.block_indexes = specs;
+        self.index_locations = Some((locations, bloom_location));
     }
 
     pub fn set_ndv_columns(&mut self, columns: BTreeMap<FieldIndex, TableField>) {
@@ -248,31 +244,8 @@ impl FuseLowLevelBlockWriteOptions {
         self.top_n = Some((columns, size));
     }
 
-    pub fn set_inverted_indexes(
-        &mut self,
-        meta_locations: &TableMetaLocationGenerator,
-        builders: Vec<InvertedIndexBuilder>,
-    ) {
-        self.block_indexes
-            .extend(builders.into_iter().map(|builder| {
-                Box::new(builder.into_write_spec(meta_locations)) as Box<dyn BlockIndexSpec>
-            }));
-    }
-
     pub fn set_virtual_columns(&mut self, builder: Option<VirtualColumnBuilder>) {
         self.virtual_columns = builder;
-    }
-
-    pub fn set_vector_index(&mut self, location: Location, builder: VectorIndexBuilder) {
-        self.block_indexes.push(Box::new(
-            builder.into_write_spec(location, self.schema.num_fields()),
-        ));
-    }
-
-    pub fn set_spatial_index(&mut self, location: Location, builder: SpatialIndexBuilder) {
-        self.block_indexes.push(Box::new(
-            builder.into_write_spec(location, self.schema.num_fields()),
-        ));
     }
 
     pub fn set_granule_indexes(
@@ -525,17 +498,26 @@ impl FuseLowLevelBlockWriter {
             &self.options.distinct_columns,
             &write_settings.col_stats_truncate_lens,
         );
-        let index_context = BlockIndexWriteContext {
-            func_ctx: self.options.func_ctx.clone(),
-            physical_schema: schema.clone(),
-            block_location: self.options.block_location.clone(),
-            operator: operator.clone(),
-            write_settings: self.options.write_settings.clone(),
-        };
-        let block_indexes = std::mem::take(&mut self.options.block_indexes)
-            .into_iter()
-            .map(|spec| spec.new_low_level_writer(index_context.clone()))
-            .collect::<Result<Vec<_>>>()?;
+        let mut block_indexes = Vec::with_capacity(self.options.block_indexes.len());
+        if !self.options.block_indexes.is_empty() {
+            let (meta_locations, bloom_location) = self
+                .options
+                .index_locations
+                .take()
+                .ok_or_else(|| ErrorCode::Internal("missing index write locations"))?;
+            let context = BlockIndexWriteContext {
+                func_ctx: self.options.func_ctx.clone(),
+                physical_schema: schema.clone(),
+                block_location: self.options.block_location.clone(),
+                meta_locations,
+                bloom_location,
+                operator: operator.clone(),
+                write_settings: self.options.write_settings.clone(),
+            };
+            for spec in &self.options.block_indexes {
+                block_indexes.push(spec.new_low_level_writer(context.clone())?);
+            }
+        }
 
         let granule_indexes = match self.options.granule_rows() {
             Some(rows) => {
@@ -1506,7 +1488,9 @@ mod tests {
     use opendal::services::Memory;
     use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 
+    use super::super::BloomIndexWriteSpec;
     use super::*;
+    use crate::io::InvertedIndexBuilder;
     use crate::io::OffsetsIndex;
     use crate::io::PrefetchedGranuleMins;
 
@@ -1539,11 +1523,6 @@ mod tests {
             ("block.parquet".to_string(), 0),
         );
         options.set_statistics(stats_columns, Vec::new(), false);
-        options.set_bloom_indexes(
-            ("bloom.parquet".to_string(), 0),
-            BTreeMap::new(),
-            Vec::new(),
-        );
         options.set_granule_indexes(
             Some(("mins.parquet".to_string(), 0)),
             ("offsets.parquet".to_string(), 0),
@@ -1617,10 +1596,11 @@ mod tests {
         write_options.granule_offsets_location = None;
         write_options.granule_index_writers.clear();
         write_options.cluster_keys = None;
-        write_options.set_bloom_indexes(
+        let spec = BloomIndexWriteSpec::new(BTreeMap::from([(0, field)]), Vec::new());
+        write_options.set_block_indexes(
+            vec![Arc::new(spec)],
+            TableMetaLocationGenerator::new("root".into()),
             ("bloom.parquet".to_string(), 0),
-            BTreeMap::from([(0, field)]),
-            Vec::new(),
         );
 
         let writer = FuseLowLevelBlockWriter::create(write_options).unwrap();
@@ -2050,7 +2030,11 @@ mod tests {
         write_options.granule_offsets_location = None;
         write_options.granule_index_writers.clear();
         write_options.cluster_keys = None;
-        write_options.set_inverted_indexes(&meta_locations, builders);
+        let specs = builders
+            .into_iter()
+            .map(|builder| Arc::new(builder.into_write_spec()) as Arc<dyn BlockIndexSpec>)
+            .collect();
+        write_options.set_block_indexes(specs, meta_locations, ("bloom.parquet".into(), 0));
 
         let text = StringType::from_data(vec!["one", "two", "three"]);
         let writer = FuseLowLevelBlockWriter::create(write_options).unwrap();

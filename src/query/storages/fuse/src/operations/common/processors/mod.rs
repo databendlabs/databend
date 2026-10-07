@@ -14,7 +14,7 @@
 
 mod recluster_inverted_index_merge;
 pub use recluster_inverted_index_merge::ReclusterIndexInput;
-pub use recluster_inverted_index_merge::ReclusterIndexMergeSpec;
+pub use recluster_inverted_index_merge::ReclusterIndexMergeInputs;
 pub use recluster_inverted_index_merge::ReclusterIndexOutput;
 pub use recluster_inverted_index_merge::ReclusterIndexRowRange;
 pub use recluster_inverted_index_merge::TransformReclusterIndexMerge;

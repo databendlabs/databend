@@ -43,7 +43,6 @@ use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_blocks::build_parquet_writer_properties;
-use databend_storages_common_index::NgramArgs;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BlockTopN;
@@ -64,13 +63,11 @@ use crate::io::TableMetaLocationGenerator;
 use crate::io::granule_index::GranuleIndexSpec;
 use crate::io::granule_index::materialize_cluster_key_columns;
 use crate::io::write::GranuleIndexState;
-use crate::io::write::InvertedIndexBuilder;
 use crate::io::write::JsonPathStatisticsBuilder;
-use crate::io::write::SpatialIndexBuilder;
 use crate::io::write::SpatialIndexState;
-use crate::io::write::VectorIndexBuilder;
 use crate::io::write::VectorIndexState;
 use crate::io::write::WriteSettings;
+use crate::io::write::block_index::BlockIndexSpec;
 use crate::io::write::virtual_column_builder::VirtualColumnBuilder;
 use crate::io::write::virtual_column_builder::VirtualColumnState;
 use crate::operations::column_parquet_metas;
@@ -200,14 +197,11 @@ pub struct BlockBuilder {
     pub bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     pub ndv_columns_map: BTreeMap<FieldIndex, TableField>,
     pub top_n: Option<(BTreeMap<FieldIndex, TableField>, usize)>,
-    pub ngram_args: Vec<NgramArgs>,
     /// One spec per declared granule-level index; empty makes the granule-level write path a no-op.
     pub granule_index_specs: Vec<Arc<dyn GranuleIndexSpec>>,
-    pub inverted_index_builders: Vec<InvertedIndexBuilder>,
+    pub block_index_specs: Vec<Arc<dyn BlockIndexSpec>>,
     pub virtual_column_builder: Option<VirtualColumnBuilder>,
     pub json_path_statistics_builder: Option<JsonPathStatisticsBuilder>,
-    pub vector_index_builder: Option<VectorIndexBuilder>,
-    pub spatial_index_builder: Option<SpatialIndexBuilder>,
     pub table_meta_timestamps: TableMetaTimestamps,
     /// Indicates whether column_hlls should be serialized into RawBlockHLL.
     pub serialize_hll: bool,
@@ -245,12 +239,9 @@ impl BlockBuilder {
             self.bloom_columns_map.clone(),
             self.ndv_columns_map.clone(),
             self.top_n.clone(),
-            self.ngram_args.clone(),
-            self.inverted_index_builders.clone(),
+            self.block_index_specs.clone(),
             self.virtual_column_builder.clone(),
             self.json_path_statistics_builder.clone(),
-            self.vector_index_builder.clone(),
-            self.spatial_index_builder.clone(),
             self.granule_index_specs.clone(),
             granule_cluster_columns,
             self.table_meta_timestamps,

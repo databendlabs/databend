@@ -181,19 +181,13 @@ impl BloomIndexState {
 pub struct BloomIndexWriteSpec {
     columns: BTreeMap<FieldIndex, TableField>,
     ngram_args: Vec<NgramArgs>,
-    location: Location,
 }
 
 impl BloomIndexWriteSpec {
-    pub fn new(
-        columns: BTreeMap<FieldIndex, TableField>,
-        ngram_args: Vec<NgramArgs>,
-        location: Location,
-    ) -> Self {
+    pub fn new(columns: BTreeMap<FieldIndex, TableField>, ngram_args: Vec<NgramArgs>) -> Self {
         Self {
             columns,
             ngram_args,
-            location,
         }
     }
 
@@ -216,7 +210,7 @@ impl BlockIndexSpec for BloomIndexWriteSpec {
         Ok(Box::new(BloomIndexWriter {
             builder: self
                 .create_builder(context.func_ctx, context.write_settings.bloom_index_type)?,
-            location: self.location.clone(),
+            location: context.bloom_location,
         }))
     }
 
@@ -224,11 +218,11 @@ impl BlockIndexSpec for BloomIndexWriteSpec {
         &self,
         context: BlockIndexWriteContext,
     ) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
-        let write = context.create_write(&self.location);
+        let write = context.create_write(&context.bloom_location);
         Ok(Box::new(BloomIndexLowLevelWriter {
             builder: self
                 .create_builder(context.func_ctx, context.write_settings.bloom_index_type)?,
-            location: self.location.clone(),
+            location: context.bloom_location,
             write: Some(write),
             next_field: 0,
             num_fields: context.physical_schema.num_fields(),

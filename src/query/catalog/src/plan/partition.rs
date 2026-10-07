@@ -26,6 +26,7 @@ use std::sync::Arc;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_meta_client::types::NodeInfo;
+use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
@@ -498,7 +499,7 @@ pub struct ReclusterTask {
     pub virtual_column_layout: Option<VirtualColumnLayout>,
     /// Index metadata in the same order as `parts`; absent for legacy tasks.
     #[serde(default)]
-    pub inverted_index_sources: Vec<Vec<databend_storages_common_table_meta::meta::BlockIndexMeta>>,
+    pub inverted_index_sources: Vec<Vec<BlockIndexMeta>>,
 }
 
 pub type BlockMetaWithHLL = (Arc<BlockMeta>, Option<RawBlockHLL>);
@@ -545,14 +546,12 @@ mod tests {
             kind: ReclusterTaskKind::MergeBlocks,
             vertical_kind: Some(VerticalReclusterKind::MergeBlocks),
             memory_budget: 64 * 1024 * 1024,
-            inverted_index_sources: vec![vec![
-                databend_storages_common_table_meta::meta::BlockIndexMeta {
-                    index_name: "text_idx".into(),
-                    location: ("source.index".into(), 2),
-                    size: 123,
-                    index_version: "definition-v1".into(),
-                },
-            ]],
+            inverted_index_sources: vec![vec![BlockIndexMeta {
+                index_name: "text_idx".into(),
+                location: ("source.index".into(), 2),
+                size: 123,
+                index_version: "definition-v1".into(),
+            }]],
         };
 
         let encoded = serde_json::to_vec(&task).unwrap();

@@ -925,6 +925,19 @@ fn invalid(message: impl Into<String>) -> io::Error {
 mod tests {
 
     use databend_common_base::runtime::GlobalIORuntime;
+    use opendal::Error as StorageError;
+    use opendal::ErrorKind;
+    use opendal::Result as StorageResult;
+    use opendal::raw::Access;
+    use opendal::raw::Layer;
+    use opendal::raw::LayeredAccess;
+    use opendal::raw::OpList;
+    use opendal::raw::OpRead;
+    use opendal::raw::OpWrite;
+    use opendal::raw::RpDelete;
+    use opendal::raw::RpList;
+    use opendal::raw::RpRead;
+    use opendal::raw::RpWrite;
     use opendal::services::Memory;
     use tantivy::IndexSettings;
     use tantivy::SingleSegmentIndexWriter;
@@ -1348,7 +1361,7 @@ mod tests {
     #[derive(Clone, Debug)]
     struct IndexWriteFailureLayer;
 
-    impl<A: opendal::raw::Access> opendal::raw::Layer<A> for IndexWriteFailureLayer {
+    impl<A: Access> Layer<A> for IndexWriteFailureLayer {
         type LayeredAccess = IndexWriteFailureAccessor<A>;
         fn layer(&self, inner: A) -> Self::LayeredAccess {
             IndexWriteFailureAccessor { inner }
@@ -1360,7 +1373,7 @@ mod tests {
         inner: A,
     }
 
-    impl<A: opendal::raw::Access> opendal::raw::LayeredAccess for IndexWriteFailureAccessor<A> {
+    impl<A: Access> LayeredAccess for IndexWriteFailureAccessor<A> {
         type Inner = A;
         type Reader = A::Reader;
         type Writer = A::Writer;
@@ -1369,31 +1382,19 @@ mod tests {
         fn inner(&self) -> &A {
             &self.inner
         }
-        async fn read(
-            &self,
-            path: &str,
-            args: opendal::raw::OpRead,
-        ) -> opendal::Result<(opendal::raw::RpRead, Self::Reader)> {
+        async fn read(&self, path: &str, args: OpRead) -> StorageResult<(RpRead, Self::Reader)> {
             self.inner.read(path, args).await
         }
-        async fn delete(&self) -> opendal::Result<(opendal::raw::RpDelete, Self::Deleter)> {
+        async fn delete(&self) -> StorageResult<(RpDelete, Self::Deleter)> {
             self.inner.delete().await
         }
-        async fn list(
-            &self,
-            path: &str,
-            args: opendal::raw::OpList,
-        ) -> opendal::Result<(opendal::raw::RpList, Self::Lister)> {
+        async fn list(&self, path: &str, args: OpList) -> StorageResult<(RpList, Self::Lister)> {
             self.inner.list(path, args).await
         }
-        async fn write(
-            &self,
-            path: &str,
-            args: opendal::raw::OpWrite,
-        ) -> opendal::Result<(opendal::raw::RpWrite, Self::Writer)> {
+        async fn write(&self, path: &str, args: OpWrite) -> StorageResult<(RpWrite, Self::Writer)> {
             if path.starts_with("o/") {
-                return Err(opendal::Error::new(
-                    opendal::ErrorKind::PermissionDenied,
+                return Err(StorageError::new(
+                    ErrorKind::PermissionDenied,
                     "injected index write failure",
                 ));
             }

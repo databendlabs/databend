@@ -12,19 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Write protocols for block-level indexes produced with a FUSE data block.
-//!
-//! The default and low-level protocols are intentionally separate. They share immutable index
-//! specifications and index-specific construction algorithms, but not mutable state, serialization
-//! orchestration, payload ownership, or finish output types.
-//!
-//! A spec is immutable configuration. `new_writer` creates a writer that consumes complete
-//! `DataBlock`s and retains serialized payloads for later upload. `new_low_level_writer` creates an
-//! independent writer that consumes logical columns in order and writes payloads directly. Neither
-//! implementation adapts or emulates the other.
+//! Block-index specs provide full-block, column-oriented and optional merge writers.
 
 use std::collections::HashMap;
+use std::io;
+use std::ops::Range;
+use std::sync::Arc;
 
+use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
@@ -32,34 +27,38 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::TableSchemaRef;
+use databend_storages_common_index::BloomIndex;
 use databend_storages_common_io::BLOCKING_WRITE_MAX_CHUNKS;
 use databend_storages_common_io::OpenDalBlockingWrite;
 use databend_storages_common_io::create_blocking_write;
 use databend_storages_common_table_meta::meta::BlockIndexMeta;
+use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::StatisticsOfSpatialColumns;
 use databend_storages_common_table_meta::meta::StatisticsOfVectorColumns;
 use opendal::Buffer;
 use opendal::Operator;
 
+use super::BloomIndexWriteSpec;
+use super::SpatialIndexBuilder;
+use super::VectorIndexBuilder;
 use super::WriteSettings;
+use super::create_inverted_index_builders;
+use crate::FuseTable;
+use crate::io::TableMetaLocationGenerator;
 
-/// Shared construction context for every block-index write protocol.
-///
-/// `operator` is only for writers that stream payloads directly (the low-level protocol).
-/// `new_writer` implementations must not perform IO: their contract is to retain serialized
-/// payloads in memory and return them as a `PendingBlockIndexOutput` for asynchronous upload.
 #[derive(Clone)]
 pub struct BlockIndexWriteContext {
     pub func_ctx: FunctionContext,
     pub physical_schema: TableSchemaRef,
     pub block_location: Location,
+    pub meta_locations: TableMetaLocationGenerator,
+    pub bloom_location: Location,
     pub operator: Operator,
     pub write_settings: WriteSettings,
 }
 
 impl BlockIndexWriteContext {
-    /// Low-level component writers create their lazy blocking outputs at construction time.
     pub fn create_write(&self, location: &Location) -> OpenDalBlockingWrite {
         create_blocking_write(
             self.operator.clone(),
@@ -71,9 +70,8 @@ impl BlockIndexWriteContext {
 
 #[derive(Debug)]
 pub struct PendingIndexFile {
-    /// Final object location; the payload is not uploaded until the asynchronous write-down phase.
     pub location: Location,
-    /// Serialized in-memory payload owned exclusively by the default writer.
+    /// Uploaded during the asynchronous write phase.
     pub data: Buffer,
 }
 
@@ -91,9 +89,7 @@ impl PendingIndexFile {
 
 #[derive(Debug)]
 pub struct WrittenIndexFile {
-    /// Closed object location produced by a low-level writer.
     pub location: Location,
-    /// Bytes written through the blocking output; no serialized payload is retained.
     pub size: u64,
 }
 
@@ -133,7 +129,7 @@ impl WrittenInvertedIndex {
     }
 }
 
-/// Builds the per-block inverted index metas in the deterministic order `BlockMeta` expects.
+/// Keep index metadata ordered by name.
 pub fn collect_inverted_index_metas(
     metas: impl IntoIterator<Item = BlockIndexMeta>,
 ) -> Vec<BlockIndexMeta> {
@@ -166,7 +162,7 @@ pub struct WrittenSpatialIndex {
     pub statistics: Option<StatisticsOfSpatialColumns>,
 }
 
-/// Union-all pending output produced only by writers that consume complete `DataBlock`s.
+/// Full-block writer output.
 #[derive(Debug, Default)]
 pub struct PendingBlockIndexOutput {
     pub bloom: Option<PendingBloomIndex>,
@@ -185,7 +181,7 @@ impl PendingBlockIndexOutput {
     }
 }
 
-/// Union-all written output produced only by low-level direct-I/O writers.
+/// Direct-I/O writer and merger output.
 #[derive(Debug, Default)]
 pub struct WrittenBlockIndexOutput {
     pub bloom: Option<WrittenBloomIndex>,
@@ -240,7 +236,72 @@ fn merge_singleton<T>(target: &mut Option<T>, source: Option<T>, name: &str) -> 
     Ok(())
 }
 
+pub struct BlockIndexMergeSource<'a> {
+    pub num_rows: u32,
+    pub indexes: &'a [BlockIndexMeta],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockIndexSourceRows {
+    pub source: u32,
+    pub rows: Range<u32>,
+}
+
+pub type BlockIndexMergeCheck = Box<dyn Fn() -> io::Result<()> + Send + Sync>;
+
+/// The caller verifies complete lineage; each output batch preserves source row order.
+pub struct BlockIndexMergeContext {
+    pub operator: Operator,
+    pub locations: TableMetaLocationGenerator,
+    pub outputs: Vec<Vec<BlockIndexSourceRows>>,
+    pub check_interrupt: BlockIndexMergeCheck,
+}
+
+/// Prepared merge capability of a block-index spec.
+pub trait BlockIndexMerge: Send + Sync {
+    fn index_name(&self) -> &str;
+
+    fn merge(&self, context: BlockIndexMergeContext) -> Result<Vec<WrittenBlockIndexOutput>>;
+
+    fn apply_output(&self, block: &mut BlockMeta, output: WrittenBlockIndexOutput) -> Result<()>;
+}
+
+pub fn create_block_index_specs(
+    table: &FuseTable,
+    schema: TableSchemaRef,
+) -> Result<Vec<Arc<dyn BlockIndexSpec>>> {
+    let columns = table
+        .bloom_index_cols
+        .bloom_index_fields(schema.clone(), BloomIndex::supported_type)?;
+    let indexes = &table.table_info.meta.indexes;
+    let ngram_args = FuseTable::create_ngram_index_args(indexes, &table.schema(), true)?;
+    let mut specs: Vec<Arc<dyn BlockIndexSpec>> =
+        vec![Arc::new(BloomIndexWriteSpec::new(columns, ngram_args))];
+    for builder in create_inverted_index_builders(&table.table_info.meta) {
+        specs.push(Arc::new(builder.into_write_spec()));
+    }
+    if let Some(builder) = VectorIndexBuilder::try_create(indexes, schema.clone(), true) {
+        specs.push(Arc::new(builder.into_write_spec()));
+    }
+    if let Some(builder) = SpatialIndexBuilder::try_create(indexes, schema, true) {
+        specs.push(Arc::new(builder.into_write_spec()));
+    }
+    Ok(specs)
+}
+
 pub trait BlockIndexSpec: Send + Sync {
+    fn index_name(&self) -> Option<&str> {
+        None
+    }
+
+    /// None means rebuild; errors from a selected merge must not fall back to rebuilding.
+    fn prepare_merge(
+        &self,
+        _sources: &[BlockIndexMergeSource<'_>],
+    ) -> Result<Option<Arc<dyn BlockIndexMerge>>> {
+        Ok(None)
+    }
+
     fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>>;
 
     fn new_low_level_writer(
@@ -255,15 +316,14 @@ pub trait BlockIndexWriter: Send {
     fn finish(self: Box<Self>) -> Result<PendingBlockIndexOutput>;
 }
 
-/// A column-oriented direct-I/O index writer. It retains only input required by its algorithm.
+/// Column-oriented direct-I/O writer.
 pub trait BlockIndexLowLevelWriter: Send {
     fn next_column(self: Box<Self>) -> Result<Box<dyn BlockIndexLowLevelColumnWriter>>;
 
     fn finish(self: Box<Self>) -> Result<WrittenBlockIndexOutput>;
 }
 
-/// Temporary state for one logical physical-schema column. It returns the concrete parent; it does
-/// not expose a component output to the FUSE coordinator.
+/// Accumulates one column and returns its parent writer on finish.
 pub trait BlockIndexLowLevelColumnWriter: Send {
     fn write(&mut self, column: &Column) -> Result<()>;
 
@@ -273,6 +333,21 @@ pub trait BlockIndexLowLevelColumnWriter: Send {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_non_merge_index_spec_defaults_to_rebuild() {
+        use std::collections::BTreeMap;
+
+        use super::super::bloom_index_writer::BloomIndexWriteSpec;
+
+        let spec: Box<dyn BlockIndexSpec> =
+            Box::new(BloomIndexWriteSpec::new(BTreeMap::new(), vec![]));
+        let sources = [BlockIndexMergeSource {
+            num_rows: 10,
+            indexes: &[],
+        }];
+        assert!(spec.prepare_merge(&sources).unwrap().is_none());
+    }
 
     #[test]
     fn test_outputs_reject_duplicate_inverted_names() {

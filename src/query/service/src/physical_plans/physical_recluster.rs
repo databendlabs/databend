@@ -31,11 +31,13 @@ use databend_common_catalog::table_context::TableContextProgress;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
+use databend_common_expression::TableDataType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::TableInfo;
@@ -54,9 +56,10 @@ use databend_common_pipeline_transforms::columns::TransformAddStreamColumns;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::StreamContext;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::HilbertRangeExchange;
-use databend_common_storages_fuse::operations::ReclusterIndexMergeSpec;
+use databend_common_storages_fuse::operations::ReclusterIndexMergeInputs;
 use databend_common_storages_fuse::operations::TransformHilbertCluster;
 use databend_common_storages_fuse::operations::TransformReclusterIndexMerge;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
@@ -154,15 +157,9 @@ impl IPhysicalPlan for Recluster {
                 let multiway_merge = task.vertical_kind.is_none()
                     && task.kind == ReclusterTaskKind::MergeBlocks
                     && settings.get_enable_recluster_multiway_merge()?
-                    && matches!(
-                        table.get_storage_format(),
-                        databend_common_storages_fuse::FuseStorageFormat::Parquet
-                    )
+                    && matches!(table.get_storage_format(), FuseStorageFormat::Parquet)
                     && !table.schema().fields().iter().any(|field| {
-                        matches!(
-                            field.computed_expr(),
-                            Some(databend_common_expression::ComputedExpr::Virtual(_))
-                        )
+                        matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_)))
                     });
                 if !multiway_merge && !builder.ctx.get_enable_sort_spill() {
                     let max_memory_usage = settings.get_max_memory_usage()? as usize;
@@ -248,39 +245,9 @@ impl IPhysicalPlan for Recluster {
                 let index_merge = if multiway_merge
                     && settings.get_enable_recluster_inverted_index_merge()?
                     && !table.schema().fields().iter().any(|field| {
-                        matches!(
-                            field.data_type(),
-                            databend_common_expression::TableDataType::AggregateState { .. }
-                        )
+                        matches!(field.data_type(), TableDataType::AggregateState { .. })
                     }) {
-                    let (output_rows, _) = block_thresholds.calc_rows_for_recluster(
-                        task.total_rows,
-                        task.total_bytes,
-                        task.total_compressed,
-                    );
-                    let global_limit = settings.get_max_memory_usage()? as usize;
-                    let available = if global_limit == 0 {
-                        usize::MAX
-                    } else {
-                        global_limit.saturating_sub(GLOBAL_MEM_STAT.get_memory_usage())
-                    };
-                    let query_limit = settings.get_max_query_memory_usage()? as usize;
-                    let query_available = if query_limit == 0 {
-                        usize::MAX
-                    } else {
-                        let used = builder
-                            .ctx
-                            .get_query_memory_tracking()
-                            .map_or(0, |stat| stat.get_memory_usage());
-                        query_limit.saturating_sub(used)
-                    };
-                    let available = available.min(query_available);
-                    ReclusterIndexMergeSpec::try_create(
-                        table,
-                        task,
-                        (available / 10).min(128 * 1024 * 1024),
-                        output_rows,
-                    )?
+                    ReclusterIndexMergeInputs::try_create(table, task)?
                 } else {
                     None
                 };

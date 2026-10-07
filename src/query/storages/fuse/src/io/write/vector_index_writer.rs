@@ -228,16 +228,8 @@ impl VectorIndexBuilder {
         Ok(())
     }
 
-    pub(crate) fn into_write_spec(
-        self,
-        location: Location,
-        num_fields: usize,
-    ) -> VectorIndexWriteSpec {
-        VectorIndexWriteSpec {
-            builder: self,
-            location,
-            num_fields,
-        }
+    pub(crate) fn into_write_spec(self) -> VectorIndexWriteSpec {
+        VectorIndexWriteSpec { builder: self }
     }
 
     pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
@@ -583,15 +575,13 @@ impl VectorIndexBuilder {
 
 pub(crate) struct VectorIndexWriteSpec {
     builder: VectorIndexBuilder,
-    location: Location,
-    num_fields: usize,
 }
 
 impl BlockIndexSpec for VectorIndexWriteSpec {
-    fn new_writer(&self, _context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
+    fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
         Ok(Box::new(VectorIndexWriter {
             builder: self.builder.clone(),
-            location: self.location.clone(),
+            location: context.meta_locations.block_vector_index_location(),
         }))
     }
 
@@ -599,13 +589,14 @@ impl BlockIndexSpec for VectorIndexWriteSpec {
         &self,
         context: BlockIndexWriteContext,
     ) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
-        let write = context.create_write(&self.location);
+        let location = context.meta_locations.block_vector_index_location();
+        let write = context.create_write(&location);
         Ok(Box::new(VectorIndexLowLevelWriter {
             builder: self.builder.clone(),
-            location: self.location.clone(),
+            location,
             write: Some(write),
             next_field: 0,
-            num_fields: self.num_fields,
+            num_fields: context.physical_schema.num_fields(),
         }))
     }
 }

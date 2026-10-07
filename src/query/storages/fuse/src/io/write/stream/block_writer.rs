@@ -38,7 +38,6 @@ use databend_storages_common_blocks::NdvProvider;
 use databend_storages_common_blocks::build_parquet_writer_properties;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::Index;
-use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -57,19 +56,14 @@ use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::io::BlockSerialization;
 use crate::io::FuseLowLevelBlockWriteOptions;
-use crate::io::InvertedIndexBuilder;
 use crate::io::JsonPathStatisticsBuilder;
 use crate::io::PendingBlockSerialization;
-use crate::io::SpatialIndexBuilder;
 use crate::io::TableMetaLocationGenerator;
-use crate::io::VectorIndexBuilder;
 use crate::io::VirtualColumnBuilder;
 use crate::io::WriteSettings;
-use crate::io::create_inverted_index_builders;
 use crate::io::granule_index::GranuleIndexSpec;
 use crate::io::granule_index::build_granule_index_specs;
 use crate::io::write::BlockColumnSketchesBuilder;
-use crate::io::write::BloomIndexWriteSpec;
 use crate::io::write::GranuleIndexState;
 use crate::io::write::block_index::BlockIndexSpec;
 use crate::io::write::block_index::BlockIndexWriteContext;
@@ -77,6 +71,7 @@ use crate::io::write::block_index::BlockIndexWriter;
 use crate::io::write::block_index::PendingBlockIndexOutput;
 use crate::io::write::block_index::PendingIndexFile;
 use crate::io::write::block_index::collect_inverted_index_metas;
+use crate::io::write::block_index::create_block_index_specs;
 use crate::io::write::stream::ColumnStatisticsState;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsBuilder;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsState;
@@ -133,37 +128,16 @@ impl FuseBlockWriter {
             func_ctx,
             physical_schema: properties.source_schema.clone(),
             block_location: block_location.clone(),
+            meta_locations: properties.meta_locations.clone(),
+            bloom_location: properties
+                .meta_locations
+                .block_bloom_index_location(&block_id),
             operator: properties.operator.clone(),
             write_settings: properties.write_settings.clone(),
         };
-        let bloom_location = properties
-            .meta_locations
-            .block_bloom_index_location(&block_id);
-        let mut block_index_writers = vec![
-            BloomIndexWriteSpec::new(
-                properties.bloom_columns_map.clone(),
-                properties.ngram_args.clone(),
-                bloom_location,
-            )
-            .new_writer(index_context.clone())?,
-        ];
-        for builder in &properties.inverted_index_builders {
-            let spec = builder.clone().into_write_spec(&properties.meta_locations);
+        let mut block_index_writers = Vec::with_capacity(properties.block_index_specs.len());
+        for spec in &properties.block_index_specs {
             block_index_writers.push(spec.new_writer(index_context.clone())?);
-        }
-        if let Some(builder) = properties.vector_index_builder.clone() {
-            let spec = builder.into_write_spec(
-                properties.meta_locations.block_vector_index_location(),
-                properties.source_schema.num_fields(),
-            );
-            block_index_writers.push(spec.new_writer(index_context.clone())?);
-        }
-        if let Some(builder) = properties.spatial_index_builder.clone() {
-            let spec = builder.into_write_spec(
-                properties.meta_locations.block_spatial_index_location(),
-                properties.source_schema.num_fields(),
-            );
-            block_index_writers.push(spec.new_writer(index_context)?);
         }
 
         let virtual_column_builder = properties.virtual_column_builder.clone();
@@ -525,16 +499,12 @@ pub struct FuseBlockWriteOptions {
     cluster_stats_builder: Arc<ClusterStatisticsBuilder>,
     stats_columns: Vec<(ColumnId, DataType)>,
     distinct_columns: Vec<(ColumnId, DataType)>,
-    bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     ndv_columns_map: BTreeMap<FieldIndex, TableField>,
     top_n: Option<(BTreeMap<FieldIndex, TableField>, usize)>,
-    ngram_args: Vec<NgramArgs>,
-    inverted_index_builders: Vec<InvertedIndexBuilder>,
+    block_index_specs: Vec<Arc<dyn BlockIndexSpec>>,
     virtual_column_builder: Option<VirtualColumnBuilder>,
     json_path_statistics_builder: Option<JsonPathStatisticsBuilder>,
     table_meta_timestamps: TableMetaTimestamps,
-    vector_index_builder: Option<VectorIndexBuilder>,
-    spatial_index_builder: Option<SpatialIndexBuilder>,
     granule_index_specs: Vec<Arc<dyn GranuleIndexSpec>>,
     granule_cluster_keys: Option<Vec<Column>>,
     serialize_hll: bool,
@@ -576,8 +546,6 @@ impl FuseBlockWriteOptions {
         let bloom_columns_map = table
             .bloom_index_cols
             .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?;
-        let ngram_args =
-            FuseTable::create_ngram_index_args(&table.table_info.meta.indexes, &schema, true)?;
         let ndv_columns_map = table
             .approx_distinct_cols
             .distinct_column_fields(source_schema.clone(), RangeIndex::supported_table_type)?;
@@ -592,7 +560,7 @@ impl FuseBlockWriteOptions {
             .map(|v| v.column_id())
             .collect::<HashSet<_>>();
 
-        let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
+        let block_index_specs = create_block_index_specs(table, source_schema.clone())?;
         let granule_index_specs = build_granule_index_specs(
             &table.table_info.meta.indexes,
             &table.table_info.meta.schema,
@@ -641,16 +609,6 @@ impl FuseBlockWriteOptions {
                 }
             }
         }
-        let vector_index_builder = VectorIndexBuilder::try_create(
-            &table.table_info.meta.indexes,
-            source_schema.clone(),
-            true,
-        );
-        let spatial_index_builder = SpatialIndexBuilder::try_create(
-            &table.table_info.meta.indexes,
-            source_schema.clone(),
-            true,
-        );
         Ok(Arc::new(FuseBlockWriteOptions {
             ctx,
             operator: table.get_operator(),
@@ -663,13 +621,9 @@ impl FuseBlockWriteOptions {
             json_path_statistics_builder,
             stats_columns,
             distinct_columns,
-            bloom_columns_map,
             top_n,
-            ngram_args,
-            inverted_index_builders,
+            block_index_specs,
             table_meta_timestamps,
-            vector_index_builder,
-            spatial_index_builder,
             ndv_columns_map,
             granule_index_specs,
             granule_cluster_keys: None,
@@ -712,10 +666,8 @@ impl FuseBlockWriteOptions {
         } else {
             0
         };
-        let active_blocking_writers = 2usize
-            .saturating_add(self.inverted_index_builders.len())
-            .saturating_add(self.vector_index_builder.is_some() as usize)
-            .saturating_add(self.spatial_index_builder.is_some() as usize)
+        let active_blocking_writers = 1usize
+            .saturating_add(self.block_index_specs.len())
             .saturating_add(granule_blocking_writers);
         let writer_buffers = databend_storages_common_io::blocking_write_retained_bytes(
             &self.operator,
@@ -725,10 +677,9 @@ impl FuseBlockWriteOptions {
 
         // Index builders and granule mark state grow with output rows even when
         // they do not own a concurrent upload buffer.
-        let retained_builders = 1usize
-            .saturating_add(self.inverted_index_builders.len())
-            .saturating_add(self.vector_index_builder.is_some() as usize)
-            .saturating_add(self.spatial_index_builder.is_some() as usize)
+        let retained_builders = self
+            .block_index_specs
+            .len()
             .saturating_add(self.granule_index_specs.len())
             .saturating_mul(output_rows.saturating_mul(16).saturating_add(64 * 1024));
         writer_buffers.saturating_add(retained_builders)
@@ -769,23 +720,16 @@ impl FuseBlockWriteOptions {
             self.distinct_columns.clone(),
             self.serialize_hll,
         );
-        options.set_bloom_indexes(
+        options.set_block_indexes(
+            self.block_index_specs.clone(),
+            self.meta_locations.clone(),
             self.meta_locations.block_bloom_index_location(&block_id),
-            self.bloom_columns_map.clone(),
-            self.ngram_args.clone(),
         );
         options.set_ndv_columns(self.ndv_columns_map.clone());
         if let Some((columns, size)) = &self.top_n {
             options.set_top_n_columns(columns.clone(), *size);
         }
-        options.set_inverted_indexes(&self.meta_locations, self.inverted_index_builders.clone());
         options.set_virtual_columns(self.virtual_column_builder.clone());
-        if let Some(builder) = self.vector_index_builder.clone() {
-            options.set_vector_index(self.meta_locations.block_vector_index_location(), builder);
-        }
-        if let Some(builder) = self.spatial_index_builder.clone() {
-            options.set_spatial_index(self.meta_locations.block_spatial_index_location(), builder);
-        }
         if let Some(rows) = self.write_settings.index_granularity {
             let func_ctx = self.ctx.get_function_context()?;
             let writers = self
@@ -828,12 +772,9 @@ impl FuseBlockWriteOptions {
         bloom_columns_map: BTreeMap<FieldIndex, TableField>,
         ndv_columns_map: BTreeMap<FieldIndex, TableField>,
         top_n: Option<(BTreeMap<FieldIndex, TableField>, usize)>,
-        ngram_args: Vec<NgramArgs>,
-        inverted_index_builders: Vec<InvertedIndexBuilder>,
+        block_index_specs: Vec<Arc<dyn BlockIndexSpec>>,
         virtual_column_builder: Option<VirtualColumnBuilder>,
         json_path_statistics_builder: Option<JsonPathStatisticsBuilder>,
-        vector_index_builder: Option<VectorIndexBuilder>,
-        spatial_index_builder: Option<SpatialIndexBuilder>,
         granule_index_specs: Vec<Arc<dyn GranuleIndexSpec>>,
         granule_cluster_columns: Option<Vec<databend_common_expression::Column>>,
         table_meta_timestamps: TableMetaTimestamps,
@@ -869,16 +810,12 @@ impl FuseBlockWriteOptions {
             cluster_stats_builder: Arc::new(ClusterStatisticsBuilder::default()),
             stats_columns,
             distinct_columns,
-            bloom_columns_map,
             ndv_columns_map,
             top_n,
-            ngram_args,
-            inverted_index_builders,
+            block_index_specs,
             virtual_column_builder,
             json_path_statistics_builder,
             table_meta_timestamps,
-            vector_index_builder,
-            spatial_index_builder,
             granule_index_specs,
             granule_cluster_keys: match granule_cluster_columns {
                 Some(columns) => Some(sample_granule_cluster_keys(
