@@ -318,7 +318,7 @@ impl SegmentAnalyzer {
             }
             None => SegmentStatistics::new(Vec::new(), Vec::new()),
         };
-        stats.block_hlls.resize(block_count, Vec::new());
+        stats.align_to_blocks(block_count)?;
         Ok(stats)
     }
 

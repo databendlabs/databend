@@ -13,11 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashSet;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
 
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::execute_futures_in_parallel;
@@ -33,7 +29,6 @@ use fastrace::func_path;
 use fastrace::prelude::*;
 use opendal::Operator;
 use tokio::sync::Semaphore;
-use tokio::task::JoinHandle;
 
 use super::read::SegmentReader;
 use crate::io::MetaReaders;
@@ -42,26 +37,6 @@ use crate::io::MetaReaders;
 pub struct SerializedSegment {
     pub path: String,
     pub segment: Arc<SegmentInfo>,
-}
-
-// Unlike a bare JoinHandle, dropping this wrapper aborts the task instead of
-// detaching it. Batch reads and merge workers use it to handle cancellation.
-pub(crate) struct AbortOnDrop<T>(pub(crate) JoinHandle<T>);
-
-impl<T> Drop for AbortOnDrop<T> {
-    fn drop(&mut self) {
-        self.0.abort();
-    }
-}
-
-impl<T> Future for AbortOnDrop<T> {
-    type Output = Result<T>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        Pin::new(&mut self.0)
-            .poll(cx)
-            .map_err(|e| ErrorCode::Internal(format!("segment IO task failed: {e}")))
-    }
 }
 
 // Read segment related operations.
@@ -144,8 +119,8 @@ impl SegmentsIO {
     }
 
     /// Read a batch on the global IO runtime using a caller's shared IO budget.
-    /// Results follow input order. Dropping the batch future aborts its spawned
-    /// tasks; acquiring before spawn also bounds tasks waiting for IO permits.
+    /// Results follow input order. Submitted reads may finish after cancellation;
+    /// acquiring before spawn bounds tasks waiting for IO permits.
     #[async_backtrace::framed]
     #[fastrace::trace]
     pub async fn read_segments_with_semaphore<T>(
@@ -168,15 +143,17 @@ impl SegmentsIO {
             let dal = dal.clone();
             let schema = table_schema.clone();
             let location = location.clone();
-            tasks.push(AbortOnDrop(runtime.spawn(async move {
+            tasks.push(runtime.spawn(async move {
                 let _permit = permit;
                 let segment = Self::read_compact_segment(dal, location, schema, put_cache).await?;
                 segment
                     .try_into()
                     .map_err(|_| ErrorCode::Internal("Failed to convert compact segment info"))
-            })));
+            }));
         }
-        futures::future::try_join_all(tasks).await
+        futures::future::try_join_all(tasks)
+            .await
+            .map_err(|e| ErrorCode::Internal(format!("segment IO task failed: {e}")))
     }
 
     #[async_backtrace::framed]
