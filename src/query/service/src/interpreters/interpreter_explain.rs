@@ -59,7 +59,6 @@ use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
-use crate::pipelines::executor::QueryPipelineExecutor;
 use crate::schedulers::Fragmenter;
 use crate::schedulers::QueryFragmentsActions;
 use crate::schedulers::build_query_pipeline;
@@ -162,7 +161,8 @@ impl Interpreter for ExplainInterpreter {
                         metadata.clone(),
                     )?;
                     let mut plan = interpreter.build_physical_plan(&mutation, true).await?;
-                    self.inject_pruned_partitions_stats(&mut plan, metadata)?;
+                    self.inject_pruned_partitions_stats(&mut plan, metadata)
+                        .await?;
                     self.explain_physical_plan(&plan, metadata, &None).await?
                 }
                 _ => self.explain_plan(&self.plan)?,
@@ -616,7 +616,8 @@ impl ExplainInterpreter {
         // It's because we need to get the same partitions as the original selecting plan.
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx, formatted_ast.is_none());
         let mut plan = builder.build(s_expr, bind_context.column_set()).await?;
-        self.inject_pruned_partitions_stats(&mut plan, metadata)?;
+        self.inject_pruned_partitions_stats(&mut plan, metadata)
+            .await?;
         self.explain_physical_plan(&plan, metadata, formatted_ast)
             .await
     }
@@ -651,7 +652,7 @@ impl ExplainInterpreter {
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
-    fn inject_pruned_partitions_stats(
+    async fn inject_pruned_partitions_stats(
         &self,
         plan: &mut PhysicalPlan,
         metadata: &MetadataRef,
@@ -669,8 +670,9 @@ impl ExplainInterpreter {
         // if get partitions from the cache, we don't need to build pruning pipelines
         if !pipelines.is_empty() {
             let settings = ExecutorSettings::try_create(self.ctx.clone())?;
-            let executor = QueryPipelineExecutor::from_pipelines(pipelines, settings)?;
-            executor.execute()?;
+            let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
+            self.ctx.set_executor(executor.get_inner())?;
+            executor.execute().await?;
         }
         let mut stat = self.ctx.get_pruned_partitions_stats();
         if stat.is_empty() {
