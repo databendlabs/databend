@@ -15,6 +15,7 @@
 use std::cmp::Reverse;
 use std::collections::VecDeque;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ChunkIndex;
 use databend_common_expression::Column;
@@ -272,7 +273,7 @@ where A: SortAlgorithm
     /// output prefix. Used by external mergers to reduce fan-in under pressure.
     pub fn into_remaining_streams(mut self) -> Result<Vec<RecoveredMergeStream<S>>> {
         if self.buffers.has_output() {
-            return Err(databend_common_exception::ErrorCode::Internal(
+            return Err(ErrorCode::Internal(
                 "flush the selected merge prefix before recovering streams",
             ));
         }

@@ -75,11 +75,14 @@ use tantivy::tokenizer::TokenizerManager;
 use tantivy_jieba::JiebaTokenizer;
 
 use crate::io::TableMetaLocationGenerator;
+use crate::io::write::block_index::BlockIndexMerge;
+use crate::io::write::block_index::BlockIndexMergeSource;
 use crate::io::write::block_index::BlockIndexSpec;
 use crate::io::write::block_index::BlockIndexWriteContext;
 use crate::io::write::block_index::BlockIndexWriter;
 use crate::io::write::block_index::PendingBlockIndexOutput;
 use crate::io::write::block_index::WrittenInvertedIndex;
+use crate::io::write::inverted_index_merge::InvertedIndexMerge;
 
 static JAPANESE_DICTIONARY: LazyLock<Dictionary> = LazyLock::new(|| {
     load_dictionary("embedded://ipadic").expect("the embedded IPADIC dictionary must be available")
@@ -117,9 +120,9 @@ impl BlockIndexSpec for InvertedIndexWriteSpec {
 
     fn prepare_merge(
         &self,
-        sources: &[super::block_index::BlockIndexMergeSource<'_>],
-    ) -> Result<Option<Arc<dyn super::block_index::BlockIndexMerge>>> {
-        super::inverted_index_merge::InvertedIndexMerge::try_create(&self.builder, sources)
+        sources: &[BlockIndexMergeSource<'_>],
+    ) -> Result<Option<Arc<dyn BlockIndexMerge>>> {
+        InvertedIndexMerge::try_create(&self.builder, sources)
     }
 
     fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {

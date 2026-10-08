@@ -51,7 +51,10 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_storages_common_io::ChunkedRangeReader;
+use databend_storages_common_io::MergeRangeReader;
 use databend_storages_common_io::OperatorRangeReader;
+use databend_storages_common_io::RangeReader;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use opendal::Operator;
@@ -89,7 +92,7 @@ pub struct FuseLowLevelBlockReadOptions {
     #[cfg(test)]
     window_size: Option<usize>,
     max_prefetch: usize,
-    merge_settings: Option<databend_storages_common_io::ReadSettings>,
+    merge_settings: Option<ReadSettings>,
     window_rows: Option<usize>,
 }
 
@@ -137,7 +140,7 @@ impl FuseLowLevelBlockReadOptions {
         self
     }
 
-    pub fn with_merge_io(mut self, settings: databend_storages_common_io::ReadSettings) -> Self {
+    pub fn with_merge_io(mut self, settings: ReadSettings) -> Self {
         self.merge_settings = Some(settings);
         self
     }
@@ -203,7 +206,7 @@ pub struct FuseLowLevelBlockReader {
     #[cfg(test)]
     window_size: Option<usize>,
     max_prefetch: usize,
-    merge_settings: Option<databend_storages_common_io::ReadSettings>,
+    merge_settings: Option<ReadSettings>,
     window_rows: Option<usize>,
 }
 
@@ -1459,36 +1462,35 @@ impl ParquetLeafRowGroupAdapter {
         )?;
         #[cfg(test)]
         let window_size = reader.window_size.unwrap_or(window_size);
-        let chain: Box<dyn databend_storages_common_io::RangeReader> =
-            if let Some(settings) = &reader.merge_settings {
-                // Storage range and consumer windows are independent. Merge bounded
-                // adjacent windows before handing them to a continuous stream tail.
-                let mut windows = Vec::new();
-                let mut start = range.start;
-                while start < range.end {
-                    let end = start.saturating_add(window_size as u64).min(range.end);
-                    windows.push(start..end);
-                    start = end;
-                }
-                let tail = OperatorRangeReader::new_streaming(
-                    reader.operator.clone(),
-                    reader.path.clone(),
-                    range.clone(),
-                    reader.max_prefetch.saturating_add(1),
-                )?;
-                Box::new(databend_storages_common_io::MergeRangeReader::new(
-                    tail,
-                    &windows,
-                    settings,
-                    reader.max_prefetch.saturating_add(1),
-                )?)
-            } else {
-                Box::new(OperatorRangeReader::new(
-                    reader.operator.clone(),
-                    reader.path.clone(),
-                    reader.max_prefetch.saturating_add(1),
-                ))
-            };
+        let chain: Box<dyn RangeReader> = if let Some(settings) = &reader.merge_settings {
+            // Storage range and consumer windows are independent. Merge bounded
+            // adjacent windows before handing them to a continuous stream tail.
+            let mut windows = Vec::new();
+            let mut start = range.start;
+            while start < range.end {
+                let end = start.saturating_add(window_size as u64).min(range.end);
+                windows.push(start..end);
+                start = end;
+            }
+            let tail = OperatorRangeReader::new_streaming(
+                reader.operator.clone(),
+                reader.path.clone(),
+                range.clone(),
+                reader.max_prefetch.saturating_add(1),
+            )?;
+            Box::new(MergeRangeReader::new(
+                tail,
+                &windows,
+                settings,
+                reader.max_prefetch.saturating_add(1),
+            )?)
+        } else {
+            Box::new(OperatorRangeReader::new(
+                reader.operator.clone(),
+                reader.path.clone(),
+                reader.max_prefetch.saturating_add(1),
+            ))
+        };
         let input =
             ChunkedRangeReader::with_range(chain, range, window_size as u64, reader.max_prefetch)?;
         let Ok(num_values) = i64::try_from(num_values) else {
@@ -1570,6 +1572,7 @@ mod tests {
     use std::collections::HashMap;
 
     use databend_common_base::runtime::GlobalIORuntime;
+    use databend_common_column::buffer::Buffer;
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
     use databend_common_expression::TableDataType;
@@ -1583,6 +1586,7 @@ mod tests {
     use databend_common_expression::types::string::StringType;
     use databend_storages_common_table_meta::meta::BlockMeta;
     use databend_storages_common_table_meta::meta::ColumnMeta;
+    use databend_storages_common_table_meta::meta::Compression;
     use databend_storages_common_table_meta::table::TableCompression;
     use opendal::services::Memory;
     use parquet::format::DataPageHeader;
@@ -1630,8 +1634,7 @@ mod tests {
                 })),
             ),
         ]));
-        let offsets: databend_common_column::buffer::Buffer<u64> =
-            vec![0_u64, 2, 2, 3, 5, 6].into();
+        let offsets: Buffer<u64> = vec![0_u64, 2, 2, 3, 5, 6].into();
         let columns = vec![
             Int32Type::from_data(vec![10, 20, 30, 40, 50]),
             StringType::from_opt_data(vec![Some("a"), None, Some("ccc"), Some("d"), None]),
@@ -1814,7 +1817,7 @@ mod tests {
         );
         let options = read_options(operator, schema, meta)
             .with_window_rows(2)
-            .with_merge_io(databend_storages_common_io::ReadSettings {
+            .with_merge_io(ReadSettings {
                 max_gap_size: 48,
                 max_range_size: 64,
                 parquet_fast_read_bytes: 0,
@@ -1924,7 +1927,7 @@ mod tests {
             ]);
         block_meta.location.0 = "split.parquet".to_string();
         block_meta.row_count = 2;
-        block_meta.compression = databend_storages_common_table_meta::meta::Compression::None;
+        block_meta.compression = Compression::None;
         let column_id = schema.to_leaf_column_ids()[0];
         let ColumnMeta::Parquet(mut column_meta) =
             block_meta.col_metas.get(&column_id).unwrap().clone();
@@ -2012,7 +2015,7 @@ mod tests {
             std::slice::from_ref(&expected),
         );
         meta.location.0 = "independent-pages.parquet".to_string();
-        meta.compression = databend_storages_common_table_meta::meta::Compression::None;
+        meta.compression = Compression::None;
         for (index, column_id) in schema.to_leaf_column_ids().into_iter().enumerate() {
             let ColumnMeta::Parquet(mut column_meta) =
                 meta.col_metas.get(&column_id).unwrap().clone();
@@ -2098,8 +2101,7 @@ mod tests {
                 ],
             })),
         )]));
-        let offsets: databend_common_column::buffer::Buffer<u64> =
-            vec![0_u64, 2, 4, 6, 8, 10].into();
+        let offsets: Buffer<u64> = vec![0_u64, 2, 4, 6, 8, 10].into();
         let expected = Column::Array(Box::new(ArrayColumn::<AnyType>::new(
             Column::Tuple(vec![
                 Int32Type::from_data((0..10).collect::<Vec<_>>()),
@@ -2210,7 +2212,7 @@ mod tests {
             std::slice::from_ref(&expected),
         );
         meta.location.0 = "independent-repeated-pages.parquet".to_string();
-        meta.compression = databend_storages_common_table_meta::meta::Compression::None;
+        meta.compression = Compression::None;
         for (index, column_id) in schema.to_leaf_column_ids().into_iter().enumerate() {
             let ColumnMeta::Parquet(mut column_meta) =
                 meta.col_metas.get(&column_id).unwrap().clone();

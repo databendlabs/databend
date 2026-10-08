@@ -15,6 +15,8 @@
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 
+use databend_common_expression::Column;
+
 use super::rows::Rows;
 
 /// A cursor point to a certain row in a data block.
@@ -69,7 +71,7 @@ where
         self.rows.len()
     }
 
-    pub fn rows_column_suffix(&self) -> databend_common_expression::Column {
+    pub fn rows_column_suffix(&self) -> Column {
         self.rows.slice(self.row_index..self.rows.len()).to_column()
     }
 
