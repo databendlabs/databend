@@ -12,30 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::number::F32;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::BlockMetaIndex;
 
-/// TopN pruner.
-/// Pruning for order by x limit N.
+/// Inverted-index based TopN / limit pruner.
+///
+/// Only applies when the filter is fully answered by the inverted index
+/// (`PushDownInfo::filter_only_use_index`), so the exact number of matched
+/// rows per block (`BlockMetaIndex::matched_rows`) is known before reading:
+/// - `LIMIT N`: keep blocks until N matched rows are covered.
+/// - `ORDER BY score() LIMIT N`: prune by the exact matched score range.
+/// - `ORDER BY col LIMIT N`: prune by column min/max and matched row counts.
+///
+/// Value-statistics TopN pruning without an index is handled by the runtime
+/// TopN filter, whose boundary comes from the rows actually produced.
 #[derive(Clone)]
 pub struct TopNPruner {
     schema: TableSchemaRef,
     sort: Vec<(RemoteExpr<String>, bool, bool)>,
     limit: usize,
-    filter_only_use_index: bool,
 }
 
 impl TopNPruner {
@@ -43,13 +48,11 @@ impl TopNPruner {
         schema: TableSchemaRef,
         sort: Vec<(RemoteExpr<String>, bool, bool)>,
         limit: usize,
-        filter_only_use_index: bool,
     ) -> Self {
         Self {
             schema,
             sort,
             limit,
-            filter_only_use_index,
         }
     }
 }
@@ -70,10 +73,6 @@ impl TopNPruner {
         &self,
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        if !self.filter_only_use_index {
-            return Ok(metas);
-        }
-
         let mut limit_count = 0;
         let mut pruned_metas = Vec::new();
         for (index, meta) in metas.into_iter() {
@@ -106,12 +105,12 @@ impl TopNPruner {
         } else {
             return Ok(metas);
         };
-        if *nulls_first && self.filter_only_use_index {
+        if *nulls_first {
             return Ok(metas);
         }
 
         // order by search score
-        if column == SEARCH_SCORE_COL_NAME && self.filter_only_use_index {
+        if column == SEARCH_SCORE_COL_NAME {
             return self.prune_topn_by_score(*asc, metas);
         }
 
@@ -142,84 +141,66 @@ impl TopNPruner {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        if self.filter_only_use_index {
-            // For descending order, we determine a lower bound for the Nth largest value.
-            // Any block with a max_val below this lower bound can be discarded.
-            // For ascending order, we determine an upper bound for the Nth smallest value.
-            // Any block with a min_val above this upper bound can be discarded.
-            // The threshold is estimated based on the number of matching rows in each block
-            // and the block's min_val/max_val.
-            let mut topn_count = 0;
-            let mut pruned_metas = Vec::new();
-            if *asc {
-                // Sort in ascending order by the min_val so the most promising candidates go first.
-                id_stats.sort_by(|a, b| a.1.min().cmp(b.1.min()));
+        // For descending order, we determine a lower bound for the Nth largest value.
+        // Any block with a max_val below this lower bound can be discarded.
+        // For ascending order, we determine an upper bound for the Nth smallest value.
+        // Any block with a min_val above this upper bound can be discarded.
+        // The threshold is estimated based on the number of matching rows in each block
+        // and the block's min_val/max_val.
+        let mut topn_count = 0;
+        let mut pruned_metas = Vec::new();
+        if *asc {
+            // Sort in ascending order by the min_val so the most promising candidates go first.
+            id_stats.sort_by(|a, b| a.1.min().cmp(b.1.min()));
 
-                // Determine the upper_bound for the Nth smallest value. Once topn_count
-                // reaches the limit, any block whose min exceeds this bound can be skipped.
-                let mut upper_bound = id_stats[0].1.max().clone();
-                for (index, stat, _) in &id_stats {
-                    if *stat.min() > upper_bound && topn_count >= self.limit {
-                        continue;
-                    }
-                    let matched_count = index_match_count(index);
-                    if matched_count == 0 {
-                        continue;
-                    }
-                    topn_count += matched_count;
-                    if *stat.max() > upper_bound {
-                        upper_bound = stat.max().clone();
-                    }
+            // Determine the upper_bound for the Nth smallest value. Once topn_count
+            // reaches the limit, any block whose min exceeds this bound can be skipped.
+            let mut upper_bound = id_stats[0].1.max().clone();
+            for (index, stat, _) in &id_stats {
+                if *stat.min() > upper_bound && topn_count >= self.limit {
+                    continue;
                 }
-                for (index, stat, meta) in id_stats.into_iter() {
-                    if *stat.min() <= upper_bound {
-                        pruned_metas.push((index, meta));
-                    }
+                let matched_count = index_match_count(index);
+                if matched_count == 0 {
+                    continue;
                 }
-            } else {
-                // Sort in descending order by the max_val so the most promising candidates go first.
-                id_stats.sort_by(|a, b| a.1.max().cmp(b.1.max()).reverse());
-
-                // Determine the lower_bound for the Nth largest value. Once topn_count
-                // reaches the limit, any block whose min exceeds this bound can be skipped.
-                let mut lower_bound = id_stats[0].1.min().clone();
-                for (index, stat, _) in &id_stats {
-                    if *stat.max() < lower_bound && topn_count >= self.limit {
-                        continue;
-                    }
-                    let matched_count = index_match_count(index);
-                    if matched_count == 0 {
-                        continue;
-                    }
-                    topn_count += matched_count;
-                    if *stat.min() < lower_bound {
-                        lower_bound = stat.min().clone();
-                    }
-                }
-                for (index, stat, meta) in id_stats.into_iter() {
-                    if *stat.max() >= lower_bound {
-                        pruned_metas.push((index, meta));
-                    }
+                topn_count += matched_count;
+                if *stat.max() > upper_bound {
+                    upper_bound = stat.max().clone();
                 }
             }
-            Ok(pruned_metas)
+            for (index, stat, meta) in id_stats.into_iter() {
+                if *stat.min() <= upper_bound {
+                    pruned_metas.push((index, meta));
+                }
+            }
         } else {
-            id_stats.sort_by(|a, b| compare_block_stats(&a.1, &b.1, *asc, *nulls_first));
+            // Sort in descending order by the max_val so the most promising candidates go first.
+            id_stats.sort_by(|a, b| a.1.max().cmp(b.1.max()).reverse());
 
-            let keep_block_count = if self.limit == 0 {
-                0
-            } else {
-                truncate_blocks_after_limit(&id_stats, *asc, *nulls_first, self.limit)
-            };
-            let keep_block_count = keep_block_count.min(self.limit).min(id_stats.len());
-
-            let pruned_metas = id_stats
-                .into_iter()
-                .map(|s| (s.0, s.2))
-                .take(keep_block_count)
-                .collect();
-            Ok(pruned_metas)
+            // Determine the lower_bound for the Nth largest value. Once topn_count
+            // reaches the limit, any block whose min exceeds this bound can be skipped.
+            let mut lower_bound = id_stats[0].1.min().clone();
+            for (index, stat, _) in &id_stats {
+                if *stat.max() < lower_bound && topn_count >= self.limit {
+                    continue;
+                }
+                let matched_count = index_match_count(index);
+                if matched_count == 0 {
+                    continue;
+                }
+                topn_count += matched_count;
+                if *stat.min() < lower_bound {
+                    lower_bound = stat.min().clone();
+                }
+            }
+            for (index, stat, meta) in id_stats.into_iter() {
+                if *stat.max() >= lower_bound {
+                    pruned_metas.push((index, meta));
+                }
+            }
         }
+        Ok(pruned_metas)
     }
 
     fn prune_topn_by_score(
@@ -306,124 +287,6 @@ fn block_score_range(scores: &[F32]) -> Option<(F32, F32)> {
     Some((min_score, max_score))
 }
 
-fn compare_scalar_for_sorting(
-    left: &Scalar,
-    right: &Scalar,
-    asc: bool,
-    nulls_first: bool,
-) -> Ordering {
-    let left_is_null = matches!(left, Scalar::Null);
-    let right_is_null = matches!(right, Scalar::Null);
-
-    if left_is_null && right_is_null {
-        return Ordering::Equal;
-    }
-
-    if left_is_null {
-        return if nulls_first {
-            Ordering::Less
-        } else {
-            Ordering::Greater
-        };
-    }
-
-    if right_is_null {
-        return if nulls_first {
-            Ordering::Greater
-        } else {
-            Ordering::Less
-        };
-    }
-
-    if asc {
-        left.cmp(right)
-    } else {
-        left.cmp(right).reverse()
-    }
-}
-
-fn compare_block_stats(
-    left: &ColumnStatistics,
-    right: &ColumnStatistics,
-    asc: bool,
-    nulls_first: bool,
-) -> Ordering {
-    if nulls_first && (left.null_count + right.null_count != 0) {
-        return left.null_count.cmp(&right.null_count).reverse();
-    }
-
-    let (left_scalar, right_scalar) = if asc {
-        (left.min(), right.min())
-    } else {
-        (left.max(), right.max())
-    };
-
-    compare_scalar_for_sorting(left_scalar, right_scalar, asc, nulls_first)
-}
-
-fn truncate_blocks_after_limit(
-    stats: &[(BlockMetaIndex, ColumnStatistics, Arc<BlockMeta>)],
-    asc: bool,
-    nulls_first: bool,
-    limit: usize,
-) -> usize {
-    if limit == 0 || stats.is_empty() {
-        return 0;
-    }
-
-    // `bound` is the worst value (in output order) among the kept blocks that
-    // together cover the first `limit` rows. The top-N rows are therefore all
-    // ordered no later than `bound`, so a following block can only be skipped
-    // if its best value is ordered strictly after `bound`. Note that the bound
-    // must cover *all* kept blocks, not only the last one: blocks are sorted by
-    // their best value, so an earlier block may still have the widest range.
-    let mut bound: Option<&Scalar> = None;
-    let mut accumulated_rows = 0usize;
-
-    for (idx, (_, col_stat, meta)) in stats.iter().enumerate() {
-        if accumulated_rows >= limit {
-            let best = block_best_value(col_stat, asc, nulls_first);
-            if let Some(bound) = bound
-                && compare_scalar_for_sorting(best, bound, asc, nulls_first) == Ordering::Greater
-            {
-                // Blocks are sorted by their best value, so all remaining
-                // blocks can be skipped as well.
-                return idx;
-            }
-            continue;
-        }
-
-        let worst = block_worst_value(col_stat, asc, nulls_first);
-        bound = match bound {
-            Some(b)
-                if compare_scalar_for_sorting(worst, b, asc, nulls_first) != Ordering::Greater =>
-            {
-                Some(b)
-            }
-            _ => Some(worst),
-        };
-        accumulated_rows = accumulated_rows.saturating_add(meta.row_count as usize);
-    }
-
-    stats.len()
-}
-
-/// The value of the block that comes first in the output order.
-fn block_best_value(stat: &ColumnStatistics, asc: bool, nulls_first: bool) -> &Scalar {
-    if nulls_first && stat.null_count > 0 {
-        return &Scalar::Null;
-    }
-    if asc { stat.min() } else { stat.max() }
-}
-
-/// The value of the block that comes last in the output order.
-fn block_worst_value(stat: &ColumnStatistics, asc: bool, nulls_first: bool) -> &Scalar {
-    if !nulls_first && stat.null_count > 0 {
-        return &Scalar::Null;
-    }
-    if asc { stat.max() } else { stat.min() }
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -478,12 +341,8 @@ mod tests {
         ];
 
         for (asc, limit, expected) in test_cases {
-            let pruner = TopNPruner::create(
-                schema.clone(),
-                vec![(sort_expr.clone(), asc, false)],
-                limit,
-                true,
-            );
+            let pruner =
+                TopNPruner::create(schema.clone(), vec![(sort_expr.clone(), asc, false)], limit);
             let result = pruner.prune(metas.clone()).unwrap();
             let mut kept_blocks: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
             kept_blocks.sort_unstable();
@@ -507,7 +366,7 @@ mod tests {
             data_type: DataType::Number(NumberDataType::Float32),
             display_name: SEARCH_SCORE_COL_NAME.to_string(),
         };
-        let pruner = TopNPruner::create(schema.clone(), vec![(sort_expr, false, false)], 2, true);
+        let pruner = TopNPruner::create(schema.clone(), vec![(sort_expr, false, false)], 2);
         let column_id = schema.column_id_of("c").unwrap();
 
         let metas = vec![
@@ -522,209 +381,24 @@ mod tests {
     }
 
     #[test]
-    fn test_prune_topn_respects_nulls_last_desc() {
+    fn test_prune_limit_by_matched_rows() {
         let schema = Arc::new(TableSchema::new(vec![TableField::new(
             "c",
-            TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int64))),
+            TableDataType::Number(NumberDataType::Int64),
         )]));
-        let sort_expr = RemoteExpr::ColumnRef {
-            span: None,
-            id: "c".to_string(),
-            data_type: DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
-            display_name: "c".to_string(),
-        };
         let column_id = schema.column_id_of("c").unwrap();
-
         let metas = vec![
-            build_null_block(column_id, 0, 5),
-            build_block(column_id, 1, 100, 200, 5),
+            build_block(column_id, 0, 0, 0, 2),
+            build_block(column_id, 1, 0, 0, 0),
+            build_block(column_id, 2, 0, 0, 3),
+            build_block(column_id, 3, 0, 0, 4),
         ];
 
-        let pruner = TopNPruner::create(
-            schema.clone(),
-            vec![(sort_expr.clone(), false, false)],
-            1,
-            false,
-        );
+        // No ORDER BY: keep blocks with matched rows until the limit is covered.
+        let pruner = TopNPruner::create(schema.clone(), vec![], 4);
         let result = pruner.prune(metas).unwrap();
         let kept_blocks: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
-        assert_eq!(kept_blocks, vec![1]);
-    }
-
-    #[test]
-    fn test_prune_topn_stops_when_ranges_disjoint() {
-        let schema = Arc::new(TableSchema::new(vec![TableField::new(
-            "c",
-            TableDataType::Number(NumberDataType::Int64),
-        )]));
-        let sort_expr = RemoteExpr::ColumnRef {
-            span: None,
-            id: "c".to_string(),
-            data_type: DataType::Number(NumberDataType::Int64),
-            display_name: "c".to_string(),
-        };
-        let column_id = schema.column_id_of("c").unwrap();
-
-        let metas = vec![
-            build_block(column_id, 0, 0, 9, 10),
-            build_block(column_id, 1, 15, 19, 8),
-            build_block(column_id, 2, 30, 39, 12),
-        ];
-        let row_counts: Vec<_> = metas
-            .iter()
-            .map(|(_, meta)| meta.row_count as usize)
-            .collect();
-        assert_eq!(row_counts, vec![10, 8, 12]);
-        let mut stats = metas
-            .iter()
-            .map(|(idx, meta)| {
-                (
-                    idx.clone(),
-                    meta.col_stats.get(&column_id).unwrap().clone(),
-                    meta.clone(),
-                )
-            })
-            .collect::<Vec<_>>();
-        stats.sort_by(|a, b| super::compare_block_stats(&a.1, &b.1, true, false));
-        assert_eq!(
-            super::truncate_blocks_after_limit(&stats, true, false, 5),
-            1
-        );
-
-        let pruner = TopNPruner::create(
-            schema.clone(),
-            vec![(sort_expr.clone(), true, false)],
-            5,
-            false,
-        );
-        let result = pruner.prune(metas).unwrap();
-        let kept_blocks: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
-        assert_eq!(kept_blocks, vec![0]);
-    }
-
-    // Regression test for https://github.com/databendlabs/databend/issues/20612
-    // Blocks [1, 4], [2, 2], [3, 3] with `ORDER BY c LIMIT 3`: the first block's
-    // range covers the later blocks, so none of them can be pruned.
-    #[test]
-    fn test_prune_topn_keeps_blocks_covered_by_earlier_range() {
-        let schema = Arc::new(TableSchema::new(vec![TableField::new(
-            "c",
-            TableDataType::Number(NumberDataType::Int64),
-        )]));
-        let sort_expr = RemoteExpr::ColumnRef {
-            span: None,
-            id: "c".to_string(),
-            data_type: DataType::Number(NumberDataType::Int64),
-            display_name: "c".to_string(),
-        };
-        let column_id = schema.column_id_of("c").unwrap();
-
-        let asc_metas = vec![
-            build_block(column_id, 0, 1, 4, 2),
-            build_block(column_id, 1, 2, 2, 1),
-            build_block(column_id, 2, 3, 3, 1),
-        ];
-        let pruner = TopNPruner::create(
-            schema.clone(),
-            vec![(sort_expr.clone(), true, false)],
-            3,
-            false,
-        );
-        let result = pruner.prune(asc_metas).unwrap();
-        let mut kept_blocks: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
-        kept_blocks.sort_unstable();
-        assert_eq!(kept_blocks, vec![0, 1, 2]);
-
-        // Mirrored case for descending order.
-        let desc_metas = vec![
-            build_block(column_id, 0, 1, 4, 2),
-            build_block(column_id, 1, 3, 3, 1),
-            build_block(column_id, 2, 2, 2, 1),
-        ];
-        let pruner = TopNPruner::create(
-            schema.clone(),
-            vec![(sort_expr.clone(), false, false)],
-            3,
-            false,
-        );
-        let result = pruner.prune(desc_metas).unwrap();
-        let mut kept_blocks: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
-        kept_blocks.sort_unstable();
-        assert_eq!(kept_blocks, vec![0, 1, 2]);
-
-        // Blocks entirely after the bound of the kept blocks are still pruned.
-        let metas = vec![
-            build_block(column_id, 0, 1, 4, 2),
-            build_block(column_id, 1, 2, 2, 1),
-            build_block(column_id, 2, 5, 6, 1),
-        ];
-        let pruner = TopNPruner::create(
-            schema.clone(),
-            vec![(sort_expr.clone(), true, false)],
-            3,
-            false,
-        );
-        let result = pruner.prune(metas).unwrap();
-        let mut kept_blocks: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
-        kept_blocks.sort_unstable();
-        assert_eq!(kept_blocks, vec![0, 1]);
-    }
-
-    #[test]
-    fn test_prune_topn_keeps_overlapping_blocks() {
-        let schema = Arc::new(TableSchema::new(vec![TableField::new(
-            "c",
-            TableDataType::Number(NumberDataType::Int64),
-        )]));
-        let sort_expr = RemoteExpr::ColumnRef {
-            span: None,
-            id: "c".to_string(),
-            data_type: DataType::Number(NumberDataType::Int64),
-            display_name: "c".to_string(),
-        };
-        let column_id = schema.column_id_of("c").unwrap();
-
-        let metas = vec![
-            build_block(column_id, 0, 0, 99, 100),
-            build_block(column_id, 1, 0, 99, 100),
-            build_block(column_id, 2, 0, 99, 100),
-        ];
-
-        let pruner = TopNPruner::create(
-            schema.clone(),
-            vec![(sort_expr.clone(), false, false)],
-            5,
-            false,
-        );
-        let result = pruner.prune(metas.clone()).unwrap();
-        assert_eq!(result.len(), metas.len());
-    }
-
-    #[test]
-    fn test_prune_topn_constant_ranges_prune_extra_blocks() {
-        let schema = Arc::new(TableSchema::new(vec![TableField::new(
-            "c",
-            TableDataType::Number(NumberDataType::Int64),
-        )]));
-        let sort_expr = RemoteExpr::ColumnRef {
-            span: None,
-            id: "c".to_string(),
-            data_type: DataType::Number(NumberDataType::Int64),
-            display_name: "c".to_string(),
-        };
-        let column_id = schema.column_id_of("c").unwrap();
-        let metas = (0..5)
-            .map(|i| build_block(column_id, i, i as i64, i as i64, 10))
-            .collect::<Vec<_>>();
-
-        let pruner = TopNPruner::create(
-            schema.clone(),
-            vec![(sort_expr.clone(), true, false)],
-            3,
-            false,
-        );
-        let result = pruner.prune(metas).unwrap();
-        assert_eq!(result.len(), 1);
+        assert_eq!(kept_blocks, vec![0, 2]);
     }
 
     fn build_block(
@@ -735,16 +409,6 @@ mod tests {
         matched_rows: usize,
     ) -> (BlockMetaIndex, Arc<BlockMeta>) {
         let column_stats = ColumnStatistics::new(Scalar::from(min), Scalar::from(max), 0, 0, None);
-        build_block_with_stats(column_id, block_id, column_stats, matched_rows)
-    }
-
-    fn build_null_block(
-        column_id: ColumnId,
-        block_id: usize,
-        matched_rows: usize,
-    ) -> (BlockMetaIndex, Arc<BlockMeta>) {
-        let column_stats =
-            ColumnStatistics::new(Scalar::Null, Scalar::Null, matched_rows as u64, 0, None);
         build_block_with_stats(column_id, block_id, column_stats, matched_rows)
     }
 

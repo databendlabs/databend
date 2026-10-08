@@ -686,32 +686,23 @@ impl FuseTable {
         }
 
         let push_down = pruner.push_down.clone();
-        // The static TopN pruner accumulates every surviving block meta
-        // behind a single-stream barrier before emitting a minimal cover.
-        // The runtime TopN boundary subsumes its value-statistics branch
-        // (skip it to keep the pipeline streaming), but not the
-        // inverted-index based limit prune. Plan-time (eager) pruning always
-        // keeps it: filters are only registered at pipeline build.
+        // Inverted-index based limit / TopN prune. It accumulates every
+        // surviving block meta behind a single-stream barrier, but only runs
+        // when the filter is fully answered by the inverted index, so the exact
+        // matched row counts are known. Value-statistics TopN pruning is left
+        // to the runtime TopN filter, which keeps the pipeline streaming.
         if push_down
             .as_ref()
             .filter(|p| {
-                let value_top_n = !p.order_by.is_empty()
-                    && p.limit.is_some()
-                    && p.filters.is_none()
-                    && p.secure_filters.is_none();
-                let index_limit =
-                    p.limit.is_some() && p.secure_filters.is_none() && p.filter_only_use_index();
-                (value_top_n && runtime_scan_filters.preferred_filter().is_none()) || index_limit
+                p.limit.is_some() && p.secure_filters.is_none() && p.filter_only_use_index()
             })
             .is_some()
         {
-            // if there are ordering + limit clause and no filter, use topn pruner
             let schema = pruner.table_schema.clone();
             let push_down = push_down.as_ref().unwrap();
             let limit = push_down.limit.unwrap();
             let sort = push_down.order_by.clone();
-            let filter_only_use_index = push_down.filter_only_use_index();
-            let topn_pruner = TopNPruner::create(schema, sort, limit, filter_only_use_index);
+            let topn_pruner = TopNPruner::create(schema, sort, limit);
             let pruning_ctx = pruner.pruning_ctx.clone();
             prune_pipeline.resize(1, false)?;
             prune_pipeline.add_transform(move |input, output| {
