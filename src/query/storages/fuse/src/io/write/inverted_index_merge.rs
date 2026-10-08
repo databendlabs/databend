@@ -116,13 +116,8 @@ impl BlockIndexMerge for InvertedIndexMerge {
             outputs,
             &self.schema,
             context.check_interrupt,
-        )
-        .map_err(|err| {
-            ErrorCode::StorageOther(format!("open recluster inverted index merge: {err}"))
-        })?;
-        let sizes = merger.finish().map_err(|err| {
-            ErrorCode::StorageOther(format!("finish recluster inverted index merge: {err}"))
-        })?;
+        )?;
+        let sizes = merger.finish()?;
         let elapsed_ms = start.elapsed().as_millis() as u64;
         metrics_inc_block_inverted_index_generate_milliseconds(elapsed_ms);
         metrics_inc_block_inverted_index_write_milliseconds(elapsed_ms);

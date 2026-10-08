@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -117,6 +118,7 @@ pub struct TransformReclusterIndexMerge {
     table: FuseTable,
     ctx: Arc<dyn TableContext>,
     merge: ReclusterIndexMergeInputs,
+    abort_checker: AbortChecker,
     outputs: Vec<ReclusterIndexOutput>,
 }
 
@@ -127,6 +129,7 @@ impl TransformReclusterIndexMerge {
         merge: ReclusterIndexMergeInputs,
     ) -> Self {
         Self {
+            abort_checker: ctx.clone().get_abort_checker(),
             ctx,
             table,
             merge,
@@ -166,9 +169,7 @@ impl AccumulatingTransform for TransformReclusterIndexMerge {
                 "recluster index lineage row count mismatch",
             ));
         }
-        self.ctx
-            .check_aborting()
-            .map_err(|err| err.with_context("recluster index mapping"))?;
+        self.abort_checker.try_check_aborting()?;
         self.outputs.push(output);
         Ok(vec![])
     }
@@ -178,9 +179,7 @@ impl AccumulatingTransform for TransformReclusterIndexMerge {
             self.outputs.clear();
             return Ok(vec![]);
         }
-        self.ctx
-            .check_aborting()
-            .map_err(|err| err.with_context("recluster index merge"))?;
+        self.abort_checker.try_check_aborting()?;
         let source_rows = &self.merge.source_rows;
         let expected: u64 = source_rows.iter().map(|&rows| u64::from(rows)).sum();
         let rows = self
@@ -226,9 +225,7 @@ impl AccumulatingTransform for TransformReclusterIndexMerge {
         let batch_outputs =
             (self.ctx.get_settings().get_max_threads()? as usize).clamp(1, u16::MAX as usize);
         for index in &self.merge.indexes {
-            self.ctx
-                .check_aborting()
-                .map_err(|err| err.with_context("recluster index merge"))?;
+            self.abort_checker.try_check_aborting()?;
             for output_batch in self.outputs.chunks_mut(batch_outputs) {
                 let outputs = output_batch
                     .iter()
@@ -261,9 +258,7 @@ impl AccumulatingTransform for TransformReclusterIndexMerge {
                 self.outputs.len()
             );
         }
-        self.ctx
-            .check_aborting()
-            .map_err(|err| err.with_context("publish recluster index metadata"))?;
+        self.abort_checker.try_check_aborting()?;
         let mut result = Vec::with_capacity(self.outputs.len());
         for output in self.outputs.drain(..) {
             result.push(DataBlock::empty_with_meta(Box::new(MutationLogs {

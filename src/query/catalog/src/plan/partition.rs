@@ -497,7 +497,7 @@ pub struct ReclusterTask {
     #[serde(default)]
     pub memory_budget: usize,
     pub virtual_column_layout: Option<VirtualColumnLayout>,
-    /// Index metadata in the same order as `parts`; absent for legacy tasks.
+    /// Index metadata in original input-block order; absent when reuse is disabled.
     #[serde(default)]
     pub inverted_index_sources: Vec<Vec<BlockIndexMeta>>,
 }

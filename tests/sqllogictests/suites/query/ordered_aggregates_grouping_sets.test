@@ -1,0 +1,134 @@
+# Ordered aggregates must read the original grouping columns, not the NULLs
+# introduced by AggregateExpand. Expected orders are computed from the input.
+# Also check the UNION ALL rewrite and single-/multi-threaded aggregation.
+# run-with-settings: grouping_sets_to_union=1
+# run-with-settings: max_threads=1
+# run-with-settings: max_threads=4
+
+statement ok
+CREATE OR REPLACE TABLE ordered_grouping (g INT NOT NULL, s STRING, i INT NOT NULL)
+
+statement ok
+INSERT INTO ordered_grouping VALUES (1,'c',1),(1,'a',2),(1,'b',3),(1,'a',4),(2,'z',5),(2,'y',6)
+
+# Plain GROUP BY is the reference behavior.
+query IT
+SELECT g, array_agg(i ORDER BY s, i) FROM ordered_grouping GROUP BY g ORDER BY g
+----
+1 [2,4,3,1]
+2 [6,5]
+
+# s is a separate sort input for the first three aggregates, but an argument
+# for the fourth. The secondary key i is an argument for array_agg.
+query ITTTTT
+SELECT g, s,
+       array_agg(i ORDER BY s, i),
+       string_agg(i::STRING, ',' ORDER BY s, i),
+       listagg(i::STRING, ',') WITHIN GROUP (ORDER BY s, i),
+       string_agg(s, ',' ORDER BY s, i)
+FROM ordered_grouping GROUP BY ROLLUP(g, s)
+ORDER BY g NULLS LAST, s NULLS LAST
+----
+1 a [2,4] 2,4 2,4 a,a
+1 b [3] 3 3 b
+1 c [1] 1 1 c
+1 NULL [2,4,3,1] 2,4,3,1 2,4,3,1 a,a,b,c
+2 y [6] 6 6 y
+2 z [5] 5 5 z
+2 NULL [6,5] 6,5 6,5 y,z
+NULL NULL [2,4,3,1,6,5] 2,4,3,1,6,5 2,4,3,1,6,5 a,a,b,c,y,z
+
+# Both grouping columns can be derived sort inputs, including descending keys.
+query ITT
+SELECT g, s, array_agg(i ORDER BY g DESC, s DESC, i)
+FROM ordered_grouping GROUP BY CUBE(g, s)
+ORDER BY g NULLS LAST, s NULLS LAST
+----
+1 a [2,4]
+1 b [3]
+1 c [1]
+1 NULL [1,3,2,4]
+2 y [6]
+2 z [5]
+2 NULL [5,6]
+NULL a [2,4]
+NULL b [3]
+NULL c [1]
+NULL y [6]
+NULL z [5]
+NULL NULL [5,6,1,3,2,4]
+
+query ITT
+SELECT g, s, array_agg(i ORDER BY s, i)
+FROM ordered_grouping GROUP BY GROUPING SETS ((g, s), (g), ())
+ORDER BY g NULLS LAST, s NULLS LAST
+----
+1 a [2,4]
+1 b [3]
+1 c [1]
+1 NULL [2,4,3,1]
+2 y [6]
+2 z [5]
+2 NULL [6,5]
+NULL NULL [2,4,3,1,6,5]
+
+# Computed grouping keys are also preserved for aggregate ORDER BY.
+query ITT
+SELECT g, lower(s) AS k, array_agg(i ORDER BY lower(s), i)
+FROM ordered_grouping GROUP BY GROUPING SETS ((g, k), (g), ())
+ORDER BY g NULLS LAST, k NULLS LAST
+----
+1 a [2,4]
+1 b [3]
+1 c [1]
+1 NULL [2,4,3,1]
+2 y [6]
+2 z [5]
+2 NULL [6,5]
+NULL NULL [2,4,3,1,6,5]
+
+# Do not confuse real input NULLs with rolled-up grouping columns. Preserve
+# the original nullable type and each ORDER BY key's NULL placement.
+statement ok
+CREATE OR REPLACE TABLE nullable_ordered_grouping (g INT NOT NULL, s STRING, i INT NOT NULL)
+
+statement ok
+INSERT INTO nullable_ordered_grouping VALUES (1,NULL,7),(1,'b',1),(1,'a',3),(1,NULL,2)
+
+query ITITT
+SELECT g, s, grouping(s),
+       array_agg(i ORDER BY s NULLS FIRST, i),
+       array_agg(i ORDER BY s NULLS LAST, i)
+FROM nullable_ordered_grouping GROUP BY ROLLUP(g, s)
+ORDER BY g NULLS LAST, grouping(s), s NULLS LAST
+----
+1 a 0 [3] [3]
+1 b 0 [1] [1]
+1 NULL 0 [2,7] [2,7]
+1 NULL 1 [2,7,3,1] [3,1,2,7]
+NULL NULL 1 [2,7,3,1] [3,1,2,7]
+
+# A non-nullable derived sort key must not receive the dummy NULLs either.
+statement ok
+CREATE OR REPLACE TABLE nonnullable_ordered_grouping (s STRING NOT NULL, i INT NOT NULL)
+
+statement ok
+INSERT INTO nonnullable_ordered_grouping VALUES ('b',1),('a',2)
+
+query TT
+SELECT s, array_agg(i ORDER BY s, i)
+FROM nonnullable_ordered_grouping GROUP BY GROUPING SETS ((s), ())
+ORDER BY s NULLS LAST
+----
+a [2]
+b [1]
+NULL [2,1]
+
+statement ok
+DROP TABLE nonnullable_ordered_grouping
+
+statement ok
+DROP TABLE nullable_ordered_grouping
+
+statement ok
+DROP TABLE ordered_grouping

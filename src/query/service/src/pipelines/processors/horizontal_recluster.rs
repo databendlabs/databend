@@ -15,7 +15,6 @@
 //! Task-local external merge of independently ordered FUSE blocks. Temporary
 //! runs are sequences of bounded spill chunks, never whole in-memory runs.
 
-use std::any::Any;
 use std::cmp::Reverse;
 use std::collections::VecDeque;
 use std::mem;
@@ -26,6 +25,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextProgress;
 use databend_common_catalog::table_context::TableContextQueryState;
@@ -44,13 +44,12 @@ use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::UInt64Type;
-use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
-use databend_common_pipeline::core::Processor;
-use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::SyncSource;
+use databend_common_pipeline::sources::SyncSourcer;
 use databend_common_pipeline_transforms::Transform;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::sorts::core::LoserTreeMerger;
@@ -89,6 +88,7 @@ struct ReclusterMergeInputBlock {
 #[derive(Clone)]
 struct ReclusterMergeConfig {
     ctx: Arc<QueryContext>,
+    abort_checker: AbortChecker,
     table: FuseTable,
     schema: TableSchemaRef,
     defaults: Vec<Scalar>,
@@ -270,10 +270,7 @@ impl<R: Rows> SortedStream for ReclusterMergeStream<R>
 where R::Converter: Send
 {
     fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
-        self.merge_config
-            .ctx
-            .check_aborting()
-            .map_err(|err| err.with_context("horizontal recluster merge"))?;
+        self.merge_config.abort_checker.try_check_aborting()?;
         if let Some(head) = self.head.take() {
             return Ok((Some(head), false));
         }
@@ -315,10 +312,7 @@ where R::Converter: Send
                     // Skip the decoded prefix when reopening a recovered stream.
                     let mut skipped = 0;
                     while skipped < *position {
-                        self.merge_config
-                            .ctx
-                            .check_aborting()
-                            .map_err(|err| err.with_context("recluster input reopen"))?;
+                        self.merge_config.abort_checker.try_check_aborting()?;
                         let rows = (*position - skipped).min(self.merge_config.batch_rows);
                         reopened.read(rows, false)?.ok_or_else(|| {
                             ErrorCode::ParquetFileInvalid("premature EOF reopening recluster input")
@@ -451,10 +445,7 @@ where R::Converter: Send
     }
 
     fn step(&mut self) -> Result<Option<DataBlock>> {
-        self.merge_config
-            .ctx
-            .check_aborting()
-            .map_err(|err| err.with_context("horizontal recluster merge"))?;
+        self.merge_config.abort_checker.try_check_aborting()?;
         if let Some(mut merger) = self.final_merge.take() {
             let block = merger.next_block()?.map(DataBlock::maybe_gc);
             if let Some(ref block) = block {
@@ -561,10 +552,9 @@ where R::Converter: Send
                 "recluster merge needs external runs but sort spill is disabled",
             ));
         }
-        let count = if self.force_initial {
-            1
-        } else {
-            self.fan_in.min(self.pending.len())
+        let count = match self.force_initial {
+            true => 1,
+            false => self.fan_in.min(self.pending.len()),
         };
         let mut merge_streams = self.pending.drain(..count).collect::<Vec<_>>();
         if merge_streams.len() == 1 {
@@ -633,9 +623,7 @@ impl RowsTypeVisitor for ReclusterMergeFactory {
 }
 
 pub struct HorizontalReclusterSource {
-    output: Arc<OutputPort>,
     merge_execution: Box<dyn ReclusterMergeExecution>,
-    ready: Option<DataBlock>,
 }
 
 impl HorizontalReclusterSource {
@@ -660,13 +648,13 @@ impl HorizontalReclusterSource {
         for mut factory in group_factories {
             let output = OutputPort::create();
             let merge_execution = select_row_type(&mut factory, fixed)?;
-            let source = Self {
-                output: output.clone(),
-                merge_execution,
-                ready: None,
-            };
+            let source = Self { merge_execution };
             pipe.push(PipeItem::create(
-                ProcessorPtr::create(Box::new(source)),
+                SyncSourcer::create(
+                    factory.merge_config.ctx.get_scan_progress(),
+                    output.clone(),
+                    source,
+                )?,
                 vec![],
                 vec![output],
             ));
@@ -754,10 +742,9 @@ impl ReclusterMergeFactory {
         let batch_rows = requested_rows;
         let output_batch_rows = requested_rows;
         // Without spill, all input streams must merge directly.
-        let fan_in = if ctx.get_enable_sort_spill() {
-            input_blocks.len().clamp(2, 64)
-        } else {
-            input_blocks.len().max(2)
+        let fan_in = match ctx.get_enable_sort_spill() {
+            true => input_blocks.len().clamp(2, 64),
+            false => input_blocks.len().max(2),
         };
         let force_initial = ctx.get_enable_sort_spill() && settings.get_force_sort_data_spill()?;
         let minimum_batch = false;
@@ -783,6 +770,7 @@ impl ReclusterMergeFactory {
         }
         let merge_config = ReclusterMergeConfig {
             ctx: ctx.clone(),
+            abort_checker: ctx.clone().get_abort_checker(),
             table,
             defaults,
             schema: schema.clone(),
@@ -857,33 +845,22 @@ impl ReclusterMergeFactory {
     }
 }
 
-impl Processor for HorizontalReclusterSource {
-    fn name(&self) -> String {
-        "HorizontalMultiwayReclusterSource".into()
-    }
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-    fn event(&mut self) -> Result<Event> {
-        if self.output.is_finished() {
-            return Ok(Event::Finished);
-        }
-        if !self.output.can_push() {
-            return Ok(Event::NeedConsume);
-        }
-        if let Some(block) = self.ready.take() {
-            self.output.push_data(Ok(block));
-            return Ok(Event::NeedConsume);
-        }
+impl SyncSource for HorizontalReclusterSource {
+    const NAME: &'static str = "HorizontalMultiwayReclusterSource";
+    // Input reads already account for scan progress; spill/replayed output must not count again.
+    const RECORD_SCAN_PROGRESS: bool = false;
+
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.merge_execution.finished() {
-            self.output.finish();
-            return Ok(Event::Finished);
+            return Ok(None);
         }
-        Ok(Event::Sync)
-    }
-    fn process(&mut self) -> Result<()> {
-        self.ready = self.merge_execution.step()?;
-        Ok(())
+        // A spill/recovery step can make progress without producing rows. Yield an empty block,
+        // which SyncSourcer skips, rather than interpreting that step as EOF or busy-looping here.
+        Ok(Some(
+            self.merge_execution
+                .step()?
+                .unwrap_or_else(DataBlock::empty),
+        ))
     }
 }
 
@@ -1007,6 +984,7 @@ mod tests {
         }
         let merge_config = ReclusterMergeConfig {
             ctx: ctx.clone(),
+            abort_checker: ctx.clone().get_abort_checker(),
             table,
             schema: schema.clone(),
             defaults: vec![Scalar::Number(0i32.into()); 2],
@@ -1145,12 +1123,10 @@ mod tests {
             for mut factory in group_factories {
                 let output = OutputPort::create();
                 let source = HorizontalReclusterSource {
-                    output: output.clone(),
                     merge_execution: factory.visit_type::<R>()?,
-                    ready: None,
                 };
                 items.push(PipeItem::create(
-                    ProcessorPtr::create(Box::new(source)),
+                    SyncSourcer::create(ctx.get_scan_progress(), output.clone(), source)?,
                     vec![],
                     vec![output],
                 ));
@@ -1303,7 +1279,6 @@ mod tests {
         ] {
             let ctx = fixture.new_query_ctx().await?;
             let settings = ctx.get_settings();
-            settings.set_setting("recluster_method".into(), "horizontal".into())?;
             settings.set_setting(
                 "enable_recluster_multiway_merge".into(),
                 u8::from(enabled).to_string(),
@@ -1342,7 +1317,6 @@ mod tests {
         ] {
             let ctx = fixture.new_query_ctx().await?;
             let settings = ctx.get_settings();
-            settings.set_setting("recluster_method".into(), "horizontal".into())?;
             settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
             settings.set_setting("max_block_size".into(), "1".into())?;
             execute_command(ctx, sql).await?;
@@ -1372,7 +1346,6 @@ mod tests {
         ] {
             let ctx = fixture.new_query_ctx().await?;
             let settings = ctx.get_settings();
-            settings.set_setting("recluster_method".into(), "horizontal".into())?;
             settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
             settings.set_setting("max_block_size".into(), "1".into())?;
             execute_command(ctx, sql).await?;
@@ -1439,7 +1412,6 @@ mod tests {
             .write(location, "corrupted recluster test input")
             .await?;
         let settings = ctx.get_settings();
-        settings.set_setting("recluster_method".into(), "horizontal".into())?;
         settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
         let result = execute_command(
             ctx.clone(),
@@ -1608,7 +1580,6 @@ mod tests {
         let expected = pretty_format_blocks(&before)?.to_string();
         let ctx = fixture.new_query_ctx().await?;
         let settings = ctx.get_settings();
-        settings.set_setting("recluster_method".into(), "horizontal".into())?;
         settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
         settings.set_setting("enable_recluster_inverted_index_merge".into(), "1".into())?;
         execute_command(ctx, "alter table default.index_merge recluster final").await?;
@@ -1650,7 +1621,6 @@ mod tests {
             .write(&location, "corrupt source inverted index")
             .await?;
         let settings = ctx.get_settings();
-        settings.set_setting("recluster_method".into(), "horizontal".into())?;
         settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
         settings.set_setting("enable_recluster_inverted_index_merge".into(), "1".into())?;
         let result =
@@ -1678,7 +1648,6 @@ mod tests {
         }
         let ctx = fixture.new_query_ctx().await?;
         let settings = ctx.get_settings();
-        settings.set_setting("recluster_method".into(), "horizontal".into())?;
         settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
         settings.set_setting("enable_recluster_inverted_index_merge".into(), "1".into())?;
         settings.set_setting("force_sort_data_spill".into(), "1".into())?;
@@ -1732,7 +1701,6 @@ mod tests {
         }
         let ctx = fixture.new_query_ctx().await?;
         let settings = ctx.get_settings();
-        settings.set_setting("recluster_method".into(), "horizontal".into())?;
         settings.set_setting("enable_recluster_multiway_merge".into(), "1".into())?;
         settings.set_setting("enable_recluster_inverted_index_merge".into(), "1".into())?;
         execute_command(ctx, "alter table default.index_partial recluster final").await?;
@@ -1791,7 +1759,6 @@ mod tests {
             }
             let ctx = fixture.new_query_ctx().await?;
             let settings = ctx.get_settings();
-            settings.set_setting("recluster_method".into(), "horizontal".into())?;
             settings.set_setting(
                 "enable_recluster_multiway_merge".into(),
                 u8::from(enabled).to_string(),

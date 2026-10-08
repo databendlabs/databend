@@ -541,15 +541,15 @@ impl Processor for TransformSerializeBlock {
                 block.check_valid()?;
 
                 let mut block_builder = self.block_builder.clone();
-                block_builder.block_index_specs.retain(|spec| {
-                    let Some(name) = spec.index_name() else {
-                        return true;
-                    };
-                    !self
-                        .recluster_merged_names
-                        .iter()
-                        .any(|merged| merged == name)
-                });
+                block_builder
+                    .block_index_specs
+                    .retain(|spec| match spec.index_name() {
+                        Some(name) => !self
+                            .recluster_merged_names
+                            .iter()
+                            .any(|merged| merged == name),
+                        None => true,
+                    });
                 if let Some(layout) = virtual_column_layout
                     && let Some(builder) = block_builder.virtual_column_builder.take()
                 {

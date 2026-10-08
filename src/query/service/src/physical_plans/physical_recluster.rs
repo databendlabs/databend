@@ -242,14 +242,15 @@ impl IPhysicalPlan for Recluster {
                     block_thresholds,
                     input_schema,
                 )?;
-                let index_merge = if multiway_merge
-                    && settings.get_enable_recluster_inverted_index_merge()?
-                    && !table.schema().fields().iter().any(|field| {
-                        matches!(field.data_type(), TableDataType::AggregateState { .. })
-                    }) {
-                    ReclusterIndexMergeInputs::try_create(table, task)?
-                } else {
-                    None
+                let index_merge = match multiway_merge {
+                    true if settings.get_enable_recluster_inverted_index_merge()?
+                        && !table.schema().fields().iter().any(|field| {
+                            matches!(field.data_type(), TableDataType::AggregateState { .. })
+                        }) =>
+                    {
+                        ReclusterIndexMergeInputs::try_create(table, task)?
+                    }
+                    _ => None,
                 };
                 if multiway_merge {
                     if !cluster_stats_gen.is_linear() {

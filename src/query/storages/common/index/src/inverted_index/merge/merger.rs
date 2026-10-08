@@ -434,16 +434,12 @@ impl InvertedIndexMerger {
     pub fn finish(mut self) -> tantivy::Result<Vec<BundleSizes>> {
         self.check_interrupt()?;
         self.write_fieldnorms()?;
-        self.check_interrupt()
-            .map_err(|err| io::Error::other(format!("fieldnorms: {err}")))?;
-        self.write_postings()
-            .map_err(|err| io::Error::other(format!("postings: {err}")))?;
         self.check_interrupt()?;
-        self.write_fast_fields()
-            .map_err(|err| io::Error::other(format!("fast fields: {err}")))?;
+        self.write_postings()?;
         self.check_interrupt()?;
-        self.write_stores()
-            .map_err(|err| io::Error::other(format!("stores: {err}")))?;
+        self.write_fast_fields()?;
+        self.check_interrupt()?;
+        self.write_stores()?;
         self.check_interrupt()?;
         self.write_metas()?;
 
@@ -525,8 +521,7 @@ impl InvertedIndexMerger {
             serializers.push(InvertedIndexSerializer::open(&mut output.segment)?);
         }
 
-        self.check_interrupt()
-            .map_err(|err| io::Error::other(format!("open postings serializers: {err}")))?;
+        self.check_interrupt()?;
         for (field, entry) in self.schema.fields() {
             if !entry.is_indexed() {
                 continue;
@@ -541,8 +536,7 @@ impl InvertedIndexMerger {
                     fieldnorm_reader,
                 )?);
             }
-            self.check_interrupt()
-                .map_err(|err| io::Error::other(format!("open field serializers: {err}")))?;
+            self.check_interrupt()?;
             self.merge_field(field, entry.field_type(), &mut field_serializers)?;
             for field_serializer in field_serializers {
                 field_serializer.close()?;
@@ -1481,14 +1475,20 @@ mod tests {
             &schema,
             Box::new(move || {
                 if flag.load(Ordering::Relaxed) && counter.fetch_add(1, Ordering::Relaxed) >= 20 {
-                    return Err(io::Error::other("cancelled during postings"));
+                    return Err(io::Error::new(
+                        io::ErrorKind::Interrupted,
+                        "cancelled during postings",
+                    ));
                 }
                 Ok(())
             }),
         )
         .unwrap();
         armed.store(true, Ordering::Relaxed);
-        assert!(merge.finish().is_err());
+        let Err(tantivy::TantivyError::IoError(error)) = merge.finish() else {
+            panic!("cancellation must preserve its IO error variant");
+        };
+        assert_eq!(error.kind(), io::ErrorKind::Interrupted);
         assert!(checks.load(Ordering::Relaxed) >= 20);
         let exists = GlobalIORuntime::instance()
             .block_on(async { Ok(operator.exists("o/cancel.index").await?) })
