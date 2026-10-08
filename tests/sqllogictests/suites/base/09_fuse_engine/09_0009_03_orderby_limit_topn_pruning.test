@@ -42,5 +42,51 @@ select * from t order by a desc limit 5;
 statement ok
 DROP TABLE t
 
+# https://github.com/databendlabs/databend/issues/20612
+# blocks [1, 4], [2], [3]: the range of the first block covers the later blocks
+statement ok
+create table t1(a Int64 not null)
+
+statement ok
+insert into t1 values (1), (4);
+
+statement ok
+insert into t1 values (2);
+
+statement ok
+insert into t1 values (3);
+
+query I
+select a from t1 order by a limit 3;
+----
+1
+2
+3
+
+statement ok
+create table t2(a Int64 not null)
+
+statement ok
+insert into t2 values (1), (4);
+
+statement ok
+insert into t2 values (3);
+
+statement ok
+insert into t2 values (2);
+
+query I
+select a from t2 order by a desc limit 3;
+----
+4
+3
+2
+
+statement ok
+DROP TABLE t1
+
+statement ok
+DROP TABLE t2
+
 statement ok
 DROP DATABASE db_09_0009_03

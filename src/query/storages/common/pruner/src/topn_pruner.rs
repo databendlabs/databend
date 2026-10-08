@@ -371,40 +371,57 @@ fn truncate_blocks_after_limit(
         return 0;
     }
 
-    let mut keep = stats.len();
+    // `bound` is the worst value (in output order) among the kept blocks that
+    // together cover the first `limit` rows. The top-N rows are therefore all
+    // ordered no later than `bound`, so a following block can only be skipped
+    // if its best value is ordered strictly after `bound`. Note that the bound
+    // must cover *all* kept blocks, not only the last one: blocks are sorted by
+    // their best value, so an earlier block may still have the widest range.
+    let mut bound: Option<&Scalar> = None;
     let mut accumulated_rows = 0usize;
 
     for (idx, (_, col_stat, meta)) in stats.iter().enumerate() {
-        accumulated_rows = accumulated_rows.saturating_add(meta.row_count as usize);
         if accumulated_rows >= limit {
-            keep = idx + 1;
-            if let Some((_, next_stat, _)) = stats.get(idx + 1) {
-                if ranges_do_not_overlap(col_stat, next_stat, asc, nulls_first) {
-                    return keep;
-                }
-            } else {
-                return keep;
+            let best = block_best_value(col_stat, asc, nulls_first);
+            if let Some(bound) = bound
+                && compare_scalar_for_sorting(best, bound, asc, nulls_first) == Ordering::Greater
+            {
+                // Blocks are sorted by their best value, so all remaining
+                // blocks can be skipped as well.
+                return idx;
             }
+            continue;
         }
+
+        let worst = block_worst_value(col_stat, asc, nulls_first);
+        bound = match bound {
+            Some(b)
+                if compare_scalar_for_sorting(worst, b, asc, nulls_first) != Ordering::Greater =>
+            {
+                Some(b)
+            }
+            _ => Some(worst),
+        };
+        accumulated_rows = accumulated_rows.saturating_add(meta.row_count as usize);
     }
 
-    keep
+    stats.len()
 }
 
-fn ranges_do_not_overlap(
-    current: &ColumnStatistics,
-    next: &ColumnStatistics,
-    asc: bool,
-    nulls_first: bool,
-) -> bool {
-    if asc {
-        compare_scalar_for_sorting(current.max(), next.min(), true, nulls_first) == Ordering::Less
-    } else {
-        // In short, the flip is what keeps NULL ordering semantics consistent when we reuse the same comparator for both ASC and DESC overlap checks.
-        let natural_nulls_first = !nulls_first;
-        compare_scalar_for_sorting(current.min(), next.max(), true, natural_nulls_first)
-            == Ordering::Greater
+/// The value of the block that comes first in the output order.
+fn block_best_value(stat: &ColumnStatistics, asc: bool, nulls_first: bool) -> &Scalar {
+    if nulls_first && stat.null_count > 0 {
+        return &Scalar::Null;
     }
+    if asc { stat.min() } else { stat.max() }
+}
+
+/// The value of the block that comes last in the output order.
+fn block_worst_value(stat: &ColumnStatistics, asc: bool, nulls_first: bool) -> &Scalar {
+    if !nulls_first && stat.null_count > 0 {
+        return &Scalar::Null;
+    }
+    if asc { stat.max() } else { stat.min() }
 }
 
 #[cfg(test)]
@@ -583,6 +600,74 @@ mod tests {
         let result = pruner.prune(metas).unwrap();
         let kept_blocks: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
         assert_eq!(kept_blocks, vec![0]);
+    }
+
+    // Regression test for https://github.com/databendlabs/databend/issues/20612
+    // Blocks [1, 4], [2, 2], [3, 3] with `ORDER BY c LIMIT 3`: the first block's
+    // range covers the later blocks, so none of them can be pruned.
+    #[test]
+    fn test_prune_topn_keeps_blocks_covered_by_earlier_range() {
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "c",
+            TableDataType::Number(NumberDataType::Int64),
+        )]));
+        let sort_expr = RemoteExpr::ColumnRef {
+            span: None,
+            id: "c".to_string(),
+            data_type: DataType::Number(NumberDataType::Int64),
+            display_name: "c".to_string(),
+        };
+        let column_id = schema.column_id_of("c").unwrap();
+
+        let asc_metas = vec![
+            build_block(column_id, 0, 1, 4, 2),
+            build_block(column_id, 1, 2, 2, 1),
+            build_block(column_id, 2, 3, 3, 1),
+        ];
+        let pruner = TopNPruner::create(
+            schema.clone(),
+            vec![(sort_expr.clone(), true, false)],
+            3,
+            false,
+        );
+        let result = pruner.prune(asc_metas).unwrap();
+        let mut kept_blocks: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
+        kept_blocks.sort_unstable();
+        assert_eq!(kept_blocks, vec![0, 1, 2]);
+
+        // Mirrored case for descending order.
+        let desc_metas = vec![
+            build_block(column_id, 0, 1, 4, 2),
+            build_block(column_id, 1, 3, 3, 1),
+            build_block(column_id, 2, 2, 2, 1),
+        ];
+        let pruner = TopNPruner::create(
+            schema.clone(),
+            vec![(sort_expr.clone(), false, false)],
+            3,
+            false,
+        );
+        let result = pruner.prune(desc_metas).unwrap();
+        let mut kept_blocks: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
+        kept_blocks.sort_unstable();
+        assert_eq!(kept_blocks, vec![0, 1, 2]);
+
+        // Blocks entirely after the bound of the kept blocks are still pruned.
+        let metas = vec![
+            build_block(column_id, 0, 1, 4, 2),
+            build_block(column_id, 1, 2, 2, 1),
+            build_block(column_id, 2, 5, 6, 1),
+        ];
+        let pruner = TopNPruner::create(
+            schema.clone(),
+            vec![(sort_expr.clone(), true, false)],
+            3,
+            false,
+        );
+        let result = pruner.prune(metas).unwrap();
+        let mut kept_blocks: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
+        kept_blocks.sort_unstable();
+        assert_eq!(kept_blocks, vec![0, 1]);
     }
 
     #[test]
