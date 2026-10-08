@@ -15,7 +15,6 @@
 //! Task-local external merge of independently ordered FUSE blocks. Temporary
 //! runs are sequences of bounded spill chunks, never whole in-memory runs.
 
-use std::any::Any;
 use std::cmp::Reverse;
 use std::collections::VecDeque;
 use std::mem;
@@ -26,6 +25,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextProgress;
 use databend_common_catalog::table_context::TableContextQueryState;
@@ -44,13 +44,12 @@ use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::UInt64Type;
-use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
-use databend_common_pipeline::core::Processor;
-use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::SyncSource;
+use databend_common_pipeline::sources::SyncSourcer;
 use databend_common_pipeline_transforms::Transform;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::sorts::core::LoserTreeMerger;
@@ -89,6 +88,7 @@ struct ReclusterMergeInputBlock {
 #[derive(Clone)]
 struct ReclusterMergeConfig {
     ctx: Arc<QueryContext>,
+    abort_checker: AbortChecker,
     table: FuseTable,
     schema: TableSchemaRef,
     defaults: Vec<Scalar>,
@@ -270,10 +270,7 @@ impl<R: Rows> SortedStream for ReclusterMergeStream<R>
 where R::Converter: Send
 {
     fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
-        self.merge_config
-            .ctx
-            .check_aborting()
-            .map_err(|err| err.with_context("horizontal recluster merge"))?;
+        self.merge_config.abort_checker.try_check_aborting()?;
         if let Some(head) = self.head.take() {
             return Ok((Some(head), false));
         }
@@ -315,10 +312,7 @@ where R::Converter: Send
                     // Skip the decoded prefix when reopening a recovered stream.
                     let mut skipped = 0;
                     while skipped < *position {
-                        self.merge_config
-                            .ctx
-                            .check_aborting()
-                            .map_err(|err| err.with_context("recluster input reopen"))?;
+                        self.merge_config.abort_checker.try_check_aborting()?;
                         let rows = (*position - skipped).min(self.merge_config.batch_rows);
                         reopened.read(rows, false)?.ok_or_else(|| {
                             ErrorCode::ParquetFileInvalid("premature EOF reopening recluster input")
@@ -451,10 +445,7 @@ where R::Converter: Send
     }
 
     fn step(&mut self) -> Result<Option<DataBlock>> {
-        self.merge_config
-            .ctx
-            .check_aborting()
-            .map_err(|err| err.with_context("horizontal recluster merge"))?;
+        self.merge_config.abort_checker.try_check_aborting()?;
         if let Some(mut merger) = self.final_merge.take() {
             let block = merger.next_block()?.map(DataBlock::maybe_gc);
             if let Some(ref block) = block {
@@ -632,9 +623,7 @@ impl RowsTypeVisitor for ReclusterMergeFactory {
 }
 
 pub struct HorizontalReclusterSource {
-    output: Arc<OutputPort>,
     merge_execution: Box<dyn ReclusterMergeExecution>,
-    ready: Option<DataBlock>,
 }
 
 impl HorizontalReclusterSource {
@@ -659,13 +648,13 @@ impl HorizontalReclusterSource {
         for mut factory in group_factories {
             let output = OutputPort::create();
             let merge_execution = select_row_type(&mut factory, fixed)?;
-            let source = Self {
-                output: output.clone(),
-                merge_execution,
-                ready: None,
-            };
+            let source = Self { merge_execution };
             pipe.push(PipeItem::create(
-                ProcessorPtr::create(Box::new(source)),
+                SyncSourcer::create(
+                    factory.merge_config.ctx.get_scan_progress(),
+                    output.clone(),
+                    source,
+                )?,
                 vec![],
                 vec![output],
             ));
@@ -781,6 +770,7 @@ impl ReclusterMergeFactory {
         }
         let merge_config = ReclusterMergeConfig {
             ctx: ctx.clone(),
+            abort_checker: ctx.clone().get_abort_checker(),
             table,
             defaults,
             schema: schema.clone(),
@@ -855,33 +845,22 @@ impl ReclusterMergeFactory {
     }
 }
 
-impl Processor for HorizontalReclusterSource {
-    fn name(&self) -> String {
-        "HorizontalMultiwayReclusterSource".into()
-    }
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-    fn event(&mut self) -> Result<Event> {
-        if self.output.is_finished() {
-            return Ok(Event::Finished);
-        }
-        if !self.output.can_push() {
-            return Ok(Event::NeedConsume);
-        }
-        if let Some(block) = self.ready.take() {
-            self.output.push_data(Ok(block));
-            return Ok(Event::NeedConsume);
-        }
+impl SyncSource for HorizontalReclusterSource {
+    const NAME: &'static str = "HorizontalMultiwayReclusterSource";
+    // Input reads already account for scan progress; spill/replayed output must not count again.
+    const RECORD_SCAN_PROGRESS: bool = false;
+
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.merge_execution.finished() {
-            self.output.finish();
-            return Ok(Event::Finished);
+            return Ok(None);
         }
-        Ok(Event::Sync)
-    }
-    fn process(&mut self) -> Result<()> {
-        self.ready = self.merge_execution.step()?;
-        Ok(())
+        // A spill/recovery step can make progress without producing rows. Yield an empty block,
+        // which SyncSourcer skips, rather than interpreting that step as EOF or busy-looping here.
+        Ok(Some(
+            self.merge_execution
+                .step()?
+                .unwrap_or_else(DataBlock::empty),
+        ))
     }
 }
 
@@ -1005,6 +984,7 @@ mod tests {
         }
         let merge_config = ReclusterMergeConfig {
             ctx: ctx.clone(),
+            abort_checker: ctx.clone().get_abort_checker(),
             table,
             schema: schema.clone(),
             defaults: vec![Scalar::Number(0i32.into()); 2],
@@ -1143,12 +1123,10 @@ mod tests {
             for mut factory in group_factories {
                 let output = OutputPort::create();
                 let source = HorizontalReclusterSource {
-                    output: output.clone(),
                     merge_execution: factory.visit_type::<R>()?,
-                    ready: None,
                 };
                 items.push(PipeItem::create(
-                    ProcessorPtr::create(Box::new(source)),
+                    SyncSourcer::create(ctx.get_scan_progress(), output.clone(), source)?,
                     vec![],
                     vec![output],
                 ));
