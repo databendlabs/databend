@@ -1,0 +1,131 @@
+# Task-level inverted index reuse after horizontal two-level row merge.
+statement ok
+create or replace database db_recluster_inverted_merge
+
+statement ok
+use db_recluster_inverted_merge
+
+statement ok
+set enable_recluster_multiway_merge = 1
+
+statement ok
+set enable_recluster_inverted_index_merge = 1
+
+statement ok
+create table t(k int, content string, inverted index text_idx(content)) cluster by(-k) row_per_block=100 block_per_segment=2
+
+statement ok
+insert into t select number, concat('word',to_string(number),' alpha') from numbers(200)
+
+statement ok
+insert into t select number, concat('word',to_string(number),' beta') from numbers(200)
+
+statement ok
+set force_sort_data_spill = 1
+
+statement ok
+alter table t recluster final
+
+query I
+select count() from t where match(content,'word123') and k=123
+----
+2
+
+query I
+select count() from t where match(content,'alpha')
+----
+200
+
+query I
+select count() from t where match(content,'beta')
+----
+200
+
+query I
+select count() from t where match(content,'missingword')
+----
+0
+
+query I
+select count() from t where match(content,'"word123 alpha"')
+----
+1
+
+statement ok
+unset force_sort_data_spill
+
+# Sources missing a newly added index still rebuild that definition.
+statement ok
+create table partial(k int, content string, other string, inverted index existing_idx(content)) cluster by(k) row_per_block=100 block_per_segment=2
+
+statement ok
+insert into partial values (3,'alpha','delta'),(1,'alpha','gamma')
+
+statement ok
+insert into partial values (4,'beta','delta'),(2,'beta','gamma')
+
+statement ok
+create inverted index late_idx on partial(other)
+
+statement ok
+alter table partial recluster final
+
+query I
+select count() from partial where match(content,'alpha')
+----
+2
+
+query I
+select count() from partial where match(other,'gamma')
+----
+2
+
+# Many small source components must not retain fs backend's 2 MiB buffers;
+# parallel serialization may complete out of order and outputs span batches.
+statement ok
+create table fan_in(k int, content string, inverted index text_idx(content)) cluster by(k) row_per_block=100 block_per_segment=2
+
+statement ok
+insert into fan_in select number*4, concat('word',to_string(number*4),' common phrase') from numbers(6000)
+
+statement ok
+insert into fan_in select number*4+1, concat('word',to_string(number*4+1),' common phrase') from numbers(6000)
+
+statement ok
+insert into fan_in select number*4+2, concat('word',to_string(number*4+2),' common phrase') from numbers(6000)
+
+statement ok
+insert into fan_in select number*4+3, concat('word',to_string(number*4+3),' common phrase') from numbers(6000)
+
+statement ok
+set force_sort_data_spill=1
+
+statement ok
+alter table fan_in recluster final
+
+query III
+select count(),count(distinct k),sum(k) from fan_in where match(content,'common')
+----
+24000 24000 287988000
+
+query I
+select k from fan_in where match(content,'word12345')
+----
+12345
+
+query I
+select count() from fan_in where match(content,'"common phrase"')
+----
+24000
+
+statement ok
+unset force_sort_data_spill
+
+statement ok
+unset enable_recluster_inverted_index_merge
+
+statement ok
+unset enable_recluster_multiway_merge
+
+statement ok
+drop database db_recluster_inverted_merge
