@@ -26,7 +26,6 @@ use arrow_schema::Field;
 use arrow_schema::Fields;
 use arrow_udf_runtime::javascript::FunctionOptions;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_cache::Cache;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -782,7 +781,9 @@ impl TransformUdfScript {
                         imports_stage_info,
                         ..
                     }),
-                ) => {
+                ) => tokio::task::block_in_place(|| -> Result<Option<TempDir>> {
+                    // Pipeline construction is synchronous, but runs on query workers.
+                    // Tell Tokio before waiting on an environment or doing pip/zip I/O.
                     let code_str = String::from_utf8(code.code.to_vec())?;
                     let mut dependencies = Self::extract_deps(&code_str)?;
                     dependencies.extend_from_slice(packages.as_slice());
@@ -790,12 +791,11 @@ impl TransformUdfScript {
                     let stage_fingerprints = Self::collect_stage_fingerprints(imports_stage_info)?;
 
                     if !dependencies.is_empty() || !stage_fingerprints.is_empty() {
-                        let key =
-                            venv::PyVenvKeyEntry::new(&dependencies, stage_fingerprints.clone());
-                        let mut w = venv::PY_VENV_CACHE.write();
-                        if let Some(entry) = w.get(&key) {
-                            Some(entry.materialize().map_err(ErrorCode::from_string)?)
-                        } else {
+                        let key = venv::PyVenvKeyEntry::new(&dependencies, stage_fingerprints);
+                        let entry = venv::cache_entry(key);
+                        // Only this environment is serialized. Never hold the global
+                        // cache lock across install, stage reads, or archive restoration.
+                        Ok(Some(entry.get_or_init(|| {
                             let temp_dir = venv::create_venv(PY_VERSION.as_str())?;
                             venv::install_deps(temp_dir.path(), &dependencies)?;
 
@@ -818,23 +818,19 @@ impl TransformUdfScript {
                                                 .await
                                         });
                                     }
-                                    let _ = futures::future::join_all(fts).await;
+                                    futures::future::try_join_all(fts).await?;
                                     Ok::<(), ErrorCode>(())
                                 })?;
                             }
 
                             let archive_path = venv::archive_env(temp_dir.path())
                                 .map_err(ErrorCode::from_string)?;
-                            let cache_entry =
-                                venv::PyVenvCacheEntry::new(temp_dir.clone(), archive_path);
-                            w.insert(key, cache_entry);
-
-                            Some(temp_dir)
-                        }
+                            Ok((temp_dir, archive_path))
+                        })?))
                     } else {
-                        None
+                        Ok(None)
                     }
-                }
+                })?,
                 _ => None,
             };
 
@@ -1049,6 +1045,7 @@ mod venv {
     use std::sync::LazyLock;
     use std::sync::Weak;
 
+    use databend_common_cache::Cache;
     use databend_common_cache::LruCache;
     use databend_common_cache::MemSized;
     use parking_lot::Mutex;
@@ -1111,10 +1108,6 @@ mod venv {
 
         pub fn new() -> Result<Self, String> {
             let path = PY_VENV_WORK_DIR.join(Uuid::now_v7().to_string());
-            Self::new_impl(path)
-        }
-
-        pub fn new_with_path(path: PathBuf) -> Result<Self, String> {
             Self::new_impl(path)
         }
 
@@ -1254,12 +1247,15 @@ mod venv {
         }
     }
 
-    // cached temp dir for python udf
-    // Add this after the PY_VERSION LazyLock declaration
-    // A simple LRU cache for Python virtual environments
+    // Cache handles remain alive during initialization/materialization even if
+    // evicted from the LRU. Each environment has its own initialization lock.
+    #[derive(Clone, Default)]
     pub(crate) struct PyVenvCacheEntry {
-        temp_dir: Mutex<WeakTempDir>,
-        temp_dir_path: PathBuf,
+        env: Arc<Mutex<Option<PyVenvEnv>>>,
+    }
+
+    struct PyVenvEnv {
+        temp_dir: WeakTempDir,
         archive_path: PathBuf,
     }
 
@@ -1316,32 +1312,50 @@ mod venv {
 
     impl MemSized for PyVenvCacheEntry {
         fn mem_bytes(&self) -> usize {
-            std::mem::size_of::<Mutex<WeakTempDir>>() + 2 * std::mem::size_of::<PathBuf>()
+            std::mem::size_of::<Mutex<Option<PyVenvEnv>>>()
         }
     }
 
     impl PyVenvCacheEntry {
+        #[cfg(test)]
         pub fn new(temp_dir: TempDir, archive_path: PathBuf) -> Self {
             Self {
-                temp_dir: Mutex::new(temp_dir.downgrade()),
-                temp_dir_path: temp_dir.path().to_path_buf(),
-                archive_path,
+                env: Arc::new(Mutex::new(Some(PyVenvEnv {
+                    temp_dir: temp_dir.downgrade(),
+                    archive_path,
+                }))),
             }
         }
 
-        pub fn materialize(&self) -> Result<TempDir, String> {
-            if let Some(existing) = self.temp_dir.lock().upgrade() {
-                return Ok(existing);
+        pub fn get_or_init(
+            &self,
+            init: impl FnOnce() -> databend_common_exception::Result<(TempDir, PathBuf)>,
+        ) -> databend_common_exception::Result<TempDir> {
+            let mut env = self.env.lock();
+            if let Some(env) = env.as_mut() {
+                if let Some(existing) = env.temp_dir.upgrade() {
+                    return Ok(existing);
+                }
+
+                // Hold the per-entry lock throughout restoration. Use a fresh path
+                // so a concurrent final drop of the old TempDir cannot remove it.
+                let temp_dir = TempDir::new()?;
+                restore_env_into(&env.archive_path, temp_dir.path())?;
+                env.temp_dir.replace(&temp_dir);
+                return Ok(temp_dir);
             }
 
-            let temp_dir = TempDir::new_with_path(self.temp_dir_path.clone())?;
-            restore_env_into(&self.archive_path, temp_dir.path())?;
-            self.temp_dir.lock().replace(&temp_dir);
+            // Leave a failed entry uninitialized so a later query can retry.
+            let (temp_dir, archive_path) = init()?;
+            *env = Some(PyVenvEnv {
+                temp_dir: temp_dir.downgrade(),
+                archive_path,
+            });
             Ok(temp_dir)
         }
     }
 
-    impl Drop for PyVenvCacheEntry {
+    impl Drop for PyVenvEnv {
         fn drop(&mut self) {
             if let Err(e) = fs::remove_file(&self.archive_path)
                 && !matches!(e.kind(), io::ErrorKind::NotFound)
@@ -1353,6 +1367,16 @@ mod venv {
                 );
             }
         }
+    }
+
+    pub fn cache_entry(key: PyVenvKeyEntry) -> PyVenvCacheEntry {
+        let mut cache = PY_VENV_CACHE.write();
+        if let Some(entry) = cache.get(&key) {
+            return entry.clone();
+        }
+        let entry = PyVenvCacheEntry::default();
+        cache.insert(key, entry.clone());
+        entry
     }
 
     pub static PY_VENV_CACHE: LazyLock<RwLock<LruCache<PyVenvKeyEntry, PyVenvCacheEntry>>> =
@@ -1376,6 +1400,10 @@ mod tests {
     use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_GEOMETRY;
 
     use super::*;
+
+    mod python_venv {
+        include!("tests/python_venv.rs");
+    }
 
     #[test]
     fn test_extract_deps_returns_error_for_malformed_toml() {
