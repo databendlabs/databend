@@ -344,6 +344,21 @@ mod tests {
     use crate::Settings;
 
     #[test]
+    fn test_recluster_inverted_index_merge_setting() -> Result<()> {
+        let settings = Settings::create(Tenant::new_literal("test"));
+        assert!(!settings.get_enable_recluster_inverted_index_merge()?);
+        settings.set_setting("enable_recluster_inverted_index_merge".into(), "1".into())?;
+        let remote: Settings = serde_json::from_str(&serde_json::to_string(&settings)?)?;
+        assert!(remote.get_enable_recluster_inverted_index_merge()?);
+        assert!(
+            settings
+                .set_setting("enable_recluster_inverted_index_merge".into(), "2".into())
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_recluster_multiway_merge_setting() -> Result<()> {
         let settings = Settings::create(Tenant::new_literal("test_tenant"));
         assert!(!settings.get_enable_recluster_multiway_merge()?);

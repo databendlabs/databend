@@ -169,6 +169,7 @@ pub struct InvertedIndexMerger {
     sources: Vec<Source>,
     outputs: Vec<Output>,
     schema: Schema,
+    check_interrupt: Option<Box<dyn Fn() -> io::Result<()> + Send + Sync>>,
     #[cfg(test)]
     force_sorted_path: bool,
 }
@@ -194,6 +195,90 @@ impl InvertedIndexMerger {
         outputs: Vec<MergeOutput>,
         stream_threshold: usize,
     ) -> tantivy::Result<Self> {
+        Self::create_checked(
+            operator,
+            sources,
+            outputs,
+            stream_threshold,
+            None,
+            None,
+            false,
+        )
+    }
+
+    /// Validate the current table definition before creating any output index.
+    pub fn try_create_with_schema(
+        operator: Operator,
+        sources: Vec<MergeSource>,
+        outputs: Vec<MergeOutput>,
+        schema: &Schema,
+    ) -> tantivy::Result<Self> {
+        Self::create_checked(
+            operator,
+            sources,
+            outputs,
+            INVERTED_INDEX_STREAM_THRESHOLD,
+            Some(schema),
+            None,
+            false,
+        )
+    }
+
+    /// Reclustering preserves every original document in source order. Reject
+    /// invalid lineage instead of falling back to the unbounded per-term sort.
+    pub fn try_create_for_recluster(
+        operator: Operator,
+        sources: Vec<MergeSource>,
+        outputs: Vec<MergeOutput>,
+        schema: &Schema,
+        check_interrupt: Box<dyn Fn() -> io::Result<()> + Send + Sync>,
+    ) -> tantivy::Result<Self> {
+        Self::create_checked(
+            operator,
+            sources,
+            outputs,
+            INVERTED_INDEX_STREAM_THRESHOLD,
+            Some(schema),
+            Some(check_interrupt),
+            true,
+        )
+    }
+
+    /// Bounded output batches may select only a subset of source documents,
+    /// but retain their relative order. The caller validates complete task coverage.
+    pub fn try_create_for_recluster_batch(
+        operator: Operator,
+        sources: Vec<MergeSource>,
+        outputs: Vec<MergeOutput>,
+        schema: &Schema,
+        check_interrupt: Box<dyn Fn() -> io::Result<()> + Send + Sync>,
+    ) -> tantivy::Result<Self> {
+        Self::create_checked(
+            operator,
+            sources,
+            outputs,
+            INVERTED_INDEX_STREAM_THRESHOLD,
+            Some(schema),
+            Some(check_interrupt),
+            false,
+        )
+    }
+
+    fn create_checked(
+        operator: Operator,
+        sources: Vec<MergeSource>,
+        outputs: Vec<MergeOutput>,
+        stream_threshold: usize,
+        expected_schema: Option<&Schema>,
+        check_interrupt: Option<Box<dyn Fn() -> io::Result<()> + Send + Sync>>,
+        complete_monotonic: bool,
+    ) -> tantivy::Result<Self> {
+        if let Some(check) = &check_interrupt {
+            check()?;
+        }
+        if sources.is_empty() || outputs.is_empty() {
+            return Err(invalid("index merge requires nonempty sources and outputs").into());
+        }
         if outputs.len() > u16::MAX as usize {
             return Err(invalid(format!("{} outputs, at most {}", outputs.len(), u16::MAX)).into());
         }
@@ -205,6 +290,9 @@ impl InvertedIndexMerger {
         for (dest_ord, output) in outputs.iter().enumerate() {
             let mut origins = Vec::new();
             for source_rows in &output.rows {
+                if source_rows.rows.start >= source_rows.rows.end {
+                    return Err(invalid("index merge source range is empty or inverted").into());
+                }
                 let mapping = mappings
                     .get_mut(source_rows.source as usize)
                     .ok_or_else(|| invalid(format!("unknown source {}", source_rows.source)))?;
@@ -218,6 +306,14 @@ impl InvertedIndexMerger {
                     .into());
                 }
                 for row in source_rows.rows.clone() {
+                    if row % 4096 == 0
+                        && let Some(check) = &check_interrupt
+                    {
+                        check()?;
+                    }
+                    if origins.len() >= u32::MAX as usize {
+                        return Err(invalid("output doc count exceeds UInt32").into());
+                    }
                     mapping.assign(row, dest_ord as u16, origins.len() as u32)?;
                     origins.push(RowAddr {
                         segment_ord: source_rows.source,
@@ -229,11 +325,22 @@ impl InvertedIndexMerger {
         }
         for mapping in &mut mappings {
             mapping.finish();
+            if (check_interrupt.is_some() && !mapping.monotonic)
+                || (complete_monotonic && mapping.dest_row.contains(&UNASSIGNED))
+            {
+                return Err(invalid(
+                    "recluster index lineage must preserve every source row in order",
+                )
+                .into());
+            }
         }
 
         let mut opened = Vec::with_capacity(sources.len());
         let mut schema = None;
         for (source, mapping) in sources.into_iter().zip(mappings) {
+            if let Some(check) = &check_interrupt {
+                check()?;
+            }
             let directory = MergeSourceDirectory::open(
                 operator.clone(),
                 source.location.clone(),
@@ -250,6 +357,9 @@ impl InvertedIndexMerger {
                 .into());
             }
             let reader = searcher.segment_reader(0).clone();
+            if reader.has_deletes() {
+                return Err(invalid("source index has deleted docs").into());
+            }
             if reader.max_doc() != source.num_rows {
                 return Err(invalid(format!(
                     "{} has {} rows, expected {}",
@@ -276,10 +386,16 @@ impl InvertedIndexMerger {
         }
         let schema = schema.ok_or_else(|| invalid("a merge needs at least one source"))?;
         check_schema(&schema)?;
+        if expected_schema.is_some_and(|expected| *expected != schema) {
+            return Err(invalid("source index schema differs from the current definition").into());
+        }
 
         let settings = opened[0].index.settings().clone();
         let mut created = Vec::with_capacity(outputs.len());
         for (output, origins) in outputs.into_iter().zip(origins_per_output) {
+            if let Some(check) = &check_interrupt {
+                check()?;
+            }
             let directory = InvertedIndexOutputDirectory::with_stream_threshold(
                 operator.clone(),
                 output.location.clone(),
@@ -302,20 +418,40 @@ impl InvertedIndexMerger {
             sources: opened,
             outputs: created,
             schema,
+            check_interrupt,
             #[cfg(test)]
             force_sorted_path: false,
         })
     }
 
+    fn check_interrupt(&self) -> io::Result<()> {
+        if let Some(check) = &self.check_interrupt {
+            check()?;
+        }
+        Ok(())
+    }
+
     pub fn finish(mut self) -> tantivy::Result<Vec<BundleSizes>> {
+        self.check_interrupt()?;
         self.write_fieldnorms()?;
-        self.write_postings()?;
-        self.write_fast_fields()?;
-        self.write_stores()?;
+        self.check_interrupt()
+            .map_err(|err| io::Error::other(format!("fieldnorms: {err}")))?;
+        self.write_postings()
+            .map_err(|err| io::Error::other(format!("postings: {err}")))?;
+        self.check_interrupt()?;
+        self.write_fast_fields()
+            .map_err(|err| io::Error::other(format!("fast fields: {err}")))?;
+        self.check_interrupt()?;
+        self.write_stores()
+            .map_err(|err| io::Error::other(format!("stores: {err}")))?;
+        self.check_interrupt()?;
         self.write_metas()?;
 
         let mut sizes = Vec::with_capacity(self.outputs.len());
         for output in self.outputs {
+            if let Some(check) = &self.check_interrupt {
+                check()?;
+            }
             let external_files = output.directory.external_files();
             let builder = InvertedIndexBundleBuilder::try_create(
                 output.directory,
@@ -352,6 +488,11 @@ impl InvertedIndexMerger {
             let mut data = vec![0u8; output.num_rows as usize];
             for (field, readers) in fields.iter().zip(&readers) {
                 for (dest_row, origin) in output.origins.iter().enumerate() {
+                    if dest_row % 4096 == 0
+                        && let Some(check) = &self.check_interrupt
+                    {
+                        check()?;
+                    }
                     data[dest_row] =
                         readers[origin.segment_ord as usize].fieldnorm_id(origin.row_id);
                 }
@@ -384,6 +525,8 @@ impl InvertedIndexMerger {
             serializers.push(InvertedIndexSerializer::open(&mut output.segment)?);
         }
 
+        self.check_interrupt()
+            .map_err(|err| io::Error::other(format!("open postings serializers: {err}")))?;
         for (field, entry) in self.schema.fields() {
             if !entry.is_indexed() {
                 continue;
@@ -398,6 +541,8 @@ impl InvertedIndexMerger {
                     fieldnorm_reader,
                 )?);
             }
+            self.check_interrupt()
+                .map_err(|err| io::Error::other(format!("open field serializers: {err}")))?;
             self.merge_field(field, entry.field_type(), &mut field_serializers)?;
             for field_serializer in field_serializers {
                 field_serializer.close()?;
@@ -478,6 +623,7 @@ impl InvertedIndexMerger {
         let mut positions = Vec::new();
         let mut deltas = Vec::new();
         while merger.advance() {
+            self.check_interrupt()?;
             let key = merger.key();
             let option = match json {
                 true => json_term_record_option(field_option, key),
@@ -493,6 +639,9 @@ impl InvertedIndexMerger {
                 let mapping = &self.sources[source_ord].mapping;
                 let mut doc = cursor.doc();
                 while doc != TERMINATED {
+                    if doc % 4096 == 0 {
+                        self.check_interrupt()?;
+                    }
                     if let Some((dest_ord, _)) = mapping.destination(doc) {
                         doc_freqs[dest_ord as usize] += 1;
                     }
@@ -539,7 +688,12 @@ impl InvertedIndexMerger {
                 heap.push(Reverse((key, index)));
             }
         }
+        let mut written = 0usize;
         while let Some(Reverse(((dest_ord, dest_row), index))) = heap.pop() {
+            if written % 4096 == 0 {
+                self.check_interrupt()?;
+            }
+            written += 1;
             let (_, cursor) = &mut cursors[index];
             docs.write(dest_ord, dest_row, cursor)?;
             cursor.advance();
@@ -608,6 +762,9 @@ impl InvertedIndexMerger {
             readers.push(columnar);
         }
         for output in &mut self.outputs {
+            if let Some(check) = &self.check_interrupt {
+                check()?;
+            }
             let mut write = output.segment.open_write(SegmentComponent::FastFields)?;
             let order = MergeRowOrder::Shuffled(ShuffleMergeOrder {
                 new_row_id_to_old_row_id: output.origins.clone(),
@@ -631,7 +788,12 @@ impl InvertedIndexMerger {
                 settings.docstore_blocksize,
                 false,
             )?;
-            for _ in 0..output.num_rows {
+            for row in 0..output.num_rows {
+                if row % 4096 == 0
+                    && let Some(check) = &self.check_interrupt
+                {
+                    check()?;
+                }
                 store.store(&empty, &self.schema)?;
             }
             store.close()?;
@@ -763,6 +925,19 @@ fn invalid(message: impl Into<String>) -> io::Error {
 mod tests {
 
     use databend_common_base::runtime::GlobalIORuntime;
+    use opendal::Error as StorageError;
+    use opendal::ErrorKind;
+    use opendal::Result as StorageResult;
+    use opendal::raw::Access;
+    use opendal::raw::Layer;
+    use opendal::raw::LayeredAccess;
+    use opendal::raw::OpList;
+    use opendal::raw::OpRead;
+    use opendal::raw::OpWrite;
+    use opendal::raw::RpDelete;
+    use opendal::raw::RpList;
+    use opendal::raw::RpRead;
+    use opendal::raw::RpWrite;
     use opendal::services::Memory;
     use tantivy::IndexSettings;
     use tantivy::SingleSegmentIndexWriter;
@@ -1181,6 +1356,215 @@ mod tests {
         let (directory, _) = merged.open(0);
         assert_eq!(directory.footer().external_files.files.len(), 2);
         merged.assert_matches(0, &schema, &ids(0..2000), true);
+    }
+
+    #[derive(Clone, Debug)]
+    struct IndexWriteFailureLayer;
+
+    impl<A: Access> Layer<A> for IndexWriteFailureLayer {
+        type LayeredAccess = IndexWriteFailureAccessor<A>;
+        fn layer(&self, inner: A) -> Self::LayeredAccess {
+            IndexWriteFailureAccessor { inner }
+        }
+    }
+
+    #[derive(Debug)]
+    struct IndexWriteFailureAccessor<A> {
+        inner: A,
+    }
+
+    impl<A: Access> LayeredAccess for IndexWriteFailureAccessor<A> {
+        type Inner = A;
+        type Reader = A::Reader;
+        type Writer = A::Writer;
+        type Lister = A::Lister;
+        type Deleter = A::Deleter;
+        fn inner(&self) -> &A {
+            &self.inner
+        }
+        async fn read(&self, path: &str, args: OpRead) -> StorageResult<(RpRead, Self::Reader)> {
+            self.inner.read(path, args).await
+        }
+        async fn delete(&self) -> StorageResult<(RpDelete, Self::Deleter)> {
+            self.inner.delete().await
+        }
+        async fn list(&self, path: &str, args: OpList) -> StorageResult<(RpList, Self::Lister)> {
+            self.inner.list(path, args).await
+        }
+        async fn write(&self, path: &str, args: OpWrite) -> StorageResult<(RpWrite, Self::Writer)> {
+            if path.starts_with("o/") {
+                return Err(StorageError::new(
+                    ErrorKind::PermissionDenied,
+                    "injected index write failure",
+                ));
+            }
+            self.inner.write(path, args).await
+        }
+    }
+
+    #[test]
+    fn test_recluster_write_failure_never_returns_completed_sizes() {
+        let operator = setup();
+        let schema = schema(IndexRecordOption::WithFreqsAndPositions, false);
+        let source = write_source(
+            &operator,
+            &schema,
+            "s/write.index",
+            &ids(0..100),
+            usize::MAX,
+        );
+        let failed = operator.clone().layer(IndexWriteFailureLayer);
+        let merge = InvertedIndexMerger::try_create_for_recluster(
+            failed,
+            vec![source],
+            vec![output("o/write.index", vec![(0, 0..100)])],
+            &schema,
+            Box::new(|| Ok(())),
+        )
+        .unwrap();
+        assert!(merge.finish().is_err());
+        let exists = GlobalIORuntime::instance()
+            .block_on(async { Ok(operator.exists("o/write.index").await?) })
+            .unwrap();
+        assert!(!exists);
+    }
+
+    #[test]
+    fn test_recluster_requires_complete_monotonic_lineage() {
+        let operator = setup();
+        let schema = schema(IndexRecordOption::WithFreqsAndPositions, false);
+        for rows in [vec![(0, 0..5)], vec![(0, 5..10), (0, 0..5)], vec![
+            (0, 0..6),
+            (0, 5..10),
+        ]] {
+            let source = write_source(
+                &operator,
+                &schema,
+                "s/lineage.index",
+                &ids(0..10),
+                usize::MAX,
+            );
+            let result = InvertedIndexMerger::try_create_for_recluster(
+                operator.clone(),
+                vec![source],
+                vec![output("o/lineage.index", rows)],
+                &schema,
+                Box::new(|| Ok(())),
+            );
+            assert!(result.is_err());
+        }
+    }
+
+    #[test]
+    fn test_recluster_cancel_during_postings_does_not_publish_bundle() {
+        use std::sync::Arc;
+        use std::sync::atomic::AtomicBool;
+        use std::sync::atomic::AtomicUsize;
+        use std::sync::atomic::Ordering;
+        let operator = setup();
+        let schema = schema(IndexRecordOption::WithFreqsAndPositions, false);
+        let source = write_source(
+            &operator,
+            &schema,
+            "s/cancel.index",
+            &ids(0..10000),
+            usize::MAX,
+        );
+        let armed = Arc::new(AtomicBool::new(false));
+        let checks = Arc::new(AtomicUsize::new(0));
+        let flag = armed.clone();
+        let counter = checks.clone();
+        let merge = InvertedIndexMerger::try_create_for_recluster(
+            operator.clone(),
+            vec![source],
+            vec![output("o/cancel.index", vec![(0, 0..10000)])],
+            &schema,
+            Box::new(move || {
+                if flag.load(Ordering::Relaxed) && counter.fetch_add(1, Ordering::Relaxed) >= 20 {
+                    return Err(io::Error::other("cancelled during postings"));
+                }
+                Ok(())
+            }),
+        )
+        .unwrap();
+        armed.store(true, Ordering::Relaxed);
+        assert!(merge.finish().is_err());
+        assert!(checks.load(Ordering::Relaxed) >= 20);
+        let exists = GlobalIORuntime::instance()
+            .block_on(async { Ok(operator.exists("o/cancel.index").await?) })
+            .unwrap();
+        assert!(!exists);
+    }
+
+    #[test]
+    fn test_recluster_output_batches_preserve_selected_document_order() {
+        let operator = setup();
+        let schema = schema(IndexRecordOption::WithFreqsAndPositions, false);
+        let source = write_source(
+            &operator,
+            &schema,
+            "s/batch.index",
+            &ids(0..100),
+            usize::MAX,
+        );
+        let sizes = InvertedIndexMerger::try_create_for_recluster_batch(
+            operator.clone(),
+            vec![source],
+            vec![output("o/batch.index", vec![(0, 20..60)])],
+            &schema,
+            Box::new(|| Ok(())),
+        )
+        .unwrap()
+        .finish()
+        .unwrap();
+        let merged = Merged {
+            operator: operator.clone(),
+            sizes,
+            locations: vec!["o/batch.index".into()],
+        };
+        merged.assert_matches(0, &schema, &ids(20..60), false);
+        let source = write_source(
+            &operator,
+            &schema,
+            "s/bad-batch.index",
+            &ids(0..100),
+            usize::MAX,
+        );
+        assert!(
+            InvertedIndexMerger::try_create_for_recluster_batch(
+                operator,
+                vec![source],
+                vec![output("o/bad-batch.index", vec![(0, 40..60), (0, 20..40)])],
+                &schema,
+                Box::new(|| Ok(())),
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn test_expected_schema_checked_before_output_creation() {
+        let operator = setup();
+        let schema = schema(IndexRecordOption::WithFreqsAndPositions, false);
+        let source = write_source(
+            &operator,
+            &schema,
+            "s/schema.index",
+            &ids(0..10),
+            usize::MAX,
+        );
+        let wrong = Schema::builder().build();
+        let result = InvertedIndexMerger::try_create_with_schema(
+            operator.clone(),
+            vec![source],
+            vec![output("o/schema.index", vec![(0, 0..10)])],
+            &wrong,
+        );
+        assert!(result.is_err());
+        let exists = GlobalIORuntime::instance()
+            .block_on(async { Ok(operator.exists("o/schema.index").await?) })
+            .unwrap();
+        assert!(!exists);
     }
 
     #[test]

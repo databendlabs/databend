@@ -34,6 +34,7 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
+use databend_common_expression::TableDataType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::TableInfo;
@@ -53,7 +54,9 @@ use databend_common_sql::StreamContext;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::HilbertRangeExchange;
+use databend_common_storages_fuse::operations::ReclusterIndexMergeInputs;
 use databend_common_storages_fuse::operations::TransformHilbertCluster;
+use databend_common_storages_fuse::operations::TransformReclusterIndexMerge;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformVectorCluster;
 use databend_common_storages_fuse::operations::add_aggregate_state_reaggregate_transform;
@@ -66,6 +69,8 @@ use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::builders::SortPipelineBuilder;
 use crate::pipelines::processors::horizontal_recluster::HorizontalReclusterSource;
+use crate::pipelines::processors::horizontal_recluster::TransformPrepareReclusterIndex;
+use crate::pipelines::processors::horizontal_recluster::TransformReclusterOutputOrder;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextSettings;
 use crate::spillers::ReclusterSpiller;
@@ -212,6 +217,16 @@ impl IPhysicalPlan for Recluster {
                     block_thresholds,
                     input_schema,
                 )?;
+                let index_merge = match multiway_merge {
+                    true if settings.get_enable_recluster_inverted_index_merge()?
+                        && !table.schema().fields().iter().any(|field| {
+                            matches!(field.data_type(), TableDataType::AggregateState { .. })
+                        }) =>
+                    {
+                        ReclusterIndexMergeInputs::try_create(table, task)?
+                    }
+                    _ => None,
+                };
                 if multiway_merge {
                     if !cluster_stats_gen.is_linear() {
                         return Err(ErrorCode::Internal(
@@ -224,7 +239,7 @@ impl IPhysicalPlan for Recluster {
                         table.clone(),
                         task,
                         &cluster_stats_gen,
-                        false,
+                        index_merge.is_some(),
                     )?;
                 } else {
                     builder.ctx.set_partitions(plan.parts.clone())?;
@@ -262,6 +277,11 @@ impl IPhysicalPlan for Recluster {
                             )
                         });
                     }
+                }
+                if index_merge.is_some() {
+                    builder
+                        .main_pipeline
+                        .add_transformer(|| TransformReclusterOutputOrder { next_row: 0 });
                 }
                 let max_threads = settings.get_max_threads()? as usize;
 
@@ -330,10 +350,19 @@ impl IPhysicalPlan for Recluster {
                     }
                 }
 
+                if let Some(index_merge) = &index_merge {
+                    let merged_names = index_merge.merged_names();
+                    builder
+                        .main_pipeline
+                        .add_transformer(move || TransformPrepareReclusterIndex {
+                            merged_names: merged_names.clone(),
+                        });
+                }
                 let virtual_column_layout = task.virtual_column_layout.clone();
                 let query_ctx = builder.ctx.clone();
                 // All layouts share the ordinary block statistics and serialization path after
                 // they have formed output blocks and removed layout-only temporary columns.
+                let index_merge_table = table.clone();
                 builder.main_pipeline.add_transform(
                     move |transform_input_port, transform_output_port| {
                         let proc = match &virtual_column_layout {
@@ -361,7 +390,18 @@ impl IPhysicalPlan for Recluster {
                         };
                         proc.into_processor()
                     },
-                )
+                )?;
+                if let Some(index_merge) = index_merge {
+                    builder.main_pipeline.try_resize(1)?;
+                    builder.main_pipeline.add_accumulating_transformer(|| {
+                        TransformReclusterIndexMerge::new(
+                            builder.ctx.clone(),
+                            index_merge_table.clone(),
+                            index_merge.clone(),
+                        )
+                    });
+                }
+                Ok(())
             }
             _ => Err(ErrorCode::Internal(
                 "A node can only execute one recluster task".to_string(),

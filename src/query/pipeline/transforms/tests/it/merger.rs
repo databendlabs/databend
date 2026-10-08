@@ -65,7 +65,7 @@ impl SortedStream for TestStream {
 }
 
 #[test]
-fn test_retention_threshold_with_pending_refills() -> Result<()> {
+fn test_flush_selected_prefix_with_pending_refills() -> Result<()> {
     let (input, expected) = prepare_input_and_result(
         vec![
             (0..100).map(|i| vec![i * 2]).collect(),
@@ -78,14 +78,13 @@ fn test_retention_threshold_with_pending_refills() -> Result<()> {
         .map(|blocks| TestStream::new(blocks.into()))
         .collect();
     let mut merger =
-        Merger::<TestLoserTreeSort, _>::new(streams, 1024, None).with_max_retained_bytes(32);
+        Merger::<TestLoserTreeSort, _>::new(streams, 1024, None).with_flush_before_refill();
     let mut output = Vec::new();
     while !merger.is_finished() {
         if let Some(block) = merger.next_block()? {
             assert!(block.num_rows() < 1024);
             output.push(block);
         }
-        assert!(merger.retained_bytes() <= 48);
     }
     let actual = DataBlock::concat(&output)?;
     assert_eq!(actual.num_rows(), expected.num_rows());
@@ -94,9 +93,9 @@ fn test_retention_threshold_with_pending_refills() -> Result<()> {
 }
 
 #[test]
-fn test_retention_flushes_prefix_before_missing_head() -> Result<()> {
-    // Initial heads occupy 32 bytes. Selecting 0 exhausts route 0, and its
-    // refill crosses the 40-byte threshold while route 1 still has rows.
+fn test_flushes_prefix_before_missing_head() -> Result<()> {
+    // Selecting 0 exhausts route 0. Materialize it before requesting its
+    // next head; never select around an unknown head.
     let (input, _) = prepare_input_and_result(
         vec![vec![vec![0], vec![2, 4, 6, 8]], vec![vec![1, 3, 5]]],
         None,
@@ -106,7 +105,7 @@ fn test_retention_flushes_prefix_before_missing_head() -> Result<()> {
         .map(|blocks| TestStream::new(blocks.into()))
         .collect();
     let mut merger =
-        Merger::<TestLoserTreeSort, _>::new(streams, 1024, None).with_max_retained_bytes(40);
+        Merger::<TestLoserTreeSort, _>::new(streams, 1024, None).with_flush_before_refill();
     let prefix = loop {
         if let Some(block) = merger.next_block()? {
             break block;

@@ -45,8 +45,6 @@ struct BufferState {
     output_indices: ChunkIndex,
     detach: Vec<usize>,
     free: Vec<usize>,
-    retained_bytes: usize,
-    block_bytes: Vec<usize>,
 }
 
 impl BufferState {
@@ -57,8 +55,6 @@ impl BufferState {
             output_indices: ChunkIndex::default(),
             detach: Vec::new(),
             free: Vec::new(),
-            retained_bytes: 0,
-            block_bytes: Vec::new(),
         }
     }
 
@@ -70,23 +66,13 @@ impl BufferState {
         self.output_indices.num_rows()
     }
 
-    fn attach_stream_block(
-        &mut self,
-        stream_index: usize,
-        block: DataBlock,
-        key_bytes: Option<usize>,
-    ) -> Result<()> {
-        // Ordinary sort callers do not enable retention accounting.
-        let bytes = key_bytes.map_or(0, |key_bytes| block.memory_size().saturating_add(key_bytes));
-        self.retained_bytes = self.retained_bytes.saturating_add(bytes);
+    fn attach_stream_block(&mut self, stream_index: usize, block: DataBlock) -> Result<()> {
         let index = if let Some(index) = self.free.pop() {
-            self.block_bytes[index] = bytes;
             self.buffer.replace(index, block);
             index
         } else {
             let index = self.buffer.block_rows().len();
             self.buffer.push(block)?;
-            self.block_bytes.push(bytes);
             index
         };
         self.stream_to_buffer[stream_index] = Some(index);
@@ -107,8 +93,6 @@ impl BufferState {
     fn build_output(&mut self) -> DataBlock {
         let block = self.buffer.take(&self.output_indices);
         for i in self.detach.iter().copied() {
-            self.retained_bytes = self.retained_bytes.saturating_sub(self.block_bytes[i]);
-            self.block_bytes[i] = 0;
             self.buffer.replace_with_empty(i);
             self.free.push(i);
         }
@@ -139,7 +123,7 @@ where A: SortAlgorithm
 {
     batch_rows: usize,
     limit: Option<usize>,
-    max_retained_bytes: usize,
+    flush_before_refill: bool,
     unsorted_streams: Vec<S>,
 
     pending_streams: VecDeque<usize>,
@@ -163,25 +147,23 @@ where A: SortAlgorithm
             sorted_cursors,
             batch_rows,
             limit,
-            max_retained_bytes: usize::MAX,
+            flush_before_refill: false,
             pending_streams,
             buffers,
         }
     }
 
-    /// Flush a selected prefix before refilling exhausted streams once this
-    /// soft retention threshold is reached. Existing sort callers are unchanged.
-    pub fn with_max_retained_bytes(mut self, bytes: usize) -> Self {
-        self.max_retained_bytes = bytes;
+    /// Release exhausted batches at refill boundaries without a byte budget.
+    /// Ordinary sort callers keep their existing output batching by default.
+    pub fn with_flush_before_refill(mut self) -> Self {
+        self.flush_before_refill = true;
         self
     }
 
-    pub fn retained_bytes(&self) -> usize {
-        self.buffers.retained_bytes
-    }
-
+    /// Materialize a selected prefix before waiting for an unknown next head.
+    /// This releases exhausted batches without a separate memory threshold.
     pub(crate) fn should_flush(&self) -> bool {
-        self.buffers.has_output() && self.buffers.retained_bytes >= self.max_retained_bytes
+        self.flush_before_refill && self.buffers.has_output() && self.has_pending_stream()
     }
 
     #[inline(always)]
@@ -327,12 +309,6 @@ where
     pub fn poll_pending_stream(&mut self) -> Result<()> {
         let mut continue_pendings = Vec::new();
         while !self.pending_streams.is_empty() {
-            // Do not load every route before the caller can reduce fan-in. A
-            // missing head prevents further selection, but the active suffixes
-            // can still be recovered at an empty output boundary.
-            if self.buffers.retained_bytes >= self.max_retained_bytes {
-                break;
-            }
             let i = self.pending_streams.pop_front().expect("pending stream");
             debug_assert!(self.buffers.stream_to_buffer[i].is_none());
             let (input, pending) = self.unsorted_streams[i].next()?;
@@ -342,9 +318,7 @@ where
             }
             if let Some((block, col)) = input {
                 let rows = A::Rows::from_column(&col)?;
-                let key_bytes =
-                    (self.max_retained_bytes != usize::MAX).then(|| col.memory_size(false));
-                self.buffers.attach_stream_block(i, block, key_bytes)?;
+                self.buffers.attach_stream_block(i, block)?;
                 let cursor = Cursor::new(i, rows);
                 self.sorted_cursors.push(i, Reverse(cursor));
             }
