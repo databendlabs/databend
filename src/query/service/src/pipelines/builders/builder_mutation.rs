@@ -219,7 +219,7 @@ impl PipelineBuilder {
                     self.ctx.clone(),
                     data,
                     table,
-                    DataSchema::from(table.schema_with_stream()),
+                    DataSchema::from(&table.schema_with_stream().remove_virtual_computed_fields()),
                 )?;
                 data.try_resize(transform_len)
             })?;

@@ -160,11 +160,20 @@ impl IPhysicalPlan for ReplaceDeduplicate {
         // Only the node that writes new rows needs the layout. In distributed REPLACE the other
         // nodes receive the same broadcast source but only mutate existing blocks.
         if self.need_insert {
+            // Defaults and stored computed columns have already been filled. The layout
+            // must describe these physical columns, not the statement's target columns.
+            let mut write_schema = DataSchema::from(&tbl.schema().remove_virtual_computed_fields());
+            if self.delete_when.is_some() {
+                write_schema.fields.insert(
+                    delete_column_idx,
+                    modified_schema.field(delete_column_idx).clone(),
+                );
+            }
             PipelineBuilder::build_table_write_layout_with_schema(
                 builder.ctx.clone(),
                 &mut builder.main_pipeline,
                 tbl.as_ref(),
-                modified_schema.as_ref().clone(),
+                write_schema,
             )?;
         }
 
