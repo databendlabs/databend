@@ -67,6 +67,7 @@ pub struct SegmentCompactMutator {
     compaction: SegmentCompactionState,
     cluster_key_info: Option<ClusterKeyInfo>,
     pub(crate) partition_key_count: usize,
+    pub(crate) partition_key_id: Option<u32>,
     table_meta_timestamps: TableMetaTimestamps,
 }
 
@@ -87,6 +88,7 @@ impl SegmentCompactMutator {
             compaction: Default::default(),
             cluster_key_info,
             partition_key_count: 0,
+            partition_key_id: None,
             table_meta_timestamps,
         })
     }
@@ -148,6 +150,7 @@ impl SegmentCompactMutator {
             self.table_meta_timestamps,
         );
         compactor.partition_key_count = self.partition_key_count;
+        compactor.partition_key_id = self.partition_key_id;
 
         self.compaction = compactor
             .compact(base_segment_locations, limit, |status| {
@@ -177,6 +180,7 @@ pub struct SegmentCompactor<'a> {
     threshold: u64,
     cluster_key_info: Option<ClusterKeyInfo>,
     partition_key_count: usize,
+    partition_key_id: Option<u32>,
     // fragmented segment collected so far, it will be reset to empty if compaction occurs
     fragmented_segments: Vec<(usize, SegmentInfo, Location)>,
     // state which keep the number of blocks of all the fragmented segment collected so far,
@@ -205,6 +209,7 @@ impl<'a> SegmentCompactor<'a> {
             threshold,
             cluster_key_info,
             partition_key_count: 0,
+            partition_key_id: None,
             accumulated_num_blocks: 0,
             fragmented_segments: vec![],
             chunk_size,
@@ -338,6 +343,7 @@ impl<'a> SegmentCompactor<'a> {
                 previous.summary.partition_stats.as_ref(),
                 segment_info.summary.partition_stats.as_ref(),
                 self.partition_key_count,
+                self.partition_key_id,
             )
         {
             self.compact_fragments().await?;

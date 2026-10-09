@@ -92,11 +92,18 @@ pub struct PartitionStatistics {
         deserialize_with = "deserialize_index_scalar_vec"
     )]
     pub values: Vec<Scalar>,
+    /// Identity of the definition that produced these values. Missing in legacy
+    /// metadata; such statistics must not be used with a current partition key.
+    #[serde(default)]
+    pub partition_key_id: Option<u32>,
 }
 
 impl PartitionStatistics {
-    pub fn new(values: Vec<Scalar>) -> Self {
-        Self { values }
+    pub fn new(partition_key_id: u32, values: Vec<Scalar>) -> Self {
+        Self {
+            values,
+            partition_key_id: Some(partition_key_id),
+        }
     }
 }
 
@@ -108,9 +115,9 @@ pub fn validate_segment_partition_statistics<'a>(
     for stats in stats {
         match (partition, stats) {
             (Some(expected), Some(actual)) if expected != actual => {
-                return Err(ErrorCode::Internal(
-                    "segment contains blocks from different partitions",
-                ));
+                // DROP/ADD and metadata-only compaction may combine historical
+                // blocks. Mixed values or identities have no exact segment value.
+                return Ok(None);
             }
             (None, Some(actual)) => partition = Some(actual),
             (_, None) => has_unknown = true,
@@ -946,16 +953,54 @@ mod tests {
         );
     }
 
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct PartitionStatisticsWithoutId {
+        #[serde(
+            serialize_with = "serialize_index_scalar_vec",
+            deserialize_with = "deserialize_index_scalar_vec"
+        )]
+        values: Vec<Scalar>,
+    }
+
     #[test]
-    fn segment_partition_statistics_rejects_different_partitions() {
-        let left = PartitionStatistics::new(vec![Scalar::Number(1_i64.into())]);
-        let right = PartitionStatistics::new(vec![Scalar::Number(2_i64.into())]);
+    fn partition_statistics_identity_is_backward_compatible() {
+        let legacy = PartitionStatisticsWithoutId {
+            values: vec![Scalar::Number(1_i64.into())],
+        };
+        let bytes = rmp_serde::to_vec_named(&legacy).unwrap();
+        let decoded: PartitionStatistics = rmp_serde::from_slice(&bytes).unwrap();
+        assert_eq!(decoded.values, legacy.values);
+        assert_eq!(decoded.partition_key_id, None);
+
+        let current = PartitionStatistics::new(7, legacy.values);
+        let bytes = rmp_serde::to_vec_named(&current).unwrap();
+        assert_eq!(
+            rmp_serde::from_slice::<PartitionStatistics>(&bytes).unwrap(),
+            current
+        );
+        // Readers predating identity can still decode the named representation.
+        let old_reader: PartitionStatisticsWithoutId = rmp_serde::from_slice(&bytes).unwrap();
+        assert_eq!(old_reader.values, current.values);
+    }
+
+    #[test]
+    fn segment_partition_statistics_discards_mixed_partitions() {
+        let left = PartitionStatistics::new(0, vec![Scalar::Number(1_i64.into())]);
+        let right = PartitionStatistics::new(0, vec![Scalar::Number(2_i64.into())]);
 
         assert_eq!(
             validate_segment_partition_statistics([Some(&left), Some(&left)]).unwrap(),
             Some(left.clone())
         );
-        assert!(validate_segment_partition_statistics([Some(&left), Some(&right)]).is_err());
+        assert_eq!(
+            validate_segment_partition_statistics([Some(&left), Some(&right)]).unwrap(),
+            None
+        );
+        let next_key = PartitionStatistics::new(1, left.values.clone());
+        assert_eq!(
+            validate_segment_partition_statistics([Some(&left), Some(&next_key)]).unwrap(),
+            None
+        );
         assert_eq!(
             validate_segment_partition_statistics([None, Some(&left)]).unwrap(),
             None

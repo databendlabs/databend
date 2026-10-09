@@ -95,6 +95,7 @@ pub struct TransformSerializeSegment<B: SegmentBuilder> {
     thresholds: BlockThresholds,
     cluster_key_info: Option<ClusterKeyInfo>,
     partition_key_count: usize,
+    partition_key_id: Option<u32>,
     table_meta_timestamps: TableMetaTimestamps,
     is_column_oriented: bool,
 }
@@ -138,6 +139,7 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
             thresholds,
             cluster_key_info,
             partition_key_count: table.partition_key_count(),
+            partition_key_id: table.partition_key_id(),
             table_meta_timestamps,
             is_column_oriented: table.is_column_oriented(),
         })
@@ -242,6 +244,7 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
             let next_partition = partition_values(
                 extended_block_meta.block_meta.partition_stats.as_ref(),
                 self.partition_key_count,
+                self.partition_key_id,
             );
             if self.partition_key_count != 0 && next_partition.is_none() {
                 return Err(ErrorCode::Internal(

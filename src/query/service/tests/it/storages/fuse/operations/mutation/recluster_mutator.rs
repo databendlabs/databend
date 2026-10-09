@@ -179,7 +179,7 @@ fn make_recluster_block(
 
 fn with_partition(mut block: Arc<BlockMeta>, partition: i32) -> Arc<BlockMeta> {
     Arc::make_mut(&mut block).partition_stats =
-        Some(PartitionStatistics::new(vec![Scalar::from(partition)]));
+        Some(PartitionStatistics::new(0, vec![Scalar::from(partition)]));
     block
 }
 

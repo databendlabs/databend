@@ -124,6 +124,7 @@ use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableConstraintPlan;
 use crate::plans::DropTableIndexPlan;
+use crate::plans::DropTablePartitionKeyPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
 use crate::plans::DropTableTagPlan;
@@ -330,6 +331,7 @@ pub enum Plan {
     DropTableConstraint(Box<DropTableConstraintPlan>),
     AlterTableClusterKey(Box<AlterTableClusterKeyPlan>),
     AlterTablePartitionBy(Box<AlterTablePartitionByPlan>),
+    DropTablePartitionKey(Box<DropTablePartitionKeyPlan>),
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
     AlterTableTtl(Box<AlterTableTtlPlan>),
     ReclusterTable(Box<ReclusterPlan>),

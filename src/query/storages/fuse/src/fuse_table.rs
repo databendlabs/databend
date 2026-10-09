@@ -643,6 +643,13 @@ impl FuseTable {
         self.resolve_partition_keys().map_or(0, |keys| keys.len())
     }
 
+    pub fn partition_key_id(&self) -> Option<u32> {
+        // Legacy definitions use ID 0 for new writes. Their historical statistics
+        // have no ID and are therefore never confused with these new statistics.
+        self.partition_key_str()
+            .map(|_| self.table_info.meta.partition_key_id.unwrap_or(0))
+    }
+
     pub fn use_hash_write_distribution(&self) -> bool {
         self.partition_key_count() != 0
             && self
@@ -678,7 +685,10 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
     ) -> Option<PartitionPruningInfo> {
         let partition_keys = self.linear_partition_keys(ctx);
-        (!partition_keys.is_empty()).then_some(PartitionPruningInfo { partition_keys })
+        (!partition_keys.is_empty()).then_some(PartitionPruningInfo {
+            partition_keys,
+            partition_key_id: self.partition_key_id(),
+        })
     }
 
     pub fn linear_partition_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {

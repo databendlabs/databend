@@ -109,6 +109,7 @@ impl Plan {
             Plan::DropTableConstraint(_) => Ok("DropTableConstraint".to_string()),
             Plan::AlterTableClusterKey(_) => Ok("AlterTableClusterKey".to_string()),
             Plan::AlterTablePartitionBy(_) => Ok("AlterTablePartitionBy".to_string()),
+            Plan::DropTablePartitionKey(_) => Ok("DropTablePartitionKey".to_string()),
             Plan::DropTableClusterKey(_) => Ok("DropTableClusterKey".to_string()),
             Plan::AlterTableTtl(_) => Ok("AlterTableTtl".to_string()),
             Plan::RefreshTableCache(_) => Ok("RefreshTableCache".to_string()),

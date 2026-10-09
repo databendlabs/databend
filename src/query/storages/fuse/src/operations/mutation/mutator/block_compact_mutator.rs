@@ -76,6 +76,7 @@ pub struct BlockCompactMutator {
     pub compact_params: CompactOptions,
     pub cluster_key_info: Option<ClusterKeyInfo>,
     pub partition_key_count: usize,
+    pub partition_key_id: Option<u32>,
     pub virtual_column_layout_policy: VirtualColumnLayoutPolicy,
 }
 
@@ -94,6 +95,7 @@ impl BlockCompactMutator {
             compact_params,
             cluster_key_info,
             partition_key_count: 0,
+            partition_key_id: None,
             virtual_column_layout_policy: Default::default(),
         }
     }
@@ -138,6 +140,7 @@ impl BlockCompactMutator {
             .as_ref()
             .map(ClusterKeyInfo::cluster_key_id);
         checker.partition_key_count = self.partition_key_count;
+        checker.partition_key_id = self.partition_key_id;
 
         let mut segment_idx = 0;
         let mut is_end = false;
@@ -242,6 +245,7 @@ impl BlockCompactMutator {
                     self.operator.clone(),
                     self.cluster_key_info.clone(),
                     self.partition_key_count,
+                    self.partition_key_id,
                     self.thresholds,
                     self.virtual_column_layout_policy,
                     lazy_parts,
@@ -263,11 +267,13 @@ impl BlockCompactMutator {
     }
 
     #[async_backtrace::framed]
+    #[allow(clippy::too_many_arguments)]
     pub async fn build_compact_tasks(
         ctx: Arc<dyn TableContext>,
         dal: Operator,
         cluster_key_info: Option<ClusterKeyInfo>,
         partition_key_count: usize,
+        partition_key_id: Option<u32>,
         thresholds: BlockThresholds,
         virtual_column_layout_policy: VirtualColumnLayoutPolicy,
         lazy_parts: Vec<CompactLazyPartInfo>,
@@ -305,6 +311,7 @@ impl BlockCompactMutator {
                         dal.clone(),
                         cluster_key_info.clone(),
                         partition_key_count,
+                        partition_key_id,
                         thresholds,
                         virtual_column_layout_policy,
                     );
@@ -360,6 +367,7 @@ pub struct SegmentCompactChecker {
     thresholds: BlockThresholds,
     cluster_key_id: Option<u32>,
     partition_key_count: usize,
+    partition_key_id: Option<u32>,
     segments: Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>,
     total_block_count: u64,
 
@@ -375,6 +383,7 @@ impl SegmentCompactChecker {
             thresholds,
             cluster_key_id: None,
             partition_key_count: 0,
+            partition_key_id: None,
             compacted_segment_cnt: 0,
             compacted_imperfect_block_cnt: 0,
         }
@@ -425,6 +434,7 @@ impl SegmentCompactChecker {
                 previous.summary.partition_stats.as_ref(),
                 segment.summary.partition_stats.as_ref(),
                 self.partition_key_count,
+                self.partition_key_id,
             )
         {
             output.push(std::mem::take(&mut self.segments));
@@ -505,6 +515,7 @@ struct CompactTaskBuilder {
     dal: Operator,
     cluster_key_info: Option<ClusterKeyInfo>,
     partition_key_count: usize,
+    partition_key_id: Option<u32>,
     thresholds: BlockThresholds,
     virtual_column_layout_policy: VirtualColumnLayoutPolicy,
 
@@ -526,6 +537,7 @@ impl CompactTaskBuilder {
         dal: Operator,
         cluster_key_info: Option<ClusterKeyInfo>,
         partition_key_count: usize,
+        partition_key_id: Option<u32>,
         thresholds: BlockThresholds,
         virtual_column_layout_policy: VirtualColumnLayoutPolicy,
     ) -> Self {
@@ -533,6 +545,7 @@ impl CompactTaskBuilder {
             dal,
             cluster_key_info,
             partition_key_count,
+            partition_key_id,
             thresholds,
             virtual_column_layout_policy,
             blocks: vec![],
@@ -743,6 +756,7 @@ impl CompactTaskBuilder {
             let current_partition = partition_values(
                 block_meta.partition_stats.as_ref(),
                 self.partition_key_count,
+                self.partition_key_id,
             );
             if seen_block
                 && self.partition_key_count != 0

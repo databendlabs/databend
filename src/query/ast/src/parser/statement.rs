@@ -5260,6 +5260,13 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, _, partition_by, _)| AlterTableAction::AlterTablePartitionBy { partition_by },
     );
 
+    let drop_table_partition_key = map(
+        rule! {
+            DROP ~ PARTITION ~ KEY
+        },
+        |(_, _, _)| AlterTableAction::DropTablePartitionKey,
+    );
+
     let drop_table_cluster_key = map(
         rule! {
             DROP ~ CLUSTER ~ KEY
@@ -5376,6 +5383,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
             | #drop_table_branch
             | #drop_table_tag
             | #alter_table_partition_by
+            | #drop_table_partition_key
             | #alter_table_cluster_key
             | #drop_table_cluster_key
             | #drop_constraint

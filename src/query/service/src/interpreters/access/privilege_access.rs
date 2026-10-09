@@ -2130,6 +2130,9 @@ impl AccessChecker for PrivilegeAccess {
             Plan::AlterTablePartitionBy(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, plan.if_exists, false).await?
             }
+            Plan::DropTablePartitionKey(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, plan.if_exists, false).await?
+            }
             Plan::DropTableClusterKey(plan) => {
                 match &plan.target {
                     MaintenanceTarget::Table => self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?,

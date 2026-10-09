@@ -155,6 +155,7 @@ use crate::plans::DropAllTableRowAccessPoliciesPlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableConstraintPlan;
+use crate::plans::DropTablePartitionKeyPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
 use crate::plans::DropTableTagPlan;
@@ -1528,6 +1529,40 @@ impl Binder {
                         table,
                         table_id: Some(tbl.get_id()),
                         partition_keys,
+                    },
+                )))
+            }
+            AlterTableAction::DropTablePartitionKey => {
+                let tbl = match self.ctx.get_table(&catalog, &database, &table).await {
+                    Ok(tbl) => Some(tbl),
+                    Err(e)
+                        if *if_exists
+                            && matches!(
+                                e.code(),
+                                ErrorCode::UNKNOWN_CATALOG
+                                    | ErrorCode::UNKNOWN_DATABASE
+                                    | ErrorCode::UNKNOWN_TABLE
+                            ) =>
+                    {
+                        None
+                    }
+                    Err(e) => return Err(e),
+                };
+                if let Some(tbl) = &tbl {
+                    let engine = Engine::from(tbl.engine());
+                    if !matches!(engine, Engine::Fuse) {
+                        return Err(ErrorCode::UnsupportedEngineParams(format!(
+                            "ALTER TABLE DROP PARTITION KEY is not supported for engine {engine}"
+                        )));
+                    }
+                }
+                Ok(Plan::DropTablePartitionKey(Box::new(
+                    DropTablePartitionKeyPlan {
+                        if_exists: *if_exists,
+                        catalog,
+                        database,
+                        table,
+                        table_id: tbl.map(|tbl| tbl.get_id()),
                     },
                 )))
             }

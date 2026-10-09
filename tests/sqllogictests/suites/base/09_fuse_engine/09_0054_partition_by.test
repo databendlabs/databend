@@ -249,13 +249,191 @@ SELECT p, c FROM alter_partitioned WHERE p % 2 = 1
 1 100
 3 300
 
-# Repeating the normalized definition is idempotent, but changing an existing
-# partition key would reinterpret persisted partition statistics and is rejected.
+# Repeating the normalized definition is idempotent. Changing an active key is
+# rejected, but DROP followed by ADD is allowed and allocates a fresh identity.
 statement ok
 ALTER TABLE alter_partitioned PARTITION BY (p % 2)
 
 statement error PARTITION BY is already defined
 ALTER TABLE alter_partitioned PARTITION BY (p % 3)
+
+# DROP is metadata-only and preserves both historical data and the cluster key.
+# Hash distribution must be cleared atomically because it requires PARTITION BY.
+statement ok
+ALTER TABLE alter_partitioned SET OPTIONS (write_distribution_mode='hash')
+
+statement ok
+CREATE TABLE alter_partitioned_before_drop AS SELECT snapshot_id FROM fuse_snapshot('db_09_0054', 'alter_partitioned') LIMIT 1
+
+statement ok
+ALTER TABLE alter_partitioned DROP PARTITION KEY
+
+query I
+SELECT count(*) FROM (SELECT snapshot_id FROM fuse_snapshot('db_09_0054', 'alter_partitioned') LIMIT 1) AS current_snapshot WHERE snapshot_id IN (SELECT snapshot_id FROM alter_partitioned_before_drop)
+----
+1
+
+query TT
+SHOW CREATE TABLE alter_partitioned
+----
+alter_partitioned <slt:ignore>ENGINE=FUSE CLUSTER BY (c)
+
+query I
+SELECT count(*) FROM system.tables WHERE database = 'db_09_0054' AND name = 'alter_partitioned' AND options NOT LIKE '%WRITE_DISTRIBUTION_MODE%' AND options NOT LIKE '%PARTITION_BY%'
+----
+1
+
+statement error write_distribution_mode='hash' requires PARTITION BY
+ALTER TABLE alter_partitioned SET OPTIONS (write_distribution_mode='hash')
+
+# Repeated DROP is a no-op. Subsequent writes have no partition statistics.
+statement ok
+ALTER TABLE alter_partitioned DROP PARTITION KEY
+
+statement ok
+INSERT INTO alter_partitioned VALUES (5, 500), (6, 600)
+
+query II rowsort
+SELECT p, c FROM alter_partitioned WHERE p % 2 = 1
+----
+1 100
+3 300
+5 500
+
+statement ok
+UPDATE alter_partitioned SET p = 7 WHERE p = 2
+
+statement ok
+DELETE FROM alter_partitioned WHERE p = 6
+
+statement ok
+OPTIMIZE TABLE alter_partitioned COMPACT
+
+statement ok
+ALTER TABLE alter_partitioned RECLUSTER FINAL
+
+query II rowsort
+SELECT p, c FROM alter_partitioned
+----
+1 100
+3 300
+4 400
+5 500
+7 200
+
+# Re-adding the same definition is allowed, and repeating it remains idempotent.
+statement ok
+ALTER TABLE alter_partitioned PARTITION BY (p % 2)
+
+statement ok
+ALTER TABLE alter_partitioned PARTITION BY (p % 2)
+
+query II rowsort
+SELECT p, c FROM alter_partitioned WHERE p % 2 = 1
+----
+1 100
+3 300
+5 500
+7 200
+
+# Partition-only column dependencies are released by DROP.
+statement ok
+ALTER TABLE alter_partitioned DROP PARTITION KEY
+
+statement ok
+ALTER TABLE alter_partitioned DROP COLUMN p
+
+query I rowsort
+SELECT c FROM alter_partitioned
+----
+100
+200
+300
+400
+500
+
+# Use untouched historical partitioned blocks to catch incorrect reuse of their
+# exact values: p=3 has old p % 2 = 1 but must match the new p % 3 = 0 filter.
+statement ok
+CREATE TABLE partition_key_versions(p INT, c INT) PARTITION BY (p % 2) CLUSTER BY (c) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
+
+statement ok
+INSERT INTO partition_key_versions VALUES (3, 30), (4, 40)
+
+statement ok
+ALTER TABLE partition_key_versions DROP PARTITION KEY
+
+statement ok
+INSERT INTO partition_key_versions VALUES (6, 60)
+
+statement ok
+ALTER TABLE partition_key_versions PARTITION BY (p % 3)
+
+statement ok
+INSERT INTO partition_key_versions VALUES (9, 90), (10, 100)
+
+query II rowsort
+SELECT p, c FROM partition_key_versions WHERE p % 3 = 0
+----
+3 30
+6 60
+9 90
+
+statement ok
+OPTIMIZE TABLE partition_key_versions COMPACT
+
+statement ok
+OPTIMIZE TABLE partition_key_versions COMPACT SEGMENT
+
+statement ok
+ALTER TABLE partition_key_versions RECLUSTER FINAL
+
+query II rowsort
+SELECT p, c FROM partition_key_versions WHERE p % 3 = 0
+----
+3 30
+6 60
+9 90
+
+# Another DROP/ADD cannot reuse an identity, even for the same expression.
+statement ok
+ALTER TABLE partition_key_versions DROP PARTITION KEY
+
+statement ok
+ALTER TABLE partition_key_versions PARTITION BY (p % 3)
+
+query I
+SELECT count(*) FROM partition_key_versions WHERE p % 3 = 0
+----
+3
+
+# ABA: the same textual key now references a new column with the same name.
+# Its default value must not be pruned using the deleted column's statistics.
+statement ok
+CREATE TABLE partition_key_aba(p INT, c INT) PARTITION BY (p % 2)
+
+statement ok
+INSERT INTO partition_key_aba VALUES (3, 30)
+
+statement ok
+ALTER TABLE partition_key_aba DROP PARTITION KEY
+
+statement ok
+ALTER TABLE partition_key_aba DROP COLUMN p
+
+statement ok
+ALTER TABLE partition_key_aba ADD COLUMN p INT DEFAULT 6
+
+statement ok
+ALTER TABLE partition_key_aba PARTITION BY (p % 2)
+
+statement ok
+INSERT INTO partition_key_aba(c, p) VALUES (50, 5)
+
+query II
+SELECT p, c FROM partition_key_aba WHERE p % 2 = 0
+----
+6 30
 
 statement ok
 CREATE TABLE alter_memory(p INT) ENGINE=MEMORY
@@ -263,11 +441,21 @@ CREATE TABLE alter_memory(p INT) ENGINE=MEMORY
 statement error ALTER TABLE PARTITION BY is not supported for engine MEMORY
 ALTER TABLE alter_memory PARTITION BY (p)
 
+statement error ALTER TABLE DROP PARTITION KEY is not supported for engine MEMORY
+ALTER TABLE alter_memory DROP PARTITION KEY
+
 statement ok
 CREATE TABLE alter_invalid_partition(a INT, b INT)
 
 statement error PARTITION BY expression `a \+ b` is invalid
 ALTER TABLE alter_invalid_partition PARTITION BY (a + b)
+
+# Dropping a key that never existed must not prevent adding the first definition.
+statement ok
+ALTER TABLE alter_invalid_partition DROP PARTITION KEY
+
+statement ok
+ALTER TABLE alter_invalid_partition PARTITION BY (a)
 
 # Vector CLUSTER BY may buffer and concatenate blocks across physical partition
 # boundaries, so the combination is rejected until it has partition-aware batching.
@@ -286,9 +474,18 @@ CREATE TABLE vector_partition_alter_partition(id INT, embedding VECTOR(3), VECTO
 statement error Vector data type is not supported for CLUSTER BY with PARTITION BY
 ALTER TABLE vector_partition_alter_partition PARTITION BY (id)
 
-# IF EXISTS must skip partition-key binding when the table is absent.
+# IF EXISTS must skip partition-key binding and DROP when the table is absent.
 statement ok
 ALTER TABLE IF EXISTS alter_missing_partition PARTITION BY (missing_column)
+
+statement ok
+ALTER TABLE IF EXISTS alter_missing_partition DROP PARTITION KEY
+
+statement ok
+ALTER TABLE IF EXISTS missing_database.alter_missing_partition DROP PARTITION KEY
+
+statement error 1025
+ALTER TABLE alter_missing_partition DROP PARTITION KEY
 
 # Moving a row to another partition must preserve physical partition boundaries.
 statement ok
