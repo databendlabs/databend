@@ -272,7 +272,7 @@ impl<A: SortAlgorithm, S: SortSpiller> StepCollect<A, S> {
                 let mut block = base.new_block(data);
                 // The merger retains its input until the run is exhausted, so
                 // merged output must stop accumulating once the budget is reached.
-                if !spilling && base.under_memory_pressure() {
+                if !spilling && base.spiller.memory_settings().check_spill() {
                     // Keep the head resident for restore, like merge_current.
                     for b in sorted.iter_mut().skip(1) {
                         check_interrupt()?;
@@ -581,15 +581,6 @@ impl<S: SortSpiller> Base<S> {
 
     fn new_block(&self, data: DataBlock) -> SpillableBlock {
         SpillableBlock::new(data, self.sort_row_offset)
-    }
-
-    /// Same budget as the collect-side spill trigger. Unlimited settings never
-    /// report pressure.
-    fn under_memory_pressure(&self) -> bool {
-        let memory_settings = self.spiller.memory_settings();
-        memory_settings
-            .check_spill_remain()
-            .is_some_and(|remain| remain < memory_settings.spill_unit_size as isize * 2)
     }
 
     fn determine_bounds<A: SortAlgorithm>(
@@ -1824,12 +1815,7 @@ mod tests {
         assert_eq!(restored, want);
 
         // Budget exhausted: only the head block stays resident.
-        let exhausted = || {
-            MemorySettings::builder()
-                .with_max_memory_usage(0)
-                .with_spill_unit_size(1024)
-                .build()
-        };
+        let exhausted = || MemorySettings::builder().with_max_memory_usage(0).build();
         let (resident, spilled, restored) = run_collected_run(exhausted(), RunSpill::OnPressure)?;
         assert_eq!(resident, [vec![true], vec![false; 5]].concat());
         assert_eq!(spilled, 5);
