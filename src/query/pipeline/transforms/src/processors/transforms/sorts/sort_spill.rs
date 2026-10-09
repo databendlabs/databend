@@ -275,6 +275,8 @@ impl<A: SortAlgorithm, S: SortSpiller> StepCollect<A, S> {
                 if !spilling && base.under_memory_pressure() {
                     // Keep the head resident for restore, like merge_current.
                     for b in sorted.iter_mut().skip(1) {
+                        check_interrupt()?;
+
                         b.spill(&base.spiller)?;
                     }
                     spilling = true;
