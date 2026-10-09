@@ -33,6 +33,9 @@ pub fn apply_cse(
     for op in operators {
         match op {
             BlockOperator::Map { exprs, projections } => {
+                let output_num_columns = projections
+                    .as_ref()
+                    .map_or(input_num_columns + exprs.len(), BTreeSet::len);
                 // find common expression
                 let mut cse_counter = HashMap::new();
                 for expr in exprs.iter() {
@@ -41,7 +44,11 @@ pub fn apply_cse(
 
                 let mut cse_candidates: Vec<&Expr> = cse_counter
                     .into_iter()
-                    .filter(|(_, count)| *count > 1)
+                    // Candidates are prepended to the Map. Only expressions whose
+                    // dependencies already exist in its input can be evaluated there.
+                    .filter(|(expr, count)| {
+                        *count > 1 && expr.column_refs().keys().all(|id| *id < input_num_columns)
+                    })
                     .map(|(expr, _)| expr)
                     .collect();
 
@@ -87,6 +94,10 @@ pub fn apply_cse(
                         .collect::<BTreeSet<_>>();
 
                     for mut expr in exprs {
+                        // Shift original intra-map references before inserting CSE
+                        // references, which already use the new column numbering.
+                        // Candidate keys contain input columns only, so still match.
+                        remap_map_columns(&mut expr, input_num_columns, candidates_nums);
                         perform_cse_replacement(&mut expr, &cse_replacements);
                         new_exprs.push(expr);
 
@@ -104,6 +115,7 @@ pub fn apply_cse(
                 } else {
                     results.push(BlockOperator::Map { exprs, projections });
                 }
+                input_num_columns = output_num_columns;
             }
             BlockOperator::Project { projection } => {
                 input_num_columns = projection.len();
@@ -202,6 +214,24 @@ fn count_candidate_children(expr: &Expr, references: &mut HashMap<&Expr, usize>)
             }
         }
         Expr::Cast(Cast { expr, .. }) => count_candidate_references(expr, references),
+        Expr::Constant(_) | Expr::ColumnRef(_) => {}
+    }
+}
+
+/// Inserting temporaries before the original Map expressions shifts all columns
+/// produced by those expressions. Unlike extraction, renumbering must also visit
+/// protected branches. Lambda bodies have their own column scope; only args refer
+/// to the enclosing block.
+fn remap_map_columns(expr: &mut Expr, input_num_columns: usize, temporaries: usize) {
+    match expr {
+        Expr::ColumnRef(column) if column.id >= input_num_columns => column.id += temporaries,
+        Expr::Cast(Cast { expr, .. }) => remap_map_columns(expr, input_num_columns, temporaries),
+        Expr::FunctionCall(expr::FunctionCall { args, .. })
+        | Expr::LambdaFunctionCall(expr::LambdaFunctionCall { args, .. }) => {
+            for arg in args {
+                remap_map_columns(arg, input_num_columns, temporaries);
+            }
+        }
         Expr::Constant(_) | Expr::ColumnRef(_) => {}
     }
 }
@@ -386,6 +416,160 @@ mod tests {
         };
         assert_eq!(exprs.len(), 2);
         assert!(projections.is_none());
+    }
+
+    fn dependent_expr(text: &str, id: usize) -> Expr {
+        let raw = parse_raw_expr(
+            text,
+            &[("a", DataType::Number(NumberDataType::Int64))],
+            &BUILTIN_FUNCTIONS,
+        );
+        ConstantFolder::fold(
+            Cow::Owned(check(&raw, &BUILTIN_FUNCTIONS).unwrap()),
+            &FunctionContext::default(),
+            &BUILTIN_FUNCTIONS,
+        )
+        .0
+        .project_column_ref(|_| Ok(id))
+        .unwrap()
+    }
+
+    fn check_operators(operators: Vec<BlockOperator>) -> Vec<BlockOperator> {
+        let optimized = apply_cse(operators.clone(), 1);
+        let ctx = FunctionContext::default();
+        let input = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![0, 1, 2, 3])]);
+        let execute = |operators: &[BlockOperator]| {
+            operators
+                .iter()
+                .fold(input.clone(), |block, op| op.execute(&ctx, block).unwrap())
+        };
+        let expected = execute(&operators);
+        let actual = execute(&optimized);
+        assert_eq!(actual.num_rows(), expected.num_rows());
+        assert_eq!(actual.num_columns(), expected.num_columns());
+        for column in 0..expected.num_columns() {
+            assert_eq!(
+                actual.get_by_offset(column).value(),
+                expected.get_by_offset(column).value(),
+                "column {column}, optimized={optimized:?}"
+            );
+        }
+        optimized
+    }
+
+    #[test]
+    fn test_cse_preserves_dependent_map_offsets() {
+        let t = parse("(a + 1) * 2");
+        let p = parse("((a + 1) * 2) + 3");
+        let original = BlockOperator::Map {
+            exprs: vec![
+                parse("a + 100"),
+                t.clone(),
+                p.clone(),
+                p,
+                dependent_expr("a", 2), // Original T: input width + expression index 1.
+            ],
+            projections: None,
+        };
+        for projections in [
+            None,
+            Some(BTreeSet::from([0, 2, 5])),
+            Some(BTreeSet::from([5])),
+        ] {
+            let mut original = original.clone();
+            let BlockOperator::Map { projections: p, .. } = &mut original else {
+                unreachable!()
+            };
+            *p = projections;
+            let optimized = check_operators(vec![original]);
+            let BlockOperator::Map { exprs, .. } = &optimized[0] else {
+                unreachable!()
+            };
+            assert_eq!(exprs.len(), 7); // T and P retained; C pruned.
+            assert!(matches!(&exprs[6], Expr::ColumnRef(column) if column.id == 4));
+        }
+    }
+
+    #[test]
+    fn test_cse_keeps_dependent_candidates_after_their_producers() {
+        for shared_inputs in [false, true] {
+            let mut exprs = vec![parse("a + 100")];
+            if shared_inputs {
+                exprs.extend([parse("(a + 1) * 2"), parse("(a + 1) * 2")]);
+            }
+            // These repeated expressions require column 1, which does not exist
+            // at the start of the Map. They cannot become prepended candidates.
+            exprs.extend([
+                dependent_expr("(a + 7) * 3", 1),
+                dependent_expr("(a + 7) * 3", 1),
+                dependent_expr("CAST(a AS STRING)", 1),
+                dependent_expr("if(a > 0, a + 1, 0)", 1),
+                dependent_expr("is_not_error(1 / a)", 1),
+            ]);
+            let original_len = exprs.len();
+            let optimized = check_operators(vec![BlockOperator::Map {
+                exprs,
+                projections: None,
+            }]);
+            let BlockOperator::Map { exprs, .. } = &optimized[0] else {
+                unreachable!()
+            };
+            assert_eq!(exprs.len(), original_len + usize::from(shared_inputs));
+        }
+    }
+
+    #[test]
+    fn test_cse_remaps_lambda_args_not_local_columns() {
+        let body = dependent_expr("a + 1", 1).as_remote_expr();
+        let mut lambda = Expr::LambdaFunctionCall(expr::LambdaFunctionCall {
+            span: None,
+            name: "array_transform".to_string(),
+            args: vec![dependent_expr("[a]", 1)],
+            lambda_expr: Box::new(body.clone()),
+            lambda_display: "x -> x + 1".to_string(),
+            return_type: DataType::Array(Box::new(DataType::Number(NumberDataType::Int64))),
+        });
+        remap_map_columns(&mut lambda, 1, 2);
+        let Expr::LambdaFunctionCall(lambda) = lambda else {
+            unreachable!()
+        };
+        assert_eq!(lambda.args[0], dependent_expr("[a]", 3));
+        assert_eq!(*lambda.lambda_expr, body);
+    }
+
+    #[test]
+    fn test_cse_tracks_map_output_width_between_operators() {
+        for first in [vec![parse("a + 1"), parse("a + 1")], vec![
+            parse("a + 1"),
+            parse("a + 2"),
+        ]] {
+            for projections in [None, Some(BTreeSet::from([2]))] {
+                let id = if projections.is_some() { 0 } else { 2 };
+                let optimized = check_operators(vec![
+                    BlockOperator::Map {
+                        exprs: first.clone(),
+                        projections,
+                    },
+                    BlockOperator::Map {
+                        exprs: vec![dependent_expr("a * 3", id), dependent_expr("a * 3", id)],
+                        projections: Some(BTreeSet::from([id])),
+                    },
+                    BlockOperator::Project {
+                        projection: vec![0, 0],
+                    },
+                    BlockOperator::Map {
+                        exprs: vec![dependent_expr("a + 4", 1), dependent_expr("a + 4", 1)],
+                        projections: None,
+                    },
+                ]);
+                for index in [1, 3] {
+                    let BlockOperator::Map { exprs, .. } = &optimized[index] else {
+                        unreachable!()
+                    };
+                    assert_eq!(exprs.len(), 3);
+                }
+            }
+        }
     }
 
     #[test]
