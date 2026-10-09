@@ -51,6 +51,17 @@ pub struct SortSpill<A: SortAlgorithm, S: SortSpiller> {
     step: Step<A, S>,
 }
 
+/// How the merged blocks of a collected run are stored.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RunSpill {
+    /// Write every merged block to storage.
+    Always,
+    /// Keep merged blocks in memory until the spill budget is exhausted, then
+    /// write the rest. Used for the final run, which is merged after ingestion
+    /// ends and would otherwise hold both its input and its merged output.
+    OnPressure,
+}
+
 enum Step<A: SortAlgorithm, S: SortSpiller> {
     Collect(StepCollect<A, S>),
     Sort(StepSort<A, S>),
@@ -126,11 +137,11 @@ where
         }
     }
 
-    pub fn sort_input_data(&mut self, input_data: Vec<DataBlock>, need_spill: bool) -> Result<()> {
+    pub fn sort_input_data(&mut self, input_data: Vec<DataBlock>, spill: RunSpill) -> Result<()> {
         let Step::Collect(collect) = &mut self.step else {
             unreachable!()
         };
-        collect.sort_input_data(&self.base, input_data, need_spill)
+        collect.sort_input_data(&self.base, input_data, spill)
     }
 
     pub fn collect_total_rows(&self) -> usize {
@@ -233,7 +244,7 @@ impl<A: SortAlgorithm, S: SortSpiller> StepCollect<A, S> {
         &mut self,
         base: &Base<S>,
         mut input_data: Vec<DataBlock>,
-        need_spill: bool,
+        spill: RunSpill,
     ) -> Result<()> {
         let batch_rows = self.params.batch_rows;
 
@@ -245,7 +256,7 @@ impl<A: SortAlgorithm, S: SortSpiller> StepCollect<A, S> {
         let sorted = if input_data.len() == 1 {
             let data = input_data.pop().unwrap();
             let mut block = base.new_block(data);
-            if need_spill {
+            if spill == RunSpill::Always {
                 block.spill(&base.spiller)?;
             }
             vec![block].into()
@@ -253,12 +264,22 @@ impl<A: SortAlgorithm, S: SortSpiller> StepCollect<A, S> {
             let mut merger =
                 create_memory_merger::<A>(input_data, base.sort_row_offset, base.limit, batch_rows);
 
-            let mut sorted = VecDeque::new();
+            let mut spilling = spill == RunSpill::Always;
+            let mut sorted: VecDeque<SpillableBlock> = VecDeque::new();
             while let Some(data) = merger.next_block()? {
                 check_interrupt()?;
 
                 let mut block = base.new_block(data);
-                if need_spill {
+                // The merger retains its input until the run is exhausted, so
+                // merged output must stop accumulating once the budget is reached.
+                if !spilling && base.under_memory_pressure() {
+                    // Keep the head resident for restore, like merge_current.
+                    for b in sorted.iter_mut().skip(1) {
+                        b.spill(&base.spiller)?;
+                    }
+                    spilling = true;
+                }
+                if spilling && (spill == RunSpill::Always || !sorted.is_empty()) {
                     block.spill(&base.spiller)?;
                 }
                 sorted.push_back(block);
@@ -558,6 +579,15 @@ impl<S: SortSpiller> Base<S> {
 
     fn new_block(&self, data: DataBlock) -> SpillableBlock {
         SpillableBlock::new(data, self.sort_row_offset)
+    }
+
+    /// Same budget as the collect-side spill trigger. Unlimited settings never
+    /// report pressure.
+    fn under_memory_pressure(&self) -> bool {
+        let memory_settings = self.spiller.memory_settings();
+        memory_settings
+            .check_spill_remain()
+            .is_some_and(|remain| remain < memory_settings.spill_unit_size as isize * 2)
     }
 
     fn determine_bounds<A: SortAlgorithm>(
@@ -1098,6 +1128,7 @@ mod tests {
     use databend_common_expression::DataSchemaRefExt;
     use databend_common_expression::FromData;
     use databend_common_expression::SortColumnDescription;
+    use databend_common_expression::types::AccessType;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::NumberDataType;
@@ -1710,6 +1741,104 @@ mod tests {
         assert!(sort.current[0].blocks.iter().all(|b| b.data.is_none()));
         assert_eq!(sort.subsequent.len(), 2);
         assert_eq!(sort.subsequent.total_rows(), 4);
+        Ok(())
+    }
+
+    /// Merge one run of three interleaved blocks, then restore it. Returns the
+    /// residency of the merged blocks, the number of spilled files and the
+    /// restored values.
+    fn run_collected_run(
+        memory_settings: MemorySettings,
+        spill: RunSpill,
+    ) -> Result<(Vec<bool>, usize, Vec<i32>)> {
+        let map = Arc::new(Mutex::new(HashMap::new()));
+        let spiller = MockSpiller {
+            map: map.clone(),
+            memory_settings: memory_settings.clone(),
+        };
+        let base = Base {
+            spiller,
+            sort_row_offset: 1,
+            limit: None,
+        };
+        let params = SortSpillParams {
+            batch_rows: 2,
+            num_merge: 2,
+            prefetch: false,
+            stream_regroup: false,
+        };
+        let mut sort_spill = SortSpill::<HeapSort<SimpleRowsAsc<Int32Type>>, _>::new(base, params);
+
+        let input = [vec![1, 4, 7, 10], vec![2, 5, 8, 11], vec![3, 6, 9, 12]]
+            .into_iter()
+            .map(|part| {
+                let col = Int32Type::from_data(part);
+                let mut data = DataBlock::new_from_columns(vec![col.clone()]);
+                data.add_column(col);
+                data
+            })
+            .collect();
+        sort_spill.sort_input_data(input, spill)?;
+
+        let Step::Collect(collect) = &sort_spill.step else {
+            unreachable!()
+        };
+        assert_eq!(collect.streams.len(), 1);
+        let resident = collect.streams[0]
+            .blocks
+            .iter()
+            .map(|b| b.data.is_some())
+            .collect();
+        let spilled_files = map.lock().unwrap().len();
+
+        let mut restored = Vec::new();
+        loop {
+            let output = sort_spill.on_restore(&memory_settings)?;
+            if let Some(block) = output.block {
+                let col = block.get_by_offset(0).to_column();
+                restored.extend(
+                    Int32Type::try_downcast_column(&col)
+                        .unwrap()
+                        .iter()
+                        .copied(),
+                );
+            }
+            if output.finish {
+                break;
+            }
+        }
+        Ok((resident, spilled_files, restored))
+    }
+
+    #[test]
+    fn test_collected_run_spill_policy() -> Result<()> {
+        let want = (1..=12).collect::<Vec<_>>();
+
+        // No budget configured: the final run stays in memory.
+        let (resident, spilled, restored) =
+            run_collected_run(MemorySettings::builder().build(), RunSpill::OnPressure)?;
+        assert_eq!(resident, vec![true; 6]);
+        assert_eq!(spilled, 0);
+        assert_eq!(restored, want);
+
+        // Budget exhausted: only the head block stays resident.
+        let exhausted = || {
+            MemorySettings::builder()
+                .with_max_memory_usage(0)
+                .with_spill_unit_size(1024)
+                .build()
+        };
+        let (resident, spilled, restored) = run_collected_run(exhausted(), RunSpill::OnPressure)?;
+        assert_eq!(resident, [vec![true], vec![false; 5]].concat());
+        assert_eq!(spilled, 5);
+        assert_eq!(restored, want);
+
+        // Mid-ingestion runs are always written, regardless of the budget.
+        let (resident, spilled, restored) =
+            run_collected_run(MemorySettings::builder().build(), RunSpill::Always)?;
+        assert_eq!(resident, vec![false; 6]);
+        assert_eq!(spilled, 6);
+        assert_eq!(restored, want);
         Ok(())
     }
 
