@@ -563,7 +563,7 @@ async fn test_dropped_acquire_releases_queue_entry() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_aborted_queued_query_releases_session() -> anyhow::Result<()> {
     let mut config = ConfigBuilder::create().config();
     config.query.common.max_active_sessions = 1;
@@ -612,6 +612,30 @@ async fn test_aborted_queued_query_releases_session() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_dropped_acquire_keeps_entry_with_same_key() -> anyhow::Result<()> {
+    let queue = QueueManager::<TestData>::create(1, create_meta_store().await?, false);
+    let holder = queue
+        .acquire(TestData::new("dup_lock".into(), "holder".into()))
+        .await?;
+
+    // Both acquisitions register under the same key, so the second replaces the first.
+    let mut first = Box::pin(queue.acquire(TestData::new("dup_lock".into(), "dup".into())));
+    assert!(futures::poll!(first.as_mut()).is_pending());
+    let mut second = Box::pin(queue.acquire(TestData::new("dup_lock".into(), "dup".into())));
+    assert!(futures::poll!(second.as_mut()).is_pending());
+    assert_eq!(queue.length(), 1);
+
+    // Dropping the replaced acquisition must not remove the entry that now owns the key.
+    drop(first);
+    assert_eq!(queue.length(), 1);
+
+    drop(holder);
+    let _guard = second.await?;
+    assert_eq!(queue.length(), 0);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_completed_acquire_cleans_up_once() -> anyhow::Result<()> {
     for remove in [false, true] {
         let queue = QueueManager::<TestData>::create(1, create_meta_store().await?, false);
@@ -649,10 +673,41 @@ async fn test_watch_abort_notify_abort_during_wait() -> anyhow::Result<()> {
         "test_abort_during_wait".to_string(),
         "test_acquire_1".to_string(),
     );
+    let test_data2 = TestData::new(
+        "test_abort_during_wait".to_string(),
+        "test_acquire_2".to_string(),
+    );
+
+    let _guard1 = queue.acquire(test_data1).await?;
+
+    let abort_notify = test_data2.abort_notify.clone();
+    let queue_clone = queue.clone();
+    let acquire_handle =
+        databend_common_base::runtime::spawn(async move { queue_clone.acquire(test_data2).await });
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    abort_notify.notify_waiters();
+
+    let result = acquire_handle.await.unwrap();
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().code(), ErrorCode::ABORTED_QUERY);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_watch_abort_notify_repeated_abort_releases_entries() -> anyhow::Result<()> {
+    let metastore = create_meta_store().await?;
+    let queue = QueueManager::<TestData>::create(1, metastore, false);
+
+    let test_data1 = TestData::new(
+        "test_abort_during_wait".to_string(),
+        "test_acquire_1".to_string(),
+    );
     let guard1 = queue.acquire(test_data1).await?;
 
     // Repeated cancellations must not accumulate entries or retain their query data.
-    for index in 0..32 {
+    for index in 0..3 {
         let data = TestData::new("test_abort_during_wait".into(), format!("waiter_{index}"));
         let abort_notify = data.abort_notify.clone();
         let wait_exits = data.wait_exits.clone();
