@@ -59,9 +59,9 @@ impl Interpreter for AlterTablePartitionByInterpreter {
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
             let plan = &self.plan;
-            if plan.table_id.is_none() {
+            let Some(table_id) = plan.table_id else {
                 return Ok(PipelineBuildResult::create());
-            }
+            };
             let table = match self
                 .ctx
                 .get_table(&plan.catalog, &plan.database, &plan.table)
@@ -73,6 +73,11 @@ impl Interpreter for AlterTablePartitionByInterpreter {
                 }
                 Err(e) => return Err(e),
             };
+            if table.get_id() != table_id {
+                return Err(ErrorCode::TableVersionMismatched(
+                    "PARTITION BY target table changed after binding",
+                ));
+            }
             table.check_mutable()?;
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
