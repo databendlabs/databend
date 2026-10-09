@@ -129,6 +129,27 @@ SELECT * FROM t1 at (tag => "v1_0") ORDER BY a
 2 b
 3 c
 
+## TAG preserves reads, not permission to restore history below LVT.
+statement error (?s).*Cannot FLASHBACK to TAG 'v1_0'.*below.*LVT.*preserves historical reads.*snapshot timestamp.*least visible time.*
+ALTER TABLE t1 FLASHBACK TO (TAG => v1_0)
+
+## A rejected FLASHBACK must leave the current head unchanged.
+query I
+SELECT count(*) FROM t1
+----
+5
+
+## Materialize the retained data into new objects instead of bypassing the LVT fence.
+statement ok
+CREATE TABLE restored AS SELECT * FROM t1 AT (TAG => v1_0)
+
+query IT
+SELECT * FROM restored ORDER BY a
+----
+1 a
+2 b
+3 c
+
 ## Test duplicate tag name
 statement error 2746
 ALTER TABLE t1 CREATE TAG v1_0

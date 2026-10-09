@@ -573,6 +573,8 @@ build_exceptions! {
     InvalidMaterializedView(2328),
     /// Materialized view already exists
     MaterializedViewAlreadyExists(2329),
+    /// Invalid table clone request or lineage state
+    InvalidTableClone(2330),
 }
 
 // Stage and Connection Errors [2501-2505, 2510-2512]

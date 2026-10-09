@@ -16,16 +16,19 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableField;
+use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
@@ -68,6 +71,27 @@ use crate::operations::common::CommitSink;
 use crate::statistics::TableStatsGenerator;
 
 impl FuseTable {
+    /// Build this table's GC fence for a metadata commit.
+    ///
+    /// `gc_safe_time` is the oldest timestamp of an object newly made reachable by the commit.
+    /// Snapshot commits use the generated snapshot timestamp (which precedes their segment/block
+    /// timestamp); historical restores use the restored snapshot timestamp.
+    pub fn build_table_lvt_check(
+        table_info: &TableInfo,
+        gc_safe_time: Option<DateTime<Utc>>,
+    ) -> Result<Option<TableLvtCheck>> {
+        if !table_info.meta.options.contains_key(OPT_KEY_CLONE_GROUP_ID) {
+            return Ok(None);
+        }
+        let time = gc_safe_time.ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "clone table {} commit has no GC-safety timestamp",
+                table_info.ident.table_id
+            ))
+        })?;
+        Ok(Some(TableLvtCheck { time, touch: false }))
+    }
+
     #[async_backtrace::framed]
     pub fn do_commit(
         &self,
@@ -165,6 +189,7 @@ impl FuseTable {
         }
 
         let table_statistics_location = snapshot.table_statistics_location();
+        let lvt_check = Self::build_table_lvt_check(table_info, snapshot.timestamp)?;
         let catalog = ctx.get_catalog(table_info.catalog()).await?;
         // 2. update table meta
         let res = self
@@ -178,6 +203,7 @@ impl FuseTable {
                 copied_files,
                 &[],
                 operator,
+                lvt_check,
                 None,
             )
             .await;
@@ -210,22 +236,7 @@ impl FuseTable {
         // remove legacy options
         Self::remove_legacy_options(&mut new_table_meta.options);
 
-        // 1.2 setup table statistics
-        let stats = &new_snapshot.summary;
-        // update statistics
-        new_table_meta.statistics = TableStatistics {
-            number_of_rows: stats.row_count,
-            data_bytes: stats.uncompressed_byte_size,
-            compressed_data_bytes: stats.compressed_byte_size,
-            index_data_bytes: stats.index_size,
-            bloom_index_size: stats.bloom_index_size,
-            ngram_index_size: stats.ngram_index_size,
-            inverted_index_size: stats.inverted_index_size,
-            vector_index_size: stats.vector_index_size,
-            virtual_column_size: stats.virtual_column_size,
-            number_of_segments: Some(new_snapshot.segments.len() as u64),
-            number_of_blocks: Some(stats.block_count),
-        };
+        Self::apply_snapshot_statistics(&mut new_table_meta, new_snapshot);
         new_table_meta.updated_on = Utc::now();
         new_table_meta
     }
@@ -243,6 +254,7 @@ impl FuseTable {
         copied_files: &Option<UpsertTableCopiedFileReq>,
         update_stream_meta: &[UpdateStreamMetaReq],
         operator: &Operator,
+        lvt_check: Option<TableLvtCheck>,
         deduplicated_label: Option<String>,
     ) -> Result<()> {
         // 1. prepare table meta
@@ -272,7 +284,7 @@ impl FuseTable {
                 seq: MatchSeq::Exact(table_version),
                 new_table_meta: new_table_meta.clone(),
                 base_snapshot_location: self.snapshot_loc(),
-                lvt_check: None,
+                lvt_check,
             };
             update_table_metas.push((req, table_info.clone()));
             copied_files_req = copied_files.iter().map(|c| (table_id, c.clone())).collect();

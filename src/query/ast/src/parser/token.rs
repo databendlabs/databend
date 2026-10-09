@@ -510,6 +510,8 @@ pub enum TokenKind {
     CHANGES,
     #[token("CLUSTER", ignore(ascii_case))]
     CLUSTER,
+    #[token("CLONE", ignore(ascii_case))]
+    CLONE,
     #[token("COMMENT", ignore(ascii_case))]
     COMMENT,
     #[token("COMMENTS", ignore(ascii_case))]

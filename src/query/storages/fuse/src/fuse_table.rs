@@ -77,6 +77,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_meta_app::schema::parse_clone_group_id;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::set_s3_storage_class;
@@ -618,6 +619,19 @@ impl FuseTable {
         self.table_info.meta.options.contains_key("TRANSIENT")
     }
 
+    /// Stable identity shared by a base table and all of its zero-copy clones.
+    pub fn clone_group_id(&self) -> Result<u64> {
+        parse_clone_group_id(&self.table_info.meta.options)
+            .map_err(|err| {
+                ErrorCode::Internal(format!(
+                    "invalid clone group on table {}: {}",
+                    self.get_id(),
+                    err
+                ))
+            })
+            .map(|group_id| group_id.unwrap_or_else(|| self.get_id()))
+    }
+
     pub fn cluster_key_str(&self) -> Option<&str> {
         self.table_info.meta.cluster_key_str()
     }
@@ -747,18 +761,8 @@ impl FuseTable {
     ///   1. Table options (number of snapshots first, then time period)
     ///   2. Settings (number of snapshots first, then time period)
     pub fn get_data_retention_policy(&self, ctx: &dyn TableContext) -> Result<RetentionPolicy> {
-        if self.is_transient() {
-            return Ok(RetentionPolicy::ByNumOfSnapshotsToKeep(1));
-        }
-
-        if let Some(num_snapshots) = self.try_get_table_option_num_snapshots_to_keep()? {
-            return Ok(RetentionPolicy::ByNumOfSnapshotsToKeep(
-                num_snapshots as usize,
-            ));
-        }
-
-        if let Some(duration) = self.try_get_table_option_retention_period()? {
-            return Ok(RetentionPolicy::ByTimePeriod(duration));
+        if let Some(policy) = self.get_table_level_retention_policy()? {
+            return Ok(policy);
         }
 
         if let Some(num_snapshots) = self.try_get_setting_num_snapshots_to_keep(ctx)? {
@@ -769,6 +773,47 @@ impl FuseTable {
 
         let duration = self.get_data_retention_period_from_settings(ctx)?;
         Ok(RetentionPolicy::ByTimePeriod(duration))
+    }
+
+    /// Returns the retention policy that another clone-group member may apply to this table.
+    /// The VACUUM target's session may retain descendant history for longer, but it must not
+    /// shorten it below the built-in default. Session snapshot-count retention is ignored because
+    /// it has no time-based lower bound that can be safely clamped.
+    pub fn get_clone_descendant_retention_policy(
+        &self,
+        ctx: &dyn TableContext,
+    ) -> Result<RetentionPolicy> {
+        if let Some(policy) = self.get_table_level_retention_policy()? {
+            return Ok(policy);
+        }
+
+        let settings = ctx.get_settings();
+        let default_days = settings
+            .get_default_value("data_retention_time_in_days")?
+            .ok_or_else(|| ErrorCode::Internal("data retention default setting is missing"))?
+            .as_u64()?;
+        let retention_days = settings
+            .get_data_retention_time_in_days()?
+            .max(default_days);
+        Ok(RetentionPolicy::ByTimePeriod(Duration::days(
+            retention_days as i64,
+        )))
+    }
+
+    fn get_table_level_retention_policy(&self) -> Result<Option<RetentionPolicy>> {
+        if self.is_transient() {
+            return Ok(Some(RetentionPolicy::ByNumOfSnapshotsToKeep(1)));
+        }
+
+        if let Some(num_snapshots) = self.try_get_table_option_num_snapshots_to_keep()? {
+            return Ok(Some(RetentionPolicy::ByNumOfSnapshotsToKeep(
+                num_snapshots as usize,
+            )));
+        }
+
+        Ok(self
+            .try_get_table_option_retention_period()?
+            .map(RetentionPolicy::ByTimePeriod))
     }
 
     fn try_get_table_option_num_snapshots_to_keep(&self) -> Result<Option<u64>> {

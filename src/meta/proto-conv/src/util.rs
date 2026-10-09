@@ -217,6 +217,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (185, "2026-09-03: Add: segment_claim.proto/SegmentClaimMeta"),
     (186, "2026-09-04: Add: table.proto/TableMeta.ttl row-level TTL expression"),
     (187, "2026-09-08: Add: datatype.proto/AggregateState.state_version"),
+    (188, "2026-09-24: Add: zero-copy table clone binding"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
