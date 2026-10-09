@@ -452,6 +452,7 @@ impl FuseTable {
             ctx.get_function_context()?,
         );
         generator.partition_key_index = partition_key_index;
+        generator.partition_key_id = self.partition_key_id();
         Ok(generator)
     }
 

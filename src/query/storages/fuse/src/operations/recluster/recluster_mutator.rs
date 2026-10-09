@@ -459,6 +459,7 @@ impl ReclusterMutator {
             } else if let Some(partition) = partition_values(
                 block.meta.partition_stats.as_ref(),
                 self.properties.partition_key_count,
+                self.properties.partition_key_id,
             ) {
                 partition.to_vec()
             } else {
@@ -860,6 +861,7 @@ impl ReclusterMutator {
                 let Some(partition) = partition_values(
                     segment.summary.partition_stats.as_ref(),
                     self.properties.partition_key_count,
+                    self.properties.partition_key_id,
                 ) else {
                     continue;
                 };

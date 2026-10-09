@@ -262,6 +262,7 @@ impl Walk for AlterTableAction {
                 try_walk!(new_column.walk(visitor));
             }
             AlterTableAction::ModifyTableComment { .. }
+            | AlterTableAction::DropTablePartitionKey
             | AlterTableAction::DropTableClusterKey
             | AlterTableAction::RemoveTableTtl
             | AlterTableAction::RefreshTableCache
@@ -374,6 +375,7 @@ impl WalkMut for AlterTableAction {
                 try_walk!(new_column.walk_mut(visitor));
             }
             AlterTableAction::ModifyTableComment { .. }
+            | AlterTableAction::DropTablePartitionKey
             | AlterTableAction::DropTableClusterKey
             | AlterTableAction::RemoveTableTtl
             | AlterTableAction::RefreshTableCache

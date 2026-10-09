@@ -17,9 +17,10 @@ use std::sync::Arc;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_sql::plans::AlterTablePartitionByPlan;
+use databend_common_sql::plans::DropTablePartitionKeyPlan;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
+use databend_storages_common_table_meta::table::OPT_KEY_WRITE_DISTRIBUTION_MODE;
 
 use super::Interpreter;
 use crate::interpreters::interpreter_table_add_column::update_table_meta;
@@ -27,28 +28,21 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
 
-fn is_missing_table_error(error: &ErrorCode) -> bool {
-    matches!(
-        error.code(),
-        ErrorCode::UNKNOWN_CATALOG | ErrorCode::UNKNOWN_DATABASE | ErrorCode::UNKNOWN_TABLE
-    )
-}
-
-pub struct AlterTablePartitionByInterpreter {
+pub struct DropTablePartitionKeyInterpreter {
     ctx: Arc<QueryContext>,
-    plan: AlterTablePartitionByPlan,
+    plan: DropTablePartitionKeyPlan,
 }
 
-impl AlterTablePartitionByInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: AlterTablePartitionByPlan) -> Result<Self> {
+impl DropTablePartitionKeyInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropTablePartitionKeyPlan) -> Result<Self> {
         Ok(Self { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for AlterTablePartitionByInterpreter {
+impl Interpreter for DropTablePartitionKeyInterpreter {
     fn name(&self) -> &str {
-        "AlterTablePartitionByInterpreter"
+        "DropTablePartitionKeyInterpreter"
     }
 
     fn is_ddl(&self) -> bool {
@@ -68,40 +62,48 @@ impl Interpreter for AlterTablePartitionByInterpreter {
                 .await
             {
                 Ok(table) => table,
-                Err(e) if plan.if_exists && is_missing_table_error(&e) => {
+                Err(e)
+                    if plan.if_exists
+                        && matches!(
+                            e.code(),
+                            ErrorCode::UNKNOWN_CATALOG
+                                | ErrorCode::UNKNOWN_DATABASE
+                                | ErrorCode::UNKNOWN_TABLE
+                        ) =>
+                {
                     return Ok(PipelineBuildResult::create());
                 }
                 Err(e) => return Err(e),
             };
             if table.get_id() != table_id {
                 return Err(ErrorCode::TableVersionMismatched(
-                    "PARTITION BY target table changed after binding",
+                    "DROP PARTITION KEY target table changed after binding",
                 ));
             }
             table.check_mutable()?;
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-
-            let partition_by = format!("({})", plan.partition_keys.join(", "));
-            if let Some(current) = table.options().get(OPT_KEY_PARTITION_BY) {
-                if current == &partition_by {
-                    return Ok(PipelineBuildResult::create());
-                }
-                return Err(ErrorCode::TableOptionInvalid(format!(
-                    "PARTITION BY is already defined as {current}; changing it is not supported"
-                )));
+            if !table.options().contains_key(OPT_KEY_PARTITION_BY) {
+                return Ok(PipelineBuildResult::create());
             }
 
             let mut new_table_meta = table.get_table_info().meta.clone();
-            // Like cluster keys, every new definition gets a fresh identity.
-            // Do not wrap the sequence and accidentally reuse historical IDs.
-            new_table_meta.partition_key_seq = new_table_meta
-                .partition_key_seq
-                .checked_add(1)
-                .ok_or_else(|| ErrorCode::TableOptionInvalid("partition key sequence exhausted"))?;
-            new_table_meta.partition_key_id = Some(new_table_meta.partition_key_seq);
-            new_table_meta
+            // Preserve the sequence across DROP, just as for cluster keys.
+            // Initialize legacy definitions so old readers cannot re-add a
+            // key while ignoring the identity fields after this DROP.
+            new_table_meta.partition_key_seq = new_table_meta.partition_key_seq.max(1);
+            new_table_meta.partition_key_id = None;
+            new_table_meta.options.remove(OPT_KEY_PARTITION_BY);
+            // Hash distribution requires a partition key. Leave other explicit
+            // distribution modes unchanged.
+            if new_table_meta
                 .options
-                .insert(OPT_KEY_PARTITION_BY.to_owned(), partition_by);
+                .get(OPT_KEY_WRITE_DISTRIBUTION_MODE)
+                .is_some_and(|mode| mode.eq_ignore_ascii_case("hash"))
+            {
+                new_table_meta
+                    .options
+                    .remove(OPT_KEY_WRITE_DISTRIBUTION_MODE);
+            }
 
             new_table_meta.updated_on = chrono::Utc::now();
             let catalog = self.ctx.get_catalog(&plan.catalog).await?;
