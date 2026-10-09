@@ -92,14 +92,13 @@ pub struct SpatialIndexBuilder {
 
 pub(crate) struct SpatialIndexWriteSpec {
     builder: SpatialIndexBuilder,
-    location: Location,
 }
 
 impl BlockIndexSpec for SpatialIndexWriteSpec {
-    fn new_writer(&self, _context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
+    fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
         Ok(Box::new(SpatialIndexBlockWriter {
             builder: self.builder.clone(),
-            location: self.location.clone(),
+            location: context.meta_locations.block_spatial_index_location(),
         }))
     }
 }
@@ -130,11 +129,8 @@ impl BlockIndexWriter for SpatialIndexBlockWriter {
 }
 
 impl SpatialIndexBuilder {
-    pub(crate) fn into_write_spec(self, location: Location) -> SpatialIndexWriteSpec {
-        SpatialIndexWriteSpec {
-            builder: self,
-            location,
-        }
+    pub(crate) fn into_write_spec(self) -> SpatialIndexWriteSpec {
+        SpatialIndexWriteSpec { builder: self }
     }
 
     pub fn try_create(

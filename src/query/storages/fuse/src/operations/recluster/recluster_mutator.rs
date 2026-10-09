@@ -641,6 +641,19 @@ impl ReclusterMutator {
                     input_level_stats: candidate.input_level_stats.clone(),
                     kind: candidate.kind,
                     virtual_column_layout,
+                    inverted_index_sources: match self
+                        .ctx
+                        .get_settings()
+                        .get_enable_recluster_inverted_index_merge()?
+                    {
+                        true => block_metas
+                            .iter()
+                            .map(|(_, block)| {
+                                block.inverted_index_metas.clone().unwrap_or_default()
+                            })
+                            .collect(),
+                        false => vec![],
+                    },
                 });
                 selected_block_count += block_metas.len() as u64;
             }

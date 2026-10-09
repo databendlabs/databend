@@ -33,6 +33,7 @@ use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::plans::Aggregate;
 use databend_common_sql::plans::AggregateMode;
 use databend_common_sql::plans::ConstantTableScan;
+use databend_common_sql::plans::GroupingSets;
 use databend_common_sql::plans::ScalarItem;
 use itertools::Itertools;
 
@@ -274,19 +275,17 @@ impl PhysicalPlanBuilder {
                 let shuffle_mode = determine_shuffle_mode(self.ctx.clone(), is_cluster_aggregate)?;
 
                 if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
-                    // ignore `_grouping_id`.
-                    // If the aggregation function argument if a group item,
-                    // we cannot use the group item directly.
-                    // It's because the group item will be wrapped with nullable and fill dummy NULLs (in `AggregateExpand` plan),
-                    // which will cause panic while executing aggregation function.
-                    // To avoid the panic, we will duplicate (`Arc::clone`) original group item columns in `AggregateExpand`,
-                    // we should use these columns instead.
+                    // AggregateExpand makes grouping columns nullable and fills in dummy
+                    // NULLs for rolled-up sets. Aggregate arguments and ORDER BY keys must
+                    // use its preserved copies instead, or aggregation can panic or sort
+                    // by the dummy NULLs rather than the original values.
                     for func in agg_funcs.iter_mut() {
                         for arg in func.arg_indices.iter_mut() {
                             if let Some(pos) = group_items.iter().position(|g| g == arg) {
                                 *arg = grouping_sets.dup_group_items[pos].0;
                             }
                         }
+                        remap_grouping_set_order_by(&mut func.sig, &group_items, grouping_sets);
                     }
                 }
 
@@ -417,7 +416,8 @@ impl PhysicalPlanBuilder {
                     build_aggregate_function(&agg.aggregate_functions, &input_schema)?;
 
                 if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
-                    // The argument types are wrapped nullable due to `AggregateExpand` plan. We should recover them to original types.
+                    // Recover aggregate arguments and ORDER BY keys to the original,
+                    // unmasked columns and types from before `AggregateExpand`.
                     for func in agg_funcs.iter_mut() {
                         for (arg, ty) in func.arg_indices.iter_mut().zip(func.sig.args.iter_mut()) {
                             if let Some(pos) = group_items.iter().position(|g| g == arg) {
@@ -425,6 +425,7 @@ impl PhysicalPlanBuilder {
                                 *ty = grouping_sets.dup_group_items[pos].1.clone();
                             }
                         }
+                        remap_grouping_set_order_by(&mut func.sig, &group_items, grouping_sets);
                     }
                 }
 
@@ -533,6 +534,21 @@ fn determine_shuffle_mode(
     };
 
     Ok(shuffle_mode)
+}
+
+// Use the original grouping columns and types, not AggregateExpand's masked keys.
+fn remap_grouping_set_order_by(
+    signature: &mut AggregateFunctionSignature,
+    group_items: &[Symbol],
+    grouping_sets: &GroupingSets,
+) {
+    for item in &mut signature.order_by {
+        if let Some(pos) = group_items.iter().position(|g| *g == item.index) {
+            let (index, data_type) = &grouping_sets.dup_group_items[pos];
+            item.index = *index;
+            item.data_type = data_type.clone();
+        }
+    }
 }
 
 fn build_aggregate_function(

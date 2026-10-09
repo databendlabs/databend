@@ -26,6 +26,7 @@ use std::sync::Arc;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_meta_client::types::NodeInfo;
+use databend_storages_common_table_meta::meta::BlockIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
@@ -484,6 +485,9 @@ pub struct ReclusterTask {
     pub input_level_stats: Vec<ClusterLevelLogStats>,
     pub kind: ReclusterTaskKind,
     pub virtual_column_layout: Option<VirtualColumnLayout>,
+    /// Index metadata in original input-block order; absent when reuse is disabled.
+    #[serde(default)]
+    pub inverted_index_sources: Vec<Vec<BlockIndexMeta>>,
 }
 
 pub type BlockMetaWithHLL = (Arc<BlockMeta>, Option<RawBlockHLL>);

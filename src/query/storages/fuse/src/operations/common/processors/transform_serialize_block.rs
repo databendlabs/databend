@@ -39,15 +39,16 @@ use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
 
+use super::recluster_inverted_index_merge::ReclusterIndexInput;
+use super::recluster_inverted_index_merge::ReclusterIndexOutput;
+use super::recluster_inverted_index_merge::ReclusterIndexRowRange;
 use crate::FuseTable;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
 use crate::io::JsonPathStatisticsBuilder;
-use crate::io::SpatialIndexBuilder;
-use crate::io::VectorIndexBuilder;
 use crate::io::VirtualColumnBuilder;
-use crate::io::create_inverted_index_builders;
+use crate::io::block_index::create_block_index_specs;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
@@ -82,6 +83,9 @@ pub struct TransformSerializeBlock {
     kind: MutationKind,
     pending_merge_hll: bool,
     pending_logical_change: (u64, u64),
+    recluster_index_rows: Option<Vec<ReclusterIndexRowRange>>,
+    recluster_output_row: u64,
+    recluster_merged_names: Vec<String>,
 }
 
 impl TransformSerializeBlock {
@@ -193,10 +197,7 @@ impl TransformSerializeBlock {
         } else {
             None
         };
-        let ngram_args =
-            FuseTable::create_ngram_index_args(&table.table_info.meta.indexes, &schema, true)?;
-
-        let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
+        let block_index_specs = create_block_index_specs(table, source_schema.clone())?;
 
         // Recluster/compact/refresh materialize virtual columns and reuse the
         // path frequencies collected by VirtualColumnBuilder. Other mutations
@@ -228,16 +229,6 @@ impl TransformSerializeBlock {
             } else {
                 (None, None)
             };
-        let vector_index_builder = VectorIndexBuilder::try_create(
-            &table.table_info.meta.indexes,
-            source_schema.clone(),
-            true,
-        );
-        let spatial_index_builder = SpatialIndexBuilder::try_create(
-            &table.table_info.meta.indexes,
-            source_schema.clone(),
-            true,
-        );
         let serialize_hll = if matches!(
             kind,
             MutationKind::Insert
@@ -261,12 +252,9 @@ impl TransformSerializeBlock {
             bloom_columns_map,
             ndv_columns_map,
             top_n,
-            ngram_args,
-            inverted_index_builders,
+            block_index_specs,
             virtual_column_builder,
             json_path_statistics_builder,
-            vector_index_builder,
-            spatial_index_builder,
             table_meta_timestamps,
             serialize_hll,
         };
@@ -279,6 +267,9 @@ impl TransformSerializeBlock {
             dal: table.get_operator(),
             table_id: if with_tid { Some(table.get_id()) } else { None },
             kind,
+            recluster_index_rows: None,
+            recluster_output_row: 0,
+            recluster_merged_names: Vec::new(),
             pending_merge_hll: false,
             pending_logical_change: (0, 0),
         })
@@ -358,6 +349,24 @@ impl Processor for TransformSerializeBlock {
         let mut input_data = self.input.pull_data().unwrap()?;
         let meta = input_data.take_meta();
         if let Some(meta) = meta {
+            if ReclusterIndexInput::downcast_ref_from(&meta).is_some() {
+                let input = ReclusterIndexInput::downcast_from(meta).unwrap();
+                if !matches!(self.kind, MutationKind::Recluster) {
+                    return Err(ErrorCode::Internal(
+                        "index merge metadata outside recluster",
+                    ));
+                }
+                self.recluster_output_row = input.output_row;
+                self.recluster_index_rows = Some(input.rows);
+                self.recluster_merged_names = input.merged_names;
+                self.state = State::NeedSerialize {
+                    block: input_data,
+                    stats_type: ClusterStatsGenType::Generally,
+                    index: None,
+                    virtual_column_layout: None,
+                };
+                return Ok(Event::Sync);
+            }
             let meta = SerializeDataMeta::downcast_from(meta)
                 .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
             match meta {
@@ -450,6 +459,15 @@ impl Processor for TransformSerializeBlock {
                 block.check_valid()?;
 
                 let mut block_builder = self.block_builder.clone();
+                block_builder
+                    .block_index_specs
+                    .retain(|spec| match spec.index_name() {
+                        Some(name) => !self
+                            .recluster_merged_names
+                            .iter()
+                            .any(|merged| merged == name),
+                        None => true,
+                    });
                 if let Some(layout) = virtual_column_layout
                     && let Some(builder) = block_builder.virtual_column_builder.take()
                 {
@@ -501,6 +519,17 @@ impl Processor for TransformSerializeBlock {
                     .get_write_progress()
                     .incr(&progress_values);
 
+                if let Some(rows) = self.recluster_index_rows.take() {
+                    metrics_inc_recluster_write_block_nums();
+                    self.output_data =
+                        Some(DataBlock::empty_with_meta(Box::new(ReclusterIndexOutput {
+                            meta: extended_block_meta,
+                            output_row: self.recluster_output_row,
+                            rows,
+                        })));
+                    self.recluster_merged_names.clear();
+                    return Ok(());
+                }
                 let mutation_log_data_block = if let Some(index) = index {
                     // we are replacing the block represented by the `index`
                     Self::mutation_logs(
