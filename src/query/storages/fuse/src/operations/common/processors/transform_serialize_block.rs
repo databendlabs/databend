@@ -14,7 +14,9 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::time::Instant;
 
+use bytes::Bytes;
 use databend_common_base::base::ProgressValues;
 use databend_common_catalog::plan::VirtualColumnLayout;
 use databend_common_catalog::table::Table;
@@ -25,6 +27,9 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
+use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
+use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_common_metrics::storage::metrics_inc_recluster_write_block_nums;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
@@ -34,14 +39,18 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storage::MutationStatus;
+use databend_storages_common_blocks::ColumnWiseParquetWriter;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
+use parquet::file::metadata::ParquetMetaData;
 
 use super::recluster_inverted_index_merge::ReclusterIndexInput;
 use super::recluster_inverted_index_merge::ReclusterIndexOutput;
 use super::recluster_inverted_index_merge::ReclusterIndexRowRange;
+use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
@@ -49,6 +58,7 @@ use crate::io::BlockWriter;
 use crate::io::JsonPathStatisticsBuilder;
 use crate::io::VirtualColumnBuilder;
 use crate::io::block_index::create_block_index_specs;
+use crate::operations::column_parquet_metas;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
@@ -69,6 +79,27 @@ enum State {
         serialized: BlockSerialization,
         index: Option<BlockMetaIndex>,
     },
+    /// Column-wise path: encode the next column (sync).
+    EncodeColumn(Box<PendingColumnWise>),
+    /// Column-wise path: upload the encoded bytes of one column, or the footer (async).
+    UploadColumn {
+        pending: Box<PendingColumnWise>,
+        chunks: Vec<Bytes>,
+    },
+}
+
+/// In-flight state of a block being encoded and uploaded one column at a time.
+struct PendingColumnWise {
+    serialized: BlockSerialization,
+    index: Option<BlockMetaIndex>,
+    /// `None` once the footer has been produced.
+    parquet: Option<ColumnWiseParquetWriter>,
+    schema: TableSchemaRef,
+    writer: Option<opendal::Writer>,
+    /// Set together with the footer chunks; its presence marks the final upload.
+    metadata: Option<ParquetMetaData>,
+    written: u64,
+    start: Instant,
 }
 
 pub struct TransformSerializeBlock {
@@ -83,6 +114,8 @@ pub struct TransformSerializeBlock {
     kind: MutationKind,
     pending_merge_hll: bool,
     pending_logical_change: (u64, u64),
+    /// Encode parquet column by column and upload each column via multipart upload.
+    column_wise_upload: bool,
     recluster_index_rows: Option<Vec<ReclusterIndexRowRange>>,
     recluster_output_row: u64,
     recluster_merged_names: Vec<String>,
@@ -242,12 +275,17 @@ impl TransformSerializeBlock {
             true
         };
 
+        let write_settings = table.get_write_settings();
+        let column_wise_upload = ctx
+            .get_settings()
+            .get_enable_fuse_parquet_column_wise_upload()?
+            && matches!(write_settings.storage_format, FuseStorageFormat::Parquet);
         let block_builder = BlockBuilder {
             ctx,
             operator: table.get_operator(),
             meta_locations: table.meta_location_generator().clone(),
             source_schema,
-            write_settings: table.get_write_settings(),
+            write_settings,
             cluster_stats_gen,
             bloom_columns_map,
             ndv_columns_map,
@@ -272,6 +310,7 @@ impl TransformSerializeBlock {
             recluster_merged_names: Vec::new(),
             pending_merge_hll: false,
             pending_logical_change: (0, 0),
+            column_wise_upload,
         })
     }
 
@@ -315,11 +354,17 @@ impl Processor for TransformSerializeBlock {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(self.state, State::NeedSerialize { .. }) {
+        if matches!(
+            self.state,
+            State::NeedSerialize { .. } | State::EncodeColumn(_)
+        ) {
             return Ok(Event::Sync);
         }
 
-        if matches!(self.state, State::Serialized { .. }) {
+        if matches!(
+            self.state,
+            State::Serialized { .. } | State::UploadColumn { .. }
+        ) {
             return Ok(Event::Async);
         }
 
@@ -474,15 +519,33 @@ impl Processor for TransformSerializeBlock {
                     block_builder.virtual_column_builder =
                         Some(builder.with_adaptive_layout(Arc::new(layout)));
                 }
-                let serialized =
-                    block_builder.build(block, |block, generator| match &stats_type {
-                        ClusterStatsGenType::Generally => generator.gen_stats_for_append(block),
-                        ClusterStatsGenType::WithOrigin(origin_stats) => {
-                            generator.gen_with_origin_stats(block, origin_stats.clone())
-                        }
-                    })?;
-
-                self.state = State::Serialized { serialized, index };
+                let gen_stats = |block, generator: &ClusterStatsGenerator| match &stats_type {
+                    ClusterStatsGenType::Generally => generator.gen_stats_for_append(block),
+                    ClusterStatsGenType::WithOrigin(origin_stats) => {
+                        generator.gen_with_origin_stats(block, origin_stats.clone())
+                    }
+                };
+                if self.column_wise_upload {
+                    let (serialized, parquet, schema) =
+                        block_builder.build_column_wise(block, gen_stats)?;
+                    let pending = Box::new(PendingColumnWise {
+                        serialized,
+                        index,
+                        parquet: Some(parquet),
+                        schema,
+                        writer: None,
+                        metadata: None,
+                        written: 0,
+                        start: Instant::now(),
+                    });
+                    self.state = Self::encode_next_column(pending)?;
+                } else {
+                    let serialized = block_builder.build(block, gen_stats)?;
+                    self.state = State::Serialized { serialized, index };
+                }
+            }
+            State::EncodeColumn(pending) => {
+                self.state = Self::encode_next_column(pending)?;
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
@@ -497,83 +560,187 @@ impl Processor for TransformSerializeBlock {
                 let (logical_updated_rows, logical_deleted_rows) =
                     std::mem::take(&mut self.pending_logical_change);
                 let extended_block_meta = BlockWriter::write_down(&self.dal, serialized).await?;
-
-                let bytes = if let Some(draft_virtual_block_meta) =
-                    &extended_block_meta.draft_virtual_block_meta
-                {
-                    (extended_block_meta.block_meta.block_size
-                        + draft_virtual_block_meta
-                            .virtual_columns
-                            .as_ref()
-                            .map(|meta| meta.virtual_column_size)
-                            .unwrap_or_default()) as usize
-                } else {
-                    extended_block_meta.block_meta.block_size as usize
-                };
-                let progress_values = ProgressValues {
-                    rows: extended_block_meta.block_meta.row_count as usize,
-                    bytes,
-                };
-                self.block_builder
-                    .ctx
-                    .get_write_progress()
-                    .incr(&progress_values);
-
-                if let Some(rows) = self.recluster_index_rows.take() {
-                    metrics_inc_recluster_write_block_nums();
-                    self.output_data =
-                        Some(DataBlock::empty_with_meta(Box::new(ReclusterIndexOutput {
-                            meta: extended_block_meta,
-                            output_row: self.recluster_output_row,
-                            rows,
-                        })));
-                    self.recluster_merged_names.clear();
+                self.on_block_written(
+                    extended_block_meta,
+                    index,
+                    merge_hll,
+                    logical_updated_rows,
+                    logical_deleted_rows,
+                );
+            }
+            State::UploadColumn {
+                mut pending,
+                chunks,
+            } => {
+                if let Err(e) = Self::upload_chunks(&self.dal, &mut pending, chunks).await {
+                    if let Some(writer) = pending.writer.as_mut() {
+                        let _ = writer.abort().await;
+                    }
+                    return Err(e);
+                }
+                if pending.metadata.is_none() {
+                    self.state = State::EncodeColumn(pending);
                     return Ok(());
                 }
-                let mutation_log_data_block = if let Some(index) = index {
-                    // we are replacing the block represented by the `index`
-                    Self::mutation_logs(
-                        MutationLogEntry::ReplacedBlock {
-                            index,
-                            block_meta: Arc::new(extended_block_meta),
-                        },
-                        logical_updated_rows,
-                        logical_deleted_rows,
-                    )
-                } else {
-                    // appending new data block
-                    if matches!(self.kind, MutationKind::Insert) {
-                        if self.table_id.is_none() {
-                            self.block_builder.ctx.mutation_state().add_mutation_status(
-                                MutationStatus {
-                                    insert_rows: extended_block_meta.block_meta.row_count,
-                                    update_rows: 0,
-                                    deleted_rows: 0,
-                                },
-                            );
-                        }
-                    }
 
-                    if matches!(self.kind, MutationKind::Insert) {
-                        DataBlock::empty_with_meta(Box::new(extended_block_meta))
-                    } else {
-                        if matches!(self.kind, MutationKind::Recluster) {
-                            metrics_inc_recluster_write_block_nums();
-                        }
-                        Self::mutation_logs(
-                            MutationLogEntry::AppendBlock {
-                                block_meta: Arc::new(extended_block_meta),
-                                merge_hll,
-                            },
-                            logical_updated_rows,
-                            logical_deleted_rows,
-                        )
-                    }
-                };
-                self.output_data = Some(mutation_log_data_block);
+                let PendingColumnWise {
+                    mut serialized,
+                    index,
+                    schema,
+                    metadata,
+                    written,
+                    start,
+                    ..
+                } = *pending;
+                serialized.block_meta.col_metas =
+                    column_parquet_metas(&metadata.unwrap(), &schema)?;
+                serialized.block_meta.file_size = written;
+                metrics_inc_block_write_nums(1);
+                metrics_inc_block_write_nums(written);
+                metrics_inc_block_write_milliseconds(start.elapsed().as_millis() as u64);
+
+                let merge_hll = std::mem::take(&mut self.pending_merge_hll);
+                let (logical_updated_rows, logical_deleted_rows) =
+                    std::mem::take(&mut self.pending_logical_change);
+                let extended_block_meta =
+                    BlockWriter::write_down_except_data(&self.dal, serialized).await?;
+                self.on_block_written(
+                    extended_block_meta,
+                    index,
+                    merge_hll,
+                    logical_updated_rows,
+                    logical_deleted_rows,
+                );
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
         Ok(())
+    }
+}
+
+impl TransformSerializeBlock {
+    /// Encode the next column into an upload state; once all columns are written, produce the
+    /// footer as the final upload.
+    fn encode_next_column(mut pending: Box<PendingColumnWise>) -> Result<State> {
+        let parquet = pending
+            .parquet
+            .as_mut()
+            .ok_or_else(|| ErrorCode::Internal("column-wise parquet writer already finished"))?;
+        let chunks = match parquet.write_next_column()? {
+            Some(chunks) => chunks,
+            None => {
+                let (chunks, metadata) = pending.parquet.take().unwrap().finish()?;
+                pending.metadata = Some(metadata);
+                chunks
+            }
+        };
+        Ok(State::UploadColumn { pending, chunks })
+    }
+
+    /// Push one column's (or the footer's) bytes into the multipart writer; close it after the
+    /// footer. Opendal coalesces small writes up to the backend's minimum part size.
+    async fn upload_chunks(
+        dal: &Operator,
+        pending: &mut PendingColumnWise,
+        chunks: Vec<Bytes>,
+    ) -> Result<()> {
+        if pending.writer.is_none() {
+            pending.writer = Some(
+                dal.writer(&pending.serialized.block_meta.location.0)
+                    .await?,
+            );
+        }
+        let writer = pending.writer.as_mut().unwrap();
+        let size: usize = chunks.iter().map(|c| c.len()).sum();
+        if size > 0 {
+            writer.write(chunks).await?;
+            pending.written += size as u64;
+        }
+        if pending.metadata.is_some() {
+            writer.close().await?;
+        }
+        Ok(())
+    }
+
+    fn on_block_written(
+        &mut self,
+        extended_block_meta: ExtendedBlockMeta,
+        index: Option<BlockMetaIndex>,
+        merge_hll: bool,
+        logical_updated_rows: u64,
+        logical_deleted_rows: u64,
+    ) {
+        let bytes =
+            if let Some(draft_virtual_block_meta) = &extended_block_meta.draft_virtual_block_meta {
+                (extended_block_meta.block_meta.block_size
+                    + draft_virtual_block_meta
+                        .virtual_columns
+                        .as_ref()
+                        .map(|meta| meta.virtual_column_size)
+                        .unwrap_or_default()) as usize
+            } else {
+                extended_block_meta.block_meta.block_size as usize
+            };
+        let progress_values = ProgressValues {
+            rows: extended_block_meta.block_meta.row_count as usize,
+            bytes,
+        };
+        self.block_builder
+            .ctx
+            .get_write_progress()
+            .incr(&progress_values);
+
+        if let Some(rows) = self.recluster_index_rows.take() {
+            metrics_inc_recluster_write_block_nums();
+            self.output_data = Some(DataBlock::empty_with_meta(Box::new(ReclusterIndexOutput {
+                meta: extended_block_meta,
+                output_row: self.recluster_output_row,
+                rows,
+            })));
+            self.recluster_merged_names.clear();
+            return;
+        }
+        let mutation_log_data_block = if let Some(index) = index {
+            // we are replacing the block represented by the `index`
+            Self::mutation_logs(
+                MutationLogEntry::ReplacedBlock {
+                    index,
+                    block_meta: Arc::new(extended_block_meta),
+                },
+                logical_updated_rows,
+                logical_deleted_rows,
+            )
+        } else {
+            // appending new data block
+            if matches!(self.kind, MutationKind::Insert) {
+                if self.table_id.is_none() {
+                    self.block_builder
+                        .ctx
+                        .mutation_state()
+                        .add_mutation_status(MutationStatus {
+                            insert_rows: extended_block_meta.block_meta.row_count,
+                            update_rows: 0,
+                            deleted_rows: 0,
+                        });
+                }
+            }
+
+            if matches!(self.kind, MutationKind::Insert) {
+                DataBlock::empty_with_meta(Box::new(extended_block_meta))
+            } else {
+                if matches!(self.kind, MutationKind::Recluster) {
+                    metrics_inc_recluster_write_block_nums();
+                }
+                Self::mutation_logs(
+                    MutationLogEntry::AppendBlock {
+                        block_meta: Arc::new(extended_block_meta),
+                        merge_hll,
+                    },
+                    logical_updated_rows,
+                    logical_deleted_rows,
+                )
+            }
+        };
+        self.output_data = Some(mutation_log_data_block);
     }
 }
