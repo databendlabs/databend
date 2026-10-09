@@ -17,6 +17,7 @@ mod decorrelate;
 mod flatten_plan;
 mod flatten_scalar;
 mod row_value;
+mod scalar_aggregate;
 mod subquery_decorrelator;
 
 use std::collections::HashMap;
@@ -24,6 +25,9 @@ use std::collections::HashMap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Symbol;
+pub(crate) use scalar_aggregate::ScalarAggregateMatch;
+pub(crate) use scalar_aggregate::function_call;
+pub(crate) use scalar_aggregate::match_scalar_aggregate;
 pub use subquery_decorrelator::FlattenInfo;
 pub use subquery_decorrelator::SubqueryDecorrelatorOptimizer;
 pub use subquery_decorrelator::UnnestResult;

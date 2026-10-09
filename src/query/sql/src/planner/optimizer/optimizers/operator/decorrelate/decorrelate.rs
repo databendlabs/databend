@@ -32,6 +32,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use super::DerivedColumnScope;
 use super::row_value::row_value_equality;
 use super::row_value::row_value_fields;
+use super::scalar_aggregate::ScalarSubqueryRewrite;
 use crate::ColumnSet;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::JoinPredicate;
@@ -258,6 +259,15 @@ impl SubqueryDecorrelatorOptimizer {
     ) -> Result<(SExpr, UnnestResult, DerivedColumnScope)> {
         match subquery.typ {
             SubqueryType::Scalar => {
+                let generic_plan_is_correct =
+                    match self.try_decorrelate_scalar_aggregate_subquery(outer, subquery)? {
+                        ScalarSubqueryRewrite::Rewritten(rewritten) => {
+                            let (s_expr, derived_columns) = *rewritten;
+                            return Ok((s_expr, UnnestResult::SingleJoin, derived_columns));
+                        }
+                        ScalarSubqueryRewrite::GenericPlan => true,
+                        ScalarSubqueryRewrite::Unsupported => false,
+                    };
                 let correlated_columns = &subquery.outer_columns;
                 let (flatten_plan, derived_columns) = self.flatten_plan(
                     outer,
@@ -266,6 +276,11 @@ impl SubqueryDecorrelatorOptimizer {
                     flatten_info,
                     false,
                 )?;
+                if generic_plan_is_correct {
+                    // The NULL produced for an outer value without aggregate input is already
+                    // the subquery result, e.g. under `HAVING count(*) > 0` or `LIMIT 0`.
+                    flatten_info.from_count_func = false;
+                }
                 // Construct single join
                 let mut left_conditions = Vec::with_capacity(correlated_columns.len());
                 let mut right_conditions = Vec::with_capacity(correlated_columns.len());
