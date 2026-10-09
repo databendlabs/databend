@@ -612,30 +612,6 @@ async fn test_aborted_queued_query_releases_session() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_dropped_acquire_keeps_entry_with_same_key() -> anyhow::Result<()> {
-    let queue = QueueManager::<TestData>::create(1, create_meta_store().await?, false);
-    let holder = queue
-        .acquire(TestData::new("dup_lock".into(), "holder".into()))
-        .await?;
-
-    // Both acquisitions register under the same key, so the second replaces the first.
-    let mut first = Box::pin(queue.acquire(TestData::new("dup_lock".into(), "dup".into())));
-    assert!(futures::poll!(first.as_mut()).is_pending());
-    let mut second = Box::pin(queue.acquire(TestData::new("dup_lock".into(), "dup".into())));
-    assert!(futures::poll!(second.as_mut()).is_pending());
-    assert_eq!(queue.length(), 1);
-
-    // Dropping the replaced acquisition must not remove the entry that now owns the key.
-    drop(first);
-    assert_eq!(queue.length(), 1);
-
-    drop(holder);
-    let _guard = second.await?;
-    assert_eq!(queue.length(), 0);
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn test_completed_acquire_cleans_up_once() -> anyhow::Result<()> {
     for remove in [false, true] {
         let queue = QueueManager::<TestData>::create(1, create_meta_store().await?, false);

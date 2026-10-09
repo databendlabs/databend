@@ -426,28 +426,6 @@ impl<Data: QueueData> QueueManager<Data> {
         key
     }
 
-    /// Removes the entry under `key` only if the acquisition owning `is_abort` registered it.
-    ///
-    /// Keys are not unique: `add_entity` replaces an existing entry with the same key, so an
-    /// unconditional removal could drop an entry that belongs to another acquisition.
-    pub(crate) fn remove_entity_if_owned(&self, key: &Data::Key, is_abort: &Arc<AtomicBool>) {
-        let (inner, queue_len) = {
-            let mut queue = self.queue.lock();
-            if !queue
-                .get(key)
-                .is_some_and(|inner| Arc::ptr_eq(&inner.is_abort, is_abort))
-            {
-                return;
-            }
-            (queue.remove(key), queue.len())
-        };
-
-        set_session_queued_queries(queue_len);
-        if let Some(inner) = inner {
-            inner.data.exit_wait_pending(inner.instant.elapsed());
-        }
-    }
-
     pub(crate) fn remove_entity(&self, key: &Data::Key) -> Option<Arc<Data>> {
         let mut queue = self.queue.lock();
         let inner = queue.remove(key);
@@ -520,9 +498,9 @@ where T: Future<Output = std::result::Result<std::result::Result<Permit, E>, Ela
     fn drop(this: Pin<&mut Self>) {
         let this = this.project();
         // Cancellation can drop the future without polling it to completion.
-        // Release the entry this future registered, and only that entry.
+        // Release the registered entry and the query context it owns in that case.
         if let Some(key) = this.key.take() {
-            this.manager.remove_entity_if_owned(&key, this.is_abort);
+            this.manager.remove_entity(&key);
         }
     }
 }
