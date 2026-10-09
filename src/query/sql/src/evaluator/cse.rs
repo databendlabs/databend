@@ -47,6 +47,7 @@ pub fn apply_cse(
 
                 // Make sure smaller expressions come first.
                 cse_candidates.sort_by_key(|expr| expression_size(expr));
+                prune_candidates(&exprs, &mut cse_candidates);
 
                 let mut temp_var_counter = input_num_columns;
                 if !cse_candidates.is_empty() {
@@ -162,6 +163,49 @@ fn expression_size(expr: &Expr) -> usize {
     }
 }
 
+/// Count references in the candidate DAG rather than occurrences in the original trees.
+/// A retained candidate evaluates its children once; an inlined candidate evaluates them
+/// once per reference. Parents are larger than children, so a reverse size traversal
+/// resolves both nested and cascading single-use candidates in one pass.
+fn prune_candidates(exprs: &[Expr], candidates: &mut Vec<&Expr>) {
+    if candidates.is_empty() {
+        return;
+    }
+    let mut references: HashMap<&Expr, usize> = candidates.iter().map(|expr| (*expr, 0)).collect();
+    for expr in exprs {
+        count_candidate_references(expr, &mut references);
+    }
+    for candidate in candidates.iter().rev() {
+        if references[candidate] != 0 {
+            count_candidate_children(candidate, &mut references);
+        }
+    }
+    candidates.retain(|candidate| references[candidate] > 1);
+}
+
+fn count_candidate_references(expr: &Expr, references: &mut HashMap<&Expr, usize>) {
+    if let Some(references) = references.get_mut(expr) {
+        *references += 1;
+    } else {
+        count_candidate_children(expr, references);
+    }
+}
+
+fn count_candidate_children(expr: &Expr, references: &mut HashMap<&Expr, usize>) {
+    match expr {
+        Expr::FunctionCall(expr::FunctionCall { function, .. })
+            if matches!(function.signature.name.as_str(), "if" | "is_not_error") => {}
+        Expr::FunctionCall(expr::FunctionCall { args, .. })
+        | Expr::LambdaFunctionCall(expr::LambdaFunctionCall { args, .. }) => {
+            for arg in args {
+                count_candidate_references(arg, references);
+            }
+        }
+        Expr::Cast(Cast { expr, .. }) => count_candidate_references(expr, references),
+        Expr::Constant(_) | Expr::ColumnRef(_) => {}
+    }
+}
+
 // `perform_cse_replacement` performs common subexpression elimination (CSE) on an expression tree
 // by replacing subexpressions that appear multiple times with a single shared expression.
 fn perform_cse_replacement(expr: &mut Expr, cse_replacements: &HashMap<Expr, Expr>) {
@@ -172,6 +216,8 @@ fn perform_cse_replacement(expr: &mut Expr, cse_replacements: &HashMap<Expr, Exp
     }
 
     match expr {
+        Expr::FunctionCall(expr::FunctionCall { function, .. })
+            if matches!(function.signature.name.as_str(), "if" | "is_not_error") => {}
         Expr::Cast(expr::Cast {
             expr: inner_expr, ..
         }) => {
@@ -190,14 +236,157 @@ fn perform_cse_replacement(expr: &mut Expr, cse_replacements: &HashMap<Expr, Exp
 
 #[cfg(test)]
 mod tests {
+    use std::borrow::Cow;
+
+    use databend_common_expression::ConstantFolder;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::FromData;
+    use databend_common_expression::FunctionContext;
     use databend_common_expression::RawExpr;
     use databend_common_expression::Scalar;
     use databend_common_expression::type_check::check;
     use databend_common_expression::types::DataType;
+    use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
+    use databend_common_expression_test_support::parse_raw_expr;
 
     use super::*;
+
+    fn parse(text: &str) -> Expr {
+        let raw = parse_raw_expr(
+            text,
+            &[("a", DataType::Number(NumberDataType::Int32))],
+            &BUILTIN_FUNCTIONS,
+        );
+        ConstantFolder::fold(
+            Cow::Owned(check(&raw, &BUILTIN_FUNCTIONS).unwrap()),
+            &FunctionContext::default(),
+            &BUILTIN_FUNCTIONS,
+        )
+        .0
+        .into_owned()
+    }
+
+    fn check_cse(
+        sql: &[&str],
+        projections: Option<BTreeSet<usize>>,
+        candidates: usize,
+    ) -> Vec<Expr> {
+        let original = BlockOperator::Map {
+            exprs: sql.iter().map(|sql| parse(sql)).collect(),
+            projections,
+        };
+        let optimized = apply_cse(vec![original.clone()], 1).pop().unwrap();
+        let input = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![0, 1, 2, 3])]);
+        let ctx = FunctionContext::default();
+        let expected = original.execute(&ctx, input.clone()).unwrap();
+        let actual = optimized.execute(&ctx, input).unwrap();
+        assert_eq!(actual.num_rows(), expected.num_rows());
+        assert_eq!(actual.num_columns(), expected.num_columns());
+        for column in 0..expected.num_columns() {
+            assert_eq!(
+                actual.get_by_offset(column).value(),
+                expected.get_by_offset(column).value()
+            );
+        }
+        let BlockOperator::Map { exprs, .. } = optimized else {
+            unreachable!()
+        };
+        assert_eq!(exprs.len(), sql.len() + candidates, "{exprs:?}");
+        exprs
+    }
+
+    #[test]
+    fn test_cse_prunes_nested_single_use_candidates() {
+        let sql = "((a + 1) * 2) + 3";
+        let exprs = check_cse(&[sql, sql], None, 1);
+        assert_eq!(exprs[0], parse(sql));
+        assert_eq!(exprs[1], exprs[2]);
+
+        // A cast is also a candidate and must propagate its one effective use.
+        let sql = "CAST((a + 1) * 2 AS STRING)";
+        let exprs = check_cse(&[sql, sql], None, 1);
+        assert_eq!(exprs[0], parse(sql));
+    }
+
+    #[test]
+    fn test_cse_retains_multiple_reference_positions() {
+        // One consumer, but two reference positions: the child still saves work.
+        let sql = "(a + 1) * (a + 1)";
+        let exprs = check_cse(&[sql, sql], None, 2);
+        let Expr::FunctionCall(parent) = &exprs[1] else {
+            unreachable!()
+        };
+        assert!(matches!(&parent.args[0], Expr::ColumnRef(_)));
+        assert_eq!(parent.args[0], parent.args[1]);
+    }
+
+    #[test]
+    fn test_cse_retains_shared_children() {
+        let exprs = check_cse(
+            &["(a + 1) * 2", "(a + 1) * 2", "(a + 1) * 3", "(a + 1) * 3"],
+            None,
+            3,
+        );
+        assert_eq!(exprs[0], parse("a + 1"));
+        // A child used directly as an output also remains shared.
+        check_cse(&["(a + 1) * 2", "(a + 1) * 2", "a + 1"], None, 2);
+        // Prune the middle candidate but retain its child, which also has a
+        // direct output reference.
+        check_cse(
+            &["((a + 1) * 2) + 3", "((a + 1) * 2) + 3", "a + 1"],
+            None,
+            2,
+        );
+    }
+
+    #[test]
+    fn test_cse_pruning_preserves_projections() {
+        for projections in [
+            BTreeSet::new(),
+            BTreeSet::from([0]),
+            BTreeSet::from([2]),
+            BTreeSet::from([0, 1, 3]),
+        ] {
+            check_cse(
+                &["(a + 1) * 2", "(a + 1) * 2", "a + 7"],
+                Some(projections),
+                1,
+            );
+        }
+    }
+
+    #[test]
+    fn test_cse_pruning_preserves_error_boundaries() {
+        // If a candidate also occurs under a protected function, do not count
+        // or replace that occurrence. Otherwise it spuriously keeps the child.
+        for protected in ["if(a > 0, a + 1, 0)", "is_not_error(a + 1)"] {
+            let exprs = check_cse(&["(a + 1) * 2", "(a + 1) * 2", protected], None, 1);
+            assert_eq!(exprs[3], parse(protected));
+            // Even when the child is retained for two unprotected uses,
+            // replacement must not cross into the protected function.
+            let exprs = check_cse(&["a + 1", "a + 1", protected], None, 1);
+            assert_eq!(exprs[3], parse(protected));
+        }
+        // The only occurrences of the throwing expression are protected.
+        check_cse(&["if(a = 0, 0, 1 / a)", "if(a = 0, 0, 1 / a)"], None, 0);
+        check_cse(&["is_not_error(1 / a)", "is_not_error(1 / a)"], None, 0);
+    }
+
+    #[test]
+    fn test_cse_pruning_keeps_nondeterministic_expressions_inline() {
+        let original = BlockOperator::Map {
+            exprs: vec![parse("rand() + a"), parse("rand() + a")],
+            projections: None,
+        };
+        let optimized = apply_cse(vec![original], 1).pop().unwrap();
+        let BlockOperator::Map { exprs, projections } = optimized else {
+            unreachable!()
+        };
+        assert_eq!(exprs.len(), 2);
+        assert!(projections.is_none());
+    }
 
     #[test]
     fn test_cse_distinguishes_expressions_with_same_display() {
