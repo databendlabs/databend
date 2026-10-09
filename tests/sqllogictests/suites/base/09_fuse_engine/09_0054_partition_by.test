@@ -279,7 +279,7 @@ SHOW CREATE TABLE alter_partitioned
 alter_partitioned <slt:ignore>ENGINE=FUSE CLUSTER BY (c)
 
 query I
-SELECT count(*) FROM system.tables WHERE database = 'db_09_0054' AND name = 'alter_partitioned' AND options NOT LIKE '%WRITE_DISTRIBUTION_MODE%' AND options NOT LIKE '%PARTITION_BY%'
+SELECT count(*) FROM system.tables WHERE database = 'db_09_0054' AND name = 'alter_partitioned' AND table_option NOT LIKE '%WRITE_DISTRIBUTION_MODE%' AND table_option NOT LIKE '%PARTITION_BY%'
 ----
 1
 
