@@ -81,11 +81,14 @@ use crate::FuseTable;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::inverted_index_user_dictionary::JAPANESE_DICTIONARY;
 use crate::io::resolve_inverted_index_user_dictionary_blocking;
+use crate::io::write::block_index::BlockIndexMerge;
+use crate::io::write::block_index::BlockIndexMergeSource;
 use crate::io::write::block_index::BlockIndexSpec;
 use crate::io::write::block_index::BlockIndexWriteContext;
 use crate::io::write::block_index::BlockIndexWriter;
 use crate::io::write::block_index::PendingBlockIndexOutput;
 use crate::io::write::block_index::WrittenInvertedIndex;
+use crate::io::write::inverted_index_merge::InvertedIndexMerge;
 
 #[derive(Clone)]
 pub struct InvertedIndexBuilder {
@@ -104,42 +107,43 @@ impl InvertedIndexBuilder {
         location_generator.gen_inverted_index_v2_location(&self.version)
     }
 
-    /// Binds this index definition to a freshly generated immutable object location.
-    ///
-    /// Inverted index object keys are independent from the block key, so the location is
-    /// resolved once per block write and carried by the spec, matching the other index specs.
-    pub(crate) fn into_write_spec(
-        self,
-        location_generator: &TableMetaLocationGenerator,
-    ) -> InvertedIndexWriteSpec {
-        let location = (
-            self.gen_inverted_index_location(location_generator),
-            INVERTED_INDEX_FILE_FORMAT_VERSION,
-        );
-        InvertedIndexWriteSpec {
-            builder: self,
-            location,
-        }
+    pub(crate) fn into_write_spec(self) -> InvertedIndexWriteSpec {
+        InvertedIndexWriteSpec { builder: self }
     }
 }
 
 pub(crate) struct InvertedIndexWriteSpec {
     builder: InvertedIndexBuilder,
-    location: Location,
 }
 
 impl BlockIndexSpec for InvertedIndexWriteSpec {
+    fn index_name(&self) -> Option<&str> {
+        Some(&self.builder.name)
+    }
+
+    fn prepare_merge(
+        &self,
+        sources: &[BlockIndexMergeSource<'_>],
+    ) -> Result<Option<Arc<dyn BlockIndexMerge>>> {
+        InvertedIndexMerge::try_create(&self.builder, sources)
+    }
+
     fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
+        let location = (
+            self.builder
+                .gen_inverted_index_location(&context.meta_locations),
+            INVERTED_INDEX_FILE_FORMAT_VERSION,
+        );
         Ok(Box::new(InvertedIndexBlockWriter {
             index_name: self.builder.name.clone(),
             index_version: self.builder.version.clone(),
-            location: self.location.clone(),
+            location: location.clone(),
             source_schema: context.physical_schema,
             writer: InvertedIndexWriter::try_create(
                 Arc::new(self.builder.schema.clone()),
                 &self.builder.options,
                 context.operator,
-                self.location.0.clone(),
+                location.0,
                 self.builder.user_dictionary.clone(),
             )?,
         }))

@@ -29,11 +29,13 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
+use databend_common_expression::TableDataType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::TableInfo;
@@ -51,9 +53,12 @@ use databend_common_pipeline_transforms::columns::TransformAddStreamColumns;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::StreamContext;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::HilbertRangeExchange;
+use databend_common_storages_fuse::operations::ReclusterIndexMergeInputs;
 use databend_common_storages_fuse::operations::TransformHilbertCluster;
+use databend_common_storages_fuse::operations::TransformReclusterIndexMerge;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformVectorCluster;
 use databend_common_storages_fuse::operations::add_aggregate_state_reaggregate_transform;
@@ -65,6 +70,9 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::builders::SortPipelineBuilder;
+use crate::pipelines::processors::horizontal_recluster::HorizontalReclusterSource;
+use crate::pipelines::processors::horizontal_recluster::TransformPrepareReclusterIndex;
+use crate::pipelines::processors::horizontal_recluster::TransformReclusterOutputOrder;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextSettings;
 use crate::spillers::ReclusterSpiller;
@@ -142,7 +150,13 @@ impl IPhysicalPlan for Recluster {
                 // coordinator and cannot see this node's live memory pressure.
                 // Oversized tasks are only tolerable when sort spill can absorb
                 // the pressure; otherwise fail fast instead of risking an OOM kill.
-                if !builder.ctx.get_enable_sort_spill() {
+                let multiway_merge = task.kind == ReclusterTaskKind::MergeBlocks
+                    && settings.get_enable_recluster_multiway_merge()?
+                    && matches!(table.get_storage_format(), FuseStorageFormat::Parquet)
+                    && !table.schema().fields().iter().any(|field| {
+                        matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_)))
+                    });
+                if !multiway_merge && !builder.ctx.get_enable_sort_spill() {
                     let max_memory_usage = settings.get_max_memory_usage()? as usize;
                     // `max_memory_usage == 0` means memory usage is unlimited.
                     if max_memory_usage != 0 {
@@ -192,30 +206,6 @@ impl IPhysicalPlan for Recluster {
                     );
                 }
 
-                builder.ctx.set_partitions(plan.parts.clone())?;
-
-                table.read_data(
-                    builder.ctx.clone(),
-                    &plan,
-                    &mut builder.main_pipeline,
-                    false,
-                )?;
-
-                let num_input_columns = schema.fields().len();
-                if table.change_tracking_enabled() {
-                    let stream_ctx = StreamContext::try_create(
-                        builder.ctx.get_function_context()?,
-                        schema,
-                        table_info.ident.seq,
-                        false,
-                        false,
-                    )?;
-
-                    builder
-                        .main_pipeline
-                        .add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));
-                }
-
                 let input_schema = DataSchema::from(table.schema_with_stream()).into();
                 let mut cluster_stats_gen = table.get_cluster_stats_gen(
                     builder.ctx.clone(),
@@ -223,18 +213,72 @@ impl IPhysicalPlan for Recluster {
                     block_thresholds,
                     input_schema,
                 )?;
-                if !cluster_stats_gen.eval_operators.is_empty() {
-                    let eval_operators = cluster_stats_gen.eval_operators.clone();
-                    let func_ctx2 = cluster_stats_gen.func_ctx.clone();
-                    builder.main_pipeline.add_transformer(move || {
-                        CompoundBlockOperator::new(
-                            eval_operators.clone(),
-                            func_ctx2.clone(),
-                            num_input_columns,
-                        )
-                    });
-                }
+                let index_merge = match multiway_merge {
+                    true if settings.get_enable_recluster_inverted_index_merge()?
+                        && !table.schema().fields().iter().any(|field| {
+                            matches!(field.data_type(), TableDataType::AggregateState { .. })
+                        }) =>
+                    {
+                        ReclusterIndexMergeInputs::try_create(table, task)?
+                    }
+                    _ => None,
+                };
+                if multiway_merge {
+                    if !cluster_stats_gen.is_linear() {
+                        return Err(ErrorCode::Internal(
+                            "MergeBlocks requires linear cluster keys",
+                        ));
+                    }
+                    HorizontalReclusterSource::build_pipeline(
+                        builder.ctx.clone(),
+                        &mut builder.main_pipeline,
+                        table.clone(),
+                        task,
+                        &cluster_stats_gen,
+                        index_merge.is_some(),
+                    )?;
+                } else {
+                    builder.ctx.set_partitions(plan.parts.clone())?;
 
+                    table.read_data(
+                        builder.ctx.clone(),
+                        &plan,
+                        &mut builder.main_pipeline,
+                        false,
+                    )?;
+
+                    let num_input_columns = schema.fields().len();
+                    if table.change_tracking_enabled() {
+                        let stream_ctx = StreamContext::try_create(
+                            builder.ctx.get_function_context()?,
+                            schema,
+                            table_info.ident.seq,
+                            false,
+                            false,
+                        )?;
+
+                        builder
+                            .main_pipeline
+                            .add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));
+                    }
+
+                    if !cluster_stats_gen.eval_operators.is_empty() {
+                        let eval_operators = cluster_stats_gen.eval_operators.clone();
+                        let func_ctx2 = cluster_stats_gen.func_ctx.clone();
+                        builder.main_pipeline.add_transformer(move || {
+                            CompoundBlockOperator::new(
+                                eval_operators.clone(),
+                                func_ctx2.clone(),
+                                num_input_columns,
+                            )
+                        });
+                    }
+                }
+                if index_merge.is_some() {
+                    builder
+                        .main_pipeline
+                        .add_transformer(|| TransformReclusterOutputOrder { next_row: 0 });
+                }
                 let max_threads = settings.get_max_threads()? as usize;
 
                 let (rows_per_block, bytes_per_block) = block_thresholds.calc_rows_for_recluster(
@@ -253,7 +297,16 @@ impl IPhysicalPlan for Recluster {
                     ));
                 }
 
-                if cluster_stats_gen.is_hilbert() {
+                if multiway_merge {
+                    let extra_key_num = cluster_stats_gen.extra_key_num;
+                    builder.main_pipeline.add_accumulating_transformer(move || {
+                        OrderedBlockCompactBuilder::new(compact_thresholds, extra_key_num)
+                    });
+                    builder.main_pipeline.try_resize(max_threads)?;
+                    builder
+                        .main_pipeline
+                        .add_block_meta_transformer(|| TransformCompactBlock);
+                } else if cluster_stats_gen.is_hilbert() {
                     Self::build_hilbert_layout_pipeline(
                         builder,
                         task,
@@ -293,10 +346,19 @@ impl IPhysicalPlan for Recluster {
                     }
                 }
 
+                if let Some(index_merge) = &index_merge {
+                    let merged_names = index_merge.merged_names();
+                    builder
+                        .main_pipeline
+                        .add_transformer(move || TransformPrepareReclusterIndex {
+                            merged_names: merged_names.clone(),
+                        });
+                }
                 let virtual_column_layout = task.virtual_column_layout.clone();
                 let query_ctx = builder.ctx.clone();
                 // All layouts share the ordinary block statistics and serialization path after
                 // they have formed output blocks and removed layout-only temporary columns.
+                let index_merge_table = table.clone();
                 builder.main_pipeline.add_transform(
                     move |transform_input_port, transform_output_port| {
                         let proc = match &virtual_column_layout {
@@ -324,7 +386,18 @@ impl IPhysicalPlan for Recluster {
                         };
                         proc.into_processor()
                     },
-                )
+                )?;
+                if let Some(index_merge) = index_merge {
+                    builder.main_pipeline.try_resize(1)?;
+                    builder.main_pipeline.add_accumulating_transformer(|| {
+                        TransformReclusterIndexMerge::new(
+                            builder.ctx.clone(),
+                            index_merge_table.clone(),
+                            index_merge.clone(),
+                        )
+                    });
+                }
+                Ok(())
             }
             _ => Err(ErrorCode::Internal(
                 "A node can only execute one recluster task".to_string(),

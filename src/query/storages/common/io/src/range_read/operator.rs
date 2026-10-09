@@ -27,6 +27,7 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::storage::*;
+use futures::AsyncReadExt;
 use futures::future::AbortHandle;
 use futures::future::AbortRegistration;
 use futures::future::Abortable;
@@ -76,6 +77,7 @@ pub struct OperatorRangeReader {
     req_tx: async_channel::Sender<FetchRequest>,
     prefetch_map: HashMap<Range<u64>, PrefetchSlot>,
     max_unconsumed: usize,
+    streaming: bool,
     poisoned: Option<ErrorCode>,
 
     // Sequential compatibility shell.
@@ -90,6 +92,7 @@ impl OperatorRangeReader {
         op: Operator,
         path: String,
         req_rx: async_channel::Receiver<FetchRequest>,
+        stream_range: Option<Range<u64>>,
     ) {
         let reader = match op.reader(&path).await {
             Ok(reader) => reader,
@@ -102,13 +105,53 @@ impl OperatorRangeReader {
             }
         };
 
+        let mut stream: Option<(u64, opendal::FuturesAsyncReader)> = None;
         while let Ok((range, result_tx, abort_registration)) = req_rx.recv().await {
             let start = Instant::now();
-            let result =
-                Abortable::new(reader.read(range.start..range.end), abort_registration).await;
+            let fetch = async {
+                let Some(bounds) = &stream_range else {
+                    return reader
+                        .read(range.start..range.end)
+                        .await
+                        .map_err(ErrorCode::from);
+                };
+                if range.start < bounds.start || range.end > bounds.end {
+                    return Err(ErrorCode::BadArguments(
+                        "stream read outside configured range",
+                    ));
+                }
+                // Consumer windows share one underlying response stream. A gap
+                // (e.g. discarded hint) reopens at the requested offset, never
+                // buffers all intervening bytes or reads the full range at once.
+                if stream
+                    .as_ref()
+                    .is_none_or(|(position, _)| *position != range.start)
+                {
+                    metrics_inc_remote_io_seeks_after_merged(1);
+                    let input = reader
+                        .clone()
+                        .into_futures_async_read(range.start..bounds.end)
+                        .await?;
+                    stream = Some((range.start, input));
+                }
+                let len = usize::try_from(range.end - range.start)
+                    .map_err(|_| ErrorCode::BadArguments("stream window exceeds address space"))?;
+                let mut data = vec![0; len];
+                let (position, input) = stream.as_mut().expect("initialized stream");
+                input.read_exact(&mut data).await.map_err(ErrorCode::from)?;
+                *position = range.end;
+                Ok(Buffer::from(data))
+            };
+            let result = Abortable::new(fetch, abort_registration).await;
             let Ok(result) = result else {
+                // Cancellation may have consumed a partial window. Never reuse
+                // its cursor as though no bytes had been read.
+                stream = None;
                 continue;
             };
+            if result.is_err() {
+                stream = None;
+            }
             let io_time = start.elapsed();
             let message = match result {
                 Ok(data) => {
@@ -127,7 +170,7 @@ impl OperatorRangeReader {
                         )))
                     }
                 }
-                Err(error) => Err(error.into()),
+                Err(error) => Err(error),
             };
             let _ = result_tx.try_send(message);
         }
@@ -136,13 +179,46 @@ impl OperatorRangeReader {
     /// Create a bare chain tail. `max_unconsumed` bounds in-flight plus
     /// arrived-but-unread ranges; hints beyond it are dropped.
     pub fn new(op: Operator, path: String, max_unconsumed: usize) -> Self {
+        Self::with_stream_range(op, path, max_unconsumed, None)
+    }
+
+    /// Deliver windows from one continuous OpenDAL stream rather than issuing
+    /// a storage range request for every consumer window. No `.chunk()` option
+    /// is used: it would split the stream into independent backend requests.
+    pub fn new_streaming(
+        op: Operator,
+        path: String,
+        range: Range<u64>,
+        max_unconsumed: usize,
+    ) -> Result<Self> {
+        if range.start > range.end || max_unconsumed == 0 {
+            return Err(ErrorCode::BadArguments(
+                "invalid streaming range reader options",
+            ));
+        }
+        Ok(Self::with_stream_range(
+            op,
+            path,
+            max_unconsumed,
+            Some(range),
+        ))
+    }
+
+    fn with_stream_range(
+        op: Operator,
+        path: String,
+        max_unconsumed: usize,
+        range: Option<Range<u64>>,
+    ) -> Self {
         let max_unconsumed = max_unconsumed.max(1);
         let (req_tx, req_rx) = async_channel::unbounded();
-        drop(GlobalIORuntime::instance().spawn(Self::remote_fetch_worker(op, path, req_rx)));
+        let streaming = range.is_some();
+        drop(GlobalIORuntime::instance().spawn(Self::remote_fetch_worker(op, path, req_rx, range)));
         Self {
             req_tx,
             prefetch_map: HashMap::new(),
             max_unconsumed,
+            streaming,
             poisoned: None,
             outputs: VecDeque::new(),
             backlog: VecDeque::new(),
@@ -266,7 +342,9 @@ impl OperatorRangeReader {
             return false;
         }
 
-        metrics_inc_remote_io_seeks_after_merged(1);
+        if !self.streaming {
+            metrics_inc_remote_io_seeks_after_merged(1);
+        }
         metrics_inc_remote_io_read_bytes_after_merged(range.end - range.start);
         self.prefetch_map.insert(range.clone(), PrefetchSlot {
             data: None,
@@ -463,10 +541,23 @@ mod tests {
 
     #[test]
     fn test_discard_does_not_block_same_range_redispatch() {
+        check_discard_during_read(false);
+    }
+
+    #[test]
+    fn test_streaming_discard_cancels_blocked_read_and_reopens() {
+        check_discard_during_read(true);
+    }
+
+    fn check_discard_during_read(streaming: bool) {
         init_test_runtime();
         let accessor = std::sync::Arc::new(BlockingFirstReadAccessor::new(b"data"));
         let op = OperatorBuilder::new(accessor.clone()).finish();
-        let mut reader = OperatorRangeReader::new(op, "cancel".to_string(), 1);
+        let mut reader = if streaming {
+            OperatorRangeReader::new_streaming(op, "cancel".into(), 0..4, 1).unwrap()
+        } else {
+            OperatorRangeReader::new(op, "cancel".into(), 1)
+        };
 
         let range = 0..4;
         assert!(!reader.prefetch(std::slice::from_ref(&range)));
@@ -497,6 +588,72 @@ mod tests {
             b"data"
         );
         assert_eq!(accessor.calls(), 2);
+    }
+
+    #[test]
+    fn test_streaming_windows_share_one_backend_range() {
+        init_test_runtime();
+        let accessor = RecordingReadAccessor::new(b"0123456789abcdef", false);
+        let mut reader = OperatorRangeReader::new_streaming(
+            recording_operator(accessor.clone()),
+            "data".into(),
+            0..16,
+            2,
+        )
+        .unwrap();
+        for range in [0..4, 4..8, 8..12, 12..16] {
+            assert!(RangeReader::prefetch(
+                &mut reader,
+                std::slice::from_ref(&range)
+            ));
+            let expected = &b"0123456789abcdef"[range.start as usize..range.end as usize];
+            assert_eq!(
+                RangeReader::read(&mut reader, range)
+                    .unwrap()
+                    .to_bytes()
+                    .as_ref(),
+                expected
+            );
+        }
+        assert_eq!(accessor.read_ranges(), vec![0..16]);
+    }
+
+    #[test]
+    fn test_streaming_gap_reopens_and_short_read_fails() {
+        init_test_runtime();
+        let accessor = RecordingReadAccessor::new(b"0123456789abcdef", false);
+        let mut reader = OperatorRangeReader::new_streaming(
+            recording_operator(accessor.clone()),
+            "data".into(),
+            0..16,
+            1,
+        )
+        .unwrap();
+        assert_eq!(
+            RangeReader::read(&mut reader, 0..4)
+                .unwrap()
+                .to_bytes()
+                .as_ref(),
+            b"0123"
+        );
+        assert_eq!(
+            RangeReader::read(&mut reader, 8..12)
+                .unwrap()
+                .to_bytes()
+                .as_ref(),
+            b"89ab"
+        );
+        assert_eq!(accessor.read_ranges(), vec![0..16, 8..16]);
+        let accessor = RecordingReadAccessor::new(b"01234567", true);
+        let mut reader = OperatorRangeReader::new_streaming(
+            recording_operator(accessor),
+            "data".into(),
+            0..8,
+            1,
+        )
+        .unwrap();
+        assert!(RangeReader::read(&mut reader, 0..8).is_err());
+        assert!(RangeReader::read(&mut reader, 0..4).is_err());
     }
 
     #[test]

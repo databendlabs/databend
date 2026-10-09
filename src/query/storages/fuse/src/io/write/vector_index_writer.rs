@@ -93,14 +93,13 @@ pub struct VectorIndexBuilder {
 
 pub(crate) struct VectorIndexWriteSpec {
     builder: VectorIndexBuilder,
-    location: Location,
 }
 
 impl BlockIndexSpec for VectorIndexWriteSpec {
-    fn new_writer(&self, _context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
+    fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
         Ok(Box::new(VectorIndexBlockWriter {
             builder: self.builder.clone(),
-            location: self.location.clone(),
+            location: context.meta_locations.block_vector_index_location(),
         }))
     }
 }
@@ -136,11 +135,8 @@ pub(crate) struct VectorIndexBuildState {
 }
 
 impl VectorIndexBuilder {
-    pub(crate) fn into_write_spec(self, location: Location) -> VectorIndexWriteSpec {
-        VectorIndexWriteSpec {
-            builder: self,
-            location,
-        }
+    pub(crate) fn into_write_spec(self) -> VectorIndexWriteSpec {
+        VectorIndexWriteSpec { builder: self }
     }
 
     pub fn try_create(
