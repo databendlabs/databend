@@ -60,12 +60,9 @@ use crate::StoredKeyNormalizer;
 use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
-use crate::binder::ScalarBinder;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
-use crate::plans::LambdaFunc;
-use crate::plans::Visitor as ScalarVisitor;
 
 const TABLE_KEY_STRING_PREFIX_LEN: u64 = 8;
 
@@ -607,73 +604,6 @@ pub fn analyze_cluster_keys(
     Ok((cluster_by_str, exprs))
 }
 
-/// Reject lambda functions in a bound TTL expression.
-///
-/// A TTL is persisted as expression text and later rewritten at the AST level
-/// by `DROP COLUMN` / `RENAME COLUMN`, where lambda parameters cannot be told
-/// apart from table columns. Supporting them would require a second scope
-/// resolution implementation next to the binder's.
-///
-/// Validate after binding because `LambdaArgument::Ambiguous` may represent
-/// either a lambda or a JSON arrow expression; only semantic analysis can
-/// distinguish them.
-fn reject_ttl_lambda(scalar: &ScalarExpr, display: &str) -> Result<()> {
-    struct LambdaRejector<'a> {
-        display: &'a str,
-        found: bool,
-    }
-
-    impl<'a> ScalarVisitor<'a> for LambdaRejector<'_> {
-        fn visit_lambda_function(&mut self, _: &'a LambdaFunc) -> Result<()> {
-            self.found = true;
-            Ok(())
-        }
-    }
-
-    let mut rejector = LambdaRejector {
-        display,
-        found: false,
-    };
-    rejector.visit(scalar)?;
-    if rejector.found {
-        return Err(ErrorCode::SemanticError(format!(
-            "TTL expression `{}` must not use a lambda function",
-            rejector.display
-        )));
-    }
-    Ok(())
-}
-
-/// Validate the rules shared by new TTL definitions and schema revalidation.
-/// Column-reference admission is checked separately for new definitions.
-pub(crate) fn validate_ttl_expr(scalar: &ScalarExpr, display: &str) -> Result<()> {
-    reject_ttl_lambda(scalar, display)?;
-    if !scalar.evaluable() {
-        return Err(ErrorCode::SemanticError(format!(
-            "TTL expression `{display}` is invalid"
-        )));
-    }
-    let expr = scalar.as_expr()?;
-    if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-        return Err(ErrorCode::SemanticError(format!(
-            "TTL expression `{display}` is not deterministic"
-        )));
-    }
-
-    let data_type = expr.data_type();
-    // TIMESTAMP_TZ is an absolute instant plus a display offset, which is what
-    // retention needs; excluding it would be an artificial restriction.
-    if !matches!(
-        data_type.remove_nullable(),
-        DataType::Timestamp | DataType::TimestampTz | DataType::Date
-    ) {
-        return Err(ErrorCode::SemanticError(format!(
-            "TTL expression `{display}` must be of type TIMESTAMP, TIMESTAMP_TZ or DATE, but got '{data_type}'"
-        )));
-    }
-    Ok(())
-}
-
 /// Re-validate a persisted TTL expression against `table_meta`'s current schema.
 ///
 /// Used by schema-changing DDL to reject a target schema on which the stored
@@ -684,11 +614,11 @@ pub fn validate_stored_ttl_expr(
     sql: &str,
 ) -> Result<()> {
     let ast = parse_expr(&tokenize_sql(sql)?, Dialect::default())?;
-    let metadata = Arc::new(RwLock::new(Metadata::default()));
-    let mut bind_context = bind_context_from_schema(&schema, &metadata);
-    let names = NameResolutionContext::preserve_identifier_case();
-    let mut binder = ScalarBinder::new(&mut bind_context, ctx, &names, metadata, &[]);
-    binder.forbid_udf();
-    let (scalar, _) = binder.bind(&ast)?;
-    validate_ttl_expr(&scalar, &format!("{ast:#}"))
+    super::ttl::bind_ttl_definition(
+        ctx,
+        &schema,
+        &ast,
+        &NameResolutionContext::preserve_identifier_case(),
+    )?;
+    Ok(())
 }

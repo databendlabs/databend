@@ -57,12 +57,11 @@ CREATE TABLE `05_0066_ttl_bad`(a int not null) TTL a
 statement error 1065
 CREATE TABLE `05_0066_ttl_bad`(a int not null) TTL '2020-01-01'::timestamp
 
-# TTL must be deterministic.
+# Functions and multi-column rules are not supported.
 statement error 1065
 CREATE TABLE `05_0066_ttl_bad`(a int not null, t timestamp not null) TTL greatest(t, now())
 
-# A TTL must not use a lambda. A stored TTL is rewritten at the AST level by
-# DROP/RENAME COLUMN, which cannot tell a lambda parameter from a table column.
+# Only a time column, optionally plus a nonnegative integer interval, is allowed.
 statement error 1065
 CREATE TABLE ttl_lambda (times ARRAY(TIMESTAMP)) TTL array_max(array_transform(times, v -> v + INTERVAL 1 DAY))
 
@@ -75,16 +74,23 @@ ALTER TABLE ttl_lambda SET TTL array_max(array_transform(times, v -> v + INTERVA
 statement ok
 DROP TABLE ttl_lambda
 
-# The JSON arrow operator is not a lambda, so it stays usable.
-statement ok
+# TTL accepts only a time column, optionally plus a constant interval.
+statement error 1065
 CREATE TABLE ttl_json_arrow (payload VARIANT) TTL try_to_timestamp(payload['expires_at'])
-
-statement ok
-DROP TABLE ttl_json_arrow
 
 # TTL must be evaluable from a row.
 statement error 1065
 CREATE TABLE ttl_aggregate (ts TIMESTAMP) TTL max(ts)
+
+# Intervals must be nonnegative integer literals, not strings or columns.
+statement error 1065
+CREATE TABLE ttl_bad_interval (ts TIMESTAMP) TTL ts + INTERVAL -1 DAY
+
+statement error 1065
+CREATE TABLE ttl_bad_interval (ts TIMESTAMP) TTL ts + INTERVAL '1' DAY
+
+statement error 1065
+CREATE TABLE ttl_bad_interval (ts TIMESTAMP, days INT) TTL ts + INTERVAL days DAY
 
 # Unknown column in a TTL expression.
 statement error 1065
@@ -271,28 +277,9 @@ ttl_canonical CREATE TABLE ttl_canonical ( "NewTime" TIMESTAMP NULL ) ENGINE=FUS
 statement ok
 DROP TABLE ttl_canonical
 
-# SQL column names are normalized, but JSON keys retain their original case.
-statement ok
+# JSON extraction is not a TTL definition.
+statement error 1065
 CREATE TABLE ttl_json (payload VARIANT) TTL try_to_timestamp(PAYLOAD:ExpiresAt)
-
-query TT
-SHOW CREATE TABLE ttl_json
-----
-ttl_json CREATE TABLE ttl_json ( payload VARIANT NULL ) ENGINE=FUSE TTL try_to_timestamp(payload:ExpiresAt)
-
-statement ok
-ALTER TABLE ttl_json SET TTL try_to_timestamp(PAYLOAD:Meta:ExpiresAt)
-
-statement ok
-ALTER TABLE ttl_json RENAME COLUMN payload TO document
-
-query TT
-SHOW CREATE TABLE ttl_json
-----
-ttl_json CREATE TABLE ttl_json ( document VARIANT NULL ) ENGINE=FUSE TTL try_to_timestamp(document:Meta:ExpiresAt)
-
-statement ok
-DROP TABLE ttl_json
 
 # TIMESTAMP_TZ is an absolute instant, so it is accepted as a TTL result type.
 statement ok

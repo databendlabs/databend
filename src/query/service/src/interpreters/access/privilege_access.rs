@@ -2283,10 +2283,14 @@ impl AccessChecker for PrivilegeAccess {
                         }
                     }
                 }
-                let privileges = match plan.mutation_type {
-                    MutationType::Merge => vec![UserPrivilegeType::Insert, UserPrivilegeType::Update, UserPrivilegeType::Delete],
-                    MutationType::Update => vec![UserPrivilegeType::Update],
-                    MutationType::Delete => vec![UserPrivilegeType::Delete],
+                let privileges = if plan.expected_ttl.is_some() {
+                    vec![UserPrivilegeType::Alter]
+                } else {
+                    match plan.mutation_type {
+                        MutationType::Merge => vec![UserPrivilegeType::Insert, UserPrivilegeType::Update, UserPrivilegeType::Delete],
+                        MutationType::Update => vec![UserPrivilegeType::Update],
+                        MutationType::Delete => vec![UserPrivilegeType::Delete],
+                    }
                 };
                 for privilege in privileges {
                     self.validate_table_access(&plan.catalog_name, &plan.database_name, &plan.table_name, privilege, false, false).await?;

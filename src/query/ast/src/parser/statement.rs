@@ -5281,6 +5281,13 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _)| AlterTableAction::RemoveTableTtl,
     );
 
+    let materialize_table_ttl = map(
+        rule! {
+            MATERIALIZE ~ TTL
+        },
+        |(_, _)| AlterTableAction::MaterializeTableTtl,
+    );
+
     let recluster_table = map(
         rule! {
             RECLUSTER ~ FINAL? ~ ( WHERE ~ ^#expr )? ~ ( LIMIT ~ #literal_u64 )?
@@ -5395,6 +5402,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         #unset_table_options
             | #set_table_ttl
             | #remove_table_ttl
+            | #materialize_table_ttl
             | #refresh_cache
             | #modify_table_connection
             | #drop_all_row_access_polices

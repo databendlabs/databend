@@ -57,6 +57,9 @@ pub struct CommitSink {
 
     // Used for recluster.
     pub recluster_info: Option<ReclusterInfoSideCar>,
+    /// Present only for materializing a row-level TTL definition.
+    #[serde(default)]
+    pub expected_ttl: Option<String>,
 }
 
 #[typetag::serde]
@@ -98,6 +101,7 @@ impl IPhysicalPlan for CommitSink {
             deduplicated_label: self.deduplicated_label.clone(),
             table_meta_timestamps: self.table_meta_timestamps,
             recluster_info: self.recluster_info.clone(),
+            expected_ttl: self.expected_ttl.clone(),
         })
     }
 
@@ -146,6 +150,7 @@ impl IPhysicalPlan for CommitSink {
                         self.deduplicated_label.clone(),
                         self.table_meta_timestamps,
                         false,
+                        self.expected_ttl.clone(),
                     )
                 })
             }
@@ -217,6 +222,7 @@ impl IPhysicalPlan for CommitSink {
                         self.deduplicated_label.clone(),
                         self.table_meta_timestamps,
                         acquire_commit_lock,
+                        self.expected_ttl.clone(),
                     )
                 })
             }

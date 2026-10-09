@@ -286,6 +286,7 @@ pub async fn do_refresh_table_index(
             None,
             table_meta_timestamps,
             false,
+            None,
         )
     })?;
 

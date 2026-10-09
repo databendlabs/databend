@@ -26,8 +26,8 @@ use futures_util::TryStreamExt;
 async fn test_ttl_flashback_schema_validation() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     for sql in [
-        "CREATE TABLE default.ttl_flashback (id INT)",
-        "INSERT INTO default.ttl_flashback VALUES (1)",
+        "CREATE TABLE default.ttl_flashback (id INT, expires TIMESTAMP)",
+        "INSERT INTO default.ttl_flashback VALUES (1, '2020-01-01')",
     ] {
         fixture.execute_command(sql).await?;
     }
@@ -85,7 +85,7 @@ async fn test_ttl_flashback_schema_validation() -> Result<()> {
 
     // A current policy that is valid for the historical schema is retained.
     fixture
-        .execute_command("ALTER TABLE default.ttl_flashback SET TTL to_timestamp(id)")
+        .execute_command("ALTER TABLE default.ttl_flashback SET TTL expires")
         .await?;
     fixture.execute_command(&flashback).await?;
     let restored = catalog
@@ -93,7 +93,7 @@ async fn test_ttl_flashback_schema_validation() -> Result<()> {
         .await?;
     assert_eq!(
         restored.get_table_info().meta.ttl.as_deref(),
-        Some("to_timestamp(id)")
+        Some("expires")
     );
 
     // Existing column names alone are insufficient: the historical type must
@@ -220,7 +220,7 @@ async fn test_alter_ttl_does_not_create_snapshot() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_ttl_lambda_validation_after_binding() -> Result<()> {
+async fn test_ttl_rejects_non_column_definitions() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -232,67 +232,23 @@ async fn test_ttl_lambda_validation_after_binding() -> Result<()> {
         .await
         .expect_err("TTL lambda must be rejected");
     assert_eq!(err.code(), ErrorCode::SEMANTIC_ERROR);
-    assert!(
-        err.message().contains("must not use a lambda function"),
-        "{err}"
-    );
+    assert!(err.message().contains("TTL must be a time column"), "{err}");
 
-    // The parser also represents a JSON arrow in a trailing function argument
-    // as an ambiguous lambda. Semantic binding must retain this valid form.
-    Planner::new(ctx)
+    // JSON extraction and function calls are not restricted TTL definitions.
+    let err = Planner::new(ctx)
         .plan_sql(
             "CREATE TABLE default.ttl_json_arrow (payload VARIANT) \
              TTL try_to_timestamp(payload -> 'expires_at')",
         )
-        .await?;
+        .await
+        .expect_err("TTL must use a time column");
+    assert_eq!(err.code(), ErrorCode::SEMANTIC_ERROR);
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_ttl_stored_expression_preserves_json_keys() -> Result<()> {
+async fn test_table_keys_preserve_json_keys() -> Result<()> {
     let fixture = TestFixture::setup().await?;
-    for (sql, expected) in [
-        (
-            "CREATE TABLE default.ttl_json_keys (payload VARIANT) TTL try_to_timestamp(PAYLOAD:ExpiresAt)",
-            "try_to_timestamp(payload:ExpiresAt)",
-        ),
-        (
-            "ALTER TABLE default.ttl_json_keys SET TTL try_to_timestamp(PAYLOAD:Meta:ExpiresAt)",
-            "try_to_timestamp(payload:Meta:ExpiresAt)",
-        ),
-        (
-            "ALTER TABLE default.ttl_json_keys RENAME COLUMN payload TO document",
-            "try_to_timestamp(document:Meta:ExpiresAt)",
-        ),
-    ] {
-        fixture.execute_command(sql).await?;
-        let ctx = fixture.new_query_ctx().await?;
-        let table = ctx.get_table("default", "default", "ttl_json_keys").await?;
-        assert_eq!(table.get_table_info().meta.ttl.as_deref(), Some(expected));
-    }
-
-    // A different session must not fold names already resolved in stored TTL.
-    fixture.execute_command("CREATE TABLE default.ttl_case (\"EventTime\" TIMESTAMP, payload VARIANT) TTL greatest(\"EventTime\", try_to_timestamp(payload:ExpiresAt))")
-        .await?;
-    let ctx = fixture.new_query_ctx().await?;
-    ctx.get_settings()
-        .set_setting("quoted_ident_case_sensitive".to_string(), "0".to_string())?;
-    let (plan, _) = Planner::new(ctx.clone())
-        .plan_sql("ALTER TABLE default.ttl_case RENAME COLUMN payload TO document")
-        .await?;
-    InterpreterFactory::get(ctx.clone(), &plan)
-        .await?
-        .execute2()
-        .await?;
-    let catalog = ctx.get_catalog("default").await?;
-    let table = catalog
-        .get_table(&fixture.default_tenant(), "default", "ttl_case")
-        .await?;
-    let ttl = table.get_table_info().meta.ttl.as_ref().unwrap();
-    assert!(ttl.contains("\"EventTime\""), "{ttl}");
-    assert!(ttl.contains("document:ExpiresAt"), "{ttl}");
-    databend_common_sql::validate_stored_ttl_expr(ctx, table.schema(), ttl)?;
-
     // Stored keys preserve JSON path keys through normalization and display.
     for (table_name, clause) in [
         ("json_cluster", "CLUSTER BY"),
@@ -404,12 +360,11 @@ async fn test_ttl_stored_name_resolution_preserves_case() -> Result<()> {
 async fn test_ttl_schema_compatibility() -> Result<()> {
     let fixture = TestFixture::setup().await?;
 
-    // The definition depends on `ts` while it is nullable. Making the column
-    // non-null folds the expression to a constant, but does not make it invalid.
+    // Changing nullability preserves a valid expiration-column TTL.
     fixture
         .execute_command(
             "CREATE TABLE default.ttl_nullable (ts TIMESTAMP, id INT) \
-             TTL if(ts IS NULL, to_timestamp('2020-01-01'), to_timestamp('2020-01-02'))",
+             TTL ts",
         )
         .await?;
     fixture
@@ -423,14 +378,13 @@ async fn test_ttl_schema_compatibility() -> Result<()> {
     let ttl = table.get_table_info().meta.ttl.clone().unwrap();
     databend_common_sql::validate_stored_ttl_expr(ctx, table.schema(), &ttl)?;
 
-    // CREATE/SET bind directly against a schema before a concrete table exists.
-    // Revalidation must use the same semantics instead of expanding a virtual
-    // computed column and reaching a different conclusion.
+    // Stored computed columns remain eligible for TTL. CREATE and schema
+    // revalidation must agree even before a concrete table exists.
     let ctx = fixture.new_query_ctx().await?;
     let (plan, _) = Planner::new(ctx.clone())
         .plan_sql(
-            "CREATE TABLE default.ttl_virtual (ts TIMESTAMP, \
-             v TIMESTAMP AS (ts) VIRTUAL) TTL v",
+            "CREATE TABLE default.ttl_stored (ts TIMESTAMP, \
+             v TIMESTAMP AS (ts) STORED) TTL v",
         )
         .await?;
     let databend_common_sql::plans::Plan::CreateTable(plan) = plan else {

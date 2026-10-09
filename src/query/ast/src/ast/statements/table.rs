@@ -492,6 +492,8 @@ pub enum AlterTableAction {
     /// `DROP TTL` is intentionally not accepted: `DROP <ident>` already means
     /// dropping a column, so it would be ambiguous with a column named `ttl`.
     RemoveTableTtl,
+    /// Apply the current TTL definition to existing rows.
+    MaterializeTableTtl,
     ReclusterTable {
         is_final: bool,
         selection: Option<Expr>,
@@ -586,6 +588,9 @@ impl Display for AlterTableAction {
             }
             AlterTableAction::RemoveTableTtl => {
                 write!(f, "REMOVE TTL")?;
+            }
+            AlterTableAction::MaterializeTableTtl => {
+                write!(f, "MATERIALIZE TTL")?;
             }
             AlterTableAction::ReclusterTable {
                 is_final,
