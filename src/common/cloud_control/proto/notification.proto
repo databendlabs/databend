@@ -125,6 +125,20 @@ message ListNotificationHistoryResponse {
   int64 previous_page_token = 7;
 }
 
+// Success means the delivery was persisted, not that the webhook was delivered.
+message EnqueueNotificationRequest {
+  string tenant_id = 1;
+  string name = 2;
+  string message = 3;
+  // Query ID for correlation, not an idempotency key.
+  optional string source_id = 4;
+}
+
+message EnqueueNotificationResponse {
+  optional NotificationError error = 1;
+  string notification_id = 2;
+}
+
 service NotificationService {
   rpc CreateNotification(CreateNotificationRequest) returns (CreateNotificationResponse);
   rpc DropNotification(DropNotificationRequest) returns (DropNotificationResponse);
@@ -132,4 +146,5 @@ service NotificationService {
   rpc GetNotification(GetNotificationRequest) returns (GetNotificationResponse);
   rpc AlterNotification(AlterNotificationRequest) returns (AlterNotificationResponse);
   rpc ListNotificationHistory(ListNotificationHistoryRequest) returns (ListNotificationHistoryResponse);
+  rpc EnqueueNotification(EnqueueNotificationRequest) returns (EnqueueNotificationResponse);
 }

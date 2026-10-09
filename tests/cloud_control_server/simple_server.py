@@ -1,4 +1,5 @@
 import hashlib
+import itertools
 import os
 import re
 import shutil
@@ -36,6 +37,7 @@ TASK_RUN_DB = {}
 
 NOTIFICATION_DB = {}
 NOTIFICATION_HISTORY_DB = {}
+NOTIFICATION_DELIVERY_IDS = itertools.count(1)
 WORKER_DB = {}
 
 UDF_HEADERS = {"x-authorization": os.getenv("UDF_MOCK_TOKEN", "123")}
@@ -765,7 +767,51 @@ class NotificationService(notification_pb2_grpc.NotificationServiceServicer):
         if name not in NOTIFICATION_DB:
             return notification_pb2.DropNotificationResponse()
         del NOTIFICATION_DB[name]
+        # Keep independently run SQL cases isolated without removing fixtures.
+        for key in list(NOTIFICATION_HISTORY_DB):
+            if key.startswith("delivery:") and NOTIFICATION_HISTORY_DB[key].name == name:
+                del NOTIFICATION_HISTORY_DB[key]
         return notification_pb2.DropNotificationResponse()
+
+    def EnqueueNotification(self, request, context):
+        # Simulates durable acceptance only; no external webhook is called.
+        if request.name == "send_unimplemented":
+            context.abort(grpc.StatusCode.UNIMPLEMENTED, "old Cloud Control")
+        if request.name == "send_rejected":
+            return notification_pb2.EnqueueNotificationResponse(
+                error=notification_pb2.NotificationError(
+                    kind="INTERNAL", message="simulated persistence failure", code=13
+                )
+            )
+        notification = NOTIFICATION_DB.get(request.name)
+        if notification is None:
+            context.abort(grpc.StatusCode.NOT_FOUND, "Notification not found")
+        if not notification.enabled:
+            context.abort(
+                grpc.StatusCode.FAILED_PRECONDITION, "Notification is disabled"
+            )
+        size = len(request.message.encode("utf-8"))
+        if not 0 < size <= 262144:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Invalid message size")
+        if not request.HasField("source_id") or not request.source_id:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Missing query ID")
+        # Deleting another integration's history must not reuse a delivery ID.
+        delivery_id = str(next(NOTIFICATION_DELIVERY_IDS))
+        timestamp = timestamp_pb2.Timestamp()
+        now = datetime.now(timezone.utc)
+        timestamp.seconds = calendar.timegm(now.utctimetuple())
+        timestamp.nanos = now.microsecond * 1000
+        NOTIFICATION_HISTORY_DB["delivery:" + delivery_id] = (
+            notification_pb2.NotificationHistory(
+                name=request.name,
+                message=request.message,
+                message_source="USER",
+                status="success",
+                created_time=timestamp,
+                processed_time=timestamp,
+            )
+        )
+        return notification_pb2.EnqueueNotificationResponse(notification_id=delivery_id)
 
     def ListNotificationHistory(self, request, context):
         print("ListNotificationHistory", request)

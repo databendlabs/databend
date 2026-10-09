@@ -88,6 +88,34 @@ impl NotificationClient {
         Ok(resp.into_inner())
     }
 
+    pub async fn enqueue_notification(
+        &self,
+        req: Request<crate::pb::EnqueueNotificationRequest>,
+    ) -> databend_common_exception::Result<crate::pb::EnqueueNotificationResponse> {
+        let mut client = self.client.clone();
+        // Do not retry: the request may already have been persisted when a response is lost.
+        let resp = client
+            .enqueue_notification(req)
+            .await
+            .map_err(|status| {
+                if status.code() == tonic::Code::Unimplemented {
+                    databend_common_exception::ErrorCode::Unimplemented(
+                        "Cloud Control does not support active notifications (EnqueueNotification)",
+                    )
+                } else {
+                    status.into()
+                }
+            })?
+            .into_inner();
+        if let Some(error) = &resp.error {
+            return Err(databend_common_exception::ErrorCode::Internal(format!(
+                "Cloud Control rejected notification: {} ({}: {})",
+                error.message, error.kind, error.code,
+            )));
+        }
+        Ok(resp)
+    }
+
     pub async fn list_notification_histories(
         &self,
         req: Request<crate::pb::ListNotificationHistoryRequest>,

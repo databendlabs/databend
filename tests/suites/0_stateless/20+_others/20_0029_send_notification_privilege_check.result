@@ -1,0 +1,2 @@
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Super] is required to invoke table function [send_notification] for user 'notification_sender'@'%' with roles [public]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Super] is required to invoke table function [send_notification] for user 'notification_sender'@'%' with roles [public]

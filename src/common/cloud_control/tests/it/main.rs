@@ -13,5 +13,6 @@
 // limitations under the License.
 
 mod billing_client;
+mod notification_client;
 mod notification_utils;
 mod task_client;
