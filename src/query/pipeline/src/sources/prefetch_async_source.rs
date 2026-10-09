@@ -23,7 +23,6 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
 use crate::core::Event;
-use crate::core::EventCause;
 use crate::core::OutputPort;
 use crate::core::Processor;
 use crate::core::ProcessorPtr;
@@ -35,10 +34,6 @@ pub trait PrefetchAsyncSource: Send {
 
     async fn generate(&mut self) -> Result<Option<DataBlock>>;
     fn is_full(&self, prefetched: &[DataBlock]) -> bool;
-
-    fn un_reacted(&self) -> Result<()> {
-        Ok(())
-    }
 }
 
 // TODO: This can be refactored using proc macros
@@ -96,14 +91,6 @@ impl<T: 'static + PrefetchAsyncSource> Processor for PrefetchAsyncSourcer<T> {
         } else {
             Ok(Event::Async)
         }
-    }
-
-    fn un_reacted(&self, cause: EventCause, _id: usize) -> Result<()> {
-        if let EventCause::Output(_) = cause {
-            self.inner.un_reacted()?;
-        }
-
-        Ok(())
     }
 
     #[async_backtrace::framed]

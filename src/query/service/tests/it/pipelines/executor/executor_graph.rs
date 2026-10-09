@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -38,8 +39,11 @@ use databend_common_pipeline_transforms::processors::TransformDummy;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::ExecutorTask;
 use databend_query::pipelines::executor::ExecutorWorkerContext;
+use databend_query::pipelines::executor::ProcessorWrapper;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
+use databend_query::pipelines::executor::Reschedule;
 use databend_query::pipelines::executor::RunningGraph;
+use databend_query::pipelines::executor::ScheduleQueue;
 use databend_query::pipelines::executor::WorkersCondvar;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextProgress;
@@ -189,40 +193,57 @@ async fn test_resize_pipeline_init_queue() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Runs every scheduled sync task, like a worker would, and keeps the executed tasks so the test
+/// can hand them back to the graph. Returns the executed node ids.
+fn process_sync_tasks(
+    queue: ScheduleQueue,
+    executed: &mut HashMap<usize, ProcessorWrapper>,
+) -> Vec<usize> {
+    assert_eq!(queue.async_queue.len(), 0);
+    let mut nodes = vec![];
+    for mut task in queue.sync_queue {
+        let _ = task.processor().process();
+        nodes.push(task.node.index());
+        executed.insert(task.node.index(), task);
+    }
+    nodes
+}
+
+/// Schedules each node again once it finished executing, in the given order, and checks which
+/// nodes are scheduled next.
+fn check_schedule(graph: &Arc<RunningGraph>, expected: &[(usize, &[usize])]) -> Result<()> {
+    let mut executed = HashMap::new();
+    let init_queue = unsafe { graph.clone().init_schedule_queue(0)? };
+    process_sync_tasks(init_queue, &mut executed);
+
+    for (index, scheduled_result) in expected {
+        let task = executed
+            .remove(index)
+            .expect("node should have been executed");
+        let scheduled = unsafe { graph.schedule_queue(Reschedule::Executed(task))? };
+        assert_eq!(
+            process_sync_tasks(scheduled, &mut executed),
+            *scheduled_result
+        );
+    }
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_simple_schedule_queue() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let pipeline = create_simple_pipeline(ctx)?;
 
-    // init queue and result should be sink node
-    let init_queue = unsafe { pipeline.clone().init_schedule_queue(0)? };
-    unsafe {
-        let _ = init_queue.sync_queue.front().unwrap().processor.process();
-    }
-
-    // node_indices is input of schedule_queue
-    // scheduled_result is result of schedule_queue
-    let node_indices = [2, 1, 0, 1, 2];
-    let scheduled_result = [1, 0, 1, 2];
-
-    for (i, &index) in node_indices.iter().enumerate() {
-        let scheduled = unsafe { pipeline.clone().schedule_queue(NodeIndex::new(index))? };
-
-        assert_eq!(scheduled.sync_queue.len(), if i == 4 { 0 } else { 1 });
-        assert_eq!(scheduled.async_queue.len(), 0);
-
-        if i == 4 {
-            continue;
-        }
-        unsafe {
-            let _ = scheduled.sync_queue.front().unwrap().processor.process();
-            assert_eq!(
-                scheduled.sync_queue.front().unwrap().processor.id().index(),
-                scheduled_result[i]
-            );
-        }
-    }
+    // (executed node, nodes scheduled by it); the init queue schedules the sink node 2
+    check_schedule(&pipeline, &[
+        (2, &[1]),
+        (1, &[0]),
+        (0, &[1]),
+        (1, &[2]),
+        (2, &[]),
+    ])?;
 
     Ok(())
 }
@@ -233,40 +254,19 @@ async fn test_parallel_schedule_queue() -> anyhow::Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     let pipeline = create_parallel_simple_pipeline(ctx)?;
 
-    // init queue and result should be two sink nodes
-    let init_queue = unsafe { pipeline.clone().init_schedule_queue(0)? };
-    unsafe {
-        let _ = init_queue.sync_queue[0].processor.process();
-    }
-    unsafe {
-        let _ = init_queue.sync_queue[1].processor.process();
-    }
-
-    // node_indices is input of schedule_queue
-    // scheduled_result is result of schedule_queue
-    let node_indices = [4, 5, 2, 3, 0, 1, 2, 3, 4, 5];
-    let scheduled_result = [2, 3, 0, 1, 2, 3, 4, 5];
-
-    for (i, &index) in node_indices.iter().enumerate() {
-        let scheduled = unsafe { pipeline.clone().schedule_queue(NodeIndex::new(index))? };
-
-        assert_eq!(
-            scheduled.sync_queue.len(),
-            if i == 8 || i == 9 { 0 } else { 1 }
-        );
-        assert_eq!(scheduled.async_queue.len(), 0);
-
-        if i == 8 || i == 9 {
-            continue;
-        }
-        unsafe {
-            let _ = scheduled.sync_queue.front().unwrap().processor.process();
-            assert_eq!(
-                scheduled.sync_queue.front().unwrap().processor.id().index(),
-                scheduled_result[i]
-            );
-        }
-    }
+    // (executed node, nodes scheduled by it); the init queue schedules the sink nodes 4 and 5
+    check_schedule(&pipeline, &[
+        (4, &[2]),
+        (5, &[3]),
+        (2, &[0]),
+        (3, &[1]),
+        (0, &[2]),
+        (1, &[3]),
+        (2, &[4]),
+        (3, &[5]),
+        (4, &[]),
+        (5, &[]),
+    ])?;
 
     Ok(())
 }
@@ -277,71 +277,59 @@ async fn test_resize_schedule_queue() -> anyhow::Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     let pipeline = create_resize_pipeline(ctx)?;
 
-    // init queue and result should be two sink nodes
-    let init_queue = unsafe { pipeline.clone().init_schedule_queue(0)? };
-    unsafe {
-        let _ = init_queue.sync_queue[0].processor.process();
-        let _ = init_queue.sync_queue[1].processor.process();
-    }
-
-    // node_indices is input of schedule_queue
-    // sync_length is length of sync_queue
-    // scheduled_result is result of schedule_queue
-    let node_indices = [7, 8, 5, 2, 3, 0, 2, 3, 5, 7, 8];
-    let sync_length = [1, 0, 2, 1, 0, 2, 0, 1, 2, 0, 0];
-    let scheduled_result = [5, 2, 3, 0, 2, 3, 5, 7, 8];
-    let mut acc = 0;
-    for (i, &index) in node_indices.iter().enumerate() {
-        let scheduled = unsafe { pipeline.clone().schedule_queue(NodeIndex::new(index))? };
-        assert_eq!(scheduled.sync_queue.len(), sync_length[i]);
-        assert_eq!(scheduled.async_queue.len(), 0);
-
-        match sync_length[i] {
-            0 => continue,
-            1 => unsafe {
-                let _ = scheduled.sync_queue.front().unwrap().processor.process();
-                assert_eq!(
-                    scheduled.sync_queue.front().unwrap().processor.id().index(),
-                    scheduled_result[acc]
-                );
-                acc += 1;
-            },
-            2 => unsafe {
-                let _ = scheduled.sync_queue[0].processor.process();
-                let _ = scheduled.sync_queue[1].processor.process();
-                assert_eq!(
-                    scheduled.sync_queue[0].processor.id().index(),
-                    scheduled_result[acc]
-                );
-                assert_eq!(
-                    scheduled.sync_queue[1].processor.id().index(),
-                    scheduled_result[acc + 1]
-                );
-                acc += 2;
-            },
-            _ => unreachable!(),
-        }
-    }
+    // (executed node, nodes scheduled by it); the init queue schedules the sink nodes 7 and 8
+    check_schedule(&pipeline, &[
+        (7, &[5]),
+        (8, &[]),
+        (5, &[2, 3]),
+        (2, &[0]),
+        (3, &[]),
+        (0, &[2, 3]),
+        (2, &[]),
+        (3, &[5]),
+        (5, &[7, 8]),
+        (7, &[]),
+        (8, &[]),
+    ])?;
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_schedule_queue_twice_without_processing() -> anyhow::Result<()> {
+async fn test_wake_ignored_unless_idle() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let pipeline = create_simple_pipeline(ctx)?;
 
+    let mut executed = HashMap::new();
     let init_queue = unsafe { pipeline.clone().init_schedule_queue(0)? };
-    unsafe {
-        let _ = init_queue.sync_queue.front().unwrap().processor.process();
-    }
+    assert_eq!(process_sync_tasks(init_queue, &mut executed), vec![2]);
 
-    let scheduled = unsafe { pipeline.clone().schedule_queue(NodeIndex::new(2))? };
-    assert_eq!(scheduled.sync_queue.len(), 1);
+    // Waking a running node does nothing: it calls `event()` itself once it completes.
+    let scheduled = unsafe {
+        pipeline.schedule_queue(Reschedule::Woken {
+            node: NodeIndex::new(2),
+            graph: pipeline.clone(),
+        })?
+    };
+    assert_eq!(scheduled.sync_queue.len(), 0);
 
-    // schedule a need data node twice, the second time should be ignored and return empty queue
-    let scheduled = unsafe { pipeline.clone().schedule_queue(NodeIndex::new(2))? };
+    let task = executed.remove(&2).unwrap();
+    let scheduled = unsafe {
+        pipeline
+            .clone()
+            .schedule_queue(Reschedule::Executed(task))?
+    };
+    assert_eq!(process_sync_tasks(scheduled, &mut executed), vec![1]);
+
+    // Waking an idle node calls `event()` again. The sink still needs data, and its upstream is
+    // already running, so nothing new is scheduled.
+    let scheduled = unsafe {
+        pipeline.schedule_queue(Reschedule::Woken {
+            node: NodeIndex::new(2),
+            graph: pipeline.clone(),
+        })?
+    };
     assert_eq!(scheduled.sync_queue.len(), 0);
 
     Ok(())
@@ -422,8 +410,10 @@ async fn test_sync_process_observes_graph_interrupt() -> anyhow::Result<()> {
 
     let mut context = ExecutorWorkerContext::create(0, WorkersCondvar::create(1));
     context.set_task(ExecutorTask::Sync(processor));
-    let error = unsafe { context.execute_task(None) }
-        .expect_err("sync process should observe the graph interrupt handle");
+    let error = context
+        .execute_task(None)
+        .err()
+        .expect("sync process should observe the graph interrupt handle");
 
     assert_eq!(
         error.get_error_code().code(),
@@ -521,7 +511,7 @@ async fn test_format_top_memory_plan_nodes() -> anyhow::Result<()> {
     let mut queue = unsafe { graph.clone().init_schedule_queue(0)? };
     while let Some(processor) = queue.sync_queue.pop_front() {
         context.set_task(ExecutorTask::Sync(processor));
-        if let Err(error) = unsafe { context.execute_task(None) } {
+        if let Err(error) = context.execute_task(None) {
             panic!(
                 "execute memory tracking task failed: {}",
                 error.get_error_code().message()

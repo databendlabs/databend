@@ -16,17 +16,10 @@
 databend_common_tracing::register_module_tag!("[PIPELINE-EXECUTOR]");
 
 use std::any::Any;
-use std::cell::UnsafeCell;
-use std::ops::Deref;
-use std::sync::Arc;
 
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use fastrace::prelude::*;
-use futures::FutureExt;
-use futures::future::BoxFuture;
-use petgraph::graph::node_index;
 use petgraph::prelude::NodeIndex;
 
 /// Checks whether the currently executing processor has been interrupted.
@@ -77,10 +70,6 @@ pub trait Processor: Send {
         self.event()
     }
 
-    fn un_reacted(&self, _cause: EventCause, _id: usize) -> Result<()> {
-        Ok(())
-    }
-
     // Synchronous work.
     fn process(&mut self) -> Result<()> {
         Err(ErrorCode::Unimplemented("Unimplemented process."))
@@ -96,155 +85,53 @@ pub trait Processor: Send {
         None
     }
 
+    /// Whether the executor may cancel an in-flight `async_process` once every output port of
+    /// this processor has finished.
+    ///
+    /// Return `true` for processors whose `async_process` can wait on something that never
+    /// arrives after downstream stops consuming (e.g. a channel receive). When enabled, the
+    /// executor drops the pending `async_process` future as soon as all outputs are finished and
+    /// then calls `event()` as usual, so the processor must tolerate being dropped at any await
+    /// point and its `event()` must return `Finished` once all outputs are finished. Returning
+    /// `Async` again after a cancellation fails the query with an internal error.
+    ///
+    /// Leave it `false` when `async_process` does work that must complete even after downstream
+    /// finished, such as `on_finish` cleanup.
+    ///
+    /// Read once when the executor graph is built.
+    fn cancel_async_on_outputs_finished(&self) -> bool {
+        false
+    }
+
     /// Called after the processor's NodeIndex is assigned during graph construction.
     /// Processors that need a `std::task::Waker` should obtain the `ExecutorWaker`
     /// during creation (via `pipeline.get_waker()`) and use it here with the assigned id.
     fn set_id(&mut self, _id: NodeIndex) {}
 }
 
-// To keep ProcessPtr::async_process taking &self, instead of self,
-// we need to wrap UnsafeCell<Box<(dyn Processor)>>, and make it Sync,
-// so that later an Arc of it could be moved into the async closure,
-// which async_process returns.
-struct UnsafeSyncCelledProcessor(UnsafeCell<Box<dyn Processor>>);
-unsafe impl Sync for UnsafeSyncCelledProcessor {}
-
-impl Deref for UnsafeSyncCelledProcessor {
-    type Target = UnsafeCell<Box<dyn Processor>>;
-
-    fn deref(&self) -> &Self::Target {
-        &(self.0)
-    }
-}
-
-#[derive(Clone)]
+/// Owned handle to a processor while a pipeline is being built.
+///
+/// It is deliberately not `Clone`: every processor has exactly one owner. The executor takes the
+/// processor out with [`ProcessorPtr::into_inner`] and moves it between its graph and its workers,
+/// so the compiler checks that only one thread drives a processor at a time.
 pub struct ProcessorPtr {
-    id: Arc<UnsafeCell<NodeIndex>>,
-    inner: Arc<UnsafeSyncCelledProcessor>,
+    inner: Box<dyn Processor>,
 }
-
-impl From<UnsafeCell<Box<dyn Processor>>> for UnsafeSyncCelledProcessor {
-    fn from(value: UnsafeCell<Box<dyn Processor>>) -> Self {
-        Self(value)
-    }
-}
-
-unsafe impl Send for ProcessorPtr {}
-
-unsafe impl Sync for ProcessorPtr {}
 
 impl ProcessorPtr {
-    #[allow(clippy::arc_with_non_send_sync)]
     pub fn create(inner: Box<dyn Processor>) -> ProcessorPtr {
-        ProcessorPtr {
-            id: Arc::new(UnsafeCell::new(node_index(0))),
-            inner: Arc::new(UnsafeCell::new(inner).into()),
-        }
+        ProcessorPtr { inner }
     }
 
-    /// # Safety
-    pub unsafe fn as_any(&mut self) -> &mut dyn Any {
-        unsafe { (*self.inner.get()).as_any() }
+    pub fn as_any(&mut self) -> &mut dyn Any {
+        self.inner.as_any()
     }
 
-    /// # Safety
-    pub unsafe fn id(&self) -> NodeIndex {
-        unsafe { *self.id.get() }
+    pub fn name(&self) -> String {
+        self.inner.name()
     }
 
-    /// # Safety
-    pub unsafe fn set_id(&self, id: NodeIndex) {
-        unsafe {
-            *self.id.get() = id;
-            (*self.inner.get()).set_id(id);
-        }
-    }
-
-    /// # Safety
-    pub unsafe fn name(&self) -> String {
-        unsafe { (*self.inner.get()).name() }
-    }
-
-    /// # Safety
-    pub unsafe fn event(&self, cause: EventCause) -> Result<Event> {
-        unsafe { (*self.inner.get()).event_with_cause(cause) }
-    }
-
-    /// # Safety
-    pub unsafe fn un_reacted(&self, cause: EventCause) -> Result<()> {
-        unsafe { (*self.inner.get()).un_reacted(cause, self.id().index()) }
-    }
-
-    /// # Safety
-    pub unsafe fn process(&self) -> Result<()> {
-        unsafe {
-            let span = LocalSpan::enter_with_local_parent(format!("{}::process", self.name()))
-                .with_property(|| ("graph-node-id", self.id().index().to_string()));
-
-            match (*self.inner.get()).process() {
-                Ok(_) => Ok(()),
-                Err(err) => {
-                    let _ = span
-                        .with_property(|| ("error", "true"))
-                        .with_properties(|| {
-                            [
-                                ("error.type", err.code().to_string()),
-                                ("error.message", err.display_text()),
-                            ]
-                        });
-                    log::info!(error = err.to_string(); "Error in process");
-                    Err(err)
-                }
-            }
-        }
-    }
-
-    /// # Safety
-    pub unsafe fn async_process(&self) -> BoxFuture<'static, Result<()>> {
-        unsafe {
-            let id = self.id();
-            let mut name = self.name();
-            name.push_str("::async_process");
-
-            let task = (*self.inner.get()).async_process();
-
-            // The `task` may have reference to the `Processor` that hold in `self.inner`,
-            // so we need to move a clone of `self.inner` into the following async closure to keep the
-            // `Processor` from being dropped before `task` is done.
-
-            // e.g.
-            // There may be scenarios where the 'ExecutingGraph' has already been dropped,
-            // but the async task returned by async_process is still running; in this case,
-            // there could be illegal memory access.
-
-            let inner = self.inner.clone();
-            async move {
-                let span = Span::enter_with_local_parent(name)
-                    .with_property(|| ("graph-node-id", id.index().to_string()));
-
-                match task.await {
-                    Ok(_) => {
-                        drop(inner);
-                        Ok(())
-                    }
-                    Err(err) => {
-                        span.with_property(|| ("error", "true")).add_properties(|| {
-                            [
-                                ("error.type", err.code().to_string()),
-                                ("error.message", err.display_text()),
-                            ]
-                        });
-                        log::info!(error = err.to_string(); "Error in process");
-                        Err(err)
-                    }
-                }
-            }
-            .boxed()
-        }
-    }
-
-    /// # Safety
-    pub unsafe fn details_status(&self) -> Option<String> {
-        unsafe { (*self.inner.get()).details_status() }
+    pub fn into_inner(self) -> Box<dyn Processor> {
+        self.inner
     }
 }

@@ -22,7 +22,6 @@ use std::sync::atomic::Ordering;
 use async_channel::Receiver;
 use async_channel::Sender;
 use bumpalo::Bump;
-use databend_common_base::base::WatchNotify;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
@@ -32,7 +31,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::PayloadFlushState;
 use databend_common_pipeline::core::Event;
-use databend_common_pipeline::core::EventCause;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
@@ -78,7 +76,6 @@ pub struct TransformFinalAggregate {
     should_finish: bool,
     tx: Option<Sender<FinalAggregateTask>>,
     rx: Receiver<FinalAggregateTask>,
-    output_finished: WatchNotify,
     stage: Stage,
     spilled_occurred: bool,
 
@@ -136,7 +133,6 @@ impl TransformFinalAggregate {
             should_finish: false,
             tx: Some(tx),
             rx,
-            output_finished: WatchNotify::new(),
             stage: Stage::Input,
             spilled_occurred: false,
             hashtable: HashTable::AggregateHashTable(hashtable),
@@ -578,26 +574,17 @@ impl Processor for TransformFinalAggregate {
         Ok(())
     }
 
-    fn un_reacted(&self, cause: EventCause, _id: usize) -> Result<()> {
-        if matches!(cause, EventCause::Output(_)) && self.output.is_finished() {
-            // event() cannot run while async_process() is waiting. Wake only
-            // this processor: peers may still need the shared task channel.
-            self.output_finished.notify_waiters();
-        }
-        Ok(())
+    // Peers may keep the shared task channel open, so the receive below can wait forever once
+    // downstream finished. Dropping it is safe: `recv` does not lose messages when cancelled.
+    fn cancel_async_on_outputs_finished(&self) -> bool {
+        true
     }
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        tokio::select! {
-            biased;
-            _ = self.output_finished.notified() => {}
-            task = self.rx.recv() => {
-                match task {
-                    Ok(meta) => self.channel_data = Some(meta),
-                    Err(_) => self.should_finish = true,
-                }
-            }
+        match self.rx.recv().await {
+            Ok(meta) => self.channel_data = Some(meta),
+            Err(_) => self.should_finish = true,
         }
 
         Ok(())
@@ -610,15 +597,13 @@ mod tests {
     use databend_common_expression::DataSchema;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::NumberDataType;
-    use databend_common_pipeline::core::ProcessorPtr;
     use databend_common_pipeline::core::port::connect;
-    use futures::FutureExt;
 
     use super::*;
     use crate::test_kits::TestFixture;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_finished_output_interrupts_final_aggregate_receive() -> Result<()> {
+    async fn test_final_aggregate_finishes_after_cancelled_receive() -> Result<()> {
         let fixture = TestFixture::setup().await?;
         let ctx = fixture.new_query_ctx().await?;
         let (tx, rx) = async_channel::unbounded();
@@ -657,20 +642,15 @@ mod tests {
         assert!(matches!(processor.event()?, Event::Sync));
         processor.process()?;
         assert!(matches!(processor.event()?, Event::Async));
-        let processor = ProcessorPtr::create(processor);
+        assert!(processor.cancel_async_on_outputs_finished());
 
-        // Match executor scheduling: poll sequentially and invoke only the
-        // thread-safe un_reacted hook while async_process is pending.
-        let mut task = unsafe { processor.async_process() };
-        assert!(futures::poll!(&mut task).is_pending());
-        downstream.finish();
-        unsafe { processor.un_reacted(EventCause::Output(0))? };
-        task.now_or_never()
-            .expect("a finished output must wake the receiver even with a live sender")?;
-        assert!(matches!(
-            unsafe { processor.event(EventCause::Other)? },
-            Event::Finished
-        ));
+        {
+            let mut task = processor.async_process();
+            assert!(futures::poll!(&mut task).is_pending());
+            downstream.finish();
+            // The executor drops the pending receive once every output has finished.
+        }
+        assert!(matches!(processor.event()?, Event::Finished));
         drop(tx);
         Ok(())
     }

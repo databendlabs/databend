@@ -294,7 +294,7 @@ mod tests {
             let worker_count = pipeline
                 .graph
                 .node_weights()
-                .filter(|node| unsafe { node.proc.name() == "ReplaceBlockMutationWorker" })
+                .filter(|node| node.proc.name() == "ReplaceBlockMutationWorker")
                 .count();
             assert_eq!(worker_count, worker_width);
             assert_eq!(pipeline.output_len(), worker_width);

@@ -233,6 +233,7 @@ impl QueryPipelineExecutor {
                         worker_id,
                         res: Ok(()),
                         graph: executor.graph.clone(),
+                        processor: None,
                     },
                 );
 
@@ -354,7 +355,7 @@ impl QueryPipelineExecutor {
             let mut wakeup_worker_id = 0;
             while let Some(proc) = init_schedule_queue.async_queue.pop_front() {
                 ScheduleQueue::schedule_async_task(
-                    proc.clone(),
+                    proc,
                     self.settings.query_id.clone(),
                     self,
                     wakeup_worker_id,
@@ -459,11 +460,13 @@ impl QueryPipelineExecutor {
                     let task_info = context.get_task_info();
                     let execute_res = context.execute_task(None);
                     match execute_res {
-                        Ok(Some((executed_pid, graph))) => {
+                        Ok(Some(executed)) => {
+                            let executed_pid = executed.node();
+                            let graph = executed.graph().clone();
                             // Not scheduled graph if pipeline is finished.
                             if !self.global_tasks_queue.is_finished() {
                                 // We immediately schedule the processor again.
-                                let schedule_queue_res = graph.clone().schedule_queue(executed_pid);
+                                let schedule_queue_res = graph.schedule_queue(executed);
                                 match schedule_queue_res {
                                     Ok(schedule_queue) => {
                                         schedule_queue.schedule(

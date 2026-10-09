@@ -163,7 +163,7 @@ impl IPhysicalPlan for MutationManipulate {
         builder.main_pipeline.add_pipe(Pipe::create(
             builder.main_pipeline.output_len(),
             output_len,
-            pipe_items.clone(),
+            pipe_items,
         ));
 
         Ok(())

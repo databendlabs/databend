@@ -21,7 +21,6 @@ use crate::core::port::OutputPort;
 use crate::core::processor::ProcessorPtr;
 use crate::core::profile::PlanScope;
 
-#[derive(Clone)]
 pub struct PipeItem {
     pub processor: ProcessorPtr,
     pub inputs_port: Vec<Arc<InputPort>>,
@@ -45,14 +44,13 @@ impl PipeItem {
 impl Debug for PipeItem {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         f.debug_struct("PipeItem")
-            .field("name", &unsafe { self.processor.name() })
+            .field("name", &self.processor.name())
             .field("inputs", &self.inputs_port.len())
             .field("outputs", &self.outputs_port.len())
             .finish()
     }
 }
 
-#[derive(Clone)]
 pub struct Pipe {
     pub items: Vec<PipeItem>,
     pub input_length: usize,
@@ -77,7 +75,6 @@ impl Pipe {
     }
 }
 
-#[derive(Clone)]
 pub struct SourcePipeBuilder {
     items: Vec<PipeItem>,
 }
