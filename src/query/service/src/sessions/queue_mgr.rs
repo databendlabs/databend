@@ -491,6 +491,19 @@ where T: Future<Output =  std::result::Result<std::result::Result<Permit, E>, El
     key: Option<Data::Key>,
     manager: Arc<QueueManager<Data>>,
 }
+
+impl<Data: QueueData, T, Permit, E> PinnedDrop for AcquireQueueFuture<Data, T, Permit, E>
+where T: Future<Output = std::result::Result<std::result::Result<Permit, E>, Elapsed>>
+{
+    fn drop(this: Pin<&mut Self>) {
+        let this = this.project();
+        // Cancellation can drop the future without polling it to completion.
+        // Release the registered entry and the query context it owns in that case.
+        if let Some(key) = this.key.take() {
+            this.manager.remove_entity(&key);
+        }
+    }
+}
 }
 
 impl<Data: QueueData, T, Permit, E> AcquireQueueFuture<Data, T, Permit, E>
