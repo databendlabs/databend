@@ -191,11 +191,16 @@ pub async fn prepare_refresh_virtual_column(
                 put_cache: false,
             })
             .await?;
+        let block_metas = segment_info.block_metas()?;
         let stats = match segment_info.summary.additional_stats_loc() {
-            Some(loc) => Some(read_segment_stats(operator.clone(), loc).await?),
+            Some(loc) => {
+                let mut stats =
+                    Arc::unwrap_or_clone(read_segment_stats(operator.clone(), loc).await?);
+                stats.align_to_blocks(block_metas.len())?;
+                Some(stats)
+            }
             _ => None,
         };
-        let block_metas = segment_info.block_metas()?;
         if let Some(target) = block_filter.as_ref() {
             if !block_metas
                 .iter()
@@ -666,8 +671,10 @@ async fn prepare_vacuum_virtual_column_mutations(
 
         let additional_stats_loc = segment_info.summary.additional_stats_loc();
         let mut segment_stats = None;
+        let blocks = segment_info.block_metas()?;
+        let block_count = blocks.len();
 
-        for (block_idx, block_meta) in segment_info.block_metas()?.into_iter().enumerate() {
+        for (block_idx, block_meta) in blocks.into_iter().enumerate() {
             let Some(virtual_block_meta) = &block_meta.virtual_block_meta else {
                 continue;
             };
@@ -683,9 +690,14 @@ async fn prepare_vacuum_virtual_column_mutations(
 
                 if segment_stats.is_none() {
                     segment_stats = match additional_stats_loc.clone() {
-                        Some(loc) => Some(
-                            read_segment_stats(fuse_table.get_operator_ref().clone(), loc).await?,
-                        ),
+                        Some(loc) => {
+                            let mut stats = Arc::unwrap_or_clone(
+                                read_segment_stats(fuse_table.get_operator_ref().clone(), loc)
+                                    .await?,
+                            );
+                            stats.align_to_blocks(block_count)?;
+                            Some(stats)
+                        }
                         None => None,
                     };
                 }

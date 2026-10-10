@@ -607,7 +607,11 @@ impl TableMutationAggregator {
                     let old_virtual_schema = segment_info.summary.virtual_segment_schema.clone();
                     let stats = match segment_info.summary.additional_stats_loc() {
                         Some(loc) => {
-                            Some(read_segment_stats(write_segment_ctx.dal.clone(), loc).await?)
+                            let stats =
+                                read_segment_stats(write_segment_ctx.dal.clone(), loc).await?;
+                            let mut stats = (*stats).clone();
+                            stats.align_to_blocks(segment_info.blocks.len())?;
+                            Some(stats)
                         }
                         _ => None,
                     };

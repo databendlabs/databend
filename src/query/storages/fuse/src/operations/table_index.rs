@@ -160,12 +160,18 @@ pub async fn do_refresh_table_index(
                 put_cache: false,
             })
             .await?;
+        let blocks = segment_info.block_metas()?;
         let stats = match segment_info.summary.additional_stats_loc() {
-            Some(loc) => Some(read_segment_stats(operator.clone(), loc).await?),
+            Some(loc) => {
+                let mut stats =
+                    Arc::unwrap_or_clone(read_segment_stats(operator.clone(), loc).await?);
+                stats.align_to_blocks(blocks.len())?;
+                Some(Arc::new(stats))
+            }
             _ => None,
         };
 
-        for (block_idx, block_meta) in segment_info.block_metas()?.into_iter().enumerate() {
+        for (block_idx, block_meta) in blocks.into_iter().enumerate() {
             let Some(refresh_index_meta) = check_index_generated(
                 operator.clone(),
                 segment_idx,

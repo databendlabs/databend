@@ -700,6 +700,7 @@ impl ReclusterMutator {
                     hll_requests.push((
                         segment_idx,
                         stats_meta.location.clone(),
+                        segment_info.blocks.len(),
                         hll_block_indices,
                     ));
                 }
@@ -980,37 +981,40 @@ impl ReclusterMutator {
     #[async_backtrace::framed]
     async fn gather_hlls(
         &self,
-        hlls: Vec<(usize, Location, Vec<usize>)>,
+        hlls: Vec<(usize, Location, usize, Vec<usize>)>,
     ) -> Result<HashMap<BlockIndex, RawBlockHLL>> {
         if hlls.is_empty() {
             return Ok(HashMap::new());
         }
 
-        let tasks = hlls.into_iter().map(|(segment_idx, (loc, ver), blocks)| {
-            let dal = self.operator.clone();
-            async move {
-                let reader = MetaReaders::segment_stats_reader(dal);
-                let load_params = LoadParams {
-                    location: loc,
-                    len_hint: None,
-                    ver,
-                    put_cache: true,
-                };
-                let stats = reader.read(&load_params).await?;
-                Ok(blocks
-                    .into_iter()
-                    .filter_map(|block_idx| {
-                        let hll = stats.block_hlls.get(block_idx)?;
-                        let block_index = BlockIndex {
-                            segment_idx,
-                            block_idx,
-                        };
-                        Some((block_index, hll.clone()))
-                    })
-                    .collect::<Vec<_>>())
-            }
-            .in_span(Span::enter_with_local_parent(func_path!()))
-        });
+        let tasks = hlls
+            .into_iter()
+            .map(|(segment_idx, (loc, ver), block_count, blocks)| {
+                let dal = self.operator.clone();
+                async move {
+                    let reader = MetaReaders::segment_stats_reader(dal);
+                    let load_params = LoadParams {
+                        location: loc,
+                        len_hint: None,
+                        ver,
+                        put_cache: true,
+                    };
+                    let mut stats = Arc::unwrap_or_clone(reader.read(&load_params).await?);
+                    stats.align_to_blocks(block_count)?;
+                    Ok(blocks
+                        .into_iter()
+                        .filter_map(|block_idx| {
+                            let hll = stats.block_hlls.get(block_idx)?;
+                            let block_index = BlockIndex {
+                                segment_idx,
+                                block_idx,
+                            };
+                            Some((block_index, hll.clone()))
+                        })
+                        .collect::<Vec<_>>())
+                }
+                .in_span(Span::enter_with_local_parent(func_path!()))
+            });
 
         let thread_nums = self.ctx.get_settings().get_max_threads()? as usize;
 

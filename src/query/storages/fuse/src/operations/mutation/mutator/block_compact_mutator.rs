@@ -675,11 +675,16 @@ impl CompactTaskBuilder {
             let permit = acquire_task_permit(semaphore.clone()).await?;
             let op = self.dal.clone();
             let handler = runtime.spawn(async move {
+                let blocks = segment.block_metas()?;
                 let stats = match segment.summary.additional_stats_loc() {
-                    Some(loc) => Some(read_segment_stats(op.clone(), loc).await?),
+                    Some(loc) => {
+                        let mut stats =
+                            Arc::unwrap_or_clone(read_segment_stats(op.clone(), loc).await?);
+                        stats.align_to_blocks(blocks.len())?;
+                        Some(stats)
+                    }
                     _ => None,
                 };
-                let blocks = segment.block_metas()?;
                 drop(permit);
                 Ok::<_, ErrorCode>((
                     blocks,
