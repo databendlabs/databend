@@ -14,11 +14,16 @@
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockThresholds;
 use databend_common_expression::Scalar;
+use databend_common_expression::compare_scalars;
+use databend_common_expression::types::DataType;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use indexmap::IndexSet;
 use log::debug;
@@ -38,6 +43,427 @@ use crate::statistics::RangeMaxTree;
 
 /// Linear cluster-key recluster behavior.
 pub(crate) struct LinearReclusterStrategy;
+
+/// Window-local depth state shared by the bounded batch evaluations.
+pub(super) struct ReclusterDepthStats {
+    positions: HashMap<String, usize>,
+    ranges: Vec<(usize, usize)>,
+    range_counts: HashMap<(usize, usize), usize>,
+    point_changes: Vec<i64>,
+    depth_sum: i128,
+}
+
+struct ReclusterOutputRun {
+    start: usize,
+    end: usize,
+    blocks: usize,
+}
+
+impl ReclusterDepthStats {
+    pub(super) fn create(blocks: &[&ReclusterBlock], key_types: &[DataType]) -> Result<Self> {
+        let mut positions = HashMap::with_capacity(blocks.len());
+        let mut ranges = Vec::with_capacity(blocks.len());
+        for block in blocks {
+            let stats = block.stats();
+            if stats.min().len() != key_types.len() || stats.max().len() != key_types.len() {
+                return Err(ErrorCode::Internal(
+                    "Invalid cluster-key arity in recluster window",
+                ));
+            }
+            if positions
+                .insert(block.meta.location.0.clone(), ranges.len())
+                .is_some()
+            {
+                return Err(ErrorCode::Internal("Duplicate block in recluster window"));
+            }
+            ranges.push((stats.min().as_slice(), stats.max().as_slice()));
+        }
+        let (ranges, points) = index_depth_ranges(&ranges, key_types)?;
+        let mut range_counts = HashMap::new();
+        for &range in &ranges {
+            *range_counts.entry(range).or_insert(0usize) += 1;
+        }
+        let mut point_changes = vec![0i64; points + 1];
+        for (&(start, end), &count) in &range_counts {
+            point_changes[start] += count as i64;
+            point_changes[end + 1] -= count as i64;
+        }
+        let depth_sum = if ranges.is_empty() {
+            0
+        } else {
+            let mut depth = 0i64;
+            let point_depths = point_changes[..points]
+                .iter()
+                .map(|change| {
+                    depth += change;
+                    depth as usize
+                })
+                .collect::<Vec<_>>();
+            let tree = RangeMaxTree::build(&point_depths);
+            range_counts
+                .iter()
+                .map(|(&(start, end), &count)| count as i128 * tree.range_max(start, end) as i128)
+                .sum()
+        };
+        Ok(Self {
+            positions,
+            ranges,
+            range_counts,
+            point_changes,
+            depth_sum,
+        })
+    }
+
+    pub(super) fn gain<'a>(
+        &self,
+        tasks: impl ExactSizeIterator<Item = &'a [usize]>,
+        blocks: &[&ReclusterBlock],
+        properties: &ReclusterProperties,
+    ) -> Result<i64> {
+        let mut selected = HashSet::new();
+        let mut outputs = Vec::with_capacity(tasks.len());
+        for task in tasks {
+            let (mut rows, mut bytes, mut compressed) = (0usize, 0usize, 0usize);
+            let (mut start, mut end) = (usize::MAX, 0usize);
+            for &block_idx in task {
+                let block = blocks[block_idx];
+                let idx = *self.positions.get(&block.meta.location.0).ok_or_else(|| {
+                    ErrorCode::Internal("Candidate missing from recluster window")
+                })?;
+                if !selected.insert(idx) {
+                    return Err(ErrorCode::Internal("Shared input in recluster task batch"));
+                }
+                start = start.min(self.ranges[idx].0);
+                end = end.max(self.ranges[idx].1);
+                rows += block.meta.row_count as usize;
+                bytes += block.meta.block_size as usize;
+                compressed += block.meta.file_size as usize;
+            }
+            let blocks =
+                estimate_output_block_count(rows, bytes, compressed, &properties.block_thresholds)
+                    .ok_or_else(|| ErrorCode::Internal("Empty recluster task candidate"))?;
+            outputs.push(ReclusterOutputRun { start, end, blocks });
+        }
+        if selected.is_empty() {
+            return Ok(0);
+        }
+
+        let mut removed = HashMap::new();
+        for &idx in &selected {
+            *removed.entry(self.ranges[idx]).or_insert(0usize) += 1;
+        }
+        let mut changes = self.point_changes.clone();
+        for (&(start, end), &count) in &removed {
+            changes[start] -= count as i64;
+            changes[end + 1] += count as i64;
+        }
+        for output in &outputs {
+            changes[output.start] += 1;
+            changes[output.end + 1] -= 1;
+        }
+        let mut depth = 0i64;
+        let point_depths = changes[..changes.len() - 1]
+            .iter()
+            .map(|change| {
+                depth += change;
+                depth as usize
+            })
+            .collect::<Vec<_>>();
+        let tree = RangeMaxTree::build(&point_depths);
+        let remaining_depth: i128 = self
+            .range_counts
+            .iter()
+            .map(|(&(start, end), &count)| {
+                let count = count - removed.get(&(start, end)).copied().unwrap_or(0);
+                count as i128 * tree.range_max(start, end) as i128
+            })
+            .sum();
+        let output_depth: i128 = outputs
+            .iter()
+            .map(|output| output.blocks as i128 * tree.range_max(output.start, output.end) as i128)
+            .sum();
+        let blocks_after = self.ranges.len() - selected.len()
+            + outputs.iter().map(|output| output.blocks).sum::<usize>();
+        let gain = (self.depth_sum * blocks_after as i128
+            - (remaining_depth + output_depth) * self.ranges.len() as i128)
+            .div_euclid(blocks_after as i128);
+        Ok(gain.clamp(i64::MIN as i128, i64::MAX as i128) as i64)
+    }
+}
+
+fn estimate_output_block_count(
+    rows: usize,
+    bytes: usize,
+    compressed: usize,
+    thresholds: &BlockThresholds,
+) -> Option<usize> {
+    if rows == 0 || bytes == 0 || compressed == 0 {
+        return None;
+    }
+    let (rows_per_block, _) = thresholds.calc_rows_for_recluster(rows, bytes, compressed);
+    Some(rows.div_ceil(rows_per_block))
+}
+
+fn index_depth_ranges<T: AsRef<[Scalar]>>(
+    ranges: &[(T, T)],
+    key_types: &[DataType],
+) -> Result<(Vec<(usize, usize)>, usize)> {
+    let mut positions = HashMap::new();
+    for (min, max) in ranges {
+        positions.entry(min.as_ref()).or_insert(0usize);
+        positions.entry(max.as_ref()).or_insert(0usize);
+    }
+    let keys = positions.keys().copied().collect::<Vec<_>>();
+    for (pos, idx) in compare_scalars(&keys, key_types)?.into_iter().enumerate() {
+        *positions.get_mut(keys[idx as usize]).unwrap() = pos;
+    }
+    let ranges = ranges
+        .iter()
+        .map(|(min, max)| (positions[min.as_ref()], positions[max.as_ref()]))
+        .collect::<Vec<_>>();
+    if ranges.iter().any(|(start, end)| start > end) {
+        return Err(ErrorCode::Internal("Invalid recluster block range"));
+    }
+    Ok((ranges, positions.len()))
+}
+
+/// Sweep geometry reused by the baseline and bounded multi-peak planners.
+pub(super) struct HotspotScan {
+    values: Vec<(Vec<usize>, Vec<usize>)>,
+    point_depths: Vec<usize>,
+    open_pos: Vec<usize>,
+    close_pos: Vec<usize>,
+    pub(super) average_depth: f64,
+    pub(super) peaks: Vec<(usize, usize, usize)>,
+}
+
+impl LinearReclusterStrategy {
+    pub(super) fn scan_hotspots(
+        properties: &ReclusterProperties,
+        group: ReclusterGroup,
+        indices: &[usize],
+        blocks: &[&ReclusterBlock],
+    ) -> Option<HotspotScan> {
+        let mut points_map = BTreeMap::new();
+        for (local_idx, &idx) in indices.iter().enumerate() {
+            let stats = blocks[idx].stats();
+            let (min, max) = (stats.min().as_slice(), stats.max().as_slice());
+            if min.len() != properties.scalar_cluster_key_types.len()
+                || max.len() != properties.scalar_cluster_key_types.len()
+            {
+                continue;
+            }
+            let point: &mut (Vec<usize>, Vec<usize>) =
+                points_map.entry(ScalarSlice(min)).or_default();
+            point.0.push(local_idx);
+            points_map
+                .entry(ScalarSlice(max))
+                .or_default()
+                .1
+                .push(local_idx);
+        }
+        if points_map.is_empty() {
+            return None;
+        }
+
+        let values = points_map.into_values().collect::<Vec<_>>();
+        let mut point_depths = vec![0usize; values.len()];
+        let mut open_pos = vec![usize::MAX; indices.len()];
+        let mut close_pos = vec![usize::MAX; indices.len()];
+        let mut live = vec![false; indices.len()];
+        let mut live_count = 0usize;
+        let mut max_depth = 0usize;
+        let mut peaks = Vec::new();
+        let mut current_peak: Option<(usize, usize, usize)> = None;
+        for (pos, (starts, ends)) in values.iter().enumerate() {
+            let depth = calc_point_depth(live_count, starts, ends);
+            point_depths[pos] = depth;
+            max_depth = max_depth.max(depth);
+            if depth as f64 > properties.depth_threshold {
+                match &mut current_peak {
+                    Some((peak_pos, peak_depth, width)) => {
+                        *width += 1;
+                        if depth > *peak_depth {
+                            *peak_pos = pos;
+                            *peak_depth = depth;
+                        }
+                    }
+                    None => current_peak = Some((pos, depth, 1)),
+                }
+            } else if let Some(peak) = current_peak.take() {
+                peaks.push(peak);
+            }
+            for &idx in starts {
+                if !live[idx] {
+                    live[idx] = true;
+                    live_count += 1;
+                }
+                open_pos[idx] = pos;
+            }
+            for &idx in ends {
+                if live[idx] {
+                    live[idx] = false;
+                    live_count -= 1;
+                    close_pos[idx] = pos;
+                }
+            }
+        }
+        if let Some(peak) = current_peak {
+            peaks.push(peak);
+        }
+
+        let tree = RangeMaxTree::build(&point_depths);
+        let mut sum_depth = 0usize;
+        let mut closed = 0usize;
+        for (&open, &close) in open_pos.iter().zip(&close_pos) {
+            if open == usize::MAX {
+                continue;
+            }
+            if close == usize::MAX || close < open {
+                debug!(
+                    "recluster: candidate selection detail group={} block_count={} average_depth={} max_depth={} selected_count=0 skip_reason=invalid_depth_range",
+                    group,
+                    indices.len(),
+                    f64::NAN,
+                    max_depth,
+                );
+                return None;
+            }
+            sum_depth += tree.range_max(open, close);
+            closed += 1;
+        }
+        if closed == 0 {
+            return None;
+        }
+        let average_depth = (10000.0 * sum_depth as f64 / closed as f64).round() / 10000.0;
+        if !passes_depth_gate(properties.depth_threshold, average_depth, max_depth) {
+            debug!(
+                "recluster: candidate selection detail group={} block_count={} average_depth={} max_depth={} selected_count=0 skip_reason=below_hotspot_depth_gate",
+                group,
+                indices.len(),
+                average_depth,
+                max_depth,
+            );
+            return None;
+        }
+        peaks.sort_by(
+            |(left_pos, left_depth, left_width), (right_pos, right_depth, right_width)| {
+                right_depth
+                    .cmp(left_depth)
+                    .then_with(|| right_width.cmp(left_width))
+                    .then_with(|| left_pos.cmp(right_pos))
+            },
+        );
+        Some(HotspotScan {
+            values,
+            point_depths,
+            open_pos,
+            close_pos,
+            average_depth,
+            peaks,
+        })
+    }
+}
+
+impl HotspotScan {
+    /// Build at most `limit` tasks around one peak. Skip-fill preserves the
+    /// early multi-peak policy; contiguous cuts reproduce the mature v1 shape.
+    pub(super) fn peak_packs(
+        &self,
+        peak: usize,
+        centered: bool,
+        contiguous: bool,
+        limit: usize,
+        indices: &[usize],
+        blocks: &[&ReclusterBlock],
+        budget: usize,
+    ) -> Vec<(Vec<usize>, usize)> {
+        let peak_depth = self.point_depths[peak];
+        let mut left = peak;
+        while left > 0 && self.point_depths[left - 1] == peak_depth {
+            left -= 1;
+        }
+        let mut right = peak;
+        while right + 1 < self.point_depths.len() && self.point_depths[right + 1] == peak_depth {
+            right += 1;
+        }
+        let mut order = (0..indices.len())
+            .filter(|&idx| self.open_pos[idx] <= right && self.close_pos[idx] >= left)
+            .collect::<Vec<_>>();
+        if centered {
+            order.sort_by_key(|&idx| {
+                (
+                    self.open_pos[idx]
+                        .abs_diff(peak)
+                        .max(self.close_pos[idx].abs_diff(peak)),
+                    idx,
+                )
+            });
+        }
+        let order = order
+            .into_iter()
+            .map(|local_idx| {
+                let idx = indices[local_idx];
+                (idx, blocks[idx].meta.block_size as usize)
+            })
+            .collect();
+        pack_peak_order(order, contiguous, limit, budget)
+    }
+}
+
+fn pack_peak_order(
+    mut order: Vec<(usize, usize)>,
+    contiguous: bool,
+    limit: usize,
+    budget: usize,
+) -> Vec<(Vec<usize>, usize)> {
+    order.retain(|&(_, size)| size <= budget);
+    let mut tasks = Vec::with_capacity(limit);
+    let mut selected = Vec::new();
+    if !contiguous {
+        while tasks.len() < limit && !order.is_empty() {
+            selected.clear();
+            let mut bytes = 0usize;
+            order.retain(|&(idx, size)| {
+                if size <= budget - bytes {
+                    selected.push(idx);
+                    bytes += size;
+                    false
+                } else {
+                    true
+                }
+            });
+            if selected.len() >= 2 {
+                selected.sort_unstable();
+                tasks.push((selected.clone(), bytes));
+            }
+        }
+        return tasks;
+    }
+
+    let mut bytes = 0usize;
+    for (idx, size) in order {
+        if !selected.is_empty() && bytes.saturating_add(size) > budget {
+            if selected.len() >= 2 {
+                selected.sort_unstable();
+                tasks.push((std::mem::take(&mut selected), bytes));
+                if tasks.len() >= limit {
+                    return tasks;
+                }
+            } else {
+                selected.clear();
+            }
+            bytes = 0;
+        }
+        selected.push(idx);
+        bytes += size;
+    }
+    if selected.len() >= 2 && tasks.len() < limit {
+        selected.sort_unstable();
+        tasks.push((selected, bytes));
+    }
+    tasks
+}
 
 impl ReclusterStrategy for LinearReclusterStrategy {
     fn supports_ordered_merge(&self) -> bool {
@@ -61,127 +487,20 @@ impl ReclusterStrategy for LinearReclusterStrategy {
         blocks: &[&ReclusterBlock],
         task_budget: usize,
     ) -> Result<Vec<ReclusterTaskCandidate>> {
-        let mut points_map = BTreeMap::new();
-        for (local_idx, &i) in indices.iter().enumerate() {
-            // Use a group-local block index (0..block_count) as the point key so
-            // dense lookup vectors are sized by the group block count, not the
-            // window-global block index range. `indices` maps each local index
-            // back to its `blocks` index.
-            let stats = blocks[i].stats();
-            let (min, max) = (stats.min().as_slice(), stats.max().as_slice());
-            if min.len() != properties.scalar_cluster_key_types.len()
-                || max.len() != properties.scalar_cluster_key_types.len()
-            {
-                continue;
-            }
-            let point: &mut (Vec<usize>, Vec<usize>) =
-                points_map.entry(ScalarSlice(min)).or_default();
-            point.0.push(local_idx);
-            let point = points_map.entry(ScalarSlice(max)).or_default();
-            point.1.push(local_idx);
-        }
-        if points_map.is_empty() {
+        let Some(HotspotScan {
+            values,
+            point_depths,
+            open_pos,
+            close_pos,
+            average_depth,
+            peaks,
+        }) = Self::scan_hotspots(properties, group, indices, blocks)
+        else {
             return Ok(Vec::new());
-        }
+        };
         let block_count = indices.len();
-        let values = points_map.into_values().collect::<Vec<_>>();
-
-        // PASS 1: sweep sorted points and record folded point depths plus each
-        // block's open/close positions.
         let num_points = values.len();
-        let mut point_depths = vec![0usize; num_points];
-        let unset_pos = usize::MAX;
-        let mut open_pos = vec![unset_pos; block_count];
-        let mut close_pos = vec![unset_pos; block_count];
-        let mut live = vec![false; block_count];
-        let mut live_count = 0usize;
-        let mut max_depth = 0;
-        // Peak tuple: (max point position, max depth, width of depth > threshold region).
-        let mut peaks = Vec::new();
-        let mut current_peak: Option<(usize, usize, usize)> = None;
-        for (i, (starts, ends)) in values.iter().enumerate() {
-            let point_depth = calc_point_depth(live_count, starts, ends);
-            point_depths[i] = point_depth;
-            if point_depth > max_depth {
-                max_depth = point_depth;
-            }
-            if point_depth as f64 > properties.depth_threshold {
-                match &mut current_peak {
-                    Some((peak_pos, peak_depth, width)) => {
-                        *width += 1;
-                        if point_depth > *peak_depth {
-                            *peak_pos = i;
-                            *peak_depth = point_depth;
-                        }
-                    }
-                    None => current_peak = Some((i, point_depth, 1)),
-                }
-            } else if let Some(peak) = current_peak.take() {
-                peaks.push(peak);
-            }
-            for &s in starts {
-                if !live[s] {
-                    live[s] = true;
-                    live_count += 1;
-                }
-                open_pos[s] = i;
-            }
-            for &e in ends {
-                if live[e] {
-                    live[e] = false;
-                    live_count -= 1;
-                    close_pos[e] = i;
-                }
-            }
-        }
-        if let Some(peak) = current_peak {
-            peaks.push(peak);
-        }
-
-        // PASS 2: gate by each interval's max folded point depth.
-        let mut sum_depth = 0usize;
-        let mut closed = 0usize;
-        let seg = RangeMaxTree::build(&point_depths);
-        for idx in 0..block_count {
-            if open_pos[idx] == unset_pos {
-                continue;
-            }
-            let open = open_pos[idx];
-            let close = close_pos[idx];
-            // Malformed stats can leave an interval unclosed or reversed; skip
-            // this group instead of feeding an invalid range into task building.
-            if close == unset_pos || close < open {
-                debug!(
-                    "recluster: candidate selection detail group={} block_count={} average_depth={} max_depth={} selected_count=0 skip_reason=invalid_depth_range",
-                    group,
-                    block_count,
-                    f64::NAN,
-                    max_depth,
-                );
-                return Ok(Vec::new());
-            }
-            sum_depth += seg.range_max(open, close);
-            closed += 1;
-        }
-        debug_assert!(closed > 0);
-        let average_depth = (10000.0 * sum_depth as f64 / closed as f64).round() / 10000.0;
-
-        if !passes_depth_gate(properties.depth_threshold, average_depth, max_depth) {
-            debug!(
-                "recluster: candidate selection detail group={} block_count={} average_depth={} max_depth={} selected_count=0 skip_reason=below_hotspot_depth_gate",
-                group, block_count, average_depth, max_depth,
-            );
-            return Ok(Vec::new());
-        }
-
-        peaks.sort_by(
-            |(left_pos, left_depth, left_width), (right_pos, right_depth, right_width)| {
-                right_depth
-                    .cmp(left_depth)
-                    .then_with(|| right_width.cmp(left_width))
-                    .then_with(|| left_pos.cmp(right_pos))
-            },
-        );
+        let max_depth = peaks.first().map(|peak| peak.1).unwrap_or(0);
 
         let push_task = |candidates: &mut Vec<ReclusterTaskCandidate>,
                          used_blocks: &mut [bool],
@@ -529,4 +848,20 @@ fn calc_point_depth(open_interval_count: usize, start: &[usize], end: &[usize]) 
     }
 
     open_interval_count + start.len()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pack_peak_order;
+
+    #[test]
+    fn test_peak_packing_switches_from_skip_fill_to_contiguous() {
+        let order = vec![(0, 6), (1, 6), (2, 4), (3, 4)];
+
+        assert_eq!(pack_peak_order(order.clone(), false, 2, 10), vec![
+            (vec![0, 2], 10),
+            (vec![1, 3], 10)
+        ]);
+        assert_eq!(pack_peak_order(order, true, 2, 10), vec![(vec![1, 2], 10)]);
+    }
 }
