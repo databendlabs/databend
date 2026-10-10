@@ -14,6 +14,8 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
@@ -26,18 +28,22 @@ use databend_common_base::runtime::workload_group::MAX_CONCURRENCY_QUOTA_KEY;
 use databend_common_base::runtime::workload_group::QuotaValue;
 use databend_common_base::runtime::workload_group::WorkloadGroup;
 use databend_common_base::runtime::workload_group::WorkloadGroupResource;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_sql::Planner;
+use databend_common_version::BUILD_INFO;
 use databend_meta_client::RpcClientConf;
 use databend_meta_runtime::DatabendRuntime;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryEntry;
 use databend_query::sessions::QueueData;
 use databend_query::sessions::QueueManager;
+use databend_query::sessions::SessionManager;
 use databend_query::sessions::TableContextSettings;
+use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 use log::error;
 use tokio::sync::Mutex;
@@ -48,6 +54,7 @@ struct TestData<const PASSED: bool = false> {
     acquire_id: String,
     abort_notify: Arc<WatchNotify>,
     test_timeout: Duration,
+    wait_exits: Arc<AtomicUsize>,
 }
 
 impl<const PASSED: bool> std::fmt::Debug for TestData<PASSED> {
@@ -67,6 +74,7 @@ impl<const PASSED: bool> TestData<PASSED> {
             acquire_id,
             abort_notify: Arc::new(WatchNotify::new()),
             test_timeout: Duration::from_secs(1000),
+            wait_exits: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -76,6 +84,7 @@ impl<const PASSED: bool> TestData<PASSED> {
             acquire_id,
             abort_notify: Arc::new(WatchNotify::new()),
             test_timeout: timeout,
+            wait_exits: Arc::new(AtomicUsize::new(0)),
         }
     }
 }
@@ -105,6 +114,10 @@ impl<const PASSED: bool> QueueData for TestData<PASSED> {
 
     fn need_acquire_to_queue(&self) -> bool {
         !PASSED
+    }
+
+    fn exit_wait_pending(&self, _wait_time: Duration) {
+        self.wait_exits.fetch_add(1, Ordering::SeqCst);
     }
 
     fn get_abort_notify(&self) -> Arc<WatchNotify> {
@@ -524,6 +537,110 @@ async fn test_watch_abort_notify_immediate_abort() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_dropped_acquire_releases_queue_entry() -> anyhow::Result<()> {
+    let queue = QueueManager::<TestData>::create(1, create_meta_store().await?, false);
+    let holder = queue
+        .acquire(TestData::new("drop_wait".into(), "holder".into()))
+        .await?;
+
+    let data = TestData::new("drop_wait".into(), "waiter".into());
+    let wait_exits = data.wait_exits.clone();
+    let mut acquire = Box::pin(queue.acquire(data));
+    assert!(futures::poll!(acquire.as_mut()).is_pending());
+    assert_eq!(queue.length(), 1);
+    let weak_data = Arc::downgrade(&queue.list()[0]);
+
+    // Dropping the caller's future must clean up even without an abort notification.
+    drop(acquire);
+    assert_eq!(queue.length(), 0);
+    assert!(weak_data.upgrade().is_none());
+    assert_eq!(wait_exits.load(Ordering::SeqCst), 1);
+
+    drop(holder);
+    let _guard = queue
+        .acquire(TestData::new("drop_wait".into(), "next".into()))
+        .await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_aborted_queued_query_releases_session() -> anyhow::Result<()> {
+    let mut config = ConfigBuilder::create().config();
+    config.query.common.max_active_sessions = 1;
+    let fixture = TestFixture::setup_with_config(&config).await?;
+    let queue = QueueManager::<QueryEntry>::create(1, create_meta_store().await?, false);
+
+    let holder_ctx = fixture.new_query_ctx().await?;
+    let extras = Planner::new(holder_ctx.clone()).parse_sql("SELECT 1")?;
+    let _holder = queue
+        .acquire(QueryEntry::create_entry(&holder_ctx, &extras, true)?)
+        .await?;
+
+    let session = fixture.new_session_with_type(SessionType::MySQL).await?;
+    let session_id = session.get_id();
+    let weak_session = Arc::downgrade(&session);
+    let ctx = session.create_query_context(&BUILD_INFO).await?;
+    let weak_ctx = Arc::downgrade(&ctx);
+    let entry = QueryEntry::create_entry(&ctx, &extras, true)?;
+    let abort_notify = entry.get_abort_notify();
+    drop(ctx);
+    drop(session);
+
+    let mut acquire = Box::pin(queue.acquire(entry));
+    assert!(futures::poll!(acquire.as_mut()).is_pending());
+    assert_eq!(queue.length(), 1);
+    assert!(weak_session.upgrade().is_some());
+    assert!(
+        SessionManager::instance()
+            .create_session(SessionType::MySQL)
+            .await
+            .is_err()
+    );
+
+    abort_notify.notify_waiters();
+    assert_eq!(acquire.await.unwrap_err().code(), ErrorCode::ABORTED_QUERY);
+    assert_eq!(queue.length(), 0);
+    assert!(weak_ctx.upgrade().is_none());
+    assert!(weak_session.upgrade().is_none());
+    assert!(
+        SessionManager::instance()
+            .get_session_by_id(&session_id)
+            .is_none()
+    );
+    let _next_session = fixture.new_session_with_type(SessionType::MySQL).await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_completed_acquire_cleans_up_once() -> anyhow::Result<()> {
+    for remove in [false, true] {
+        let queue = QueueManager::<TestData>::create(1, create_meta_store().await?, false);
+        let holder = queue
+            .acquire(TestData::new("complete_wait".into(), "holder".into()))
+            .await?;
+
+        let data = TestData::new("complete_wait".into(), "waiter".into());
+        let wait_exits = data.wait_exits.clone();
+        let mut acquire = Box::pin(queue.acquire(data));
+        assert!(futures::poll!(acquire.as_mut()).is_pending());
+        assert_eq!(queue.length(), 1);
+        let weak_data = Arc::downgrade(&queue.list()[0]);
+
+        if remove {
+            assert!(queue.remove("waiter".into()));
+            assert!(acquire.await.is_err());
+        } else {
+            drop(holder);
+            let _guard = acquire.await?;
+        }
+        assert_eq!(queue.length(), 0);
+        assert!(weak_data.upgrade().is_none());
+        assert_eq!(wait_exits.load(Ordering::SeqCst), 1);
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_watch_abort_notify_abort_during_wait() -> anyhow::Result<()> {
     let metastore = create_meta_store().await?;
     let queue = QueueManager::<TestData>::create(1, metastore, false);
@@ -550,6 +667,46 @@ async fn test_watch_abort_notify_abort_during_wait() -> anyhow::Result<()> {
     let result = acquire_handle.await.unwrap();
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().code(), ErrorCode::ABORTED_QUERY);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_watch_abort_notify_repeated_abort_releases_entries() -> anyhow::Result<()> {
+    let metastore = create_meta_store().await?;
+    let queue = QueueManager::<TestData>::create(1, metastore, false);
+
+    let test_data1 = TestData::new(
+        "test_abort_during_wait".to_string(),
+        "test_acquire_1".to_string(),
+    );
+    let guard1 = queue.acquire(test_data1).await?;
+
+    // Repeated cancellations must not accumulate entries or retain their query data.
+    for index in 0..3 {
+        let data = TestData::new("test_abort_during_wait".into(), format!("waiter_{index}"));
+        let abort_notify = data.abort_notify.clone();
+        let wait_exits = data.wait_exits.clone();
+        let mut acquire = Box::pin(queue.acquire(data));
+        assert!(futures::poll!(acquire.as_mut()).is_pending());
+        assert_eq!(queue.length(), 1);
+        let weak_data = Arc::downgrade(&queue.list()[0]);
+
+        abort_notify.notify_waiters();
+        let result = acquire.await;
+        assert_eq!(result.unwrap_err().code(), ErrorCode::ABORTED_QUERY);
+        assert_eq!(queue.length(), 0);
+        assert!(weak_data.upgrade().is_none());
+        assert_eq!(wait_exits.load(Ordering::SeqCst), 1);
+    }
+
+    drop(guard1);
+    let _guard = queue
+        .acquire(TestData::new(
+            "test_abort_during_wait".into(),
+            "next".into(),
+        ))
+        .await?;
 
     Ok(())
 }
