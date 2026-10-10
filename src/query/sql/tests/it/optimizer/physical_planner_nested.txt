@@ -1,0 +1,77 @@
+sql: INSERT INTO dst SELECT k, v FROM t
+raw_source:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+planned_source:
+Scan
+├── table: default.t (#0)
+├── filters: []
+├── order by: []
+└── limit: NONE
+
+sql: REPLACE INTO dst ON(k) SELECT k, v FROM t
+raw_source:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+planned_source:
+Scan
+├── table: default.t (#0)
+├── filters: []
+├── order by: []
+└── limit: NONE
+
+sql: CREATE TABLE copied ENGINE=NULL AS SELECT k, v FROM t
+raw_source:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+planned_source:
+Scan
+├── table: default.t (#0)
+├── filters: []
+├── order by: []
+└── limit: NONE
+
+sql: INSERT ALL WHEN k IN (SELECT k FROM t) THEN INTO dst VALUES(k, v) ELSE INTO dst2 VALUES(k, v) SELECT k, v FROM t
+raw_source:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+planned_source:
+Join(RightMark)
+├── build keys: [t.k (#2)]
+├── probe keys: [t.k (#0)]
+├── other filters: []
+├── Scan
+│   ├── table: default.t (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+

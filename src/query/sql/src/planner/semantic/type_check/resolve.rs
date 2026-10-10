@@ -70,7 +70,7 @@ where A: TypeCheckAdapter
         fallback_aliases: Option<AliasLookup<'a>>,
     ) -> Result<Self> {
         let func_ctx = adapter.function_context()?;
-        let dialect = adapter.settings().get_sql_dialect()?;
+        let dialect = adapter.sql_dialect()?;
         Ok(Self {
             bind_context,
             adapter,

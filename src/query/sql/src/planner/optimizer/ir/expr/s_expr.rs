@@ -12,68 +12,82 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
-use databend_common_catalog::plan::InvertedIndexInfo;
-use databend_common_catalog::plan::VectorIndexInfo;
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use educe::Educe;
 
 use crate::IndexType;
-use crate::Symbol;
-use crate::optimizer::ir::SExprVisitor;
+use crate::optimizer::ir::Expr;
+use crate::optimizer::ir::ExprKind;
+use crate::optimizer::ir::RelExprKind;
+use crate::optimizer::ir::RewriteExprKind;
 use crate::optimizer::ir::StatInfo;
-use crate::optimizer::ir::VisitAction;
 use crate::optimizer::ir::property::RelExpr;
 use crate::optimizer::ir::property::RelationalProperty;
 use crate::optimizer::optimizers::rule::AppliedRules;
 use crate::optimizer::optimizers::rule::RuleID;
-use crate::plans::Exchange;
-use crate::plans::Operator;
 use crate::plans::RelOperator;
 
-/// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
+/// Logical expression, with stage-specific state on a shared recursive tree.
+pub type SExpr = Expr<Logical>;
+
+pub struct Logical;
+
+impl ExprKind for Logical {
+    type Operator = RelOperator;
+    type State = LogicalState;
+}
+
 #[derive(Educe)]
-#[educe(
-    PartialEq(bound = false, attrs = "#[recursive::recursive]"),
-    Eq,
-    Hash(bound = false, attrs = "#[recursive::recursive]"),
-    Clone(bound = false, attrs = "#[recursive::recursive]"),
-    Debug(bound = false, attrs = "#[recursive::recursive]")
-)]
-pub struct SExpr {
-    pub plan: Arc<RelOperator>,
-    pub children: Vec<Arc<SExpr>>,
-
-    original_group: Option<IndexType>,
-
-    /// A cache of relational property of current `SExpr`, will
-    /// be lazily computed as soon as `RelExpr::derive_relational_prop`
-    /// is invoked on current `SExpr`.
-    ///
-    /// Since `SExpr` is `Send + Sync`, we use `OnceLock` to protect
-    /// the cache.
+#[educe(PartialEq, Eq, Hash, Clone)]
+pub struct LogicalState {
+    pub(crate) original_group: Option<IndexType>,
+    /// Shared, lazily populated caches; excluded from expression identity.
     #[educe(Hash(ignore), PartialEq(ignore))]
-    rel_prop: Arc<OnceLock<Arc<RelationalProperty>>>,
-
+    pub(crate) rel_prop: Arc<OnceLock<Arc<RelationalProperty>>>,
     #[educe(Hash(ignore), PartialEq(ignore))]
     pub(crate) stat_info: Arc<OnceLock<Arc<StatInfo>>>,
-
-    /// A bitmap to record applied rules on current SExpr, to prevent
-    /// redundant transformations.
     pub(crate) applied_rules: AppliedRules,
 }
 
-#[derive(Clone, Default)]
-pub struct ScanRequiredColumns {
-    pub columns: BTreeSet<Symbol>,
-    pub inverted_index: Option<InvertedIndexInfo>,
-    pub vector_index: Option<VectorIndexInfo>,
+impl RewriteExprKind for Logical {
+    fn rewritten_state(state: &Self::State) -> Self::State {
+        Self::State {
+            original_group: None,
+            rel_prop: Default::default(),
+            stat_info: Default::default(),
+            applied_rules: state.applied_rules.clone(),
+        }
+    }
+}
+
+impl RelExprKind for Logical {
+    const NAME: &'static str = "SExpr";
+    fn rel_expr(expr: &Expr<Self>) -> RelExpr<'_> {
+        RelExpr::with_s_expr(expr)
+    }
+    fn relational_cache(state: &Self::State) -> &Arc<OnceLock<Arc<RelationalProperty>>> {
+        &state.rel_prop
+    }
+    fn statistics_cache(state: &Self::State) -> &Arc<OnceLock<Arc<StatInfo>>> {
+        &state.stat_info
+    }
+}
+
+// Preserve diagnostic output rather than exposing the implementation's state wrapper.
+impl std::fmt::Debug for Expr<Logical> {
+    #[recursive::recursive]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SExpr")
+            .field("plan", &self.plan)
+            .field("children", &self.children)
+            .field("original_group", &self.state.original_group)
+            .field("rel_prop", &self.state.rel_prop)
+            .field("stat_info", &self.state.stat_info)
+            .field("applied_rules", &self.state.applied_rules)
+            .finish()
+    }
 }
 
 impl SExpr {
@@ -87,16 +101,18 @@ impl SExpr {
         SExpr {
             plan: plan.into(),
             children,
-            original_group,
-            rel_prop: Arc::new(match rel_prop {
-                Some(rel_prop) => OnceLock::from(rel_prop),
-                None => OnceLock::new(),
-            }),
-            stat_info: Arc::new(match stat_info {
-                Some(stat_info) => OnceLock::from(stat_info),
-                None => OnceLock::new(),
-            }),
-            applied_rules: AppliedRules::default(),
+            state: LogicalState {
+                original_group,
+                rel_prop: Arc::new(match rel_prop {
+                    Some(rel_prop) => OnceLock::from(rel_prop),
+                    None => OnceLock::new(),
+                }),
+                stat_info: Arc::new(match stat_info {
+                    Some(stat_info) => OnceLock::from(stat_info),
+                    None => OnceLock::new(),
+                }),
+                applied_rules: AppliedRules::default(),
+            },
         }
     }
 
@@ -130,232 +146,24 @@ impl SExpr {
         Self::create(plan, vec![self.clone()], None, None, None)
     }
 
-    pub fn plan(&self) -> &RelOperator {
-        &self.plan
-    }
-
-    pub fn children(&self) -> impl Iterator<Item = &SExpr> {
-        self.children.iter().map(|v| v.as_ref())
-    }
-
-    pub fn child(&self, n: usize) -> Result<&SExpr> {
-        self.children
-            .get(n)
-            .map(|v| v.as_ref())
-            .ok_or_else(|| ErrorCode::Internal(format!("Invalid children index: {}", n)))
-    }
-
-    pub fn unary_child(&self) -> &SExpr {
-        debug_assert_eq!(self.children.len(), 1);
-        &self.children[0]
-    }
-
-    pub fn unary_child_arc(&self) -> Arc<SExpr> {
-        assert_eq!(self.children.len(), 1);
-        self.children[0].clone()
-    }
-
-    pub fn left_child(&self) -> &SExpr {
-        debug_assert_eq!(self.children.len(), 2);
-        &self.children[0]
-    }
-
-    pub fn left_child_arc(&self) -> Arc<SExpr> {
-        assert_eq!(self.children.len(), 2);
-        self.children[0].clone()
-    }
-
-    pub fn right_child(&self) -> &SExpr {
-        debug_assert_eq!(self.children.len(), 2);
-        &self.children[1]
-    }
-
-    pub fn right_child_arc(&self) -> Arc<SExpr> {
-        assert_eq!(self.children.len(), 2);
-        self.children[1].clone()
-    }
-
-    pub fn build_side_child(&self) -> &SExpr {
-        debug_assert_eq!(self.plan.rel_op(), crate::plans::RelOp::Join);
-        &self.children[1]
-    }
-
-    pub fn probe_side_child(&self) -> &SExpr {
-        debug_assert_eq!(self.plan.rel_op(), crate::plans::RelOp::Join);
-        &self.children[0]
-    }
-
-    pub fn arity(&self) -> usize {
-        self.children.len()
-    }
-
     pub fn original_group(&self) -> Option<IndexType> {
-        self.original_group
-    }
-
-    /// Replace children with given new `children`.
-    /// Note that this method will keep the `applied_rules` of
-    /// current `SExpr` unchanged.
-    pub fn replace_children(&self, children: impl IntoIterator<Item = Arc<SExpr>>) -> Self {
-        Self {
-            plan: self.plan.clone(),
-            original_group: None,
-            rel_prop: Default::default(),
-            stat_info: Default::default(),
-            applied_rules: self.applied_rules.clone(),
-            children: children.into_iter().collect(),
-        }
-    }
-
-    pub fn replace_left_child(&self, left: impl Into<Arc<SExpr>>) -> Self {
-        assert_eq!(self.children.len(), 2);
-        Self {
-            plan: self.plan.clone(),
-            original_group: None,
-            rel_prop: Default::default(),
-            stat_info: Default::default(),
-            applied_rules: self.applied_rules.clone(),
-            children: vec![left.into(), self.children[1].clone()],
-        }
-    }
-
-    pub fn replace_right_child(&self, right: impl Into<Arc<SExpr>>) -> Self {
-        assert_eq!(self.children.len(), 2);
-        Self {
-            plan: self.plan.clone(),
-            original_group: None,
-            rel_prop: Default::default(),
-            stat_info: Default::default(),
-            applied_rules: self.applied_rules.clone(),
-            children: vec![self.children[0].clone(), right.into()],
-        }
-    }
-
-    pub fn replace_side_child(&self, side: Side, child: impl Into<Arc<SExpr>>) -> SExpr {
-        match side {
-            Side::Left => self.replace_left_child(child),
-            Side::Right => self.replace_right_child(child),
-        }
-    }
-
-    pub fn replace_plan(&self, plan: impl Into<Arc<RelOperator>>) -> Self {
-        Self {
-            plan: plan.into(),
-            original_group: None,
-            rel_prop: Default::default(),
-            stat_info: Default::default(),
-            applied_rules: self.applied_rules.clone(),
-            children: self.children.clone(),
-        }
+        self.state.original_group
     }
 
     /// Record the applied rule id in current SExpr
     pub(crate) fn set_applied_rule(&mut self, rule_id: &RuleID) {
-        self.applied_rules.set(rule_id, true);
+        self.state.applied_rules.set(rule_id, true);
     }
 
     /// Check if a rule is applied for current SExpr
     pub(crate) fn applied_rule(&self, rule_id: &RuleID) -> bool {
-        self.applied_rules.get(rule_id)
-    }
-
-    #[recursive::recursive]
-    pub fn support_lazy_materialize(&self) -> bool {
-        self.plan.support_lazy_materialize()
-            && self
-                .children
-                .iter()
-                .all(|child| child.support_lazy_materialize())
-    }
-
-    #[recursive::recursive]
-    pub fn get_udfs(&self) -> Result<HashSet<&String>> {
-        let mut udfs = HashSet::new();
-        let iter = self.plan.scalar_expr_iter();
-        for scalar in iter {
-            for udf in scalar.get_udf_names()? {
-                udfs.insert(udf);
-            }
-        }
-
-        for child in &self.children {
-            let udf = child.get_udfs()?;
-            udf.iter().for_each(|udf| {
-                udfs.insert(*udf);
-            })
-        }
-        Ok(udfs)
-    }
-
-    #[recursive::recursive]
-    pub fn get_udfs_col_ids(&self) -> Result<BTreeSet<Symbol>> {
-        let mut udf_ids = BTreeSet::new();
-        if let RelOperator::Udf(udf) = self.plan.as_ref() {
-            for item in udf.items.iter() {
-                udf_ids.insert(item.index);
-            }
-        }
-        for child in &self.children {
-            let udfs = child.get_udfs_col_ids()?;
-            udf_ids.extend(udfs);
-        }
-        Ok(udf_ids)
-    }
-
-    // Add column index to Scan nodes that match the given table index
-    pub fn add_column_index_to_scans(&self, table_index: IndexType, column_index: Symbol) -> SExpr {
-        let mut required_columns = BTreeMap::new();
-        required_columns.insert(table_index, ScanRequiredColumns {
-            columns: BTreeSet::from([column_index]),
-            inverted_index: None,
-            vector_index: None,
-        });
-        self.add_column_indexes_to_scans(&required_columns)
-    }
-
-    // Add column indexes to Scan nodes that match the given table indexes.
-    pub fn add_column_indexes_to_scans(
-        &self,
-        required_columns: &BTreeMap<IndexType, ScanRequiredColumns>,
-    ) -> SExpr {
-        struct Visitor<'a> {
-            required_columns: &'a BTreeMap<IndexType, ScanRequiredColumns>,
-        }
-
-        impl<'a> SExprVisitor for Visitor<'a> {
-            fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
-                if let Some(p) = expr.plan.as_ref().as_scan() {
-                    if let Some(required_columns) = self.required_columns.get(&p.table_index) {
-                        let mut p = p.clone();
-                        p.columns.extend(required_columns.columns.iter().copied());
-                        if required_columns.inverted_index.is_some() {
-                            p.inverted_index = required_columns.inverted_index.clone();
-                        }
-                        if required_columns.vector_index.is_some() {
-                            p.vector_index = required_columns.vector_index.clone();
-                        }
-                        let expr = expr.replace_plan(p);
-                        return Ok(VisitAction::Replace(expr));
-                    } else {
-                        return Ok(VisitAction::SkipChildren);
-                    }
-                }
-                Ok(VisitAction::Continue)
-            }
-        }
-
-        let mut visitor = Visitor { required_columns };
-        let expr = self.accept(&mut visitor);
-        if let Ok(Some(expr)) = expr {
-            return expr;
-        }
-        self.clone()
+        self.state.applied_rules.get(rule_id)
     }
 
     // The method will clear the applied rules of current SExpr and its children.
     #[recursive::recursive]
     pub fn clear_applied_rules(&mut self) {
-        self.applied_rules.clear();
+        self.state.applied_rules.clear();
         let children = self
             .children()
             .map(|child| {
@@ -365,77 +173,5 @@ impl SExpr {
             })
             .collect::<Vec<_>>();
         self.children = children;
-    }
-
-    #[recursive::recursive]
-    pub fn has_merge_exchange(&self) -> bool {
-        if let RelOperator::Exchange(Exchange::Merge) = self.plan.as_ref() {
-            return true;
-        }
-        self.children.iter().any(|child| child.has_merge_exchange())
-    }
-
-    pub fn derive_relational_prop(&self) -> Result<Arc<RelationalProperty>> {
-        let rel_prop = self.rel_prop.get_or_try_init(|| {
-            self.plan
-                .derive_relational_prop(&RelExpr::SExpr { expr: self })
-        })?;
-
-        Ok(rel_prop.clone())
-    }
-
-    pub fn get_data_distribution(&self) -> Result<Option<Exchange>> {
-        struct DataDistributionVisitor {
-            result: Option<Exchange>,
-        }
-        impl SExprVisitor for DataDistributionVisitor {
-            fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
-                match expr.plan.as_ref() {
-                    RelOperator::Exchange(exchange) => {
-                        self.result = Some(exchange.clone());
-                        Ok(VisitAction::Stop)
-                    }
-
-                    RelOperator::Join(_) => {
-                        let child = expr.probe_side_child();
-                        self.result = child.get_data_distribution()?;
-                        Ok(VisitAction::Stop)
-                    }
-                    _ => {
-                        if expr.arity() > 0 {
-                            Ok(VisitAction::Continue)
-                        } else {
-                            Ok(VisitAction::Stop)
-                        }
-                    }
-                }
-            }
-        }
-
-        let mut visitor = DataDistributionVisitor { result: None };
-        let _ = self.accept(&mut visitor);
-        Ok(visitor.result)
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Side {
-    Left,
-    Right,
-}
-
-impl Side {
-    pub fn opposite(self) -> Self {
-        match self {
-            Side::Left => Side::Right,
-            Side::Right => Side::Left,
-        }
-    }
-
-    pub fn child(self, s_expr: &SExpr) -> Arc<SExpr> {
-        match self {
-            Side::Left => s_expr.left_child_arc(),
-            Side::Right => s_expr.right_child_arc(),
-        }
     }
 }

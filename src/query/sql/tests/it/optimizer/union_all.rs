@@ -20,13 +20,12 @@ use databend_common_catalog::BasicColumnStatistics;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::ColumnEntry;
-use databend_common_sql::FormatOptions;
 use databend_common_sql::Metadata;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::Symbol;
 use databend_common_sql::optimizer::ir::ColumnStat;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::RelExpr;
-use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::ir::StatInfo;
 use databend_common_sql::plans::Operator;
@@ -57,7 +56,7 @@ struct UnionCase {
 }
 
 struct StatTarget {
-    // Child directions starting from the optimized Plan::Query SExpr root.
+    // Child directions starting from the optimized Plan::Query PExpr root.
     path: Vec<Child>,
     operator: RelOp,
 }
@@ -78,7 +77,7 @@ impl Child {
 }
 
 fn collect_operator_paths(
-    expr: &SExpr,
+    expr: &PExpr,
     operator: &RelOp,
     path: &mut Vec<Child>,
     paths: &mut Vec<Vec<Child>>,
@@ -91,21 +90,21 @@ fn collect_operator_paths(
         path.push(match index {
             0 => Child::Left,
             1 => Child::Right,
-            _ => unreachable!("SExpr nodes have at most two children"),
+            _ => unreachable!("PExpr nodes have at most two children"),
         });
         collect_operator_paths(child, operator, path, paths);
         path.pop();
     }
 }
 
-fn possible_operator_paths(root: &SExpr, operator: &RelOp) -> Vec<Vec<Child>> {
+fn possible_operator_paths(root: &PExpr, operator: &RelOp) -> Vec<Vec<Child>> {
     let mut paths = Vec::new();
     collect_operator_paths(root, operator, &mut Vec::new(), &mut paths);
     paths
 }
 
 fn invalid_target_path(
-    root: &SExpr,
+    root: &PExpr,
     target: &StatTarget,
     reason: impl std::fmt::Display,
 ) -> ErrorCode {
@@ -193,22 +192,14 @@ fn write_stat_info(file: &mut impl Write, metadata: &Metadata, stat_info: &StatI
     Ok(())
 }
 
-fn format_node(metadata: &MetadataRef, expr: &SExpr) -> Result<String> {
-    Plan::Query {
-        s_expr: Box::new(expr.clone()),
-        metadata: metadata.clone(),
-        bind_context: Default::default(),
-        rewrite_kind: None,
-        formatted_ast: None,
-        ignore_result: false,
-    }
-    .format_indent(FormatOptions::default(), &StatContext::default())
+fn format_node(metadata: &MetadataRef, expr: &PExpr) -> Result<String> {
+    expr.pretty_format(&metadata.read(), &StatContext::default())
 }
 
 fn write_derived_stats(
     file: &mut impl Write,
     metadata: &MetadataRef,
-    root: &SExpr,
+    root: &PExpr,
     target: &StatTarget,
 ) -> Result<()> {
     let mut expr = root;
@@ -240,7 +231,7 @@ fn write_derived_stats(
     writeln!(file, "path: {:?}", target.path)?;
     writeln!(file, "node:")?;
     writeln!(file, "{}", format_node(metadata, expr)?)?;
-    let stat_info = RelExpr::with_s_expr(expr).derive_cardinality(&StatContext::default())?;
+    let stat_info = RelExpr::with_p_expr(expr).derive_cardinality(&StatContext::default())?;
     write_stat_info(file, &metadata.read(), &stat_info)?;
     Ok(())
 }
@@ -262,7 +253,7 @@ async fn write_case(file: &mut impl Write, case: UnionCase) -> Result<()> {
     write_case_title(file, case.name, case.description)?;
     writeln!(file, "sql: {}", case.sql)?;
     for target in &case.targets {
-        write_derived_stats(file, &metadata, &s_expr, target)?;
+        write_derived_stats(file, &metadata, s_expr.planned()?.expr(), target)?;
     }
     writeln!(file)?;
     Ok(())

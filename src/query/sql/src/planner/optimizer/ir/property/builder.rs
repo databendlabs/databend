@@ -19,6 +19,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::IndexType;
+use crate::optimizer::ir::PExpr;
 use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::expr::MExpr;
@@ -32,6 +33,9 @@ use crate::plans::Operator;
 /// A helper to access children of `SExpr` and `MExpr` in
 /// a unified view.
 pub enum RelExpr<'a> {
+    PExpr {
+        expr: &'a PExpr,
+    },
     SExpr {
         expr: &'a SExpr,
     },
@@ -47,6 +51,10 @@ pub enum RelExpr<'a> {
 }
 
 impl<'a> RelExpr<'a> {
+    pub fn with_p_expr(expr: &'a PExpr) -> Self {
+        Self::PExpr { expr }
+    }
+
     pub fn with_s_expr(s_expr: &'a SExpr) -> Self {
         Self::SExpr { expr: s_expr }
     }
@@ -70,6 +78,7 @@ impl<'a> RelExpr<'a> {
     #[recursive::recursive]
     pub fn derive_relational_prop(&self) -> Result<Arc<RelationalProperty>> {
         match self {
+            RelExpr::PExpr { expr } => expr.derive_relational_prop(),
             RelExpr::SExpr { expr } => expr.derive_relational_prop(),
             RelExpr::MExpr { expr, .. } => expr.plan.derive_relational_prop(self),
             RelExpr::OptContext { expr, .. } => expr.plan.derive_relational_prop(self),
@@ -78,6 +87,11 @@ impl<'a> RelExpr<'a> {
 
     pub fn derive_relational_prop_child(&self, index: usize) -> Result<Arc<RelationalProperty>> {
         match self {
+            RelExpr::PExpr { expr } => {
+                let child = expr.child(index)?;
+                let rel_expr = RelExpr::with_p_expr(child);
+                rel_expr.derive_relational_prop()
+            }
             RelExpr::SExpr { expr } => {
                 let child = expr.child(index)?;
                 let rel_expr = RelExpr::with_s_expr(child);
@@ -98,12 +112,8 @@ impl<'a> RelExpr<'a> {
     #[recursive::recursive]
     pub fn derive_cardinality(&self, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         match self {
-            RelExpr::SExpr { expr } => {
-                let stat_info = expr
-                    .stat_info
-                    .get_or_try_init(|| expr.plan.derive_stats(self, stat_ctx))?;
-                Ok(stat_info.clone())
-            }
+            RelExpr::PExpr { expr } => expr.derive_cardinality(stat_ctx),
+            RelExpr::SExpr { expr } => expr.derive_cardinality(stat_ctx),
             RelExpr::MExpr { expr, .. } => expr.plan.derive_stats(self, stat_ctx),
             RelExpr::OptContext { expr, .. } => expr.plan.derive_stats(self, stat_ctx),
         }
@@ -115,6 +125,11 @@ impl<'a> RelExpr<'a> {
         stat_ctx: &StatContext,
     ) -> Result<Arc<StatInfo>> {
         match self {
+            RelExpr::PExpr { expr } => {
+                let child = expr.child(index)?;
+                let rel_expr = RelExpr::with_p_expr(child);
+                rel_expr.derive_cardinality(stat_ctx)
+            }
             RelExpr::SExpr { expr } => {
                 let child = expr.child(index)?;
                 let rel_expr = RelExpr::with_s_expr(child);
@@ -130,6 +145,7 @@ impl<'a> RelExpr<'a> {
     #[recursive::recursive]
     pub fn derive_physical_prop(&self) -> Result<PhysicalProperty> {
         let plan = match self {
+            RelExpr::PExpr { expr } => expr.plan(),
             RelExpr::SExpr { expr } => expr.plan(),
             RelExpr::MExpr { expr, .. } => &expr.plan,
             RelExpr::OptContext { expr, .. } => &expr.plan,
@@ -141,6 +157,11 @@ impl<'a> RelExpr<'a> {
 
     pub fn derive_physical_prop_child(&self, index: usize) -> Result<PhysicalProperty> {
         match self {
+            RelExpr::PExpr { expr } => {
+                let child = expr.child(index)?;
+                let rel_expr = RelExpr::with_p_expr(child);
+                rel_expr.derive_physical_prop()
+            }
             RelExpr::SExpr { expr } => {
                 let child = expr.child(index)?;
                 let rel_expr = RelExpr::with_s_expr(child);
@@ -166,6 +187,7 @@ impl<'a> RelExpr<'a> {
         input: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         let plan = match self {
+            RelExpr::PExpr { expr } => expr.plan(),
             RelExpr::SExpr { expr } => expr.plan(),
             RelExpr::MExpr { expr, .. } => &expr.plan,
             RelExpr::OptContext { expr, .. } => &expr.plan,
@@ -181,6 +203,7 @@ impl<'a> RelExpr<'a> {
         input: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
         let plan = match self {
+            RelExpr::PExpr { expr } => expr.plan(),
             RelExpr::SExpr { expr } => expr.plan(),
             RelExpr::MExpr { expr, .. } => &expr.plan,
             RelExpr::OptContext { expr, .. } => &expr.plan,

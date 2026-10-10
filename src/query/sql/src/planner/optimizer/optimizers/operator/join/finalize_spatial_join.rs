@@ -18,8 +18,8 @@ use databend_common_exception::Result;
 
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
+use crate::optimizer::ir::PExpr;
 use crate::optimizer::ir::RelExpr;
-use crate::optimizer::ir::SExpr;
 use crate::plans::RelOperator;
 use crate::plans::spatial_join_gate;
 
@@ -33,7 +33,7 @@ impl FinalizeSpatialJoinOptimizer {
         Self { ctx }
     }
 
-    pub fn optimize_sync(&mut self, s_expr: SExpr) -> Result<SExpr> {
+    pub fn optimize_sync(&mut self, s_expr: PExpr) -> Result<PExpr> {
         if !self
             .ctx
             .get_table_ctx()
@@ -47,7 +47,7 @@ impl FinalizeSpatialJoinOptimizer {
     }
 
     #[recursive::recursive]
-    fn finalize_spatial_join(mut s_expr: SExpr) -> Result<SExpr> {
+    fn finalize_spatial_join(mut s_expr: PExpr) -> Result<PExpr> {
         let mut children = Vec::with_capacity(s_expr.children.len());
         for child in std::mem::take(&mut s_expr.children) {
             children.push(Arc::new(Self::finalize_spatial_join(
@@ -58,8 +58,8 @@ impl FinalizeSpatialJoinOptimizer {
         let mut result = s_expr.replace_children(children);
 
         if let RelOperator::Join(join) = result.plan() {
-            let left_prop = RelExpr::with_s_expr(result.left_child()).derive_relational_prop()?;
-            let right_prop = RelExpr::with_s_expr(result.right_child()).derive_relational_prop()?;
+            let left_prop = RelExpr::with_p_expr(result.left_child()).derive_relational_prop()?;
+            let right_prop = RelExpr::with_p_expr(result.right_child()).derive_relational_prop()?;
             let spatial_join =
                 spatial_join_gate(join, &left_prop.output_columns, &right_prop.output_columns)
                     .map(Box::new);
@@ -77,12 +77,12 @@ impl FinalizeSpatialJoinOptimizer {
 }
 
 #[async_trait::async_trait]
-impl Optimizer for FinalizeSpatialJoinOptimizer {
+impl Optimizer<PExpr> for FinalizeSpatialJoinOptimizer {
     fn name(&self) -> String {
         "FinalizeSpatialJoinOptimizer".to_string()
     }
 
-    async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
+    async fn optimize(&mut self, s_expr: PExpr) -> Result<PExpr> {
         self.optimize_sync(s_expr)
     }
 }

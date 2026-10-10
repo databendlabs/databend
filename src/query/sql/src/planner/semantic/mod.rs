@@ -46,6 +46,7 @@ pub use name_resolution::normalize_identifier;
 pub use type_check::AuthFunction;
 pub use type_check::FullTypeCheckAdapter;
 pub use type_check::NamespaceFunction;
+pub use type_check::PersistedTypeCheckAdapter;
 pub use type_check::SessionFunction;
 pub use type_check::StageLocationParam;
 pub use type_check::TypeCheckAdapter;

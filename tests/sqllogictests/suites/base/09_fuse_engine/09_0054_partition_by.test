@@ -713,5 +713,303 @@ EXPLAIN SELECT id FROM nullable_partitioned WHERE p IS NULL
 ----
 <slt:ignore>partitions total: 4<slt:ignore>partitions scanned: 1<slt:ignore>range pruning: 4 to 1<slt:ignore>
 
+# Hash write layout for MERGE INTO, REPLACE INTO and INSERT ALL. Each hash
+# table has a plain twin running the same statements: data must match and every
+# block of the hash table must hold a single partition value.
+statement ok
+CREATE TABLE hash_merge(id INT, p INT NULL, c INT) PARTITION BY (p) CLUSTER BY (c) WRITE_DISTRIBUTION_MODE='hash'
+
+statement ok
+CREATE TABLE hash_merge_plain(id INT, p INT NULL, c INT)
+
+statement ok
+MERGE INTO hash_merge t USING (SELECT number::INT id, if(number % 3 = 0, NULL, (number % 2)::INT) p, (100 - number)::INT c FROM numbers(60)) s ON t.id = s.id
+WHEN NOT MATCHED THEN INSERT (id, p, c) VALUES (s.id, s.p, s.c)
+
+statement ok
+MERGE INTO hash_merge_plain t USING (SELECT number::INT id, if(number % 3 = 0, NULL, (number % 2)::INT) p, (100 - number)::INT c FROM numbers(60)) s ON t.id = s.id
+WHEN NOT MATCHED THEN INSERT (id, p, c) VALUES (s.id, s.p, s.c)
+
+statement ok
+MERGE INTO hash_merge t USING (SELECT (number * 2)::INT id, if(number % 4 = 0, NULL, (number % 3)::INT) p, number::INT c FROM numbers(40)) s ON t.id = s.id
+WHEN MATCHED AND t.id < 20 THEN DELETE
+WHEN MATCHED THEN UPDATE SET t.p = s.p, t.c = s.c
+WHEN NOT MATCHED THEN INSERT (id, p, c) VALUES (s.id, s.p, s.c)
+
+statement ok
+MERGE INTO hash_merge_plain t USING (SELECT (number * 2)::INT id, if(number % 4 = 0, NULL, (number % 3)::INT) p, number::INT c FROM numbers(40)) s ON t.id = s.id
+WHEN MATCHED AND t.id < 20 THEN DELETE
+WHEN MATCHED THEN UPDATE SET t.p = s.p, t.c = s.c
+WHEN NOT MATCHED THEN INSERT (id, p, c) VALUES (s.id, s.p, s.c)
+
+query I
+SELECT count(*) FROM hash_merge
+----
+60
+
+query II
+SELECT (SELECT count(*) FROM (SELECT * FROM hash_merge EXCEPT SELECT * FROM hash_merge_plain)),
+       (SELECT count(*) FROM (SELECT * FROM hash_merge_plain EXCEPT SELECT * FROM hash_merge))
+----
+0 0
+
+query I
+SELECT count_if(partition_values != 1)
+FROM (
+    SELECT _block_name, count(DISTINCT if(p IS NULL, '<NULL>', to_string(p))) AS partition_values
+    FROM hash_merge
+    GROUP BY _block_name
+)
+----
+0
+
+# The partition key column is filled from its default value.
+statement ok
+CREATE TABLE hash_merge_default(id INT, a INT, b STRING DEFAULT 'd') PARTITION BY (a % 2, b) WRITE_DISTRIBUTION_MODE='hash'
+
+statement ok
+MERGE INTO hash_merge_default t USING (SELECT number::INT id FROM numbers(20)) s ON t.id = s.id
+WHEN NOT MATCHED THEN INSERT (id, a) VALUES (s.id, s.id)
+
+query II
+SELECT count(*), count_if(b = 'd') FROM hash_merge_default
+----
+20 20
+
+query I
+SELECT count_if(partition_values != 1)
+FROM (
+    SELECT _block_name, count(DISTINCT (a % 2)::STRING || b) AS partition_values
+    FROM hash_merge_default
+    GROUP BY _block_name
+)
+----
+0
+
+# REPLACE with reordered columns and a nullable partition key.
+statement ok
+CREATE TABLE hash_replace(id INT, v INT, p INT NULL) PARTITION BY (p) WRITE_DISTRIBUTION_MODE='hash'
+
+statement ok
+CREATE TABLE hash_replace_plain(id INT, v INT, p INT NULL)
+
+statement ok
+REPLACE INTO hash_replace(p, id, v) ON(id) SELECT if(number % 3 = 0, NULL, (number % 2)::INT), number::INT, number::INT FROM numbers(30)
+
+statement ok
+REPLACE INTO hash_replace_plain(p, id, v) ON(id) SELECT if(number % 3 = 0, NULL, (number % 2)::INT), number::INT, number::INT FROM numbers(30)
+
+statement ok
+REPLACE INTO hash_replace(p, id, v) ON(id) SELECT (number % 4)::INT, (number * 2)::INT, 1 FROM numbers(20)
+
+statement ok
+REPLACE INTO hash_replace_plain(p, id, v) ON(id) SELECT (number % 4)::INT, (number * 2)::INT, 1 FROM numbers(20)
+
+query I
+SELECT count(*) FROM hash_replace
+----
+35
+
+query II
+SELECT (SELECT count(*) FROM (SELECT * FROM hash_replace EXCEPT SELECT * FROM hash_replace_plain)),
+       (SELECT count(*) FROM (SELECT * FROM hash_replace_plain EXCEPT SELECT * FROM hash_replace))
+----
+0 0
+
+query I
+SELECT count_if(partition_values != 1)
+FROM (
+    SELECT _block_name, count(DISTINCT if(p IS NULL, '<NULL>', to_string(p))) AS partition_values
+    FROM hash_replace
+    GROUP BY _block_name
+)
+----
+0
+
+# REPLACE fills an omitted non-partition default column before the hash layout.
+statement ok
+CREATE TABLE hash_replace_default(id INT, p INT, v INT DEFAULT 7) PARTITION BY (p) WRITE_DISTRIBUTION_MODE='hash'
+
+statement ok
+REPLACE INTO hash_replace_default(id, p) ON(id) VALUES (1, 2)
+
+query III
+SELECT id, p, v FROM hash_replace_default
+----
+1 2 7
+
+statement ok
+REPLACE INTO hash_replace_default(p, id) ON(id) SELECT 3, 1
+
+query III
+SELECT id, p, v FROM hash_replace_default
+----
+1 3 7
+
+statement ok
+REPLACE INTO hash_replace_default(id, p) ON(id) SELECT number::INT, (number % 2)::INT FROM numbers(20)
+
+query II
+SELECT count(*), count_if(v = 7) FROM hash_replace_default
+----
+20 20
+
+query I
+SELECT count_if(partition_values != 1)
+FROM (
+    SELECT _block_name, count(DISTINCT p) AS partition_values
+    FROM hash_replace_default
+    GROUP BY _block_name
+)
+----
+0
+
+# REPLACE with DELETE WHEN: the extra delete column must not shift the partition key.
+statement ok
+CREATE TABLE hash_replace_delete(id INT, p INT) PARTITION BY (p % 2) WRITE_DISTRIBUTION_MODE='hash'
+
+statement ok
+INSERT INTO hash_replace_delete VALUES (0, 0), (1, 1)
+
+statement ok
+CREATE TABLE hash_replace_delete_src(id INT, p INT, c INT)
+
+statement ok
+INSERT INTO hash_replace_delete_src VALUES (0, 0, 0), (1, 2, 1), (2, 3, 1)
+
+statement ok
+REPLACE INTO hash_replace_delete ON(id) DELETE WHEN c = 0 SELECT * FROM hash_replace_delete_src
+
+query II
+SELECT count(*), sum(p) FROM hash_replace_delete
+----
+2 5
+
+query I
+SELECT count_if(partition_values != 1)
+FROM (
+    SELECT _block_name, count(DISTINCT p % 2) AS partition_values
+    FROM hash_replace_delete
+    GROUP BY _block_name
+)
+----
+0
+
+# INSERT ALL with a nullable partition key plus CLUSTER BY, a partition key filled
+# from its default value, and a multi-column partition key.
+statement ok
+CREATE TABLE hash_ia_a(id INT, p INT NULL, c INT) PARTITION BY (p) CLUSTER BY (c) WRITE_DISTRIBUTION_MODE='hash'
+
+statement ok
+CREATE TABLE hash_ia_a_plain(id INT, p INT NULL, c INT)
+
+statement ok
+CREATE TABLE hash_ia_b(id INT, p INT DEFAULT 4) PARTITION BY (p % 2) WRITE_DISTRIBUTION_MODE='hash'
+
+statement ok
+CREATE TABLE hash_ia_k(id INT, a INT, b STRING) PARTITION BY (a % 2, b) WRITE_DISTRIBUTION_MODE='hash'
+
+statement ok
+INSERT ALL
+  WHEN id < 20 THEN INTO hash_ia_a VALUES (id, p, c) INTO hash_ia_a_plain VALUES (id, p, c)
+  WHEN id >= 10 THEN INTO hash_ia_b(id) VALUES (id)
+  WHEN id >= 0 THEN INTO hash_ia_k VALUES (id, id, b)
+SELECT number::INT id, if(number % 3 = 0, NULL, (number % 2)::INT) p, (50 - number)::INT c, if(number % 2 = 0, 'x', 'y') b FROM numbers(40)
+
+query I
+SELECT count(*) FROM hash_ia_a
+----
+20
+
+query II
+SELECT (SELECT count(*) FROM (SELECT * FROM hash_ia_a EXCEPT SELECT * FROM hash_ia_a_plain)),
+       (SELECT count(*) FROM (SELECT * FROM hash_ia_a_plain EXCEPT SELECT * FROM hash_ia_a))
+----
+0 0
+
+query I
+SELECT count_if(partition_values != 1)
+FROM (
+    SELECT _block_name, count(DISTINCT if(p IS NULL, '<NULL>', to_string(p))) AS partition_values
+    FROM hash_ia_a
+    GROUP BY _block_name
+)
+----
+0
+
+query II
+SELECT count(*), sum(p) FROM hash_ia_b
+----
+30 120
+
+query I
+SELECT count(*) FROM hash_ia_k
+----
+40
+
+query I
+SELECT count_if(partition_values != 1)
+FROM (
+    SELECT _block_name, count(DISTINCT (a % 2)::STRING || b) AS partition_values
+    FROM hash_ia_k
+    GROUP BY _block_name
+)
+----
+0
+
+# Repeated INTO branches must share one layout per table. Compare with a
+# single-branch target in the same pipeline so this also works in a cluster:
+# coalescing is node-local, and both targets see the same source rows on each node.
+statement ok
+CREATE TABLE hash_ia_repeat(id INT, p INT) PARTITION BY (p) WRITE_DISTRIBUTION_MODE='hash' ROW_PER_BLOCK=1000
+
+statement ok
+CREATE TABLE hash_ia_single(id INT, p INT) PARTITION BY (p) WRITE_DISTRIBUTION_MODE='hash' ROW_PER_BLOCK=1000
+
+statement ok
+CREATE TABLE hash_ia_repeat_plain(id INT, p INT)
+
+statement ok
+INSERT ALL
+  INTO hash_ia_repeat VALUES (id, p)
+  INTO hash_ia_single VALUES (id, p)
+  INTO hash_ia_repeat_plain VALUES (id, p)
+  INTO hash_ia_repeat VALUES (id + 20, p)
+SELECT number::INT id, (number % 2)::INT p FROM numbers(20)
+
+query III
+SELECT count(*), sum(id), sum(p) FROM hash_ia_repeat
+----
+40 780 20
+
+query III
+SELECT count(*), sum(id), sum(p) FROM hash_ia_single
+----
+20 190 10
+
+query III
+SELECT count(*), sum(id), sum(p) FROM hash_ia_repeat_plain
+----
+20 190 10
+
+# Independent layouts leave twice as many partition tails for the repeated target.
+query I
+SELECT to_int64(r.block_count = s.block_count)
+FROM fuse_snapshot('db_09_0054', 'hash_ia_repeat') r
+CROSS JOIN fuse_snapshot('db_09_0054', 'hash_ia_single') s
+LIMIT 1
+----
+1
+
+query I
+SELECT count_if(partition_values != 1)
+FROM (
+    SELECT _block_name, count(DISTINCT p) AS partition_values
+    FROM hash_ia_repeat
+    GROUP BY _block_name
+)
+----
+0
+
 statement ok
 DROP DATABASE db_09_0054

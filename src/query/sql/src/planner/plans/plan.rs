@@ -33,6 +33,7 @@ use super::ShowCreateDictionaryPlan;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::binder::ExplainConfig;
+use crate::optimizer::ir::QueryPlan;
 use crate::optimizer::ir::SExpr;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AddTableConstraintPlan;
@@ -220,7 +221,7 @@ use crate::plans::worker_schema;
 pub enum Plan {
     // `SELECT` statement
     Query {
-        s_expr: Box<SExpr>,
+        s_expr: Box<QueryPlan>,
         metadata: MetadataRef,
         bind_context: Box<BindContext>,
         rewrite_kind: Option<RewriteKind>,
@@ -362,7 +363,7 @@ pub enum Plan {
     InsertMultiTable(Box<InsertMultiTable>),
     Replace(Box<Replace>),
     DataMutation {
-        s_expr: Box<SExpr>,
+        s_expr: Box<crate::optimizer::ir::MutationPlan>,
         schema: DataSchemaRef,
         metadata: MetadataRef,
     },
@@ -702,8 +703,10 @@ impl Plan {
             ignore_result,
         } = self
         {
-            if let RelOperator::Exchange(Exchange::Merge) = s_expr.plan.as_ref() {
-                let s_expr = Box::new(s_expr.child(0).unwrap().clone());
+            if s_expr.planned().is_ok_and(|plan| {
+                matches!(plan.expr().plan(), RelOperator::Exchange(Exchange::Merge))
+            }) {
+                let s_expr = Box::new(s_expr.remove_root_merge());
                 return Plan::Query {
                     s_expr,
                     metadata: metadata.clone(),
@@ -739,7 +742,7 @@ impl Plan {
         };
 
         Plan::Query {
-            s_expr: Box::new(s_expr),
+            s_expr: Box::new(s_expr.into()),
             metadata: metadata.clone(),
             bind_context: bind_context.clone(),
             rewrite_kind: rewrite_kind.clone(),
