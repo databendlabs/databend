@@ -166,6 +166,8 @@ impl SelectExprBuilder {
                             }
                         }
                         "like" => {
+                            // LIKE is not commutative: only a constant RHS can be compiled
+                            // as a pattern. A column-valued pattern needs the evaluator.
                             let (column, column_data_type, scalar) = match (&args[0], &args[1]) {
                                 (
                                     Expr::ColumnRef(ColumnRef { data_type, .. }),
@@ -176,16 +178,6 @@ impl SelectExprBuilder {
                                 ) =>
                                 {
                                     (&args[0], data_type, scalar)
-                                }
-                                (
-                                    Expr::Constant(Constant { scalar, .. }),
-                                    Expr::ColumnRef(ColumnRef { data_type, .. }),
-                                ) if matches!(
-                                    data_type,
-                                    DataType::String | DataType::Nullable(deref!(DataType::String))
-                                ) =>
-                                {
-                                    (&args[1], data_type, scalar)
                                 }
                                 _ => {
                                     return SelectExprBuildResult::new(SelectExpr::Others(
