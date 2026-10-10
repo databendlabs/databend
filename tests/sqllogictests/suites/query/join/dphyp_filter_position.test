@@ -1,0 +1,89 @@
+# Position-sensitive residuals must survive DPhyp reconstruction.
+
+statement ok
+set enable_dphyp = 1;
+
+statement ok
+set disable_join_reorder = 0;
+
+statement ok
+create or replace table dphyp_pos_a (k int, v int);
+
+statement ok
+create or replace table dphyp_pos_b (k int, v int);
+
+statement ok
+create or replace table dphyp_pos_c (k int, v int);
+
+statement ok
+insert into dphyp_pos_a values (1, 5), (2, 20), (3, 30);
+
+statement ok
+insert into dphyp_pos_b values (1, 10), (2, 10);
+
+statement ok
+insert into dphyp_pos_c values (1, 100), (2, 0), (3, 100);
+
+# An inner ON residual is a required condition, not just a search hint.
+query I
+select a.k from dphyp_pos_a a
+join dphyp_pos_b b on a.k = b.k and a.v > b.v
+join dphyp_pos_c c on b.k = c.k
+order by a.k;
+----
+2
+
+# The unmatched row must survive: an outer ON residual is not a WHERE filter.
+query II
+select a.k, c.k from dphyp_pos_a a
+join dphyp_pos_b b on a.k = b.k
+left join dphyp_pos_c c on b.k = c.k and c.v > a.v
+order by a.k;
+----
+1 1
+2 NULL
+
+# Keep the residual inside an opaque outer join and its WHERE above that join.
+query I
+select t.k from (
+  select a.k from dphyp_pos_a a
+  left join dphyp_pos_b b on a.k = b.k and b.v > a.v
+  where b.k is null
+) t join dphyp_pos_c c on t.k = c.k
+order by t.k;
+----
+2
+3
+
+# A filter on a limited relation must not be reconstructed under the LIMIT.
+query I
+select t.k from (
+  select k, v from dphyp_pos_a order by k limit 1
+) t join dphyp_pos_b b on t.k = b.k
+join dphyp_pos_c c on b.k = c.k
+where t.v > 10;
+----
+
+statement ok
+set disable_join_reorder = 1;
+
+query II
+select a.k, c.k from dphyp_pos_a a
+join dphyp_pos_b b on a.k = b.k
+left join dphyp_pos_c c on b.k = c.k and c.v > a.v
+order by a.k;
+----
+1 1
+2 NULL
+
+statement ok
+set disable_join_reorder = 0;
+
+statement ok
+drop table dphyp_pos_a;
+
+statement ok
+drop table dphyp_pos_b;
+
+statement ok
+drop table dphyp_pos_c;
