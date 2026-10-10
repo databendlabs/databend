@@ -673,7 +673,9 @@ impl FusePruner {
     }
 
     // topn pruner:
-    // if there are ordering + limit clause and no filters, use topn pruner
+    // If the filter is fully answered by the inverted index and there is a
+    // limit, prune blocks by the exact matched row counts. Value-statistics
+    // TopN pruning is left to the runtime TopN filter.
     fn topn_pruning(
         &self,
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
@@ -682,13 +684,7 @@ impl FusePruner {
         if push_down
             .as_ref()
             .filter(|p| {
-                (!p.order_by.is_empty()
-                    && p.limit.is_some()
-                    && p.filters.is_none()
-                    && p.secure_filters.is_none())
-                    || (p.limit.is_some()
-                        && p.secure_filters.is_none()
-                        && p.filter_only_use_index())
+                p.limit.is_some() && p.secure_filters.is_none() && p.filter_only_use_index()
             })
             .is_some()
         {
@@ -706,8 +702,7 @@ impl FusePruner {
             let push_down = push_down.as_ref().unwrap();
             let limit = push_down.limit.unwrap();
             let sort = push_down.order_by.clone();
-            let filter_only_use_index = push_down.filter_only_use_index();
-            let topn_pruner = TopNPruner::create(schema, sort, limit, filter_only_use_index);
+            let topn_pruner = TopNPruner::create(schema, sort, limit);
             let pruning_cost = self.pruning_ctx.pruning_cost.clone();
             let pruned_res = pruning_cost.measure(PruningCostKind::BlocksTopN, || {
                 topn_pruner.prune(metas.clone())
