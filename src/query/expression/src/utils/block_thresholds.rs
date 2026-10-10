@@ -194,9 +194,7 @@ impl BlockThresholds {
         let block_num_by_rows = std::cmp::max(total_rows / self.min_rows_per_block, 1);
         let block_num_by_compressed = total_compressed.div_ceil(self.max_compressed_per_block);
 
-        let max_bytes_per_block = default_bytes_per_block
-            .saturating_add(default_bytes_per_block.min(DEFAULT_BLOCK_BUFFER_SIZE));
-        let min_block_num_by_bytes = total_bytes.div_ceil(max_bytes_per_block);
+        let min_block_num_by_bytes = total_bytes.div_ceil(self.max_bytes_per_block);
 
         // When rows require the most blocks, preserve the row-based sizing decision.
         let block_nums = if block_num_by_rows >= block_num_by_compressed

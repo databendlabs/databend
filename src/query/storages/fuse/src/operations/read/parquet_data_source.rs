@@ -18,9 +18,9 @@ use crate::io::BlockReadResult;
 use crate::io::VirtualBlockReadResult;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 
-pub struct ParquetDataSource {
-    pub data: BlockReadResult,
-    pub virtual_data: Option<VirtualBlockReadResult>,
+pub(crate) enum ParquetDataSource {
+    Normal((Vec<BlockReadResult>, Option<VirtualBlockReadResult>)),
+    Granule(Vec<Vec<std::ops::Range<usize>>>),
 }
 
 #[typetag::serde(name = "fuse_data_source")]

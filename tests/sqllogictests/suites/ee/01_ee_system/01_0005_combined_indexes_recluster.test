@@ -1,0 +1,96 @@
+statement ok
+create or replace database combined_indexes_recluster
+
+statement ok
+use combined_indexes_recluster
+
+statement ok
+set enable_experimental_virtual_column=1
+
+statement ok
+set enable_recluster_multiway_merge=1
+
+statement ok
+set enable_recluster_inverted_index_merge=1
+
+statement ok
+set recluster_method='vertical'
+
+statement ok
+set recluster_timeout_secs=30
+
+statement ok
+create table t(id int,k int,tag string,content string,v variant,inverted index text_idx(content),bloom index tag_idx(tag)) cluster by(k) enable_virtual_column=true index_granularity=7 row_per_block=32 block_per_segment=2 virtual_column_max_direct_columns=1
+
+statement ok
+insert into t select number,if(number<220,0,number),concat('tag',to_string(number%5)),concat('word',to_string(number),' common phrase'),parse_json(concat('{"n":',to_string(number*3),',"text":"value',to_string(number),'"}')) from numbers(257)
+
+statement ok
+alter table t cluster by(-k)
+
+# Constant-key output blocks must become terminal instead of being rewritten forever.
+statement ok
+alter table t recluster final
+
+query III
+select count(),sum(id),sum(v:n::int) from t where match(content,'"common phrase"')
+----
+257 32896 98688
+
+query IIT rowsort
+select id,v:n::int,v:text::string from t where match(content,'word0 OR word128 OR word256')
+----
+0 0 value0
+128 384 value128
+256 768 value256
+
+query IBB
+select sum(row_count),count_if(inverted_index_size>0)=count(),count_if(virtual_column_size>0)=count() from fuse_block('combined_indexes_recluster','t')
+----
+257 1 1
+
+statement ok
+set recluster_method='horizontal'
+
+statement ok
+set force_sort_data_spill=1
+
+statement ok
+insert into t values (257,0,'tag2','word257 common phrase','{"n":771,"text":"value257"}')
+
+statement ok
+alter table t recluster final
+
+query IT
+select id,v:text::string from t where match(content,'word257') and tag='tag2' and v:n::int=771
+----
+257 value257
+
+statement ok
+optimize table t compact
+
+query III
+select count(),sum(id),sum(v:n::int) from t where match(content,'common')
+----
+258 33153 99459
+
+statement ok
+unset force_sort_data_spill
+
+statement ok
+unset recluster_method
+
+statement ok
+unset recluster_timeout_secs
+
+statement ok
+unset enable_recluster_multiway_merge
+
+statement ok
+unset enable_recluster_inverted_index_merge
+
+statement ok
+unset enable_experimental_virtual_column
+
+statement ok
+drop database combined_indexes_recluster

@@ -1,0 +1,31 @@
+statement ok
+USE compat_granule_rollout
+
+query III
+SELECT count(),sum(payload),count_if(source LIKE 'old-%') FROM rollout_t
+----
+64 288224 64
+
+statement ok
+INSERT INTO rollout_t SELECT 307-number,9000+number,'current-after-replace-1' FROM numbers(8)
+
+query III
+SELECT count(),sum(payload),count_if(source='current-after-replace-1') FROM rollout_t
+----
+72 360252 8
+
+statement ok
+SET recluster_method='vertical'
+
+statement ok
+ALTER TABLE rollout_t RECLUSTER FINAL
+
+query II
+SELECT count(),sum(payload) FROM rollout_t
+----
+72 360252
+
+query I
+SELECT count_if(previous_k > k) FROM (SELECT k,lag(k) OVER (PARTITION BY _block_name ORDER BY _row_id) AS previous_k FROM rollout_t)
+----
+0

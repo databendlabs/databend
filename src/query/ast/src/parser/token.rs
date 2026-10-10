@@ -492,6 +492,8 @@ pub enum TokenKind {
     BZ2,
     #[token("BLOCK", ignore(ascii_case))]
     BLOCK,
+    #[token("BLOOM", ignore(ascii_case))]
+    BLOOM,
     #[token("CALL", ignore(ascii_case))]
     CALL,
     #[token("CASE", ignore(ascii_case))]

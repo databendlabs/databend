@@ -1,0 +1,53 @@
+statement ok
+USE compat_granule_rollout
+
+query III
+SELECT count(),sum(payload),count_if(source LIKE 'old-%') FROM rollout_t
+----
+72 360252 64
+
+statement ok
+INSERT INTO rollout_t SELECT 407-number,10000+number,'current-after-replace-2' FROM numbers(8)
+
+query III
+SELECT count(),sum(payload),count_if(source LIKE 'current-after-replace-%') FROM rollout_t
+----
+80 440280 16
+
+statement ok
+SET recluster_method='vertical'
+
+statement ok
+ALTER TABLE rollout_t RECLUSTER FINAL
+
+query II
+SELECT count(),sum(payload) FROM rollout_t
+----
+80 440280
+
+query III
+SELECT count_if(k=0),count_if(k=103),count_if(k=400) FROM rollout_t
+----
+3 2 1
+
+query I
+SELECT count_if(previous_k > k) FROM (SELECT k,lag(k) OVER (PARTITION BY _block_name ORDER BY _row_id) AS previous_k FROM rollout_t)
+----
+0
+
+query TII rowsort
+SELECT source,min(payload),count() FROM rollout_t GROUP BY source
+----
+current-after-replace-1 9000 8
+current-after-replace-2 10000 8
+old-before-high-a 5000 8
+old-before-high-b 6000 8
+old-before-low-a 1000 8
+old-before-low-b 2000 8
+old-before-mid-a 3000 8
+old-before-mid-b 4000 8
+old-live-cross-a 7000 8
+old-live-cross-b 8000 8
+
+statement ok
+DROP DATABASE compat_granule_rollout

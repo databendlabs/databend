@@ -1,0 +1,39 @@
+statement ok
+USE compat_granule_mixed
+
+query III
+SELECT count(),sum(payload),count_if(k IS NULL) FROM gi_t
+----
+307 317250 1
+
+statement ok
+INSERT INTO gi_t SELECT number+3000,number+3000,'old-100' FROM numbers(100)
+
+statement ok
+INSERT INTO gi_t VALUES (NULL,NULL,'old-edge'),(100,100,'old-edge'),(100,100,'old-edge'),(2100,2100,'old-edge'),(3100,3100,'old-edge')
+
+query III
+SELECT count(),sum(payload),count_if(k IS NULL) FROM gi_t
+----
+412 627600 2
+
+query III
+SELECT count_if(k=100),count_if(k=2100),count_if(k=3100) FROM gi_t
+----
+4 2 1
+
+statement ok
+INSERT INTO gi_sort_merge VALUES (8,'o8'),(0,'o0'),(7,'o7'),(9,'o9'),(2,'o2'),(6,'o6'),(3,'o3'),(5,'o5')
+
+query II
+SELECT count(),count(DISTINCT _block_name) FROM gi_sort_merge
+----
+16 2
+
+statement ok
+INSERT INTO gi_bloom SELECT number+201,concat('o',to_string(number+201)) FROM numbers(100)
+
+query III
+SELECT count(),count_if(k=99),count_if(k=250) FROM gi_bloom
+----
+301 1 1

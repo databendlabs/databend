@@ -64,6 +64,7 @@ use opendal::Operator;
 use crate::FuseTable;
 use crate::io::BlockBuilder;
 use crate::io::BlockReader;
+use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
 use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
@@ -210,8 +211,12 @@ impl PreparedReplaceMutation {
                 let serialized = context.block_builder.build(block, |block, generator| {
                     generator.gen_with_origin_stats(block, origin_stats.clone())
                 })?;
-                let extended_block_meta =
-                    BlockWriter::write_down(&context.data_accessor, serialized).await?;
+                let extended_block_meta = match serialized {
+                    BlockSerialization::Pending(pending) => {
+                        BlockWriter::write_down(&context.block_builder.operator, pending).await?
+                    }
+                    BlockSerialization::Written(meta) => meta,
+                };
                 metrics_inc_replace_block_number_write(1);
                 metrics_inc_replace_row_number_write(extended_block_meta.block_meta.row_count);
                 metrics_inc_replace_replaced_blocks_rows(original_rows as u64);
@@ -676,7 +681,7 @@ impl AggregationContext {
                 Column::filter(&UInt64Type::from_data(row_ids), &bitmap).wrap_nullable(None);
             new_block.add_column(row_num);
 
-            let stream_meta = gen_mutation_stream_meta(None, &block_meta.location.0)?;
+            let stream_meta = gen_mutation_stream_meta(None, &block_meta.location.0, 0)?;
             new_block = stream_ctx.apply(new_block, &stream_meta)?;
         }
 

@@ -22,10 +22,7 @@ use bytes::BytesMut;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-/// A blocking writer whose output must be explicitly committed after all bytes are written.
-pub trait BlockingWrite: io::Write + Send {
-    fn close(&mut self) -> Result<()>;
-}
+pub use databend_storages_common_blocks::BlockingWrite;
 use opendal::Operator;
 
 /// Smallest chunk handed to OpenDAL. It is the multipart minimum of S3, GCS and OBS, so on

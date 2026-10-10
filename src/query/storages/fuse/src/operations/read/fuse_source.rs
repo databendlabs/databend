@@ -191,6 +191,7 @@ pub(crate) fn build_fuse_read_transform_pipeline(
                 DeserializeDataTransform::create(
                     ctx.clone(),
                     block_reader.clone(),
+                    read_block_context.clone(),
                     plan,
                     transform_input,
                     transform_output,
@@ -337,6 +338,7 @@ mod tests {
             location.to_string(),
             None,
             0,
+            None,
             1,
             HashMap::new(),
             min_max_nulls.map(|(min, max, nulls)| HashMap::from([(3, stats(min, max, nulls))])),
@@ -364,6 +366,7 @@ mod tests {
             location.to_string(),
             None,
             0,
+            None,
             1,
             HashMap::new(),
             None,

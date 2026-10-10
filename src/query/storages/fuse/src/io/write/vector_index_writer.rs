@@ -32,11 +32,13 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_generate_milliseconds;
 use databend_storages_common_blocks::SerializedParquet;
+use databend_storages_common_blocks::block_to_parquet_with_writer;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::DistanceType;
 use databend_storages_common_index::HNSWIndex;
 use databend_storages_common_index::normalize_vector;
 use databend_storages_common_index::vector_stat_distance;
+use databend_storages_common_io::OpenDalBlockingWrite;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
@@ -50,12 +52,17 @@ use opendal::Operator;
 use parquet::file::metadata::KeyValue;
 
 use crate::io::read::load_vector_index_files;
+use crate::io::write::block_index::BlockIndexLowLevelColumnWriter;
+use crate::io::write::block_index::BlockIndexLowLevelWriter;
 use crate::io::write::block_index::BlockIndexSpec;
 use crate::io::write::block_index::BlockIndexWriteContext;
 use crate::io::write::block_index::BlockIndexWriter;
 use crate::io::write::block_index::PendingBlockIndexOutput;
 use crate::io::write::block_index::PendingIndexFile;
 use crate::io::write::block_index::PendingVectorIndex;
+use crate::io::write::block_index::WrittenBlockIndexOutput;
+use crate::io::write::block_index::WrittenIndexFile;
+use crate::io::write::block_index::WrittenVectorIndex;
 
 const DEFAULT_M: usize = 16;
 const DEFAULT_EF_CONSTRUCT: usize = 100;
@@ -88,54 +95,17 @@ pub struct VectorIndexBuilder {
     columns: BTreeMap<usize, Vec<Column>>,
 }
 
-pub(crate) struct VectorIndexWriteSpec {
-    builder: VectorIndexBuilder,
-}
-
-impl BlockIndexSpec for VectorIndexWriteSpec {
-    fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
-        Ok(Box::new(VectorIndexBlockWriter {
-            builder: self.builder.clone(),
-            location: context.meta_locations.block_vector_index_location(),
-        }))
-    }
-}
-
-struct VectorIndexBlockWriter {
-    builder: VectorIndexBuilder,
-    location: Location,
-}
-
-impl BlockIndexWriter for VectorIndexBlockWriter {
-    fn write(&mut self, block: &DataBlock) -> Result<()> {
-        self.builder.add_block(block)
-    }
-
-    fn finish(mut self: Box<Self>) -> Result<PendingBlockIndexOutput> {
-        let state = self.builder.finalize_block(&self.location)?;
-        Ok(PendingBlockIndexOutput {
-            vector: Some(PendingVectorIndex {
-                file: state.index_state.map(|index_state| PendingIndexFile {
-                    location: index_state.location,
-                    data: index_state.data,
-                }),
-                statistics: state.vector_stats,
-            }),
-            ..Default::default()
-        })
-    }
-}
-
 pub(crate) struct VectorIndexBuildState {
     pub(crate) index_state: Option<VectorIndexState>,
     pub(crate) vector_stats: Option<StatisticsOfVectorColumns>,
 }
 
-impl VectorIndexBuilder {
-    pub(crate) fn into_write_spec(self) -> VectorIndexWriteSpec {
-        VectorIndexWriteSpec { builder: self }
-    }
+pub(crate) struct VectorIndexWrittenState {
+    pub(crate) size: u64,
+    pub(crate) vector_stats: Option<StatisticsOfVectorColumns>,
+}
 
+impl VectorIndexBuilder {
     pub fn try_create(
         table_indexes: &BTreeMap<String, TableIndex>,
         schema: TableSchemaRef,
@@ -247,6 +217,21 @@ impl VectorIndexBuilder {
         }
     }
 
+    pub fn add_column(&mut self, field_index: usize, column: Column) -> Result<()> {
+        if !self.field_offsets_set.contains(&field_index) {
+            return Ok(());
+        }
+        let Some(columns) = self.columns.get_mut(&field_index) else {
+            return Err(ErrorCode::Internal("Can't find vector column"));
+        };
+        columns.push(column);
+        Ok(())
+    }
+
+    pub(crate) fn into_write_spec(self) -> VectorIndexWriteSpec {
+        VectorIndexWriteSpec { builder: self }
+    }
+
     pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
         for offset in &self.field_offsets_set {
             let block_entry = block.get_by_offset(*offset);
@@ -305,6 +290,35 @@ impl VectorIndexBuilder {
         );
 
         Ok(state)
+    }
+
+    pub(crate) fn finalize_block_to_writer(
+        &mut self,
+        write: OpenDalBlockingWrite,
+    ) -> Result<VectorIndexWrittenState> {
+        let concated_columns = self.take_concated_columns()?;
+        let vector_stats = self.build_vector_statistics(&concated_columns)?;
+        if self.index_params.is_empty() {
+            return Ok(VectorIndexWrittenState {
+                size: 0,
+                vector_stats,
+            });
+        }
+        let result = self.build_vector_index(&concated_columns)?;
+        let index_schema = TableSchemaRefExt::create(result.index_fields);
+        let index_block = DataBlock::new(result.index_columns, 1);
+        let (_, write) = block_to_parquet_with_writer(
+            index_schema.as_ref(),
+            index_block,
+            TableCompression::Zstd,
+            false,
+            Some(result.metadata),
+            write,
+        )?;
+        Ok(VectorIndexWrittenState {
+            size: write.bytes_written(),
+            vector_stats,
+        })
     }
 
     pub(crate) fn finalize_block(&mut self, location: &Location) -> Result<VectorIndexBuildState> {
@@ -556,6 +570,129 @@ impl VectorIndexBuilder {
         }
 
         Ok((!statistics.is_empty()).then_some(statistics))
+    }
+}
+
+pub(crate) struct VectorIndexWriteSpec {
+    builder: VectorIndexBuilder,
+}
+
+impl BlockIndexSpec for VectorIndexWriteSpec {
+    fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>> {
+        Ok(Box::new(VectorIndexWriter {
+            builder: self.builder.clone(),
+            location: context.meta_locations.block_vector_index_location(),
+        }))
+    }
+
+    fn new_low_level_writer(
+        &self,
+        context: BlockIndexWriteContext,
+    ) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
+        let location = context.meta_locations.block_vector_index_location();
+        let write = context.create_write(&location);
+        Ok(Box::new(VectorIndexLowLevelWriter {
+            builder: self.builder.clone(),
+            location,
+            write: Some(write),
+            next_field: 0,
+            num_fields: context.physical_schema.num_fields(),
+        }))
+    }
+}
+
+struct VectorIndexWriter {
+    builder: VectorIndexBuilder,
+    location: Location,
+}
+
+impl BlockIndexWriter for VectorIndexWriter {
+    fn write(&mut self, block: &DataBlock) -> Result<()> {
+        self.builder.add_block(block)
+    }
+
+    fn finish(mut self: Box<Self>) -> Result<PendingBlockIndexOutput> {
+        let result = self.builder.finalize_block(&self.location)?;
+        Ok(PendingBlockIndexOutput {
+            vector: Some(PendingVectorIndex {
+                file: result.index_state.map(|state| PendingIndexFile {
+                    location: state.location,
+                    data: state.data,
+                }),
+                statistics: result.vector_stats,
+            }),
+            ..Default::default()
+        })
+    }
+}
+
+struct VectorIndexLowLevelWriter {
+    builder: VectorIndexBuilder,
+    location: Location,
+    write: Option<OpenDalBlockingWrite>,
+    next_field: usize,
+    num_fields: usize,
+}
+
+impl BlockIndexLowLevelWriter for VectorIndexLowLevelWriter {
+    fn next_column(mut self: Box<Self>) -> Result<Box<dyn BlockIndexLowLevelColumnWriter>> {
+        if self.next_field >= self.num_fields {
+            return Err(ErrorCode::Internal(
+                "vector index low-level writer has no remaining columns",
+            ));
+        }
+        let field_index = self.next_field;
+        self.next_field += 1;
+        Ok(Box::new(VectorIndexLowLevelColumnWriter {
+            parent: Some(self),
+            field_index,
+        }))
+    }
+
+    fn finish(mut self: Box<Self>) -> Result<WrittenBlockIndexOutput> {
+        if self.next_field != self.num_fields {
+            return Err(ErrorCode::Internal(format!(
+                "vector index low-level writer consumed {} of {} columns",
+                self.next_field, self.num_fields
+            )));
+        }
+        let write = self
+            .write
+            .take()
+            .ok_or_else(|| ErrorCode::Internal("vector index blocking output was consumed"))?;
+        let result = self.builder.finalize_block_to_writer(write)?;
+        Ok(WrittenBlockIndexOutput {
+            vector: Some(WrittenVectorIndex {
+                file: (result.size > 0).then_some(WrittenIndexFile {
+                    location: self.location,
+                    size: result.size,
+                }),
+                statistics: result.vector_stats,
+            }),
+            ..Default::default()
+        })
+    }
+}
+
+struct VectorIndexLowLevelColumnWriter {
+    parent: Option<Box<VectorIndexLowLevelWriter>>,
+    field_index: usize,
+}
+
+impl BlockIndexLowLevelColumnWriter for VectorIndexLowLevelColumnWriter {
+    fn write(&mut self, column: &Column) -> Result<()> {
+        self.parent
+            .as_mut()
+            .ok_or_else(|| ErrorCode::Internal("vector index column writer has no parent"))?
+            .builder
+            .add_column(self.field_index, column.clone())
+    }
+
+    fn finish(mut self: Box<Self>) -> Result<Box<dyn BlockIndexLowLevelWriter>> {
+        self.parent
+            .take()
+            .map(|parent| parent as Box<dyn BlockIndexLowLevelWriter>)
+            .ok_or_else(|| ErrorCode::Internal("vector index column writer has no parent"))
     }
 }
 

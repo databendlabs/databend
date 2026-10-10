@@ -19,6 +19,7 @@
 mod cache;
 mod cache_items;
 mod caches;
+mod disk_cache_range_reader;
 mod manager;
 mod providers;
 mod read;
@@ -26,6 +27,7 @@ mod temp_dir;
 
 pub use cache::*;
 pub use caches::*;
+pub use disk_cache_range_reader::DiskCacheRangeReader;
 pub use manager::CacheManager;
 pub use providers::DiskCacheAccessor;
 pub use providers::DiskCacheBuilder;
