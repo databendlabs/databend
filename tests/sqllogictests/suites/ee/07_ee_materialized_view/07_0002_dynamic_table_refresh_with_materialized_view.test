@@ -1,0 +1,48 @@
+# A refreshed MV must not be treated as a logical source of a dynamic table.
+# MV rewrite may add the MV's physical table to planner metadata, but the
+# dynamic table dependency remains the source table referenced by its query.
+
+statement ok
+DROP DATABASE IF EXISTS test_dynamic_table_mv_rewrite
+
+statement ok
+CREATE DATABASE test_dynamic_table_mv_rewrite
+
+statement ok
+USE test_dynamic_table_mv_rewrite
+
+statement ok
+CREATE TABLE source (k INT, v INT)
+
+statement ok
+INSERT INTO source VALUES (1, 10), (1, 20), (2, 5)
+
+statement ok
+CREATE MATERIALIZED VIEW source_mv AS
+SELECT k, SUM(v) AS total
+FROM source
+GROUP BY k
+
+statement ok
+REFRESH MATERIALIZED VIEW source_mv
+
+# This query does not match source_mv, but the refreshed MV is still a rewrite
+# candidate while the refresh plan is being bound.
+statement ok
+CREATE DYNAMIC TABLE counts AS
+SELECT k, COUNT(*) AS n
+FROM source
+WHERE v > 0
+GROUP BY k
+
+statement ok
+REFRESH DYNAMIC TABLE counts
+
+query II rowsort
+SELECT k, n FROM counts
+----
+1 2
+2 1
+
+statement ok
+DROP DATABASE test_dynamic_table_mv_rewrite
