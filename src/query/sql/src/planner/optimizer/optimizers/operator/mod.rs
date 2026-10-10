@@ -27,6 +27,8 @@ pub use decorrelate::UnnestResult;
 pub use filter::DeduplicateJoinConditionOptimizer;
 pub use filter::EquivalentConstantsVisitor;
 pub use filter::InferFilterOptimizer;
+pub(crate) use filter::JoinCondition;
+pub(crate) use filter::JoinFilters;
 pub use filter::JoinProperty;
 pub use filter::NormalizeDisjunctiveFilterOptimizer;
 pub use filter::PullUpFilterOptimizer;
