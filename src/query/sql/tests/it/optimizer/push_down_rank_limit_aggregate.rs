@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
@@ -46,7 +46,7 @@ async fn write_optimized_case(file: &mut impl std::io::Write, case: &SqlTestCase
     let Plan::Query { s_expr, .. } = &optimized_plan else {
         unreachable!("test optimizer should return Plan::Query");
     };
-    match find_rank_limit(s_expr) {
+    match find_rank_limit(s_expr.planned().unwrap().expr()) {
         Some((items, limit)) => {
             let keys = items
                 .iter()
@@ -61,7 +61,7 @@ async fn write_optimized_case(file: &mut impl std::io::Write, case: &SqlTestCase
     Ok(())
 }
 
-fn find_rank_limit(s_expr: &SExpr) -> Option<&(Vec<SortItem>, usize)> {
+fn find_rank_limit(s_expr: &PExpr) -> Option<&(Vec<SortItem>, usize)> {
     match s_expr.plan() {
         RelOperator::Aggregate(agg) if agg.rank_limit.is_some() => agg.rank_limit.as_ref(),
         _ => s_expr.children().find_map(find_rank_limit),
