@@ -131,6 +131,7 @@ impl Binder {
         else {
             return Ok(plan);
         };
+        let s_expr = s_expr.logical()?;
         let RelOperator::Mutation(mutation) = s_expr.plan() else {
             return Ok(plan);
         };
@@ -345,7 +346,7 @@ impl Binder {
             unreachable!()
         };
         Ok(Plan::DataMutation {
-            s_expr,
+            s_expr: Box::new((*s_expr).into()),
             schema,
             metadata,
         })

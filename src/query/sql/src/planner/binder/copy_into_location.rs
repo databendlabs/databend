@@ -104,7 +104,7 @@ impl Binder {
         }?;
         let mut is_ordered = false;
         if let Plan::Query { s_expr, .. } = &query {
-            let p = s_expr.derive_relational_prop()?;
+            let p = s_expr.logical()?.derive_relational_prop()?;
             if !p.orderings.is_empty() {
                 is_ordered = true;
             }

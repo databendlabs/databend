@@ -36,6 +36,8 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::FormatOptions;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::binder::ExplainConfig;
+use databend_common_sql::optimizer::ir::PExpr;
+use databend_common_sql::optimizer::ir::PlannedQuery;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Mutation;
 use databend_common_storages_basic::ResultCacheReader;
@@ -70,7 +72,6 @@ use crate::sessions::TableContextQueryIdentity;
 use crate::sessions::TableContextQueryProfile;
 use crate::sessions::TableContextRuntimeFilter;
 use crate::sessions::TableContextSettings;
-use crate::sql::optimizer::ir::SExpr;
 use crate::sql::plans::Plan;
 
 pub struct ExplainInterpreter {
@@ -115,7 +116,7 @@ impl Interpreter for ExplainInterpreter {
                         formatted_ast,
                         ..
                     } => {
-                        self.explain_query(s_expr, metadata, bind_context, formatted_ast)
+                        self.explain_query(s_expr.planned()?, metadata, bind_context, formatted_ast)
                             .await?
                     }
                     Plan::Insert(insert_plan) => {
@@ -141,8 +142,13 @@ impl Interpreter for ExplainInterpreter {
                                     vec!["CreateTableAsSelect:", ""],
                                 )])];
                             res.extend(
-                                self.explain_query(s_expr, metadata, bind_context, formatted_ast)
-                                    .await?,
+                                self.explain_query(
+                                    s_expr.planned()?,
+                                    metadata,
+                                    bind_context,
+                                    formatted_ast,
+                                )
+                                .await?,
                             );
                             vec![DataBlock::concat(&res)?]
                         }
@@ -163,10 +169,10 @@ impl Interpreter for ExplainInterpreter {
                         schema,
                         metadata,
                     } => {
-                        let mutation: Mutation = s_expr.plan().clone().try_into()?;
+                        let mutation: Mutation = s_expr.mutation()?.clone();
                         let interpreter = MutationInterpreter::try_create(
                             self.ctx.clone(),
-                            *s_expr.clone(),
+                            s_expr.planned()?.clone(),
                             schema.clone(),
                             metadata.clone(),
                         )?;
@@ -187,7 +193,9 @@ impl Interpreter for ExplainInterpreter {
                     } => {
                         let ctx = self.ctx.clone();
                         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx, true);
-                        let plan = builder.build(s_expr, bind_context.column_set()).await?;
+                        let plan = builder
+                            .build_query(s_expr.planned()?, bind_context.column_set())
+                            .await?;
 
                         let metadata = metadata.read();
                         let mut context = FormatContext {
@@ -218,7 +226,7 @@ impl Interpreter for ExplainInterpreter {
                         ..
                     } => {
                         self.explain_analyze(
-                            s_expr,
+                            s_expr.planned()?.expr(),
                             metadata,
                             bind_context.column_set(),
                             None,
@@ -227,11 +235,11 @@ impl Interpreter for ExplainInterpreter {
                         .await?
                     }
                     Plan::DataMutation { s_expr, .. } => {
-                        let plan: Mutation = s_expr.plan().clone().try_into()?;
+                        let plan: Mutation = s_expr.mutation()?.clone();
                         let mutation_build_info =
                             build_mutation_info(self.ctx.clone(), &plan, true, None).await?;
                         self.explain_analyze(
-                            s_expr.child(0)?,
+                            s_expr.planned()?.child(0)?,
                             &plan.metadata,
                             *plan.required_columns.clone(),
                             Some(mutation_build_info),
@@ -289,14 +297,14 @@ impl Interpreter for ExplainInterpreter {
                         ..
                     } => {
                         self.explain_fragments(
-                            *s_expr.clone(),
+                            s_expr.planned()?.clone(),
                             metadata.clone(),
                             bind_context.column_set(),
                         )
                         .await?
                     }
                     Plan::DataMutation { s_expr, schema, .. } => {
-                        self.explain_merge_fragments(*s_expr.clone(), schema.clone())
+                        self.explain_merge_fragments(s_expr.planned()?.clone(), schema.clone())
                             .await?
                     }
                     Plan::InsertMultiTable(plan) => {
@@ -449,13 +457,13 @@ impl ExplainInterpreter {
     #[async_backtrace::framed]
     async fn explain_fragments(
         &self,
-        s_expr: SExpr,
+        query: PlannedQuery,
         metadata: MetadataRef,
         required: ColumnSet,
     ) -> Result<Vec<DataBlock>> {
         let ctx = self.ctx.clone();
         let plan = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true)
-            .build(&s_expr, required)
+            .build_query(&query, required)
             .await?;
 
         let fragments = Fragmenter::try_create(ctx.clone())?.build_fragment(&plan)?;
@@ -502,7 +510,7 @@ impl ExplainInterpreter {
     #[async_backtrace::framed]
     async fn explain_analyze_graphical(
         &self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         metadata: &MetadataRef,
         required: ColumnSet,
         ignore_result: bool,
@@ -525,7 +533,7 @@ impl ExplainInterpreter {
     #[async_backtrace::framed]
     async fn explain_analyze(
         &self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         metadata: &MetadataRef,
         required: ColumnSet,
         mutation_build_info: Option<MutationBuildInfo>,
@@ -625,7 +633,7 @@ impl ExplainInterpreter {
 
     async fn explain_query(
         &self,
-        s_expr: &SExpr,
+        query: &PlannedQuery,
         metadata: &MetadataRef,
         bind_context: &BindContext,
         formatted_ast: &Option<String>,
@@ -636,7 +644,9 @@ impl ExplainInterpreter {
         // we should not use `dry_run` mode to build the physical plan.
         // It's because we need to get the same partitions as the original selecting plan.
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx, formatted_ast.is_none());
-        let mut plan = builder.build(s_expr, bind_context.column_set()).await?;
+        let mut plan = builder
+            .build_query(query, bind_context.column_set())
+            .await?;
         self.inject_pruned_partitions_stats(&mut plan, metadata)
             .await?;
         self.explain_physical_plan(&plan, metadata, formatted_ast)
@@ -645,7 +655,7 @@ impl ExplainInterpreter {
 
     async fn explain_merge_fragments(
         &self,
-        s_expr: SExpr,
+        s_expr: PExpr,
         schema: DataSchemaRef,
     ) -> Result<Vec<DataBlock>> {
         let mutation: Mutation = s_expr.plan().clone().try_into()?;

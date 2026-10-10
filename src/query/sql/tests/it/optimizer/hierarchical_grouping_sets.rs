@@ -15,11 +15,11 @@
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
 use databend_common_sql::optimizer::ir::Distribution;
+use databend_common_sql::optimizer::ir::ExprVisitor;
+use databend_common_sql::optimizer::ir::PExpr;
+use databend_common_sql::optimizer::ir::PVisitAction as VisitAction;
 use databend_common_sql::optimizer::ir::RelExpr;
-use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::ir::SExprVisitor;
 use databend_common_sql::optimizer::ir::StatContext;
-use databend_common_sql::optimizer::ir::VisitAction;
 use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOp;
@@ -76,10 +76,10 @@ fn assert_no_serial_sequence_producer(plan: &Plan) -> Result<()> {
 
     struct SequenceDistributionChecker;
 
-    impl SExprVisitor for SequenceDistributionChecker {
-        fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
+    impl ExprVisitor<databend_common_sql::optimizer::ir::Physical> for SequenceDistributionChecker {
+        fn visit(&mut self, expr: &PExpr) -> Result<VisitAction> {
             if expr.plan().rel_op() == RelOp::Sequence {
-                let left_prop = RelExpr::with_s_expr(expr.left_child()).derive_physical_prop()?;
+                let left_prop = RelExpr::with_p_expr(expr.left_child()).derive_physical_prop()?;
                 assert_ne!(
                     left_prop.distribution,
                     Distribution::Serial,
@@ -90,7 +90,10 @@ fn assert_no_serial_sequence_producer(plan: &Plan) -> Result<()> {
         }
     }
 
-    s_expr.accept(&mut SequenceDistributionChecker)?;
+    s_expr
+        .planned()?
+        .expr()
+        .accept(&mut SequenceDistributionChecker)?;
     Ok(())
 }
 

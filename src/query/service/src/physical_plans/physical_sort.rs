@@ -30,7 +30,7 @@ use databend_common_sql::IndexType;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::SortDesc;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::plans::WindowFuncType;
 use itertools::Itertools;
 
@@ -366,7 +366,7 @@ impl Sort {
 impl PhysicalPlanBuilder {
     pub async fn build_sort(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         sort: &databend_common_sql::plans::Sort,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,

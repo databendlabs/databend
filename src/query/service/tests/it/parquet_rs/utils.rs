@@ -40,7 +40,9 @@ pub async fn get_data_source_plan(ctx: Arc<dyn TableContext>, sql: &str) -> Resu
     } = plan
     {
         let mut builder = PhysicalPlanBuilder::new(metadata, ctx, false);
-        let physcail_plan = builder.build(&s_expr, bind_context.column_set()).await?;
+        let physcail_plan = builder
+            .build_query(s_expr.planned()?, bind_context.column_set())
+            .await?;
         physcail_plan.try_find_single_data_source().unwrap().clone()
     } else {
         unreachable!()
