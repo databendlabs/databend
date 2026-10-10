@@ -39,6 +39,7 @@ use bytes::Bytes;
 use parquet::file::metadata::ParquetMetaData;
 
 pub use self::block::BlockParquetWriter;
+pub use self::block::ColumnWiseParquetWriter;
 pub use self::bulk::BulkBlockParquetWriter;
 pub use self::bulk::ChunkedWriteBuffer;
 pub use self::bulk::DEFAULT_CHUNK_SIZE;

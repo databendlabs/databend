@@ -1662,6 +1662,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_fuse_parquet_column_wise_upload", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Encodes fuse parquet blocks column by column and uploads each column via multipart upload once encoded",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("trace_sample_rate", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Setting the trace sample rate. The value should be between '0' and '100'",
