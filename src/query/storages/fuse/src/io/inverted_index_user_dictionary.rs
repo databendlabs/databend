@@ -117,9 +117,51 @@ fn build_inverted_index_user_dictionary(content: &[u8]) -> Result<UserDictionary
         })?;
     // Lindera 5.3 indexes numeric columns before validating row lengths. Malformed short
     // records can panic; report them as invalid input rather than unwinding the DDL task.
-    catch_unwind(|| load_user_dictionary_from_csv(&JAPANESE_DICTIONARY.metadata, file.path()))
-        .map_err(|_| ErrorCode::IndexOptionInvalid("invalid user dictionary CSV record"))?
-        .map_err(|e| ErrorCode::IndexOptionInvalid(format!("invalid user dictionary: {e}")))
+    let dictionary =
+        catch_unwind(|| load_user_dictionary_from_csv(&JAPANESE_DICTIONARY.metadata, file.path()))
+            .map_err(|_| ErrorCode::IndexOptionInvalid("invalid user dictionary CSV record"))?
+            .map_err(|e| ErrorCode::IndexOptionInvalid(format!("invalid user dictionary: {e}")))?;
+    validate_user_dictionary_context_ids(&dictionary)?;
+    Ok(dictionary)
+}
+
+/// Compilation only checks that context IDs fit in u16, not the IPADIC matrix.
+fn validate_user_dictionary_context_ids(dictionary: &UserDictionary) -> Result<()> {
+    // Lindera 5.3 serializes WordEntry as [u32 word_id, i16 cost, u16 left, u16 right],
+    // little endian. Its deserializer is private; use the same layout as remap_context_ids.
+    const WORD_ENTRY_LEN: usize = 10;
+    let (entries, remainder) = dictionary.dict.vals_data.as_chunks::<WORD_ENTRY_LEN>();
+    if !remainder.is_empty() {
+        return Err(ErrorCode::IndexOptionInvalid(
+            "invalid user dictionary word entry layout",
+        ));
+    }
+    let matrix = &JAPANESE_DICTIONARY.connection_cost_matrix;
+    let context_id_map = JAPANESE_DICTIONARY.metadata.context_id_map.as_ref();
+    for entry in entries {
+        let left = u16::from_le_bytes([entry[6], entry[7]]);
+        let right = u16::from_le_bytes([entry[8], entry[9]]);
+        if u32::from(left) >= matrix.backward_size || u32::from(right) >= matrix.forward_size {
+            return Err(ErrorCode::IndexOptionInvalid(format!(
+                "invalid user dictionary context IDs: left={left}, right={right}; IPADIC requires left < {} and right < {}",
+                matrix.backward_size, matrix.forward_size
+            )));
+        }
+        // Segmenter remaps context IDs before accessing the matrix. Validate that space too,
+        // without mutating the dictionary (Segmenter will perform the actual remapping).
+        if let Some(map) = context_id_map {
+            let mapped_left = map.left.get(usize::from(left)).copied();
+            let mapped_right = map.right.get(usize::from(right)).copied();
+            if !mapped_left.is_some_and(|id| u32::from(id) < matrix.backward_size)
+                || !mapped_right.is_some_and(|id| u32::from(id) < matrix.forward_size)
+            {
+                return Err(ErrorCode::IndexOptionInvalid(format!(
+                    "invalid user dictionary context IDs after IPADIC remapping: left={left}, right={right}"
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Loads the dictionary stored at `location`, building it on first use and caching the result.

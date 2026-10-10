@@ -99,6 +99,16 @@ SELECT id FROM news WHERE match(content, 'Cloud') ORDER BY id
 ----
 5
 
+# Full-format context IDs must fit IPADIC, not merely u16. Reject before publishing.
+statement error 1603
+CREATE OR REPLACE INVERTED INDEX idx ON news(content) tokenizer = 'japanese' user_dictionary = '@data/csv/japanese/userdict_invalid_context_ids.csv'
+
+query I
+SELECT id FROM news WHERE match(content, 'AI') ORDER BY id
+----
+1
+2
+
 # Newly inserted rows are indexed with the same dictionary.
 statement ok
 INSERT INTO news VALUES (6, 'GPT を使った新しい AI サービス')
@@ -214,6 +224,19 @@ CREATE OR REPLACE TABLE news_replace (
     id INT,
     content STRING,
     INVERTED INDEX idx (content) tokenizer = 'japanese' user_dictionary = '@data/csv/japanese/does_not_exist.csv'
+)
+
+query I
+SELECT id FROM news_replace WHERE match(content, 'AI') ORDER BY id
+----
+1
+
+# Out-of-range context IDs must also fail before replacing the visible table.
+statement error 1603
+CREATE OR REPLACE TABLE news_replace (
+    id INT,
+    content STRING,
+    INVERTED INDEX idx (content) tokenizer = 'japanese' user_dictionary = '@data/csv/japanese/userdict_invalid_context_ids.csv'
 )
 
 query I
