@@ -68,6 +68,8 @@ runs:
         uv run tests/sqllogictests/scripts/prepare_iceberg_tpch_data.py
         echo "Running prepare_iceberg_test_data.py..."
         uv run tests/sqllogictests/scripts/prepare_iceberg_test_data.py
+        echo "Running prepare_iceberg_decimal_data.py..."
+        uv run --package scripts python tests/sqllogictests/scripts/prepare_iceberg_decimal_data.py
 
 
     - name: Run sqllogic Tests with Standalone lib
