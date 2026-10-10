@@ -25,6 +25,13 @@ SET VARIABLE first_snap = (
 )
 
 statement ok
+SET VARIABLE first_time = (
+    SELECT timestamp
+    FROM fuse_snapshot('db_05_clone_history', 'source')
+    WHERE snapshot_id = $first_snap
+)
+
+statement ok
 ALTER TABLE source ADD COLUMN evolved STRING
 
 statement ok
@@ -43,6 +50,20 @@ CREATE TABLE head CLONE source
 
 statement ok
 CREATE TABLE historical CLONE source AT (SNAPSHOT => $first_snap)
+
+statement ok
+CREATE TABLE historical_time CLONE source AT (TIMESTAMP => $first_time::TIMESTAMP)
+
+query I
+SELECT id FROM historical_time ORDER BY id
+----
+1
+
+query I
+SELECT count(*) FROM system.columns
+WHERE database = 'db_05_clone_history' AND "table" = 'historical_time' AND name = 'evolved'
+----
+0
 
 statement ok
 CREATE TABLE chained CLONE head

@@ -465,6 +465,9 @@ impl CreateTableInterpreter {
         // Meta CASes the source TableMeta sequence captured in the request, so the anchor, schema
         // and policies always describe one source version. A concurrent source commit between two
         // attempts only moves that version forward; refresh the source and rebuild the request.
+        // TIMESTAMP/OFFSET keep the time point resolved during binding. TAG is resolved again
+        // when rebuilding a request, so the successful attempt may select a different snapshot
+        // if the tag changed between attempts.
         let mut source_info = clone.table_info.clone();
         let mut attempts = 0;
         let (reply, mut staged_table_meta, source_snapshot) = loop {
@@ -579,20 +582,23 @@ impl CreateTableInterpreter {
         let source =
             FuseTable::create_without_refresh_table_info(source_info.clone(), storage_class)?;
         let source_snapshot_location = match &clone.navigation {
-            Some(point) => source.navigate_to_location(self.ctx.clone(), point).await?,
+            Some(point) => Some(
+                source
+                    .navigate_to_location(self.ctx.clone(), point)
+                    .await?
+                    .ok_or_else(|| {
+                        ErrorCode::TableHistoricalDataNotFound("Empty Table has no historical data")
+                    })?,
+            ),
             None => source.snapshot_loc(),
         };
         let source_snapshot = match (&clone.navigation, source_snapshot_location.clone()) {
             // A historical snapshot may be vacuumed after navigation; report missing history
             // like other navigation paths instead of a raw storage error.
             (Some(_), Some(location)) => Some(
-                FuseTable::read_navigation_snapshot(
-                    location,
-                    source.get_operator(),
-                    "CLONE AT (SNAPSHOT)",
-                )
-                .await?
-                .0,
+                FuseTable::read_navigation_snapshot(location, source.get_operator(), "CLONE AT")
+                    .await?
+                    .0,
             ),
             _ => {
                 source

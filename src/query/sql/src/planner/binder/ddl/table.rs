@@ -703,12 +703,9 @@ impl Binder {
                 self.resolve_data_travel_point(&mut bind_context, point)
             })
             .transpose()?;
-        if navigation
-            .as_ref()
-            .is_some_and(|point| !matches!(point, NavigationPoint::SnapshotID(_)))
-        {
+        if matches!(navigation, Some(NavigationPoint::StreamInfo(_))) {
             return Err(ErrorCode::BadArguments(
-                "CREATE TABLE CLONE supports only AT (SNAPSHOT => '<snapshot_id>')",
+                "CREATE TABLE CLONE does not support AT (STREAM => ...); use SNAPSHOT, TIMESTAMP, OFFSET, or TAG",
             ));
         }
 

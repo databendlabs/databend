@@ -456,8 +456,8 @@ impl FuseTable {
                 Ok(Some(loc))
             }
             NavigationPoint::TimePoint(time_point) => {
-                // This allows users to query historical states gracefully even if
-                // the table was created *after* the given time.
+                // An empty table has no location. Otherwise, propagate lookup errors: callers
+                // must not publish an empty state when history is unavailable or unreadable.
                 let Some(location) = self.snapshot_loc() else {
                     return Ok(None);
                 };
@@ -469,9 +469,8 @@ impl FuseTable {
                             false
                         }
                     })
-                    .await
-                    .ok();
-                Ok(loc)
+                    .await?;
+                Ok(Some(loc))
             }
             NavigationPoint::StreamInfo(stream_info) => {
                 let options = stream_info.options();
