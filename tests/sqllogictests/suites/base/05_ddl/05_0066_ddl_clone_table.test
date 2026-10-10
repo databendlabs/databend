@@ -237,7 +237,7 @@ SELECT id FROM chain ORDER BY id
 5
 8
 
-# CLONE owns its schema and engine and supports only snapshot-ID navigation.
+# CLONE owns its schema and inherits attributes; creation cannot override them.
 statement error
 CREATE TABLE clone_with_schema(id INT) CLONE head
 
@@ -245,7 +245,55 @@ statement error
 CREATE TABLE clone_with_engine CLONE head ENGINE = FUSE
 
 statement error
+CREATE TABLE clone_with_cluster CLONE head CLUSTER BY (id)
+
+statement error
+CREATE TABLE clone_with_options CLONE head bloom_index_columns = 'id'
+
+# TIMESTAMP and OFFSET select the current snapshot when their point is now.
+statement ok
 CREATE TABLE clone_at_timestamp CLONE head AT (TIMESTAMP => now())
+
+statement ok
+CREATE TABLE clone_at_offset CLONE head AT (OFFSET => 0)
+
+query I
+SELECT id FROM clone_at_timestamp ORDER BY id
+----
+1
+2
+3
+7
+
+query I
+SELECT id FROM clone_at_offset ORDER BY id
+----
+1
+2
+3
+7
+
+# Explicit history must exist; it must never silently produce an empty clone.
+statement error .*No historical data.*
+CREATE TABLE clone_before_creation CLONE head AT (TIMESTAMP => '1970-01-01'::TIMESTAMP)
+
+statement error .*Empty Table has no historical data.*
+CREATE TABLE clone_empty_history CLONE empty_source AT (OFFSET => 0)
+
+# A negative OFFSET must resolve history, not silently select the current head.
+statement error .*No historical data.*
+CREATE TABLE clone_before_creation_offset CLONE head AT (OFFSET => -3600)
+
+statement error
+CREATE TABLE clone_positive_offset CLONE head AT (OFFSET => 1)
+
+query I
+SELECT count(*) FROM system.tables
+WHERE database = 'db_05_clone'
+  AND name IN ('clone_before_creation', 'clone_empty_history',
+               'clone_before_creation_offset', 'clone_positive_offset')
+----
+0
 
 statement ok
 DROP DATABASE db_05_clone_target
