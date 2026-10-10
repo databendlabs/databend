@@ -16,7 +16,10 @@ use std::any::Any;
 use std::ops::Not;
 use std::sync::Arc;
 
+use async_channel::Receiver;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::build_origin_block_row_num;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
@@ -56,6 +59,7 @@ pub enum MutationAction {
 }
 
 enum State {
+    /// `None` means the next partition has to be fetched.
     ReadData(Option<PartInfoPtr>),
     FilterData(PartInfoPtr, BlockReadResult),
     ReadRemain {
@@ -70,7 +74,7 @@ enum State {
         filter: Option<Value<BooleanType>>,
     },
     PerformOperator(DataBlock, String),
-    Output(Option<PartInfoPtr>, DataBlock),
+    Output(DataBlock),
     Finish,
 }
 
@@ -79,6 +83,9 @@ pub struct MutationSource {
     output: Arc<OutputPort>,
 
     ctx: Arc<dyn TableContext>,
+    /// Receives the partitions streamed by the pruning pipeline. If absent,
+    /// the partitions are taken from the query context.
+    partition_receiver: Option<Receiver<Result<PartInfoPtr>>>,
     filter: Arc<Option<Expr>>,
     block_reader: Arc<BlockReader>,
     remain_reader: Arc<Option<BlockReader>>,
@@ -94,7 +101,7 @@ pub struct MutationSource {
 }
 
 impl MutationSource {
-    #![allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         action: MutationAction,
@@ -105,11 +112,13 @@ impl MutationSource {
         operators: Vec<BlockOperator>,
         storage_format: FuseStorageFormat,
         update_stream_columns: bool,
+        partition_receiver: Option<Receiver<Result<PartInfoPtr>>>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(MutationSource {
             state: State::ReadData(None),
             output,
             ctx: ctx.clone(),
+            partition_receiver,
             filter,
             block_reader,
             remain_reader,
@@ -136,7 +145,8 @@ impl Processor for MutationSource {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(self.state, State::ReadData(None)) {
+        // Partitions streamed by the pruning pipeline are received in `async_process`.
+        if matches!(self.state, State::ReadData(None)) && self.partition_receiver.is_none() {
             self.state = self
                 .ctx
                 .get_partition()
@@ -144,11 +154,15 @@ impl Processor for MutationSource {
         }
 
         if matches!(self.state, State::Finish) {
+            self.partition_receiver.take();
             self.output.finish();
             return Ok(Event::Finished);
         }
 
         if self.output.is_finished() {
+            self.state = State::Finish;
+            // Release the receiver now so upstream senders can stop before the graph is dropped.
+            self.partition_receiver.take();
             return Ok(Event::Finished);
         }
 
@@ -156,11 +170,9 @@ impl Processor for MutationSource {
             return Ok(Event::NeedConsume);
         }
 
-        if matches!(self.state, State::Output(_, _)) {
-            if let State::Output(part, data_block) =
-                std::mem::replace(&mut self.state, State::Finish)
-            {
-                self.state = part.map_or(State::Finish, |part| State::ReadData(Some(part)));
+        if matches!(self.state, State::Output(_)) {
+            if let State::Output(data_block) = std::mem::replace(&mut self.state, State::Finish) {
+                self.state = State::ReadData(None);
 
                 self.output.push_data(Ok(data_block));
                 return Ok(Event::NeedConsume);
@@ -228,10 +240,7 @@ impl Processor for MutationSource {
                                             affect_rows as u64,
                                         ),
                                     ));
-                                    self.state = State::Output(
-                                        self.ctx.get_partition(),
-                                        DataBlock::empty_with_meta(meta),
-                                    );
+                                    self.state = State::Output(DataBlock::empty_with_meta(meta));
                                 } else {
                                     if self.update_stream_columns {
                                         let row_num = build_origin_block_row_num(rows);
@@ -274,7 +283,7 @@ impl Processor for MutationSource {
                         }
                     } else {
                         // Do nothing.
-                        self.state = State::Output(self.ctx.get_partition(), DataBlock::empty());
+                        self.state = State::Output(DataBlock::empty());
                     }
                 } else {
                     self.update_mutation_status(rows);
@@ -336,7 +345,7 @@ impl Processor for MutationSource {
                 } else {
                     inner_meta
                 };
-                self.state = State::Output(self.ctx.get_partition(), block.add_meta(Some(meta))?);
+                self.state = State::Output(block.add_meta(Some(meta))?);
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
@@ -346,17 +355,28 @@ impl Processor for MutationSource {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
+            State::ReadData(None) => {
+                let Some(receiver) = &self.partition_receiver else {
+                    return Err(ErrorCode::Internal("It's a bug. Need partition receiver"));
+                };
+                self.state = match receiver.recv().await {
+                    Ok(part) => {
+                        let part = part?;
+                        Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, 1);
+                        State::ReadData(Some(part))
+                    }
+                    // All the partitions have been received.
+                    Err(_) => State::Finish,
+                };
+            }
             State::ReadData(Some(part)) => {
                 let settings = ReadSettings::from_ctx(&self.ctx)?;
                 match Mutation::from_part(&part)? {
                     Mutation::MutationDeletedSegment(deleted_segment) => {
                         self.update_mutation_status(deleted_segment.summary.row_count as usize);
-                        self.state = State::Output(
-                            self.ctx.get_partition(),
-                            DataBlock::empty_with_meta(Box::new(
-                                SerializeDataMeta::DeletedSegment(deleted_segment.clone()),
-                            )),
-                        )
+                        self.state = State::Output(DataBlock::empty_with_meta(Box::new(
+                            SerializeDataMeta::DeletedSegment(deleted_segment.clone()),
+                        )))
                     }
                     Mutation::MutationPartInfo(part) => {
                         self.index = BlockMetaIndex {
@@ -384,10 +404,7 @@ impl Processor for MutationSource {
                                     fuse_part.nums_rows as u64,
                                 ),
                             ));
-                            self.state = State::Output(
-                                self.ctx.get_partition(),
-                                DataBlock::empty_with_meta(meta),
-                            );
+                            self.state = State::Output(DataBlock::empty_with_meta(meta));
                         } else {
                             let read_res = self
                                 .block_reader
