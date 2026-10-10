@@ -38,6 +38,7 @@ TopN
             ├── order by: [events.category (#0) ASC]
             └── limit: NONE
 
+rank_limit: [#0 ASC] limit 3
 
 === single_key_filter_scan_pushes_descending_order ===
 description: A row-preserving Filter between the aggregate and scan should allow descending scan ordering to be pushed through.
@@ -83,6 +84,7 @@ TopN
                 ├── order by: [events.category (#0) DESC]
                 └── limit: NONE
 
+rank_limit: [#0 DESC] limit 3
 
 === single_key_eval_scalar_scan_pushes_order ===
 description: An EvalScalar that computes an aggregate argument should allow group-key ordering to reach the scan.
@@ -126,6 +128,7 @@ TopN
                 ├── order by: [events.category (#0) ASC]
                 └── limit: NONE
 
+rank_limit: [#0 ASC] limit 3
 
 === multiple_group_keys_do_not_push_scan_order ===
 description: Rank limits with multiple group keys must not install scan ordering for the runtime single-key filter.
@@ -167,6 +170,91 @@ TopN
             ├── order by: []
             └── limit: NONE
 
+rank_limit: [#0 ASC, #1 ASC] limit 3
+
+=== rank_limit_follows_order_by_key_order ===
+description: When ORDER BY lists the group keys in a different order, the rank limit keys must follow the ORDER BY order.
+sql: SELECT category, value, count(*) FROM events GROUP BY category, value ORDER BY value DESC, category LIMIT 3
+raw_plan:
+Limit
+├── limit: [3]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [events.value (#1) DESC NULLS LAST, events.category (#0) ASC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [events.category (#0) AS (#0), events.value (#1) AS (#1), COUNT(*) (#2) AS (#2)]
+        └── Aggregate(Initial)
+            ├── group items: [events.category (#0) AS (#0), events.value (#1) AS (#1)]
+            ├── aggregate functions: [count() AS (#2)]
+            └── EvalScalar
+                ├── scalars: [events.category (#0) AS (#0), events.value (#1) AS (#1)]
+                └── Scan
+                    ├── table: default.events (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [events.value (#1) DESC NULLS LAST, events.category (#0) ASC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [events.category (#0) AS (#0), events.value (#1) AS (#1)]
+    ├── aggregate functions: [count() AS (#2)]
+    └── Aggregate(Partial)
+        ├── group items: [events.category (#0) AS (#0), events.value (#1) AS (#1)]
+        ├── aggregate functions: [count() AS (#2)]
+        └── Scan
+            ├── table: default.events (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+rank_limit: [#1 DESC, #0 ASC] limit 3
+
+=== repeated_order_key_keeps_single_rank_key ===
+description: A repeated ORDER BY column keeps only its first occurrence, so the single-key rank limit still pushes scan ordering.
+sql: SELECT category, count(*) FROM events GROUP BY category ORDER BY category ASC, category DESC LIMIT 3
+raw_plan:
+Limit
+├── limit: [3]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [events.category (#0) ASC NULLS LAST, events.category (#0) DESC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [events.category (#0) AS (#0), COUNT(*) (#2) AS (#2)]
+        └── Aggregate(Initial)
+            ├── group items: [events.category (#0) AS (#0)]
+            ├── aggregate functions: [count() AS (#2)]
+            └── EvalScalar
+                ├── scalars: [events.category (#0) AS (#0)]
+                └── Scan
+                    ├── table: default.events (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+optimized_plan:
+TopN
+├── sort keys: [events.category (#0) ASC NULLS LAST, events.category (#0) DESC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── Aggregate(Final)
+    ├── group items: [events.category (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#2)]
+    └── Aggregate(Partial)
+        ├── group items: [events.category (#0) AS (#0)]
+        ├── aggregate functions: [count() AS (#2)]
+        └── Scan
+            ├── table: default.events (#0)
+            ├── filters: []
+            ├── order by: [events.category (#0) ASC]
+            └── limit: NONE
+
+rank_limit: [#0 ASC] limit 3
 
 === join_input_does_not_push_scan_order ===
 description: A row-changing Join below the aggregate must prevent rank-limit ordering from reaching either scan.
@@ -228,6 +316,7 @@ TopN
                     ├── order by: []
                     └── limit: NONE
 
+rank_limit: [#0 ASC] limit 3
 
 === preordered_scan_keeps_existing_order ===
 description: A scan already ordered by a subquery must keep that ordering instead of being overwritten by the outer aggregate rank limit.
@@ -277,4 +366,5 @@ TopN
                 ├── order by: [events.value (#1) ASC]
                 └── limit: NONE
 
+rank_limit: [#0 ASC] limit 3
 

@@ -192,24 +192,24 @@ impl RulePushDownRankLimitAggregate {
             return Ok(());
         }
 
-        let mut sort_items = Vec::with_capacity(agg_limit.group_items.len());
-        let mut not_found_sort_items = vec![];
+        // The rank limit must follow the ORDER BY key order, then append the remaining
+        // group keys so that each rank identifies exactly one group. A repeated ORDER BY
+        // column is redundant after its first occurrence, so keep only the first one.
+        let mut sort_items: Vec<SortItem> = Vec::with_capacity(agg_limit.group_items.len());
+        for order_item in &order_items {
+            if !sort_items.iter().any(|k| k.index == order_item.index) {
+                sort_items.push(order_item.clone());
+            }
+        }
         for group_item in &agg_limit.group_items {
-            if let Some(sort_item) = order_items.iter().find(|k| k.index == group_item.index) {
+            if !sort_items.iter().any(|k| k.index == group_item.index) {
                 sort_items.push(SortItem {
-                    index: group_item.index,
-                    asc: sort_item.asc,
-                    nulls_first: sort_item.nulls_first,
-                });
-            } else {
-                not_found_sort_items.push(SortItem {
                     index: group_item.index,
                     asc: true,
                     nulls_first: false,
                 });
             }
         }
-        sort_items.extend(not_found_sort_items);
 
         agg_limit.rank_limit = Some((sort_items.clone(), limit));
 

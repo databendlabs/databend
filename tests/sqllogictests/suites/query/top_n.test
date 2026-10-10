@@ -94,6 +94,70 @@ select number % 5 as k, count(*) as c from numbers(1000) group by k order by k d
 3 200
 2 200
 
+# Rank limit pushdown must rank groups by the ORDER BY key order, not by the
+# GROUP BY key order, when both list the same columns in different orders.
+query III
+select a, b, count(*) from (select number % 3 as a, number % 5 as b from numbers(15)) t group by a, b order by b, a limit 2
+----
+0 0 1
+1 0 1
+
+query III
+settings (enable_top_n = 0) select a, b, count(*) from (select number % 3 as a, number % 5 as b from numbers(15)) t group by a, b order by b, a limit 2
+----
+0 0 1
+1 0 1
+
+query III
+select a, b, count(*) from (select number % 3 as a, number % 5 as b from numbers(15)) t group by a, b order by b desc, a limit 2
+----
+0 4 1
+1 4 1
+
+query III
+select a, b, count(*) from (select number % 3 as a, number % 5 as b from numbers(15)) t group by a, b order by b, a desc limit 2
+----
+2 0 1
+1 0 1
+
+# OFFSET is part of the pushed-down candidate count.
+query III
+select a, b, count(*) from (select number % 3 as a, number % 5 as b from numbers(15)) t group by a, b order by b, a limit 2 offset 2
+----
+2 0 1
+0 1 1
+
+# ORDER BY covers only part of the group keys; exactly three groups have b = 0.
+query III rowsort
+select a, b, count(*) from (select number % 3 as a, number % 5 as b from numbers(15)) t group by a, b order by b limit 3
+----
+0 0 1
+1 0 1
+2 0 1
+
+# HAVING filters after aggregation, so the limit must not be pushed into the
+# aggregate: the smallest groups by (b, a) have count 1 and are filtered out.
+query III
+select a, b, count(*) from (select number % 3 as a, number % 5 as b from numbers(20)) t group by a, b having count(*) > 1 order by b, a limit 2
+----
+0 0 2
+1 1 2
+
+# NULL group keys with per-key NULLS ordering.
+query III
+select a, b, count(*) from (select nullif(number % 3, 0) as a, nullif(number % 5, 0) as b from numbers(15)) t group by a, b order by b nulls first, a nulls last limit 2
+----
+1 NULL 1
+2 NULL 1
+
+# Grouping sets keep their own path; the result must still follow ORDER BY.
+query III
+select a, b, count(*) from (select number % 3 as a, number % 5 as b from numbers(15)) t group by rollup(a, b) order by b nulls first, a nulls first limit 3
+----
+NULL NULL 15
+0 NULL 5
+1 NULL 5
+
 # TopN above UNION ALL.
 query I
 select * from (select number from numbers(10) union all select number + 5 from numbers(10)) as t order by number desc limit 4
@@ -249,6 +313,26 @@ select k, count(*) from t_aggregate_rank_limit group by k order by k desc limit 
 
 statement ok
 drop table t_aggregate_rank_limit;
+
+# Multi-batch rank limit with reordered keys: every group spans many batches
+# and must still be aggregated in full (each (a, b) group has 10 rows).
+query III
+select a, b, count(*) from (select number % 3 as a, number % 5 as b from numbers(150)) t group by a, b order by b, a limit 2
+----
+0 0 10
+1 0 10
+
+query III
+settings (enable_top_n = 0) select a, b, count(*) from (select number % 3 as a, number % 5 as b from numbers(150)) t group by a, b order by b desc, a desc limit 2
+----
+2 4 10
+1 4 10
+
+# LIMIT without ORDER BY may return any groups, but each group must be complete.
+query II
+select count(*), sum(c) from (select a, b, count(*) as c from (select number % 3 as a, number % 5 as b from numbers(150)) t group by a, b limit 3) s
+----
+3 30
 
 statement ok
 unset max_block_size;
