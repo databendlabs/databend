@@ -56,8 +56,17 @@ fn has_null_safe_key(expr: &SExpr) -> bool {
 // The position-only test below separately exercises DPhyp without pull-up.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_predicate_reorder_plans() -> Result<()> {
-    let mut file = open_golden_file("optimizer", "predicate_reorder.txt")?;
+    let mut file = open_golden_file("optimizer", "dphyp_reorder.txt")?;
     let cases = [
+        SqlTestCase {
+            name: "hub_repeated_candidate_evaluation",
+            description: "Independent bindings exercise repeated hub splits; reuse must preserve the complete plan and binding identities.",
+            setup_sqls: &[],
+            sql: "SELECT b0.k FROM b b0
+JOIN b b1 ON b0.k = b1.k
+JOIN b b2 ON b0.k = b2.k
+JOIN b b3 ON b0.k = b3.k",
+        },
         SqlTestCase {
             name: "single_table_or_extraction",
             description: "Single-table OR restrictions can reduce base inputs before reordering.",

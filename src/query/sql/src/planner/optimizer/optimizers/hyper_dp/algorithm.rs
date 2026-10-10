@@ -71,6 +71,8 @@ enum JoinNodeChildren {
 struct JoinArena<S> {
     nodes: Vec<Option<JoinNode<S>>>,
     free_list: Vec<NodeId>,
+    // A reused slot must not identify the candidate that occupied it before GC.
+    generations: Vec<u64>,
 }
 
 impl<S> Default for JoinArena<S> {
@@ -78,6 +80,7 @@ impl<S> Default for JoinArena<S> {
         Self {
             nodes: vec![],
             free_list: vec![],
+            generations: vec![],
         }
     }
 }
@@ -87,13 +90,19 @@ impl<S> JoinArena<S> {
         let id = if let Some(id) = self.free_list.pop() {
             let _old = self.nodes[id.0].replace(node);
             assert!(_old.is_none(), "free join node slot should be empty");
+            self.generations[id.0] += 1;
             id
         } else {
             let id = NodeId(self.nodes.len());
             self.nodes.push(Some(node));
+            self.generations.push(0);
             id
         };
         id
+    }
+
+    fn identity(&self, id: NodeId) -> (NodeId, u64) {
+        (id, self.generations[id.0])
     }
 
     fn node(&self, id: NodeId) -> &JoinNode<S> {
@@ -132,6 +141,8 @@ impl<S> JoinArena<S> {
     }
 }
 
+/// Model computations must be deterministic for fixed nodes and edges within
+/// a search. The algorithm may reuse an evaluation of unchanged inputs.
 pub trait JoinOrderModel {
     type NodeState: Clone;
 
@@ -291,6 +302,16 @@ impl JoinGraph {
     }
 }
 
+/// Model inputs are immutable for the lifetime of a candidate. Include arena
+/// generations because GC can reuse a slot, and edges because the same inputs
+/// may be evaluated with different predicates (including a cross join).
+#[derive(Eq, Hash, PartialEq)]
+struct EvaluatedJoin {
+    left: (NodeId, u64),
+    right: (NodeId, u64),
+    edges: Vec<JoinEdgeRef>,
+}
+
 pub struct HyperDp<'a, M: JoinOrderModel> {
     relation_count: usize,
     model: &'a M,
@@ -299,6 +320,7 @@ pub struct HyperDp<'a, M: JoinOrderModel> {
     arena: JoinArena<M::NodeState>,
     dp_table: HashMap<RelationSet, NodeId>,
     emit_count: usize,
+    evaluated_joins: HashMap<EvaluatedJoin, f64>,
 }
 
 impl<'a, M: JoinOrderModel> HyperDp<'a, M> {
@@ -311,6 +333,7 @@ impl<'a, M: JoinOrderModel> HyperDp<'a, M> {
             arena: JoinArena::default(),
             dp_table: Default::default(),
             emit_count: 0,
+            evaluated_joins: HashMap::new(),
         }
     }
 
@@ -631,6 +654,21 @@ impl<'a, M: JoinOrderModel> HyperDp<'a, M> {
         let left_id = *self.dp_table.get(left).unwrap();
         let right_id = *self.dp_table.get(right).unwrap();
 
+        let evaluated = EvaluatedJoin {
+            left: self.arena.identity(left_id),
+            right: self.arena.identity(right_id),
+            edges: edge_refs.clone(),
+        };
+        if let Some(join_cost) = self.evaluated_joins.get(&evaluated) {
+            // The previous evaluation installed this parent or lost to a
+            // cheaper one. Parent costs only decrease during the search.
+            let id = self
+                .dp_table
+                .get(&parent_set)
+                .expect("an evaluated join must have a parent DP state");
+            return Ok(self.arena.node(*id).cost.min(*join_cost));
+        }
+
         let join_id = self.create_join_node(edge_refs, left_id, right_id)?;
         let join_node = self.arena.node(join_id);
         let join_cost = join_node.cost;
@@ -653,6 +691,7 @@ impl<'a, M: JoinOrderModel> HyperDp<'a, M> {
             self.arena.free_node(join_id);
         }
 
+        self.evaluated_joins.insert(evaluated, join_cost);
         Ok(cost)
     }
 
@@ -795,6 +834,7 @@ mod tests {
 
     struct TestJoinOrderModel {
         base_cardinalities: Vec<f64>,
+        evaluations: std::cell::Cell<usize>,
         join_cardinalities: HashMap<RelationSet, f64>,
     }
 
@@ -823,6 +863,7 @@ mod tests {
         fn new(base_cardinalities: Vec<f64>) -> Self {
             Self {
                 base_cardinalities,
+                evaluations: std::cell::Cell::new(0),
                 join_cardinalities: Default::default(),
             }
         }
@@ -850,6 +891,7 @@ mod tests {
             right: &JoinNode<Self::NodeState>,
             edge_refs: &[JoinEdgeRef],
         ) -> Result<(f64, Self::NodeState)> {
+            self.evaluations.set(self.evaluations.get() + 1);
             let left_state = left.state();
             let right_state = right.state();
             let key = union(&left_state.leaves, &right_state.leaves);
@@ -951,6 +993,116 @@ mod tests {
             reversed: false,
         }]);
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_hub_evaluates_each_unchanged_split_once() -> Result<()> {
+        let model = TestJoinOrderModel::new(vec![1.0; 7]);
+        let mut dp = HyperDp::new(7, &model);
+        for leaf in 1..7 {
+            dp.add_edge(&relation_set(&[0]), &relation_set(&[leaf]), leaf)?;
+        }
+        dp.graph.sort_cached_neighbors();
+        dp.join_reorder()?;
+        // One connected side contains the hub, the other is a single leaf:
+        // six choices of leaf times 2^5 subsets of the remaining leaves.
+        assert_eq!(model.evaluations.get(), 6 * (1 << 5));
+        assert!(dp.emit_count > model.evaluations.get());
+        let root = dp.dp_table.get(&[0, 1, 2, 3, 4, 5, 6][..]).unwrap();
+        assert_eq!(dp.arena.node(*root).cost(), 6.0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_repeated_join_reuses_evaluation_but_not_changed_edges() -> Result<()> {
+        let model = TestJoinOrderModel::new(vec![10.0, 100.0]);
+        let mut dp = HyperDp::new(2, &model);
+        dp.initialize_dp_table()?;
+        let edges = vec![JoinEdgeRef {
+            id: 0,
+            reversed: false,
+        }];
+        let cost = dp.emit_csg_cmp(&[0], &[1], edges.clone())?;
+        assert_eq!(dp.emit_csg_cmp(&[0], &[1], edges.clone())?, cost);
+        assert_eq!(model.evaluations.get(), 1);
+        dp.emit_csg_cmp(&[0], &[1], vec![])?;
+        assert_eq!(model.evaluations.get(), 2);
+        dp.emit_csg_cmp(&[0], &[1], vec![edges[0].reversed()])?;
+        assert_eq!(model.evaluations.get(), 3);
+        // Ordered inputs are distinct, even when the build-side heuristic can
+        // eventually orient them alike.
+        dp.emit_csg_cmp(&[1], &[0], vec![edges[0].reversed()])?;
+        assert_eq!(model.evaluations.get(), 4);
+        Ok(())
+    }
+
+    #[test]
+    fn test_improved_subplan_is_reevaluated_and_cached_loser_returns_parent_cost() -> Result<()> {
+        let model = TestJoinOrderModel::new(vec![100.0; 4])
+            .with_join_cardinality(&[0, 1], 1000.0)
+            .with_join_cardinality(&[1, 2], 1.0)
+            .with_join_cardinality(&[0, 1, 2], 10.0)
+            .with_join_cardinality(&[0, 1, 2, 3], 20.0);
+        let mut dp = HyperDp::new(4, &model);
+        dp.initialize_dp_table()?;
+        let edges = vec![JoinEdgeRef {
+            id: 0,
+            reversed: false,
+        }];
+        dp.emit_csg_cmp(&[0], &[1], edges.clone())?;
+        let expensive = dp.emit_csg_cmp(&[0, 1], &[2], edges.clone())?;
+        let old_full = dp.emit_csg_cmp(&[0, 1, 2], &[3], edges.clone())?;
+        let old_input = *dp.dp_table.get(&[0, 1, 2][..]).unwrap();
+        assert_eq!(model.evaluations.get(), 3);
+
+        dp.emit_csg_cmp(&[1], &[2], edges.clone())?;
+        let cheaper = dp.emit_csg_cmp(&[0], &[1, 2], edges.clone())?;
+        assert!(cheaper < expensive);
+        assert_ne!(*dp.dp_table.get(&[0, 1, 2][..]).unwrap(), old_input);
+        assert_eq!(model.evaluations.get(), 5);
+        // The old split's inputs have not changed. Its cached evaluation must
+        // still return the parent's new minimum, not the old expensive cost.
+        assert_eq!(dp.emit_csg_cmp(&[0, 1], &[2], edges.clone())?, cheaper);
+        assert_eq!(model.evaluations.get(), 5);
+
+        // Same relation sets, but the three-relation input now has a new tree.
+        let improved_full = dp.emit_csg_cmp(&[0, 1, 2], &[3], edges.clone())?;
+        assert!(improved_full < old_full);
+        assert_eq!(model.evaluations.get(), 6);
+        assert_eq!(dp.emit_csg_cmp(&[0, 1, 2], &[3], edges)?, improved_full);
+        assert_eq!(model.evaluations.get(), 6);
+        Ok(())
+    }
+
+    #[test]
+    fn test_reused_input_slot_requires_new_evaluation() -> Result<()> {
+        let model = TestJoinOrderModel::new(vec![10.0, 100.0]);
+        let mut dp = HyperDp::new(2, &model);
+        dp.initialize_dp_table()?;
+        let cost = dp.emit_csg_cmp(&[0], &[1], vec![])?;
+        let old_id = *dp.dp_table.get(&[0][..]).unwrap();
+        let old_identity = dp.arena.identity(old_id);
+        // Remove the old tree before exercising slot reuse: an input of a
+        // live parent cannot be collected. The evaluation cache outlives GC.
+        let parent_id = dp.dp_table.remove(&[0, 1][..]).unwrap();
+        dp.arena.free_node(parent_id);
+        dp.dp_table.remove(&[0][..]);
+        dp.arena.free_node(old_id);
+        let new_id = dp.arena.push(JoinNode {
+            children: JoinNodeChildren::Leaf,
+            cost: 0.0,
+            cardinality: 1.0,
+            state: TestJoinState::leaf(0, 1.0),
+        });
+        assert_eq!(new_id, old_id);
+        assert_ne!(dp.arena.identity(new_id), old_identity);
+        dp.dp_table.insert(vec![0].into_boxed_slice(), new_id);
+        let improved = dp.emit_csg_cmp(&[0], &[1], vec![])?;
+        assert!(improved < cost);
+        assert_eq!(model.evaluations.get(), 2);
+        assert_eq!(dp.emit_csg_cmp(&[0], &[1], vec![])?, improved);
+        assert_eq!(model.evaluations.get(), 2);
         Ok(())
     }
 
