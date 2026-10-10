@@ -58,6 +58,9 @@ pub type InvertedIndexMetaCache = HybridCache<InvertedIndexMeta>;
 pub type InvertedIndexLookupCache = HybridCache<InvertedIndexLookupBytes>;
 /// Byte-limited cache of postings, positions, store, and other payload pages.
 pub type InvertedIndexPayloadCache = HybridCache<InvertedIndexPayloadBytes>;
+/// Memory-only cache of complete `.idx` and `.pos` components. Kept separate from pages so
+/// large full warmups cannot evict frequently accessed small posting ranges.
+pub type InvertedIndexFullPayloadCache = InMemoryLruCache<InvertedIndexPayloadBytes>;
 
 pub type VectorIndexMetaCache = HybridCache<VectorIndexMeta>;
 pub type VectorIndexFileCache = HybridCache<VectorIndexFile>;

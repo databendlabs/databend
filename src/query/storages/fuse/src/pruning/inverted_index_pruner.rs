@@ -24,6 +24,7 @@ use opendal::Operator;
 use tantivy::query::Query;
 use tantivy::query::QueryClone;
 use tantivy::query::QueryParser;
+use tantivy::query_grammar::parse_query_lenient;
 use tantivy::tokenizer::TokenizerManager;
 
 use crate::io::create_index_schema;
@@ -153,7 +154,7 @@ pub fn create_inverted_index_query(
     // parse query text to check whether has phrase terms need position file.
     let tokenizer_manager = create_tokenizer_manager(&inverted_index_info.index_options);
     let mut query_parser = QueryParser::new(
-        index_schema,
+        index_schema.clone(),
         query_fields.clone(),
         tokenizer_manager.clone(),
     );
@@ -189,12 +190,22 @@ pub fn create_inverted_index_query(
         .unwrap_or_default();
     let query = if lenient {
         // If lenient is TRUE, invalid query text will not report an error.
-        let (query, _) = query_parser.parse_query_lenient(&inverted_index_info.query_text);
-        query
+        query_parser
+            .parse_query_lenient(&inverted_index_info.query_text)
+            .0
     } else {
         query_parser.parse_query(&inverted_index_info.query_text)?
     };
-    let warmup = InvertedIndexWarmupInfo::try_create(query.as_ref(), &query_fields)?;
+    // The AST only supplements query_terms() with expansion warmups; it does not change the
+    // executable query or its lenient/strict parsing behavior.
+    let (ast, _) = parse_query_lenient(&inverted_index_info.query_text);
+    let warmup = InvertedIndexWarmupInfo::try_create(
+        query.as_ref(),
+        &ast,
+        &index_schema,
+        &query_fields,
+        fuzziness,
+    )?;
     Ok(PreparedInvertedIndexQuery {
         query,
         tokenizer_manager,

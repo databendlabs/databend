@@ -556,9 +556,8 @@ mod tests {
     use databend_common_expression::types::StringType;
     use databend_storages_common_index::BundleSizes;
     use opendal::services::Memory;
-    use tantivy::Term;
-    use tantivy::query::Query;
-    use tantivy::query::TermQuery;
+    use tantivy::query::QueryParser;
+    use tantivy::query_grammar::parse_query;
 
     use super::*;
     use crate::io::read::InvertedIndexReader;
@@ -619,12 +618,25 @@ mod tests {
         bundle_size: u64,
         word: &str,
     ) -> Vec<usize> {
-        let field = Field::from_field_id(0);
-        let query: Box<dyn Query> = Box::new(TermQuery::new(
-            Term::from_field_text(field, word),
-            IndexRecordOption::Basic,
-        ));
-        let warmup = InvertedIndexWarmupInfo::try_create(query.as_ref(), &[field]).unwrap();
+        let (schema, fields) = create_index_schema(
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "body",
+                DataType::String,
+            )])),
+            &index_options(),
+        )
+        .unwrap();
+        let query_text = format!("body:{word}");
+        let parser = QueryParser::new(
+            schema.clone(),
+            fields.clone(),
+            create_tokenizer_manager(&index_options()),
+        );
+        let query = parser.parse_query(&query_text).unwrap();
+        let ast = parse_query(&query_text).unwrap();
+        let warmup =
+            InvertedIndexWarmupInfo::try_create(query.as_ref(), &ast, &schema, &fields, None)
+                .unwrap();
         let reader = InvertedIndexReader::create(
             operator.clone(),
             false,
@@ -648,6 +660,63 @@ mod tests {
 
     async fn exists(operator: &Operator, path: &str) -> bool {
         operator.exists(path).await.unwrap()
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_full_warmup_reads_needed_postings_and_positions() {
+        use tantivy::query::QueryParser;
+        use tantivy::query_grammar::parse_query;
+        use tantivy::schema::Schema;
+        use tantivy::schema::TEXT;
+
+        init_test_globals().unwrap();
+        let operator = Operator::new(Memory::default()).unwrap().finish();
+        let location = "t/ast-warmup.index";
+        let sizes = build_index(&operator, location, 256);
+        let mut schema = Schema::builder();
+        let field = schema.add_text_field("body", TEXT);
+        let schema = schema.build();
+        let tokenizers = create_tokenizer_manager(&index_options());
+
+        for (text, fuzziness, expected) in [
+            (
+                "body:\"talks about alp\"*",
+                None,
+                (0..ROWS).filter(|&i| WORDS[i % 5] == "alpha").collect(),
+            ),
+            ("body:alpa", Some(1), expected_rows("alpha")),
+            ("body:[alpha TO alpha]", None, expected_rows("alpha")),
+        ] {
+            let mut parser = QueryParser::new(schema.clone(), vec![field], tokenizers.clone());
+            if let Some(distance) = fuzziness {
+                parser.set_field_fuzzy(field, false, distance, true);
+            }
+            let query = parser.parse_query(text).unwrap();
+            let ast = parse_query(text).unwrap();
+            let warmup = InvertedIndexWarmupInfo::try_create(
+                query.as_ref(),
+                &ast,
+                &schema,
+                &[field],
+                fuzziness,
+            )
+            .unwrap();
+            let reader =
+                InvertedIndexReader::create(operator.clone(), false, tokenizers.clone(), warmup);
+            let (mut rows, _) = reader
+                .do_filter(
+                    query,
+                    location,
+                    INVERTED_INDEX_FILE_FORMAT_VERSION,
+                    sizes.bundle,
+                    ROWS as u64,
+                )
+                .await
+                .unwrap()
+                .unwrap();
+            rows.sort_unstable();
+            assert_eq!(rows, expected, "{text}");
+        }
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -697,7 +766,6 @@ mod tests {
 
 #[cfg(test)]
 mod merge_tests {
-    use std::ops::Bound;
     use std::ops::Range;
 
     use databend_common_expression::FromData;
@@ -712,10 +780,8 @@ mod merge_tests {
     use databend_storages_common_index::MergeSource;
     use databend_storages_common_index::SourceRows;
     use opendal::services::Memory;
-    use tantivy::Term;
-    use tantivy::query::Query;
-    use tantivy::query::RangeQuery;
-    use tantivy::query::TermQuery;
+    use tantivy::query::QueryParser;
+    use tantivy::query_grammar::parse_query;
 
     use super::*;
     use crate::io::read::InvertedIndexReader;
@@ -781,10 +847,20 @@ mod merge_tests {
         location: &str,
         bundle_size: u64,
         rows: u32,
-        query: Box<dyn Query>,
+        query_text: &str,
         fields: &[Field],
     ) -> Vec<usize> {
-        let warmup = InvertedIndexWarmupInfo::try_create(query.as_ref(), fields).unwrap();
+        let (schema, _) = create_index_schema(schemas().0, &index_options()).unwrap();
+        let parser = QueryParser::new(
+            schema.clone(),
+            fields.to_vec(),
+            create_tokenizer_manager(&index_options()),
+        );
+        let query = parser.parse_query(query_text).unwrap();
+        let ast = parse_query(query_text).unwrap();
+        let warmup =
+            InvertedIndexWarmupInfo::try_create(query.as_ref(), &ast, &schema, fields, None)
+                .unwrap();
         let reader = InvertedIndexReader::create(
             operator.clone(),
             false,
@@ -804,25 +880,6 @@ mod merge_tests {
         let (mut matched, _) = result.unwrap_or_default();
         matched.sort_unstable();
         matched
-    }
-
-    fn term_query(word: &str) -> Box<dyn Query> {
-        Box::new(TermQuery::new(
-            Term::from_field_text(Field::from_field_id(0), word),
-            IndexRecordOption::Basic,
-        ))
-    }
-
-    fn range_query(low: i64, high: i64) -> Box<dyn Query> {
-        let bound = |value: i64| {
-            let mut term = Term::from_field_json_path(Field::from_field_id(1), "n", false);
-            term.append_type_and_fast_value(value);
-            term
-        };
-        Box::new(RangeQuery::new(
-            Bound::Included(bound(low)),
-            Bound::Excluded(bound(high)),
-        ))
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -899,7 +956,7 @@ mod merge_tests {
                     location,
                     sizes[output].bundle,
                     rows,
-                    term_query(word),
+                    &format!("body:{word}"),
                     &[Field::from_field_id(0)],
                 )
                 .await;
@@ -916,11 +973,31 @@ mod merge_tests {
                 location,
                 sizes[output].bundle,
                 rows,
-                range_query(1000, 2100),
+                "meta.n:[1000 TO 2100}",
                 &[Field::from_field_id(1)],
             )
             .await;
             assert_eq!(matched, expected, "output {output} range");
+
+            // Warm exact postings and the fast-field range concurrently. The synchronous
+            // search must find both branches after the asynchronous warmup completes.
+            let expected: Vec<usize> = ids
+                .iter()
+                .enumerate()
+                .filter_map(|(row, id)| {
+                    (WORDS[*id as usize % 4] == "alpha" || (1000..2100).contains(id)).then_some(row)
+                })
+                .collect();
+            let matched = filter(
+                &operator,
+                location,
+                sizes[output].bundle,
+                rows,
+                "body:alpha OR meta.n:[1000 TO 2100}",
+                &[Field::from_field_id(0)],
+            )
+            .await;
+            assert_eq!(matched, expected, "output {output} mixed warmup");
         }
     }
 }
