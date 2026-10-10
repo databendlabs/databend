@@ -141,6 +141,9 @@ pub struct Config {
     pub query: QueryConfig,
 
     #[clap(flatten)]
+    pub lineage: LineageConfig,
+
+    #[clap(flatten)]
     pub log: LogConfig,
 
     #[clap(flatten)]
@@ -2242,6 +2245,28 @@ pub struct TaskConfig {
     pub on: bool,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct LineageConfig {
+    /// Enables query lineage capture and persistence.
+    #[clap(
+        long = "lineage-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
+    #[serde(rename = "on")]
+    pub lineage_on: bool,
+
+    /// Retention period in hours for DML lineage. When omitted, lineage is retained permanently.
+    #[clap(long = "lineage-retention", value_name = "HOURS")]
+    #[serde(rename = "retention")]
+    pub lineage_retention: Option<usize>,
+}
+
+impl LineageConfig {
+    pub fn enabled(&self) -> bool {
+        self.lineage_on
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct FileLogConfig {
@@ -2721,8 +2746,9 @@ pub struct HistoryLogTableConfig {
     pub table_name: String,
 
     /// The retention period (in hours) for history logs.
-    /// Data older than this period will be deleted during retention tasks.
-    pub retention: usize,
+    /// Data older than this period will be deleted during retention tasks. When omitted, the
+    /// predefined table policy applies.
+    pub retention: Option<usize>,
 
     /// Whether this history table is invisible for querying.
     /// Default is false.
@@ -2784,6 +2810,7 @@ impl TryInto<InnerHistoryConfig> for HistoryLogConfig {
                 .into_iter()
                 .map(|cfg| cfg.try_into())
                 .collect::<Result<Vec<_>>>()?,
+            internal_tables: vec![],
             storage_params: storage_params.map(|cfg| cfg.params),
         })
     }
@@ -3613,6 +3640,7 @@ mod config_converters {
         fn from(inner: InnerConfig) -> Self {
             Self {
                 query: inner.query.into(),
+                lineage: inner.lineage,
                 log: inner.log.into(),
                 task: inner.task,
                 meta: inner.meta,
@@ -3633,6 +3661,7 @@ mod config_converters {
         fn try_into(self) -> Result<InnerConfig> {
             let Config {
                 query,
+                lineage,
                 log,
                 task,
                 meta,
@@ -3664,10 +3693,33 @@ mod config_converters {
             }
 
             let spill = convert_local_spill_config(spill)?;
+            let mut log: InnerLogConfig = log.try_into()?;
+
+            const LINEAGE_HISTORY_TABLE: &str = "lineage_history";
+            if log
+                .history
+                .tables
+                .iter()
+                .any(|table| table.table_name.eq_ignore_ascii_case(LINEAGE_HISTORY_TABLE))
+            {
+                return Err(ErrorCode::InvalidConfig(
+                    "`lineage_history` is internal; configure lineage with `[lineage]` instead"
+                        .to_string(),
+                ));
+            }
+
+            if lineage.lineage_on {
+                log.history.internal_tables.push(InnerHistoryTableConfig {
+                    table_name: LINEAGE_HISTORY_TABLE.to_string(),
+                    retention: lineage.lineage_retention,
+                    invisible: false,
+                });
+            }
 
             Ok(InnerConfig {
                 query: query.try_into()?,
-                log: log.try_into()?,
+                lineage,
+                log,
                 task,
                 meta,
                 storage: storage.try_into()?,
@@ -3760,6 +3812,93 @@ mod test {
             setting_default, config_default,
             "default setting is different from default config, please check again"
         )
+    }
+
+    #[test]
+    fn test_history_table_retention_is_optional() {
+        let omitted: HistoryLogTableConfig =
+            toml::from_str("table_name = 'query_history'").unwrap();
+        assert_eq!(omitted.retention, None);
+        let inner: InnerHistoryTableConfig = omitted.try_into().unwrap();
+        assert_eq!(inner.retention, None);
+
+        let explicit: HistoryLogTableConfig =
+            toml::from_str("table_name = 'query_history'\nretention = 0").unwrap();
+        assert_eq!(explicit.retention, Some(0));
+
+        let inner: InnerHistoryTableConfig = explicit.try_into().unwrap();
+        assert_eq!(inner.retention, Some(0));
+    }
+
+    #[test]
+    fn test_lineage_config_enables_history_backend() {
+        let config: Config = toml::from_str("[lineage]\non = true").unwrap();
+        let inner: InnerConfig = config.try_into().unwrap();
+
+        assert!(inner.lineage.enabled());
+        assert!(!inner.log.history.on);
+        assert!(inner.log.history.enabled());
+        assert!(inner.log.history.tables.is_empty());
+        assert_eq!(inner.log.history.internal_tables.len(), 1);
+        let lineage = &inner.log.history.internal_tables[0];
+        assert_eq!(lineage.table_name, "lineage_history");
+        assert_eq!(lineage.retention, None);
+    }
+
+    #[test]
+    fn test_lineage_config_preserves_disabled_history_tables() {
+        let config: Config = toml::from_str(
+            "[lineage]\non = true\nretention = 24\n\
+             [log.history]\non = false\nlog_only = true\n\
+             [[log.history.tables]]\ntable_name = 'query_history'\nretention = 12",
+        )
+        .unwrap();
+        let inner: InnerConfig = config.try_into().unwrap();
+
+        let lineage = inner
+            .log
+            .history
+            .internal_tables
+            .iter()
+            .find(|table| table.table_name == "lineage_history")
+            .unwrap();
+        assert_eq!(lineage.retention, Some(24));
+        let query = inner
+            .log
+            .history
+            .tables
+            .iter()
+            .find(|table| table.table_name == "query_history")
+            .unwrap();
+        assert_eq!(query.retention, Some(12));
+        assert_eq!(
+            inner
+                .log
+                .history
+                .enabled_tables()
+                .map(|table| table.table_name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["lineage_history"]
+        );
+        assert!(inner.log.history.transforms_enabled());
+        assert_eq!(
+            inner
+                .log
+                .history
+                .transform_tables()
+                .map(|table| table.table_name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["lineage_history"]
+        );
+
+        let outer = inner.into_config();
+        assert!(!outer.log.history.log_history_on);
+        assert!(outer.log.history.log_history_log_only);
+        assert_eq!(outer.log.history.log_history_tables.len(), 1);
+        assert_eq!(
+            outer.log.history.log_history_tables[0].table_name,
+            "query_history"
+        );
     }
 
     #[test]

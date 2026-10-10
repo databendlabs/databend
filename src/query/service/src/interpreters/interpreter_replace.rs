@@ -95,6 +95,7 @@ impl Interpreter for ReplaceInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         if check_deduplicate_label(self.ctx.clone()).await? {
+            self.ctx.attach_query_lineage(None);
             return Ok(PipelineBuildResult::create());
         }
 
@@ -151,6 +152,13 @@ impl ReplaceInterpreter {
             .ctx
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
+
+        self.ctx.update_query_lineage_target_id(
+            &plan.catalog,
+            &plan.database,
+            &plan.table,
+            table.get_table_info().ident.table_id,
+        );
 
         // check mutability
         table.check_mutable()?;

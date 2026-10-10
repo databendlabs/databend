@@ -350,6 +350,7 @@ impl Binder {
             Statement::DropView(stmt) => self.bind_drop_view(stmt).await?,
             Statement::ShowViews(stmt) => self.bind_show_views(bind_context, stmt).await?,
             Statement::DescribeView(stmt) => self.bind_describe_view(stmt).await?,
+            Statement::RefreshLineage(stmt) => self.bind_refresh_lineage(stmt),
 
             // Indexes
             Statement::CreateIndex(stmt) => self.bind_create_index(bind_context, stmt).await?,

@@ -242,7 +242,7 @@ impl Binder {
             enable_schema_evolution,
             path_prefix: None,
             no_file_to_copy: false,
-            from_attachment: false,
+            from_stage_attachment: false,
             stage_table_info: StageTableInfo {
                 schema: required_values_table_schema,
                 files_info,
@@ -419,6 +419,7 @@ impl Binder {
             files_info,
             options,
             write_mode,
+            true,
         )
         .await
     }
@@ -437,6 +438,7 @@ impl Binder {
         files_info: StageFilesInfo,
         copy_into_table_options: CopyIntoTableOptions,
         write_mode: CopyIntoTableMode,
+        from_stage_attachment: bool,
     ) -> Result<Plan> {
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
         let catalog_info = catalog.info();
@@ -468,7 +470,7 @@ impl Binder {
             database_name,
             table_name,
             no_file_to_copy: false,
-            from_attachment: true,
+            from_stage_attachment,
             required_source_schema: Arc::new(DataSchema::from(&required_source_schema)),
             required_values_schema,
             dedup_full_path: false,

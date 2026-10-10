@@ -23,6 +23,7 @@ use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::log_lineage_object_deletion;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextTableAccess;
@@ -103,6 +104,7 @@ impl Interpreter for DropViewInterpreter {
                         .unwrap_or_default(),
                 })
                 .await?;
+            log_lineage_object_deletion(&self.ctx, table.get_id());
         };
 
         Ok(PipelineBuildResult::create())

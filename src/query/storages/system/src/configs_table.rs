@@ -71,6 +71,17 @@ impl SyncSystemTable for ConfigsTable {
             query_config_value,
         );
 
+        let lineage_config = config.lineage;
+        let lineage_config_value = serde_json::to_value(lineage_config)?;
+        ConfigsTable::extract_config(
+            &mut names,
+            &mut values,
+            &mut groups,
+            &mut descs,
+            "lineage".to_string(),
+            lineage_config_value,
+        );
+
         let log_config = config.log;
         let log_config_value = serde_json::to_value(log_config)?;
         ConfigsTable::extract_config(

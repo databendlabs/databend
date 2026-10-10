@@ -1,0 +1,78 @@
+# Object lifecycle: DROP invalidates edges, transient/View DROP removes them, and VACUUM cleans Fuse edges.
+
+statement ok
+DROP DATABASE IF EXISTS lineage_history_lifecycle
+
+statement ok
+CREATE DATABASE lineage_history_lifecycle
+
+statement ok
+CREATE TABLE lineage_history_lifecycle.src(a INT)
+
+# DataMovement column lineage uses stable column ids. The check suite mutates these schemas after
+# history ingestion to verify rename and replacement behavior without emitting another edge.
+statement ok
+CREATE TABLE lineage_history_lifecycle.renamed_column_src(a INT)
+
+statement ok
+INSERT INTO lineage_history_lifecycle.renamed_column_src VALUES (1)
+
+statement ok
+CREATE TABLE lineage_history_lifecycle.renamed_column_dst(a INT)
+
+statement ok
+INSERT INTO lineage_history_lifecycle.renamed_column_dst
+SELECT a FROM lineage_history_lifecycle.renamed_column_src
+
+statement ok
+CREATE TABLE lineage_history_lifecycle.replaced_column_src(a INT, keep INT)
+
+statement ok
+INSERT INTO lineage_history_lifecycle.replaced_column_src VALUES (1, 0)
+
+statement ok
+CREATE TABLE lineage_history_lifecycle.replaced_column_dst(a INT)
+
+statement ok
+INSERT INTO lineage_history_lifecycle.replaced_column_dst
+SELECT a FROM lineage_history_lifecycle.replaced_column_src
+
+# A dropped Fuse edge is physically removed only after VACUUM.
+statement ok
+CREATE TABLE lineage_history_lifecycle.vacuumed_fuse AS
+SELECT a FROM lineage_history_lifecycle.src
+
+statement ok
+DROP TABLE lineage_history_lifecycle.vacuumed_fuse
+
+statement ok
+SET data_retention_time_in_days = 0
+
+statement ok
+VACUUM DROP TABLE FROM lineage_history_lifecycle
+
+statement ok
+UNSET data_retention_time_in_days
+
+# This Fuse table is dropped after VACUUM, so its physical edge remains available to UNDROP.
+statement ok
+CREATE TABLE lineage_history_lifecycle.dropped_fuse AS
+SELECT a FROM lineage_history_lifecycle.src
+
+statement ok
+DROP TABLE lineage_history_lifecycle.dropped_fuse
+
+# Transient tables and Views emit deletion tombstones immediately on DROP.
+statement ok
+CREATE TRANSIENT TABLE lineage_history_lifecycle.dropped_transient AS
+SELECT a FROM lineage_history_lifecycle.src
+
+statement ok
+DROP TABLE lineage_history_lifecycle.dropped_transient
+
+statement ok
+CREATE VIEW lineage_history_lifecycle.dropped_view AS
+SELECT a FROM lineage_history_lifecycle.src
+
+statement ok
+DROP VIEW lineage_history_lifecycle.dropped_view

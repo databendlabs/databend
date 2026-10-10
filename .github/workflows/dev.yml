@@ -9,6 +9,7 @@ on:
     branches:
       - main
       - backport/*
+      - release/v1.2.925
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}

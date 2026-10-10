@@ -45,6 +45,7 @@ use md5::Md5;
 
 use crate::interpreters::common::QueryFinishHooks;
 use crate::interpreters::common::log_query_finished;
+use crate::interpreters::common::log_query_lineage;
 use crate::interpreters::common::log_query_start;
 use crate::interpreters::interpreter_txn_commit::execute_commit_statement;
 use crate::pipelines::PipelineBuildResult;
@@ -199,6 +200,7 @@ async fn build_pipeline_before_execute(
     if build_res.main_pipeline.is_empty() {
         if hooks.log_finished {
             log_query_finished(&ctx, None);
+            log_query_lineage(&ctx);
         }
         return Ok(BuiltPipeline::Finished(Box::pin(DataBlockStream::create(
             None,

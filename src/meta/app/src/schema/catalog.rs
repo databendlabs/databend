@@ -26,7 +26,7 @@ use crate::schema::catalog_id_ident;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub enum CatalogType {
     Default = 1,
     Hive = 2,

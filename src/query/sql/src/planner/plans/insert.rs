@@ -29,6 +29,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::TableInfo;
 use enum_as_inner::EnumAsInner;
 use parking_lot::Mutex;
@@ -89,6 +90,10 @@ pub struct Insert {
     // it should be provided as some `table_info`.
     // otherwise, the table being inserted will be resolved by using `catalog`.`database`.`table`
     pub table_info: Option<TableInfo>,
+    /// Target table id captured for lineage extraction only. Execution must
+    /// continue to resolve ordinary INSERT targets by name.
+    pub lineage_target_table_id: Option<u64>,
+    pub lineage_target_catalog_type: CatalogType,
 }
 
 impl PartialEq for Insert {
@@ -126,6 +131,8 @@ impl Insert {
             overwrite,
             // table_info only used create table as select.
             table_info: _,
+            lineage_target_table_id: _,
+            lineage_target_catalog_type: _,
             source,
         } = self;
 
@@ -214,7 +221,7 @@ pub(crate) fn format_insert_source(
             Plan::CopyIntoTable(copy_plan) => {
                 let CopyIntoTablePlan {
                     no_file_to_copy,
-                    from_attachment,
+                    from_stage_attachment,
                     required_values_schema,
                     required_source_schema,
                     write_mode,
@@ -237,7 +244,7 @@ pub(crate) fn format_insert_source(
                     .join(",");
                 let stage_node = vec![
                     FormatTreeNode::new(format!("no_file_to_copy: {no_file_to_copy}")),
-                    FormatTreeNode::new(format!("from_attachment: {from_attachment}")),
+                    FormatTreeNode::new(format!("from_stage_attachment: {from_stage_attachment}")),
                     FormatTreeNode::new(format!(
                         "required_values_schema: [{required_values_schema}]"
                     )),

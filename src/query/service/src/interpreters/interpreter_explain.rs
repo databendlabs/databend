@@ -237,13 +237,22 @@ impl Interpreter for ExplainInterpreter {
             ExplainKind::Pipeline => {
                 // todo:(JackTan25), we need to make all execute2() just do `build pipeline` work,
                 // don't take real actions. for now we fix #13657 like below.
+                let previous_query_lineage = self.ctx.get_query_lineage();
                 let mut pipeline = match &self.plan {
                     Plan::Query { .. } | Plan::DataMutation { .. } => {
-                        let interpter =
-                            InterpreterFactory::get(self.ctx.clone(), &self.plan).await?;
-                        interpter.execute2().await?
+                        let result = async {
+                            let interpreter =
+                                InterpreterFactory::get(self.ctx.clone(), &self.plan).await?;
+                            interpreter.execute2().await
+                        }
+                        .await;
+                        self.ctx.attach_query_lineage(previous_query_lineage);
+                        result?
                     }
-                    _ => PipelineBuildResult::create(),
+                    _ => {
+                        self.ctx.attach_query_lineage(previous_query_lineage);
+                        PipelineBuildResult::create()
+                    }
                 };
 
                 // The explain pipeline does not require executing on_init and on_finished.

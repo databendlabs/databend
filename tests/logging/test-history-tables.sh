@@ -26,20 +26,25 @@ killall -9 databend-query || true
 killall -9 databend-meta || true
 killall -9 vector || true
 rm -rf ./.databend
+mkdir -p ./.databend/config
 
 echo "Starting Databend Query cluster with 2 nodes enable history tables"
 
 for node in 1 2; do
-    CONFIG_FILE="./scripts/ci/deploy/config/databend-query-node-${node}.toml"
+    SOURCE_CONFIG="./scripts/ci/deploy/config/databend-query-node-${node}.toml"
+    CONFIG_FILE="./.databend/config/databend-query-node-${node}.toml"
 
     echo "Appending history table config to query node-${node}"
+    cp "$SOURCE_CONFIG" "$CONFIG_FILE"
     cat ./tests/logging/history_table/history_table.toml >> "$CONFIG_FILE"
 done
 
 for node in 1 2 3; do
-    CONFIG_FILE="./scripts/ci/deploy/config/databend-meta-node-${node}.toml"
+    SOURCE_CONFIG="./scripts/ci/deploy/config/databend-meta-node-${node}.toml"
+    CONFIG_FILE="./.databend/config/databend-meta-node-${node}.toml"
 
     echo "Appending history table config to meta node-${node}"
+    cp "$SOURCE_CONFIG" "$CONFIG_FILE"
     cat ./tests/logging/history_table/history_table_meta.toml >> "$CONFIG_FILE"
 done
 
@@ -48,33 +53,33 @@ echo 'Start Meta service HA cluster(3 nodes)...'
 
 mkdir -p ./.databend/
 
-nohup ./target/${BUILD_PROFILE}/databend-meta -c scripts/ci/deploy/config/databend-meta-node-1.toml >./.databend/meta-1.out 2>&1 &
+nohup ./target/${BUILD_PROFILE}/databend-meta -c ./.databend/config/databend-meta-node-1.toml >./.databend/meta-1.out 2>&1 &
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9191
 
 sleep 1
 
-nohup ./target/${BUILD_PROFILE}/databend-meta -c scripts/ci/deploy/config/databend-meta-node-2.toml >./.databend/meta-2.out 2>&1 &
+nohup ./target/${BUILD_PROFILE}/databend-meta -c ./.databend/config/databend-meta-node-2.toml >./.databend/meta-2.out 2>&1 &
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 28202
 
 sleep 1
 
-nohup ./target/${BUILD_PROFILE}/databend-meta -c scripts/ci/deploy/config/databend-meta-node-3.toml >./.databend/meta-3.out 2>&1 &
+nohup ./target/${BUILD_PROFILE}/databend-meta -c ./.databend/config/databend-meta-node-3.toml >./.databend/meta-3.out 2>&1 &
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 28302
 
 sleep 1
 
 # Start only 2 query nodes
 echo 'Start databend-query node-1'
-nohup env RUST_BACKTRACE=1 target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml --internal-enable-sandbox-tenant >./.databend/query-1.out 2>&1 &
+nohup env RUST_BACKTRACE=1 target/${BUILD_PROFILE}/databend-query -c ./.databend/config/databend-query-node-1.toml --internal-enable-sandbox-tenant >./.databend/query-1.out 2>&1 &
 
 echo "Waiting on node-1..."
-python3 scripts/ci/wait_tcp.py --timeout 30 --port 9091
+python3 scripts/ci/wait_tcp.py --timeout 50 --port 9091
 
 echo 'Start databend-query node-2'
-env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-2.toml --internal-enable-sandbox-tenant >./.databend/query-2.out 2>&1 &
+env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c ./.databend/config/databend-query-node-2.toml --internal-enable-sandbox-tenant >./.databend/query-2.out 2>&1 &
 
 echo "Waiting on node-2..."
-python3 scripts/ci/wait_tcp.py --timeout 30 --port 9092
+python3 scripts/ci/wait_tcp.py --timeout 50 --port 9092
 
 echo "Started 2-node cluster with history tables enabled..."
 
@@ -126,12 +131,14 @@ fi
 
 echo "Add a node with external history table enabled"
 
-CONFIG_FILE="./scripts/ci/deploy/config/databend-query-node-3.toml"
+SOURCE_CONFIG="./scripts/ci/deploy/config/databend-query-node-3.toml"
+CONFIG_FILE="./.databend/config/databend-query-node-3.toml"
 echo "Appending external history table config to node-3"
+cp "$SOURCE_CONFIG" "$CONFIG_FILE"
 cat ./tests/logging/history_table/history_table_external.toml >> "$CONFIG_FILE"
 
 echo 'Start databend-query node-3'
-env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-3.toml --internal-enable-sandbox-tenant >./.databend/query-3.out 2>&1 &
+env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c "$CONFIG_FILE" --internal-enable-sandbox-tenant >./.databend/query-3.out 2>&1 &
 
 echo "Waiting on node-3..."
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9093

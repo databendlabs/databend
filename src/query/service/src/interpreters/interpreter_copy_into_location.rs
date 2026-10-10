@@ -128,6 +128,7 @@ impl Interpreter for CopyIntoLocationInterpreter {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_location_interpreter_execute_v2");
 
         if check_deduplicate_label(self.ctx.clone()).await? {
+            self.ctx.attach_query_lineage(None);
             return Ok(PipelineBuildResult::create());
         }
 

@@ -1,0 +1,21 @@
+query TTTT
+SELECT source_object_database, source_object_name,
+       target_object_database, target_object_name
+FROM get_lineage('lineage_history_legacy.legacy_view', 'VIEW', 'UPSTREAM', 1)
+----
+lineage_history_legacy src lineage_history_legacy legacy_view
+
+query BBB
+SELECT query_info['query_text']::STRING LIKE
+           'CREATE VIEW `default`.`lineage_history_legacy`.`legacy_view` AS%',
+       query_info['backfilled_at']::STRING LIKE '%Z',
+       is_null_value(query_info['query_id'])
+FROM system_history.lineage_history
+WHERE target_database = 'lineage_history_legacy'
+  AND target_name = 'legacy_view'
+  AND lineage_kind = 'CREATE_VIEW'
+----
+1 1 1
+
+statement ok
+DROP DATABASE lineage_history_legacy

@@ -419,7 +419,7 @@ pub fn init_logging(
                 .append(structlog_log_file)
         });
     }
-    if cfg.history.on {
+    if cfg.history.enabled() {
         let (remote_log, flush_guard) =
             RemoteLog::new(&labels, cfg).expect("initialize remote logger");
 
@@ -428,7 +428,7 @@ pub fn init_logging(
 
         let mut table_to_target = table_to_target();
 
-        for table_cfg in cfg.history.tables.iter() {
+        for table_cfg in cfg.history.enabled_tables() {
             if let Some(target) = table_to_target.remove(&table_cfg.table_name) {
                 filter_builder = filter_builder.filter(Some(&target), LevelFilter::Trace);
             }

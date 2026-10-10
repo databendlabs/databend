@@ -964,6 +964,7 @@ impl Interpreter for CopyIntoTableInterpreter {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_table_interpreter_execute_v2");
 
         if check_deduplicate_label(self.ctx.clone()).await? {
+            self.ctx.attach_query_lineage(None);
             return Ok(PipelineBuildResult::create());
         }
 
@@ -977,9 +978,17 @@ impl Interpreter for CopyIntoTableInterpreter {
             )
             .await?;
 
+        self.ctx.update_query_lineage_target_id(
+            plan.catalog_info.catalog_name(),
+            &plan.database_name,
+            &plan.table_name,
+            to_table.get_table_info().ident.table_id,
+        );
+
         to_table.check_mutable()?;
 
         if self.plan.no_file_to_copy {
+            self.ctx.attach_query_lineage(None);
             info!("no file to copy");
             return self.on_no_files_to_copy().await;
         }

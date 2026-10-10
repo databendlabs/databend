@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_pipeline::core::ExecutionInfo;
 
 use crate::interpreters::common::log_query_finished;
+use crate::interpreters::common::log_query_lineage;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
@@ -102,6 +103,9 @@ impl QueryFinishHooks {
             };
             if self.log_finished {
                 log_query_finished(&ctx, info.res.clone().err());
+                if info.res.is_ok() {
+                    log_query_lineage(&ctx);
+                }
             }
             info.res.clone().and(hooks_res)
         }

@@ -1605,6 +1605,17 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let refresh_lineage = map(
+        rule! {
+            REFRESH ~ LINEAGE ~ ^FOR ~ ^ALL ~ ^VIEWS ~ ( DRY ~ ^RUN )?
+        },
+        |(_, _, _, _, _, dry_run)| {
+            Statement::RefreshLineage(RefreshLineageStmt {
+                dry_run: dry_run.is_some(),
+            })
+        },
+    );
+
     let create_index = map_res(
         rule! {
             CREATE
@@ -2979,7 +2990,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ATTACH => rule!(#attach_table : "`ATTACH TABLE [<database>.]<table> <uri>`"
             ).parse(i),
         REFRESH => rule!(
-            #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
+            #refresh_lineage: "`REFRESH LINEAGE FOR ALL VIEWS [DRY RUN]`"
+            | #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
             | #refresh_table_index: "`REFRESH <index_type> INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
         ).parse(i),

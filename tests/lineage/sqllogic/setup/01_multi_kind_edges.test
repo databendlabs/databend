@@ -1,0 +1,38 @@
+# Multi-kind edges: the same source -> target object pair is recorded once per (lineage_kind,
+# column mapping). CTAS and DML keep distinct records, repeated DML with the same column mapping
+# is deduplicated, and a DML with a new column mapping adds another record. GET_LINEAGE later
+# collapses all of them back into a single object edge that reflects the newest statement.
+
+statement ok
+DROP DATABASE IF EXISTS lineage_history_multi_kind
+
+statement ok
+CREATE DATABASE lineage_history_multi_kind
+
+statement ok
+CREATE TABLE lineage_history_multi_kind.src(a INT, b INT)
+
+statement ok
+INSERT INTO lineage_history_multi_kind.src VALUES (1, 2)
+
+# CTAS: kind = CTAS, column mapping {a -> x, b -> y}.
+statement ok
+CREATE TABLE lineage_history_multi_kind.dst AS
+SELECT a AS x, b AS y FROM lineage_history_multi_kind.src
+
+# DML: kind = DML, column mapping {b -> x, a -> y}. Distinct kind and mapping from the CTAS edge.
+statement ok
+INSERT INTO lineage_history_multi_kind.dst(x, y)
+SELECT b, a FROM lineage_history_multi_kind.src
+
+# DML repeated with the same column mapping {b -> x, a -> y}. Same merge key as the previous DML,
+# so it must update that record in place rather than adding a new one.
+statement ok
+INSERT INTO lineage_history_multi_kind.dst(x, y)
+SELECT b, a FROM lineage_history_multi_kind.src
+
+# DML with a new column mapping {a -> x, b -> y}. The mapping matches the CTAS edge, but the kind
+# differs, so this is still a distinct DML record.
+statement ok
+INSERT INTO lineage_history_multi_kind.dst(x, y)
+SELECT a, b FROM lineage_history_multi_kind.src

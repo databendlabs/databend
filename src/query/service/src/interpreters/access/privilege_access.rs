@@ -1805,6 +1805,10 @@ impl AccessChecker for PrivilegeAccess {
             Plan::DescribeView(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.view_name, UserPrivilegeType::Select, false, false).await?
             }
+            Plan::RefreshLineage(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    .await?
+            }
             Plan::CreateStream(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Create, false).await?
             }

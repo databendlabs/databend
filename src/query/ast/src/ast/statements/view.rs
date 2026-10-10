@@ -37,6 +37,21 @@ pub struct CreateViewStmt {
     pub query: Box<Query>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
+pub struct RefreshLineageStmt {
+    pub dry_run: bool,
+}
+
+impl Display for RefreshLineageStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "REFRESH LINEAGE FOR ALL VIEWS")?;
+        if self.dry_run {
+            write!(f, " DRY RUN")?;
+        }
+        Ok(())
+    }
+}
+
 impl Display for CreateViewStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE ")?;
