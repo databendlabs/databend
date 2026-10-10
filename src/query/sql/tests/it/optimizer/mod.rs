@@ -24,6 +24,7 @@ mod collect_statistics;
 mod column_scope;
 mod decorrelate_correlated_aliases;
 mod distributed_join;
+mod dphyp;
 mod eager_aggregation;
 mod eliminate_eval_scalar;
 mod hierarchical_grouping_sets;

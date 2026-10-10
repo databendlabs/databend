@@ -1,0 +1,483 @@
+=== filter_scope_exceeds_used_columns ===
+description: Use the original a/b scope to find the single-table provider and place the predicate directly on a.
+sql: SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k WHERE a.v > 10) t JOIN c ON t.k = c.k
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+Join(Inner)
+├── build keys: [b.k (#2)]
+├── probe keys: [a.k (#0)]
+├── other filters: []
+├── Scan
+│   ├── table: default.b (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Join(Inner)
+    ├── build keys: [c.k (#4)]
+    ├── probe keys: [a.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.c (#2)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Filter
+        ├── filters: [gt(a.v (#1), 10)]
+        └── Scan
+            ├── table: default.a (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== selective_filter_keeps_covered_subtree ===
+description: Place the single-table filter before evaluating candidates so its selectivity participates in join-order choice.
+sql: SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k WHERE a.v = 1) t JOIN c ON t.k = c.k
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+Join(Inner)
+├── build keys: [a.k (#0)]
+├── probe keys: [b.k (#2)]
+├── other filters: []
+├── Join(Inner)
+│   ├── build keys: [c.k (#4)]
+│   ├── probe keys: [a.k (#0)]
+│   ├── other filters: []
+│   ├── Scan
+│   │   ├── table: default.c (#2)
+│   │   ├── filters: []
+│   │   ├── order by: []
+│   │   └── limit: NONE
+│   └── Filter
+│       ├── filters: [eq(a.v (#1), 1)]
+│       └── Scan
+│           ├── table: default.a (#0)
+│           ├── filters: []
+│           ├── order by: []
+│           └── limit: NONE
+└── Scan
+    ├── table: default.b (#1)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+
+=== same_scalar_different_scopes ===
+description: A collected filter and an unchanged root filter can have the same scalar; preserve both placement contexts.
+sql: SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k WHERE a.k > 10) t JOIN c ON t.k = c.k WHERE t.k > 10
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+Filter
+├── filters: [gt(a.k (#0), 10)]
+└── Join(Inner)
+    ├── build keys: [b.k (#2)]
+    ├── probe keys: [a.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.b (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Join(Inner)
+        ├── build keys: [c.k (#4)]
+        ├── probe keys: [a.k (#0)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.c (#2)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Filter
+            ├── filters: [gt(a.k (#0), 10)]
+            └── Scan
+                ├── table: default.a (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== two_scoped_filters ===
+description: Place the two-table residual where both inputs are available and preserve the unchanged root filter.
+sql: SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k WHERE a.v + b.v > 10) t JOIN c ON t.k = c.k WHERE c.v > 1
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+Filter
+├── filters: [gt(c.v (#5), 1)]
+└── Join(Inner)
+    ├── build keys: [b.k (#2)]
+    ├── probe keys: [a.k (#0)]
+    ├── other filters: [gt(plus(a.v (#1), b.v (#3)), 10)]
+    ├── Scan
+    │   ├── table: default.b (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Join(Inner)
+        ├── build keys: [c.k (#4)]
+        ├── probe keys: [a.k (#0)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.c (#2)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.a (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== inner_join_on_residual ===
+description: Place a non-equality ON condition where its actual inputs first become available within the original scope.
+sql: SELECT a.k FROM a JOIN b ON a.k = b.k AND a.v > b.v JOIN c ON b.k = c.k
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+Join(Inner)
+├── build keys: [b.k (#2)]
+├── probe keys: [a.k (#0)]
+├── other filters: [gt(a.v (#1), b.v (#3))]
+├── Join(Inner)
+│   ├── build keys: [c.k (#4)]
+│   ├── probe keys: [b.k (#2)]
+│   ├── other filters: []
+│   ├── Scan
+│   │   ├── table: default.c (#2)
+│   │   ├── filters: []
+│   │   ├── order by: []
+│   │   └── limit: NONE
+│   └── Scan
+│       ├── table: default.b (#1)
+│       ├── filters: []
+│       ├── order by: []
+│       └── limit: NONE
+└── Scan
+    ├── table: default.a (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+
+=== complex_other_without_rewrite ===
+description: DPhyp directly places an existing complex Other filter as a residual at the first join providing both inputs.
+sql: SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k WHERE a.v + b.v > 50) t JOIN c ON t.k = c.k
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+Join(Inner)
+├── build keys: [b.k (#2)]
+├── probe keys: [a.k (#0)]
+├── other filters: [gt(plus(a.v (#1), b.v (#3)), 50)]
+├── Scan
+│   ├── table: default.b (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Join(Inner)
+    ├── build keys: [c.k (#4)]
+    ├── probe keys: [a.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.c (#2)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.a (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== cross_side_or_without_rewrite ===
+description: DPhyp places an existing OR as one intact residual, without OR extraction or expression splitting.
+sql: SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k WHERE (a.v = 1 AND b.v > 10) OR (a.v = 2 AND b.v < 20)) t JOIN c ON t.k = c.k
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+Join(Inner)
+├── build keys: [b.k (#2)]
+├── probe keys: [a.k (#0)]
+├── other filters: [or(and(eq(a.v (#1), 1), gt(b.v (#3), 10)), and(eq(a.v (#1), 2), lt(b.v (#3), 20)))]
+├── Scan
+│   ├── table: default.b (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Join(Inner)
+    ├── build keys: [c.k (#4)]
+    ├── probe keys: [a.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.c (#2)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.a (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== split_filter_by_required_relations ===
+description: One original Filter contains predicates needing different inputs; place them independently without generating new predicates.
+sql: SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k WHERE a.v = 1 AND b.v > 10 AND a.v + b.v > 20) t JOIN c ON t.k = c.k
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+Join(Inner)
+├── build keys: [a.k (#0)]
+├── probe keys: [b.k (#2)]
+├── other filters: [gt(plus(a.v (#1), b.v (#3)), 20)]
+├── Join(Inner)
+│   ├── build keys: [c.k (#4)]
+│   ├── probe keys: [a.k (#0)]
+│   ├── other filters: []
+│   ├── Scan
+│   │   ├── table: default.c (#2)
+│   │   ├── filters: []
+│   │   ├── order by: []
+│   │   └── limit: NONE
+│   └── Filter
+│       ├── filters: [eq(a.v (#1), 1)]
+│       └── Scan
+│           ├── table: default.a (#0)
+│           ├── filters: []
+│           ├── order by: []
+│           └── limit: NONE
+└── Filter
+    ├── filters: [gt(b.v (#3), 10)]
+    └── Scan
+        ├── table: default.b (#1)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== residual_collision_without_pull_up ===
+description: Bypass pull-up to verify that identical ON residuals from different scopes collide during DPhyp candidate placement.
+sql: SELECT a.k FROM a JOIN b ON a.k = b.k AND a.v > b.v JOIN c ON b.k = c.k AND a.v > b.v
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+Join(Inner)
+├── build keys: [b.k (#2)]
+├── probe keys: [a.k (#0)]
+├── other filters: [gt(a.v (#1), b.v (#3))]
+├── Join(Inner)
+│   ├── build keys: [c.k (#4)]
+│   ├── probe keys: [b.k (#2)]
+│   ├── other filters: []
+│   ├── Scan
+│   │   ├── table: default.c (#2)
+│   │   ├── filters: []
+│   │   ├── order by: []
+│   │   └── limit: NONE
+│   └── Scan
+│       ├── table: default.b (#1)
+│       ├── filters: []
+│       ├── order by: []
+│       └── limit: NONE
+└── Scan
+    ├── table: default.a (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+
+=== single_side_on_residual ===
+description: A deterministic single-side inner ON residual becomes a base filter instead of staying on a larger join.
+sql: SELECT a.k FROM a JOIN b ON a.k = b.k AND a.v > 10 JOIN c ON b.k = c.k
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+Join(Inner)
+├── build keys: [b.k (#2)]
+├── probe keys: [a.k (#0)]
+├── other filters: []
+├── Join(Inner)
+│   ├── build keys: [c.k (#4)]
+│   ├── probe keys: [b.k (#2)]
+│   ├── other filters: []
+│   ├── Scan
+│   │   ├── table: default.c (#2)
+│   │   ├── filters: []
+│   │   ├── order by: []
+│   │   └── limit: NONE
+│   └── Scan
+│       ├── table: default.b (#1)
+│       ├── filters: []
+│       ├── order by: []
+│       └── limit: NONE
+└── Filter
+    ├── filters: [gt(a.v (#1), 10)]
+    └── Scan
+        ├── table: default.a (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== constant_keeps_original_scope ===
+description: A no-column predicate retains the collected a/b scope and is neither copied to both inputs nor inferred.
+sql: SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k WHERE false) t JOIN c ON t.k = c.k
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+Join(Inner)
+├── build keys: [a.k (#0)]
+├── probe keys: [c.k (#4)]
+├── other filters: []
+├── Filter
+│   ├── filters: [false]
+│   └── Join(Inner)
+│       ├── build keys: [b.k (#2)]
+│       ├── probe keys: [a.k (#0)]
+│       ├── other filters: []
+│       ├── Scan
+│       │   ├── table: default.b (#1)
+│       │   ├── filters: []
+│       │   ├── order by: []
+│       │   └── limit: NONE
+│       └── Scan
+│           ├── table: default.a (#0)
+│           ├── filters: []
+│           ├── order by: []
+│           └── limit: NONE
+└── Scan
+    ├── table: default.c (#2)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+
+=== volatile_keeps_original_scope ===
+description: A volatile filter with a referenced column must not be narrowed to that column's base relation.
+sql: SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k WHERE rand() + a.v > 10) t JOIN c ON t.k = c.k
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+Filter
+├── filters: [gt(plus(rand(), a.v (#1)), 10)]
+└── Join(Inner)
+    ├── build keys: [b.k (#2)]
+    ├── probe keys: [a.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.b (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Join(Inner)
+        ├── build keys: [c.k (#4)]
+        ├── probe keys: [a.k (#0)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.c (#2)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.a (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== outer_join_on_residual ===
+description: An outer join ON residual must remain in the opaque outer join, not become a WHERE filter.
+sql: SELECT a.k FROM a JOIN b ON a.k = b.k LEFT JOIN c ON b.k = c.k AND c.v > a.v
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+Join(Left)
+├── build keys: [k (#6)]
+├── probe keys: [b.k (#2)]
+├── other filters: [gt(v (#7), a.v (#1))]
+├── EvalScalar
+│   ├── scalars: [CAST(c.k (#4) AS Int64 NULL) AS (#6), CAST(c.v (#5) AS Int64 NULL) AS (#7)]
+│   └── Scan
+│       ├── table: default.c (#2)
+│       ├── filters: []
+│       ├── order by: []
+│       └── limit: NONE
+└── Join(Inner)
+    ├── build keys: [b.k (#2)]
+    ├── probe keys: [a.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.b (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.a (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== filter_above_outer_join ===
+description: Retain a filter above an opaque outer-join relation when surrounding inner joins reorder.
+sql: SELECT t.k FROM (SELECT a.k FROM a LEFT JOIN b ON a.k = b.k AND b.v > 10 WHERE b.v IS NULL) t JOIN c ON t.k = c.k
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+Join(Inner)
+├── build keys: [a.k (#0)]
+├── probe keys: [c.k (#6)]
+├── other filters: []
+├── Filter
+│   ├── filters: [not(is_not_null(v (#5)))]
+│   └── Join(Left)
+│       ├── build keys: [k (#4)]
+│       ├── probe keys: [a.k (#0)]
+│       ├── other filters: []
+│       ├── Filter
+│       │   ├── filters: [gt(v (#5), 10)]
+│       │   └── EvalScalar
+│       │       ├── scalars: [CAST(b.k (#2) AS Int64 NULL) AS (#4), CAST(b.v (#3) AS Int64 NULL) AS (#5)]
+│       │       └── Scan
+│       │           ├── table: default.b (#1)
+│       │           ├── filters: []
+│       │           ├── order by: []
+│       │           └── limit: NONE
+│       └── Scan
+│           ├── table: default.a (#0)
+│           ├── filters: []
+│           ├── order by: []
+│           └── limit: NONE
+└── Scan
+    ├── table: default.c (#2)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+
+=== filter_above_limit ===
+description: Keep the filter above the LIMIT boundary; do not reconstruct it below the limit.
+sql: SELECT t.k FROM (SELECT k, v FROM a LIMIT 10) t JOIN b ON t.k = b.k JOIN c ON b.k = c.k WHERE t.v > 1
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+Filter
+├── filters: [gt(a.v (#1), 1)]
+└── Join(Inner)
+    ├── build keys: [a.k (#0)]
+    ├── probe keys: [b.k (#2)]
+    ├── other filters: []
+    ├── Limit
+    │   ├── limit: [10]
+    │   ├── offset: [0]
+    │   └── Scan
+    │       ├── table: default.a (#0)
+    │       ├── filters: []
+    │       ├── order by: []
+    │       └── limit: NONE
+    └── Join(Inner)
+        ├── build keys: [c.k (#4)]
+        ├── probe keys: [b.k (#2)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.c (#2)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.b (#1)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+

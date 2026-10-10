@@ -27,6 +27,7 @@ use super::algorithm::JoinEdgeRef;
 use super::algorithm::JoinNode;
 use super::algorithm::JoinOrderModel;
 use crate::IndexType;
+use crate::binder::JoinPredicate;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::RelExpr;
@@ -36,9 +37,8 @@ use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::optimizer::ir::VisitAction;
-use crate::optimizer::optimizers::rule::RuleFactory;
-use crate::optimizer::optimizers::rule::RuleID;
-use crate::optimizer::optimizers::rule::TransformResult;
+use crate::optimizer::optimizers::operator::JoinCondition;
+use crate::optimizer::optimizers::operator::JoinFilters;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
@@ -53,25 +53,159 @@ pub struct DPhpyOptimizer {
     join_relations: Vec<JoinRelation>,
     // base table index -> index of join_relations
     table_index_map: HashMap<IndexType, RelationId>,
-    // non-equi conditions
-    filters: HashSet<Filter>,
+    // Detached filters retain their original input relation scope.
+    filters: Vec<PositionedFilter>,
+}
+
+struct PositionedFilter {
+    filter: Filter,
+    // Original input scope limits which base relations may supply columns.
+    // Opaque relations cannot be traversed by predicate placement.
+    relations: HashSet<RelationId>,
+    // Preserve ON residuals as join conditions, not standalone filters.
+    is_join_condition: bool,
+}
+
+struct PlacedPredicate {
+    predicate: crate::ScalarExpr,
+    relations: HashSet<RelationId>,
+    placement: PredicatePlacement,
+}
+
+impl PlacedPredicate {
+    fn applies_at(
+        &self,
+        relations: &HashSet<RelationId>,
+        children: &[&HashSet<RelationId>],
+    ) -> bool {
+        self.relations.is_subset(relations)
+            && !children.iter().any(|child| self.relations.is_subset(child))
+    }
+
+    fn append_filter(&self, residual: &mut Vec<crate::ScalarExpr>) {
+        // Scoped occurrences may represent independent volatile calls.
+        if matches!(self.placement, PredicatePlacement::ScopedFilter)
+            || !residual.contains(&self.predicate)
+        {
+            residual.push(self.predicate.clone());
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum PredicatePlacement {
+    // Constants, volatile expressions and unresolved references keep their scope.
+    ScopedFilter,
+    // Deterministic filters can be classified against the new join sides.
+    MovableFilter,
+    // Original ON residuals remain join conditions when placed on a join.
+    JoinCondition,
+}
+
+#[derive(Clone)]
+struct DPhypPlan {
+    expr: SExpr,
+    relations: HashSet<RelationId>,
 }
 
 struct DPhypJoinOrderModel<'a> {
     join_relations: &'a [JoinRelation],
     join_conditions: &'a [JoinEquiCondition],
+    filters: &'a [PlacedPredicate],
     stat_context: &'a StatContext,
 }
 
 impl DPhypJoinOrderModel<'_> {
+    /// A base relation is opaque: all applicable predicates become Filters
+    /// above it, even if its root happens to be a Join.
+    fn attach_base_filters(&self, expr: SExpr, relations: &HashSet<RelationId>) -> SExpr {
+        let mut residual = vec![];
+        for predicate in self.filters.iter().filter(|p| p.applies_at(relations, &[])) {
+            predicate.append_filter(&mut residual);
+        }
+        JoinFilters::wrap(expr, residual)
+    }
+
+    /// Place existing predicates on a join candidate without inference.
+    fn attach_join_filters(
+        &self,
+        mut expr: SExpr,
+        relations: &HashSet<RelationId>,
+        children: &[&HashSet<RelationId>; 2],
+    ) -> Result<SExpr> {
+        let predicates = self
+            .filters
+            .iter()
+            .filter(|p| p.applies_at(relations, children));
+        let RelOperator::Join(join) = expr.plan() else {
+            unreachable!("binary DPhyp candidate must be a Join")
+        };
+        let mut updated_join = None;
+        let mut properties = None;
+        let mut residual = vec![];
+        for positioned in predicates {
+            let predicate = &positioned.predicate;
+            if matches!(positioned.placement, PredicatePlacement::ScopedFilter) {
+                positioned.append_filter(&mut residual);
+                continue;
+            }
+            if properties.is_none() {
+                let rel_expr = RelExpr::with_s_expr(&expr);
+                properties = Some((
+                    rel_expr.derive_relational_prop_child(0)?,
+                    rel_expr.derive_relational_prop_child(1)?,
+                ));
+            }
+            let (left_prop, right_prop) = properties.as_ref().unwrap();
+            let classified = JoinPredicate::new(predicate, left_prop, right_prop);
+            let condition = match &classified {
+                JoinPredicate::Both {
+                    left,
+                    right,
+                    is_equal_op: true,
+                } if predicate.is_deterministic() => JoinCondition::Equi {
+                    left,
+                    right,
+                    is_null_equal: false,
+                },
+                JoinPredicate::Both { .. } => JoinCondition::NonEqui(predicate),
+                // prepare_predicates already proved that a movable predicate
+                // is deterministic and supplied entirely by these relations.
+                // Other need not be separable into left/right operands to be
+                // evaluated as a residual on this inner/cross join.
+                JoinPredicate::Other(_)
+                    if matches!(positioned.placement, PredicatePlacement::MovableFilter) =>
+                {
+                    JoinCondition::NonEqui(predicate)
+                }
+                _ if matches!(positioned.placement, PredicatePlacement::JoinCondition) => {
+                    JoinCondition::NonEqui(predicate)
+                }
+                _ => {
+                    positioned.append_filter(&mut residual);
+                    continue;
+                }
+            };
+            let join = updated_join.get_or_insert_with(|| join.clone());
+            condition.insert_into(join);
+            if join.join_type == JoinType::Cross {
+                join.join_type = JoinType::Inner;
+            }
+        }
+        if let Some(join) = updated_join {
+            expr = expr.replace_plan(RelOperator::Join(join));
+        }
+        Ok(JoinFilters::wrap(expr, residual))
+    }
+
     fn join_s_expr(
         &self,
-        left: &JoinNode<SExpr>,
-        right: &JoinNode<SExpr>,
+        left: &JoinNode<DPhypPlan>,
+        right: &JoinNode<DPhypPlan>,
         edge_refs: &[JoinEdgeRef],
     ) -> SExpr {
-        let left_expr = left.state().clone();
-        let right_expr = right.state().clone();
+        let left_expr = left.state().expr.clone();
+        let right_expr = right.state().expr.clone();
         let mut conditions = Vec::with_capacity(edge_refs.len());
 
         for edge_ref in edge_refs {
@@ -111,13 +245,21 @@ impl DPhypJoinOrderModel<'_> {
 }
 
 impl JoinOrderModel for DPhypJoinOrderModel<'_> {
-    type NodeState = SExpr;
+    type NodeState = DPhypPlan;
 
     fn base_node(&self, relation: RelationId) -> Result<(f64, Self::NodeState)> {
-        Ok((
-            self.join_relations[relation].cardinality(self.stat_context)?,
-            self.join_relations[relation].s_expr(),
-        ))
+        let relations = HashSet::from([relation]);
+        // Never push into an opaque base's outer join, projection or LIMIT.
+        let base = self.join_relations[relation].s_expr();
+        let expr = self.attach_base_filters(base.clone(), &relations);
+        let cardinality = if expr == base {
+            self.join_relations[relation].cardinality(self.stat_context)?
+        } else {
+            RelExpr::with_s_expr(&expr)
+                .derive_cardinality(self.stat_context)?
+                .cardinality
+        };
+        Ok((cardinality, DPhypPlan { expr, relations }))
     }
 
     fn join_node(
@@ -126,11 +268,21 @@ impl JoinOrderModel for DPhypJoinOrderModel<'_> {
         right: &JoinNode<Self::NodeState>,
         edge_refs: &[JoinEdgeRef],
     ) -> Result<(f64, Self::NodeState)> {
-        let s_expr = self.join_s_expr(left, right, edge_refs);
-        let cardinality = RelExpr::with_s_expr(&s_expr)
-            .derive_cardinality(self.stat_context)
-            .map(|stat| stat.cardinality)?;
-        Ok((cardinality, s_expr))
+        let relations = left
+            .state()
+            .relations
+            .union(&right.state().relations)
+            .copied()
+            .collect();
+        let expr =
+            self.attach_join_filters(self.join_s_expr(left, right, edge_refs), &relations, &[
+                &left.state().relations,
+                &right.state().relations,
+            ])?;
+        let cardinality = RelExpr::with_s_expr(&expr)
+            .derive_cardinality(self.stat_context)?
+            .cardinality;
+        Ok((cardinality, DPhypPlan { expr, relations }))
     }
 
     fn join_cost(
@@ -154,7 +306,7 @@ impl DPhpyOptimizer {
             opt_ctx,
             join_relations: vec![],
             table_index_map: Default::default(),
-            filters: HashSet::new(),
+            filters: vec![],
         }
     }
 
@@ -225,14 +377,7 @@ impl DPhpyOptimizer {
         s_expr: &SExpr,
         join_relation: Option<&SExpr>,
     ) -> Result<(Arc<SExpr>, bool)> {
-        let join_relation = if let Some(relation) = join_relation {
-            // Check if relation contains filter, if exists, check if the filter in `filters`
-            // If exists, remove it from `filters`
-            self.check_filter(relation)?;
-            JoinRelation::new(relation)
-        } else {
-            JoinRelation::new(s_expr)
-        };
+        let join_relation = JoinRelation::new(join_relation.unwrap_or(s_expr));
 
         if let RelOperator::Scan(op) = s_expr.plan() {
             self.table_index_map
@@ -270,11 +415,10 @@ impl DPhpyOptimizer {
             _ => unreachable!(),
         };
 
-        // Skip if build side cache info is present
-        if op.build_side_cache_info.is_some() {
-            return Ok((Arc::new(s_expr.clone()), true));
-        }
-        if op.join_type.is_any_join() {
+        // Preserve joins that cannot participate in this reorder region.
+        if op.build_side_cache_info.is_some() || op.join_type.is_any_join() {
+            self.collect_table_indexes(s_expr)?;
+            self.join_relations.push(JoinRelation::new(s_expr));
             return Ok((Arc::new(s_expr.clone()), true));
         }
 
@@ -297,16 +441,6 @@ impl DPhpyOptimizer {
                 is_inner_join = false;
                 break;
             }
-
-            join_conditions.push(condition.clone());
-        }
-
-        // Add non-equi conditions to filters
-        if !op.non_equi_conditions.is_empty() {
-            let filter = Filter {
-                predicates: op.non_equi_conditions.clone(),
-            };
-            self.filters.insert(filter);
         }
 
         if !is_inner_join {
@@ -315,6 +449,9 @@ impl DPhpyOptimizer {
             self.join_relations.push(JoinRelation::new(&new_s_expr));
             return Ok((Arc::new(new_s_expr), true));
         }
+
+        join_conditions.extend(op.equi_conditions.iter().cloned());
+        let relation_start = self.join_relations.len();
 
         // Process left and right children
         let left_res = self
@@ -337,6 +474,15 @@ impl DPhpyOptimizer {
             )
             .await?;
 
+        if !op.non_equi_conditions.is_empty() {
+            self.filters.push(PositionedFilter {
+                filter: Filter {
+                    predicates: op.non_equi_conditions.clone(),
+                },
+                relations: (relation_start..self.join_relations.len()).collect(),
+                is_join_condition: true,
+            });
+        }
         let new_s_expr = Arc::new(s_expr.replace_children([left_res.0, right_res.0]));
         Ok((new_s_expr, left_res.1 && right_res.1))
     }
@@ -540,14 +686,7 @@ impl DPhpyOptimizer {
             _ => unreachable!(),
         };
 
-        let join_relation = if let Some(relation) = join_relation {
-            // Check if relation contains filter, if exists, check if the filter in `filters`
-            // If exists, remove it from `filters`
-            self.check_filter(relation)?;
-            JoinRelation::new(relation)
-        } else {
-            JoinRelation::new(s_expr)
-        };
+        let join_relation = JoinRelation::new(join_relation.unwrap_or(s_expr));
 
         // Map table indexes before adding to join_relations
         self.collect_table_indexes(&cte_consumer.def)?;
@@ -595,13 +734,7 @@ impl DPhpyOptimizer {
         join_child: bool,
         join_relation: Option<&SExpr>,
     ) -> Result<(Arc<SExpr>, bool)> {
-        // If plan is filter, save it
-        if let RelOperator::Filter(op) = s_expr.plan.as_ref() {
-            if join_child {
-                self.filters.insert(op.clone());
-            }
-        }
-
+        let relation_start = self.join_relations.len();
         let (child, optimized) = if join_child {
             self.get_base_relations(
                 s_expr.unary_child(),
@@ -616,6 +749,23 @@ impl DPhpyOptimizer {
                 .await?
         };
 
+        if join_child {
+            if let RelOperator::Filter(filter) = s_expr.plan() {
+                let relations = &mut self.join_relations[relation_start..];
+                if relations.len() == 1 {
+                    // Restore this occurrence above the optimized child, not
+                    // by scalar equality: equal filters at different positions
+                    // must not cause one occurrence to remove another.
+                    relations[0] = JoinRelation::new(&s_expr.replace_children([child.clone()]));
+                } else {
+                    self.filters.push(PositionedFilter {
+                        filter: filter.clone(),
+                        relations: (relation_start..self.join_relations.len()).collect(),
+                        is_join_condition: false,
+                    });
+                }
+            }
+        }
         Ok((s_expr.replace_children([child]).into(), optimized))
     }
 
@@ -636,7 +786,7 @@ impl DPhpyOptimizer {
         join_relation: Option<&SExpr>,
         is_subquery: bool,
     ) -> Result<(Arc<SExpr>, bool)> {
-        if is_subquery {
+        if is_subquery || (join_child && Self::is_subquery_operator(s_expr.plan())) {
             return self.process_subquery(s_expr).await;
         }
 
@@ -711,9 +861,11 @@ impl DPhpyOptimizer {
             return Ok(Arc::unwrap_or_clone(s_expr));
         }
 
+        let placed_predicates = self.prepare_predicates()?;
         let model = DPhypJoinOrderModel {
             join_relations: &self.join_relations,
             join_conditions: &join_conditions,
+            filters: &placed_predicates,
             stat_context: self.opt_ctx.get_stat_context(),
         };
         let mut hyper_dp = HyperDp::new(self.join_relations.len(), &model);
@@ -724,8 +876,7 @@ impl DPhpyOptimizer {
         }
 
         if let Some(join_expr) = hyper_dp.find_best_order()? {
-            let join_expr = self.apply_filters(&join_expr)?;
-            let new_s_expr = Self::replace_join_expr(&join_expr, &s_expr)?;
+            let new_s_expr = Self::replace_join_expr(&join_expr.expr, &s_expr)?;
             self.opt_ctx.set_flag("dphyp_optimized", true);
             Ok(new_s_expr)
         } else {
@@ -733,6 +884,60 @@ impl DPhpyOptimizer {
             self.opt_ctx.set_flag("dphyp_optimized", false);
             Ok(Arc::unwrap_or_clone(s_expr))
         }
+    }
+
+    /// Narrow each predicate's scope using columns available from opaque base
+    /// outputs. Missing/outer columns, constants and non-deterministic scalars
+    /// retain the collected scope. No expression rewriting is performed here.
+    fn prepare_predicates(&self) -> Result<Vec<PlacedPredicate>> {
+        let outputs = self
+            .join_relations
+            .iter()
+            .map(|relation| {
+                RelExpr::with_s_expr(&relation.s_expr())
+                    .derive_relational_prop()
+                    .map(|prop| prop.output_columns.clone())
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let mut result = vec![];
+        for filter in &self.filters {
+            for predicate in &filter.filter.predicates {
+                let columns = predicate.used_columns();
+                let mut required = HashSet::new();
+                let mut movable = predicate.is_deterministic() && !columns.is_empty();
+                if movable {
+                    for column in &columns {
+                        let providers = filter
+                            .relations
+                            .iter()
+                            .copied()
+                            .filter(|relation| outputs[*relation].contains(column))
+                            .collect::<Vec<_>>();
+                        if providers.len() != 1 {
+                            movable = false;
+                            break;
+                        }
+                        required.insert(providers[0]);
+                    }
+                }
+                result.push(PlacedPredicate {
+                    predicate: predicate.clone(),
+                    relations: if movable {
+                        required
+                    } else {
+                        filter.relations.clone()
+                    },
+                    placement: if filter.is_join_condition {
+                        PredicatePlacement::JoinCondition
+                    } else if movable {
+                        PredicatePlacement::MovableFilter
+                    } else {
+                        PredicatePlacement::ScopedFilter
+                    },
+                });
+            }
+        }
+        Ok(result)
     }
 
     fn build_join_order_edges(
@@ -763,36 +968,6 @@ impl DPhpyOptimizer {
         }
 
         Ok(true)
-    }
-
-    /// Apply filters to the optimized plan
-    fn apply_filters(&self, s_expr: &SExpr) -> Result<SExpr> {
-        if self.filters.is_empty() {
-            return Ok(s_expr.clone());
-        }
-
-        // Add filters to `s_expr`, then push down filters if possible
-        let mut predicates = vec![];
-        for filter in self.filters.iter() {
-            predicates.extend(filter.clone().predicates.iter().cloned())
-        }
-
-        let mut new_s_expr = SExpr::create_unary(
-            Arc::new(RelOperator::Filter(Filter { predicates })),
-            Arc::new(s_expr.clone()),
-        );
-
-        // Push down filters
-        new_s_expr = self.push_down_filter(&new_s_expr)?;
-
-        // Remove empty filter
-        if let RelOperator::Filter(filter) = new_s_expr.plan.as_ref() {
-            if filter.predicates.is_empty() {
-                new_s_expr = new_s_expr.child(0)?.clone();
-            }
-        }
-
-        Ok(new_s_expr)
     }
 
     /// Replace the join expression in the plan tree.
@@ -827,79 +1002,6 @@ impl DPhpyOptimizer {
             )
         })
     }
-
-    /// Check if a filter exists in the expression and remove it from filters set
-    fn check_filter(&mut self, expr: &SExpr) -> Result<()> {
-        struct FilterChecker<'a> {
-            filters: &'a mut HashSet<Filter>,
-        }
-
-        impl SExprVisitor for FilterChecker<'_> {
-            fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
-                if let RelOperator::Filter(filter) = expr.plan.as_ref() {
-                    self.filters.remove(filter);
-                }
-
-                Ok(VisitAction::Continue)
-            }
-        }
-
-        expr.accept(&mut FilterChecker {
-            filters: &mut self.filters,
-        })?;
-        Ok(())
-    }
-
-    /// Push down filters to lower levels in the plan tree
-    fn push_down_filter(&self, s_expr: &SExpr) -> Result<SExpr> {
-        struct FilterPushDownVisitor<'a> {
-            optimizer: &'a DPhpyOptimizer,
-        }
-
-        impl SExprVisitor for FilterPushDownVisitor<'_> {
-            fn visit(&mut self, _expr: &SExpr) -> Result<VisitAction> {
-                Ok(VisitAction::Continue)
-            }
-
-            fn post_visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
-                let result = self.optimizer.apply_rule(expr)?;
-                if result == *expr {
-                    Ok(VisitAction::Continue)
-                } else {
-                    Ok(VisitAction::Replace(result))
-                }
-            }
-        }
-
-        Ok(s_expr
-            .accept(&mut FilterPushDownVisitor { optimizer: self })?
-            .unwrap_or_else(|| s_expr.clone()))
-    }
-
-    /// Apply a specific optimization rule to the expression
-    fn apply_rule(&self, s_expr: &SExpr) -> Result<SExpr> {
-        let mut s_expr = s_expr.clone();
-        let rule = RuleFactory::create_rule(RuleID::PushDownFilterJoin, self.opt_ctx.clone())?;
-        let mut state = TransformResult::new();
-
-        for (idx, matcher) in rule.matchers().iter().enumerate() {
-            if matcher.matches(&s_expr) && !s_expr.applied_rule(&rule.id()) {
-                s_expr.set_applied_rule(&rule.id());
-                rule.apply_matcher(idx, &s_expr, &mut state)?;
-
-                if !state.results().is_empty() {
-                    // Recursive optimize the result
-                    let result = &state.results()[0];
-                    let optimized_result = self.push_down_filter(result)?;
-                    return Ok(optimized_result);
-                }
-
-                break;
-            }
-        }
-
-        Ok(s_expr)
-    }
 }
 
 #[async_trait::async_trait]
@@ -933,6 +1035,59 @@ mod tests {
             value: Scalar::Boolean(value),
         }
         .into()
+    }
+
+    #[test]
+    fn test_filter_attaches_only_when_original_scope_is_complete() {
+        let filters = [PlacedPredicate {
+            // No referenced columns: placement must come from the collected
+            // input scope, not from the scalar's used_columns/used_tables.
+            predicate: bool_constant(false),
+            relations: HashSet::from([0, 1]),
+            placement: PredicatePlacement::ScopedFilter,
+        }];
+        let model = DPhypJoinOrderModel {
+            join_relations: &[],
+            join_conditions: &[],
+            filters: &filters,
+            stat_context: &StatContext::default(),
+        };
+        let expr = SExpr::create_leaf(DummyTableScan::new());
+        let a = HashSet::from([0]);
+        let b = HashSet::from([1]);
+        let ab = HashSet::from([0, 1]);
+        let bc = HashSet::from([1, 2]);
+        let abc = HashSet::from([0, 1, 2]);
+        let c = HashSet::from([2]);
+
+        assert_eq!(model.attach_base_filters(expr.clone(), &a), expr);
+        let expr = SExpr::create_binary(Join::default(), Arc::new(expr.clone()), Arc::new(expr));
+        assert_eq!(
+            model
+                .attach_join_filters(expr.clone(), &bc, &[&b, &c])
+                .unwrap(),
+            expr
+        );
+        let attached = model
+            .attach_join_filters(expr.clone(), &ab, &[&a, &b])
+            .unwrap();
+        assert!(matches!(attached.plan(), RelOperator::Filter(_)));
+        assert_eq!(attached.unary_child(), &expr);
+        // The old a/b subtree need not exist: use its first covering ancestor.
+        assert!(matches!(
+            model
+                .attach_join_filters(expr.clone(), &abc, &[&a, &bc])
+                .unwrap()
+                .plan(),
+            RelOperator::Filter(_)
+        ));
+        // A child already covered the scope: never attach the filter twice.
+        assert_eq!(
+            model
+                .attach_join_filters(expr.clone(), &abc, &[&ab, &c])
+                .unwrap(),
+            expr
+        );
     }
 
     #[test]
