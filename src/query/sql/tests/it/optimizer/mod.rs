@@ -23,6 +23,7 @@ use databend_common_statistics::Histogram;
 mod collect_statistics;
 mod column_scope;
 mod decorrelate_correlated_aliases;
+mod decorrelate_scalar_aggregate;
 mod distributed_join;
 mod eager_aggregation;
 mod hierarchical_grouping_sets;
