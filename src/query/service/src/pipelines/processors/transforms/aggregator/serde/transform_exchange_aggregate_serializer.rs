@@ -182,6 +182,24 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                             )))?
                         }
                         PartitionedData::Mixed(data) => PartitionItem::serialize_mixed(data)?,
+                        PartitionedData::Raw(data) => {
+                            let data = data
+                                .into_iter()
+                                .filter(|payload| payload.data_block.num_rows() != 0)
+                                .collect::<Vec<_>>();
+                            if data.is_empty() {
+                                DataBlock::empty()
+                            } else {
+                                let buckets = data.iter().map(|p| p.bucket).collect();
+                                let row_counts =
+                                    data.iter().map(|p| p.data_block.num_rows()).collect();
+                                let blocks =
+                                    data.into_iter().map(|p| p.data_block).collect::<Vec<_>>();
+                                DataBlock::concat(&blocks)?.add_meta(Some(
+                                    AggregateSerdeMeta::create_raw(buckets, row_counts),
+                                ))?
+                            }
+                        }
                         data => {
                             return Err(ErrorCode::Internal(format!(
                                 "Partitioned meta cannot be serialized from this payload batch: {data:?}"

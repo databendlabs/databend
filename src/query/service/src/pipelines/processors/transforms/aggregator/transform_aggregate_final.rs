@@ -31,6 +31,7 @@ use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::PayloadFlushState;
+use databend_common_expression::ProjectedBlock;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::EventCause;
 use databend_common_pipeline::core::InputPort;
@@ -46,6 +47,7 @@ use crate::pipelines::processors::transforms::aggregator::AggregateSpiller;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::LocalPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::PartitionedData;
+use crate::pipelines::processors::transforms::aggregator::RawPayload;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::SpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
@@ -222,6 +224,27 @@ impl TransformFinalAggregate {
         self.check_spill(need_check_spill)
     }
 
+    fn handle_raw(&mut self, payload: RawPayload, need_check_spill: bool) -> Result<()> {
+        let block = payload.data_block;
+        let rows = block.num_rows();
+        if rows == 0 {
+            return Ok(());
+        }
+        self.statistics.record_block(rows, block.memory_size());
+
+        if let HashTable::AggregateHashTable(ht) = &mut self.hashtable {
+            let group_columns = ProjectedBlock::project(&self.params.group_columns, &block);
+            let params = self
+                .params
+                .aggregate_functions_arguments
+                .iter()
+                .map(|args| ProjectedBlock::project(args, &block))
+                .collect::<Vec<_>>();
+            ht.add_raw_groups(&mut self.flush_state, group_columns, &params, rows)?;
+        }
+        self.check_spill(need_check_spill)
+    }
+
     fn merge_serialized(&mut self, payload: SerializedPayload) -> Result<()> {
         let partitioned_payload = payload.convert_to_partitioned_payload(
             self.params.group_data_types.clone(),
@@ -308,6 +331,12 @@ impl TransformFinalAggregate {
                     for item in items {
                         check_interrupt()?;
                         self.handle_meta(AggregateMeta::from(item), need_check_spill)?;
+                    }
+                }
+                PartitionedData::Raw(payloads) => {
+                    for payload in payloads {
+                        check_interrupt()?;
+                        self.handle_raw(payload, need_check_spill)?;
                     }
                 }
             },
