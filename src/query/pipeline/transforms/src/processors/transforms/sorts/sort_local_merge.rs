@@ -29,6 +29,7 @@ use super::Base;
 use super::MergeSort;
 use super::MergeSortStatus;
 use super::MergeSorter;
+use super::RunSpill;
 use super::SortSpillParams;
 use super::TransformSortMergeLimit;
 use super::core::RowConverter;
@@ -289,7 +290,7 @@ where
                 self.output_data.extend(limit_sort.on_finish(false)?);
                 self.inner = Inner::Finished;
             }
-            Inner::Merge(sorter) => sorter.finish_input(false),
+            Inner::Merge(sorter) => sorter.finish_input(RunSpill::OnPressure),
             Inner::Finished => unreachable!(),
         }
         Ok(())

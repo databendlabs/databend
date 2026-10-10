@@ -20,7 +20,7 @@ use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_sql::Symbol;
 use databend_common_sql::evaluator::BlockOperator;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlan;
@@ -140,7 +140,7 @@ impl IPhysicalPlan for MaterializedCTE {
 impl PhysicalPlanBuilder {
     pub(crate) async fn build_materialized_cte(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         materialized_cte: &databend_common_sql::plans::MaterializedCTE,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {

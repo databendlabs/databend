@@ -18,8 +18,8 @@ use databend_common_expression::types::DataType;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::binder::is_range_join_condition;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::RelExpr;
-use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::Join;
@@ -39,17 +39,17 @@ fn is_precise_single_row(stat_info: &databend_common_sql::optimizer::ir::StatInf
 
 fn single_join_scalar_side_is_precise_single_row(
     join: &Join,
-    s_expr: &SExpr,
+    s_expr: &PExpr,
     stat_context: &StatContext,
 ) -> Result<bool> {
     match join.single_to_inner {
         Some(JoinType::LeftSingle) => {
-            let right_rel_expr = RelExpr::with_s_expr(s_expr.right_child());
+            let right_rel_expr = RelExpr::with_p_expr(s_expr.right_child());
             let right_stat_info = right_rel_expr.derive_cardinality(stat_context)?;
             Ok(is_precise_single_row(&right_stat_info))
         }
         Some(JoinType::RightSingle) => {
-            let left_rel_expr = RelExpr::with_s_expr(s_expr.left_child());
+            let left_rel_expr = RelExpr::with_p_expr(s_expr.left_child());
             let left_stat_info = left_rel_expr.derive_cardinality(stat_context)?;
             Ok(is_precise_single_row(&left_stat_info))
         }
@@ -86,7 +86,7 @@ fn asof_hash_join_type(join_type: JoinType) -> JoinType {
 // Choose physical join type by join conditions
 fn physical_join(
     join: &Join,
-    s_expr: &SExpr,
+    s_expr: &PExpr,
     stat_context: &StatContext,
 ) -> Result<PhysicalJoinType> {
     if join.equi_conditions.is_empty() && join.join_type.is_any_join() {
@@ -95,8 +95,8 @@ fn physical_join(
         ));
     }
 
-    let left_rel_expr = RelExpr::with_s_expr(s_expr.left_child());
-    let right_rel_expr = RelExpr::with_s_expr(s_expr.right_child());
+    let left_rel_expr = RelExpr::with_p_expr(s_expr.left_child());
+    let right_rel_expr = RelExpr::with_p_expr(s_expr.right_child());
     let left_stat_info = left_rel_expr.derive_cardinality(stat_context)?;
     let right_stat_info = right_rel_expr.derive_cardinality(stat_context)?;
 
@@ -140,7 +140,7 @@ fn physical_join(
 impl PhysicalPlanBuilder {
     pub async fn build_join(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         join: &databend_common_sql::plans::Join,
         required: ColumnSet,
         stat_info: PlanStatsInfo,

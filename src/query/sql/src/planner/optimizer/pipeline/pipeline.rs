@@ -22,19 +22,15 @@ use super::common::contains_local_table_scan;
 use super::common::contains_warehouse_table_scan;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
-use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::pipeline::OptimizerTraceCollector;
 
-/// A pipeline of optimizers that are executed in sequence.
+/// Sequential logical rewrite passes over SExpr. Physical planning runs separately.
 pub struct OptimizerPipeline {
     /// The optimizer context
     opt_ctx: Arc<OptimizerContext>,
     /// The sequence of optimizers to be applied
     optimizers: Vec<Box<dyn Optimizer>>,
-    /// The memo captured during optimization (if any)
-    memo: Option<Memo>,
-
     /// The trace collector for generating reports
     trace_collector: Arc<OptimizerTraceCollector>,
 
@@ -44,18 +40,13 @@ pub struct OptimizerPipeline {
 impl OptimizerPipeline {
     /// Create a new optimizer pipeline
     pub async fn new(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<Self> {
-        let pipeline = Self {
+        configure_distributed_optimization(&opt_ctx, &s_expr).await?;
+        Ok(Self {
             opt_ctx,
             optimizers: Vec::new(),
-            memo: None,
             trace_collector: Arc::new(OptimizerTraceCollector::new()),
             s_expr,
-        };
-
-        pipeline
-            .configure_distributed_optimization(&pipeline.s_expr)
-            .await?;
-        Ok(pipeline)
+        })
     }
 
     /// Add an optimizer to the pipeline
@@ -78,26 +69,7 @@ impl OptimizerPipeline {
         if condition { self.add(optimizer) } else { self }
     }
 
-    /// Configure distributed optimization based on table types
-    async fn configure_distributed_optimization(&self, s_expr: &SExpr) -> Result<()> {
-        let metadata = self.opt_ctx.get_metadata();
-
-        if contains_local_table_scan(s_expr, &metadata) {
-            self.opt_ctx.set_enable_distributed_optimization(false);
-            info!("Disable distributed optimization due to local table scan.");
-        } else if contains_warehouse_table_scan(s_expr, &metadata) {
-            let warehouse = self.opt_ctx.get_table_ctx().get_warehouse_cluster().await?;
-
-            if !warehouse.is_empty() {
-                self.opt_ctx.set_enable_distributed_optimization(true);
-                info!("Enable distributed optimization due to warehouse table scan.");
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Execute the pipeline on the given expression
+    /// Execute the logical passes on the stored input expression
     pub async fn execute(&mut self) -> Result<SExpr> {
         // Then apply all optimizers in sequence
         let mut current_expr = self.s_expr.clone();
@@ -105,7 +77,10 @@ impl OptimizerPipeline {
         let trace_collector = self.get_trace_collector();
 
         #[cfg(debug_assertions)]
-        current_expr.validate_types(&self.opt_ctx.get_metadata())?;
+        {
+            current_expr.validate_types(&self.opt_ctx.get_metadata())?;
+            current_expr.validate_column_scope(&self.opt_ctx.get_metadata())?;
+        }
 
         for (idx, optimizer) in self.optimizers.iter_mut().enumerate() {
             let enable_trace = self.opt_ctx.get_enable_trace();
@@ -124,14 +99,17 @@ impl OptimizerPipeline {
             current_expr = optimizer.optimize(current_expr).await?;
 
             #[cfg(debug_assertions)]
-            current_expr.validate_types(&self.opt_ctx.get_metadata())?;
+            {
+                current_expr.validate_types(&self.opt_ctx.get_metadata())?;
+                current_expr
+                    .validate_column_scope(&self.opt_ctx.get_metadata())
+                    .map_err(|e| {
+                        e.add_message_back(format!(" (after optimizer `{}`)", optimizer.name()))
+                    })?;
+            }
 
             // Calculate duration
             let duration = start_time.elapsed();
-
-            if let Some(memo) = optimizer.memo() {
-                self.memo = Some(memo.clone());
-            }
 
             // Only trace if tracing is enabled
             if let Some(before_expr) = before_expr {
@@ -164,22 +142,32 @@ impl OptimizerPipeline {
         Ok(current_expr)
     }
 
-    /// Get the memo captured during optimization
-    ///
-    /// If no memo was captured during optimization, an empty memo is created and returned.
-    /// This ensures the method always returns a valid Memo.
-    pub fn memo(&self) -> Memo {
-        match &self.memo {
-            Some(memo) => memo.clone(),
-            None => {
-                // Create and return an empty memo
-                Memo::new(self.opt_ctx.get_stat_context().clone())
-            }
-        }
+    /// Number of enabled passes, used to continue trace ordering in physical planning.
+    pub fn num_optimizers(&self) -> usize {
+        self.optimizers.len()
     }
 
     /// Get the trace collector
     pub fn get_trace_collector(&self) -> Arc<OptimizerTraceCollector> {
         self.trace_collector.clone()
     }
+}
+
+/// Shared input configuration, independent of logical pipeline execution.
+pub(crate) async fn configure_distributed_optimization(
+    opt_ctx: &Arc<OptimizerContext>,
+    s_expr: &SExpr,
+) -> Result<()> {
+    let metadata = opt_ctx.get_metadata();
+    if contains_local_table_scan(s_expr, &metadata) {
+        opt_ctx.set_enable_distributed_optimization(false);
+        info!("Disable distributed optimization due to local table scan.");
+    } else if contains_warehouse_table_scan(s_expr, &metadata) {
+        let warehouse = opt_ctx.get_table_ctx().get_warehouse_cluster().await?;
+        if !warehouse.is_empty() {
+            opt_ctx.set_enable_distributed_optimization(true);
+            info!("Enable distributed optimization due to warehouse table scan.");
+        }
+    }
+    Ok(())
 }

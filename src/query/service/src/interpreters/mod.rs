@@ -323,6 +323,7 @@ pub use interpreter_table_index_create::CreateTableIndexInterpreter;
 pub use interpreter_table_index_drop::DropTableIndexInterpreter;
 pub use interpreter_table_index_refresh::RefreshTableIndexInterpreter;
 pub use interpreter_table_modify_column::ModifyTableColumnInterpreter;
+pub use interpreter_table_modify_column::build_modify_column_physical_plan;
 pub use interpreter_table_modify_comment::ModifyTableCommentInterpreter;
 pub use interpreter_table_partition_by::AlterTablePartitionByInterpreter;
 pub use interpreter_table_recluster::ReclusterTableInterpreter;

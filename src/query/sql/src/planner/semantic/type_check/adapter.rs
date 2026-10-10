@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::Query;
+use databend_common_ast::parser::Dialect;
 use databend_common_base::runtime::block_on_with_handle;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table_context::TableContext;
@@ -38,7 +39,6 @@ use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
-use databend_common_settings::Settings;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use databend_common_users::security_policy_cache::CachedSecurityPolicy;
@@ -139,8 +139,28 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
         self.ctx.get_function_context()
     }
 
-    fn settings(&self) -> Arc<Settings> {
-        self.ctx.get_settings()
+    fn sql_dialect(&self) -> Result<Dialect> {
+        self.ctx.get_settings().get_sql_dialect()
+    }
+
+    fn inlist_to_join_threshold(&self) -> Result<usize> {
+        self.ctx.get_settings().get_inlist_to_join_threshold()
+    }
+
+    fn max_inlist_to_or(&self) -> Result<u64> {
+        self.ctx.get_settings().get_max_inlist_to_or()
+    }
+
+    fn enable_decimal_sum_widening(&self) -> Result<bool> {
+        self.ctx.get_settings().get_enable_decimal_sum_widening()
+    }
+
+    fn timezone(&self) -> Result<String> {
+        self.ctx.get_settings().get_timezone()
+    }
+
+    fn default_nulls_first(&self, asc: bool) -> Result<bool> {
+        Ok(self.ctx.get_settings().get_nulls_first()(asc))
     }
 
     fn aggregate_function_registry(&self) -> &'static AggregateRegistry {

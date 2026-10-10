@@ -22,21 +22,24 @@ use databend_common_expression::types::DataType;
 
 use crate::MetadataRef;
 use crate::planner::binder::BindContext;
+use crate::planner::semantic::FullTypeCheckAdapter;
 use crate::planner::semantic::NameResolutionContext;
+use crate::planner::semantic::TypeCheckAdapter;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::ScalarExpr;
 
-/// Helper for binding scalar expression with `BindContext`.
-pub struct ScalarBinder<'a> {
+/// Helper for binding scalar expressions with explicitly supplied capabilities.
+pub struct ScalarBinder<'a, A = FullTypeCheckAdapter> {
     bind_context: &'a mut BindContext,
-    ctx: Arc<dyn TableContext>,
+    // Preserve the infallible legacy constructor, reporting initialization errors
+    // when binding. `with_adapter` always stores an already constructed adapter.
+    adapter: Result<A>,
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
     aliases: &'a [(String, ScalarExpr)],
-    forbid_udf: bool,
 }
 
-impl<'a> ScalarBinder<'a> {
+impl<'a> ScalarBinder<'a, FullTypeCheckAdapter> {
     pub fn new(
         bind_context: &'a mut BindContext,
         ctx: Arc<dyn TableContext>,
@@ -44,33 +47,52 @@ impl<'a> ScalarBinder<'a> {
         metadata: MetadataRef,
         aliases: &'a [(String, ScalarExpr)],
     ) -> Self {
-        ScalarBinder {
+        Self {
             bind_context,
-            ctx,
+            adapter: FullTypeCheckAdapter::new(ctx),
             name_resolution_ctx,
             metadata,
             aliases,
-            forbid_udf: false,
         }
     }
 
     pub fn forbid_udf(&mut self) {
-        self.forbid_udf = true;
+        self.adapter = self
+            .adapter
+            .clone()
+            .map(|adapter| adapter.with_forbid_udf(true));
+    }
+}
+
+impl<'a, A: TypeCheckAdapter> ScalarBinder<'a, A> {
+    pub fn with_adapter(
+        bind_context: &'a mut BindContext,
+        adapter: A,
+        name_resolution_ctx: &'a NameResolutionContext,
+        metadata: MetadataRef,
+        aliases: &'a [(String, ScalarExpr)],
+    ) -> Self {
+        Self {
+            bind_context,
+            adapter: Ok(adapter),
+            name_resolution_ctx,
+            metadata,
+            aliases,
+        }
     }
 
     pub fn bind(&mut self, expr: &Expr) -> Result<(ScalarExpr, DataType)> {
-        let mut type_checker = TypeChecker::try_create(
+        let mut type_checker = TypeChecker::try_create_with_adapter(
             self.bind_context,
-            self.ctx.clone(),
+            self.adapter.clone()?,
             self.name_resolution_ctx,
             self.metadata.clone(),
             self.aliases,
-            self.forbid_udf,
         )?;
         Ok(*type_checker.resolve(expr)?)
     }
 
     pub fn get_func_ctx(&self) -> Result<FunctionContext> {
-        self.ctx.get_function_context()
+        self.adapter.clone()?.function_context()
     }
 }

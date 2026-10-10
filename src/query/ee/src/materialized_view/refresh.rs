@@ -49,7 +49,6 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_sql::MaterializedViewChecker;
 use databend_common_sql::Planner;
 use databend_common_sql::parse_materialized_view_query;
-use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::validate_materialized_view_source;
 use databend_common_storages_fuse::FuseTable;
@@ -366,10 +365,10 @@ impl<'a> MaterializedViewRefresh<'a> {
                 self.mv_table.get_id(),
             )?,
             Plan::DataMutation { s_expr, schema, .. } => {
-                let mutation: Mutation = s_expr.plan().clone().try_into()?;
+                let mutation = s_expr.mutation()?.clone();
                 Arc::new(MutationInterpreter::try_create_materialized_view_refresh(
                     self.ctx.clone(),
-                    *s_expr,
+                    (*s_expr).into_planned()?,
                     schema,
                     mutation.metadata,
                     self.mv_table.get_id(),

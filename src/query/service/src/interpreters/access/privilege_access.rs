@@ -49,7 +49,6 @@ use databend_common_sql::plans::AlterSharePlanAction;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::MaintenanceTarget;
 use databend_common_sql::plans::ModifyColumnAction;
-use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::PresignAction;
 use databend_common_sql::plans::RewriteKind;
@@ -2245,10 +2244,9 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_insert_source(ctx, &plan.source).await?;
             }
             Plan::DataMutation { s_expr, .. } => {
-                let plan: Mutation = s_expr.plan().clone().try_into()?;
+                let plan = s_expr.mutation()?;
                 if enable_experimental_rbac_check {
-                    let s_expr = s_expr.child(0)?;
-                    match s_expr.get_udfs() {
+                    match s_expr.input_udfs() {
                         Ok(udfs) => {
                             if !udfs.is_empty() {
                                 self.validate_udf_access(udfs).await?;

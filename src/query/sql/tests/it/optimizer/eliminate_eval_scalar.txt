@@ -1,0 +1,130 @@
+=== identity_projection ===
+description: Physical EvalScalar cleanup removes identity projections but keeps computations, and honors both skip levels.
+sql: SELECT k FROM t
+raw_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+skip: 
+optimized_plan:
+Scan
+├── table: default.t (#0)
+├── filters: []
+├── order by: []
+└── limit: NONE
+
+skip: EliminateEvalScalar
+optimized_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+skip: RecursiveRuleOptimizer[EliminateEvalScalar]
+optimized_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+=== computed_projection ===
+description: Physical EvalScalar cleanup removes identity projections but keeps computations, and honors both skip levels.
+sql: SELECT k + 1 FROM t
+raw_plan:
+EvalScalar
+├── scalars: [plus(t.k (#0), 1) AS (#1)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+skip: 
+optimized_plan:
+EvalScalar
+├── scalars: [plus(t.k (#0), 1) AS (#1)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+=== constant_projection ===
+description: Physical EvalScalar cleanup removes identity projections but keeps computations, and honors both skip levels.
+sql: SELECT 42 FROM t
+raw_plan:
+EvalScalar
+├── scalars: [42 AS (#1)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+skip: 
+optimized_plan:
+EvalScalar
+├── scalars: [42 AS (#1)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+=== cast_projection ===
+description: Physical EvalScalar cleanup removes identity projections but keeps computations, and honors both skip levels.
+sql: SELECT CAST(k AS String) FROM t
+raw_plan:
+EvalScalar
+├── scalars: [CAST(t.k (#0) AS String) AS (#1)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+skip: 
+optimized_plan:
+EvalScalar
+├── scalars: [CAST(t.k (#0) AS String) AS (#1)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+=== nested_identity ===
+description: Physical EvalScalar cleanup removes identity projections but keeps computations, and honors both skip levels.
+sql: SELECT x FROM (SELECT k + 1 AS x FROM t) q
+raw_plan:
+EvalScalar
+├── scalars: [x (#1) AS (#1)]
+└── EvalScalar
+    ├── scalars: [plus(t.k (#0), 1) AS (#1)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+skip: 
+optimized_plan:
+EvalScalar
+├── scalars: [plus(t.k (#0), 1) AS (#1)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+

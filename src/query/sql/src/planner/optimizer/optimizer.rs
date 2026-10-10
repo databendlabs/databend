@@ -22,23 +22,18 @@ use databend_common_expression::Symbol;
 use log::info;
 
 use crate::InsertInputSource;
-use crate::MetadataRef;
-use crate::ScalarExpr;
-use crate::binder::MutationStrategy;
-use crate::binder::MutationType;
-use crate::binder::target_probe;
 use crate::optimizer::OptimizerContext;
+use crate::optimizer::PhysicalPlanner;
 use crate::optimizer::ir::Memo;
+use crate::optimizer::ir::PlannedQuery;
+use crate::optimizer::ir::QueryPlan;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::mutation::optimize_mutation;
 use crate::optimizer::optimizers::CTEFilterPushdownOptimizer;
-use crate::optimizer::optimizers::CascadesOptimizer;
 use crate::optimizer::optimizers::CommonSubexpressionOptimizer;
 use crate::optimizer::optimizers::DPhpyOptimizer;
 use crate::optimizer::optimizers::EliminateSelfJoinOptimizer;
-use crate::optimizer::optimizers::distributed::BroadcastToShuffleOptimizer;
-use crate::optimizer::optimizers::operator::CleanupUnusedCTEOptimizer;
 use crate::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
-use crate::optimizer::optimizers::operator::FinalizeSpatialJoinOptimizer;
 use crate::optimizer::optimizers::operator::PullUpFilterOptimizer;
 use crate::optimizer::optimizers::operator::RuleNormalizeAggregateOptimizer;
 use crate::optimizer::optimizers::operator::RuleStatsAggregateOptimizer;
@@ -50,15 +45,8 @@ use crate::optimizer::optimizers::rule::RuleEagerAggregation;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::pipeline::OptimizerPipeline;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
-use crate::plans::ConstantTableScan;
 use crate::plans::EvalScalar;
-use crate::plans::Join;
-use crate::plans::JoinType;
-use crate::plans::MatchedEvaluator;
-use crate::plans::Mutation;
-use crate::plans::Operator;
 use crate::plans::Plan;
-use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 use crate::plans::SetScalarsOrQuery;
@@ -82,8 +70,13 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
                 .collect();
             Ok(Plan::Query {
                 s_expr: Box::new(
-                    optimize_query_with_output_columns(opt_ctx, *s_expr, query_output_columns)
-                        .await?,
+                    optimize_query_with_output_columns(
+                        opt_ctx,
+                        (*s_expr).into_logical()?,
+                        query_output_columns,
+                    )
+                    .await
+                    .map(QueryPlan::Planned)?,
                 ),
                 bind_context,
                 metadata,
@@ -113,7 +106,8 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
 
                 let s_expr = Box::new(
                     SubqueryDecorrelatorOptimizer::new(opt_ctx.clone(), None)
-                        .optimize_sync(*s_expr)?,
+                        .optimize_sync((*s_expr).into_logical()?)?
+                        .into(),
                 );
                 Ok(Plan::Explain {
                     kind,
@@ -130,7 +124,8 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
             }
             ExplainKind::Memo(_) => {
                 if let deref!( Plan::Query { ref s_expr, .. }) = plan {
-                    let memo = get_optimized_memo(opt_ctx.clone(), *s_expr.clone()).await?;
+                    let memo =
+                        get_optimized_memo(opt_ctx.clone(), s_expr.logical()?.clone()).await?;
                     Ok(Plan::Explain {
                         config,
                         kind: ExplainKind::Memo(memo.display()?),
@@ -185,7 +180,9 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
             }
             Ok(Plan::CopyIntoTable(plan))
         }
-        Plan::DataMutation { s_expr, .. } => optimize_mutation(opt_ctx, *s_expr).await,
+        Plan::DataMutation { s_expr, .. } => {
+            optimize_mutation(opt_ctx, (*s_expr).into_logical()?).await
+        }
 
         // distributed insert will be optimized in `physical_plan_builder`
         Plan::Insert(mut plan) => {
@@ -203,8 +200,29 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
             Ok(Plan::Insert(plan))
         }
         Plan::InsertMultiTable(mut plan) => {
-            plan.input_source = optimize(opt_ctx.clone(), plan.input_source.clone()).await?;
-            rewrite_insert_multi_table_whens(opt_ctx, plan.as_mut())?;
+            // WHEN subqueries introduce logical joins/aggregates. Rewrite them before
+            // selecting the source implementation so those nodes participate in CBO.
+            rewrite_insert_multi_table_whens(opt_ctx.clone(), plan.as_mut())?;
+            if let Plan::Query {
+                s_expr,
+                bind_context,
+                ..
+            } = &mut plan.input_source
+            {
+                let mut output_columns = bind_context
+                    .column_set()
+                    .into_iter()
+                    .collect::<std::collections::HashSet<_>>();
+                for when in &plan.whens {
+                    output_columns.extend(when.condition.used_columns());
+                }
+                let input = s_expr.logical()?.clone();
+                let planned =
+                    optimize_query_with_output_columns(opt_ctx, input, output_columns).await?;
+                *s_expr = Box::new(QueryPlan::Planned(planned));
+            } else {
+                plan.input_source = optimize(opt_ctx, plan.input_source.clone()).await?;
+            }
             Ok(Plan::InsertMultiTable(plan))
         }
         Plan::Replace(mut plan) => {
@@ -261,7 +279,7 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
     }
 }
 
-pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<SExpr> {
+pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<PlannedQuery> {
     optimize_query_inner(opt_ctx, s_expr, None).await
 }
 
@@ -269,7 +287,7 @@ async fn optimize_query_with_output_columns(
     opt_ctx: Arc<OptimizerContext>,
     s_expr: SExpr,
     output_columns: std::collections::HashSet<Symbol>,
-) -> Result<SExpr> {
+) -> Result<PlannedQuery> {
     optimize_query_inner(opt_ctx, s_expr, Some(output_columns)).await
 }
 
@@ -277,9 +295,24 @@ async fn optimize_query_inner(
     opt_ctx: Arc<OptimizerContext>,
     s_expr: SExpr,
     output_columns: Option<std::collections::HashSet<Symbol>>,
-) -> Result<SExpr> {
+) -> Result<PlannedQuery> {
+    let mut pipeline = query_logical_pipeline(opt_ctx.clone(), s_expr, output_columns).await?;
+    let input = pipeline.execute().await?;
+    PhysicalPlanner::new(opt_ctx)
+        .with_trace_collector(pipeline.get_trace_collector(), pipeline.num_optimizers())
+        .plan(input)
+        .await
+}
+
+/// Build the common logical passes without selecting distributions or execution plans.
+/// Mutation preparation runs after these passes and before query planning.
+pub(super) async fn query_logical_pipeline(
+    opt_ctx: Arc<OptimizerContext>,
+    s_expr: SExpr,
+    output_columns: Option<std::collections::HashSet<Symbol>>,
+) -> Result<OptimizerPipeline> {
     let settings = opt_ctx.get_table_ctx().get_settings();
-    let mut pipeline = OptimizerPipeline::new(opt_ctx.clone(), s_expr.clone())
+    let pipeline = OptimizerPipeline::new(opt_ctx.clone(), s_expr)
         .await?
         // Eliminate subqueries by rewriting them into more efficient form
         .add(SubqueryDecorrelatorOptimizer::new(opt_ctx.clone(), None))
@@ -328,23 +361,8 @@ async fn optimize_query_inner(
         .add_if(
             settings.get_force_eager_aggregate()?,
             RuleEagerAggregation::new(opt_ctx.get_metadata()),
-        )
-        // Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
-        .add(CascadesOptimizer::new(opt_ctx.clone())?)
-        // Eliminate unnecessary scalar calculations to clean up the final plan
-        .add(RecursiveRuleOptimizer::new(
-            opt_ctx.clone(),
-            [RuleID::EliminateEvalScalar].as_slice(),
-        ))
-        // Clean up unused CTEs
-        .add(CleanupUnusedCTEOptimizer)
-        // Finalize derived join annotations after all logical rewrites.
-        .add(FinalizeSpatialJoinOptimizer::new(opt_ctx.clone()));
-
-    // 17. Execute the pipeline
-    let s_expr = pipeline.execute().await?;
-
-    Ok(s_expr)
+        );
+    Ok(pipeline)
 }
 
 fn rewrite_insert_multi_table_whens(
@@ -355,7 +373,7 @@ fn rewrite_insert_multi_table_whens(
         return Ok(());
     };
 
-    let mut source_expr = s_expr.as_ref().clone();
+    let mut source_expr = s_expr.logical()?.clone();
     let mut rewritten_any = false;
 
     for (idx, when) in plan.whens.iter_mut().enumerate() {
@@ -394,7 +412,7 @@ fn rewrite_insert_multi_table_whens(
     }
 
     if rewritten_any {
-        *s_expr = Box::new(source_expr);
+        *s_expr = Box::new(QueryPlan::Logical(source_expr));
     }
 
     Ok(())
@@ -420,169 +438,11 @@ async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
             RuleID::SplitAggregate,
         ]))
         // Cost based optimization
-        .add(DPhpyOptimizer::new(opt_ctx.clone()))
-        .add(CascadesOptimizer::new(opt_ctx.clone())?);
+        .add(DPhpyOptimizer::new(opt_ctx.clone()));
 
-    let _s_expr = pipeline.execute().await?;
-
-    Ok(pipeline.memo())
-}
-
-async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<Plan> {
-    // Optimize the input plan.
-    let mut input_s_expr = optimize_query(opt_ctx.clone(), s_expr.child(0)?.clone()).await?;
-    input_s_expr = RecursiveRuleOptimizer::new(opt_ctx.clone(), &[RuleID::MergeFilterIntoMutation])
-        .optimize_sync(input_s_expr)?;
-
-    // For distributed query optimization, we need to remove the Exchange operator at the top of the plan.
-    if let &RelOperator::Exchange(_) = input_s_expr.plan() {
-        input_s_expr = input_s_expr.child(0)?.clone();
-    }
-    // If there still exists an Exchange::Merge operator, we should disable distributed optimization and
-    // optimize the input plan again.
-    if input_s_expr.has_merge_exchange() {
-        opt_ctx.set_enable_distributed_optimization(false);
-        input_s_expr = optimize_query(opt_ctx.clone(), s_expr.child(0)?.clone()).await?;
-    }
-
-    let mut mutation: Mutation = s_expr.plan().clone().try_into()?;
-    mutation.distributed = opt_ctx.get_enable_distributed_optimization();
-
-    let schema = mutation.schema();
-    // To fix issue #16588, if target table is rewritten as an empty scan, that means
-    // the condition is false and the match branch can never be executed.
-    // Therefore, the match evaluators can be reset.
-    let inner_rel_op = input_s_expr.plan.rel_op();
-    if !mutation.matched_evaluators.is_empty() {
-        match inner_rel_op {
-            RelOp::ConstantTableScan => {
-                let constant_table_scan = ConstantTableScan::try_from(input_s_expr.plan().clone())?;
-                if constant_table_scan.num_rows == 0 {
-                    mutation.no_effect = true;
-                }
-            }
-            RelOp::Join => {
-                let mut right_child = input_s_expr.child(1)?;
-                let mut right_child_rel = right_child.plan.rel_op();
-                if right_child_rel == RelOp::Exchange {
-                    right_child_rel = right_child.child(0)?.plan.rel_op();
-                    right_child = right_child.child(0)?;
-                }
-                if right_child_rel == RelOp::ConstantTableScan {
-                    let constant_table_scan =
-                        ConstantTableScan::try_from(right_child.plan().clone())?;
-                    if constant_table_scan.num_rows == 0 {
-                        mutation.matched_evaluators = vec![MatchedEvaluator {
-                            condition: None,
-                            update: None,
-                        }];
-                        mutation.can_try_update_column_only = false;
-                    }
-                }
-            }
-            _ => (),
-        }
-    }
-
-    input_s_expr = match mutation.mutation_type {
-        MutationType::Merge => {
-            if mutation.distributed && inner_rel_op == RelOp::Join {
-                let join = Join::try_from(input_s_expr.plan().clone())?;
-                let broadcast_to_shuffle = BroadcastToShuffleOptimizer::create();
-                let is_broadcast = broadcast_to_shuffle.matcher.matches(&input_s_expr)
-                    && broadcast_to_shuffle.is_broadcast(&input_s_expr)?;
-
-                // If the mutation strategy is matched only, the join type is inner join, if it is a broadcast
-                // join and the target table on the probe side, we can avoid row id shuffle after the join.
-                let target_probe = target_probe(&input_s_expr, mutation.target_table_index)?;
-                if is_broadcast
-                    && target_probe
-                    && mutation.strategy == MutationStrategy::MatchedOnly
-                {
-                    mutation.row_id_shuffle = false;
-                }
-
-                // Change broadcast join to shuffle join if the join type is left or left-anti join, because
-                // broadcast join can not deduplicate row ids.
-                if is_broadcast && matches!(join.join_type, JoinType::Left | JoinType::LeftAnti) {
-                    broadcast_to_shuffle.optimize(&input_s_expr)?
-                } else {
-                    input_s_expr
-                }
-            } else {
-                input_s_expr
-            }
-        }
-        MutationType::Update | MutationType::Delete => {
-            #[allow(clippy::type_complexity)]
-            fn finalize_mutation_source(
-                s_expr: &SExpr,
-                metadata: &MetadataRef,
-            ) -> Result<Option<(SExpr, bool, Vec<ScalarExpr>, Option<Symbol>)>> {
-                match s_expr.plan() {
-                    RelOperator::MutationSource(rel) => {
-                        let mut rel = rel.clone();
-                        rel.refresh_read_partition_columns();
-                        let is_truncate =
-                            rel.mutation_type == MutationType::Delete && !rel.has_predicates();
-                        let direct_filter = rel.all_predicates_cloned();
-                        let predicate_column_index =
-                            rel.ensure_mutation_predicate_column_if_needed(metadata);
-                        let new_s_expr =
-                            SExpr::create_leaf(Arc::new(RelOperator::MutationSource(rel)));
-                        Ok(Some((
-                            new_s_expr,
-                            is_truncate,
-                            direct_filter,
-                            predicate_column_index,
-                        )))
-                    }
-                    RelOperator::Udf(_) | RelOperator::EvalScalar(_) if s_expr.arity() == 1 => {
-                        if let Some((child, is_truncate, direct_filter, pred_idx)) =
-                            finalize_mutation_source(s_expr.unary_child(), metadata)?
-                        {
-                            Ok(Some((
-                                s_expr.replace_children(vec![Arc::new(child)]),
-                                is_truncate,
-                                direct_filter,
-                                pred_idx,
-                            )))
-                        } else {
-                            Ok(None)
-                        }
-                    }
-                    _ => Ok(None),
-                }
-            }
-
-            // finalize_mutation_source only applies to Direct strategy where the
-            // plan tree contains a MutationSource leaf. Non-direct mutations
-            // (e.g., UPDATE ... FROM, subquery cases) have Join/Filter roots
-            // with no MutationSource node.
-            if mutation.strategy == MutationStrategy::Direct {
-                let metadata = opt_ctx.get_metadata();
-                if let Some((new_s_expr, is_truncate, direct_filter, pred_idx)) =
-                    finalize_mutation_source(&input_s_expr, &metadata)?
-                {
-                    input_s_expr = new_s_expr;
-                    mutation.truncate_table = is_truncate;
-                    mutation.direct_filter = direct_filter;
-                    if let Some(index) = pred_idx {
-                        mutation.required_columns.insert(index);
-                        mutation.predicate_column_index = Some(index);
-                    }
-                }
-            }
-            input_s_expr
-        }
-    };
-
-    Ok(Plan::DataMutation {
-        schema,
-        s_expr: Box::new(SExpr::create_unary(
-            Arc::new(RelOperator::Mutation(mutation)),
-            Arc::new(input_s_expr),
-        )),
-        metadata: opt_ctx.get_metadata(),
-    })
+    let input = pipeline.execute().await?;
+    PhysicalPlanner::new(opt_ctx)
+        .with_trace_collector(pipeline.get_trace_collector(), pipeline.num_optimizers())
+        .search_memo(input)
+        .await
 }

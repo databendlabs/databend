@@ -316,7 +316,7 @@ impl Binder {
         s_expr = self.rewrite_udf(&mut bind_context, s_expr)?;
 
         Ok(Plan::DataMutation {
-            s_expr: Box::new(s_expr),
+            s_expr: Box::new(s_expr.into()),
             schema,
             metadata: self.metadata.clone(),
         })
