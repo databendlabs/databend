@@ -1,0 +1,324 @@
+=== single_table_or_extraction ===
+description: Single-table OR restrictions can reduce base inputs before reordering.
+sql: SELECT a.k FROM a JOIN b ON a.k = b.k
+WHERE (a.v = 1 AND b.v = 10) OR (a.v = 2 AND b.v = 20)
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+EvalScalar
+├── scalars: [a.k (#0) AS (#0), b.k (#2) AS (#4), a.v (#1) AS (#5), b.v (#3) AS (#6)]
+└── Filter
+    ├── filters: [or_filters(and_filters(eq(a.v (#1), 1), eq(b.v (#3), 10)), and_filters(eq(a.v (#1), 2), eq(b.v (#3), 20)))]
+    └── Join(Inner)
+        ├── build keys: [b.k (#2)]
+        ├── probe keys: [a.k (#0)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.b (#1)
+        │   ├── filters: [or_filters(eq(b.v (#3), 10), eq(b.v (#3), 20))]
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.a (#0)
+            ├── filters: [or_filters(eq(a.v (#1), 1), eq(a.v (#1), 2))]
+            ├── order by: []
+            └── limit: NONE
+
+
+=== multi_table_or_extraction ===
+description: Q13 shape: a necessary OR over a/b is useful below the join with c; inspect its position after reordering.
+sql: SELECT a.k FROM a JOIN b ON a.k = b.k JOIN c ON a.k = c.k
+WHERE (a.v = 1 AND b.v > 10 AND c.v = 3)
+   OR (a.v = 2 AND b.v < 20 AND c.v = 1)
+   OR (a.v = 3 AND b.v = 30 AND c.v = 1)
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+EvalScalar
+├── scalars: [a.k (#0) AS (#0), b.k (#2) AS (#6), c.k (#4) AS (#7), a.v (#1) AS (#8), b.v (#3) AS (#9), c.v (#5) AS (#10)]
+└── Filter
+    ├── filters: [or_filters(and_filters(eq(a.v (#1), 1), gt(b.v (#3), 10), eq(c.v (#5), 3)), and_filters(eq(a.v (#1), 2), lt(b.v (#3), 20), eq(c.v (#5), 1)), and_filters(eq(a.v (#1), 3), eq(b.v (#3), 30), eq(c.v (#5), 1)))]
+    └── Filter
+        ├── filters: [or_filters(and_filters(eq(a.v (#1), 1), gt(b.v (#3), 10)), and_filters(eq(a.v (#1), 2), lt(b.v (#3), 20)), and_filters(eq(a.v (#1), 3), eq(b.v (#3), 30)))]
+        └── Join(Inner)
+            ├── build keys: [a.k (#0), c.k (#4)]
+            ├── probe keys: [b.k (#2), b.k (#2)]
+            ├── other filters: []
+            ├── Join(Inner)
+            │   ├── build keys: [c.k (#4)]
+            │   ├── probe keys: [a.k (#0)]
+            │   ├── other filters: []
+            │   ├── Scan
+            │   │   ├── table: default.c (#2)
+            │   │   ├── filters: [or_filters(eq(c.v (#5), 3), eq(c.v (#5), 1), eq(c.v (#5), 1))]
+            │   │   ├── order by: []
+            │   │   └── limit: NONE
+            │   └── Filter
+            │       ├── filters: [or_filters(eq(a.v (#1), 1), eq(a.v (#1), 2), eq(a.v (#1), 3))]
+            │       └── Scan
+            │           ├── table: default.a (#0)
+            │           ├── filters: [or_filters(eq(a.v (#1), 1), eq(a.v (#1), 2), eq(a.v (#1), 3))]
+            │           ├── order by: []
+            │           └── limit: NONE
+            └── Filter
+                ├── filters: [or_filters(gt(b.v (#3), 10), lt(b.v (#3), 20), eq(b.v (#3), 30))]
+                └── Scan
+                    ├── table: default.b (#1)
+                    ├── filters: [or_filters(gt(b.v (#3), 10), lt(b.v (#3), 20), eq(b.v (#3), 30))]
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== multi_table_or_alternate_input_order ===
+description: The same filtering semantics start from a different join cut.
+sql: SELECT a.k FROM a JOIN c ON a.k = c.k JOIN b ON a.k = b.k
+WHERE (a.v = 1 AND b.v > 10 AND c.v = 3)
+   OR (a.v = 2 AND b.v < 20 AND c.v = 1)
+   OR (a.v = 3 AND b.v = 30 AND c.v = 1)
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+EvalScalar
+├── scalars: [a.k (#0) AS (#0), c.k (#2) AS (#6), b.k (#4) AS (#7), a.v (#1) AS (#8), b.v (#5) AS (#9), c.v (#3) AS (#10)]
+└── Filter
+    ├── filters: [or_filters(and_filters(eq(a.v (#1), 1), gt(b.v (#5), 10), eq(c.v (#3), 3)), and_filters(eq(a.v (#1), 2), lt(b.v (#5), 20), eq(c.v (#3), 1)), and_filters(eq(a.v (#1), 3), eq(b.v (#5), 30), eq(c.v (#3), 1)))]
+    └── Join(Inner)
+        ├── build keys: [a.k (#0), c.k (#2)]
+        ├── probe keys: [b.k (#4), b.k (#4)]
+        ├── other filters: []
+        ├── Filter
+        │   ├── filters: [or_filters(and_filters(eq(a.v (#1), 1), eq(c.v (#3), 3)), and_filters(eq(a.v (#1), 2), eq(c.v (#3), 1)), and_filters(eq(a.v (#1), 3), eq(c.v (#3), 1)))]
+        │   └── Join(Inner)
+        │       ├── build keys: [c.k (#2)]
+        │       ├── probe keys: [a.k (#0)]
+        │       ├── other filters: []
+        │       ├── Filter
+        │       │   ├── filters: [or_filters(eq(c.v (#3), 3), eq(c.v (#3), 1), eq(c.v (#3), 1))]
+        │       │   └── Scan
+        │       │       ├── table: default.c (#1)
+        │       │       ├── filters: [or_filters(eq(c.v (#3), 3), eq(c.v (#3), 1), eq(c.v (#3), 1))]
+        │       │       ├── order by: []
+        │       │       └── limit: NONE
+        │       └── Filter
+        │           ├── filters: [or_filters(eq(a.v (#1), 1), eq(a.v (#1), 2), eq(a.v (#1), 3))]
+        │           └── Scan
+        │               ├── table: default.a (#0)
+        │               ├── filters: [or_filters(eq(a.v (#1), 1), eq(a.v (#1), 2), eq(a.v (#1), 3))]
+        │               ├── order by: []
+        │               └── limit: NONE
+        └── Scan
+            ├── table: default.b (#2)
+            ├── filters: [or_filters(gt(b.v (#5), 10), lt(b.v (#5), 20), eq(b.v (#5), 30))]
+            ├── order by: []
+            └── limit: NONE
+
+
+=== two_relation_residual ===
+description: A required non-equality condition must survive collection and reconstruction.
+sql: SELECT a.k FROM a JOIN b ON a.k = b.k JOIN c ON b.k = c.k
+WHERE a.v + b.v > 50
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+EvalScalar
+├── scalars: [a.k (#0) AS (#0), b.k (#2) AS (#6), c.k (#4) AS (#7), a.v (#1) AS (#8), b.v (#3) AS (#9)]
+└── Filter
+    ├── filters: [gt(plus(a.v (#1), b.v (#3)), 50)]
+    └── Join(Inner)
+        ├── build keys: [c.k (#4), b.k (#2)]
+        ├── probe keys: [a.k (#0), a.k (#0)]
+        ├── other filters: []
+        ├── Join(Inner)
+        │   ├── build keys: [c.k (#4)]
+        │   ├── probe keys: [b.k (#2)]
+        │   ├── other filters: []
+        │   ├── Scan
+        │   │   ├── table: default.c (#2)
+        │   │   ├── filters: []
+        │   │   ├── order by: []
+        │   │   └── limit: NONE
+        │   └── Scan
+        │       ├── table: default.b (#1)
+        │       ├── filters: []
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Scan
+            ├── table: default.a (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== three_relation_residual ===
+description: A predicate requiring all three inputs cannot be applied to a smaller subtree.
+sql: SELECT a.k FROM a JOIN b ON a.k = b.k JOIN c ON b.k = c.k
+WHERE a.v + b.v > c.v
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+EvalScalar
+├── scalars: [a.k (#0) AS (#0), b.k (#2) AS (#6), c.k (#4) AS (#7), a.v (#1) AS (#8), b.v (#3) AS (#9), c.v (#5) AS (#10)]
+└── Filter
+    ├── filters: [gt(plus(a.v (#1), b.v (#3)), c.v (#5))]
+    └── Join(Inner)
+        ├── build keys: [c.k (#4), b.k (#2)]
+        ├── probe keys: [a.k (#0), a.k (#0)]
+        ├── other filters: []
+        ├── Join(Inner)
+        │   ├── build keys: [c.k (#4)]
+        │   ├── probe keys: [b.k (#2)]
+        │   ├── other filters: []
+        │   ├── Scan
+        │   │   ├── table: default.c (#2)
+        │   │   ├── filters: []
+        │   │   ├── order by: []
+        │   │   └── limit: NONE
+        │   └── Scan
+        │       ├── table: default.b (#1)
+        │       ├── filters: []
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Scan
+            ├── table: default.a (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== equality_chain ===
+description: Record the equality conditions chosen from a transitive chain.
+sql: SELECT a.k FROM a JOIN b ON a.k = b.k JOIN c ON b.k = c.k
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+EvalScalar
+├── scalars: [a.k (#0) AS (#0), b.k (#2) AS (#6), c.k (#4) AS (#7)]
+└── Join(Inner)
+    ├── build keys: [c.k (#4), b.k (#2)]
+    ├── probe keys: [a.k (#0), a.k (#0)]
+    ├── other filters: []
+    ├── Join(Inner)
+    │   ├── build keys: [c.k (#4)]
+    │   ├── probe keys: [b.k (#2)]
+    │   ├── other filters: []
+    │   ├── Scan
+    │   │   ├── table: default.c (#2)
+    │   │   ├── filters: []
+    │   │   ├── order by: []
+    │   │   └── limit: NONE
+    │   └── Scan
+    │       ├── table: default.b (#1)
+    │       ├── filters: []
+    │       ├── order by: []
+    │       └── limit: NONE
+    └── Scan
+        ├── table: default.a (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== equality_constant_propagation ===
+description: A constant propagated across equality can change the inputs seen by reorder.
+sql: SELECT a.k FROM a JOIN b ON a.k = b.k JOIN c ON b.k = c.k
+WHERE a.k = 7
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+EvalScalar
+├── scalars: [a.k (#0) AS (#0), b.k (#2) AS (#6), c.k (#4) AS (#7)]
+└── Join(Inner)
+    ├── build keys: [c.k (#4), b.k (#2)]
+    ├── probe keys: [a.k (#0), a.k (#0)]
+    ├── other filters: []
+    ├── Join(Inner)
+    │   ├── build keys: [c.k (#4)]
+    │   ├── probe keys: [b.k (#2)]
+    │   ├── other filters: []
+    │   ├── Scan
+    │   │   ├── table: default.c (#2)
+    │   │   ├── filters: [eq(c.k (#4), 7), eq(7, 7)]
+    │   │   ├── order by: []
+    │   │   └── limit: NONE
+    │   └── Scan
+    │       ├── table: default.b (#1)
+    │       ├── filters: [eq(b.k (#2), 7), eq(7, 7)]
+    │       ├── order by: []
+    │       └── limit: NONE
+    └── Scan
+        ├── table: default.a (#0)
+        ├── filters: [eq(a.k (#0), 7), eq(7, 7)]
+        ├── order by: []
+        └── limit: NONE
+
+
+=== both_sides_already_filtered ===
+description: Both sides already contain the predicate that equality substitution can derive.
+sql: SELECT a.k FROM a JOIN b ON a.k = b.k
+WHERE a.k % 2 = 0 AND b.k % 2 = 0
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+EvalScalar
+├── scalars: [a.k (#0) AS (#0), b.k (#2) AS (#4)]
+└── Join(Inner)
+    ├── build keys: [b.k (#2)]
+    ├── probe keys: [a.k (#0)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.b (#1)
+    │   ├── filters: [eq(modulo(b.k (#2), 2), 0)]
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.a (#0)
+        ├── filters: [eq(modulo(a.k (#0), 2), 0)]
+        ├── order by: []
+        └── limit: NONE
+
+
+=== alias_rewrite_collision ===
+description: Distinct projected aliases become the same scalar after filter pushdown.
+sql: SELECT x FROM (SELECT k AS x, k AS y FROM a) t
+WHERE x > 10 AND y > 10
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+EvalScalar
+├── scalars: [a.k (#0) AS (#0)]
+└── Scan
+    ├── table: default.a (#0)
+    ├── filters: [gt(a.k (#0), 10)]
+    ├── order by: []
+    └── limit: NONE
+
+
+=== outer_join_boundary ===
+description: A non-null-rejecting residual must preserve the outer-join boundary.
+sql: SELECT a.k, c.v FROM a JOIN b ON a.k = b.k
+LEFT JOIN c ON b.k = c.k
+WHERE c.v IS NULL OR a.v = 1
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+EvalScalar
+├── scalars: [a.k (#0) AS (#0), v (#7) AS (#7), b.k (#2) AS (#8), a.v (#1) AS (#9)]
+└── Filter
+    ├── filters: [or_filters(not(is_not_null(v (#7))), eq(a.v (#1), 1))]
+    └── Join(Left)
+        ├── build keys: [k (#6), k (#6)]
+        ├── probe keys: [b.k (#2), a.k (#0)]
+        ├── other filters: []
+        ├── EvalScalar
+        │   ├── scalars: [CAST(c.k (#4) AS Int64 NULL) AS (#6), CAST(c.v (#5) AS Int64 NULL) AS (#7)]
+        │   └── Scan
+        │       ├── table: default.c (#2)
+        │       ├── filters: []
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Join(Inner)
+            ├── build keys: [b.k (#2)]
+            ├── probe keys: [a.k (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.b (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.a (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
