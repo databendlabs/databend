@@ -1,3 +1,47 @@
+=== hub_repeated_candidate_evaluation ===
+description: Independent bindings exercise repeated hub splits; reuse must preserve the complete plan and binding identities.
+sql: SELECT b0.k FROM b b0
+JOIN b b1 ON b0.k = b1.k
+JOIN b b2 ON b0.k = b2.k
+JOIN b b3 ON b0.k = b3.k
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+EvalScalar
+├── scalars: [b.k (#0) AS (#0), b.k (#2) AS (#8), b.k (#4) AS (#9), b.k (#6) AS (#10)]
+└── Join(Inner)
+    ├── build keys: [b.k (#6), b.k (#4), b.k (#6), b.k (#4)]
+    ├── probe keys: [b.k (#0), b.k (#0), b.k (#2), b.k (#2)]
+    ├── other filters: []
+    ├── Join(Inner)
+    │   ├── build keys: [b.k (#6)]
+    │   ├── probe keys: [b.k (#4)]
+    │   ├── other filters: []
+    │   ├── Scan
+    │   │   ├── table: default.b (#3)
+    │   │   ├── filters: []
+    │   │   ├── order by: []
+    │   │   └── limit: NONE
+    │   └── Scan
+    │       ├── table: default.b (#2)
+    │       ├── filters: []
+    │       ├── order by: []
+    │       └── limit: NONE
+    └── Join(Inner)
+        ├── build keys: [b.k (#2)]
+        ├── probe keys: [b.k (#0)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.b (#1)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.b (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
 === single_table_or_extraction ===
 description: Single-table OR restrictions can reduce base inputs before reordering.
 sql: SELECT a.k FROM a JOIN b ON a.k = b.k
