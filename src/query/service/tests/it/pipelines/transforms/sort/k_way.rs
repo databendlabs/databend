@@ -67,7 +67,7 @@ fn create_pipeline(
         enable_queries_executor: false,
         max_threads: 8,
         executor_node_id: "".to_string(),
-        perf_event_groups: vec![],
+        perf_enabled: false,
     };
     let executor = QueryPipelineExecutor::create(pipeline, settings)?;
     Ok((executor, rx))

@@ -27,9 +27,11 @@ use arrow_flight::flight_service_client::FlightServiceClient;
 use async_channel::Receiver;
 use databend_common_base::JoinHandle;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::AllocProfile;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::QueryPerf;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::spawn_blocking;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -1353,7 +1355,22 @@ impl QueryCoordinator {
         };
 
         let settings = ExecutorSettings::try_create(info.query_ctx.clone())?;
-        let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
+
+        // Under EXPLAIN PERF MEMORY, the processors of this node inherit the profile from the
+        // payload the executor graph is built with. The coordinator samples its fragments with
+        // the profile of the statement, the pipelines are linked into the statement's pipeline.
+        let alloc_profile = match info.query_ctx.get_perf_config().memory_enabled {
+            true if !self.is_request_server => Some(AllocProfile::create()),
+            _ => None,
+        };
+        let executor = {
+            let mut payload = ThreadTracker::new_tracking_payload();
+            if alloc_profile.is_some() {
+                payload.alloc_profile = alloc_profile.clone();
+            }
+            let _guard = ThreadTracker::tracking(payload);
+            PipelineCompleteExecutor::from_pipelines(pipelines, settings)?
+        };
 
         assert!(self.flight_data_senders.is_empty() && self.flight_data_receivers.is_empty());
         let info_mut = self.info.as_mut().expect("Query info is None");
@@ -1378,6 +1395,7 @@ impl QueryCoordinator {
             request_server_exchange,
             executor.get_inner(),
             perf_guard,
+            alloc_profile,
             finished_profiling_rx,
         );
 

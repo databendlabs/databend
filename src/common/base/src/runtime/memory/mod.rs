@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod alloc_error_hook;
+mod alloc_profile;
 mod mem_stat;
 mod memory_manager;
 mod stat_buffer_global;
@@ -23,6 +24,14 @@ pub use alloc_error_hook::is_alloc_error_panic;
 pub(crate) use alloc_error_hook::mark_alloc_error_panic_for_test;
 pub use alloc_error_hook::set_alloc_error_hook;
 pub use alloc_error_hook::take_alloc_error_panic;
+pub use alloc_profile::AllocProfile;
+pub use alloc_profile::AllocStack;
+pub use alloc_profile::AllocSummaryLevel;
+pub use alloc_profile::AllocSummaryRow;
+pub use alloc_profile::LOW_CONFIDENCE_SAMPLES;
+pub use alloc_profile::SAMPLE_INTERVAL;
+pub use alloc_profile::alloc_flamegraph;
+pub use alloc_profile::summarize_alloc_stacks;
 pub use mem_stat::GLOBAL_MEM_STAT;
 pub use mem_stat::MemStat;
 pub use mem_stat::OutOfLimit;

@@ -1,0 +1,14 @@
+statement ok
+explain perf memory select avg(number) from numbers(10000);
+
+statement ok
+explain perf memory select number % 100 as k, count(*) from numbers(1000000) group by k order by k;
+
+statement ok
+explain perf memory select * from numbers(10) where number > 100;
+
+statement ok
+explain perf memory (format='table', limit=2) select number % 100 as k, count(*) from numbers(1000000) group by k order by k;
+
+statement error 1005
+explain perf memory (format='xml') select 1;

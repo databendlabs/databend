@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::ExecutionInfo;
 
@@ -24,7 +23,6 @@ use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContextPerf;
 use crate::sessions::TableContextQueryProfile;
 
 fn run_hooks(query_ctx: Arc<QueryContext>) -> Result<()> {
@@ -88,11 +86,6 @@ impl QueryFinishHooks {
         ctx: Arc<QueryContext>,
     ) -> impl Fn(&ExecutionInfo) -> Result<()> + Send + Sync + 'static {
         move |info: &ExecutionInfo| {
-            // Collect local hw perf counters while the executor is still alive.
-            if ctx.get_perf_config().has_hw_counters() {
-                let node_id = GlobalConfig::instance().query.node_id.clone();
-                ctx.collect_local_perf_counters(node_id);
-            }
             if self.collect_profiles {
                 ctx.add_query_profiles(&info.profiling);
             }

@@ -15,4 +15,5 @@
 mod cluster;
 mod clustering_information;
 mod config;
+mod perf;
 mod status;
