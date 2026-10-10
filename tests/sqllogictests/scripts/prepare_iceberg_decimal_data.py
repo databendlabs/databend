@@ -12,6 +12,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from pyarrow.fs import S3FileSystem
 from pyiceberg.catalog import load_catalog
+from pyiceberg.io.pyarrow import schema_to_pyarrow
 from pyiceberg.schema import Schema
 from pyiceberg.types import DecimalType, LongType, NestedField
 
@@ -39,14 +40,20 @@ schema = Schema(
     NestedField(2, "d", DecimalType(15, 2)),
 )
 table = catalog.create_table(name, schema=schema)
+# Databend projects Iceberg columns by their Parquet field IDs, not by names.
+# Use the catalog's schema so the manually written file carries those IDs too.
+arrow_schema = schema_to_pyarrow(table.schema(), include_field_ids=True)
 
 
 def rows(keys, decimals):
     return pa.table(
         {
             "k": pa.array(keys, type=pa.int64()),
-            "d": pa.array([Decimal(value) for value in decimals], type=pa.decimal128(15, 2)),
-        }
+            "d": pa.array(
+                [Decimal(value) for value in decimals], type=pa.decimal128(15, 2)
+            ),
+        },
+        schema=arrow_schema,
     )
 
 
@@ -63,7 +70,11 @@ path = f"{parsed.netloc}{parsed.path}"
 with filesystem.open_output_stream(path) as output:
     pq.write_table(rows([1, 2, 3], ["123.45", "-7.01", "99999.99"]), output)
 with filesystem.open_input_file(path) as source:
-    decimal = pq.ParquetFile(source).schema.column(1)
+    parquet = pq.ParquetFile(source)
+    for field in table.schema().fields:
+        metadata = parquet.schema_arrow.field(field.name).metadata
+        assert int(metadata[b"PARQUET:field_id"]) == field.field_id
+    decimal = parquet.schema.column(1)
     assert decimal.physical_type == "FIXED_LEN_BYTE_ARRAY" and decimal.length == 7
 
 table.add_files([location])
