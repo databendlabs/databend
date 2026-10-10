@@ -23,6 +23,7 @@ use databend_common_exception::Result;
 use databend_common_sql::Metadata;
 use databend_common_sql::optimize;
 use databend_common_sql::optimizer::OptimizerContext;
+use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Plan;
 use databend_common_sql_test_support::TestCase;
 use databend_common_sql_test_support::TestCaseRunner;
@@ -44,6 +45,13 @@ use crate::sql::planner::optimizer::test_utils::raw_plan;
 struct ServiceRunner(Arc<QueryContext>);
 
 impl TestCaseRunner for ServiceRunner {
+    fn stat_context(&self) -> Result<StatContext> {
+        Ok(StatContext::new(
+            self.0.get_function_context()?,
+            &self.0.get_settings(),
+        ))
+    }
+
     async fn bind_sql(&self, sql: &str) -> Result<Plan> {
         raw_plan(&self.0, sql).await
     }

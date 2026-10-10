@@ -148,7 +148,7 @@ impl AccessChecker for ManagementModeAccess {
                     "Management Mode Error: Access denied for operation:{:?} in management-mode",
                     plan.format_indent(
                         Default::default(),
-                        &StatContext::new(ctx.get_function_context()?),
+                        &StatContext::new(ctx.get_function_context()?, &ctx.get_settings()),
                     )?
                 )));
             }

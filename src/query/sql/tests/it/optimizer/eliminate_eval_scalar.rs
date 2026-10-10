@@ -20,7 +20,6 @@ use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::ExprVisitor;
 use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::PVisitAction as VisitAction;
-use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::optimize;
 use databend_common_sql::optimizer::optimizers::operator::EliminateEvalScalarOptimizer;
 use databend_common_sql::plans::Plan;
@@ -119,14 +118,14 @@ async fn test_physical_eliminate_eval_scalar() -> Result<()> {
                 writeln!(
                     file,
                     "raw_plan:\n{}",
-                    raw.format_indent(Default::default(), &StatContext::default())?
+                    raw.format_indent(Default::default(), &ctx.stat_context()?)?
                 )?;
             }
             writeln!(file, "skip: {skipped}")?;
             writeln!(
                 file,
                 "optimized_plan:\n{}",
-                planned.format_indent(Default::default(), &StatContext::default())?
+                planned.format_indent(Default::default(), &ctx.stat_context()?)?
             )?;
         }
     }

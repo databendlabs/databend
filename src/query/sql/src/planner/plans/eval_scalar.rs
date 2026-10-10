@@ -387,7 +387,7 @@ mod tests {
         );
         let eval = SExpr::create_unary(EvalScalar { items }, input);
         RelExpr::with_s_expr(&eval)
-            .derive_cardinality(&StatContext::default())
+            .derive_cardinality(&StatContext::without_settings(Default::default()))
             .unwrap()
     }
 
@@ -420,7 +420,7 @@ mod tests {
         );
 
         let derived = RelExpr::with_s_expr(&eval)
-            .derive_cardinality(&StatContext::default())
+            .derive_cardinality(&StatContext::without_settings(Default::default()))
             .unwrap();
         assert!(Arc::ptr_eq(&derived, &input_stats));
     }

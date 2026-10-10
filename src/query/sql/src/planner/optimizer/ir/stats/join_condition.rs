@@ -31,12 +31,22 @@ use databend_common_statistics::NumericHistogramType;
 use databend_common_statistics::StatBounds;
 
 use super::ColumnStat;
+use super::FilterAndStrategy;
 use super::Selectivity;
 use super::SelectivityVisitor;
 use crate::Symbol;
 use crate::optimizer::ir::Statistics;
 use crate::plans::EvalScalar;
 use crate::plans::ScalarExpr;
+
+/// A synthetic histogram that has lost more than this fraction of its distinct
+/// values to filters on other columns is not trusted for join overlap; the
+/// NDV formula (containment only) is used instead. Any value below 1.0 means
+/// "the histogram was scaled at all". Dimension filters in practice keep well
+/// under 10% of a key range (a year of `date_dim` is 0.5%), so a threshold
+/// near 1.0 catches them while leaving unfiltered or lightly filtered inputs
+/// on the histogram path.
+const JOIN_SYNTHETIC_MIN_DISTINCT_RETENTION: f64 = 0.5;
 
 #[derive(Clone, Debug)]
 pub(super) struct EquiCondition<'expr, 'stats> {
@@ -146,6 +156,7 @@ impl NonEquiCondition {
         input_cardinality: StatCardinality,
         column_row_scales: &HashMap<Symbol, StatCardinality>,
         func_ctx: &FunctionContext,
+        and_strategy: FilterAndStrategy,
     ) -> Result<Self> {
         let selectivity = SelectivityVisitor::estimate(
             predicate,
@@ -155,6 +166,7 @@ impl NonEquiCondition {
             &input.count_min_sketch,
             column_row_scales,
             func_ctx,
+            and_strategy,
         )?;
         Ok(Self { selectivity })
     }
@@ -346,8 +358,13 @@ impl JoinEstimate {
     ) -> Result<Self> {
         let histogram_estimation = match (left.histogram(), right.histogram()) {
             (Some(left_hist), Some(right_hist))
-                if left_hist.is_range_distorted() || right_hist.is_range_distorted() =>
+                if left_hist.is_range_sparse(JOIN_SYNTHETIC_MIN_DISTINCT_RETENTION)
+                    || right_hist.is_range_sparse(JOIN_SYNTHETIC_MIN_DISTINCT_RETENTION) =>
             {
+                // A synthetic histogram whose surviving values no longer fill its
+                // buckets has lost positional information: bucket overlap would
+                // treat those values as spread over the pre-filter range. Fall
+                // back to the NDV formula, which only assumes containment.
                 None
             }
             (Some(left_hist), Some(right_hist)) => match numeric_return_type {

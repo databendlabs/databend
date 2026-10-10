@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_sql::optimizer::ir::StatContext;
@@ -26,14 +27,15 @@ async fn write_optimized_case(file: &mut impl std::io::Write, case: &SqlTestCase
     let raw_plan = ctx.bind_sql(case.sql).await?;
     let optimized_plan = ctx.optimize_plan(raw_plan.clone()).await?;
 
-    let stat_ctx = StatContext {
-        function_context: FunctionContext {
+    let stat_ctx = StatContext::new(
+        FunctionContext {
             now: chrono::DateTime::parse_from_rfc3339("2020-01-01T16:39:57Z")
                 .unwrap()
                 .to_utc(),
             ..Default::default()
         },
-    };
+        &ctx.get_settings(),
+    );
 
     write_case_header(file, case)?;
     writeln!(file, "raw_plan:")?;

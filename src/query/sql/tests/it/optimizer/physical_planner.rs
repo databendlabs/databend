@@ -18,7 +18,6 @@ use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::QueryPlan;
-use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::optimize;
 use databend_common_sql::plans::Plan;
 
@@ -84,12 +83,12 @@ async fn test_query_planning_boundary() -> Result<()> {
             writeln!(
                 file,
                 "raw_plan:\n{}",
-                raw.format_indent(Default::default(), &StatContext::default())?
+                raw.format_indent(Default::default(), &ctx.stat_context()?)?
             )?;
             writeln!(
                 file,
                 "planned_query:\n{}",
-                planned.format_indent(Default::default(), &StatContext::default())?
+                planned.format_indent(Default::default(), &ctx.stat_context()?)?
             )?;
             let without_merge = planned.remove_exchange_for_select();
             let Plan::Query { s_expr, .. } = without_merge else {
@@ -237,12 +236,12 @@ async fn test_nested_queries_keep_planned_state() -> Result<()> {
         writeln!(
             file,
             "raw_source:\n{}",
-            source(&raw).format_indent(Default::default(), &StatContext::default())?
+            source(&raw).format_indent(Default::default(), &ctx.stat_context()?)?
         )?;
         writeln!(
             file,
             "planned_source:\n{}",
-            source(&planned).format_indent(Default::default(), &StatContext::default())?
+            source(&planned).format_indent(Default::default(), &ctx.stat_context()?)?
         )?;
     }
     Ok(())
@@ -277,8 +276,7 @@ async fn test_physical_expression_fork_equivalence() -> Result<()> {
         };
         let logical = s_expr.logical()?.clone();
         let property = logical.derive_relational_prop()?;
-        let statistics =
-            RelExpr::with_s_expr(&logical).derive_cardinality(&StatContext::default())?;
+        let statistics = RelExpr::with_s_expr(&logical).derive_cardinality(&ctx.stat_context()?)?;
         let physical = PExpr::from(logical.clone());
         assert!(std::sync::Arc::ptr_eq(
             &property,
@@ -286,13 +284,13 @@ async fn test_physical_expression_fork_equivalence() -> Result<()> {
         ));
         assert!(std::sync::Arc::ptr_eq(
             &statistics,
-            &RelExpr::with_p_expr(&physical).derive_cardinality(&StatContext::default())?
+            &RelExpr::with_p_expr(&physical).derive_cardinality(&ctx.stat_context()?)?
         ));
         physical.validate_types(metadata)?;
         physical.validate_column_scope(metadata)?;
         assert_eq!(
-            logical.pretty_format(&metadata.read(), &StatContext::default())?,
-            physical.pretty_format(&metadata.read(), &StatContext::default())?
+            logical.pretty_format(&metadata.read(), &ctx.stat_context()?)?,
+            physical.pretty_format(&metadata.read(), &ctx.stat_context()?)?
         );
         fn hash(expr: &impl Hash) -> u64 {
             let mut h = std::collections::hash_map::DefaultHasher::new();

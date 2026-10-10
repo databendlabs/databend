@@ -19,7 +19,6 @@ use databend_common_statistics::TypedHistogramBucket;
 #[test]
 fn test_histogram() {
     let histogram = Histogram::UInt(TypedHistogram {
-        accuracy: false,
         row_scale: 1.0,
         buckets: vec![
             TypedHistogramBucket::new(0, 1, 2.0, 1.0),
