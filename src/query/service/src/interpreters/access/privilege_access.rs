@@ -1841,7 +1841,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::DropDatabase(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Drop, plan.if_exists).await?;
             }
-            Plan::UndropDatabase(_) | Plan::DropIndex(_) => {
+            Plan::UndropDatabase(_) => {
                 // undroptable/db need convert name to id. But because of drop, can not find the id. Upgrade Object to Database.
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Drop, false, false)
                     .await?;
@@ -1961,6 +1961,10 @@ impl AccessChecker for PrivilegeAccess {
                 }
                 if let Some(query) = &plan.as_select {
                     self.check(ctx, query).await?;
+                }
+                for dictionary in plan.index_user_dictionaries.iter().flatten().map(|(_, d)| d) {
+                    self.validate_stage_access(&dictionary.stage_info, UserPrivilegeType::Read)
+                        .await?;
                 }
             }
             Plan::CreateMaterializedView(plan) => {
@@ -2435,7 +2439,6 @@ impl AccessChecker for PrivilegeAccess {
             Plan::RenameDatabase(_)
             | Plan::RevertTable(_)
             | Plan::AlterUDF(_)
-            | Plan::RefreshIndex(_)
             | Plan::AlterRole(_)
             | Plan::AlterUser(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false, false)
@@ -2543,7 +2546,6 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::AlterPasswordPolicy(_)
             | Plan::DropPasswordPolicy(_)
             | Plan::DescPasswordPolicy(_)
-            | Plan::CreateIndex(_)
             | Plan::CreateNotification(_)
             | Plan::DropNotification(_)
             | Plan::DescNotification(_)
@@ -2566,6 +2568,10 @@ impl AccessChecker for PrivilegeAccess {
             Plan::CreateTableIndex(plan) => {
                 self.validate_table_index_access(&plan.catalog, &plan.database, &plan.table)
                     .await?;
+                if let Some(dictionary) = &plan.user_dictionary {
+                    self.validate_stage_access(&dictionary.stage_info, UserPrivilegeType::Read)
+                        .await?;
+                }
             }
             Plan::CreateDatamaskPolicy(_) => {
                 self

@@ -174,9 +174,6 @@ impl Plan {
             Plan::RefreshDynamicTable(_) => Ok("RefreshDynamicTable".to_string()),
 
             // Indexes
-            Plan::CreateIndex(_) => Ok("CreateIndex".to_string()),
-            Plan::DropIndex(_) => Ok("DropIndex".to_string()),
-            Plan::RefreshIndex(_) => Ok("RefreshIndex".to_string()),
             Plan::CreateTableIndex(_) => Ok("CreateTableIndex".to_string()),
             Plan::DropTableIndex(_) => Ok("DropTableIndex".to_string()),
             Plan::RefreshTableIndex(_) => Ok("RefreshTableIndex".to_string()),

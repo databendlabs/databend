@@ -66,7 +66,6 @@ use crate::plans::CreateDatabasePlan;
 use crate::plans::CreateDatamaskPolicyPlan;
 use crate::plans::CreateDynamicTablePlan;
 use crate::plans::CreateFileFormatPlan;
-use crate::plans::CreateIndexPlan;
 use crate::plans::CreateMaterializedViewPlan;
 use crate::plans::CreateNetworkPolicyPlan;
 use crate::plans::CreateNotificationPlan;
@@ -108,7 +107,6 @@ use crate::plans::DropConnectionPlan;
 use crate::plans::DropDatabasePlan;
 use crate::plans::DropDatamaskPolicyPlan;
 use crate::plans::DropFileFormatPlan;
-use crate::plans::DropIndexPlan;
 use crate::plans::DropMaterializedViewPlan;
 use crate::plans::DropNetworkPolicyPlan;
 use crate::plans::DropNotificationPlan;
@@ -155,7 +153,6 @@ use crate::plans::PresignPlan;
 use crate::plans::ReclusterPlan;
 use crate::plans::RefreshDatabaseCachePlan;
 use crate::plans::RefreshDynamicTablePlan;
-use crate::plans::RefreshIndexPlan;
 use crate::plans::RefreshLineagePlan;
 use crate::plans::RefreshMaterializedViewPlan;
 use crate::plans::RefreshTableCachePlan;
@@ -392,9 +389,6 @@ pub enum Plan {
     DropStream(Box<DropStreamPlan>),
 
     // Indexes
-    CreateIndex(Box<CreateIndexPlan>),
-    DropIndex(Box<DropIndexPlan>),
-    RefreshIndex(Box<RefreshIndexPlan>),
     CreateTableIndex(Box<CreateTableIndexPlan>),
     DropTableIndex(Box<DropTableIndexPlan>),
     RefreshTableIndex(Box<RefreshTableIndexPlan>),

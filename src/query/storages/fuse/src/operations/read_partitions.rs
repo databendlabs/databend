@@ -82,6 +82,10 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::ROW_COUN
 use databend_storages_common_table_meta::meta::column_oriented_segment::meta_name;
 use databend_storages_common_table_meta::meta::column_oriented_segment::stat_name;
 use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::NGRAM_INDEX_OPT_BLOOM_SIZE;
+use databend_storages_common_table_meta::table::NGRAM_INDEX_OPT_FALSE_POSITIVE_RATE;
+use databend_storages_common_table_meta::table::NGRAM_INDEX_OPT_GRAM_SIZE;
+use databend_storages_common_table_meta::table::NGRAM_INDEX_OPT_HASH_ALGORITHM;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
@@ -1015,19 +1019,19 @@ impl FuseTable {
                 continue;
             }
 
-            let gram_size = match index.options.get("gram_size") {
+            let gram_size = match index.options.get(NGRAM_INDEX_OPT_GRAM_SIZE) {
                 None => DEFAULT_GRAM_SIZE,
                 Some(s) => s.parse::<usize>()?,
             };
-            let bloom_size = match index.options.get("bloom_size") {
+            let bloom_size = match index.options.get(NGRAM_INDEX_OPT_BLOOM_SIZE) {
                 None => DEFAULT_BLOOM_SIZE,
                 Some(s) => s.parse::<u64>()?,
             };
-            let false_positive_rate = match index.options.get("false_positive_rate") {
+            let false_positive_rate = match index.options.get(NGRAM_INDEX_OPT_FALSE_POSITIVE_RATE) {
                 None => DEFAULT_NGRAM_FALSE_POSITIVE_RATE,
                 Some(s) => s.parse::<f64>()?,
             };
-            let hash_algorithm = match index.options.get("hash_algorithm") {
+            let hash_algorithm = match index.options.get(NGRAM_INDEX_OPT_HASH_ALGORITHM) {
                 None => NgramHashAlgorithm::City64V0,
                 Some(s) => NgramHashAlgorithm::parse(s)?,
             };
