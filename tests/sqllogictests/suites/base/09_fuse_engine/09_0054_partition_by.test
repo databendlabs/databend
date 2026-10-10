@@ -316,6 +316,13 @@ SELECT count(*) FROM t
 ----
 7
 
+# These layout checks rely on adjacent partition runs arriving in input order.
+# Parallel append serialization can reorder whole blocks and coalesce segments
+# of the same partition; keep the exact-count cases single-threaded. The race
+# and fragmented-input cases below explicitly restore parallel execution.
+statement ok
+SET max_threads=1
+
 statement ok
 CREATE TABLE partition_only(p INT, v STRING) PARTITION BY (p % 2) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
 
@@ -593,6 +600,11 @@ ALTER TABLE t MODIFY COLUMN part BIGINT
 statement ok
 ALTER TABLE t MODIFY COLUMN c BIGINT
 
+# Keep the following exact layout assertions independent of append completion
+# order, just as for partition_only above.
+statement ok
+SET max_threads=1
+
 # A filter with no correlation to the partition key must not prune any partition.
 statement ok
 CREATE TABLE unrelated_filter(p INT, v STRING) PARTITION BY (p % 2) ROW_PER_BLOCK=1000 BLOCK_PER_SEGMENT=1000
@@ -660,6 +672,9 @@ SELECT p, length(v) FROM ctas_partitioned
 0 1
 2 1
 3 1
+
+statement ok
+SET max_threads=4
 
 # Missing DEFAULT columns must be materialized before the hash write layout
 # evaluates the partition expression. Reversing those pipeline stages makes the
