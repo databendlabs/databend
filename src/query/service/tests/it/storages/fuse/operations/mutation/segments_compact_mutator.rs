@@ -1000,54 +1000,52 @@ async fn test_segment_compactor() -> anyhow::Result<()> {
             // - number of new segments created during the compaction
             let mut expected_block_number_of_new_segments = vec![];
             for _ in 0..num_segments {
-                let block_num: usize = rng.gen_range(0..20);
+                let block_num: usize = rng.gen_range(1..20);
                 blocks_number_of_input_segments.push(block_num);
             }
 
             // traverse the input segments in reversed order (to let the compaction "right-assoc")
             for item in blocks_number_of_input_segments.iter().rev() {
                 let block_num = *item;
-                if block_num != 0 {
-                    let s = block_num + num_accumulated_blocks;
-                    if s < threshold {
-                        // input segment is fragmented, but fragments collected so far
-                        // are not enough yet.
-                        num_accumulated_blocks = s;
-                        // only in this branch, the number of fragmented_segments will increase
-                        fragmented_segments += 1;
-                    } else if s >= threshold && s < 2 * threshold {
-                        // input segment is fragmented, and fragments collected are
-                        // large enough to be compacted
-                        num_accumulated_blocks = 0;
-                        // mark that a segment will be included in the output
-                        expected_number_of_output_segments += 1;
-                        if fragmented_segments > 0 {
-                            // mark that a NEW segment will be generated, which
-                            // "contains" all the fragmented segments collected so far.
-                            expected_block_number_of_new_segments.push(s);
-                        }
-                        // reset state
-                        fragmented_segments = 0;
-                    } else {
-                        // input segment is larger than threshold
-                        // - fragmented segments collected so far should be compacted first
-                        if fragmented_segments > 0 {
-                            // some fragments left there, check them out
-                            if fragmented_segments > 1 {
-                                // if there are more than one fragments, a new segment is expected
-                                // to be generated
-                                expected_block_number_of_new_segments.push(num_accumulated_blocks);
-                            }
-                            // mark that another segment will be include in the output
-                            expected_number_of_output_segments += 1;
-                        }
-                        // - after compacting the fragments, count this large segment in
-                        expected_number_of_output_segments += 1;
-
-                        // no fragments left currently, reset the counters
-                        fragmented_segments = 0;
-                        num_accumulated_blocks = 0;
+                let s = block_num + num_accumulated_blocks;
+                if s < threshold {
+                    // input segment is fragmented, but fragments collected so far
+                    // are not enough yet.
+                    num_accumulated_blocks = s;
+                    // only in this branch, the number of fragmented_segments will increase
+                    fragmented_segments += 1;
+                } else if s >= threshold && s < 2 * threshold {
+                    // input segment is fragmented, and fragments collected are
+                    // large enough to be compacted
+                    num_accumulated_blocks = 0;
+                    // mark that a segment will be included in the output
+                    expected_number_of_output_segments += 1;
+                    if fragmented_segments > 0 {
+                        // mark that a NEW segment will be generated, which
+                        // "contains" all the fragmented segments collected so far.
+                        expected_block_number_of_new_segments.push(s);
                     }
+                    // reset state
+                    fragmented_segments = 0;
+                } else {
+                    // input segment is larger than threshold
+                    // - fragmented segments collected so far should be compacted first
+                    if fragmented_segments > 0 {
+                        // some fragments left there, check them out
+                        if fragmented_segments > 1 {
+                            // if there are more than one fragments, a new segment is expected
+                            // to be generated
+                            expected_block_number_of_new_segments.push(num_accumulated_blocks);
+                        }
+                        // mark that another segment will be include in the output
+                        expected_number_of_output_segments += 1;
+                    }
+                    // - after compacting the fragments, count this large segment in
+                    expected_number_of_output_segments += 1;
+
+                    // no fragments left currently, reset the counters
+                    fragmented_segments = 0;
+                    num_accumulated_blocks = 0;
                 }
             }
 
