@@ -13,7 +13,11 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::StatContext;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::SortItem;
 
 use crate::framework::golden::SqlTestCase;
 use crate::framework::golden::open_golden_file;
@@ -38,9 +42,30 @@ async fn write_optimized_case(file: &mut impl std::io::Write, case: &SqlTestCase
         "{}",
         optimized_plan.format_indent(Default::default(), &StatContext::default())?
     )?;
+    // The plan formatter does not show rank limit keys, so print them separately.
+    let Plan::Query { s_expr, .. } = &optimized_plan else {
+        unreachable!("test optimizer should return Plan::Query");
+    };
+    match find_rank_limit(s_expr) {
+        Some((items, limit)) => {
+            let keys = items
+                .iter()
+                .map(|item| format!("#{} {}", item.index, if item.asc { "ASC" } else { "DESC" }))
+                .collect::<Vec<_>>();
+            writeln!(file, "rank_limit: [{}] limit {}", keys.join(", "), limit)?;
+        }
+        None => writeln!(file, "rank_limit: NONE")?,
+    }
     writeln!(file)?;
 
     Ok(())
+}
+
+fn find_rank_limit(s_expr: &SExpr) -> Option<&(Vec<SortItem>, usize)> {
+    match s_expr.plan() {
+        RelOperator::Aggregate(agg) if agg.rank_limit.is_some() => agg.rank_limit.as_ref(),
+        _ => s_expr.children().find_map(find_rank_limit),
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -71,6 +96,18 @@ async fn test_push_down_rank_limit_aggregate_outcomes() -> Result<()> {
             description: "Rank limits with multiple group keys must not install scan ordering for the runtime single-key filter.",
             setup_sqls: &[EVENTS_TABLE],
             sql: "SELECT category, value, count(*) FROM events GROUP BY category, value ORDER BY category LIMIT 3",
+        },
+        SqlTestCase {
+            name: "rank_limit_follows_order_by_key_order",
+            description: "When ORDER BY lists the group keys in a different order, the rank limit keys must follow the ORDER BY order.",
+            setup_sqls: &[EVENTS_TABLE],
+            sql: "SELECT category, value, count(*) FROM events GROUP BY category, value ORDER BY value DESC, category LIMIT 3",
+        },
+        SqlTestCase {
+            name: "repeated_order_key_keeps_single_rank_key",
+            description: "A repeated ORDER BY column keeps only its first occurrence, so the single-key rank limit still pushes scan ordering.",
+            setup_sqls: &[EVENTS_TABLE],
+            sql: "SELECT category, count(*) FROM events GROUP BY category ORDER BY category ASC, category DESC LIMIT 3",
         },
         SqlTestCase {
             name: "join_input_does_not_push_scan_order",
