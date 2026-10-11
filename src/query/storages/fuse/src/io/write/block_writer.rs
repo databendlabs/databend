@@ -14,11 +14,9 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::time::Instant;
 
-use chrono::Utc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
@@ -28,6 +26,7 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::local_block_meta_serde;
+use databend_common_metrics::storage::metrics_inc_block_index_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_index_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_write_bytes;
@@ -39,10 +38,11 @@ use databend_common_metrics::storage::metrics_inc_block_vector_index_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_nums;
+use databend_common_metrics::storage::metrics_inc_block_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_storages_common_blocks::SerializedParquet;
-use databend_storages_common_blocks::blocks_to_parquet_with_stats;
+use databend_storages_common_blocks::build_parquet_writer_properties;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BlockTopN;
@@ -52,28 +52,27 @@ use databend_storages_common_table_meta::meta::DraftVirtualColumnPathStatistics;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-use databend_storages_common_table_meta::meta::encode_column_hll;
 use opendal::Buffer;
 use opendal::Operator;
 
+use super::FuseBlockWriteOptions;
+use super::FuseBlockWriter;
+use super::parquet_block_writer::ParquetBlockWriter;
 use crate::FuseStorageFormat;
-use crate::io::BlockStatsBuilder;
-use crate::io::BloomIndexState;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::granule_index::GranuleIndexSpec;
+use crate::io::granule_index::materialize_cluster_key_columns;
+use crate::io::write::GranuleIndexState;
 use crate::io::write::JsonPathStatisticsBuilder;
 use crate::io::write::SpatialIndexState;
 use crate::io::write::VectorIndexState;
 use crate::io::write::WriteSettings;
 use crate::io::write::block_index::BlockIndexSpec;
-use crate::io::write::block_index::BlockIndexWriteContext;
-use crate::io::write::block_index::PendingBlockIndexOutput;
-use crate::io::write::block_index::collect_inverted_index_metas;
 use crate::io::write::virtual_column_builder::VirtualColumnBuilder;
 use crate::io::write::virtual_column_builder::VirtualColumnState;
 use crate::operations::column_parquet_metas;
 use crate::statistics::ClusterStatsGenerator;
 use crate::statistics::ClusterStatsState;
-use crate::statistics::gen_columns_statistics;
 
 pub fn serialize_block(
     write_settings: &WriteSettings,
@@ -92,16 +91,22 @@ pub fn serialize_block_with_column_stats(
     let schema = Arc::new(schema.remove_virtual_computed_fields());
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
-            let SerializedParquet { payload, metadata } = blocks_to_parquet_with_stats(
-                &schema,
-                vec![block],
+            // Plain write: `granule_rows = None`, no page-boundary forcing, no granule index.
+            let props = Arc::new(build_parquet_writer_properties(
                 write_settings.table_compression,
                 write_settings.enable_parquet_dictionary,
-                None,
                 column_stats,
+                None,
+                block.num_rows(),
+                &schema,
                 write_settings.data_page_rows,
                 write_settings.data_page_bytes,
-            )?;
+            ));
+            let mut writer = ParquetBlockWriter::new(props, schema.clone(), None);
+            writer.write(block)?;
+            let SerializedParquet {
+                payload, metadata, ..
+            } = writer.finish_plain()?;
             let meta = column_parquet_metas(&metadata, &schema)?;
             Ok((meta, Buffer::from(payload)))
         }
@@ -123,14 +128,57 @@ pub async fn write_data(
 }
 
 #[derive(Debug)]
-pub struct BlockSerialization {
-    pub block_raw_data: Buffer,
-    pub block_meta: BlockMeta,
-    pub block_indexes: PendingBlockIndexOutput,
-    pub virtual_column_state: Option<VirtualColumnState>,
-    pub path_statistics: Option<HashMap<ColumnId, DraftVirtualColumnPathStatistics>>,
-    pub column_hlls: Option<BlockHLLState>,
-    pub column_top_n: Option<BlockTopN>,
+#[doc(hidden)]
+pub struct PendingBlockSerialization {
+    pub(crate) block_raw_data: Buffer,
+    pub(crate) block_meta: BlockMeta,
+    pub(crate) block_indexes: crate::io::write::block_index::PendingBlockIndexOutput,
+    pub(crate) virtual_column_state: Option<VirtualColumnState>,
+    pub(crate) path_statistics: Option<HashMap<ColumnId, DraftVirtualColumnPathStatistics>>,
+    pub(crate) granule_index_state: Option<GranuleIndexState>,
+    pub(crate) granule_index_payloads: Vec<crate::io::granule_index::PendingGranuleIndexPayload>,
+    pub(crate) column_hlls: Option<BlockHLLState>,
+    pub(crate) column_top_n: Option<BlockTopN>,
+}
+
+impl PendingBlockSerialization {
+    async fn write_down(self, dal: &Operator) -> Result<ExtendedBlockMeta> {
+        let block_location = self.block_meta.location.0.clone();
+        BlockWriter::write_down_data_block(dal, self.block_raw_data, &block_location).await?;
+        BlockWriter::write_down_indexes(dal, self.block_indexes).await?;
+        BlockWriter::write_down_granule_index_state(dal, self.granule_index_state).await?;
+        for payload in self.granule_index_payloads {
+            write_data(payload.data, dal, &payload.location.0).await?;
+        }
+        let virtual_columns = if let Some(state) = self.virtual_column_state {
+            let meta = state.draft_virtual_block_meta.virtual_columns.clone();
+            BlockWriter::write_down_virtual_column_state(dal, Some(state)).await?;
+            meta
+        } else {
+            None
+        };
+        let draft_virtual_block_meta = match (virtual_columns, self.path_statistics) {
+            (None, None) => None,
+            (virtual_columns, path_statistics) => Some(DraftVirtualBlockMeta {
+                virtual_columns,
+                path_statistics,
+            }),
+        };
+
+        Ok(ExtendedBlockMeta {
+            block_meta: self.block_meta,
+            draft_virtual_block_meta,
+            column_hlls: self.column_hlls,
+            column_top_n: self.column_top_n,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub enum BlockSerialization {
+    #[doc(hidden)]
+    Pending(PendingBlockSerialization),
+    Written(ExtendedBlockMeta),
 }
 
 local_block_meta_serde!(BlockSerialization);
@@ -149,13 +197,13 @@ pub struct BlockBuilder {
     pub bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     pub ndv_columns_map: BTreeMap<FieldIndex, TableField>,
     pub top_n: Option<(BTreeMap<FieldIndex, TableField>, usize)>,
+    /// One spec per declared granule-level index; empty makes the granule-level write path a no-op.
+    pub granule_index_specs: Vec<Arc<dyn GranuleIndexSpec>>,
     pub block_index_specs: Vec<Arc<dyn BlockIndexSpec>>,
     pub virtual_column_builder: Option<VirtualColumnBuilder>,
     pub json_path_statistics_builder: Option<JsonPathStatisticsBuilder>,
     pub table_meta_timestamps: TableMetaTimestamps,
-    /// Indicates whether column_hlls should be serialized into RawBlockHLL
-    /// - true: Output as BlockHLLState::Serialized(RawBlockHLL)
-    /// - false: Output as BlockHLLState::Deserialized(BlockHLL)
+    /// Indicates whether column_hlls should be serialized into RawBlockHLL.
     pub serialize_hll: bool,
 }
 
@@ -165,187 +213,45 @@ impl BlockBuilder {
         let partition_stats = self
             .cluster_stats_gen
             .extract_partition_stats(&data_block)?;
+        // `column_min_max` short-circuits the inline `gen_columns_statistics` pass; the
+        // streaming `ColumnStatisticsState` used by `FuseBlockWriter` does not consume it.
         let ClusterStatsState {
             cluster_stats,
             data_block,
-            column_min_max,
+            column_min_max: _,
         } = f(data_block, &self.cluster_stats_gen)?;
-        let (block_location, block_id) = self
-            .meta_locations
-            .gen_block_location(self.table_meta_timestamps);
-
-        let index_context = BlockIndexWriteContext {
-            func_ctx: self.ctx.get_function_context()?,
-            physical_schema: self.source_schema.clone(),
-            meta_locations: self.meta_locations.clone(),
-            bloom_location: self.meta_locations.block_bloom_index_location(&block_id),
-            operator: self.operator.clone(),
-            write_settings: self.write_settings.clone(),
-        };
-        let index_writers = self
-            .block_index_specs
-            .iter()
-            .map(|spec| spec.new_writer(index_context.clone()))
-            .collect::<Result<Vec<_>>>()?;
-
-        let mut block_indexes = PendingBlockIndexOutput::default();
-        for mut index_writer in index_writers {
-            index_writer.write(&data_block)?;
-            block_indexes.merge(index_writer.finish()?)?;
-        }
-
-        let mut column_distinct_count = block_indexes
-            .bloom
-            .as_ref()
-            .map(|i| i.column_distinct_count.clone())
-            .unwrap_or_default();
-
-        let top_n = self
-            .top_n
-            .as_ref()
-            .map(|(top_n_columns_map, top_n_size)| (top_n_columns_map, *top_n_size));
-        let mut block_stats_builder = BlockStatsBuilder::new(&self.ndv_columns_map, top_n, None)?;
-        block_stats_builder.add_block(&data_block)?;
-        let block_stats = block_stats_builder.finalize_with_top_n()?;
-        let (column_hlls, column_top_n) = if let Some(stats) = block_stats {
-            (
-                (!stats.hll.is_empty()).then_some(stats.hll),
-                (!stats.top_n.is_empty()).then_some(stats.top_n),
-            )
-        } else {
-            (None, None)
-        };
-        if let Some(hlls) = &column_hlls {
-            for (key, val) in hlls {
-                if let Entry::Vacant(entry) = column_distinct_count.entry(*key) {
-                    entry.insert(val.count());
-                }
-            }
-        }
-
-        let vector_stats = block_indexes
-            .vector
-            .as_mut()
-            .and_then(|vector| vector.statistics.take());
-        let spatial_stats = block_indexes
-            .spatial
-            .as_mut()
-            .and_then(|spatial| spatial.statistics.take());
-
-        let virtual_column_state =
-            if let Some(ref virtual_column_builder) = self.virtual_column_builder {
-                let mut virtual_column_builder = virtual_column_builder.clone();
-                virtual_column_builder.add_block(&data_block)?;
-                let virtual_column_state =
-                    virtual_column_builder.finalize(&self.write_settings, &block_location)?;
-                Some(virtual_column_state)
-            } else {
-                None
-            };
-        let path_statistics = if virtual_column_state.is_some() {
-            virtual_column_state
-                .as_ref()
-                .and_then(|state| state.draft_virtual_block_meta.path_statistics.clone())
-        } else if let Some(ref statistics_builder) = self.json_path_statistics_builder {
-            let mut statistics_builder = statistics_builder.clone();
-            statistics_builder.add_block(&data_block)?;
-            Some(statistics_builder.finalize())
+        let granule_cluster_columns = if self.write_settings.index_granularity.is_some() {
+            materialize_cluster_key_columns(
+                &data_block,
+                &self.cluster_stats_gen,
+                self.cluster_stats_gen.granule_cluster_key_offsets(),
+            )?
         } else {
             None
         };
-
-        let row_count = data_block.num_rows() as u64;
-        let col_stats = gen_columns_statistics(
-            &data_block,
-            Some(column_distinct_count),
-            &self.source_schema,
-            &self.write_settings.col_stats_truncate_lens,
-            column_min_max,
-        )?;
-
-        let block_size = data_block.estimate_block_size(data_block.num_columns()) as u64;
-        let (col_metas, buffer) = serialize_block_with_column_stats(
-            &self.write_settings,
-            &self.source_schema,
-            Some(&col_stats),
-            data_block,
-        )?;
-        let file_size = buffer.len() as u64;
-        let mut inverted_index_size = None;
-        let mut inverted_index_metas = Vec::with_capacity(block_indexes.inverted.len());
-        for inverted in &block_indexes.inverted {
-            inverted_index_size = Some(inverted_index_size.unwrap_or(0) + inverted.total_size);
-            inverted_index_metas.push(inverted.to_block_index_meta());
-        }
-        let inverted_index_metas = collect_inverted_index_metas(inverted_index_metas);
-        let block_meta = BlockMeta {
-            row_count,
-            block_size,
-            file_size,
-            col_stats,
-            col_metas,
+        let options = FuseBlockWriteOptions::from_block_builder_parts(
+            self.ctx.clone(),
+            self.operator.clone(),
+            self.meta_locations.clone(),
+            self.source_schema.clone(),
+            self.write_settings.clone(),
+            self.cluster_stats_gen.block_thresholds(),
+            self.bloom_columns_map.clone(),
+            self.ndv_columns_map.clone(),
+            self.top_n.clone(),
+            self.block_index_specs.clone(),
+            self.virtual_column_builder.clone(),
+            self.json_path_statistics_builder.clone(),
+            self.granule_index_specs.clone(),
+            granule_cluster_columns,
+            self.table_meta_timestamps,
+            self.serialize_hll,
             cluster_stats,
             partition_stats,
-            location: block_location,
-            bloom_filter_index_location: block_indexes
-                .bloom
-                .as_ref()
-                .map(|v| v.file.location.clone()),
-            bloom_filter_index_size: block_indexes
-                .bloom
-                .as_ref()
-                .map(|v| v.file.size())
-                .unwrap_or_default(),
-            ngram_filter_index_size: block_indexes.bloom.as_ref().and_then(|v| v.ngram_size),
-            vector_index_size: block_indexes
-                .vector
-                .as_ref()
-                .and_then(|v| v.file.as_ref())
-                .map(|file| file.size()),
-            vector_index_location: block_indexes
-                .vector
-                .as_ref()
-                .and_then(|v| v.file.as_ref())
-                .map(|file| file.location.clone()),
-            spatial_index_size: block_indexes
-                .spatial
-                .as_ref()
-                .and_then(|v| v.file.as_ref())
-                .map(|file| file.size()),
-            spatial_index_location: block_indexes
-                .spatial
-                .as_ref()
-                .and_then(|v| v.file.as_ref())
-                .map(|file| file.location.clone()),
-            spatial_stats,
-            vector_stats,
-            compression: self.write_settings.table_compression.into(),
-            inverted_index_size,
-            inverted_index_metas: Some(inverted_index_metas),
-            virtual_path_statistics: None,
-            virtual_block_meta: None,
-            create_on: Some(Utc::now()),
-        };
-
-        let column_hlls = column_hlls
-            .map(|hlls| {
-                if self.serialize_hll {
-                    encode_column_hll(&hlls).map(BlockHLLState::Serialized)
-                } else {
-                    Ok(BlockHLLState::Deserialized(hlls))
-                }
-            })
-            .transpose()?;
-        let serialized = BlockSerialization {
-            block_raw_data: buffer,
-            block_meta,
-            block_indexes,
-            virtual_column_state,
-            path_statistics,
-            column_hlls,
-            column_top_n,
-        };
-        Ok(serialized)
+        )?;
+        let mut writer = FuseBlockWriter::create(options)?;
+        writer.write(data_block)?;
+        writer.finish()
     }
 }
 
@@ -354,66 +260,9 @@ pub struct BlockWriter;
 impl BlockWriter {
     pub async fn write_down(
         dal: &Operator,
-        serialized: BlockSerialization,
+        pending: PendingBlockSerialization,
     ) -> Result<ExtendedBlockMeta> {
-        let block_meta = serialized.block_meta;
-        let column_hlls = serialized.column_hlls;
-        let column_top_n = serialized.column_top_n;
-        let block_location = block_meta.location.0.clone();
-
-        let draft_virtual_block_meta = match (
-            serialized
-                .virtual_column_state
-                .as_ref()
-                .and_then(|state| state.draft_virtual_block_meta.virtual_columns.clone()),
-            serialized.path_statistics.clone(),
-        ) {
-            (None, None) => None,
-            (virtual_columns, path_statistics) => Some(DraftVirtualBlockMeta {
-                virtual_columns,
-                path_statistics,
-            }),
-        };
-        let extended_block_meta = ExtendedBlockMeta {
-            block_meta,
-            draft_virtual_block_meta,
-            column_hlls,
-            column_top_n,
-        };
-
-        Self::write_down_data_block(dal, serialized.block_raw_data, &block_location).await?;
-        Self::write_down_block_indexes(dal, serialized.block_indexes).await?;
-        Self::write_down_virtual_column_state(dal, serialized.virtual_column_state).await?;
-
-        Ok(extended_block_meta)
-    }
-
-    pub async fn write_down_block_indexes(
-        dal: &Operator,
-        block_indexes: PendingBlockIndexOutput,
-    ) -> Result<()> {
-        if let Some(bloom) = block_indexes.bloom {
-            let start = Instant::now();
-            let size = bloom.file.write(dal).await?;
-            metrics_inc_block_index_write_nums(1);
-            metrics_inc_block_index_write_nums(size);
-            metrics_inc_block_index_write_milliseconds(start.elapsed().as_millis() as u64);
-        }
-        if let Some(file) = block_indexes.vector.and_then(|vector| vector.file) {
-            let start = Instant::now();
-            let size = file.write(dal).await?;
-            metrics_inc_block_vector_index_write_nums(1);
-            metrics_inc_block_vector_index_write_bytes(size);
-            metrics_inc_block_vector_index_write_milliseconds(start.elapsed().as_millis() as u64);
-        }
-        if let Some(file) = block_indexes.spatial.and_then(|spatial| spatial.file) {
-            let start = Instant::now();
-            let size = file.write(dal).await?;
-            metrics_inc_block_spatial_index_write_nums(1);
-            metrics_inc_block_spatial_index_write_bytes(size);
-            metrics_inc_block_spatial_index_write_milliseconds(start.elapsed().as_millis() as u64);
-        }
-        Ok(())
+        pending.write_down(dal).await
     }
 
     pub async fn write_down_data_block(
@@ -427,63 +276,104 @@ impl BlockWriter {
         write_data(raw_block_data, dal, block_location).await?;
 
         metrics_inc_block_write_nums(1);
-        metrics_inc_block_write_nums(size as u64);
+        metrics_inc_block_write_bytes(size as u64);
         metrics_inc_block_write_milliseconds(start.elapsed().as_millis() as u64);
 
         Ok(())
     }
 
-    pub async fn write_down_bloom_index_state(
+    pub async fn write_down_indexes(
         dal: &Operator,
-        bloom_index_state: Option<BloomIndexState>,
+        output: crate::io::write::block_index::PendingBlockIndexOutput,
     ) -> Result<()> {
-        if let Some(index_state) = bloom_index_state {
+        if let Some(index) = output.bloom {
             let start = Instant::now();
-
-            let location = &index_state.location.0;
-            write_data(index_state.data, dal, location).await?;
-
+            let size = index.file.write(dal).await?;
             metrics_inc_block_index_write_nums(1);
-            metrics_inc_block_index_write_nums(index_state.size);
+            metrics_inc_block_index_write_bytes(size);
             metrics_inc_block_index_write_milliseconds(start.elapsed().as_millis() as u64);
         }
+        // Inverted indexes were written while the block was built.
+        if let Some(index) = output.vector
+            && let Some(file) = index.file
+        {
+            let start = Instant::now();
+            let size = file.write(dal).await?;
+            metrics_inc_block_vector_index_write_nums(1);
+            metrics_inc_block_vector_index_write_bytes(size);
+            metrics_inc_block_vector_index_write_milliseconds(start.elapsed().as_millis() as u64);
+        }
+        if let Some(index) = output.spatial
+            && let Some(file) = index.file
+        {
+            let start = Instant::now();
+            let size = file.write(dal).await?;
+            metrics_inc_block_spatial_index_write_nums(1);
+            metrics_inc_block_spatial_index_write_bytes(size);
+            metrics_inc_block_spatial_index_write_milliseconds(start.elapsed().as_millis() as u64);
+        }
+        Ok(())
+    }
+
+    pub async fn write_down_bloom_index_state(
+        dal: &Operator,
+        state: Option<crate::io::BloomIndexState>,
+    ) -> Result<()> {
+        let Some(state) = state else {
+            return Ok(());
+        };
+        let start = Instant::now();
+        let size = state.data.len() as u64;
+        write_data(state.data, dal, &state.location.0).await?;
+        metrics_inc_block_index_write_nums(1);
+        metrics_inc_block_index_write_bytes(size);
+        metrics_inc_block_index_write_milliseconds(start.elapsed().as_millis() as u64);
         Ok(())
     }
 
     pub async fn write_down_vector_index_state(
         dal: &Operator,
-        vector_index_state: Option<VectorIndexState>,
+        state: Option<VectorIndexState>,
     ) -> Result<()> {
-        if let Some(vector_index_state) = vector_index_state {
-            let start = Instant::now();
-
-            let location = &vector_index_state.location.0;
-            let index_size = vector_index_state.size;
-            write_data(vector_index_state.data, dal, location).await?;
-
-            metrics_inc_block_vector_index_write_nums(1);
-            metrics_inc_block_vector_index_write_bytes(index_size);
-            metrics_inc_block_vector_index_write_milliseconds(start.elapsed().as_millis() as u64);
-        }
+        let Some(state) = state else {
+            return Ok(());
+        };
+        let start = Instant::now();
+        let size = state.data.len() as u64;
+        write_data(state.data, dal, &state.location.0).await?;
+        metrics_inc_block_vector_index_write_nums(1);
+        metrics_inc_block_vector_index_write_bytes(size);
+        metrics_inc_block_vector_index_write_milliseconds(start.elapsed().as_millis() as u64);
         Ok(())
     }
 
     pub async fn write_down_spatial_index_state(
         dal: &Operator,
-        spatial_index_state: Option<SpatialIndexState>,
+        state: Option<SpatialIndexState>,
     ) -> Result<()> {
-        if let Some(spatial_index_state) = spatial_index_state {
-            let start = Instant::now();
-
-            let location = &spatial_index_state.location.0;
-            let index_size = spatial_index_state.size;
-            write_data(spatial_index_state.data, dal, location).await?;
-
-            metrics_inc_block_spatial_index_write_nums(1);
-            metrics_inc_block_spatial_index_write_bytes(index_size);
-            metrics_inc_block_spatial_index_write_milliseconds(start.elapsed().as_millis() as u64);
-        }
+        let Some(state) = state else {
+            return Ok(());
+        };
+        let start = Instant::now();
+        let size = state.data.len() as u64;
+        write_data(state.data, dal, &state.location.0).await?;
+        metrics_inc_block_spatial_index_write_nums(1);
+        metrics_inc_block_spatial_index_write_bytes(size);
+        metrics_inc_block_spatial_index_write_milliseconds(start.elapsed().as_millis() as u64);
         Ok(())
+    }
+
+    pub async fn write_down_granule_index_state(
+        dal: &Operator,
+        granule_index_state: Option<GranuleIndexState>,
+    ) -> Result<()> {
+        let Some(state) = granule_index_state else {
+            return Ok(());
+        };
+        if let Some(mins) = state.mins {
+            write_data(mins.data, dal, &mins.layout.location.0).await?;
+        }
+        write_data(state.offsets.data, dal, &state.offsets.layout.location.0).await
     }
 
     pub async fn write_down_virtual_column_state(

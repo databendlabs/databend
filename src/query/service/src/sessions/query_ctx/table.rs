@@ -566,7 +566,9 @@ impl TableContextTableManagement for QueryContext {
                 };
                 OrcTable::try_create(self, info, has_column_name_ref).await
             }
-            FileFormatParams::NdJson(..) | FileFormatParams::Avro(..) => {
+            FileFormatParams::NdJson(..)
+            | FileFormatParams::Avro(..)
+            | FileFormatParams::Loki(..) => {
                 let schema = Arc::new(TableSchema::new(vec![TableField::new(
                     "_$1",
                     TableDataType::Variant,

@@ -61,6 +61,7 @@ impl Interpreter for DropTableIndexInterpreter {
                 ast::TableIndexType::Ngram => TableIndexType::Ngram,
                 ast::TableIndexType::Vector => TableIndexType::Vector,
                 ast::TableIndexType::Spatial => TableIndexType::Spatial,
+                ast::TableIndexType::Bloom => TableIndexType::Bloom,
             };
 
             if let Some(table_meta) = catalog.get_table_meta_by_id(table_id).await? {

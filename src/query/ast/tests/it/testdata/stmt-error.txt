@@ -237,7 +237,7 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `CATALOG`, `SPATIAL`, `MASKING`, `DATABASE`, `PASSWORD`, `WAREHOUSE`, `MATERIALIZED`, `WORKER`, `WORKLOAD`, `SHARE`, `SCHEMA`, `DICTIONARY`, `VIEW`, `INVERTED`, `NGRAM`, `VECTOR`, `STAGE`, `TAG`, `FILE`, `PIPE`, `NOTIFICATION`, `CONNECTION`, `ROW`, `USER`, `ROLE`, `FUNCTION`, `NETWORK`, `PROCEDURE`, `STREAM`, or `SEQUENCE`
+  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `CATALOG`, `SPATIAL`, `MASKING`, `DATABASE`, `PASSWORD`, `WAREHOUSE`, `MATERIALIZED`, `WORKER`, `WORKLOAD`, `SHARE`, `SCHEMA`, `DICTIONARY`, `VIEW`, `INVERTED`, `NGRAM`, `VECTOR`, `BLOOM`, `STAGE`, `TAG`, `FILE`, `PIPE`, `NOTIFICATION`, `CONNECTION`, `ROW`, `USER`, `ROLE`, `FUNCTION`, `NETWORK`, `PROCEDURE`, `STREAM`, or `SEQUENCE`
 
 
 ---------- Input ----------
@@ -301,7 +301,7 @@ error:
   --> SQL:1:6
   |
 1 | drop usar if exists 'test-j';
-  |      ^^^^ unexpected `usar`, expecting `USER`, `SHARE`, `STREAM`, `STAGE`, `SPATIAL`, `PASSWORD`, `WAREHOUSE`, `MATERIALIZED`, `TAG`, `ROLE`, `TABLE`, `WORKER`, `SCHEMA`, `VECTOR`, `CATALOG`, `NETWORK`, `WORKLOAD`, `DATABASE`, `INVERTED`, `FUNCTION`, `PROCEDURE`, `TASK`, `NOTIFICATION`, `NGRAM`, `MASKING`, `SEQUENCE`, `DICTIONARY`, `VIEW`, `FILE`, `PIPE`, `CONNECTION`, or `ROW`
+  |      ^^^^ unexpected `usar`, expecting `USER`, `SHARE`, `STREAM`, `STAGE`, `SPATIAL`, `PASSWORD`, `WAREHOUSE`, `MATERIALIZED`, `TAG`, `ROLE`, `TABLE`, `WORKER`, `SCHEMA`, `VECTOR`, `CATALOG`, `NETWORK`, `WORKLOAD`, `DATABASE`, `INVERTED`, `FUNCTION`, `PROCEDURE`, `TASK`, `NOTIFICATION`, `NGRAM`, `MASKING`, `SEQUENCE`, `DICTIONARY`, `VIEW`, `BLOOM`, `FILE`, `PIPE`, `CONNECTION`, or `ROW`
 
 
 ---------- Input ----------
@@ -806,7 +806,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM | LOKI } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -838,7 +838,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM | LOKI } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -858,7 +858,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM | LOKI } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -878,7 +878,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM | LOKI } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -898,7 +898,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM | LOKI } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -918,7 +918,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM | LOKI } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -938,7 +938,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM | LOKI } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -958,7 +958,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM | LOKI } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -981,7 +981,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM | LOKI } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`
@@ -1335,7 +1335,7 @@ error:
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM | LOKI } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`

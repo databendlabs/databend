@@ -1,0 +1,49 @@
+statement ok
+USE compat_granule_rollout
+
+query III
+SELECT count(),sum(payload),count(DISTINCT _block_name) FROM rollout_t
+----
+48 168168 3
+
+query T
+EXPLAIN SELECT payload FROM rollout_t WHERE k=103
+----
+<slt:ignore>partitions total: 3
+<slt:ignore>partitions scanned: 1
+<slt:ignore>
+
+query II
+SELECT count(),sum(payload) FROM rollout_t WHERE k=103
+----
+2 7008
+
+# The current vertical rewrite emits three table-sized blocks spanning [0, 207]. Their
+# current-written bloom metadata still prunes every partition for this absent key.
+query T
+EXPLAIN SELECT payload FROM rollout_t WHERE k=50
+----
+<slt:ignore>partitions total: 3
+<slt:ignore>partitions scanned: 0
+<slt:ignore>
+
+query I
+SELECT count() FROM rollout_t WHERE k=50
+----
+0
+
+statement ok
+INSERT INTO rollout_t SELECT number*30,7000+number,'old-live-cross-a' FROM numbers(8)
+
+statement ok
+INSERT INTO rollout_t SELECT 7+number*30,8000+number,'old-live-cross-b' FROM numbers(8)
+
+query III
+SELECT count(),sum(payload),count_if(source LIKE 'old-live-%') FROM rollout_t
+----
+64 288224 16
+
+query III
+SELECT count_if(k=0),count_if(k=50),count_if(k=157) FROM rollout_t
+----
+3 0 1

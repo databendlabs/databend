@@ -54,6 +54,7 @@ use log::info;
 use crate::FuseTable;
 use crate::io::BlockBuilder;
 use crate::io::BlockReader;
+use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
 use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
@@ -257,8 +258,12 @@ impl PreparedMatchedMutation {
                     );
                     Ok(state)
                 })?;
-                let extended_block_meta =
-                    BlockWriter::write_down(&context.block_reader.operator(), serialized).await?;
+                let extended_block_meta = match serialized {
+                    BlockSerialization::Pending(pending) => {
+                        BlockWriter::write_down(&context.block_builder.operator, pending).await?
+                    }
+                    BlockSerialization::Written(meta) => meta,
+                };
                 metrics_inc_merge_into_replace_blocks_counter(1);
                 metrics_inc_merge_into_replace_blocks_rows_counter(origin_num_rows as u32);
                 Ok((
@@ -581,7 +586,7 @@ impl AggregationContext {
         .await?;
         let origin_num_rows = origin_data_block.num_rows();
         if self.stream_ctx.is_some() {
-            origin_data_block.add_entry(build_origin_block_row_num(origin_num_rows));
+            origin_data_block.add_entry(build_origin_block_row_num(0, origin_num_rows));
         }
 
         let mut bitmap = MutableBitmap::new();
@@ -601,7 +606,7 @@ impl AggregationContext {
         }
 
         if let Some(stream_ctx) = &self.stream_ctx {
-            let stream_meta = gen_mutation_stream_meta(None, &block_meta.location.0)?;
+            let stream_meta = gen_mutation_stream_meta(None, &block_meta.location.0, 0)?;
             res_block = stream_ctx.apply(res_block, &stream_meta)?;
         }
 

@@ -215,26 +215,40 @@ impl ReadState {
         columns_chunks: HashMap<ColumnId, DataItem>,
         part: &FuseBlockPartInfo,
     ) -> Result<(DataBlock, Option<RowSelection>, Option<Bitmap>)> {
-        let pre_columns_chunks = Self::filter_column_chunks(&columns_chunks, &self.pre_column_ids)?;
-        let mut preread_block = self
-            .pre_reader
-            .deserialize_part(part, pre_columns_chunks, None)?;
+        self.deserialize_and_filter_with_num_rows(columns_chunks, part, part.nums_rows)
+    }
 
-        let filter_bitmap = self.filter(&preread_block, part.nums_rows)?;
+    /// Like [`deserialize_and_filter`], but with an explicit row count for sparse-granule-index
+    /// narrowed reads, where the fetched partial chunks cover fewer rows than `part.nums_rows`.
+    pub fn deserialize_and_filter_with_num_rows(
+        &self,
+        columns_chunks: HashMap<ColumnId, DataItem>,
+        part: &FuseBlockPartInfo,
+        num_rows: usize,
+    ) -> Result<(DataBlock, Option<RowSelection>, Option<Bitmap>)> {
+        let pre_columns_chunks = Self::filter_column_chunks(&columns_chunks, &self.pre_column_ids)?;
+        let mut preread_block = self.pre_reader.deserialize_part_with_num_rows(
+            part,
+            num_rows,
+            pre_columns_chunks,
+            None,
+        )?;
+
+        let filter_bitmap = self.filter(&preread_block, num_rows)?;
         // Expensive probe expressions are evaluated only for rows surviving
         // the static prewhere predicate. Expand their bitmap back to the
         // original row positions before combining it with prewhere.
         let runtime_filter_bitmap = if self.runtime_filters.is_empty() {
             // Preserve the profile entry emitted before expression probes were
             // supported, even when there is no Bloom filter to evaluate.
-            self.runtime_filter(&preread_block, part.nums_rows)?
+            self.runtime_filter(&preread_block, num_rows)?
         } else if let Some(filter_bitmap) = &filter_bitmap {
             let filter_bitmap: Bitmap = filter_bitmap.clone().into();
             let filtered_block = preread_block.clone().filter_with_bitmap(&filter_bitmap)?;
             self.runtime_filter(&filtered_block, filtered_block.num_rows())?
                 .map(|runtime_bitmap| expand_runtime_filter_bitmap(&filter_bitmap, &runtime_bitmap))
         } else {
-            self.runtime_filter(&preread_block, part.nums_rows)?
+            self.runtime_filter(&preread_block, num_rows)?
         };
 
         let bitmap_selection: Option<Bitmap> = match (filter_bitmap, runtime_filter_bitmap) {
@@ -263,8 +277,9 @@ impl ReadState {
             should_push_down_row_selection(row_selection, self.prewhere_selectivity_threshold)
         });
 
-        let mut remain_block = self.remain_reader.deserialize_part(
+        let mut remain_block = self.remain_reader.deserialize_part_with_num_rows(
             part,
+            num_rows,
             remain_columns_chunks,
             push_down_row_selection
                 .then_some(row_selection.as_ref())

@@ -1,0 +1,73 @@
+statement ok
+USE compat_granule_mixed
+
+query III
+SELECT count(),sum(payload),count_if(k IS NULL) FROM gi_t
+----
+614 1541749 4
+
+query III
+SELECT count_if(k BETWEEN 0 AND 98),count_if(k BETWEEN 99 AND 101),count_if(k BETWEEN 1000 AND 1099) FROM gi_t
+----
+98 8 100
+
+query III
+SELECT count_if(k BETWEEN 2000 AND 2100),count_if(k BETWEEN 3000 AND 3099),count_if(k BETWEEN 4000 AND 4099) FROM gi_t
+----
+102 100 101
+
+query III
+SELECT count_if(k BETWEEN 5000 AND 5099),count_if(k=3100),count_if(k=5100) FROM gi_t
+----
+100 1 0
+
+statement ok
+SET recluster_method='vertical'
+
+statement ok
+ALTER TABLE gi_t RECLUSTER FINAL
+
+query T
+SELECT info:average_depth FROM clustering_information('compat_granule_mixed','gi_t')
+----
+1.0
+
+query III
+SELECT count(),count_if(tag IN ('c99','o250','c350','o450')),count_if(tag='missing') FROM gi_bloom
+----
+501 4 0
+
+query III
+SELECT count_if(k=0),count_if(k=500),count_if(k=501) FROM gi_bloom
+----
+1 1 0
+
+query TBI rowsort
+SELECT change$action,change$is_update,count() FROM gi_s GROUP BY change$action,change$is_update
+----
+DELETE 0 3
+DELETE 1 11
+INSERT 0 310
+INSERT 1 11
+
+statement ok
+CREATE TABLE gi_audit(action string,is_update bool,row_count bigint)
+
+statement ok
+INSERT INTO gi_audit SELECT change$action,change$is_update,count() FROM gi_s GROUP BY change$action,change$is_update
+
+query I
+SELECT count() FROM gi_s
+----
+0
+
+query TBI rowsort
+SELECT action,is_update,row_count FROM gi_audit
+----
+DELETE 0 3
+DELETE 1 11
+INSERT 0 310
+INSERT 1 11
+
+statement ok
+DROP DATABASE compat_granule_mixed

@@ -116,6 +116,7 @@ mod dummy {
             enable_parquet_dictionary,
             data_page_rows: None,
             data_page_bytes: None,
+            index_granularity: None,
             col_stats_truncate_lens: std::collections::BTreeMap::new(),
         };
         let schema = Arc::new(schema);
@@ -409,6 +410,7 @@ mod runtime_bloom {
             enable_parquet_dictionary: false,
             data_page_rows: None,
             data_page_bytes: None,
+            index_granularity: None,
             col_stats_truncate_lens: std::collections::BTreeMap::new(),
         };
         let (_, buffer) = serialize_block(&settings, &schema, block).unwrap();

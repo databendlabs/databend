@@ -20,12 +20,15 @@ mod table_snapshot_statistics;
 
 pub use segment::BlockIndexMeta;
 pub use segment::BlockMeta;
+pub use segment::BytesRange;
 pub use segment::ColumnMeta;
 pub use segment::DraftVirtualBlockMeta;
 pub use segment::DraftVirtualColumnBlockMeta;
 pub use segment::DraftVirtualColumnMeta;
 pub use segment::DraftVirtualColumnPathStatistics;
 pub use segment::ExtendedBlockMeta;
+pub use segment::GranuleIndexFileLayout;
+pub use segment::GranuleIndexLayout;
 pub use segment::SegmentInfo;
 pub use segment::VirtualBlockMeta;
 pub use segment::VirtualColumnMeta;

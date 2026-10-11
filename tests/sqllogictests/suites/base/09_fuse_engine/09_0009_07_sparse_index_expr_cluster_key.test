@@ -1,0 +1,251 @@
+# Sparse granule index over expression cluster keys.
+#
+# The write path must materialize expression-key columns after cluster statistics have removed them
+# from append blocks, and for mutation rewrite blocks that never contain them. The read path may
+# project source-column predicates through functions only when their FunctionProperty proves the
+# function monotonic for the current argument domains.
+
+statement ok
+DROP DATABASE IF EXISTS db_09_0009_07
+
+statement ok
+CREATE DATABASE db_09_0009_07
+
+statement ok
+USE db_09_0009_07
+
+# to_yyyymmdd: a source timestamp range is projected to the expression key.
+statement ok
+CREATE TABLE t_yyyymmdd(ts timestamp, n int) CLUSTER BY (to_yyyymmdd(ts)) row_per_block = 1000 index_granularity = 10
+
+statement ok
+INSERT INTO t_yyyymmdd SELECT to_timestamp(1704067200 + number * 3600), number FROM numbers(240)
+
+query III
+SELECT count(*), min(n), max(n) FROM t_yyyymmdd WHERE ts >= to_timestamp(1704240000) AND ts < to_timestamp(1704326400)
+----
+24 48 71
+
+query I
+SELECT count(*) FROM t_yyyymmdd WHERE to_yyyymmdd(ts) = 20240105
+----
+24
+
+# A qualified source-column range is projected through the expression cluster key.
+query III
+SELECT count(*), min(n), max(n) FROM t_yyyymmdd AS events WHERE events.ts >= to_timestamp(1704412800) AND events.ts < to_timestamp(1704499200)
+----
+24 96 119
+
+# to_yyyymm: the same mechanism works at month granularity.
+statement ok
+CREATE TABLE t_yyyymm(d date, n int) CLUSTER BY (to_yyyymm(d)) row_per_block = 1000 index_granularity = 10
+
+statement ok
+INSERT INTO t_yyyymm SELECT to_date('2023-01-01') + number, number FROM numbers(730)
+
+query III
+SELECT count(*), min(n), max(n) FROM t_yyyymm WHERE d > to_date('2024-02-01')
+----
+333 397 729
+
+query III
+SELECT count(*), min(n), max(n) FROM t_yyyymm WHERE d >= to_date('2024-02-01')
+----
+334 396 729
+
+query III
+SELECT count(*), min(n), max(n) FROM t_yyyymm WHERE d < to_date('2024-03-01')
+----
+425 0 424
+
+query III
+SELECT count(*), min(n), max(n) FROM t_yyyymm WHERE d <= to_date('2024-02-29')
+----
+425 0 424
+
+query III
+SELECT count(*), min(n), max(n) FROM t_yyyymm WHERE d >= to_date('2024-02-01') AND d < to_date('2024-03-01')
+----
+29 396 424
+
+# Date truncation functions are declared monotonic in FunctionProperty.
+statement ok
+CREATE TABLE t_month(d date, n int) CLUSTER BY (to_start_of_month(d)) row_per_block = 1000 index_granularity = 10
+
+statement ok
+INSERT INTO t_month SELECT to_date('2024-01-01') + number, number FROM numbers(366)
+
+query III
+SELECT count(*), min(n), max(n) FROM t_month WHERE d >= to_date('2024-06-01') AND d < to_date('2024-07-01')
+----
+30 152 181
+
+# Prefix substring: an equality predicate on the full source string is projected to the expression
+# key domain. The extra suffix keeps the source values distinct while their first 40 bytes repeat.
+statement ok
+CREATE TABLE t_substring(id string, n int) CLUSTER BY (SUBSTRING(id FROM 1 FOR 40)) row_per_block = 1000 index_granularity = 2
+
+statement ok
+INSERT INTO t_substring SELECT concat(lpad(to_string(number % 4), 40, '0'), '-tail-', to_string(number)), number FROM numbers(40)
+
+query III
+SELECT count(*), min(n), max(n) FROM t_substring WHERE id = concat(lpad('2', 40, '0'), '-tail-18')
+----
+1 18 18
+
+query T
+EXPLAIN SELECT id, n FROM t_substring WHERE id = concat(lpad('2', 40, '0'), '-tail-18')
+----
+<slt:ignore>granule pruning: 20 to 6<slt:ignore>
+
+# Composite projection: fixing the leading day first makes the substring suffix independently
+# useful. The date predicate retains four granules; adding the full source-string equality narrows
+# the contiguous sparse range to two granules.
+statement ok
+CREATE TABLE t_substring_composite(dt timestamp, id string, n int) CLUSTER BY (to_yyyymmdd(dt), SUBSTRING(id FROM 1 FOR 40)) row_per_block = 1000 index_granularity = 2
+
+statement ok
+INSERT INTO t_substring_composite SELECT to_timestamp(1704067200 + intdiv(number, 8) * 86400 + (number % 8) * 1800), concat(lpad(to_string(number % 4), 40, '0'), '-tail-', to_string(number)), number FROM numbers(40)
+
+query III
+SELECT count(*), min(n), max(n) FROM t_substring_composite WHERE dt >= '2024-01-01 00:00:00' AND dt < '2024-01-02 00:00:00'
+----
+8 0 7
+
+query T
+EXPLAIN SELECT dt, id, n FROM t_substring_composite WHERE dt >= '2024-01-01 00:00:00' AND dt < '2024-01-02 00:00:00'
+----
+<slt:ignore>granule pruning: 20 to 4<slt:ignore>
+
+query III
+SELECT count(*), min(n), max(n) FROM t_substring_composite WHERE dt >= '2024-01-01 00:00:00' AND dt < '2024-01-02 00:00:00' AND id = concat(lpad('3', 40, '0'), '-tail-7')
+----
+1 7 7
+
+query T
+EXPLAIN SELECT dt, id, n FROM t_substring_composite WHERE dt >= '2024-01-01 00:00:00' AND dt < '2024-01-02 00:00:00' AND id = concat(lpad('3', 40, '0'), '-tail-7')
+----
+<slt:ignore>granule pruning: 20 to 2<slt:ignore>
+
+# Suffix-only composite projection: every granule interval has an equal leading day component, so
+# tuple ordering permits the second substring key to prune even though WHERE does not constrain dt.
+statement ok
+CREATE TABLE t_composite_equal_leading(dt timestamp, id string, n int) CLUSTER BY (to_yyyymmdd(dt), SUBSTRING(id FROM 1 FOR 40)) row_per_block = 1000 index_granularity = 2
+
+statement ok
+INSERT INTO t_composite_equal_leading SELECT to_timestamp(1704067200 + (number % 8) * 1800), concat(lpad(to_string(number % 4), 40, '0'), '-tail-', to_string(number)), number FROM numbers(40)
+
+query III
+SELECT count(*), min(n), max(n) FROM t_composite_equal_leading WHERE id = concat(lpad('0', 40, '0'), '-tail-20')
+----
+1 20 20
+
+query T
+EXPLAIN SELECT dt, id, n FROM t_composite_equal_leading WHERE id = concat(lpad('0', 40, '0'), '-tail-20')
+----
+<slt:ignore>granule pruning: 20 to 5<slt:ignore>
+
+# Composite expression key: WHERE predicates stay on the source columns. This exercises the
+# lexicographic tuple semantics of (day, id-prefix): the leading date expression can prune on its
+# own, while the id predicate can additionally narrow granules whose leading key is fixed.
+statement ok
+CREATE TABLE t_composite(dt timestamp, id string, n int) CLUSTER BY (to_yyyymmdd(dt), SUBSTRING(id FROM 1 FOR 40)) row_per_block = 1000 index_granularity = 2
+
+statement ok
+INSERT INTO t_composite SELECT to_timestamp(1704067200 + intdiv(number, 4) * 86400 + (number % 4) * 3600), concat(lpad(to_string(number % 4), 40, '0'), '-tail'), number FROM numbers(40)
+
+# Leading source column only.
+query III
+SELECT count(*), min(n), max(n) FROM t_composite WHERE dt >= to_timestamp(1704412800) AND dt < to_timestamp(1704499200)
+----
+4 16 19
+
+query T
+EXPLAIN SELECT dt, id, n FROM t_composite WHERE dt >= to_timestamp(1704412800) AND dt < to_timestamp(1704499200)
+----
+<slt:ignore>granule pruning: 20 to 3<slt:ignore>
+
+# An implicitly cast string timestamp is normalized to a constant before source-domain projection.
+query III
+SELECT count(*), min(n), max(n) FROM t_composite WHERE dt > '2024-01-04 00:00:00'
+----
+27 13 39
+
+query T
+EXPLAIN SELECT dt, id, n FROM t_composite WHERE dt > '2024-01-04 00:00:00'
+----
+<slt:ignore>granule pruning: 20 to 15<slt:ignore>
+
+# Suffix source column only. This must remain correct across all leading-key values. Since the
+# leading key is unconstrained, tuple ordering requires the sparse index to preserve every granule.
+query III
+SELECT count(*), min(n), max(n) FROM t_composite WHERE id = concat(lpad('2', 40, '0'), '-tail')
+----
+10 2 38
+
+query T
+EXPLAIN SELECT dt, id, n FROM t_composite WHERE id = concat(lpad('2', 40, '0'), '-tail')
+----
+<slt:ignore>granule pruning: 20 to 20<slt:ignore>
+
+# Both source columns fix one day and one id prefix.
+query III
+SELECT count(*), min(n), max(n) FROM t_composite WHERE dt >= to_timestamp(1704412800) AND dt < to_timestamp(1704499200) AND id = concat(lpad('2', 40, '0'), '-tail')
+----
+1 18 18
+
+query T
+EXPLAIN SELECT dt, id, n FROM t_composite WHERE dt >= to_timestamp(1704412800) AND dt < to_timestamp(1704499200) AND id = concat(lpad('2', 40, '0'), '-tail')
+----
+<slt:ignore>granule pruning: 20 to 3<slt:ignore>
+
+# The leading range spans several days; the suffix predicate is applied conservatively at tuple
+# boundaries and exactly within equal-day granules.
+query III
+SELECT count(*), min(n), max(n) FROM t_composite WHERE dt >= to_timestamp(1704326400) AND dt < to_timestamp(1704585600) AND id = concat(lpad('1', 40, '0'), '-tail')
+----
+3 13 21
+
+query T
+EXPLAIN SELECT dt, id, n FROM t_composite WHERE dt >= to_timestamp(1704326400) AND dt < to_timestamp(1704585600) AND id = concat(lpad('1', 40, '0'), '-tail')
+----
+<slt:ignore>granule pruning: 20 to 7<slt:ignore>
+
+# A valid tuple range with no matching suffix value.
+query I
+SELECT count(*) FROM t_composite WHERE dt >= to_timestamp(1704412800) AND dt < to_timestamp(1704499200) AND id = concat(lpad('9', 40, '0'), '-tail')
+----
+0
+
+query T
+EXPLAIN SELECT dt, id, n FROM t_composite WHERE dt >= to_timestamp(1704412800) AND dt < to_timestamp(1704499200) AND id = concat(lpad('9', 40, '0'), '-tail')
+----
+<slt:ignore>granule pruning: 20 to 3<slt:ignore>
+
+# Append and mutation rewrite regression: expression keys are temporary granule-index inputs and
+# must not be read by stale offsets after computed columns are removed.
+statement ok
+CREATE TABLE t_rewrite(a int, b string) CLUSTER BY (a % 3) row_per_block = 4 index_granularity = 2
+
+statement ok
+INSERT INTO t_rewrite SELECT number, 'x' FROM numbers(8)
+
+statement ok
+REPLACE INTO t_rewrite ON(a) VALUES (1, 'updated')
+
+query IT
+SELECT a, b FROM t_rewrite WHERE a = 1
+----
+1 updated
+
+statement ok
+DELETE FROM t_rewrite WHERE a = 2
+
+query II
+SELECT count(*), sum(a) FROM t_rewrite
+----
+7 26
+
+statement ok
+DROP DATABASE db_09_0009_07

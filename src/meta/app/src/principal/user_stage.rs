@@ -178,6 +178,7 @@ pub enum StageFileFormatType {
     Arrow,
     ArrowStream,
     Xml,
+    Loki,
 }
 
 impl Default for StageFileFormatType {
@@ -201,8 +202,9 @@ impl FromStr for StageFileFormatType {
             "AVRO" => Ok(StageFileFormatType::Avro),
             "ARROW" => Ok(StageFileFormatType::Arrow),
             "ARROW_STREAM" => Ok(StageFileFormatType::ArrowStream),
+            "LOKI" => Ok(StageFileFormatType::Loki),
             _ => Err(format!(
-                "Unknown file format type '{s}', must be one of ( CSV | TEXT | NDJSON | PARQUET | LANCE | ORC | AVRO | JSON | ARROW | ARROW_STREAM )"
+                "Unknown file format type '{s}', must be one of ( CSV | TEXT | NDJSON | PARQUET | LANCE | ORC | AVRO | JSON | ARROW | ARROW_STREAM | LOKI )"
             )),
         }
     }
@@ -221,6 +223,7 @@ impl Display for StageFileFormatType {
             StageFileFormatType::Lance => write!(f, "LANCE"),
             StageFileFormatType::Arrow => write!(f, "ARROW"),
             StageFileFormatType::ArrowStream => write!(f, "ARROW_STREAM"),
+            StageFileFormatType::Loki => write!(f, "LOKI"),
             StageFileFormatType::Xml => write!(f, "XML"),
         }
     }

@@ -1,0 +1,33 @@
+statement ok
+DROP DATABASE IF EXISTS compat_recluster_mixed
+
+statement ok
+CREATE DATABASE compat_recluster_mixed
+
+statement ok
+USE compat_recluster_mixed
+
+statement ok
+CREATE TABLE mixed_t(id int, value int, source string) CLUSTER BY(id) change_tracking = true row_per_block = 4 block_per_segment = 2
+
+statement ok
+INSERT INTO mixed_t VALUES (1,10,'initial'),(4,40,'initial'),(5,50,'initial'),(6,60,'initial'),(2,20,'initial'),(3,30,'initial')
+
+statement ok
+CREATE STREAM mixed_s ON TABLE mixed_t APPEND_ONLY = false
+
+statement ok
+INSERT INTO mixed_t VALUES (7,70,'old-write-1'),(9,90,'old-write-1')
+
+statement ok
+INSERT INTO mixed_t VALUES (8,80,'old-write-2'),(10,100,'old-write-2')
+
+query II
+SELECT count(),sum(value) FROM mixed_t
+----
+10 550
+
+query TBI rowsort
+SELECT change$action,change$is_update,count() FROM mixed_s GROUP BY change$action,change$is_update
+----
+INSERT 0 4

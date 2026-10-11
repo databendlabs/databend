@@ -1,0 +1,145 @@
+# Inverted index on a table with `index_granularity`: the block-level Tantivy bundle is searched
+# once, and the matched rows narrow the surviving granule set so only granules holding a hit are
+# read. Exercises row -> granule mapping, intersection with sparse/bloom survivors, score
+# alignment after narrowing, and internal-column mapping under partial granule reads.
+
+statement ok
+DROP DATABASE IF EXISTS db_09_0009_08
+
+statement ok
+CREATE DATABASE db_09_0009_08
+
+statement ok
+USE db_09_0009_08
+
+# Small granule so a single block spans many granules. `id` is the cluster key so the sparse
+# granule index also applies; `tag` carries a granule Bloom index.
+statement ok
+CREATE TABLE ii_t(
+    id int,
+    tag string,
+    content string,
+    INVERTED INDEX ii_idx (content),
+    BLOOM INDEX ii_bloom (tag)
+) CLUSTER BY (id) index_granularity = 100
+
+# 2000 rows in one block; rows 0..99 -> granule 0, ..., 1900..1999 -> granule 19.
+# `content` mentions a unique word on every row plus a shared word every 500 rows.
+statement ok
+INSERT INTO ii_t
+SELECT
+    number,
+    concat('tag', to_string(number % 7)),
+    concat(
+        'row', to_string(number), ' plain text',
+        if(number % 500 = 0, ' anchor', ''),
+        if(number >= 1500, ' tail', '')
+    )
+FROM numbers(2000)
+
+query I
+SELECT count(*) FROM fuse_block('db_09_0009_08', 'ii_t')
+----
+1
+
+# Single hit: exactly one granule survives.
+query IT
+SELECT id, content FROM ii_t WHERE match(content, 'row1234')
+----
+1234 row1234 plain text
+
+query T
+EXPLAIN SELECT id, content FROM ii_t WHERE match(content, 'row1234')
+----
+<slt:ignore>granule pruning: 20 to 1<slt:ignore>
+
+# Hits spread across granules 0, 5, 10 and 15.
+query I
+SELECT id FROM ii_t WHERE match(content, 'anchor') ORDER BY id
+----
+0
+500
+1000
+1500
+
+query T
+EXPLAIN SELECT id FROM ii_t WHERE match(content, 'anchor')
+----
+<slt:ignore>granule pruning: 20 to 4<slt:ignore>
+
+# Hits in every granule of the second half: only granules 15..19 are read.
+query II
+SELECT count(*), min(id) FROM ii_t WHERE match(content, 'tail')
+----
+500 1500
+
+query T
+EXPLAIN SELECT count(*), min(id) FROM ii_t WHERE match(content, 'tail')
+----
+<slt:ignore>granule pruning: 20 to 5<slt:ignore>
+
+# Scores stay aligned with the rows kept after narrowing, including the last granule.
+query IB
+SELECT id, score() > 0 FROM ii_t WHERE match(content, 'row1999 OR row0') ORDER BY id
+----
+0 1
+1999 1
+
+# Intersection with the sparse granule index on the cluster key: the search hits granule 0 and
+# granule 15, the range predicate keeps granules 14..19, so only granule 15 remains.
+query I
+SELECT id FROM ii_t WHERE match(content, 'anchor') AND id >= 1400
+----
+1500
+
+query T
+EXPLAIN SELECT id FROM ii_t WHERE match(content, 'anchor') AND id >= 1400
+----
+<slt:ignore>granule pruning: 20 to 1<slt:ignore>
+
+# Intersection with the granule Bloom index on a non-searched column.
+query IT
+SELECT id, tag FROM ii_t WHERE match(content, 'anchor') AND tag = 'tag3'
+----
+500 tag3
+
+# Search hits and the cluster-key range select disjoint granules.
+query I
+SELECT count(*) FROM ii_t WHERE match(content, 'anchor') AND id > 1600
+----
+0
+
+# No hit at all: the block is pruned by the inverted index alone.
+query I
+SELECT count(*) FROM ii_t WHERE match(content, 'missingword')
+----
+0
+
+# Internal columns are remapped through the partial granule offsets.
+query IB
+SELECT id, _row_id IS NOT NULL FROM ii_t WHERE match(content, 'row1750')
+----
+1750 1
+
+# Narrowed reads split into <= max_block_size sub-blocks must still be correct.
+statement ok
+SET max_block_size = 64
+
+query I
+SELECT id FROM ii_t WHERE match(content, 'anchor') ORDER BY id
+----
+0
+500
+1000
+1500
+
+query I
+SELECT count(*) FROM ii_t WHERE match(content, 'tail')
+----
+500
+
+statement ok
+UNSET max_block_size
+
+statement ok
+DROP DATABASE db_09_0009_08

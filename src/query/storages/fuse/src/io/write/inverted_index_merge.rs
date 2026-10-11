@@ -140,13 +140,18 @@ impl BlockIndexMerge for InvertedIndexMerge {
                     bundle_size: sizes.bundle,
                     total_size,
                 }],
+                ..Default::default()
             });
         }
         Ok(outputs)
     }
 
     fn apply_output(&self, block: &mut BlockMeta, output: WrittenBlockIndexOutput) -> Result<()> {
-        if output.inverted.len() != 1 {
+        if output.bloom.is_some()
+            || output.vector.is_some()
+            || output.spatial.is_some()
+            || output.inverted.len() != 1
+        {
             return Err(ErrorCode::Internal(
                 "unexpected inverted index merge output",
             ));
@@ -185,7 +190,7 @@ mod tests {
     use crate::io::block_index::BlockIndexSpec;
 
     #[test]
-    fn test_inverted_spec_full_writer_output_is_mergeable() -> Result<()> {
+    fn test_inverted_spec_reused_by_full_and_low_level_writers() -> Result<()> {
         use databend_common_expression::DataBlock;
         use databend_common_expression::FromData;
         use databend_common_expression::TableDataType;
@@ -211,12 +216,12 @@ mod tests {
             schema: DataSchema::new(vec![DataField::new("content", DataType::String)]),
             options: BTreeMap::new(),
         };
-        let locations = TableMetaLocationGenerator::new("reuse".into());
         let spec = builder.into_write_spec();
         let context = BlockIndexWriteContext {
             func_ctx: Default::default(),
             physical_schema: schema,
-            meta_locations: locations,
+            block_location: ("data.parquet".into(), 0),
+            meta_locations: TableMetaLocationGenerator::new("reuse".into()),
             bloom_location: ("bloom.parquet".into(), 0),
             operator: Operator::new(Memory::default()).unwrap().finish(),
             write_settings: WriteSettings::default(),
@@ -225,11 +230,12 @@ mod tests {
         let mut writer = spec.new_writer(context.clone())?;
         writer.write(&DataBlock::new_from_columns(vec![column.clone()]))?;
         let full = writer.finish()?;
-        let mut writer = spec.new_writer(context.clone())?;
-        writer.write(&DataBlock::new_from_columns(vec![column]))?;
-        let second = writer.finish()?;
-        assert_ne!(full.inverted[0].location, second.inverted[0].location);
-        for output in [full.inverted, second.inverted] {
+        let writer = spec.new_low_level_writer(context.clone())?;
+        let mut field = writer.next_column()?;
+        field.write(&column)?;
+        let low = field.finish()?.finish()?;
+        assert_ne!(full.inverted[0].location, low.inverted[0].location);
+        for output in [full.inverted, low.inverted] {
             let meta = &output[0];
             let directory = MergeSourceDirectory::open(
                 context.operator.clone(),

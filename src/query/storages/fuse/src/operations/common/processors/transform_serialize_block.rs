@@ -36,6 +36,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storage::MutationStatus;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
 
@@ -47,8 +48,10 @@ use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
 use crate::io::JsonPathStatisticsBuilder;
+use crate::io::PendingBlockSerialization;
 use crate::io::VirtualColumnBuilder;
 use crate::io::block_index::create_block_index_specs;
+use crate::io::granule_index::build_granule_index_specs;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
@@ -66,7 +69,7 @@ enum State {
         virtual_column_layout: Option<VirtualColumnLayout>,
     },
     Serialized {
-        serialized: BlockSerialization,
+        pending: PendingBlockSerialization,
         index: Option<BlockMetaIndex>,
     },
 }
@@ -78,14 +81,14 @@ pub struct TransformSerializeBlock {
     output_data: Option<DataBlock>,
 
     block_builder: BlockBuilder,
+    recluster_index_rows: Option<Vec<ReclusterIndexRowRange>>,
+    recluster_merged_names: Vec<String>,
+    recluster_output_row: u64,
     dal: Operator,
     table_id: Option<u64>, // Only used in multi table insert
     kind: MutationKind,
     pending_merge_hll: bool,
     pending_logical_change: (u64, u64),
-    recluster_index_rows: Option<Vec<ReclusterIndexRowRange>>,
-    recluster_output_row: u64,
-    recluster_merged_names: Vec<String>,
 }
 
 impl TransformSerializeBlock {
@@ -198,6 +201,10 @@ impl TransformSerializeBlock {
             None
         };
         let block_index_specs = create_block_index_specs(table, source_schema.clone())?;
+        let granule_index_specs = build_granule_index_specs(
+            &table.table_info.meta.indexes,
+            &table.table_info.meta.schema,
+        )?;
 
         // Recluster/compact/refresh materialize virtual columns and reuse the
         // path frequencies collected by VirtualColumnBuilder. Other mutations
@@ -252,6 +259,7 @@ impl TransformSerializeBlock {
             bloom_columns_map,
             ndv_columns_map,
             top_n,
+            granule_index_specs,
             block_index_specs,
             virtual_column_builder,
             json_path_statistics_builder,
@@ -264,12 +272,12 @@ impl TransformSerializeBlock {
             output,
             output_data: None,
             block_builder,
+            recluster_index_rows: None,
+            recluster_merged_names: Vec::new(),
+            recluster_output_row: 0,
             dal: table.get_operator(),
             table_id: if with_tid { Some(table.get_id()) } else { None },
             kind,
-            recluster_index_rows: None,
-            recluster_output_row: 0,
-            recluster_merged_names: Vec::new(),
             pending_merge_hll: false,
             pending_logical_change: (0, 0),
         })
@@ -288,6 +296,80 @@ impl TransformSerializeBlock {
 
     pub fn get_block_builder(&self) -> BlockBuilder {
         self.block_builder.clone()
+    }
+
+    fn finish_serialized(
+        &mut self,
+        extended_block_meta: ExtendedBlockMeta,
+        index: Option<BlockMetaIndex>,
+    ) {
+        let merge_hll = std::mem::take(&mut self.pending_merge_hll);
+        let (logical_updated_rows, logical_deleted_rows) =
+            std::mem::take(&mut self.pending_logical_change);
+        let bytes =
+            if let Some(draft_virtual_block_meta) = &extended_block_meta.draft_virtual_block_meta {
+                (extended_block_meta.block_meta.block_size
+                    + draft_virtual_block_meta
+                        .virtual_columns
+                        .as_ref()
+                        .map_or(0, |meta| meta.virtual_column_size)) as usize
+            } else {
+                extended_block_meta.block_meta.block_size as usize
+            };
+        self.block_builder
+            .ctx
+            .get_write_progress()
+            .incr(&ProgressValues {
+                rows: extended_block_meta.block_meta.row_count as usize,
+                bytes,
+            });
+
+        if let Some(rows) = self.recluster_index_rows.take() {
+            metrics_inc_recluster_write_block_nums();
+            self.output_data = Some(DataBlock::empty_with_meta(Box::new(ReclusterIndexOutput {
+                meta: extended_block_meta,
+                rows,
+                output_row: self.recluster_output_row,
+            })));
+            self.recluster_merged_names.clear();
+            return;
+        }
+        self.output_data = Some(if let Some(index) = index {
+            Self::mutation_logs(
+                MutationLogEntry::ReplacedBlock {
+                    index,
+                    block_meta: Arc::new(extended_block_meta),
+                },
+                logical_updated_rows,
+                logical_deleted_rows,
+            )
+        } else {
+            if matches!(self.kind, MutationKind::Insert) && self.table_id.is_none() {
+                self.block_builder
+                    .ctx
+                    .mutation_state()
+                    .add_mutation_status(MutationStatus {
+                        insert_rows: extended_block_meta.block_meta.row_count,
+                        update_rows: 0,
+                        deleted_rows: 0,
+                    });
+            }
+            if matches!(self.kind, MutationKind::Insert) {
+                DataBlock::empty_with_meta(Box::new(extended_block_meta))
+            } else {
+                if matches!(self.kind, MutationKind::Recluster) {
+                    metrics_inc_recluster_write_block_nums();
+                }
+                Self::mutation_logs(
+                    MutationLogEntry::AppendBlock {
+                        block_meta: Arc::new(extended_block_meta),
+                        merge_hll,
+                    },
+                    logical_updated_rows,
+                    logical_deleted_rows,
+                )
+            }
+        });
     }
 
     fn mutation_logs(
@@ -482,7 +564,12 @@ impl Processor for TransformSerializeBlock {
                         }
                     })?;
 
-                self.state = State::Serialized { serialized, index };
+                match serialized {
+                    BlockSerialization::Written(meta) => self.finish_serialized(meta, index),
+                    BlockSerialization::Pending(pending) => {
+                        self.state = State::Serialized { pending, index };
+                    }
+                }
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
@@ -492,85 +579,9 @@ impl Processor for TransformSerializeBlock {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
-            State::Serialized { serialized, index } => {
-                let merge_hll = std::mem::take(&mut self.pending_merge_hll);
-                let (logical_updated_rows, logical_deleted_rows) =
-                    std::mem::take(&mut self.pending_logical_change);
-                let extended_block_meta = BlockWriter::write_down(&self.dal, serialized).await?;
-
-                let bytes = if let Some(draft_virtual_block_meta) =
-                    &extended_block_meta.draft_virtual_block_meta
-                {
-                    (extended_block_meta.block_meta.block_size
-                        + draft_virtual_block_meta
-                            .virtual_columns
-                            .as_ref()
-                            .map(|meta| meta.virtual_column_size)
-                            .unwrap_or_default()) as usize
-                } else {
-                    extended_block_meta.block_meta.block_size as usize
-                };
-                let progress_values = ProgressValues {
-                    rows: extended_block_meta.block_meta.row_count as usize,
-                    bytes,
-                };
-                self.block_builder
-                    .ctx
-                    .get_write_progress()
-                    .incr(&progress_values);
-
-                if let Some(rows) = self.recluster_index_rows.take() {
-                    metrics_inc_recluster_write_block_nums();
-                    self.output_data =
-                        Some(DataBlock::empty_with_meta(Box::new(ReclusterIndexOutput {
-                            meta: extended_block_meta,
-                            output_row: self.recluster_output_row,
-                            rows,
-                        })));
-                    self.recluster_merged_names.clear();
-                    return Ok(());
-                }
-                let mutation_log_data_block = if let Some(index) = index {
-                    // we are replacing the block represented by the `index`
-                    Self::mutation_logs(
-                        MutationLogEntry::ReplacedBlock {
-                            index,
-                            block_meta: Arc::new(extended_block_meta),
-                        },
-                        logical_updated_rows,
-                        logical_deleted_rows,
-                    )
-                } else {
-                    // appending new data block
-                    if matches!(self.kind, MutationKind::Insert) {
-                        if self.table_id.is_none() {
-                            self.block_builder.ctx.mutation_state().add_mutation_status(
-                                MutationStatus {
-                                    insert_rows: extended_block_meta.block_meta.row_count,
-                                    update_rows: 0,
-                                    deleted_rows: 0,
-                                },
-                            );
-                        }
-                    }
-
-                    if matches!(self.kind, MutationKind::Insert) {
-                        DataBlock::empty_with_meta(Box::new(extended_block_meta))
-                    } else {
-                        if matches!(self.kind, MutationKind::Recluster) {
-                            metrics_inc_recluster_write_block_nums();
-                        }
-                        Self::mutation_logs(
-                            MutationLogEntry::AppendBlock {
-                                block_meta: Arc::new(extended_block_meta),
-                                merge_hll,
-                            },
-                            logical_updated_rows,
-                            logical_deleted_rows,
-                        )
-                    }
-                };
-                self.output_data = Some(mutation_log_data_block);
+            State::Serialized { pending, index } => {
+                let extended_block_meta = BlockWriter::write_down(&self.dal, pending).await?;
+                self.finish_serialized(extended_block_meta, index);
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

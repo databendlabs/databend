@@ -1,0 +1,221 @@
+# Four combinations, followed by mixed historical blocks and refresh fallback.
+statement ok
+create or replace database virtual_granule_read
+
+statement ok
+use virtual_granule_read
+
+statement ok
+set enable_experimental_virtual_column = 1
+
+statement ok
+create table plain(k int, v variant) enable_virtual_column = false
+
+statement ok
+create table granule(k int, v variant) cluster by(k) enable_virtual_column = false index_granularity = 2
+
+statement ok
+create table virtual_only(k int, v variant) enable_virtual_column = true
+
+statement ok
+create table indexed_virtual(k int, v variant) enable_virtual_column = true index_granularity = 2
+
+statement ok
+insert into plain values (1, '{"a":1,"b":"one"}'), (2, '{"a":2,"b":"two"}'), (3, '{}'), (4, '{"a":4,"b":"four"}'), (5, '{"a":null,"b":"five"}')
+
+statement ok
+insert into granule select * from plain
+
+statement ok
+insert into virtual_only select * from plain
+
+statement ok
+insert into indexed_virtual select * from plain
+
+# Inserts collect path statistics; materialization happens on refresh/rewrite.
+statement ok
+refresh virtual column for virtual_only
+
+statement ok
+alter table indexed_virtual cluster by(k)
+
+statement ok
+alter table indexed_virtual recluster final
+
+query IIT rowsort
+select k, v:a::int, v:b::string from plain where k in (2, 4, 5)
+----
+2 2 two
+4 4 four
+5 NULL five
+
+query IIT rowsort
+select k, v:a::int, v:b::string from granule where k in (2, 4, 5)
+----
+2 2 two
+4 4 four
+5 NULL five
+
+query IIT rowsort
+select k, v:a::int, v:b::string from virtual_only where k in (2, 4, 5)
+----
+2 2 two
+4 4 four
+5 NULL five
+
+query IIT rowsort
+select k, v:a::int, v:b::string from indexed_virtual where k in (2, 4, 5)
+----
+2 2 two
+4 4 four
+5 NULL five
+
+# Only virtual output, no ordinary projected output; missing-path plans read no leaf.
+query IT rowsort
+select v:a::int, v:b::string from indexed_virtual where k >= 4
+----
+4 four
+NULL five
+
+query I
+select count(v:missing) from indexed_virtual where k >= 2
+----
+0
+
+query I
+select count() from indexed_virtual where k >= 2 and v:a::int > 100
+----
+0
+
+# Refresh replaces the virtual column file but must not overwrite the block offsets.
+statement ok
+refresh virtual column for indexed_virtual
+
+query IIT rowsort
+select k, v:a::int, v:b::string from indexed_virtual where k in (2, 4, 5)
+----
+2 2 two
+4 4 four
+5 NULL five
+
+# Old blocks retain plain virtual column files; new writes may use aligned pages.
+statement ok
+alter table virtual_only cluster by(k)
+
+statement ok
+alter table virtual_only set options(index_granularity = 2)
+
+statement ok
+insert into virtual_only values (6, '{"a":6,"b":"six"}'), (7, '{"a":7,"b":"seven"}')
+
+query IIT rowsort
+select k, v:a::int, v:b::string from virtual_only where k in (2, 4, 7)
+----
+2 2 two
+4 4 four
+7 7 seven
+
+# Force one direct path; remaining paths use shared Map leaves.
+statement ok
+create table shared(k int, v variant) enable_virtual_column = true index_granularity = 2 virtual_column_max_direct_columns = 1
+
+statement ok
+insert into shared select * from plain
+
+statement ok
+alter table shared cluster by(k)
+
+statement ok
+alter table shared recluster final
+
+query IIT rowsort
+select k, v:a::int, v:b::string from shared where k in (2, 4, 5)
+----
+2 2 two
+4 4 four
+5 NULL five
+
+# Repeated reads exercise mixed array-cache hits and raw shared Map leaves.
+query IT rowsort
+select v:a::int, v:b::string from shared where k >= 4
+----
+4 four
+NULL five
+
+query IT rowsort
+select v:a::int, v:b::string from shared where k >= 4
+----
+4 four
+NULL five
+
+query I
+select count() from shared where k >= 2 and v:a::int > 100
+----
+0
+
+query T
+select v::string from shared where k = 4
+----
+{"a":4,"b":"four"}
+
+# Blocks without virtual column files coexist with newly materialized blocks.
+statement ok
+alter table granule set options(enable_virtual_column = true)
+
+statement ok
+insert into granule values (6, '{"a":6,"b":"six"}'), (7, '{"a":7,"b":"seven"}')
+
+query IIT rowsort
+select k, v:a::int, v:b::string from granule where k in (2, 4, 7)
+----
+2 2 two
+4 4 four
+7 7 seven
+
+statement ok
+set recluster_method = 'vertical'
+
+statement ok
+alter table virtual_only recluster final
+
+query IIT rowsort
+select k, v:a::int, v:b::string from virtual_only where k in (2, 4, 7)
+----
+2 2 two
+4 4 four
+7 7 seven
+
+statement ok
+set recluster_method = 'horizontal'
+
+statement ok
+optimize table granule compact
+
+query IIT rowsort
+select k, v:a::int, v:b::string from granule where k in (2, 4, 7)
+----
+2 2 two
+4 4 four
+7 7 seven
+
+# Disabling virtual-column writes must not invalidate historical virtual column files.
+statement ok
+alter table indexed_virtual set options(enable_virtual_column = false)
+
+statement ok
+insert into indexed_virtual values (8, '{"a":8,"b":"eight"}')
+
+query IIT rowsort
+select k, v:a::int, v:b::string from indexed_virtual where k in (4, 8)
+----
+4 4 four
+8 8 eight
+
+statement ok
+set recluster_method = 'auto'
+
+statement ok
+set enable_experimental_virtual_column = 0
+
+statement ok
+drop database virtual_granule_read

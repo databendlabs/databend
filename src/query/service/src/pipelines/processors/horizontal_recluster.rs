@@ -1490,6 +1490,8 @@ mod tests {
             level: 0,
             input_level_stats: vec![],
             kind: ReclusterTaskKind::MergeBlocks,
+            vertical_kind: None,
+            memory_budget: 0,
             virtual_column_layout: None,
             inverted_index_sources: blocks
                 .iter()

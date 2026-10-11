@@ -67,6 +67,51 @@ fn test_set_ttl_and_modify_column_are_distinct() {
     assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err());
 }
 
+#[test]
+fn test_loki_file_format() {
+    for sql in [
+        "COPY INTO logs FROM @stage/chunks/ FILE_FORMAT = (TYPE = LOKI)",
+        "COPY INTO logs FROM @stage FILE_FORMAT = (TYPE = 'loki' MISSING_FIELD_AS = FIELD_DEFAULT)",
+        "COPY INTO logs FROM (SELECT $1:message::STRING FROM @stage) FILE_FORMAT = (TYPE = LOKI)",
+        "SELECT $1 FROM @stage (FILE_FORMAT => 'loki')",
+        "CREATE FILE FORMAT loki_format TYPE = LOKI",
+        "CREATE STAGE loki_stage FILE_FORMAT = (TYPE = LOKI)",
+        "SELECT loki FROM loki",
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        let rendered = stmt.to_string();
+        let tokens = tokenize_sql(&rendered).unwrap();
+        assert!(
+            parse_sql(&tokens, Dialect::PostgreSQL).is_ok(),
+            "{rendered}"
+        );
+    }
+}
+
+#[test]
+fn test_loki_copy_regression_sql_parses() {
+    let suite = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../tests/sqllogictests/suites/stage/formats/loki/loki_copy.test"
+    ));
+    for record in suite.split("\n\n") {
+        let mut lines = record.lines().filter(|line| !line.starts_with('#'));
+        let Some(header) = lines.next() else {
+            continue;
+        };
+        if !header.starts_with("statement ") && !header.starts_with("query ") {
+            continue;
+        }
+        let sql = lines
+            .take_while(|line| *line != "----")
+            .collect::<Vec<_>>()
+            .join("\n");
+        let tokens = tokenize_sql(&sql).unwrap();
+        parse_sql(&tokens, Dialect::PostgreSQL).unwrap_or_else(|error| panic!("{sql}: {error}"));
+    }
+}
+
 fn run_parser<P, O>(file: &mut dyn Write, parser: P, src: &str)
 where
     P: FnMut(Input) -> IResult<O>,

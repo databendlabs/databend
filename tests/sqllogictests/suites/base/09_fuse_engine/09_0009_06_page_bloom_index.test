@@ -1,0 +1,215 @@
+# Granule-level bloom index: verify equality/IN predicates over a table written with a
+# `TYPE bloom` index and `index_granularity` return correct results. Exercises the write path
+# (per-granule filter payloads + offset marks) and the read path (per-granule bloom
+# narrowing of the surviving granule set) end to end.
+
+statement ok
+DROP DATABASE IF EXISTS db_09_0009_06
+
+statement ok
+CREATE DATABASE db_09_0009_06
+
+statement ok
+USE db_09_0009_06
+
+# Granule Bloom indexes are built on the write path; async backfill is not supported.
+statement error 1601
+CREATE ASYNC BLOOM INDEX pb_async_idx ON pb_t_missing(a)
+
+statement error 1601
+CREATE TABLE pb_async_t(a int, ASYNC BLOOM INDEX pb_async_idx(a)) index_granularity = 100
+
+# Column-oriented segments currently cannot preserve granule-index metadata.
+statement error 1301
+CREATE TABLE pb_column_segment(a int) index_granularity = 100 segment_format = 'column_oriented'
+
+statement ok
+CREATE TABLE pb_column_segment(a int) segment_format = 'column_oriented'
+
+statement error 1301
+ALTER TABLE pb_column_segment SET OPTIONS(index_granularity = '100')
+
+statement ok
+DROP TABLE pb_column_segment
+
+statement error 1301
+CREATE TABLE pb_invalid_granularity(a int) index_granularity = 4294967296
+
+# Small granule so a single block spans many granules; index created before insert so the write path
+# builds per-granule payloads.
+statement ok
+CREATE TABLE pb_t(a int, b string) index_granularity = 100
+
+statement ok
+CREATE BLOOM INDEX pb_idx ON pb_t(a)
+
+statement error 1603
+CREATE BLOOM INDEX pb_invalid_filter ON pb_t(b) filter_type = 'invalid'
+
+statement error 1603
+CREATE BLOOM INDEX pb_unknown_option ON pb_t(b) unknown = 'xor8'
+
+# Bloom filter type is an index-level option. The table-level block Bloom option must not change
+# the default granule Bloom type, which remains xor8.
+statement ok
+CREATE TABLE pb_filter_types(
+    a int,
+    b int,
+    BLOOM INDEX pb_default(a),
+    BLOOM INDEX pb_fuse(b) filter_type = 'BINARY_FUSE32'
+) bloom_index_type = 'binary_fuse32' index_granularity = 100
+
+query TT rowsort
+SELECT name, definition FROM system.indexes
+WHERE database = 'db_09_0009_06' AND table = 'pb_filter_types'
+----
+pb_default pb_filter_types(a)
+pb_fuse pb_filter_types(b)filter_type='binary_fuse32'
+
+statement ok
+INSERT INTO pb_filter_types SELECT number, number * 2 FROM numbers(10000)
+
+query II
+SELECT a, b FROM pb_filter_types WHERE a = 4242
+----
+4242 8484
+
+query II
+SELECT a, b FROM pb_filter_types WHERE b = 8484
+----
+4242 8484
+
+statement ok
+DROP TABLE pb_filter_types
+
+statement ok
+INSERT INTO pb_t SELECT number, concat('v', to_string(number)) FROM numbers(10000)
+
+# Point lookup on the indexed column: only granules whose filter may contain 4242 are read.
+query IT
+SELECT * FROM pb_t WHERE a = 4242
+----
+4242 v4242
+
+# Equality that matches nothing in range: every granule's filter proves false -> block dropped.
+query I
+SELECT count(*) FROM pb_t WHERE a = 100000
+----
+0
+
+# IN list spanning several granules.
+query I
+SELECT count(*) FROM pb_t WHERE a IN (1, 250, 4242, 9999)
+----
+4
+
+# Aggregate over the full table is unaffected (no eq predicate to narrow on).
+query II
+SELECT count(*), sum(a) FROM pb_t
+----
+10000 49995000
+
+# Predicate on a non-indexed column must still return correct rows (granule bloom must not apply).
+query IT
+SELECT * FROM pb_t WHERE b = 'v7777'
+----
+7777 v7777
+
+# Range predicate (not eq): granule bloom cannot narrow, results must stay correct.
+query I
+SELECT count(*) FROM pb_t WHERE a >= 1234 AND a <= 5678
+----
+4445
+
+# Narrowed read split into <= max_block_size sub-blocks must still be correct.
+statement ok
+SET max_block_size = 128
+
+query IT
+SELECT * FROM pb_t WHERE a = 4242
+----
+4242 v4242
+
+query I
+SELECT count(*) FROM pb_t WHERE a IN (1, 250, 4242, 9999)
+----
+4
+
+statement ok
+UNSET max_block_size
+
+# Combined with a cluster key: the sparse (cluster-key) pruner narrows first, then granule bloom narrows
+# the survivor set further. Results must remain correct.
+statement ok
+CREATE TABLE pb_ck(a int, b int) CLUSTER BY (a) index_granularity = 100
+
+statement ok
+CREATE BLOOM INDEX pb_ck_idx ON pb_ck(b)
+
+statement ok
+INSERT INTO pb_ck SELECT number, number * 2 FROM numbers(10000)
+
+# Cluster-key range narrows to a granule run; the eq on `b` narrows within it.
+query II
+SELECT a, b FROM pb_ck WHERE a >= 2000 AND a < 3000 AND b = 5000
+----
+2500 5000
+
+# eq on the bloom column alone.
+query II
+SELECT a, b FROM pb_ck WHERE b = 8484
+----
+4242 8484
+
+# eq that matches nothing.
+query I
+SELECT count(*) FROM pb_ck WHERE b = 3
+----
+0
+
+statement ok
+DROP TABLE pb_ck
+
+# An index created AFTER data is written applies to blocks written afterwards; older blocks have no
+# granule bloom mark columns and must degrade to a full (correct) read.
+statement ok
+CREATE TABLE pb_late(a int) index_granularity = 100
+
+statement ok
+INSERT INTO pb_late SELECT number FROM numbers(5000)
+
+statement ok
+CREATE BLOOM INDEX pb_late_idx ON pb_late(a)
+
+statement ok
+INSERT INTO pb_late SELECT number + 5000 FROM numbers(5000)
+
+# Rows from both the pre-index and post-index blocks must be found.
+query I
+SELECT count(*) FROM pb_late WHERE a = 42
+----
+1
+
+query I
+SELECT count(*) FROM pb_late WHERE a = 7777
+----
+1
+
+query I
+SELECT count(*) FROM pb_late WHERE a IN (42, 7777, 100000)
+----
+2
+
+query I
+SELECT count(*) FROM pb_late
+----
+10000
+
+statement ok
+DROP TABLE pb_late
+
+statement ok
+DROP TABLE pb_t
+
+statement ok
+DROP DATABASE db_09_0009_06

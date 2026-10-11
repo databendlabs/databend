@@ -1,0 +1,36 @@
+statement ok
+USE compat_granule_mixed
+
+query III
+SELECT count(),sum(payload),count_if(k IS NULL) FROM gi_t
+----
+512 1036699 3
+
+statement ok
+INSERT INTO gi_t SELECT number+5000,number+5000,'old-final-100' FROM numbers(100)
+
+statement ok
+INSERT INTO gi_t VALUES (NULL,NULL,'old-final-edge'),(100,100,'old-final-edge')
+
+# The old version has no recluster_method setting; its default recluster path is
+# horizontal.
+statement ok
+ALTER TABLE gi_t RECLUSTER FINAL
+
+query III
+SELECT count(),sum(payload),count_if(k IS NULL) FROM gi_t
+----
+614 1541749 4
+
+query III
+SELECT count_if(k BETWEEN 5000 AND 5099),count_if(k=100),count_if(k=5100) FROM gi_t
+----
+100 6 0
+
+statement ok
+INSERT INTO gi_bloom SELECT number+401,concat('o',to_string(number+401)) FROM numbers(100)
+
+query III
+SELECT count(),count_if(tag='c99'),count_if(tag='o450') FROM gi_bloom
+----
+501 1 1

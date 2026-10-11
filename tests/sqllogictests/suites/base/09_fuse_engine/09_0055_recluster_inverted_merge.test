@@ -6,6 +6,9 @@ statement ok
 use db_recluster_inverted_merge
 
 statement ok
+set recluster_method = 'horizontal'
+
+statement ok
 set enable_recluster_multiway_merge = 1
 
 statement ok
@@ -126,6 +129,9 @@ unset enable_recluster_inverted_index_merge
 
 statement ok
 unset enable_recluster_multiway_merge
+
+statement ok
+unset recluster_method
 
 statement ok
 drop database db_recluster_inverted_merge
