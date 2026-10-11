@@ -4570,6 +4570,7 @@ dependencies = [
  "bstr",
  "bytes",
  "chrono",
+ "crc32c",
  "csv-core",
  "databend-common-ast",
  "databend-common-base",
@@ -4592,9 +4593,11 @@ dependencies = [
  "databend-storages-common-table-meta",
  "encoding_rs",
  "enum-as-inner",
+ "flate2",
  "jsonb",
  "lexical-core",
  "log",
+ "lz4_flex 0.11.6",
  "match-template",
  "num-bigint",
  "num-traits",
@@ -4605,9 +4608,11 @@ dependencies = [
  "serde",
  "serde_json",
  "simdutf8",
+ "snap",
  "tokio",
  "typetag",
  "uuid",
+ "zstd 0.12.4",
 ]
 
 [[package]]

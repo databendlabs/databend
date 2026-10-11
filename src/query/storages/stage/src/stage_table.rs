@@ -47,6 +47,7 @@ use opendal::Operator;
 use crate::read::arrow::ArrowIpcMode;
 use crate::read::arrow::ArrowReadPipelineBuilder;
 use crate::read::avro::AvroReadPipelineBuilder;
+use crate::read::loki::LokiReadPipelineBuilder;
 use crate::read::row_based::RowBasedReadPipelineBuilder;
 
 /// TODO: we need to track the data metrics in stage table.
@@ -188,7 +189,8 @@ impl Table for StageTable {
             | FileFormatParams::Text(_)
             | FileFormatParams::Arrow(_)
             | FileFormatParams::ArrowStream(_)
-            | FileFormatParams::Avro(_) => self.read_partitions_simple(ctx, stage_table_info).await,
+            | FileFormatParams::Avro(_)
+            | FileFormatParams::Loki(_) => self.read_partitions_simple(ctx, stage_table_info).await,
             format => Err(ErrorCode::Unimplemented(format!(
                 "Unsupported file format in stage table read: {format}"
             ))),
@@ -231,6 +233,14 @@ impl Table for StageTable {
             FileFormatParams::Csv(_) | FileFormatParams::NdJson(_) | FileFormatParams::Text(_) => {
                 let compact_threshold = ctx.read_block_thresholds().get();
                 RowBasedReadPipelineBuilder {
+                    stage_table_info,
+                    compact_threshold,
+                }
+                .read_data(ctx, plan, pipeline, internal_columns)
+            }
+            FileFormatParams::Loki(_) => {
+                let compact_threshold = ctx.read_block_thresholds().get();
+                LokiReadPipelineBuilder {
                     stage_table_info,
                     compact_threshold,
                 }

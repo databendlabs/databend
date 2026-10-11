@@ -936,6 +936,8 @@ pub enum TokenKind {
     LIMIT,
     #[token("LIST", ignore(ascii_case))]
     LIST,
+    #[token("LOKI", ignore(ascii_case))]
+    LOKI,
     #[token("LOW", ignore(ascii_case))]
     LOW,
     #[token("LZO", ignore(ascii_case))]

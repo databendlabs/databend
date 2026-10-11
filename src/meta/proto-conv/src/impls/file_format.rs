@@ -47,6 +47,7 @@ impl FromToProtoEnum for mt::principal::StageFileFormatType {
             pb::StageFileFormatType::Parquet => Ok(mt::principal::StageFileFormatType::Parquet),
             pb::StageFileFormatType::Xml => Ok(mt::principal::StageFileFormatType::Xml),
             pb::StageFileFormatType::Lance => Ok(mt::principal::StageFileFormatType::Lance),
+            pb::StageFileFormatType::Loki => Ok(mt::principal::StageFileFormatType::Loki),
             pb::StageFileFormatType::Arrow => Ok(mt::principal::StageFileFormatType::Arrow),
             pb::StageFileFormatType::ArrowStream => {
                 Ok(mt::principal::StageFileFormatType::ArrowStream)
@@ -65,6 +66,7 @@ impl FromToProtoEnum for mt::principal::StageFileFormatType {
             mt::principal::StageFileFormatType::Parquet => pb::StageFileFormatType::Parquet,
             mt::principal::StageFileFormatType::Xml => pb::StageFileFormatType::Xml,
             mt::principal::StageFileFormatType::Lance => pb::StageFileFormatType::Lance,
+            mt::principal::StageFileFormatType::Loki => pb::StageFileFormatType::Loki,
             mt::principal::StageFileFormatType::Arrow => pb::StageFileFormatType::Arrow,
             mt::principal::StageFileFormatType::ArrowStream => pb::StageFileFormatType::ArrowStream,
         }
@@ -273,6 +275,11 @@ impl FromToProto for mt::principal::FileFormatParams {
                     mt::principal::ArrowFileFormatParams::from_pb(p)?,
                 ))
             }
+            Some(pb::file_format_params::Format::Loki(p)) => {
+                Ok(mt::principal::FileFormatParams::Loki(
+                    mt::principal::LokiFileFormatParams::from_pb(p)?,
+                ))
+            }
             None => Err(Incompatible::new(
                 "FileFormatParams.format cannot be None".to_string(),
             )),
@@ -336,6 +343,34 @@ impl FromToProto for mt::principal::FileFormatParams {
                     mt::principal::ArrowFileFormatParams::to_pb(p),
                 )),
             },
+            Self::Loki(p) => Self::PB {
+                format: Some(pb::file_format_params::Format::Loki(
+                    mt::principal::LokiFileFormatParams::to_pb(p),
+                )),
+            },
+        }
+    }
+}
+
+impl FromToProto for mt::principal::LokiFileFormatParams {
+    type PB = pb::LokiFileFormatParams;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible> {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        mt::principal::LokiFileFormatParams::try_create(p.missing_field_as.as_deref())
+            .map_err(|e| Incompatible::new(e.to_string()))
+    }
+
+    fn to_pb(&self) -> Self::PB {
+        pb::LokiFileFormatParams {
+            ver: VER,
+            // Loki is a new oneof alternative that older readers cannot interpret.
+            min_reader_ver: 188,
+            missing_field_as: Some(self.missing_field_as.to_string()),
         }
     }
 }

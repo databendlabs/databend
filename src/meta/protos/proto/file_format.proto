@@ -29,6 +29,7 @@ enum StageFileFormatType {
   Lance = 8;
   Arrow = 9;
   ArrowStream = 10;
+  Loki = 11;
 }
 
 enum StageFileCompression {
@@ -93,6 +94,7 @@ message FileFormatParams {
     LanceFileFormatParams lance = 9;
     ArrowFileFormatParams arrow = 10;
     ArrowFileFormatParams arrow_stream = 11;
+    LokiFileFormatParams loki = 12;
   }
 }
 
@@ -194,6 +196,12 @@ message AvroFileFormatParams {
 message LanceFileFormatParams {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
+}
+
+message LokiFileFormatParams {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+  optional string missing_field_as = 1;
 }
 
 message ArrowFileFormatParams {

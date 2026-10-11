@@ -159,7 +159,7 @@ pub fn copy_into(i: Input) -> IResult<Statement> {
                 FROM { @<stage_name>[/<path>]
                     | '<uri>'
                     | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TEXT | AVRO | ORC | JSON | LANCE | ARROW | ARROW_STREAM | LOKI } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`"

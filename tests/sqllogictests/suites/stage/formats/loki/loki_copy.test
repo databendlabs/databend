@@ -1,0 +1,177 @@
+# Native object-store chunks produced by grafana/loki v3.4.2.
+# No CREATE FILE FORMAT is required for either direct COPY or SELECT conversion.
+
+statement ok
+CREATE OR REPLACE TABLE loki_logs (message STRING, labels VARIANT, timestamp_ns BIGINT, tenant_id STRING, structured_metadata VARIANT) ENGINE = FUSE
+
+query ?????
+COPY INTO loki_logs FROM @data/loki/chunks/v4-codec1 FILE_FORMAT = (TYPE = LOKI)
+----
+loki/chunks/v4-codec1 3 0 NULL NULL
+
+query ????
+SELECT timestamp_ns, message, labels:service::STRING, structured_metadata:trace_id::STRING FROM loki_logs ORDER BY timestamp_ns
+----
+1700000000123456789 hello loki api trace-0
+1700000000123456790 你好 loki api trace-1
+1700000000123456791 {"status":200} api trace-2
+
+query ?
+SELECT DISTINCT tenant_id FROM loki_logs
+----
+test-tenant
+
+# Already copied files must not be loaded twice.
+statement ok
+COPY INTO loki_logs FROM @data/loki/chunks/v4-codec1 FILE_FORMAT = (TYPE = LOKI)
+
+query ?
+SELECT count(*) FROM loki_logs
+----
+3
+
+# Source selection and every supported version/compression combination: 28 files.
+statement ok
+TRUNCATE TABLE loki_logs
+
+statement ok
+COPY INTO loki_logs FROM @data/loki/chunks/ PATTERN = '.*v[1-4]-codec[0-9]$' FILE_FORMAT = (TYPE = 'loki') FORCE = TRUE
+
+query ??
+SELECT count(*), count(DISTINCT timestamp_ns) FROM loki_logs
+----
+84 3
+
+query ??
+SELECT count_if(structured_metadata = parse_json('{}')), count_if(structured_metadata:trace_id IS NOT NULL) FROM loki_logs
+----
+57 27
+
+# Inline built-in format and arbitrary target names/types.
+statement ok
+CREATE OR REPLACE TABLE loki_app_logs (event_ns BIGINT, service STRING, status INT NULL, content STRING)
+
+query ?????
+COPY INTO loki_app_logs FROM (SELECT $1:timestamp_ns::BIGINT, $1:labels:service::STRING, try_parse_json($1:message::STRING):status::INT, $1:message::STRING FROM @data/loki/chunks/v4-codec1) FILE_FORMAT = (TYPE = LOKI)
+----
+loki/chunks/v4-codec1 3 0 NULL NULL
+
+query ???
+SELECT event_ns, service, status FROM loki_app_logs ORDER BY event_ns
+----
+1700000000123456789 api NULL
+1700000000123456790 api NULL
+1700000000123456791 api 200
+
+# Projection and source metadata must work with the single VARIANT source column.
+query ???
+SELECT metadata$filename, metadata$file_row_number, $1:message::STRING FROM @data/loki/chunks/ (FILES => ('v3-codec0'), FILE_FORMAT => 'loki') ORDER BY metadata$file_row_number
+----
+loki/chunks/v3-codec0 0 hello loki
+loki/chunks/v3-codec0 1 你好 loki
+loki/chunks/v3-codec0 2 {"status":200}
+
+# A named format is optional and reusable.
+statement ok
+CREATE OR REPLACE FILE FORMAT loki_format TYPE = LOKI MISSING_FIELD_AS = FIELD_DEFAULT
+
+statement ok
+CREATE OR REPLACE TABLE loki_defaults (message STRING, extra STRING NOT NULL DEFAULT 'fallback')
+
+query ?????
+COPY INTO loki_defaults FROM @data/loki/chunks/v2-codec4 FILE_FORMAT = (FORMAT_NAME = 'loki_format')
+----
+loki/chunks/v2-codec4 3 0 NULL NULL
+
+query ?
+SELECT DISTINCT extra FROM loki_defaults
+----
+fallback
+
+query ?
+SELECT count(*) FROM @data/loki/chunks/ (FILES => ('v4-codec9'), FILE_FORMAT => 'loki_format')
+----
+3
+
+# Missing nullable fields use NULL only when explicitly requested.
+statement ok
+CREATE OR REPLACE TABLE loki_nullable (message STRING, extra STRING NULL)
+
+statement ok
+COPY INTO loki_nullable FROM @data/loki/chunks/v3-codec1 FILE_FORMAT = (TYPE = LOKI MISSING_FIELD_AS = NULL)
+
+query ?
+SELECT count_if(extra IS NULL) FROM loki_nullable
+----
+3
+
+# Missing fields default to ERROR, and NULL does not fill non-nullable columns.
+statement error Missing value for column
+COPY INTO loki_defaults FROM @data/loki/chunks/v4-codec1 FILE_FORMAT = (TYPE = LOKI)
+
+statement error Missing value for column
+COPY INTO loki_defaults FROM @data/loki/chunks/v4-codec1 FILE_FORMAT = (TYPE = LOKI MISSING_FIELD_AS = NULL)
+
+# Case matching follows COPY options, not a bucket-specific schema.
+statement ok
+CREATE OR REPLACE TABLE loki_case ("MESSAGE" STRING)
+
+statement ok
+COPY INTO loki_case FROM @data/loki/chunks/v4-codec1 FILE_FORMAT = (TYPE = LOKI) COLUMN_MATCH_MODE = CASE_INSENSITIVE
+
+query ?
+SELECT count(*) FROM loki_case
+----
+3
+
+statement error Missing value for column
+COPY INTO loki_case FROM @data/loki/chunks/v4-codec1 FILE_FORMAT = (TYPE = LOKI) COLUMN_MATCH_MODE = CASE_SENSITIVE FORCE = TRUE
+
+# Rows that fail conversion must be rolled back across every target column.
+statement ok
+CREATE OR REPLACE TABLE loki_bad_rows (labels VARIANT, message INT NOT NULL)
+
+query ?????
+COPY INTO loki_bad_rows FROM @data/loki/chunks/v4-codec1 FILE_FORMAT = (TYPE = LOKI) ON_ERROR = CONTINUE
+----
+loki/chunks/v4-codec1 0 3 Invalid value '"hello loki"' for column 1 (message Int32): BadBytes. Code: 1046, Text = Incorrect json value, must be number. 1
+
+query ?
+SELECT count(*) FROM loki_bad_rows
+----
+0
+
+# Corrupt binary chunks abort even with CONTINUE; they cannot safely be skipped by row.
+statement error Invalid LOKI chunk.*checksum mismatch
+COPY INTO loki_bad_rows FROM @data/loki/bad-crc FILE_FORMAT = (TYPE = LOKI) ON_ERROR = CONTINUE
+
+# Empty chunks contribute no records.
+query ?
+SELECT count(*) FROM @data/loki/ (FILES => ('empty'), FILE_FORMAT => 'loki')
+----
+0
+
+# Loki compression comes from the chunk, not a user-selected outer compression.
+statement error Unsupported options for Loki
+CREATE FILE FORMAT loki_wrong_compression TYPE = LOKI COMPRESSION = GZIP
+
+statement ok
+DROP FILE FORMAT loki_format
+
+statement ok
+DROP TABLE loki_logs
+
+statement ok
+DROP TABLE loki_app_logs
+
+statement ok
+DROP TABLE loki_defaults
+
+statement ok
+DROP TABLE loki_nullable
+
+statement ok
+DROP TABLE loki_bad_rows
+
+statement ok
+DROP TABLE loki_case
