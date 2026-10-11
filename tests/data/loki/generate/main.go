@@ -63,6 +63,7 @@ func main() {
 	for version := byte(1); version <= 4; version++ {
 		for _, codec := range []compression.Codec{compression.None, compression.GZIP, compression.LZ4_64k,
 			compression.Snappy, compression.LZ4_256k, compression.LZ4_1M, compression.LZ4_4M,
+			// typos:ignore-next-line
 			compression.Flate, compression.Zstd} {
 			if version == 1 && codec != compression.GZIP {
 				continue
