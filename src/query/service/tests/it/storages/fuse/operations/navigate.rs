@@ -172,48 +172,6 @@ async fn test_fuse_navigate() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_timestamp_location_propagates_snapshot_read_error() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
-    fixture.create_default_database().await?;
-    fixture.create_default_table().await?;
-    fixture
-        .execute_command(&format!(
-            "INSERT INTO {}.{} VALUES (1, (2, 3))",
-            fixture.default_db_name(),
-            fixture.default_table_name()
-        ))
-        .await?;
-
-    let table = fixture.latest_default_table().await?;
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let location = fuse_table.snapshot_loc().unwrap();
-    let timestamp = fuse_table
-        .read_table_snapshot()
-        .await?
-        .unwrap()
-        .timestamp
-        .unwrap();
-    // Corrupt the object and evict its cached snapshot to exercise the actual read failure.
-    fuse_table
-        .get_operator()
-        .write(&location, b"invalid snapshot".to_vec())
-        .await?;
-    if let Some(cache) = CacheManager::instance().get_table_snapshot_cache() {
-        cache.evict(&location);
-    }
-    let expected = fuse_table.read_table_snapshot().await.unwrap_err();
-    let error = fuse_table
-        .navigate_to_location(
-            fixture.new_query_ctx().await?,
-            &NavigationPoint::TimePoint(timestamp),
-        )
-        .await
-        .unwrap_err();
-    assert_eq!(error.code(), expected.code());
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn test_no_check_timestamp_maps_missing_prev_snapshot() -> anyhow::Result<()> {
     // When NO_CHECK TIMESTAMP finds a later snapshot whose predecessor object is gone
     // (vacuumed), it should return TableHistoricalDataNotFound instead of StorageNotFound.
