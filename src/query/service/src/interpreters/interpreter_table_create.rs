@@ -190,7 +190,8 @@ impl Interpreter for CreateTableInterpreter {
                 .fields()
                 .iter()
                 .any(|f| f.computed_expr().is_some());
-            if has_computed_column {
+            // CLONE checks the final schema after historical projection and source refresh.
+            if self.plan.clone.is_none() && has_computed_column {
                 LicenseManagerSwitch::instance()
                     .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
             }
@@ -667,6 +668,15 @@ impl CreateTableInterpreter {
                 source_snapshot.as_deref(),
             )
             .await?;
+        if table_meta
+            .schema
+            .fields()
+            .iter()
+            .any(|field| field.computed_expr().is_some())
+        {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
+        }
         self.validate_create_table_meta(&table_meta)?;
         let now = Utc::now();
         table_meta.created_on = now;

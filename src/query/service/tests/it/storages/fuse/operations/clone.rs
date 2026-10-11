@@ -30,6 +30,7 @@ use databend_common_sql::Planner;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_meta_client::types::MatchSeq;
 use databend_query::interpreters::InterpreterFactory;
+use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::test_kits::TestFixture;
@@ -63,6 +64,99 @@ async fn test_clone_feature_gate_at_execution() -> anyhow::Result<()> {
     };
     assert_eq!(err.code(), ErrorCode::UNIMPLEMENTED);
     assert!(err.message().contains("enable_experimental_clone_table=1"));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_clone_source_refresh_rechecks_computed_column_license() -> anyhow::Result<()> {
+    // Bind a plain schema, then change the source before execution to force a refresh.
+    // SQL tests cannot deterministically interleave binding and execution of one plan.
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture.enable_experimental_clone_table()?;
+    fixture.create_default_database().await?;
+    let database = fixture.default_db_name();
+    let source = format!("{database}.refresh_source");
+    fixture
+        .execute_command(&format!("CREATE TABLE {source}(id INT)"))
+        .await?;
+    fixture
+        .execute_command(&format!("INSERT INTO {source} VALUES (1)"))
+        .await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let original = catalog
+        .get_table(&tenant, &database, "refresh_source")
+        .await?;
+    let plain_snapshot = FuseTable::try_from_table(original.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .unwrap()
+        .snapshot_id;
+    let (plan, _) = Planner::new(ctx.clone())
+        .plan_sql(&format!(
+            "CREATE TABLE {database}.refresh_clone CLONE {source}"
+        ))
+        .await?;
+
+    fixture
+        .execute_command(&format!(
+            "ALTER TABLE {source} ADD COLUMN doubled INT AS (id * 2) VIRTUAL"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!("INSERT INTO {source}(id) VALUES (2)"))
+        .await?;
+    // A nonempty invalid key cannot fall back to a CI-embedded license.
+    let invalid_license = "invalid-clone-refresh-license";
+    ctx.get_settings()
+        .set_global_setting(
+            "enterprise_license".to_string(),
+            invalid_license.to_string(),
+        )
+        .await?;
+    let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
+    let error = match interpreter.execute(ctx).await {
+        Err(error) => error,
+        Ok(_) => panic!("source refresh must recheck the final computed-column schema"),
+    };
+    assert_eq!(error.code(), ErrorCode::LICENSE_KEY_PARSE_ERROR);
+    assert!(
+        !catalog
+            .exists_table(&tenant, &database, "refresh_clone")
+            .await?
+    );
+
+    // Current metadata has a computed column, but the historical target does not.
+    // Restoring the old plan.schema license check would incorrectly reject this clone.
+    let historical_ctx = fixture.new_query_ctx().await?;
+    historical_ctx
+        .get_settings()
+        .set_global_setting(
+            "enterprise_license".to_string(),
+            invalid_license.to_string(),
+        )
+        .await?;
+    let (historical_plan, _) = Planner::new(historical_ctx.clone())
+        .plan_sql(&format!(
+            "CREATE TABLE {database}.plain_history CLONE {source} AT (SNAPSHOT => '{}')",
+            plain_snapshot.simple()
+        ))
+        .await?;
+    let _ = InterpreterFactory::get(historical_ctx.clone(), &historical_plan)
+        .await?
+        .execute(historical_ctx)
+        .await?;
+    let historical = catalog
+        .get_table(&tenant, &database, "plain_history")
+        .await?;
+    assert!(
+        historical
+            .schema()
+            .fields()
+            .iter()
+            .all(|field| field.computed_expr().is_none())
+    );
     Ok(())
 }
 
