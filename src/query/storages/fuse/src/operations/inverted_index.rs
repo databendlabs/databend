@@ -141,12 +141,18 @@ impl FuseTable {
                     put_cache: false,
                 })
                 .await?;
+            let blocks = segment_info.block_metas()?;
             let stats = match segment_info.summary.additional_stats_loc() {
-                Some(location) => Some(read_segment_stats(operator.clone(), location).await?),
+                Some(location) => {
+                    let mut stats =
+                        Arc::unwrap_or_clone(read_segment_stats(operator.clone(), location).await?);
+                    stats.align_to_blocks(blocks.len())?;
+                    Some(stats)
+                }
                 None => None,
             };
 
-            for (block_idx, block_meta) in segment_info.block_metas()?.into_iter().enumerate() {
+            for (block_idx, block_meta) in blocks.into_iter().enumerate() {
                 let generated = block_meta
                     .inverted_index_meta(&index_name)
                     .is_some_and(|meta| {
