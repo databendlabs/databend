@@ -74,6 +74,11 @@ def write_config():
             table_hook_mode = "async"
             table_hook_async_max_concurrency = 1
 
+            # Exact compacted block counts depend on append completion order.
+            # Keep the private node single-threaded without disabling async hooks.
+            [query.settings]
+            max_threads = 1
+
             [[query.users]]
             name = "root"
             auth_type = "no_password"

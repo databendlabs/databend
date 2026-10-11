@@ -80,6 +80,14 @@ impl FuseTable {
                 TransformBlockBuilder::try_create(input, output, properties.clone())
             })?;
 
+            // The builder emits complete serialized blocks. Redistribute only
+            // after it so IO concurrency does not change block accumulation or
+            // create additional tail fragments in the builders.
+            let max_threads = ctx.get_settings().get_max_threads()? as usize;
+            if pipeline.output_len() < max_threads {
+                pipeline.try_resize(max_threads)?;
+            }
+
             pipeline.add_async_accumulating_transformer(|| {
                 TransformBlockWriter::create(ctx.clone(), MutationKind::Insert, self, false)
             });
@@ -96,6 +104,17 @@ impl FuseTable {
             let schema = DataSchema::from(self.schema()).into();
             let cluster_stats_gen =
                 self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds, Some(schema))?;
+
+            if !self.use_hash_write_distribution() {
+                // Resize after compaction and layout preparation: whole blocks
+                // retain their partition boundaries and in-block cluster order.
+                // Serialization and IO need not inherit the source's width.
+                // Keep hash-distributed write lanes unchanged.
+                let max_threads = ctx.get_settings().get_max_threads()? as usize;
+                if pipeline.output_len() < max_threads {
+                    pipeline.try_resize(max_threads)?;
+                }
+            }
             pipeline.add_transform(|input, output| {
                 let proc = TransformSerializeBlock::try_create(
                     ctx.clone(),
