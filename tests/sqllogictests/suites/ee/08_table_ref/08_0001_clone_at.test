@@ -112,7 +112,7 @@ SELECT * FROM source AT (TAG => "Original")
 statement error 2327
 CREATE TABLE expired_tag_clone CLONE source AT (TAG => "Original")
 
-statement error 2327
+statement error 2013
 CREATE TABLE expired_timestamp_clone CLONE source AT (TIMESTAMP => $first_time::TIMESTAMP)
 
 query I
