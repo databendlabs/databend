@@ -20,9 +20,10 @@ use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 
-use super::SExpr;
-use super::SExprVisitor;
-use super::VisitAction;
+use super::node::Expr;
+use super::node::RelExprKind;
+use super::visitor::ExprVisitor;
+use super::visitor::VisitAction;
 use crate::MetadataRef;
 use crate::Symbol;
 use crate::plans::AggregateFunction;
@@ -36,29 +37,33 @@ use crate::plans::ScalarItem;
 use crate::plans::Visitor as ScalarExprVisitor;
 use crate::plans::WindowFuncType;
 
-impl SExpr {
+impl<K: RelExprKind> Expr<K> {
     /// Validate embedded type declarations against the types that can be inferred
     /// from scalar expressions and aggregate function signatures.
     ///
     /// Nullability is intentionally ignored when comparing a symbol with metadata:
     /// outer joins may add a nullable wrapper without changing the global symbol.
     pub fn validate_types(&self, metadata: &MetadataRef) -> Result<()> {
-        self.accept(&mut SExprTypeValidator { metadata })
-            .map(|_| ())
+        self.accept(&mut ExprTypeValidator {
+            metadata,
+            name: K::NAME,
+        })
+        .map(|_| ())
     }
 }
 
-struct SExprTypeValidator<'a> {
+struct ExprTypeValidator<'a> {
+    name: &'static str,
     metadata: &'a MetadataRef,
 }
 
-impl SExprVisitor for SExprTypeValidator<'_> {
-    fn visit(&mut self, s_expr: &SExpr) -> Result<VisitAction> {
+impl<K: RelExprKind> ExprVisitor<K> for ExprTypeValidator<'_> {
+    fn visit(&mut self, s_expr: &Expr<K>) -> Result<VisitAction<K>> {
         if let RelOperator::Scan(scan) = s_expr.plan() {
             self.validate_scan_scalars(scan)?;
         } else {
             for scalar in s_expr.plan().scalar_expr_iter() {
-                self.validate_scalar(scalar, SymbolTypeSource::create(self.metadata))?;
+                self.validate_scalar(scalar, SymbolTypeSource::create(self.metadata, self.name))?;
             }
         }
 
@@ -93,7 +98,8 @@ impl SExprVisitor for SExprTypeValidator<'_> {
                     || union.left_outputs.len() != union.output_indexes.len()
                 {
                     return Err(ErrorCode::Internal(format!(
-                        "SExpr union output length mismatch: left {}, right {}, output {}",
+                        "{} union output length mismatch: left {}, right {}, output {}",
+                        self.name,
                         union.left_outputs.len(),
                         union.right_outputs.len(),
                         union.output_indexes.len()
@@ -124,7 +130,7 @@ impl SExprVisitor for SExprTypeValidator<'_> {
     }
 }
 
-impl SExprTypeValidator<'_> {
+impl ExprTypeValidator<'_> {
     fn validate_items(&self, items: &[ScalarItem]) -> Result<()> {
         for item in items {
             self.validate_symbol_type(
@@ -140,7 +146,8 @@ impl SExprTypeValidator<'_> {
         let metadata_type = self.metadata_type(index)?;
         if metadata_type.remove_nullable() != actual.remove_nullable() {
             return Err(ErrorCode::Internal(format!(
-                "SExpr type mismatch for {source} {index}: metadata declares {metadata_type:?}, expression declares {actual:?}"
+                "{} type mismatch for {source} {index}: metadata declares {metadata_type:?}, expression declares {actual:?}",
+                self.name
             )));
         }
         Ok(())
@@ -153,14 +160,17 @@ impl SExprTypeValidator<'_> {
             .get(index.as_usize())
             .map(|column| column.data_type())
             .ok_or_else(|| {
-                ErrorCode::Internal(format!("SExpr references unknown metadata symbol {index}"))
+                ErrorCode::Internal(format!(
+                    "{} references unknown metadata symbol {index}",
+                    self.name
+                ))
             })
     }
 
     fn validate_window_function(&self, function: &WindowFuncType) -> Result<()> {
         if let WindowFuncType::Aggregate(aggregate) = function {
             ScalarTypeValidator {
-                symbol_types: SymbolTypeSource::create(self.metadata),
+                symbol_types: SymbolTypeSource::create(self.metadata, self.name),
             }
             .validate_aggregate_function(aggregate)?;
         }
@@ -168,7 +178,7 @@ impl SExprTypeValidator<'_> {
     }
 
     fn validate_scan_scalars(&self, scan: &crate::plans::Scan) -> Result<()> {
-        let metadata_symbols = SymbolTypeSource::create(self.metadata);
+        let metadata_symbols = SymbolTypeSource::create(self.metadata, self.name);
         for scalar in scan
             .push_down_predicates
             .iter()
@@ -193,12 +203,13 @@ impl SExprTypeValidator<'_> {
 
 #[derive(Clone, Copy)]
 struct SymbolTypeSource<'a> {
+    name: &'static str,
     metadata: &'a MetadataRef,
 }
 
 impl<'a> SymbolTypeSource<'a> {
-    fn create(metadata: &'a MetadataRef) -> SymbolTypeSource<'a> {
-        Self { metadata }
+    fn create(metadata: &'a MetadataRef, name: &'static str) -> SymbolTypeSource<'a> {
+        Self { metadata, name }
     }
 
     fn validate(&self, index: Symbol, actual: &DataType) -> Result<()> {
@@ -208,13 +219,17 @@ impl<'a> SymbolTypeSource<'a> {
             .get(index.as_usize())
             .map(|column| column.data_type())
             .ok_or_else(|| {
-                ErrorCode::Internal(format!("SExpr references unknown metadata symbol {index}"))
+                ErrorCode::Internal(format!(
+                    "{} references unknown metadata symbol {index}",
+                    self.name
+                ))
             })?;
 
         let types_match = expected.remove_nullable() == actual.remove_nullable();
         if !types_match {
             return Err(ErrorCode::Internal(format!(
-                "SExpr bound column type mismatch for {index}: source declares {expected:?}, expression declares {actual:?}"
+                "{} bound column type mismatch for {index}: source declares {expected:?}, expression declares {actual:?}",
+                self.name
             )));
         }
         Ok(())
@@ -230,8 +245,8 @@ impl ScalarTypeValidator<'_> {
         let inferred = function.infer_return_type()?;
         if inferred != *function.return_type {
             return Err(ErrorCode::Internal(format!(
-                "SExpr function return type mismatch for {}: stored {:?}, inferred {inferred:?}",
-                function.func_name, function.return_type
+                "{} function return type mismatch for {}: stored {:?}, inferred {inferred:?}",
+                self.symbol_types.name, function.func_name, function.return_type
             )));
         }
         Ok(())
@@ -242,8 +257,11 @@ impl ScalarTypeValidator<'_> {
         refreshed.refresh_return_type()?;
         if refreshed.return_type != function.return_type {
             return Err(ErrorCode::Internal(format!(
-                "SExpr lambda return type mismatch for {}: stored {:?}, expected {:?}",
-                function.func_name, function.return_type, refreshed.return_type
+                "{} lambda return type mismatch for {}: stored {:?}, expected {:?}",
+                self.symbol_types.name,
+                function.func_name,
+                function.return_type,
+                refreshed.return_type
             )));
         }
         Ok(())
@@ -269,8 +287,8 @@ impl ScalarTypeValidator<'_> {
             .clone();
         if inferred != *aggregate.return_type {
             return Err(ErrorCode::Internal(format!(
-                "SExpr aggregate return type mismatch for {}: stored {:?}, inferred {inferred:?}",
-                aggregate.display_name, aggregate.return_type
+                "{} aggregate return type mismatch for {}: stored {:?}, inferred {inferred:?}",
+                self.symbol_types.name, aggregate.display_name, aggregate.return_type
             )));
         }
         Ok(())

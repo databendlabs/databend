@@ -163,3 +163,210 @@ async fn test_type_check_special_function() -> Result<()> {
 
     run_type_check_cases("special_function.txt", &cases).await
 }
+
+/// Persisted and storage-level expressions must reject every read of session
+/// or query context, since such values are folded into literals (issue #19833).
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_type_check_context_independent_policy() -> Result<()> {
+    init_testing_globals();
+    let settings = Settings::create(Tenant::new_literal("default"));
+    let adapter =
+        databend_common_sql::PersistedTypeCheckAdapter::new(&settings, FunctionContext::default())?;
+
+    let cases = [
+        SqlTestCase {
+            name: "current_database_rejected",
+            description: "current_database() must be rejected instead of folding to a literal.",
+            setup_sqls: &[],
+            sql: "current_database()",
+        },
+        SqlTestCase {
+            name: "database_alias_rejected",
+            description: "Aliases of current_database() must be rejected with the canonical name.",
+            setup_sqls: &[],
+            sql: "database()",
+        },
+        SqlTestCase {
+            name: "nested_current_database_rejected",
+            description: "A context function nested inside a deterministic expression must be rejected.",
+            setup_sqls: &[],
+            sql: "concat(to_string(number), current_database())",
+        },
+        SqlTestCase {
+            name: "current_catalog_rejected",
+            description: "current_catalog() depends on the session.",
+            setup_sqls: &[],
+            sql: "current_catalog()",
+        },
+        SqlTestCase {
+            name: "version_rejected",
+            description: "version() depends on the running server build.",
+            setup_sqls: &[],
+            sql: "version()",
+        },
+        SqlTestCase {
+            name: "connection_id_rejected",
+            description: "connection_id() depends on the session.",
+            setup_sqls: &[],
+            sql: "connection_id()",
+        },
+        SqlTestCase {
+            name: "client_session_id_rejected",
+            description: "client_session_id() depends on the session.",
+            setup_sqls: &[],
+            sql: "client_session_id()",
+        },
+        SqlTestCase {
+            name: "current_user_rejected",
+            description: "current_user() depends on the authenticated user.",
+            setup_sqls: &[],
+            sql: "current_user()",
+        },
+        SqlTestCase {
+            name: "current_role_rejected",
+            description: "current_role() depends on the session role.",
+            setup_sqls: &[],
+            sql: "current_role()",
+        },
+        SqlTestCase {
+            name: "current_secondary_roles_rejected",
+            description: "current_secondary_roles() depends on the session roles.",
+            setup_sqls: &[],
+            sql: "current_secondary_roles()",
+        },
+        SqlTestCase {
+            name: "current_available_roles_rejected",
+            description: "current_available_roles() depends on the session roles.",
+            setup_sqls: &[],
+            sql: "current_available_roles()",
+        },
+        SqlTestCase {
+            name: "current_tenant_id_rejected",
+            description: "current_tenant_id() depends on the session tenant.",
+            setup_sqls: &[],
+            sql: "current_tenant_id()",
+        },
+        SqlTestCase {
+            name: "is_role_in_session_rejected",
+            description: "is_role_in_session() depends on the effective roles.",
+            setup_sqls: &[],
+            sql: "is_role_in_session('reader')",
+        },
+        SqlTestCase {
+            name: "timezone_rejected",
+            description: "timezone() depends on the session settings.",
+            setup_sqls: &[],
+            sql: "timezone()",
+        },
+        SqlTestCase {
+            name: "last_query_id_rejected",
+            description: "last_query_id() depends on the session query history.",
+            setup_sqls: &[],
+            sql: "last_query_id(-1)",
+        },
+        SqlTestCase {
+            name: "getvariable_rejected",
+            description: "getvariable() depends on session variables.",
+            setup_sqls: &[],
+            sql: "getvariable('x')",
+        },
+        SqlTestCase {
+            name: "session_variable_rejected",
+            description: "$var lowers to getvariable() and must be rejected too.",
+            setup_sqls: &[],
+            sql: "number + $x",
+        },
+        SqlTestCase {
+            name: "sql_udf_rejected",
+            description: "The persisted-expression adapter has no UDF loading capability.",
+            setup_sqls: &[],
+            sql: "context_udf(text)",
+        },
+        SqlTestCase {
+            name: "sequence_capability_unavailable",
+            description: "The persisted adapter cannot resolve a sequence even if Full gains that capability.",
+            setup_sqls: &[],
+            sql: "nextval(seq)",
+        },
+        SqlTestCase {
+            name: "dictionary_capability_unavailable",
+            description: "The persisted adapter has no dictionary resolver.",
+            setup_sqls: &[],
+            sql: "dict_get(dict, 'field', number)",
+        },
+        SqlTestCase {
+            name: "stage_capability_unavailable",
+            description: "The persisted adapter has no stage resolver.",
+            setup_sqls: &[],
+            sql: "read_file('@stage', 'file.txt')",
+        },
+        SqlTestCase {
+            name: "subquery_capability_unavailable",
+            description: "The persisted adapter has no subquery planner.",
+            setup_sqls: &[],
+            sql: "(SELECT 1)",
+        },
+        SqlTestCase {
+            name: "array_sort_default_nulls_order_rejected",
+            description: "array_sort() without NULLS FIRST/LAST reads the session null-order setting.",
+            setup_sqls: &[],
+            sql: "array_sort([3, 1, 2])",
+        },
+        SqlTestCase {
+            name: "array_sort_default_nulls_order_with_sort_order_rejected",
+            description: "An explicit sort order alone still leaves the null order to the session.",
+            setup_sqls: &[],
+            sql: "array_sort([3, 1, 2], 'desc')",
+        },
+        SqlTestCase {
+            name: "array_sort_explicit_nulls_order_allowed",
+            description: "array_sort() with an explicit null order does not read session context.",
+            setup_sqls: &[],
+            sql: "array_sort([3, 1, 2], 'desc', 'nulls last')",
+        },
+        SqlTestCase {
+            name: "coalesce_allowed",
+            description: "Pure special-function rewrites stay allowed.",
+            setup_sqls: &[],
+            sql: "coalesce(text, pattern)",
+        },
+        SqlTestCase {
+            name: "greatest_allowed",
+            description: "Pure special-function rewrites stay allowed.",
+            setup_sqls: &[],
+            sql: "greatest(number, 1)",
+        },
+    ];
+
+    let mut file = open_golden_file("semantic/type_check", "special_function_context.txt")?;
+    for (index, case) in cases.iter().enumerate() {
+        if index > 0 {
+            writeln!(file)?;
+        }
+        write_case_header(&mut file, case)?;
+        let mut bind_context = test_bind_context(ExprContext::Unknown);
+        let expr = parse_expr(&tokenize_sql(case.sql)?, adapter.sql_dialect()?)?;
+        let names = NameResolutionContext::try_from(settings.as_ref())?;
+        let mut checker = TypeChecker::try_create_with_adapter(
+            &mut bind_context,
+            adapter.clone(),
+            &names,
+            Arc::new(RwLock::new(Metadata::default())),
+            &[],
+        )?;
+        let outcome = match checker.resolve(&expr).map(|resolved| *resolved) {
+            Ok((scalar, data_type)) => SqlTestOutcome::Plan(format!(
+                "scalar: {}\ntype: {}",
+                format_scalar(&scalar),
+                data_type
+            )),
+            Err(err) => SqlTestOutcome::Error {
+                code: err.code(),
+                message: err.message(),
+            },
+        };
+        write_case_outcome_body(&mut file, &outcome)?;
+    }
+
+    Ok(())
+}

@@ -28,7 +28,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use itertools::Itertools;
 
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -148,7 +148,7 @@ impl IPhysicalPlan for ProjectSet {
 impl PhysicalPlanBuilder {
     pub async fn build_project_set(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         project_set: &databend_common_sql::plans::ProjectSet,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,

@@ -28,6 +28,7 @@ borsh = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true }
 futures = { workspace = true }
+hmac = { workspace = true }
 http = { workspace = true }
 iceberg = { workspace = true }
 log = { workspace = true }
@@ -39,6 +40,7 @@ rand = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
+sha2 = { workspace = true }
 simple_hll = { workspace = true, features = ["serde_borsh"] }
 thiserror = { workspace = true }
 tokio = { workspace = true }

@@ -572,7 +572,9 @@ impl Interpreter for InsertInterpreter {
                             let mut builder1 =
                                 PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                             (
-                                builder1.build(s_expr, bind_context.column_set()).await?,
+                                builder1
+                                    .build_query(s_expr.planned()?, bind_context.column_set())
+                                    .await?,
                                 bind_context.columns.clone(),
                                 metadata,
                             )

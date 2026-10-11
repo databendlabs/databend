@@ -35,6 +35,7 @@ use databend_common_expression::HashTableConfig;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
+use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SerializedPayload;
 use databend_common_expression::StateSerdeItem;
@@ -502,6 +503,49 @@ impl TrackedHeapFixture {
         )
         .into()
     }
+}
+
+#[test]
+fn test_singleton_group_keys_merge_across_blocks() -> Result<()> {
+    for (data_type, scalar) in [
+        (DataType::Null, Scalar::Null),
+        (DataType::EmptyArray, Scalar::EmptyArray),
+        (DataType::EmptyMap, Scalar::EmptyMap),
+    ] {
+        for materialize in [false, true] {
+            let mut hashtable = AggregateHashTable::new(
+                vec![data_type.clone(), Int64Type::data_type()],
+                vec![],
+                HashTableConfig::default(),
+                Arc::new(Bump::new()),
+            );
+            let mut state = ProbeState::default();
+            let block = DataBlock::new(
+                vec![
+                    BlockEntry::new_const_column(data_type.clone(), scalar.clone(), 1),
+                    BlockEntry::new_const_column_arg::<Int64Type>(7, 1),
+                ],
+                1,
+            );
+            let block = if materialize {
+                block.convert_to_full()
+            } else {
+                block
+            };
+
+            for _ in 0..3 {
+                hashtable.add_groups(
+                    &mut state,
+                    ProjectedBlock::from(block.columns()),
+                    &[],
+                    (&[]).into(),
+                    1,
+                )?;
+                assert_eq!(hashtable.len(), 1, "group key: {data_type:?}");
+            }
+        }
+    }
+    Ok(())
 }
 
 #[test]

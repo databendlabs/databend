@@ -21,19 +21,38 @@ use super::display::FormatOptions;
 use super::display::IdHumanizer;
 use super::display::MetadataIdHumanizer;
 use super::display::TreeHumanizer;
-use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::Expr;
+use crate::optimizer::ir::RelExprKind;
 use crate::optimizer::ir::StatContext;
 use crate::plans::CreateTablePlan;
 use crate::plans::Plan;
 
-impl SExpr {
+impl<K: RelExprKind> Expr<K> {
     pub(crate) fn to_format_tree<I: IdHumanizer>(
         &self,
         id_humanizer: &I,
     ) -> Result<FormatTreeNode> {
         let operator_humanizer = DefaultOperatorHumanizer;
         let tree_humanizer = TreeHumanizer::new(id_humanizer, &operator_humanizer);
-        tree_humanizer.humanize_s_expr(self)
+        tree_humanizer.humanize_expr(self)
+    }
+}
+
+impl crate::optimizer::ir::QueryPlan {
+    pub(crate) fn to_format_tree<I: IdHumanizer>(&self, id: &I) -> Result<FormatTreeNode> {
+        match self {
+            Self::Logical(expr) => expr.to_format_tree(id),
+            Self::Planned(plan) => plan.expr().to_format_tree(id),
+        }
+    }
+}
+
+impl crate::optimizer::ir::MutationPlan {
+    pub(crate) fn to_format_tree<I: IdHumanizer>(&self, id: &I) -> Result<FormatTreeNode> {
+        match self {
+            Self::Logical(expr) => expr.to_format_tree(id),
+            Self::Planned(plan) => plan.to_format_tree(id),
+        }
     }
 }
 

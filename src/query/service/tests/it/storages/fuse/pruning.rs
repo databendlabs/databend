@@ -250,10 +250,11 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         (None, num_blocks, num_blocks * row_per_block),
         (Some(e1), 0, 0),
         (Some(e2), b2, b2 * row_per_block),
-        // TopN asc limit stops after the first block once its disjoint range satisfies the limit.
-        (Some(e3), 1, row_per_block),
+        // ORDER BY + LIMIT without an inverted-index filter is not pruned
+        // statically; the runtime TopN filter prunes blocks during the scan.
+        (Some(e3), num_blocks, num_blocks * row_per_block),
         // Same behavior applies to the DESC variant.
-        (Some(e4), 1, row_per_block),
+        (Some(e4), num_blocks, num_blocks * row_per_block),
         (Some(e5), 2, 2 * row_per_block),
     ];
 

@@ -17,6 +17,7 @@ use databend_common_expression::DataBlock;
 
 use super::Base;
 use super::MemoryMerger;
+use super::RunSpill;
 use super::SortSpill;
 use super::SortSpillParams;
 use super::core::algorithm::SortAlgorithm;
@@ -34,7 +35,7 @@ pub enum MergeSortStatus {
 #[allow(clippy::large_enum_variant)]
 enum State<A: SortAlgorithm> {
     Collecting,
-    Spill { finish_input: bool, write: bool },
+    Spill { finish_input: bool, spill: RunSpill },
     PrepareMerge,
     Memory(MemoryMerger<A>),
     Restore,
@@ -102,13 +103,13 @@ impl<A: SortAlgorithm, S: SortSpiller> MergeSorter<A, S> {
             .get_or_insert_with(|| SortSpill::new(self.base.clone(), params));
         self.state = State::Spill {
             finish_input: false,
-            write: true,
+            spill: RunSpill::Always,
         };
     }
 
-    /// End ingestion. If external runs exist, `spill_remaining` determines whether
-    /// the final buffered run is written to storage or retained for the merge.
-    pub fn finish_input(&mut self, spill_remaining: bool) {
+    /// End ingestion. If external runs exist, `spill_remaining` determines how
+    /// the final buffered run is stored before the merge.
+    pub fn finish_input(&mut self, spill_remaining: RunSpill) {
         assert_eq!(self.status(), MergeSortStatus::Collecting);
         if self.spill.is_some() {
             self.state = if self.blocks.is_empty() {
@@ -116,7 +117,7 @@ impl<A: SortAlgorithm, S: SortSpiller> MergeSorter<A, S> {
             } else {
                 State::Spill {
                     finish_input: true,
-                    write: spill_remaining,
+                    spill: spill_remaining,
                 }
             };
         } else if self.blocks.len() > 1 {
@@ -159,7 +160,7 @@ impl<A: SortAlgorithm, S: SortSpiller> MergeSorter<A, S> {
         match self.state {
             State::Spill {
                 finish_input,
-                write,
+                spill,
             } => {
                 let blocks = self.take_blocks();
                 log::debug!(
@@ -172,7 +173,7 @@ impl<A: SortAlgorithm, S: SortSpiller> MergeSorter<A, S> {
                 self.spill
                     .as_mut()
                     .unwrap()
-                    .sort_input_data(blocks, write)?;
+                    .sort_input_data(blocks, spill)?;
                 self.state = if finish_input {
                     State::Restore
                 } else {

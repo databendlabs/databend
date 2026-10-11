@@ -62,7 +62,7 @@ impl Interpreter for CreateMaterializedViewInterpreter {
                 expected_source_generation: self.plan.expected_source_generation,
             };
             let catalog = self.ctx.get_catalog(&self.plan.table_plan.catalog).await?;
-            let mut req = table_interpreter.build_request(None)?;
+            let mut req = table_interpreter.build_request()?;
             req.source_table_option = self.plan.source_table_option.clone();
             req.materialized_view = Some(materialized_view);
             // MV tables deliberately have no independent ownership. Reuse table

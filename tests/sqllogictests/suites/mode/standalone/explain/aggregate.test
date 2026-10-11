@@ -545,3 +545,120 @@ DROP TABLE IF EXISTS t;
 
 statement ok
 DROP TABLE IF EXISTS explain_agg_t1;
+
+# https://github.com/databendlabs/databend/issues/20591
+# The rank limit pushed down by ORDER BY ... LIMIT stays on the aggregate above the join.
+# The eager aggregate below the join must not carry it.
+statement ok
+set force_eager_aggregate = 1;
+
+statement ok
+CREATE OR REPLACE TABLE explain_agg_rank_l (k BIGINT NOT NULL, v BIGINT);
+
+statement ok
+CREATE OR REPLACE TABLE explain_agg_rank_r (k BIGINT NOT NULL, flag BOOLEAN);
+
+statement ok
+INSERT INTO explain_agg_rank_l VALUES (1, -1), (2, -2), (3, -3), (4, -4), (5, -5), (6, -6), (7, -7), (8, -8), (9, -9);
+
+statement ok
+INSERT INTO explain_agg_rank_r VALUES (1, false), (2, false), (3, false), (4, true), (5, true), (6, true), (7, true), (8, true), (9, true);
+
+query T
+EXPLAIN SELECT sum(l.v), l.k, l.v
+FROM explain_agg_rank_l l JOIN explain_agg_rank_r r ON r.k = l.k
+WHERE r.flag
+GROUP BY l.k, l.v
+ORDER BY l.k, l.v
+LIMIT 3;
+----
+TopN(Final)
+├── output columns: [l.k (#0), l.v (#1), sum(l.v) (#4)]
+├── sort keys: [k ASC NULLS LAST, v ASC NULLS LAST]
+├── limit: 3
+├── offset: 0
+├── estimated rows: 3.00
+└── TopN(Partial)
+    ├── output columns: [l.k (#0), l.v (#1), sum(l.v) (#4), #_order_col]
+    ├── sort keys: [k ASC NULLS LAST, v ASC NULLS LAST]
+    ├── limit: 3
+    ├── offset: 0
+    ├── estimated rows: 3.00
+    └── EvalScalar
+        ├── output columns: [l.k (#0), l.v (#1), sum(l.v) (#4)]
+        ├── expressions: [sum(l.v) (#16)]
+        ├── estimated rows: 4.50
+        └── AggregateFinal
+            ├── output columns: [_eager_final_sum (#16), l.k (#0), l.v (#1)]
+            ├── group by: [k, v]
+            ├── aggregate functions: [sum(sum(l.v) * _eager_count)]
+            ├── estimated rows: 4.50
+            └── AggregatePartial
+                ├── group by: [k, v]
+                ├── aggregate functions: [sum(sum(l.v) * _eager_count)]
+                ├── estimated rows: 4.50
+                ├── rank limit: 3
+                └── EvalScalar
+                    ├── output columns: [l.k (#0), l.v (#1), sum(l.v) * _eager_count (#18)]
+                    ├── expressions: [_eager (#4) * CAST(_eager_count (#17) AS UInt64 NULL)]
+                    ├── estimated rows: 4.50
+                    └── HashJoin
+                        ├── output columns: [sum(l.v) (#4), l.k (#0), l.v (#1), count(*) (#17)]
+                        ├── join type: INNER
+                        ├── build keys: [r.k (#2)]
+                        ├── probe keys: [l.k (#0)]
+                        ├── keys is null equal: [false]
+                        ├── filters: []
+                        ├── build join filters:
+                        │   └── filter id:0, build key:r.k (#2), probe targets:[l.k (#0)@scan0], filter type:bloom,inlist,min_max
+                        ├── estimated rows: 4.50
+                        ├── AggregateFinal(Build)
+                        │   ├── output columns: [count(*) (#17), r.k (#2)]
+                        │   ├── group by: [k]
+                        │   ├── aggregate functions: [count()]
+                        │   ├── estimated rows: 4.50
+                        │   └── AggregatePartial
+                        │       ├── group by: [k]
+                        │       ├── aggregate functions: [count()]
+                        │       ├── estimated rows: 4.50
+                        │       └── TableScan
+                        │           ├── table: default.default.explain_agg_rank_r
+                        │           ├── scan id: 1
+                        │           ├── output columns: [k (#2)]
+                        │           ├── read rows: 9
+                        │           ├── read size: < 1 KiB
+                        │           ├── partitions total: 1
+                        │           ├── partitions scanned: 1
+                        │           ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                        │           ├── push downs: [filters: [is_true(explain_agg_rank_r.flag (#3))], limit: NONE]
+                        │           └── estimated rows: 4.50
+                        └── AggregateFinal(Probe)
+                            ├── output columns: [sum(l.v) (#4), l.k (#0), l.v (#1)]
+                            ├── group by: [k, v]
+                            ├── aggregate functions: [sum(v)]
+                            ├── estimated rows: 9.00
+                            └── AggregatePartial
+                                ├── group by: [k, v]
+                                ├── aggregate functions: [sum(v)]
+                                ├── estimated rows: 9.00
+                                └── TableScan
+                                    ├── table: default.default.explain_agg_rank_l
+                                    ├── scan id: 0
+                                    ├── output columns: [k (#0), v (#1)]
+                                    ├── read rows: 9
+                                    ├── read size: < 1 KiB
+                                    ├── partitions total: 1
+                                    ├── partitions scanned: 1
+                                    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                                    ├── push downs: [filters: [], limit: NONE]
+                                    ├── apply join filters: [#0]
+                                    └── estimated rows: 9.00
+
+statement ok
+DROP TABLE explain_agg_rank_l;
+
+statement ok
+DROP TABLE explain_agg_rank_r;
+
+statement ok
+unset force_eager_aggregate;

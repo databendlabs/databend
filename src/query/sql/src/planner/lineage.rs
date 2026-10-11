@@ -179,13 +179,22 @@ enum SourceExpr {
 impl Plan {
     /// Query lineage for this plan.
     ///
-    /// Prefers the snapshot captured by [`Plan::capture_bound_query_lineage`] on the bound plan.
-    /// Plans that never went through the planner (or carry no query part) are extracted directly.
+    /// Planned queries and mutations read only the snapshot captured by
+    /// [`Plan::capture_bound_query_lineage`]. Without that snapshot, lineage is unavailable:
+    /// execution rewrites cannot reconstruct what the user originally wrote.
+    /// Bound plans and statements without a query tree can still be inspected directly.
     pub fn query_lineage(&self) -> Result<Option<QueryLineage>> {
         if let Some(metadata) = self.lineage_metadata() {
             if let Some(captured) = metadata.read().bound_query_lineage() {
                 return Ok(captured.lineage.clone());
             }
+        }
+        match self.lineage_query_part() {
+            Some(Plan::Query { s_expr, .. }) if s_expr.planned().is_ok() => return Ok(None),
+            Some(Plan::DataMutation { s_expr, .. }) if s_expr.planned().is_ok() => {
+                return Ok(None);
+            }
+            _ => {}
         }
         self.extract_query_lineage()
     }
@@ -215,9 +224,9 @@ impl Plan {
         RelationExtractor::new(self).extract_query_lineage()
     }
 
-    /// Metadata of the query part whose shape the optimizer may change.
-    fn lineage_metadata(&self) -> Option<&MetadataRef> {
-        let query = match self {
+    /// Query part whose shape the optimizer may change.
+    fn lineage_query_part(&self) -> Option<&Plan> {
+        match self {
             Plan::CreateTable(plan) => plan.as_select.as_deref(),
             Plan::CreateView(plan) => plan.query_plan.as_deref(),
             Plan::CreateMaterializedView(plan) => Some(plan.query_plan.as_ref()),
@@ -232,11 +241,15 @@ impl Plan {
             Plan::CopyIntoTable(plan) => plan.query.as_deref(),
             Plan::CopyIntoLocation(plan) => Some(plan.from.as_ref()),
             Plan::InsertMultiTable(plan) => Some(&plan.input_source),
-            Plan::DataMutation { metadata, .. } => return Some(metadata),
+            Plan::DataMutation { .. } => Some(self),
             _ => None,
-        }?;
-        match query {
-            Plan::Query { metadata, .. } => Some(metadata),
+        }
+    }
+
+    /// Metadata containing the binding-time lineage snapshot.
+    fn lineage_metadata(&self) -> Option<&MetadataRef> {
+        match self.lineage_query_part()? {
+            Plan::Query { metadata, .. } | Plan::DataMutation { metadata, .. } => Some(metadata),
             _ => None,
         }
     }
@@ -602,6 +615,7 @@ impl<'a> RelationExtractor<'a> {
             Plan::DataMutation {
                 s_expr, metadata, ..
             } => {
+                let s_expr = s_expr.logical()?;
                 let Some(mutation) = find_mutation(s_expr) else {
                     return Ok(None);
                 };
@@ -1234,7 +1248,7 @@ fn query_parts(plan: &Plan) -> Result<(&SExpr, &MetadataRef, &BindContext)> {
             metadata,
             bind_context,
             ..
-        } => Ok((s_expr, metadata, bind_context)),
+        } => Ok((s_expr.logical()?, metadata, bind_context)),
         _ => Err(ErrorCode::Internal(
             "Lineage extraction expects a query plan".to_string(),
         )),
@@ -2192,7 +2206,7 @@ mod tests {
             ..Default::default()
         };
         Plan::Query {
-            s_expr: Box::new(s_expr),
+            s_expr: Box::new(s_expr.into()),
             metadata,
             bind_context: Box::new(bind_context),
             rewrite_kind: None,

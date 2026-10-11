@@ -20,7 +20,6 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::ExplainConfig;
-use databend_common_sql::plans::Mutation;
 use log::error;
 use log::warn;
 
@@ -282,7 +281,7 @@ impl InterpreterFactory {
             } => Ok(Arc::new(SelectInterpreter::try_create(
                 ctx,
                 *bind_context.clone(),
-                *s_expr.clone(),
+                s_expr.planned()?.clone(),
                 metadata.clone(),
                 formatted_ast.clone(),
                 *ignore_result,
@@ -654,10 +653,10 @@ impl InterpreterFactory {
 
             Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone()),
             Plan::DataMutation { s_expr, schema, .. } => {
-                let mutation: Mutation = s_expr.plan().clone().try_into()?;
+                let mutation = s_expr.mutation()?;
                 Ok(Arc::new(MutationInterpreter::try_create(
                     ctx,
-                    *s_expr.clone(),
+                    s_expr.planned()?.clone(),
                     schema.clone(),
                     mutation.metadata.clone(),
                 )?))

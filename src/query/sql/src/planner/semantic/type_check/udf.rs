@@ -705,7 +705,9 @@ where A: super::TypeCheckAdapter
             return Err(self.unknown_function_error(span, &udf_name));
         }
 
-        let udf = self.resolve_udf_from_cache(&udf_name)?;
+        let udf = self
+            .resolve_udf_from_cache(&udf_name)
+            .map_err(|err| super::with_semantic_span(err, span))?;
         let Some(udf) = udf else {
             return Err(self.unknown_function_error(span, &udf_name));
         };
@@ -790,11 +792,13 @@ where A: super::TypeCheckAdapter
     }
 
     fn resolve_udf_from_cache(&mut self, udf_name: &str) -> Result<Option<UserDefinedFunction>> {
+        // A shared binding cache must not grant a capability the adapter lacks.
+        let adapter = self.adapter.udf_adapter()?;
         if let Some(udf) = self.bind_context.udf_cache.read().get(udf_name).cloned() {
             return Ok(udf);
         }
 
-        let udf = self.adapter.udf_adapter()?.load_definition(udf_name)?;
+        let udf = adapter.load_definition(udf_name)?;
         self.bind_context
             .udf_cache
             .write()
@@ -814,7 +818,7 @@ where A: super::TypeCheckAdapter
         // Recursive or mutually recursive UDFs can recurse during type checking and
         // overflow the stack; other unchecked definition risks may exist as well.
         let sql_tokens = tokenize_sql(definition)?;
-        let expr = parse_expr(&sql_tokens, self.adapter.settings().get_sql_dialect()?)?;
+        let expr = parse_expr(&sql_tokens, self.adapter.sql_dialect()?)?;
 
         let mut bind_context = BindContext::new();
         let mut metadata = Metadata::default();

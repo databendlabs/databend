@@ -13,8 +13,11 @@
 // limitations under the License.
 
 mod column_scope_validator;
+mod conversion;
 mod extract;
 mod m_expr;
+mod node;
+mod p_expr;
 mod s_expr;
 mod type_validator;
 mod visitor;
@@ -22,9 +25,18 @@ mod visitor;
 pub use extract::Matcher;
 pub use extract::PatternExtractor;
 pub use m_expr::MExpr;
+pub use node::Expr;
+pub use node::ExprKind;
+pub use node::RelExprKind;
+pub use node::RewriteExprKind;
+pub use node::ScanRequiredColumns;
+pub use node::Side;
+pub use p_expr::PExpr;
+pub use p_expr::Physical;
+pub use s_expr::Logical;
 pub use s_expr::SExpr;
-pub use s_expr::ScanRequiredColumns;
-pub use s_expr::Side;
-pub use visitor::AsyncSExprVisitor;
-pub use visitor::SExprVisitor;
+pub use visitor::AsyncExprVisitor;
+pub use visitor::AsyncExprVisitor as AsyncSExprVisitor;
+pub use visitor::ExprVisitor;
+pub use visitor::ExprVisitor as SExprVisitor;
 pub use visitor::VisitAction;

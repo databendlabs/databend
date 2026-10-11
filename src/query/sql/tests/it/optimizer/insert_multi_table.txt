@@ -1,0 +1,726 @@
+=== no_subquery ===
+description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
+sql: INSERT ALL WHEN k > 0 THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
+raw_source:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+cbo: false, distributed: false
+planned_source:
+Scan
+├── table: default.t (#0)
+├── filters: []
+├── order by: []
+└── limit: NONE
+
+when_0: t.k (#0) > CAST(0 AS Int64 NULL)
+cbo: false, distributed: true
+planned_source:
+Scan
+├── table: default.t (#0)
+├── filters: []
+├── order by: []
+└── limit: NONE
+
+when_0: t.k (#0) > CAST(0 AS Int64 NULL)
+cbo: true, distributed: false
+planned_source:
+Scan
+├── table: default.t (#0)
+├── filters: []
+├── order by: []
+└── limit: NONE
+
+when_0: t.k (#0) > CAST(0 AS Int64 NULL)
+cbo: true, distributed: true
+planned_source:
+Scan
+├── table: default.t (#0)
+├── filters: []
+├── order by: []
+└── limit: NONE
+
+when_0: t.k (#0) > CAST(0 AS Int64 NULL)
+=== constant_subquery ===
+description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
+sql: INSERT ALL WHEN k = (SELECT 1) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
+raw_source:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+cbo: false, distributed: false
+planned_source:
+Scan
+├── table: default.t (#0)
+├── filters: []
+├── order by: []
+└── limit: NONE
+
+when_0: t.k (#0) = CAST(1 AS Int64 NULL)
+cbo: false, distributed: true
+planned_source:
+Scan
+├── table: default.t (#0)
+├── filters: []
+├── order by: []
+└── limit: NONE
+
+when_0: t.k (#0) = CAST(1 AS Int64 NULL)
+cbo: true, distributed: false
+planned_source:
+Scan
+├── table: default.t (#0)
+├── filters: []
+├── order by: []
+└── limit: NONE
+
+when_0: t.k (#0) = CAST(1 AS Int64 NULL)
+cbo: true, distributed: true
+planned_source:
+Scan
+├── table: default.t (#0)
+├── filters: []
+├── order by: []
+└── limit: NONE
+
+when_0: t.k (#0) = CAST(1 AS Int64 NULL)
+=== in_subquery ===
+description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
+sql: INSERT ALL WHEN k IN (SELECT k FROM lookup) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
+raw_source:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+cbo: false, distributed: false
+planned_source:
+Join(RightMark)
+├── build keys: [lookup.k (#2)]
+├── probe keys: [t.k (#0)]
+├── other filters: []
+├── Scan
+│   ├── table: default.lookup (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+when_0: 4 (#4)
+cbo: false, distributed: true
+planned_source:
+Join(RightMark)
+├── build keys: [lookup.k (#2)]
+├── probe keys: [t.k (#0)]
+├── other filters: []
+├── Scan
+│   ├── table: default.lookup (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+when_0: 4 (#4)
+cbo: true, distributed: false
+planned_source:
+Join(RightMark)
+├── build keys: [lookup.k (#2)]
+├── probe keys: [t.k (#0)]
+├── other filters: []
+├── Scan
+│   ├── table: default.lookup (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+when_0: 4 (#4)
+cbo: true, distributed: true
+planned_source:
+Join(RightMark)
+├── build keys: [lookup.k (#2)]
+├── probe keys: [t.k (#0)]
+├── other filters: []
+├── Scan
+│   ├── table: default.lookup (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+when_0: 4 (#4)
+=== correlated_exists ===
+description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
+sql: INSERT ALL WHEN EXISTS (SELECT 1 FROM lookup WHERE lookup.k = s.k) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t s
+raw_source:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+cbo: false, distributed: false
+planned_source:
+Join(RightMark)
+├── build keys: [lookup.k (#2)]
+├── probe keys: [t.k (#0)]
+├── other filters: []
+├── EvalScalar
+│   ├── scalars: [lookup.k (#2) AS (#2), 1 AS (#3)]
+│   └── Filter
+│       ├── filters: [eq(lookup.k (#2), lookup.k (#2))]
+│       └── Scan
+│           ├── table: default.lookup (#1)
+│           ├── filters: [eq(lookup.k (#2), lookup.k (#2))]
+│           ├── order by: []
+│           └── limit: NONE
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+when_0: is_true(5 (#5))
+cbo: false, distributed: true
+planned_source:
+Join(RightMark)
+├── build keys: [lookup.k (#2)]
+├── probe keys: [t.k (#0)]
+├── other filters: []
+├── EvalScalar
+│   ├── scalars: [lookup.k (#2) AS (#2), 1 AS (#3)]
+│   └── Filter
+│       ├── filters: [eq(lookup.k (#2), lookup.k (#2))]
+│       └── Scan
+│           ├── table: default.lookup (#1)
+│           ├── filters: [eq(lookup.k (#2), lookup.k (#2))]
+│           ├── order by: []
+│           └── limit: NONE
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+when_0: is_true(5 (#5))
+cbo: true, distributed: false
+planned_source:
+Join(RightMark)
+├── build keys: [lookup.k (#2)]
+├── probe keys: [t.k (#0)]
+├── other filters: []
+├── EvalScalar
+│   ├── scalars: [lookup.k (#2) AS (#2), 1 AS (#3)]
+│   └── Filter
+│       ├── filters: [eq(lookup.k (#2), lookup.k (#2))]
+│       └── Scan
+│           ├── table: default.lookup (#1)
+│           ├── filters: [eq(lookup.k (#2), lookup.k (#2))]
+│           ├── order by: []
+│           └── limit: NONE
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+when_0: is_true(5 (#5))
+cbo: true, distributed: true
+planned_source:
+Join(RightMark)
+├── build keys: [lookup.k (#2)]
+├── probe keys: [t.k (#0)]
+├── other filters: []
+├── EvalScalar
+│   ├── scalars: [lookup.k (#2) AS (#2), 1 AS (#3)]
+│   └── Filter
+│       ├── filters: [eq(lookup.k (#2), lookup.k (#2))]
+│       └── Scan
+│           ├── table: default.lookup (#1)
+│           ├── filters: [eq(lookup.k (#2), lookup.k (#2))]
+│           ├── order by: []
+│           └── limit: NONE
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+when_0: is_true(5 (#5))
+=== scalar_aggregate ===
+description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
+sql: INSERT ALL WHEN k > (SELECT max(k) FROM lookup) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
+raw_source:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+cbo: false, distributed: false
+planned_source:
+Join(RightSingle)
+├── build keys: []
+├── probe keys: []
+├── other filters: []
+├── Scan
+│   ├── table: default.t (#0)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Aggregate(Final)
+    ├── group items: []
+    ├── aggregate functions: [max(lookup.k (#2)) AS (#3)]
+    └── Aggregate(Partial)
+        ├── group items: []
+        ├── aggregate functions: [max(lookup.k (#2)) AS (#3)]
+        └── Scan
+            ├── table: default.lookup (#1)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+when_0: t.k (#0) > scalar_subquery_3 (#3)
+cbo: false, distributed: true
+planned_source:
+Join(RightSingle)
+├── build keys: []
+├── probe keys: []
+├── other filters: []
+├── Scan
+│   ├── table: default.t (#0)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Aggregate(Final)
+    ├── group items: []
+    ├── aggregate functions: [max(lookup.k (#2)) AS (#3)]
+    └── Aggregate(Partial)
+        ├── group items: []
+        ├── aggregate functions: [max(lookup.k (#2)) AS (#3)]
+        └── Scan
+            ├── table: default.lookup (#1)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+when_0: t.k (#0) > scalar_subquery_3 (#3)
+cbo: true, distributed: false
+planned_source:
+Join(RightSingle)
+├── build keys: []
+├── probe keys: []
+├── other filters: []
+├── Scan
+│   ├── table: default.t (#0)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Aggregate(Final)
+    ├── group items: []
+    ├── aggregate functions: [max(lookup.k (#2)) AS (#3)]
+    └── Aggregate(Partial)
+        ├── group items: []
+        ├── aggregate functions: [max(lookup.k (#2)) AS (#3)]
+        └── Scan
+            ├── table: default.lookup (#1)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+when_0: t.k (#0) > scalar_subquery_3 (#3)
+cbo: true, distributed: true
+planned_source:
+Join(RightSingle)
+├── build keys: []
+├── probe keys: []
+├── other filters: []
+├── Scan
+│   ├── table: default.t (#0)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Aggregate(Final)
+    ├── group items: []
+    ├── aggregate functions: [max(lookup.k (#2)) AS (#3)]
+    └── Aggregate(Partial)
+        ├── group items: []
+        ├── aggregate functions: [max(lookup.k (#2)) AS (#3)]
+        └── Scan
+            ├── table: default.lookup (#1)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+when_0: t.k (#0) > scalar_subquery_3 (#3)
+=== multiple_first ===
+description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
+sql: INSERT FIRST WHEN k IN (SELECT k FROM lookup) THEN INTO dst WHEN k > (SELECT min(k) FROM lookup) THEN INTO dst2 ELSE INTO dst SELECT k, v FROM t
+raw_source:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+cbo: false, distributed: false
+planned_source:
+Join(RightSingle)
+├── build keys: []
+├── probe keys: []
+├── other filters: []
+├── Join(RightMark)
+│   ├── build keys: [lookup.k (#2)]
+│   ├── probe keys: [t.k (#0)]
+│   ├── other filters: []
+│   ├── Scan
+│   │   ├── table: default.lookup (#1)
+│   │   ├── filters: []
+│   │   ├── order by: []
+│   │   └── limit: NONE
+│   └── Scan
+│       ├── table: default.t (#0)
+│       ├── filters: []
+│       ├── order by: []
+│       └── limit: NONE
+└── Aggregate(Final)
+    ├── group items: []
+    ├── aggregate functions: [min(lookup.k (#3)) AS (#4)]
+    └── Aggregate(Partial)
+        ├── group items: []
+        ├── aggregate functions: [min(lookup.k (#3)) AS (#4)]
+        └── Scan
+            ├── table: default.lookup (#2)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+when_0: 6 (#6)
+when_1: t.k (#0) > scalar_subquery_4 (#4)
+cbo: false, distributed: true
+planned_source:
+Join(RightSingle)
+├── build keys: []
+├── probe keys: []
+├── other filters: []
+├── Join(RightMark)
+│   ├── build keys: [lookup.k (#2)]
+│   ├── probe keys: [t.k (#0)]
+│   ├── other filters: []
+│   ├── Scan
+│   │   ├── table: default.lookup (#1)
+│   │   ├── filters: []
+│   │   ├── order by: []
+│   │   └── limit: NONE
+│   └── Scan
+│       ├── table: default.t (#0)
+│       ├── filters: []
+│       ├── order by: []
+│       └── limit: NONE
+└── Aggregate(Final)
+    ├── group items: []
+    ├── aggregate functions: [min(lookup.k (#3)) AS (#4)]
+    └── Aggregate(Partial)
+        ├── group items: []
+        ├── aggregate functions: [min(lookup.k (#3)) AS (#4)]
+        └── Scan
+            ├── table: default.lookup (#2)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+when_0: 6 (#6)
+when_1: t.k (#0) > scalar_subquery_4 (#4)
+cbo: true, distributed: false
+planned_source:
+Join(RightSingle)
+├── build keys: []
+├── probe keys: []
+├── other filters: []
+├── Join(RightMark)
+│   ├── build keys: [lookup.k (#2)]
+│   ├── probe keys: [t.k (#0)]
+│   ├── other filters: []
+│   ├── Scan
+│   │   ├── table: default.lookup (#1)
+│   │   ├── filters: []
+│   │   ├── order by: []
+│   │   └── limit: NONE
+│   └── Scan
+│       ├── table: default.t (#0)
+│       ├── filters: []
+│       ├── order by: []
+│       └── limit: NONE
+└── Aggregate(Final)
+    ├── group items: []
+    ├── aggregate functions: [min(lookup.k (#3)) AS (#4)]
+    └── Aggregate(Partial)
+        ├── group items: []
+        ├── aggregate functions: [min(lookup.k (#3)) AS (#4)]
+        └── Scan
+            ├── table: default.lookup (#2)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+when_0: 6 (#6)
+when_1: t.k (#0) > scalar_subquery_4 (#4)
+cbo: true, distributed: true
+planned_source:
+Join(RightSingle)
+├── build keys: []
+├── probe keys: []
+├── other filters: []
+├── Join(RightMark)
+│   ├── build keys: [lookup.k (#2)]
+│   ├── probe keys: [t.k (#0)]
+│   ├── other filters: []
+│   ├── Scan
+│   │   ├── table: default.lookup (#1)
+│   │   ├── filters: []
+│   │   ├── order by: []
+│   │   └── limit: NONE
+│   └── Scan
+│       ├── table: default.t (#0)
+│       ├── filters: []
+│       ├── order by: []
+│       └── limit: NONE
+└── Aggregate(Final)
+    ├── group items: []
+    ├── aggregate functions: [min(lookup.k (#3)) AS (#4)]
+    └── Aggregate(Partial)
+        ├── group items: []
+        ├── aggregate functions: [min(lookup.k (#3)) AS (#4)]
+        └── Scan
+            ├── table: default.lookup (#2)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+when_0: 6 (#6)
+when_1: t.k (#0) > scalar_subquery_4 (#4)
+=== nullable_not_in ===
+description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
+sql: INSERT ALL WHEN k NOT IN (SELECT k FROM lookup) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t
+raw_source:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+cbo: false, distributed: false
+planned_source:
+Join(RightMark)
+├── build keys: [lookup.k (#2)]
+├── probe keys: [t.k (#0)]
+├── other filters: []
+├── Scan
+│   ├── table: default.lookup (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+when_0: NOT 4 (#4)
+cbo: false, distributed: true
+planned_source:
+Join(RightMark)
+├── build keys: [lookup.k (#2)]
+├── probe keys: [t.k (#0)]
+├── other filters: []
+├── Scan
+│   ├── table: default.lookup (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+when_0: NOT 4 (#4)
+cbo: true, distributed: false
+planned_source:
+Join(RightMark)
+├── build keys: [lookup.k (#2)]
+├── probe keys: [t.k (#0)]
+├── other filters: []
+├── Scan
+│   ├── table: default.lookup (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+when_0: NOT 4 (#4)
+cbo: true, distributed: true
+planned_source:
+Join(RightMark)
+├── build keys: [lookup.k (#2)]
+├── probe keys: [t.k (#0)]
+├── other filters: []
+├── Scan
+│   ├── table: default.lookup (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+when_0: NOT 4 (#4)
+=== source_limit ===
+description: WHEN decorrelation introduces logical nodes before source planning; branch symbols and source column order survive optimization.
+sql: INSERT ALL WHEN k IN (SELECT k FROM lookup) THEN INTO dst ELSE INTO dst2 SELECT k, v FROM t ORDER BY k LIMIT 2
+raw_source:
+Limit
+├── limit: [2]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [t.k (#0) ASC NULLS LAST]
+    ├── limit: [NONE]
+    └── EvalScalar
+        ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+cbo: false, distributed: false
+planned_source:
+Join(RightMark)
+├── build keys: [lookup.k (#2)]
+├── probe keys: [t.k (#0)]
+├── other filters: []
+├── Scan
+│   ├── table: default.lookup (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── TopN
+    ├── sort keys: [t.k (#0) ASC NULLS LAST]
+    ├── limit: [2]
+    ├── offset: [0]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: [t.k (#0) ASC]
+        └── limit: 2
+
+when_0: 4 (#4)
+cbo: false, distributed: true
+planned_source:
+Join(RightMark)
+├── build keys: [lookup.k (#2)]
+├── probe keys: [t.k (#0)]
+├── other filters: []
+├── Scan
+│   ├── table: default.lookup (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── TopN
+    ├── sort keys: [t.k (#0) ASC NULLS LAST]
+    ├── limit: [2]
+    ├── offset: [0]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: [t.k (#0) ASC]
+        └── limit: 2
+
+when_0: 4 (#4)
+cbo: true, distributed: false
+planned_source:
+Join(RightMark)
+├── build keys: [lookup.k (#2)]
+├── probe keys: [t.k (#0)]
+├── other filters: []
+├── Scan
+│   ├── table: default.lookup (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── TopN
+    ├── sort keys: [t.k (#0) ASC NULLS LAST]
+    ├── limit: [2]
+    ├── offset: [0]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: [t.k (#0) ASC]
+        └── limit: 2
+
+when_0: 4 (#4)
+cbo: true, distributed: true
+planned_source:
+Join(RightMark)
+├── build keys: [lookup.k (#2)]
+├── probe keys: [t.k (#0)]
+├── other filters: []
+├── Scan
+│   ├── table: default.lookup (#1)
+│   ├── filters: []
+│   ├── order by: []
+│   └── limit: NONE
+└── TopN
+    ├── sort keys: [t.k (#0) ASC NULLS LAST]
+    ├── limit: [2]
+    ├── offset: [0]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: [t.k (#0) ASC]
+        └── limit: 2
+
+when_0: 4 (#4)

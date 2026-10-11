@@ -43,7 +43,6 @@ use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_storages_common_blocks::SerializedParquet;
 use databend_storages_common_blocks::blocks_to_parquet_with_stats;
-use databend_storages_common_index::NgramArgs;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BlockTopN;
@@ -61,18 +60,14 @@ use crate::FuseStorageFormat;
 use crate::io::BlockStatsBuilder;
 use crate::io::BloomIndexState;
 use crate::io::TableMetaLocationGenerator;
-use crate::io::write::InvertedIndexBuilder;
 use crate::io::write::JsonPathStatisticsBuilder;
-use crate::io::write::SpatialIndexBuilder;
 use crate::io::write::SpatialIndexState;
-use crate::io::write::VectorIndexBuilder;
 use crate::io::write::VectorIndexState;
 use crate::io::write::WriteSettings;
 use crate::io::write::block_index::BlockIndexSpec;
 use crate::io::write::block_index::BlockIndexWriteContext;
 use crate::io::write::block_index::PendingBlockIndexOutput;
 use crate::io::write::block_index::collect_inverted_index_metas;
-use crate::io::write::bloom_index_writer::BloomIndexWriteSpec;
 use crate::io::write::virtual_column_builder::VirtualColumnBuilder;
 use crate::io::write::virtual_column_builder::VirtualColumnState;
 use crate::operations::column_parquet_metas;
@@ -154,12 +149,9 @@ pub struct BlockBuilder {
     pub bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     pub ndv_columns_map: BTreeMap<FieldIndex, TableField>,
     pub top_n: Option<(BTreeMap<FieldIndex, TableField>, usize)>,
-    pub ngram_args: Vec<NgramArgs>,
-    pub inverted_index_builders: Vec<InvertedIndexBuilder>,
+    pub block_index_specs: Vec<Arc<dyn BlockIndexSpec>>,
     pub virtual_column_builder: Option<VirtualColumnBuilder>,
     pub json_path_statistics_builder: Option<JsonPathStatisticsBuilder>,
-    pub vector_index_builder: Option<VectorIndexBuilder>,
-    pub spatial_index_builder: Option<SpatialIndexBuilder>,
     pub table_meta_timestamps: TableMetaTimestamps,
     /// Indicates whether column_hlls should be serialized into RawBlockHLL
     /// - true: Output as BlockHLLState::Serialized(RawBlockHLL)
@@ -185,34 +177,16 @@ impl BlockBuilder {
         let index_context = BlockIndexWriteContext {
             func_ctx: self.ctx.get_function_context()?,
             physical_schema: self.source_schema.clone(),
+            meta_locations: self.meta_locations.clone(),
+            bloom_location: self.meta_locations.block_bloom_index_location(&block_id),
             operator: self.operator.clone(),
             write_settings: self.write_settings.clone(),
         };
-        let bloom_index_location = self.meta_locations.block_bloom_index_location(&block_id);
-        let mut index_writers = vec![
-            BloomIndexWriteSpec::new(
-                self.bloom_columns_map.clone(),
-                self.ngram_args.clone(),
-                bloom_index_location,
-            )
-            .new_writer(index_context.clone())?,
-        ];
-        for inverted_index_builder in &self.inverted_index_builders {
-            let spec = inverted_index_builder
-                .clone()
-                .into_write_spec(&self.meta_locations);
-            index_writers.push(spec.new_writer(index_context.clone())?);
-        }
-        if let Some(vector_index_builder) = self.vector_index_builder.clone() {
-            let spec = vector_index_builder
-                .into_write_spec(self.meta_locations.block_vector_index_location());
-            index_writers.push(spec.new_writer(index_context.clone())?);
-        }
-        if let Some(spatial_index_builder) = self.spatial_index_builder.clone() {
-            let spec = spatial_index_builder
-                .into_write_spec(self.meta_locations.block_spatial_index_location());
-            index_writers.push(spec.new_writer(index_context)?);
-        }
+        let index_writers = self
+            .block_index_specs
+            .iter()
+            .map(|spec| spec.new_writer(index_context.clone()))
+            .collect::<Result<Vec<_>>>()?;
 
         let mut block_indexes = PendingBlockIndexOutput::default();
         for mut index_writer in index_writers {

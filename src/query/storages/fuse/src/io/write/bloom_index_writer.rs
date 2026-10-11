@@ -123,19 +123,16 @@ impl BloomIndexState {
 pub struct BloomIndexWriteSpec {
     bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     ngram_args: Vec<NgramArgs>,
-    location: Location,
 }
 
 impl BloomIndexWriteSpec {
     pub fn new(
         bloom_columns_map: BTreeMap<FieldIndex, TableField>,
         ngram_args: Vec<NgramArgs>,
-        location: Location,
     ) -> Self {
         Self {
             bloom_columns_map,
             ngram_args,
-            location,
         }
     }
 }
@@ -149,7 +146,7 @@ impl BlockIndexSpec for BloomIndexWriteSpec {
                 self.bloom_columns_map.clone(),
                 &self.ngram_args,
             )?,
-            location: self.location.clone(),
+            location: context.bloom_location,
         }))
     }
 }

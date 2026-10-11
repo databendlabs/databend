@@ -17,12 +17,13 @@ use similar::ChangeTag;
 use similar::TextDiff;
 
 use crate::Metadata;
-use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::Expr;
+use crate::optimizer::ir::RelExprKind;
 use crate::optimizer::ir::StatContext;
 use crate::planner::format::FormatOptions;
 use crate::planner::format::MetadataIdHumanizer;
 
-impl SExpr {
+impl<K: RelExprKind> Expr<K> {
     /// Compares this SExpr with another SExpr and returns a diff of their string representations.
     ///
     /// # Arguments
@@ -33,7 +34,7 @@ impl SExpr {
     /// A string containing the diff between the two SExpr instances.
     pub fn diff(
         &self,
-        other: &SExpr,
+        other: &Self,
         metadata: &Metadata,
         stat_context: &StatContext,
     ) -> Result<String> {

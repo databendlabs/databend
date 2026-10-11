@@ -61,6 +61,10 @@ CREATE TABLE `05_0066_ttl_bad`(a int not null) TTL '2020-01-01'::timestamp
 statement error 1065
 CREATE TABLE `05_0066_ttl_bad`(a int not null, t timestamp not null) TTL greatest(t, now())
 
+# TTL must not depend on the session context (issue #19833).
+statement error depends on the session or query context
+CREATE TABLE `05_0066_ttl_bad`(a int not null, t timestamp not null) TTL greatest(t, to_timestamp(getvariable('x')))
+
 # A TTL must not use a lambda. A stored TTL is rewritten at the AST level by
 # DROP/RENAME COLUMN, which cannot tell a lambda parameter from a table column.
 statement error 1065

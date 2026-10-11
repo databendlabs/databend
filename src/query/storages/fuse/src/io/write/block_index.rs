@@ -14,33 +14,45 @@
 
 //! Write protocol for block-level indexes produced with a FUSE data block.
 //!
-//! A spec is immutable configuration. `new_writer` creates a writer that consumes complete
-//! `DataBlock`s and retains serialized payloads in memory; the payloads are uploaded later in
-//! the asynchronous write-down phase. `new_writer` implementations must not perform IO: that
-//! contract is expressed by the `PendingBlockIndexOutput` return type of the writer.
+//! Specs share ordinary writer configuration with optional, source-validated merge admission.
+//! Immutable specs carry no output locations: each writer binds a fresh location from context.
 
 use std::collections::HashMap;
+use std::io;
+use std::ops::Range;
+use std::sync::Arc;
 
+use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::TableSchemaRef;
+use databend_storages_common_index::BloomIndex;
 use databend_storages_common_table_meta::meta::BlockIndexMeta;
+use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::StatisticsOfSpatialColumns;
 use databend_storages_common_table_meta::meta::StatisticsOfVectorColumns;
 use opendal::Buffer;
 use opendal::Operator;
 
+use super::SpatialIndexBuilder;
+use super::VectorIndexBuilder;
 use super::WriteSettings;
+use super::bloom_index_writer::BloomIndexWriteSpec;
+use super::create_inverted_index_builders;
+use crate::FuseTable;
+use crate::io::TableMetaLocationGenerator;
 
 /// Shared construction context for block-index writers.
 #[derive(Clone)]
 pub struct BlockIndexWriteContext {
     pub func_ctx: FunctionContext,
     pub physical_schema: TableSchemaRef,
+    pub meta_locations: TableMetaLocationGenerator,
+    pub bloom_location: Location,
     pub operator: Operator,
     pub write_settings: WriteSettings,
 }
@@ -155,7 +167,77 @@ fn merge_singleton<T>(target: &mut Option<T>, source: Option<T>, name: &str) -> 
     Ok(())
 }
 
+pub struct BlockIndexMergeSource<'a> {
+    pub num_rows: u32,
+    pub indexes: &'a [BlockIndexMeta],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockIndexSourceRows {
+    pub source: u32,
+    pub rows: Range<u32>,
+}
+
+pub type BlockIndexMergeCheck = Box<dyn Fn() -> io::Result<()> + Send + Sync>;
+
+/// The caller verifies complete lineage; each output batch preserves source row order.
+pub struct BlockIndexMergeContext {
+    pub operator: Operator,
+    pub locations: TableMetaLocationGenerator,
+    pub outputs: Vec<Vec<BlockIndexSourceRows>>,
+    pub check_interrupt: BlockIndexMergeCheck,
+}
+
+#[derive(Debug, Default)]
+pub struct WrittenBlockIndexOutput {
+    pub inverted: Vec<WrittenInvertedIndex>,
+}
+
+/// Prepared merge capability of a block-index spec.
+pub trait BlockIndexMerge: Send + Sync {
+    fn index_name(&self) -> &str;
+
+    fn merge(&self, context: BlockIndexMergeContext) -> Result<Vec<WrittenBlockIndexOutput>>;
+
+    fn apply_output(&self, block: &mut BlockMeta, output: WrittenBlockIndexOutput) -> Result<()>;
+}
+
+pub fn create_block_index_specs(
+    table: &FuseTable,
+    schema: TableSchemaRef,
+) -> Result<Vec<Arc<dyn BlockIndexSpec>>> {
+    let columns = table
+        .bloom_index_cols
+        .bloom_index_fields(schema.clone(), BloomIndex::supported_type)?;
+    let indexes = &table.table_info.meta.indexes;
+    let ngram_args = FuseTable::create_ngram_index_args(indexes, &table.schema(), true)?;
+    let mut specs: Vec<Arc<dyn BlockIndexSpec>> =
+        vec![Arc::new(BloomIndexWriteSpec::new(columns, ngram_args))];
+    for builder in create_inverted_index_builders(&table.table_info.meta) {
+        specs.push(Arc::new(builder.into_write_spec()));
+    }
+    if let Some(builder) = VectorIndexBuilder::try_create(indexes, schema.clone(), true) {
+        specs.push(Arc::new(builder.into_write_spec()));
+    }
+    if let Some(builder) = SpatialIndexBuilder::try_create(indexes, schema, true) {
+        specs.push(Arc::new(builder.into_write_spec()));
+    }
+    Ok(specs)
+}
+
 pub trait BlockIndexSpec: Send + Sync {
+    fn index_name(&self) -> Option<&str> {
+        None
+    }
+
+    /// None means rebuild; errors from a selected merge must not fall back to rebuilding.
+    fn prepare_merge(
+        &self,
+        _sources: &[BlockIndexMergeSource<'_>],
+    ) -> Result<Option<Arc<dyn BlockIndexMerge>>> {
+        Ok(None)
+    }
+
     fn new_writer(&self, context: BlockIndexWriteContext) -> Result<Box<dyn BlockIndexWriter>>;
 }
 
@@ -168,6 +250,20 @@ pub trait BlockIndexWriter: Send {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_non_merge_spec_is_retained_for_rebuild() {
+        use std::collections::BTreeMap;
+
+        let spec: Arc<dyn BlockIndexSpec> =
+            Arc::new(BloomIndexWriteSpec::new(BTreeMap::new(), vec![]));
+        let sources = [BlockIndexMergeSource {
+            num_rows: 10,
+            indexes: &[],
+        }];
+        assert!(spec.prepare_merge(&sources).unwrap().is_none());
+        assert!(spec.index_name().is_none());
+    }
 
     #[test]
     fn test_outputs_reject_duplicate_inverted_names() {

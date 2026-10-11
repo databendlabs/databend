@@ -1089,67 +1089,67 @@ HashJoin
 │   │       ├── aggregate functions: [max(v)]
 │   │       ├── estimated rows: 1.00
 │   │       └── HashJoin
-│   │           ├── output columns: [k (#7), nullable_scalar_exchange_payload.v (#4)]
+│   │           ├── output columns: [nullable_scalar_exchange_payload.v (#4), k (#7)]
 │   │           ├── join type: CROSS
 │   │           ├── build keys: []
 │   │           ├── probe keys: []
 │   │           ├── keys is null equal: []
 │   │           ├── filters: []
 │   │           ├── estimated rows: 1.00
-│   │           ├── TableScan(Build)
-│   │           │   ├── table: default.default.nullable_scalar_exchange_payload
-│   │           │   ├── scan id: 2
-│   │           │   ├── output columns: [v (#4)]
-│   │           │   ├── read rows: 1
-│   │           │   ├── read size: < 1 KiB
-│   │           │   ├── partitions total: 1
-│   │           │   ├── partitions scanned: 1
-│   │           │   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│   │           │   ├── push downs: [filters: [], limit: NONE]
-│   │           │   └── estimated rows: 1.00
-│   │           └── AggregateFinal(Probe)
-│   │               ├── output columns: [k (#7)]
-│   │               ├── group by: [k]
-│   │               ├── aggregate functions: []
-│   │               ├── estimated rows: 1.00
-│   │               └── AggregatePartial
-│   │                   ├── group by: [k]
-│   │                   ├── aggregate functions: []
-│   │                   ├── estimated rows: 1.00
-│   │                   └── HashJoin
-│   │                       ├── output columns: [k (#7)]
-│   │                       ├── join type: INNER
-│   │                       ├── build keys: [o.id (#6)]
-│   │                       ├── probe keys: [j.id (#9)]
-│   │                       ├── keys is null equal: [false]
-│   │                       ├── filters: []
-│   │                       ├── estimated rows: 1.80
-│   │                       ├── Filter(Build)
-│   │                       │   ├── output columns: [id (#6), k (#7)]
-│   │                       │   ├── filters: [NOT is_not_null(outer.k (#7))]
-│   │                       │   ├── estimated rows: 0.60
-│   │                       │   └── TableScan
-│   │                       │       ├── table: default.default.nullable_scalar_exchange_outer
-│   │                       │       ├── scan id: 3
-│   │                       │       ├── output columns: [id (#6), k (#7)]
-│   │                       │       ├── read rows: 3
-│   │                       │       ├── read size: < 1 KiB
-│   │                       │       ├── partitions total: 1
-│   │                       │       ├── partitions scanned: 1
-│   │                       │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│   │                       │       ├── push downs: [filters: [true], limit: NONE]
-│   │                       │       └── estimated rows: 3.00
-│   │                       └── TableScan(Probe)
-│   │                           ├── table: default.default.nullable_scalar_exchange_join
-│   │                           ├── scan id: 4
-│   │                           ├── output columns: [id (#9)]
-│   │                           ├── read rows: 3
-│   │                           ├── read size: < 1 KiB
-│   │                           ├── partitions total: 1
-│   │                           ├── partitions scanned: 1
-│   │                           ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│   │                           ├── push downs: [filters: [], limit: NONE]
-│   │                           └── estimated rows: 3.00
+│   │           ├── AggregateFinal(Build)
+│   │           │   ├── output columns: [k (#7)]
+│   │           │   ├── group by: [k]
+│   │           │   ├── aggregate functions: []
+│   │           │   ├── estimated rows: 1.00
+│   │           │   └── AggregatePartial
+│   │           │       ├── group by: [k]
+│   │           │       ├── aggregate functions: []
+│   │           │       ├── estimated rows: 1.00
+│   │           │       └── HashJoin
+│   │           │           ├── output columns: [k (#7)]
+│   │           │           ├── join type: INNER
+│   │           │           ├── build keys: [o.id (#6)]
+│   │           │           ├── probe keys: [j.id (#9)]
+│   │           │           ├── keys is null equal: [false]
+│   │           │           ├── filters: []
+│   │           │           ├── estimated rows: 1.80
+│   │           │           ├── Filter(Build)
+│   │           │           │   ├── output columns: [id (#6), k (#7)]
+│   │           │           │   ├── filters: [NOT is_not_null(outer.k (#7))]
+│   │           │           │   ├── estimated rows: 0.60
+│   │           │           │   └── TableScan
+│   │           │           │       ├── table: default.default.nullable_scalar_exchange_outer
+│   │           │           │       ├── scan id: 3
+│   │           │           │       ├── output columns: [id (#6), k (#7)]
+│   │           │           │       ├── read rows: 3
+│   │           │           │       ├── read size: < 1 KiB
+│   │           │           │       ├── partitions total: 1
+│   │           │           │       ├── partitions scanned: 1
+│   │           │           │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   │           │           │       ├── push downs: [filters: [true], limit: NONE]
+│   │           │           │       └── estimated rows: 3.00
+│   │           │           └── TableScan(Probe)
+│   │           │               ├── table: default.default.nullable_scalar_exchange_join
+│   │           │               ├── scan id: 4
+│   │           │               ├── output columns: [id (#9)]
+│   │           │               ├── read rows: 3
+│   │           │               ├── read size: < 1 KiB
+│   │           │               ├── partitions total: 1
+│   │           │               ├── partitions scanned: 1
+│   │           │               ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   │           │               ├── push downs: [filters: [], limit: NONE]
+│   │           │               └── estimated rows: 3.00
+│   │           └── TableScan(Probe)
+│   │               ├── table: default.default.nullable_scalar_exchange_payload
+│   │               ├── scan id: 2
+│   │               ├── output columns: [v (#4)]
+│   │               ├── read rows: 1
+│   │               ├── read size: < 1 KiB
+│   │               ├── partitions total: 1
+│   │               ├── partitions scanned: 1
+│   │               ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   │               ├── push downs: [filters: [], limit: NONE]
+│   │               └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.default.nullable_scalar_exchange_outer
 │       ├── scan id: 0

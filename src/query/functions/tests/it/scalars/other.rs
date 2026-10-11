@@ -15,7 +15,10 @@
 use std::io::Write;
 
 use databend_common_expression::FromData;
+use databend_common_expression::types::Float32Type;
 use databend_common_expression::types::Float64Type;
+use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::UInt16Type;
 use goldenfile::Mint;
@@ -36,6 +39,77 @@ fn test_other() {
     test_try_inet_aton(file);
     test_inet_ntoa(file);
     test_try_inet_ntoa(file);
+}
+
+#[test]
+fn test_num_to_char() {
+    let mut mint = Mint::new("tests/it/scalars/testdata");
+    let file = &mut mint.new_goldenfile("num_to_char.txt").unwrap();
+
+    for column in [
+        Int64Type::from_data(vec![-12, 0, 34]),
+        Float32Type::from_data(vec![-12.5, 0.0, 34.25]),
+        Float64Type::from_data(vec![-12.5, 0.0, 34.25]),
+    ] {
+        let columns = &[
+            ("n", column),
+            ("a", Int64Type::from_data(vec![1, 0, 1])),
+            (
+                "fmt",
+                StringType::from_data(vec!["FM999.00", "FM000", "FM999.0"]),
+            ),
+            (
+                "bad_fmt",
+                StringType::from_data(vec!["FM999.00", "9.9.9", "FM999.0"]),
+            ),
+            (
+                "null_fmt",
+                StringType::from_data_with_validity(vec!["FM999.00", "9.9.9", "FM999.0"], vec![
+                    true, false, true,
+                ]),
+            ),
+        ];
+        for expr in [
+            "to_char(n, 'FM999.00')",
+            "to_string(n, 'FM999.00')",
+            "to_char(n, fmt)",
+            "to_char(n, '9.9.9')",
+            "to_char(n, bad_fmt)",
+            "to_char(n, null_fmt)",
+            "to_char(n, NULL)",
+            "if(a = 0, 'skipped', to_char(n, bad_fmt))",
+            "if(a >= 0, 'skipped', to_char(n, '9.9.9'))",
+            "if(a = 0, 'skipped', to_char(n, '9.9.9'))",
+        ] {
+            run_ast(file, expr, columns);
+        }
+    }
+
+    for column in [
+        Int64Type::from_data_with_validity(vec![-12, 0, 34], vec![true, false, true]),
+        Float32Type::from_data_with_validity(vec![-12.5, 0.0, 34.25], vec![true, false, true]),
+        Float64Type::from_data_with_validity(vec![-12.5, 0.0, 34.25], vec![true, false, true]),
+    ] {
+        let columns = &[("n", column), ("a", Int64Type::from_data(vec![1, 0, 1]))];
+        run_ast(file, "to_char(n, 'FM999.00')", columns);
+        // The only selected row is NULL: the cached parse error must not escape.
+        run_ast(file, "if(a = 1, 'skipped', to_char(n, '9.9.9'))", columns);
+        run_ast(file, "to_char(if(a >= 0, NULL, n), '9.9.9')", columns);
+    }
+
+    for ty in ["Int64", "Float32", "Float64"] {
+        run_ast(file, format!("to_char(12::{ty}, 'FM999.00')"), &[]);
+        run_ast(file, format!("to_char(12::{ty}, fmt)"), &[(
+            "fmt",
+            StringType::from_data(vec!["FM999.00", "FM000", "FM999.0"]),
+        )]);
+        run_ast(file, format!("to_char(NULL::Nullable({ty}), '9.9.9')"), &[]);
+        run_ast(
+            file,
+            format!("if(a >= 0, 'skipped', to_char(12::{ty}, '9.9.9'))"),
+            &[("a", Int64Type::from_data(vec![1, 0, 1]))],
+        );
+    }
 }
 
 fn test_run_diff(file: &mut impl Write) {
