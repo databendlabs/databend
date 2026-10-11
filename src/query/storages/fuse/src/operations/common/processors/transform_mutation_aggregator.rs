@@ -238,6 +238,7 @@ impl TableMutationAggregator {
             thresholds: table.get_block_thresholds(),
             cluster_key_info: table.cluster_key_info(),
             partition_key_count: table.partition_key_count(),
+            partition_key_id: table.partition_key_id(),
             cluster_key_exprs: Arc::from(cluster_key_exprs),
             schema: table.schema(),
             kind,
@@ -431,6 +432,7 @@ impl TableMutationAggregator {
                         previous.block_meta.partition_stats.as_ref(),
                         block.block_meta.partition_stats.as_ref(),
                         self.write_segment_ctx.partition_key_count,
+                        self.write_segment_ctx.partition_key_id,
                     )
                 })
             {
@@ -856,6 +858,7 @@ struct WriteSegmentCtx {
     thresholds: BlockThresholds,
     cluster_key_info: Option<ClusterKeyInfo>,
     partition_key_count: usize,
+    partition_key_id: Option<u32>,
     cluster_key_exprs: Arc<[Expr<usize>]>,
     schema: TableSchemaRef,
     kind: MutationKind,

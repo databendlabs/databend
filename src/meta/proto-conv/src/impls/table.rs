@@ -212,6 +212,8 @@ impl FromToProto for mt::TableMeta {
                 (id, k)
             }),
             cluster_key_seq,
+            partition_key_seq: p.partition_key_seq.unwrap_or_default(),
+            partition_key_id: p.partition_key_id,
             ttl: p.ttl,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             updated_on: DateTime::<Utc>::from_pb(p.updated_on)?,
@@ -263,7 +265,13 @@ impl FromToProto for mt::TableMeta {
 
         pb::TableMeta {
             ver: VER,
-            min_reader_ver: MIN_READER_VER,
+            // Older queries ignore partition identity and may prune with statistics
+            // from a dropped definition. Do not let them open versioned tables.
+            min_reader_ver: if self.partition_key_id.is_some() || self.partition_key_seq != 0 {
+                188
+            } else {
+                MIN_READER_VER
+            },
             schema: Some(self.schema.to_pb()),
             engine: self.engine.clone(),
             engine_options: self.engine_options.clone(),
@@ -279,6 +287,8 @@ impl FromToProto for mt::TableMeta {
             // cluster_keys is deprecated.
             cluster_keys: vec![],
             cluster_key_seq: Some(self.cluster_key_seq),
+            partition_key_seq: Some(self.partition_key_seq),
+            partition_key_id: self.partition_key_id,
             ttl: self.ttl.clone(),
             created_on: self.created_on.to_pb(),
             updated_on: self.updated_on.to_pb(),

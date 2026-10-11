@@ -526,6 +526,8 @@ impl CreateTableInterpreter {
             schema: schema.clone(),
             engine: self.plan.engine.to_string(),
             storage_params: self.plan.storage_params.clone(),
+            partition_key_seq: u32::from(options.contains_key(OPT_KEY_PARTITION_BY)),
+            partition_key_id: options.contains_key(OPT_KEY_PARTITION_BY).then_some(1),
             options,
             engine_options: self.plan.engine_options.clone(),
             field_comments,

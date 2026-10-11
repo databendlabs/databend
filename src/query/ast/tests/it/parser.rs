@@ -406,6 +406,8 @@ SELECT * from s;"#,
         r#"ALTER TABLE t1 swap with t2;"#,
         r#"ALTER TABLE t refresh cache;"#,
         r#"ALTER TABLE t COMMENT='t1-commnet';"#, // typos:disable-line
+        r#"ALTER TABLE t DROP PARTITION KEY;"#,
+        r#"ALTER TABLE IF EXISTS db.t DROP PARTITION KEY;"#,
         r#"ALTER TABLE t DROP CLUSTER KEY;"#,
         r#"ALTER TABLE t SET TTL event_time + INTERVAL 30 DAY;"#,
         r#"ALTER TABLE t SET TTL event_time + INTERVAL 7 DAY;"#,

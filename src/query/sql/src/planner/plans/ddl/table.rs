@@ -526,6 +526,22 @@ impl AlterTablePartitionByPlan {
 }
 
 #[derive(Clone, Debug)]
+pub struct DropTablePartitionKeyPlan {
+    pub if_exists: bool,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    /// `None` when `IF EXISTS` resolves a missing table during binding.
+    pub table_id: Option<u64>,
+}
+
+impl DropTablePartitionKeyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct DropTableClusterKeyPlan {
     pub tenant: Tenant,
     pub catalog: String,

@@ -185,6 +185,12 @@ pub struct TableMeta {
     /// Global monotonically increasing sequence for cluster key changes, to
     /// ensuring a unique identifier for each version of cluster key.
     pub cluster_key_seq: u32,
+    /// Monotonically increasing partition key sequence; never reset by DROP.
+    #[serde(default)]
+    pub partition_key_seq: u32,
+    /// Identity of the current PARTITION BY definition. Legacy definitions have no ID.
+    #[serde(default)]
+    pub partition_key_id: Option<u32>,
     /// Row-level TTL expression, e.g. `event_time + INTERVAL 30 DAY`.
     ///
     /// Only the definition text is stored. Referenced columns and result type
@@ -414,6 +420,8 @@ impl Default for TableMeta {
             cluster_key: None,
             cluster_key_v2: None,
             cluster_key_seq: 0,
+            partition_key_seq: 0,
+            partition_key_id: None,
             ttl: None,
             created_on: Utc::now(),
             updated_on: Utc::now(),

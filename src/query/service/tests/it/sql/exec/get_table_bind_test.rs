@@ -1170,6 +1170,85 @@ async fn test_schema_bound_ddl_preserves_table_version() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_partition_key_ddl_rejects_replacement_table() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let cases = [
+        ("PARTITION BY (id % 2)", "", ""),
+        // The ID guard must also precede an otherwise idempotent no-op.
+        ("PARTITION BY (id % 2)", "", "PARTITION BY (id % 2)"),
+        ("DROP PARTITION KEY", "PARTITION BY (id % 2)", ""),
+        (
+            "DROP PARTITION KEY",
+            "PARTITION BY (id % 2)",
+            "PARTITION BY (id % 3) WRITE_DISTRIBUTION_MODE='hash'",
+        ),
+    ];
+
+    for (i, (pending, original_key, replacement_key)) in cases.iter().enumerate() {
+        for if_exists in [false, true] {
+            let name = format!("partition_ddl_replacement_{i}_{if_exists}");
+            fixture
+                .execute_command(&format!(
+                    "CREATE TABLE default.{name} (id INT) {original_key}"
+                ))
+                .await?;
+
+            let bind_ctx = fixture.new_query_ctx().await?;
+            bind_ctx
+                .get_settings()
+                .set_setting("enable_table_lock".into(), "0".into())?;
+            let clause = if if_exists { "IF EXISTS " } else { "" };
+            let (plan, _) = Planner::new(bind_ctx.clone())
+                .plan_sql(&format!("ALTER TABLE {clause}default.{name} {pending}"))
+                .await?;
+            let bound = bind_ctx.get_table("default", "default", &name).await?;
+
+            fixture
+                .execute_command(&format!("DROP TABLE default.{name}"))
+                .await?;
+            fixture
+                .execute_command(&format!(
+                    "CREATE TABLE default.{name} (id INT) {replacement_key}"
+                ))
+                .await?;
+
+            // Use a fresh execution context to resolve the replacement instead of
+            // the original table retained in the binding context's query cache.
+            let execute_ctx = fixture.new_query_ctx().await?;
+            let catalog = execute_ctx.get_catalog("default").await?;
+            let replacement = catalog
+                .get_table(&fixture.default_tenant(), "default", &name)
+                .await?;
+            assert_ne!(bound.get_id(), replacement.get_id());
+
+            let interpreter = InterpreterFactory::get(execute_ctx, &plan).await?;
+            let error = match interpreter.execute2().await {
+                Ok(_) => panic!("stale ALTER {pending} succeeded on a replacement table"),
+                Err(error) => error,
+            };
+            assert_eq!(
+                error.code(),
+                ErrorCode::TABLE_VERSION_MISMATCHED,
+                "{pending}: {error}"
+            );
+
+            let after = catalog
+                .get_table(&fixture.default_tenant(), "default", &name)
+                .await?;
+            assert_eq!(
+                replacement.get_table_info().ident,
+                after.get_table_info().ident
+            );
+            assert_eq!(
+                replacement.get_table_info().meta,
+                after.get_table_info().meta
+            );
+        }
+    }
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_get_same_table_once() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
