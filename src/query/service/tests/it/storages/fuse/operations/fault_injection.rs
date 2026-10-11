@@ -186,13 +186,14 @@ async fn test_compact_segment_write_failure_cleans_concurrent_output() -> Result
         let dal = dal.clone();
         let path = format!("{prefix}/{dir}/");
         async move {
-            Ok::<_, ErrorCode>(
-                dal.list(&path)
-                    .await?
-                    .iter()
-                    .map(|entry| entry.path().to_string())
-                    .collect::<Vec<_>>(),
-            )
+            let mut paths = dal
+                .list(&path)
+                .await?
+                .iter()
+                .map(|entry| entry.path().to_string())
+                .collect::<Vec<_>>();
+            paths.sort();
+            Ok::<_, ErrorCode>(paths)
         }
     };
     let before_segments = list("_sg").await?;
