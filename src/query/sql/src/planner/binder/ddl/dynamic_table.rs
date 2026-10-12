@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 
 use databend_common_ast::ast::CreateDynamicTableStmt;
 use databend_common_ast::ast::CreateTableSource;
@@ -222,13 +221,7 @@ impl Binder {
         }
 
         options.insert(OPT_KEY_AS_QUERY.to_owned(), canonical_query.to_string());
-        let source_table_ids = self
-            .metadata
-            .read()
-            .tables()
-            .iter()
-            .map(|entry| entry.table().get_id())
-            .collect::<BTreeSet<_>>();
+        let source_table_ids = self.metadata.read().source_table_ids();
         if source_table_ids.is_empty() {
             return Err(ErrorCode::BadArguments(
                 "Dynamic Table definition must reference at least one source table",
