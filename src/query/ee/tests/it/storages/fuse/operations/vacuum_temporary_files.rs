@@ -19,10 +19,6 @@ mod unit {
 
     use std::collections::HashMap;
     use std::future::Future;
-    use std::sync::Arc;
-    use std::sync::Mutex;
-    use std::sync::atomic::AtomicUsize;
-    use std::sync::atomic::Ordering;
 
     use chrono::Duration as ChronoDuration;
     use chrono::Utc;
@@ -73,12 +69,12 @@ mod unit {
 
     impl oio::Delete for RecordingDeleter {
         fn delete(&mut self, path: &str, _args: OpDelete) -> opendal::Result<()> {
-            self.deleted.lock().unwrap().push(path.to_string());
+            self.deleted.lock().push(path.to_string());
             Ok(())
         }
 
         async fn flush(&mut self) -> opendal::Result<usize> {
-            Ok(self.deleted.lock().unwrap().len())
+            Ok(self.deleted.lock().len())
         }
     }
 
@@ -109,7 +105,7 @@ mod unit {
         }
 
         fn deleted_paths(&self) -> Vec<String> {
-            self.deleted.lock().unwrap().clone()
+            self.deleted.lock().clone()
         }
 
         fn list_call_count(&self) -> usize {
@@ -203,6 +199,7 @@ mod unit {
         meta
     }
 
+    /// Drive the real per-directory unit of work and return how many files it removed.
     async fn run_dir_vacuum_for_test(
         operator: &Operator,
         temporary_dir: &str,
@@ -211,41 +208,29 @@ mod unit {
         timestamp: i64,
         expire_time: i64,
         limit: usize,
-        removed_total: &mut usize,
     ) -> Result<usize> {
-        let meta_path = format!("{}{}", dir_path.trim_end_matches('/'), SPILL_META_SUFFIX);
-        if let Some(last_modified) =
-            resolve_dir_last_modified(operator, dir_path, metadata, &meta_path).await
-        {
-            if timestamp - last_modified < expire_time {
-                return Ok(0);
-            }
-
-            let removed = vacuum_by_meta_with_operator(
-                operator,
-                temporary_dir,
-                &meta_path,
-                limit,
-                removed_total,
-            )
-            .await?;
-            if removed > 0 {
-                return Ok(removed);
-            }
-
-            return vacuum_by_list_dir_with_operator(operator, dir_path, limit, removed_total)
-                .await;
-        }
-
-        vacuum_dir_with_probe(
-            operator,
-            dir_path,
+        let removed_total = Arc::new(AtomicUsize::new(0));
+        let gc_metas = Arc::new(Mutex::new(HashSet::new()));
+        let name = dir_path
+            .trim_end_matches('/')
+            .rsplit('/')
+            .next()
+            .unwrap_or_default()
+            .to_string();
+        vacuum_dir_entry(
+            operator.clone(),
+            temporary_dir.to_string(),
+            dir_path.to_string(),
+            name,
+            metadata.clone(),
             timestamp,
             expire_time,
             limit,
-            removed_total,
+            removed_total.clone(),
+            gc_metas,
         )
-        .await
+        .await?;
+        Ok(removed_total.load(Ordering::Relaxed))
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -268,8 +253,7 @@ mod unit {
         let operator = OperatorBuilder::new(accessor).finish();
 
         let last_modified =
-            resolve_dir_last_modified(&operator, "spill/dir/", &dir_meta(None), "spill/dir.list")
-                .await;
+            resolve_dir_last_modified(&operator, &dir_meta(None), "spill/dir.list").await;
 
         assert_eq!(last_modified, Some(meta_ts));
         Ok(())
@@ -296,8 +280,6 @@ mod unit {
             HashMap::new(),
         );
         let operator = OperatorBuilder::new(accessor.clone()).finish();
-        let mut removed_total = 0;
-
         let removed = run_dir_vacuum_for_test(
             &operator,
             "spill/",
@@ -306,12 +288,10 @@ mod unit {
             now,
             Duration::from_secs(60).as_millis() as i64,
             100,
-            &mut removed_total,
         )
         .await?;
 
         assert_eq!(removed, 0);
-        assert_eq!(removed_total, 0);
         assert_eq!(accessor.deleted_paths(), Vec::<String>::new());
         assert_eq!(accessor.list_call_count(), 0);
         assert_eq!(accessor.read_call_count(), 0);
@@ -343,8 +323,6 @@ mod unit {
             )]),
         );
         let operator = OperatorBuilder::new(accessor.clone()).finish();
-        let mut removed_total = 0;
-
         let removed = run_dir_vacuum_for_test(
             &operator,
             "spill/",
@@ -353,12 +331,10 @@ mod unit {
             now,
             Duration::from_secs(60).as_millis() as i64,
             100,
-            &mut removed_total,
         )
         .await?;
 
         assert_eq!(removed, 2);
-        assert_eq!(removed_total, 2);
         assert_eq!(accessor.deleted_paths(), vec![
             "spill/dir/file1".to_string(),
             "spill/dir/file2".to_string()
@@ -380,7 +356,7 @@ mod unit {
             HashMap::new(),
         );
         let operator = OperatorBuilder::new(accessor.clone()).finish();
-        let mut removed_total = 0;
+        let removed_total = AtomicUsize::new(0);
 
         let removed = vacuum_dir_with_probe(
             &operator,
@@ -388,12 +364,12 @@ mod unit {
             now,
             Duration::from_secs(60).as_millis() as i64,
             100,
-            &mut removed_total,
+            &removed_total,
         )
         .await?;
 
         assert_eq!(removed, 0);
-        assert_eq!(removed_total, 0);
+        assert_eq!(removed_total.load(Ordering::Relaxed), 0);
         assert_eq!(accessor.deleted_paths(), Vec::<String>::new());
         assert_eq!(accessor.list_call_count(), 1);
         assert_eq!(accessor.read_call_count(), 0);
@@ -412,7 +388,7 @@ mod unit {
             HashMap::new(),
         );
         let operator = OperatorBuilder::new(accessor.clone()).finish();
-        let mut removed_total = 0;
+        let removed_total = AtomicUsize::new(0);
 
         let removed = vacuum_dir_with_probe(
             &operator,
@@ -420,12 +396,12 @@ mod unit {
             Utc::now().timestamp_millis(),
             Duration::from_secs(60).as_millis() as i64,
             100,
-            &mut removed_total,
+            &removed_total,
         )
         .await?;
 
         assert_eq!(removed, 3);
-        assert_eq!(removed_total, 3);
+        assert_eq!(removed_total.load(Ordering::Relaxed), 3);
         assert_eq!(accessor.deleted_paths(), vec![
             "spill/dir/file1".to_string(),
             "spill/dir/file2".to_string(),
