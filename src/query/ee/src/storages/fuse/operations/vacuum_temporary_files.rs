@@ -39,8 +39,10 @@ use databend_common_storage::DataOperator;
 use databend_common_storage::opendal_rate_limited_retries;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumReport;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
+use futures_util::FutureExt;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
+use futures_util::future::BoxFuture;
 use futures_util::stream::FuturesUnordered;
 use log::info;
 use log::warn;
@@ -402,7 +404,10 @@ async fn vacuum_by_duration(
     let mut ds = deleter.operator().lister_with(&temporary_dir).await?;
 
     let mut temp_files = Vec::new();
-    let mut in_flight = FuturesUnordered::new();
+    // Meta-backed and directory tasks share one bounded pool; on S3 `x.list` is listed before
+    // `x/`, so the meta task is the common path and must not run inline.
+    let mut in_flight: FuturesUnordered<BoxFuture<'static, Result<DirOutcome>>> =
+        FuturesUnordered::new();
 
     loop {
         if run.budget.exhausted() {
@@ -441,13 +446,15 @@ async fn vacuum_by_duration(
                 if !run.gc_metas.insert(name.to_owned()) {
                     continue;
                 }
-                let delete =
-                    delete_by_meta(&deleter, &temporary_dir, de.path(), run.budget.remaining())
-                        .await?;
-                run.settle(DirOutcome {
-                    dir_path: de.path().to_owned(),
-                    delete,
-                });
+                in_flight.push(
+                    vacuum_meta_entry(
+                        deleter.clone(),
+                        temporary_dir.clone(),
+                        de.path().to_owned(),
+                        run.budget.remaining(),
+                    )
+                    .boxed(),
+                );
             } else {
                 temp_files.push(de.path().to_owned());
                 if temp_files.len() >= run.budget.remaining() {
@@ -462,14 +469,17 @@ async fn vacuum_by_duration(
                 continue;
             }
             let (dir_path, metadata) = de.into_parts();
-            in_flight.push(vacuum_dir_entry(
-                deleter.clone(),
-                temporary_dir.clone(),
-                dir_path,
-                metadata,
-                expiry,
-                run.budget.remaining(),
-            ));
+            in_flight.push(
+                vacuum_dir_entry(
+                    deleter.clone(),
+                    temporary_dir.clone(),
+                    dir_path,
+                    metadata,
+                    expiry,
+                    run.budget.remaining(),
+                )
+                .boxed(),
+            );
         }
     }
 
@@ -486,6 +496,25 @@ async fn vacuum_by_duration(
     }
 
     Ok(run.finish())
+}
+
+/// Vacuum the files recorded in an expired spill meta file. Runs in the same bounded pool as
+/// directory tasks.
+async fn vacuum_meta_entry(
+    deleter: Arc<SpillDeleter>,
+    temporary_dir: Arc<str>,
+    meta_path: String,
+    max: usize,
+) -> Result<DirOutcome> {
+    let delete = if max == 0 {
+        None
+    } else {
+        delete_by_meta(&deleter, &temporary_dir, &meta_path, max).await?
+    };
+    Ok(DirOutcome {
+        dir_path: meta_path,
+        delete,
+    })
 }
 
 /// Vacuum one spill directory. Runs concurrently; returns its outcome instead of touching shared
