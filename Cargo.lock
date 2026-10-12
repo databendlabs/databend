@@ -4909,6 +4909,7 @@ dependencies = [
  "jwt-simple",
  "log",
  "opendal",
+ "parking_lot 0.12.3",
  "serde",
  "serde_json",
  "siphasher 0.3.11",

@@ -14,6 +14,9 @@
 
 use std::collections::HashSet;
 use std::io::BufRead;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
@@ -23,15 +26,25 @@ use databend_common_catalog::table_context::AbortChecker;
 use databend_common_exception::Result;
 use databend_common_storage::DataOperator;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
+use futures_util::StreamExt;
 use futures_util::TryStreamExt;
+use futures_util::stream::FuturesUnordered;
 use log::info;
 use opendal::Buffer;
 use opendal::ErrorKind;
 use opendal::Operator;
+use parking_lot::Mutex;
 
 // Default retention duration for temporary files: 3 days.
 const DEFAULT_RETAIN_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 3);
 const SPILL_META_SUFFIX: &str = ".list";
+/// Max number of spill directories vacuumed concurrently by `VACUUM TEMPORARY FILES`.
+///
+/// Each directory needs a few sequential object-store round trips (stat / list / delete), and
+/// directories are independent of each other, so processing them one by one leaves the command
+/// bound by latency. On a tenant with hundreds of thousands of leftover directories the
+/// sequential version needs days to finish.
+const VACUUM_DIR_CONCURRENCY: usize = 32;
 
 #[async_backtrace::framed]
 pub async fn do_vacuum_temporary_files(
@@ -79,10 +92,17 @@ pub async fn do_vacuum_temporary_files(
 /// - `list` on remote storage is expensive, so the extra probe is only used in the final fallback.
 /// - If probing decides the directory is expired, the same lister is reused to finish deletion so
 ///   we don't pay for an additional probe list.
+///
+/// Concurrency:
+/// - The top-level listing is consumed sequentially, but each spill directory is vacuumed as an
+///   independent task with at most `VACUUM_DIR_CONCURRENCY` in flight.
+/// - `limit` is a soft upper bound: no new directory is started once it is reached, but the
+///   directories already in flight finish their own deletion, so the final count may exceed
+///   `limit` by up to `VACUUM_DIR_CONCURRENCY` directories.
 async fn vacuum_by_duration(
     abort_checker: AbortChecker,
     temporary_dir: &str,
-    mut limit: usize,
+    limit: usize,
     duration: &Option<Duration>,
 ) -> Result<usize> {
     let operator = DataOperator::instance().spill_operator();
@@ -94,121 +114,97 @@ async fn vacuum_by_duration(
         .unwrap()
         .as_millis() as i64;
 
-    let mut removed_total = 0;
+    let removed_total = Arc::new(AtomicUsize::new(0));
+    let gc_metas: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
     let temporary_dir = format!("{}/", temporary_dir.trim_end_matches('/'));
     let mut ds = operator.lister_with(&temporary_dir).await?;
 
     let mut temp_files = Vec::new();
-    let mut gc_metas = HashSet::new();
+    let mut in_flight = FuturesUnordered::new();
 
     loop {
-        let de = ds.try_next().await;
-        match de {
-            Ok(Some(de)) => {
-                abort_checker.try_check_aborting()?;
-                if de.path() == temporary_dir {
-                    continue;
-                }
-                let name = de.name();
-                if de.metadata().is_file() {
-                    let Some(last_modified) =
-                        resolve_file_last_modified(&operator, de.path(), de.metadata()).await
-                    else {
-                        continue;
-                    };
+        if removed_total.load(Ordering::Relaxed) >= limit {
+            break;
+        }
 
-                    if timestamp - last_modified < expire_time {
-                        continue;
-                    }
-
-                    if name.ends_with(SPILL_META_SUFFIX) {
-                        if gc_metas.contains(name) {
-                            continue;
-                        }
-                        let removed = vacuum_by_meta_with_operator(
-                            &operator,
-                            &temporary_dir,
-                            de.path(),
-                            limit,
-                            &mut removed_total,
-                        )
-                        .await?;
-                        limit = limit.saturating_sub(removed);
-                        gc_metas.insert(name.to_owned());
-                    } else {
-                        temp_files.push(de.path().to_owned());
-                        if temp_files.len() >= limit {
-                            break;
-                        }
-                    }
-                } else {
-                    let meta_path =
-                        format!("{}{}", de.path().trim_end_matches('/'), SPILL_META_SUFFIX);
-                    if let Some(last_modified) =
-                        resolve_dir_last_modified(&operator, de.path(), de.metadata(), &meta_path)
-                            .await
-                    {
-                        if timestamp - last_modified < expire_time {
-                            continue;
-                        }
-
-                        let removed = vacuum_by_meta_with_operator(
-                            &operator,
-                            &temporary_dir,
-                            &meta_path,
-                            limit,
-                            &mut removed_total,
-                        )
-                        .await?;
-                        if removed > 0 {
-                            let meta_name = format!("{}{}", name, SPILL_META_SUFFIX);
-                            if gc_metas.contains(&meta_name) {
-                                continue;
-                            }
-
-                            limit = limit.saturating_sub(removed);
-                            gc_metas.insert(meta_name);
-                        } else {
-                            let removed = vacuum_by_list_dir_with_operator(
-                                &operator,
-                                de.path(),
-                                limit,
-                                &mut removed_total,
-                            )
-                            .await?;
-                            limit = limit.saturating_sub(removed);
-                        }
-                    } else {
-                        let removed = vacuum_dir_with_probe(
-                            &operator,
-                            de.path(),
-                            timestamp,
-                            expire_time,
-                            limit,
-                            &mut removed_total,
-                        )
-                        .await?;
-                        limit = limit.saturating_sub(removed);
-                        if removed > 0 {
-                            gc_metas.insert(format!("{}{}", name, SPILL_META_SUFFIX));
-                        }
-                    }
-                }
-                if limit == 0 {
-                    break;
-                }
+        // Keep the number of in-flight directory tasks bounded.
+        while in_flight.len() >= VACUUM_DIR_CONCURRENCY {
+            if let Some(res) = in_flight.next().await {
+                res?;
             }
+        }
+
+        let de = match ds.try_next().await {
+            Ok(Some(de)) => de,
             Ok(None) => break,
             Err(e) if e.kind() == ErrorKind::NotFound => continue,
             Err(e) => return Err(e.into()),
+        };
+        abort_checker.try_check_aborting()?;
+        if de.path() == temporary_dir {
+            continue;
+        }
+
+        let remaining = limit.saturating_sub(removed_total.load(Ordering::Relaxed));
+        let name = de.name();
+        if de.metadata().is_file() {
+            let Some(last_modified) =
+                resolve_file_last_modified(&operator, de.path(), de.metadata()).await
+            else {
+                continue;
+            };
+
+            if timestamp - last_modified < expire_time {
+                continue;
+            }
+
+            if name.ends_with(SPILL_META_SUFFIX) {
+                if gc_metas.lock().contains(name) {
+                    continue;
+                }
+                vacuum_by_meta_with_operator(
+                    &operator,
+                    &temporary_dir,
+                    de.path(),
+                    remaining,
+                    &removed_total,
+                )
+                .await?;
+                gc_metas.lock().insert(name.to_owned());
+            } else {
+                temp_files.push(de.path().to_owned());
+                if temp_files.len() >= remaining {
+                    break;
+                }
+            }
+        } else {
+            in_flight.push(vacuum_dir_entry(
+                operator.clone(),
+                temporary_dir.clone(),
+                de.path().to_owned(),
+                name.to_owned(),
+                de.metadata().clone(),
+                timestamp,
+                expire_time,
+                limit,
+                removed_total.clone(),
+                gc_metas.clone(),
+            ));
         }
     }
 
-    if temp_files.len() <= limit {
-        removed_total += temp_files.len();
+    // Drain the directories that are still in flight.
+    while let Some(res) = in_flight.next().await {
+        res?;
+    }
+
+    let remaining = limit.saturating_sub(removed_total.load(Ordering::Relaxed));
+    if !temp_files.is_empty() && temp_files.len() <= remaining {
+        removed_total.fetch_add(temp_files.len(), Ordering::Relaxed);
         let _ = operator.delete_iter(temp_files).await;
     }
 
+    let removed_total = removed_total.load(Ordering::Relaxed);
     // Log for the final total progress
     info!(
         "vacuum command finished, total cleaned {} files, total elapsed: {} seconds",
@@ -216,6 +212,71 @@ async fn vacuum_by_duration(
         start_time.elapsed().as_secs()
     );
     Ok(removed_total)
+}
+
+/// Vacuum one spill directory found under the temporary dir.
+///
+/// This is the per-directory unit of work that runs concurrently in `vacuum_by_duration`.
+#[allow(clippy::too_many_arguments)]
+async fn vacuum_dir_entry(
+    operator: Operator,
+    temporary_dir: String,
+    dir_path: String,
+    name: String,
+    metadata: opendal::Metadata,
+    timestamp: i64,
+    expire_time: i64,
+    limit: usize,
+    removed_total: Arc<AtomicUsize>,
+    gc_metas: Arc<Mutex<HashSet<String>>>,
+) -> Result<()> {
+    let removed_so_far = removed_total.load(Ordering::Relaxed);
+    if removed_so_far >= limit {
+        return Ok(());
+    }
+    let remaining = limit - removed_so_far;
+
+    let meta_path = format!("{}{}", dir_path.trim_end_matches('/'), SPILL_META_SUFFIX);
+    let meta_name = format!("{}{}", name, SPILL_META_SUFFIX);
+
+    match resolve_dir_last_modified(&operator, &metadata, &meta_path).await {
+        Some(last_modified) => {
+            if timestamp - last_modified < expire_time {
+                return Ok(());
+            }
+
+            let removed = vacuum_by_meta_with_operator(
+                &operator,
+                &temporary_dir,
+                &meta_path,
+                remaining,
+                &removed_total,
+            )
+            .await?;
+            if removed > 0 {
+                gc_metas.lock().insert(meta_name);
+            } else {
+                vacuum_by_list_dir_with_operator(&operator, &dir_path, remaining, &removed_total)
+                    .await?;
+            }
+        }
+        None => {
+            let removed = vacuum_dir_with_probe(
+                &operator,
+                &dir_path,
+                timestamp,
+                expire_time,
+                remaining,
+                &removed_total,
+            )
+            .await?;
+            if removed > 0 {
+                gc_metas.lock().insert(meta_name);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Read `last_modified` for a single object path via `stat`.
@@ -243,19 +304,20 @@ async fn resolve_file_last_modified(
     None
 }
 
-/// Resolve a directory's `last_modified` from the dir itself first, then from its `.list` file.
+/// Resolve a directory's `last_modified` from the listing metadata first, then from its `.list`
+/// file.
+///
+/// The directory path itself is deliberately not `stat`ed: on object stores a "directory" is only
+/// a key prefix, so the request can never return a `last_modified` and only adds a round trip
+/// (opendal may even issue a follow-up list to confirm the prefix exists). Backends that do have
+/// directory metadata already expose it through the listing entry.
 async fn resolve_dir_last_modified(
     operator: &Operator,
-    dir_path: &str,
     metadata: &opendal::Metadata,
     meta_path: &str,
 ) -> Option<i64> {
     if let Some(last_modified) = metadata.last_modified() {
         return Some(last_modified.into_inner().as_millisecond());
-    }
-
-    if let Some(last_modified) = stat_last_modified(operator, dir_path).await {
-        return Some(last_modified);
     }
 
     stat_last_modified(operator, meta_path).await
@@ -269,7 +331,7 @@ async fn vacuum_dir_with_probe(
     timestamp: i64,
     expire_time: i64,
     limit: usize,
-    removed_total: &mut usize,
+    removed_total: &AtomicUsize,
 ) -> Result<usize> {
     let start_time = Instant::now();
     let mut lister = match operator.lister_with(dir_path).recursive(true).await {
@@ -330,10 +392,10 @@ async fn vacuum_dir_with_probe(
     let cur_removed = paths.len().min(limit);
     let _ = operator.delete_iter(paths.into_iter().take(limit)).await;
 
-    *removed_total += cur_removed;
+    let total = removed_total.fetch_add(cur_removed, Ordering::Relaxed) + cur_removed;
     info!(
         "Vacuum temporary files progress(by probed dir): Total removed: {}, Current batch: {} (from '{}'), Time: {} sec",
-        *removed_total,
+        total,
         cur_removed,
         dir_path,
         start_time.elapsed().as_secs(),
@@ -351,7 +413,7 @@ async fn vacuum_query_hook(
     query_id: &str,
     mut limit: usize,
 ) -> Result<usize> {
-    let mut removed_total = 0;
+    let removed_total = AtomicUsize::new(0);
     let metas_f = nodes
         .iter()
         .map(|i| async move {
@@ -376,13 +438,13 @@ async fn vacuum_query_hook(
             temporary_dir,
             buffer,
             limit,
-            &mut removed_total,
+            &removed_total,
         )
         .await?;
         limit = limit.saturating_sub(removed);
     }
 
-    Ok(removed_total)
+    Ok(removed_total.load(Ordering::Relaxed))
 }
 
 /// Delete temporary files recorded in a spill meta buffer with the provided operator.
@@ -392,7 +454,7 @@ async fn vacuum_by_meta_buffer_with_operator(
     temporary_dir: &str,
     meta: Buffer,
     limit: usize,
-    removed_total: &mut usize,
+    removed_total: &AtomicUsize,
 ) -> Result<usize> {
     let start_time = Instant::now();
     let meta = meta.to_bytes();
@@ -417,11 +479,11 @@ async fn vacuum_by_meta_buffer_with_operator(
         operator.write(meta_file_path, remain).await?;
     }
 
-    *removed_total += cur_removed;
+    let total = removed_total.fetch_add(cur_removed, Ordering::Relaxed) + cur_removed;
     // Log for the current batch
     info!(
         "Vacuum temporary files progress(by meta file): Total removed: {}, Current batch: {} (from '{}'), Dir: '{}', Time: {} sec",
-        *removed_total,
+        total,
         cur_removed,
         meta_file_path,
         temporary_dir,
@@ -437,7 +499,7 @@ async fn vacuum_by_meta_with_operator(
     temporary_dir: &str,
     meta_file_path: &str,
     limit: usize,
-    removed_total: &mut usize,
+    removed_total: &AtomicUsize,
 ) -> Result<usize> {
     let meta: Buffer;
     let r = operator.read(meta_file_path).await;
@@ -462,7 +524,7 @@ async fn vacuum_by_list_dir_with_operator(
     operator: &Operator,
     dir_path: &str,
     limit: usize,
-    removed_total: &mut usize,
+    removed_total: &AtomicUsize,
 ) -> Result<usize> {
     let start_time = Instant::now();
     let mut r = operator.lister_with(dir_path).recursive(true).await?;
@@ -481,11 +543,11 @@ async fn vacuum_by_list_dir_with_operator(
     let cur_removed = batches.len().min(limit);
     let _ = operator.delete_iter(batches.into_iter().take(limit)).await;
 
-    *removed_total += cur_removed;
+    let total = removed_total.fetch_add(cur_removed, Ordering::Relaxed) + cur_removed;
     // Log progress for the current batch
     info!(
         "Vacuum temporary files progress(by list dir): Total removed: {}, Current batch: {} (from '{}'), Time: {} sec",
-        *removed_total,
+        total,
         cur_removed,
         dir_path,
         start_time.elapsed().as_secs(),
