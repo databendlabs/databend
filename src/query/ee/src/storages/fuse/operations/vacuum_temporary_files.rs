@@ -509,7 +509,7 @@ async fn vacuum_dir_entry(
         resolve_dir_last_modified(deleter.operator(), &metadata, &meta_path).await
     else {
         let delete = delete_by_probe(&deleter, &dir_path, expiry, max).await?;
-        return Ok(outcome(Some(delete)));
+        return Ok(outcome(delete));
     };
     if !expiry.expired(last_modified) {
         return Ok(outcome(None));
@@ -517,10 +517,10 @@ async fn vacuum_dir_entry(
     // A meta batch that was attempted is final for this run, whether it succeeded or was
     // throttled; only a directory without a usable meta file falls back to listing.
     let delete = match delete_by_meta(&deleter, &temporary_dir, &meta_path, max).await? {
-        Some(by_meta) => by_meta,
+        Some(by_meta) => Some(by_meta),
         None => delete_by_list(&deleter, &dir_path, max).await?,
     };
-    Ok(outcome(Some(delete)))
+    Ok(outcome(delete))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -576,85 +576,91 @@ async fn delete_by_meta_buffer(
     Ok(Some(outcome))
 }
 
+/// Collect up to `max` paths from a recursive listing of `dir_path`, skipping the directory
+/// entry itself. The directory marker is appended only when the listing was exhausted with
+/// capacity left, so an abandoned directory with more files than `max` is never fully buffered.
+async fn collect_dir_paths(
+    lister: &mut opendal::Lister,
+    dir_path: &str,
+    paths: &mut Vec<String>,
+    max: usize,
+) -> Result<()> {
+    while paths.len() < max {
+        let entry = match lister.try_next().await {
+            Ok(Some(entry)) => entry,
+            Ok(None) => {
+                paths.push(dir_path.to_owned());
+                break;
+            }
+            Err(e) if e.kind() == ErrorKind::NotFound => continue,
+            Err(e) => return Err(e.into()),
+        };
+        if entry.path() != dir_path {
+            paths.push(entry.path().to_string());
+        }
+    }
+    Ok(())
+}
+
 /// Delete everything under `dir_path` found by a recursive listing, then the directory itself.
+/// `None` when nothing was listed.
 async fn delete_by_list(
     deleter: &SpillDeleter,
     dir_path: &str,
     max: usize,
-) -> Result<DeleteOutcome> {
+) -> Result<Option<DeleteOutcome>> {
     let mut lister = deleter
         .operator()
         .lister_with(dir_path)
         .recursive(true)
         .await?;
-    let mut paths = vec![];
-    while let Some(entry) = lister.try_next().await? {
-        if entry.path() == dir_path {
-            continue;
-        }
-        paths.push(entry.path().to_string());
+    let mut paths = Vec::new();
+    collect_dir_paths(&mut lister, dir_path, &mut paths, max).await?;
+    // Only the directory marker: nothing to vacuum.
+    if paths.len() <= 1 {
+        return Ok(None);
     }
-    paths.push(dir_path.to_owned());
-    paths.truncate(max);
-    Ok(deleter.delete(paths, dir_path).await)
+    Ok(Some(deleter.delete(paths, dir_path).await))
 }
 
 /// For a directory without a usable `last_modified`: probe the first file and use its
 /// `last_modified` as the directory's age. If expired, reuse the same lister to finish deletion
-/// and avoid an extra probe list.
+/// and avoid an extra probe list. `None` when the directory is empty, fresh or of unknown age.
 async fn delete_by_probe(
     deleter: &SpillDeleter,
     dir_path: &str,
     expiry: Expiry,
     max: usize,
-) -> Result<DeleteOutcome> {
+) -> Result<Option<DeleteOutcome>> {
     let operator = deleter.operator();
     let mut lister = match operator.lister_with(dir_path).recursive(true).await {
         Ok(lister) => lister,
-        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(DeleteOutcome::default()),
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(e.into()),
     };
-    let mut paths = Vec::new();
 
-    let mut first_entry_last_modified = None;
-    loop {
-        let entry = match lister.try_next().await {
-            Ok(Some(entry)) => entry,
-            Ok(None) => break,
+    let first = loop {
+        match lister.try_next().await {
+            Ok(Some(entry)) if entry.path() == dir_path => continue,
+            Ok(Some(entry)) => break entry,
+            Ok(None) => return Ok(None),
             Err(e) if e.kind() == ErrorKind::NotFound => continue,
             Err(e) => return Err(e.into()),
-        };
-        if entry.path() == dir_path {
-            continue;
         }
-        paths.push(entry.path().to_string());
-        first_entry_last_modified =
-            resolve_file_last_modified(operator, entry.path(), entry.metadata()).await;
-        break;
-    }
-
-    let Some(first_entry_last_modified) = first_entry_last_modified else {
-        return Ok(DeleteOutcome::default());
     };
-    if !expiry.expired(first_entry_last_modified) {
-        return Ok(DeleteOutcome::default());
+    let Some(last_modified) =
+        resolve_file_last_modified(operator, first.path(), first.metadata()).await
+    else {
+        // Unknown age: be conservative and keep the directory.
+        return Ok(None);
+    };
+    if !expiry.expired(last_modified) {
+        return Ok(None);
     }
 
-    loop {
-        let entry = match lister.try_next().await {
-            Ok(Some(entry)) => entry,
-            Ok(None) => break,
-            Err(e) if e.kind() == ErrorKind::NotFound => continue,
-            Err(e) => return Err(e.into()),
-        };
-        if entry.path() == dir_path {
-            continue;
-        }
-        paths.push(entry.path().to_string());
-    }
-    paths.push(dir_path.to_owned());
-    paths.truncate(max);
-    Ok(deleter.delete(paths, dir_path).await)
+    let mut paths = vec![first.path().to_string()];
+    collect_dir_paths(&mut lister, dir_path, &mut paths, max).await?;
+    Ok(Some(deleter.delete(paths, dir_path).await))
 }
 
 // ---------------------------------------------------------------------------------------------

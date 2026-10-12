@@ -566,10 +566,50 @@ mod unit {
         )
         .await?;
 
-        assert_eq!(outcome.removed, 0);
+        assert!(
+            outcome.is_none(),
+            "a fresh directory must not be reported as a clear delete batch"
+        );
         assert_eq!(accessor.deleted_paths(), Vec::<String>::new());
         assert_eq!(accessor.list_call_count(), 1);
         assert_eq!(accessor.read_call_count(), 0);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_list_stops_at_budget_without_buffering_the_directory() -> anyhow::Result<()> {
+        let old_ts = (Utc::now() - ChronoDuration::hours(2)).timestamp_millis();
+        let files: Vec<_> = (0..5)
+            .map(|i| (format!("spill/dir/file{i}"), file_meta(Some(old_ts))))
+            .collect();
+        let accessor = MockVacuumAccessor::new(
+            HashMap::from([("spill/dir/".to_string(), files)]),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
+
+        let outcome = delete_by_list(&deleter, "spill/dir/", 2).await?;
+        assert_eq!(outcome.map(|o| o.removed), Some(2));
+        // Budget hit before the listing ended: no directory marker.
+        assert_eq!(accessor.deleted_paths(), vec![
+            "spill/dir/file0".to_string(),
+            "spill/dir/file1".to_string(),
+        ]);
+
+        let outcome = delete_by_probe(
+            &deleter,
+            "spill/dir/",
+            expiry(Utc::now().timestamp_millis(), Duration::from_secs(60)),
+            3,
+        )
+        .await?;
+        assert_eq!(outcome.map(|o| o.removed), Some(3));
+        assert_eq!(accessor.deleted_paths()[2..], [
+            "spill/dir/file0".to_string(),
+            "spill/dir/file1".to_string(),
+            "spill/dir/file2".to_string(),
+        ]);
         Ok(())
     }
 
@@ -594,7 +634,7 @@ mod unit {
         )
         .await?;
 
-        assert_eq!(outcome.removed, 3);
+        assert_eq!(outcome.map(|o| o.removed), Some(3));
         assert_eq!(accessor.deleted_paths(), vec![
             "spill/dir/file1".to_string(),
             "spill/dir/file2".to_string(),
