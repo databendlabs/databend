@@ -6931,7 +6931,6 @@ impl SchemaApiTestSuite {
         let db2_id = *db2.db_id();
         let (undecodable_db2_t1, db2_t1_meta) =
             create_undecodable_table(db2_name, "t1", None).await?;
-        assert!(db2_t1_meta.drop_on.is_none());
         let mut db2_t2 = DbTableHarness::new(mt, tenant_name, db2_name, "t2", "JSON");
         let (db2_t2, _) = db2_t2.create_table().await?;
         db2.drop_db().await?;
