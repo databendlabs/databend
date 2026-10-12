@@ -55,6 +55,8 @@ use parking_lot::Mutex;
 // Default retention duration for temporary files: 3 days.
 const DEFAULT_RETAIN_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 3);
 const SPILL_META_SUFFIX: &str = ".list";
+/// Paths materialized from a manifest per delete batch; also the S3 multi-delete maximum.
+const META_BATCH_FILES: usize = 1000;
 
 // ---------------------------------------------------------------------------------------------
 // Delete I/O
@@ -70,6 +72,15 @@ struct DeleteOutcome {
     /// `RateLimited` retries recorded process-wide while the batch was in flight. The retry
     /// layer hides `SlowDown`, so a successful batch may still have been throttled.
     retried: usize,
+}
+
+impl DeleteOutcome {
+    /// Merge the outcome of a further batch issued by the same task.
+    fn absorb(&mut self, other: DeleteOutcome) {
+        self.removed += other.removed;
+        self.rate_limited |= other.rate_limited;
+        self.retried += other.retried;
+    }
 }
 
 /// Deletes spill files and observes how the object store responds.
@@ -506,14 +517,29 @@ async fn vacuum_meta_entry(
     meta_path: String,
     max: usize,
 ) -> Result<DirOutcome> {
-    let delete = if max == 0 {
-        None
-    } else {
-        delete_by_meta(&deleter, &temporary_dir, &meta_path, max).await?
-    };
+    if max == 0 {
+        return Ok(DirOutcome {
+            dir_path: meta_path,
+            delete: None,
+        });
+    }
+    if let Some(delete) = delete_by_meta(&deleter, &temporary_dir, &meta_path, max).await? {
+        return Ok(DirOutcome {
+            dir_path: meta_path,
+            delete: Some(delete),
+        });
+    }
+    // The manifest names nothing we can delete (empty, truncated or foreign paths). The claim
+    // on it keeps the directory task away, so vacuum the directory it describes here and drop
+    // the useless manifest with it.
+    let dir_path = format!("{}/", meta_path.trim_end_matches(SPILL_META_SUFFIX));
+    let mut delete = delete_by_list(&deleter, &dir_path, max)
+        .await?
+        .unwrap_or_default();
+    delete.absorb(deleter.delete(vec![meta_path.clone()], &meta_path).await);
     Ok(DirOutcome {
         dir_path: meta_path,
-        delete,
+        delete: Some(delete),
     })
 }
 
@@ -585,35 +611,55 @@ async fn delete_by_meta_buffer(
     meta: Buffer,
     max: usize,
 ) -> Result<Option<DeleteOutcome>> {
-    // Only the first `max` paths are materialized; the rest of the manifest stays a slice of
-    // the buffer we already hold and is written back as-is.
+    // The manifest is walked in place: at most `META_BATCH_FILES` paths are materialized per
+    // batch, whatever `max` is, so a large manifest never becomes a second full copy. What was
+    // not deleted is written back as a slice of the buffer already held.
     let bytes = meta.to_bytes();
     let text = std::str::from_utf8(&bytes).map_err(|e| {
         ErrorCode::StorageOther(format!("spill meta {meta_path} is not utf-8: {e}"))
     })?;
-    let mut to_be_removed = Vec::new();
+
+    let mut total = DeleteOutcome::default();
+    let mut attempted = false;
     let mut consumed = 0;
-    for line in text.split_inclusive('\n') {
-        if to_be_removed.len() >= max {
+    let mut budget = max;
+    while budget > 0 {
+        let mut batch = Vec::new();
+        let mut batch_end = consumed;
+        for line in text[consumed..].split_inclusive('\n') {
+            if batch.len() >= budget.min(META_BATCH_FILES) {
+                break;
+            }
+            batch_end += line.len();
+            let path = line.trim_end_matches(['\n', '\r']);
+            if path.starts_with(temporary_dir) {
+                batch.push(path.to_owned());
+            }
+        }
+        if batch.is_empty() {
             break;
         }
-        consumed += line.len();
-        let path = line.trim_end_matches(['\n', '\r']);
-        if path.starts_with(temporary_dir) {
-            to_be_removed.push(path.to_owned());
+        attempted = true;
+        budget -= batch.len();
+        let outcome = deleter.delete(batch, meta_path).await;
+        total.absorb(outcome);
+        if outcome.removed == 0 {
+            // Failed batch: keep it in the manifest for the next run.
+            break;
         }
+        consumed = batch_end;
     }
-    if to_be_removed.is_empty() {
+
+    if !attempted {
         return Ok(None);
     }
-    let outcome = deleter.delete(to_be_removed, meta_path).await;
-    if outcome.removed > 0 && consumed < bytes.len() {
+    if total.removed > 0 && consumed < bytes.len() {
         deleter
             .operator()
             .write(meta_path, bytes.slice(consumed..))
             .await?;
     }
-    Ok(Some(outcome))
+    Ok(Some(total))
 }
 
 /// Collect paths from a recursive listing of `dir_path` until `max` are buffered or the listing

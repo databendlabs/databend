@@ -579,6 +579,65 @@ mod unit {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    async fn test_large_manifest_is_deleted_in_bounded_batches() -> anyhow::Result<()> {
+        let old_ts = (Utc::now() - ChronoDuration::hours(2)).timestamp_millis();
+        let paths: Vec<String> = (0..2500).map(|i| format!("spill/dir/file{i}")).collect();
+        let accessor = MockVacuumAccessor::new(
+            HashMap::new(),
+            HashMap::from([(
+                "spill/dir.list".to_string(),
+                StatResult::Meta(Box::new(file_meta(Some(old_ts)))),
+            )]),
+            HashMap::from([(
+                "spill/dir.list".to_string(),
+                ReadResult::Buffer(Buffer::from(paths.join("\n"))),
+            )]),
+        );
+        let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
+
+        // No LIMIT: every path goes, but never more than META_BATCH_FILES per batch.
+        let outcome = delete_by_meta(&deleter, "spill/", "spill/dir.list", usize::MAX).await?;
+        assert_eq!(outcome.map(|o| o.removed), Some(2500));
+        assert_eq!(accessor.deleted_paths(), paths);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_empty_manifest_falls_back_to_listing_and_drops_itself() -> anyhow::Result<()> {
+        let old_ts = (Utc::now() - ChronoDuration::hours(2)).timestamp_millis();
+        let accessor = MockVacuumAccessor::new(
+            HashMap::from([("spill/dir/".to_string(), vec![(
+                "spill/dir/file1".to_string(),
+                file_meta(Some(old_ts)),
+            )])]),
+            HashMap::new(),
+            HashMap::from([(
+                "spill/dir.list".to_string(),
+                ReadResult::Buffer(Buffer::from("")),
+            )]),
+        );
+        let deleter = Arc::new(SpillDeleter::new(
+            OperatorBuilder::new(accessor.clone()).finish(),
+        ));
+
+        let outcome = vacuum_meta_entry(
+            deleter,
+            Arc::from("spill/"),
+            "spill/dir.list".to_string(),
+            100,
+        )
+        .await?;
+
+        assert_eq!(outcome.delete.map(|d| d.removed), Some(3));
+        assert_eq!(accessor.deleted_paths(), vec![
+            "spill/dir/file1".to_string(),
+            "spill/dir/".to_string(),
+            "spill/dir.list".to_string(),
+        ]);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_probe_skips_fresh_directory() -> anyhow::Result<()> {
         let now = Utc::now().timestamp_millis();
         let accessor = MockVacuumAccessor::new(
