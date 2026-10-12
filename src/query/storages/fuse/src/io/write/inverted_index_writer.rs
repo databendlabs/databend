@@ -735,19 +735,21 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_full_warmup_reads_needed_postings_and_positions() {
-        use tantivy::query::QueryParser;
-        use tantivy::query_grammar::parse_query;
-        use tantivy::schema::Schema;
-        use tantivy::schema::TEXT;
-
         init_test_globals().unwrap();
         let operator = Operator::new(Memory::default()).unwrap().finish();
         let location = "t/ast-warmup.index";
         let sizes = build_index(&operator, location, 256);
-        let mut schema = Schema::builder();
-        let field = schema.add_text_field("body", TEXT);
-        let schema = schema.build();
-        let tokenizers = create_tokenizer_manager(&index_options());
+        let options = index_options();
+        let (schema, fields) = create_index_schema(
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "body",
+                DataType::String,
+            )])),
+            &options,
+        )
+        .unwrap();
+        let field = fields[0];
+        let tokenizers = create_tokenizer_manager(&options);
 
         for (text, fuzziness, expected) in [
             (
@@ -758,7 +760,7 @@ mod tests {
             ("body:alpa", Some(1), expected_rows("alpha")),
             ("body:[alpha TO alpha]", None, expected_rows("alpha")),
         ] {
-            let mut parser = QueryParser::new(schema.clone(), vec![field], tokenizers.clone());
+            let mut parser = QueryParser::new(schema.clone(), fields.clone(), tokenizers.clone());
             if let Some(distance) = fuzziness {
                 parser.set_field_fuzzy(field, false, distance, true);
             }
@@ -768,7 +770,7 @@ mod tests {
                 query.as_ref(),
                 &ast,
                 &schema,
-                &[field],
+                &fields,
                 fuzziness,
             )
             .unwrap();

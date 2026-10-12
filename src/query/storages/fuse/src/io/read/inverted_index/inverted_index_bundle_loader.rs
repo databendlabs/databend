@@ -411,9 +411,9 @@ impl RemoteBundleFileHandle {
     }
 
     async fn read_full_postings_file(&self) -> io::Result<OwnedBytes> {
-        // Full `.idx` / `.pos` warmups already need every byte. Preserve one full-read
-        // singleflight per immutable component instead of translating the logical read into many
-        // page-sized object requests.
+        // The warmup planner explicitly requests the complete physical `.idx` / `.pos` through
+        // the raw bundle directory, not Tantivy's footer-stripped field slices. Preserve one
+        // full-read singleflight per component instead of translating it into page requests.
         let fetch_lock = full_payload_fetch_lock(&self.location, self.file_id);
         let _guard = fetch_lock.lock().await;
         if let Some(data) = self.cached_full_payload() {
@@ -1120,6 +1120,229 @@ mod tests {
         assert_eq!(*ranges.lock().unwrap(), vec![0..data.len() as u64]);
         assert!(file.cached_full_payload().is_some());
         assert!(file.cached_page(0)?.is_none());
+        Ok(())
+    }
+
+    // Build actual Tantivy managed/composite files rather than manufacturing a 0..len request.
+    // Local caches keep this regression independent of process-wide cache state.
+    async fn expansion_bundle_fixture() -> Result<(
+        RemoteBundleDirectory,
+        InvertedIndexBundleFooter,
+        Arc<Mutex<Vec<Range<u64>>>>,
+    )> {
+        use databend_storages_common_index::collect_index_open_slices;
+        use tantivy::Index;
+        use tantivy::IndexSettings;
+        use tantivy::directory::RamDirectory;
+        use tantivy::schema::Schema;
+        use tantivy::schema::TEXT;
+
+        let mut schema = Schema::builder();
+        let body = schema.add_text_field("body", TEXT);
+        let title = schema.add_text_field("title", TEXT);
+        let raw = RamDirectory::default();
+        let index = Index::create(raw.clone(), schema.build(), IndexSettings::default())?;
+        let mut writer = index.writer_with_num_threads(1, 50_000_000)?;
+        for row in 0..4000 {
+            let body_text = if row % 2 == 0 {
+                "alpha beta"
+            } else {
+                "omega gamma"
+            };
+            let title_text = if row % 3 == 0 { "needle" } else { "other" };
+            writer.add_document(tantivy::doc!(body => body_text, title => title_text))?;
+        }
+        writer.commit()?;
+        drop(writer);
+
+        let open_slices = collect_index_open_slices(raw.clone())?;
+        let mut paths = index
+            .directory()
+            .list_managed_files()
+            .into_iter()
+            .collect::<Vec<_>>();
+        paths.sort_unstable();
+        let files = paths
+            .into_iter()
+            .filter(|path| {
+                path != Path::new(".managed.json")
+                    && path != Path::new("meta.json")
+                    && raw.exists(path).unwrap()
+            })
+            .map(|path| raw.atomic_read(&path).map(|bytes| (path, bytes)))
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let data = InvertedIndexBundleFooter::build(
+            files,
+            BTreeMap::new(),
+            open_slices,
+            raw.atomic_read(Path::new(".managed.json"))?,
+            raw.atomic_read(Path::new("meta.json"))?,
+        )?;
+        let footer = InvertedIndexBundleFooter::open(&data)?;
+        let layer = RecordingLayer::default();
+        let ranges = layer.ranges.clone();
+        let operator = Operator::new(Memory::default())?.layer(layer).finish();
+        let location = "real-expansion-bundle";
+        operator.write(location, data).await?;
+        Ok((
+            RemoteBundleDirectory {
+                operator,
+                location: Arc::from(location),
+                file_ranges: footer.file_ranges.clone(),
+                external_files: footer.external_files.clone(),
+                lookup_cache: None,
+                payload_cache: payload_cache(16 * 1024 * 1024),
+                full_payload_cache: full_payload_cache(16 * 1024 * 1024),
+            },
+            footer,
+            ranges,
+        ))
+    }
+
+    async fn execute_expansion_bundle_query(
+        remote: &RemoteBundleDirectory,
+        footer: &InvertedIndexBundleFooter,
+        text: &str,
+        fuzziness: Option<u8>,
+    ) -> Result<Vec<u32>> {
+        use tantivy::Index;
+        use tantivy::collector::DocSetCollector;
+        use tantivy::query::QueryParser;
+        use tantivy::query_grammar::parse_query;
+
+        let directory = FooterDirectory::new(
+            SearchPinDirectory::new(Arc::new(remote.clone())),
+            footer.clone(),
+        );
+        let index = Index::open(directory.clone())?;
+        let schema = index.schema();
+        let body = schema.get_field("body")?;
+        let mut parser = QueryParser::new(schema.clone(), vec![body], index.tokenizers().clone());
+        if let Some(distance) = fuzziness {
+            parser.set_field_fuzzy(body, false, distance, true);
+        }
+        let query = parser.parse_query(text)?;
+        let ast = parse_query(text).unwrap();
+        let warmup = crate::io::read::InvertedIndexWarmupInfo::try_create(
+            query.as_ref(),
+            &ast,
+            &schema,
+            &[body],
+            fuzziness,
+        )?;
+        let reader = index.reader()?;
+        let searcher = reader.searcher();
+        warmup.warm_searcher(&searcher, &directory, false).await?;
+        // Search is synchronous and must succeed using pinned data, without remote reads.
+        let mut rows = searcher
+            .search(query.as_ref(), &DocSetCollector)?
+            .into_iter()
+            .map(|address| address.doc_id)
+            .collect::<Vec<_>>();
+        rows.sort_unstable();
+        Ok(rows)
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_real_expansion_warmups_cache_physical_components() -> Result<()> {
+        let (fixture, footer, ranges) = expansion_bundle_fixture().await?;
+        let idx = footer
+            .file_ranges
+            .files
+            .iter()
+            .find(|(path, _)| component_name(path) == "idx")
+            .unwrap()
+            .1
+            .clone();
+        let pos = footer
+            .file_ranges
+            .files
+            .iter()
+            .find(|(path, _)| component_name(path) == "pos")
+            .unwrap()
+            .1
+            .clone();
+
+        for (text, fuzziness, with_positions) in [
+            ("body:\"alpha be\"*", None, true),
+            ("body:alpa", Some(1), false),
+            ("body:[alpha TO alpha]", None, false),
+            // Full and exact terms on different fields share the same physical component.
+            ("body:\"alpha be\"* OR title:needle", None, true),
+        ] {
+            let mut remote = fixture.clone();
+            remote.payload_cache = payload_cache(16 * 1024 * 1024);
+            remote.full_payload_cache = full_payload_cache(16 * 1024 * 1024);
+            ranges.lock().unwrap().clear();
+
+            let rows = execute_expansion_bundle_query(&remote, &footer, text, fuzziness).await?;
+            let expected = (0..4000u32)
+                .filter(|row| row % 2 == 0 || (text.contains("title:") && row % 3 == 0))
+                .collect::<Vec<_>>();
+            assert_eq!(rows, expected, "{text}");
+            assert_eq!(
+                remote.full_payload_cache.as_ref().unwrap().len(),
+                if with_positions { 2 } else { 1 },
+                "{text}",
+            );
+            assert_eq!(
+                remote
+                    .payload_cache
+                    .as_ref()
+                    .unwrap()
+                    .in_memory_cache()
+                    .unwrap()
+                    .len(),
+                0,
+                "{text}"
+            );
+
+            let payload_reads = || {
+                let mut reads = ranges
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .filter(|range| {
+                        (range.start < idx.end && range.end > idx.start)
+                            || (range.start < pos.end && range.end > pos.start)
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+                reads.sort_unstable_by_key(|range| range.start);
+                reads
+            };
+            let first_reads = payload_reads();
+            let mut expected_reads = vec![idx.clone()];
+            if with_positions {
+                expected_reads.push(pos.clone());
+            }
+            expected_reads.sort_unstable_by_key(|range| range.start);
+            assert_eq!(first_reads, expected_reads, "{text}");
+
+            // Reopening gives a new SearchPinDirectory, so this verifies cross-query full-cache
+            // reuse rather than reuse of the first search's pin. No further payload GET is allowed.
+            assert_eq!(
+                execute_expansion_bundle_query(&remote, &footer, text, fuzziness).await?,
+                expected
+            );
+            assert_eq!(payload_reads(), first_reads, "{text}");
+            assert_eq!(
+                execute_expansion_bundle_query(&remote, &footer, "body:alpha", None).await?,
+                (0..4000u32).filter(|row| row % 2 == 0).collect::<Vec<_>>(),
+            );
+            assert_eq!(payload_reads(), first_reads, "partial query after {text}");
+            assert_eq!(
+                remote
+                    .payload_cache
+                    .as_ref()
+                    .unwrap()
+                    .in_memory_cache()
+                    .unwrap()
+                    .len(),
+                0,
+                "{text}"
+            );
+        }
         Ok(())
     }
 

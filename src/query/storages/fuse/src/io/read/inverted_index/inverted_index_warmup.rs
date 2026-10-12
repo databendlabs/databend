@@ -16,7 +16,9 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use databend_common_exception::Result;
+use databend_storages_common_index::FooterDirectory;
 use futures_util::future;
+use tantivy::Directory;
 use tantivy::Searcher;
 use tantivy::Term;
 use tantivy::index::SegmentComponent;
@@ -171,7 +173,12 @@ impl InvertedIndexWarmupInfo {
             .retain(|field| !self.full_posting_fields.contains_key(field));
     }
 
-    pub(crate) async fn warm_searcher(&self, searcher: &Searcher, has_score: bool) -> Result<()> {
+    pub(crate) async fn warm_searcher(
+        &self,
+        searcher: &Searcher,
+        raw_bundle_directory: &FooterDirectory,
+        has_score: bool,
+    ) -> Result<()> {
         // Fast fields are a single segment component. Keep the full file pinned for the
         // synchronous range/exists scorer, irrespective of the exact JSON path.
         let warm_fast_fields = async {
@@ -191,6 +198,41 @@ impl InvertedIndexWarmupInfo {
         };
 
         let warm_postings = async {
+            if !self.full_posting_fields.is_empty() {
+                let with_positions = self
+                    .full_posting_fields
+                    .values()
+                    .any(|positions| *positions);
+                let segments = searcher.index().searchable_segments()?;
+                let warmups = segments.iter().map(|segment| async move {
+                    // `warm_postings_full()` reads a field's CompositeFile slice, excluding the
+                    // managed/composite footers and the .idx token-count header. Explicitly read
+                    // through the original bundle directory, before ManagedDirectory slicing, so
+                    // the remote handle sees 0..physical_len and uses the full-component cache.
+                    let postings = raw_bundle_directory
+                        .open_read(&segment.relative_path(SegmentComponent::Postings))?;
+                    let positions = if with_positions {
+                        Some(
+                            raw_bundle_directory
+                                .open_read(&segment.relative_path(SegmentComponent::Positions))?,
+                        )
+                    } else {
+                        None
+                    };
+                    let warm_positions = async {
+                        if let Some(file) = &positions {
+                            file.read_bytes_async().await?;
+                        }
+                        Ok::<(), std::io::Error>(())
+                    };
+                    tokio::try_join!(postings.read_bytes_async(), warm_positions)?;
+                    Ok::<(), databend_common_exception::ErrorCode>(())
+                });
+                future::try_join_all(warmups).await?;
+            }
+
+            // Full physical components are pinned before per-field warmups. This also prevents
+            // exact queries on other fields from filling the page pool for the same .idx/.pos.
             // Databend bundles contain one segment, but keep the directory warmup valid for
             // searchers with multiple segments as well.
             future::try_join_all(
@@ -213,15 +255,15 @@ impl InvertedIndexWarmupInfo {
         has_score: bool,
     ) -> Result<()> {
         let warm_full = async {
-            let warmups =
-                self.full_posting_fields
-                    .iter()
-                    .map(|(&field, &with_positions)| async move {
-                        let inverted_index = segment_reader.inverted_index(field)?;
-                        inverted_index.terms().warm_up_dictionary().await?;
-                        inverted_index.warm_postings_full(with_positions).await?;
-                        Ok::<(), databend_common_exception::ErrorCode>(())
-                    });
+            let warmups = self
+                .full_posting_fields
+                .iter()
+                .map(|(&field, _)| async move {
+                    let inverted_index = segment_reader.inverted_index(field)?;
+                    // The complete physical .idx/.pos have already been pinned above.
+                    inverted_index.terms().warm_up_dictionary().await?;
+                    Ok::<(), databend_common_exception::ErrorCode>(())
+                });
             future::try_join_all(warmups).await?;
             Ok::<(), databend_common_exception::ErrorCode>(())
         };
