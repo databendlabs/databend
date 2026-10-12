@@ -6859,8 +6859,9 @@ impl SchemaApiTestSuite {
             let req = ListDroppedTableReq::new(&tenant);
             let resp = mt.get_drop_table_infos(req).await?;
 
-            // Physical cleanup candidates and table metadata GC tasks must agree. Check lengths
-            // as well as ID sets: set equality alone would hide duplicate cleanup tasks.
+            // Physical cleanup candidates and table metadata GC tasks must select the same tables.
+            // Converting these lists to ID sets discards duplicate entries. Also check the original
+            // list lengths to ensure each table appears only once.
             let vacuum_table_ids: BTreeSet<u64> = resp
                 .vacuum_tables
                 .iter()
@@ -7087,8 +7088,10 @@ impl SchemaApiTestSuite {
                     .iter()
                     .map(|(_, table)| table.id().table_id)
                     .collect();
-                // Sets identify the selected tables, but lengths also reject duplicates. Database
-                // GC tasks are excluded: the quota and candidate list count tables, not databases.
+                // Converting the candidate list to an ID set discards duplicate entries. Compare
+                // its original length and the table GC task count with the number of distinct IDs
+                // to ensure each selected table appears exactly once in each list. Database GC
+                // tasks are excluded: the quota and candidate list count tables, not databases.
                 assert_eq!(
                     resp.vacuum_tables.len(),
                     table_ids.len(),
