@@ -77,6 +77,7 @@ pub use operator::OperatorRegistry;
 pub use operator::check_operator;
 pub use operator::init_operator;
 pub use operator::init_operator_with_policy_scope;
+pub use operator::opendal_rate_limited_retries;
 
 mod operator_cache;
 

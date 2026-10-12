@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Progress;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
@@ -53,7 +54,8 @@ pub trait VacuumHandler: Sync + Send {
 pub enum VacuumTempOptions {
     // nodes, query_id
     QueryHook(Vec<usize>, String),
-    VacuumCommand(Option<Duration>),
+    /// retain duration, progress sink (one row per removed file)
+    VacuumCommand(Option<Duration>, Arc<Progress>),
 }
 
 pub struct VacuumHandlerWrapper {

@@ -65,16 +65,31 @@ mod unit {
     #[derive(Debug)]
     struct RecordingDeleter {
         deleted: Arc<Mutex<Vec<String>>>,
+        pending: Vec<String>,
+        throttled_batches: Arc<AtomicUsize>,
     }
 
     impl oio::Delete for RecordingDeleter {
         fn delete(&mut self, path: &str, _args: OpDelete) -> opendal::Result<()> {
-            self.deleted.lock().push(path.to_string());
+            self.pending.push(path.to_string());
             Ok(())
         }
 
         async fn flush(&mut self) -> opendal::Result<usize> {
-            Ok(self.deleted.lock().len())
+            let throttled = self
+                .throttled_batches
+                .try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+                .is_ok();
+            if throttled {
+                self.pending.clear();
+                return Err(opendal::Error::new(
+                    opendal::ErrorKind::RateLimited,
+                    "mock SlowDown",
+                ));
+            }
+            let n = self.pending.len();
+            self.deleted.lock().append(&mut self.pending);
+            Ok(n)
         }
     }
 
@@ -84,6 +99,7 @@ mod unit {
         stat_results: HashMap<String, StatResult>,
         read_results: HashMap<String, ReadResult>,
         deleted: Arc<Mutex<Vec<String>>>,
+        throttled_batches: Arc<AtomicUsize>,
         list_calls: AtomicUsize,
         read_calls: AtomicUsize,
     }
@@ -99,9 +115,14 @@ mod unit {
                 stat_results,
                 read_results,
                 deleted: Arc::new(Mutex::new(Vec::new())),
+                throttled_batches: Arc::new(AtomicUsize::new(0)),
                 list_calls: AtomicUsize::new(0),
                 read_calls: AtomicUsize::new(0),
             })
+        }
+
+        fn throttle_next_batches(&self, n: usize) {
+            self.throttled_batches.store(n, Ordering::Release);
         }
 
         fn deleted_paths(&self) -> Vec<String> {
@@ -170,6 +191,8 @@ mod unit {
         async fn delete(&self) -> opendal::Result<(RpDelete, Self::Deleter)> {
             Ok((RpDelete::default(), RecordingDeleter {
                 deleted: self.deleted.clone(),
+                pending: Vec::new(),
+                throttled_batches: self.throttled_batches.clone(),
             }))
         }
 
@@ -209,7 +232,7 @@ mod unit {
         expire_time: i64,
         limit: usize,
     ) -> Result<usize> {
-        let removed_total = Arc::new(AtomicUsize::new(0));
+        let progress = Arc::new(VacuumProgress::new(None));
         let gc_metas = Arc::new(Mutex::new(HashSet::new()));
         let name = dir_path
             .trim_end_matches('/')
@@ -226,11 +249,156 @@ mod unit {
             timestamp,
             expire_time,
             limit,
-            removed_total.clone(),
+            progress.clone(),
             gc_metas,
         )
         .await?;
-        Ok(removed_total.load(Ordering::Relaxed))
+        Ok(progress.removed())
+    }
+
+    fn controller() -> (DirConcurrency, Instant) {
+        let t0 = Instant::now();
+        (DirConcurrency::new(t0), t0)
+    }
+
+    #[test]
+    fn test_dir_concurrency_ramps_up_once_per_full_streak() {
+        let (dirs, t0) = controller();
+        assert_eq!(dirs.current(), DirConcurrency::INIT);
+
+        for _ in 0..DirConcurrency::RAMP_UP_BATCHES - 1 {
+            dirs.observe(ThrottleSignal::Clear, t0);
+        }
+        assert_eq!(dirs.current(), DirConcurrency::INIT);
+        dirs.observe(ThrottleSignal::Clear, t0);
+        assert_eq!(dirs.current(), DirConcurrency::INIT + 1);
+
+        for _ in 0..DirConcurrency::RAMP_UP_BATCHES - 1 {
+            dirs.observe(ThrottleSignal::Clear, t0);
+        }
+        assert_eq!(dirs.current(), DirConcurrency::INIT + 1);
+
+        for _ in 0..DirConcurrency::MAX * DirConcurrency::RAMP_UP_BATCHES {
+            dirs.observe(ThrottleSignal::Clear, t0);
+        }
+        assert_eq!(dirs.current(), DirConcurrency::MAX);
+    }
+
+    #[test]
+    fn test_dir_concurrency_light_throttling_holds_and_restarts_streak() {
+        let (dirs, t0) = controller();
+
+        for _ in 0..DirConcurrency::RAMP_UP_BATCHES - 1 {
+            dirs.observe(ThrottleSignal::Clear, t0);
+        }
+        dirs.observe(ThrottleSignal::Light, t0);
+        assert_eq!(
+            dirs.current(),
+            DirConcurrency::INIT,
+            "light throttling keeps the bound"
+        );
+
+        for _ in 0..DirConcurrency::RAMP_UP_BATCHES - 1 {
+            dirs.observe(ThrottleSignal::Clear, t0);
+        }
+        assert_eq!(dirs.current(), DirConcurrency::INIT);
+        dirs.observe(ThrottleSignal::Clear, t0);
+        assert_eq!(dirs.current(), DirConcurrency::INIT + 1);
+    }
+
+    #[test]
+    fn test_dir_concurrency_halves_at_most_once_per_cooldown() {
+        let (dirs, t0) = controller();
+        let cooldown = DirConcurrency::DECREASE_COOLDOWN;
+
+        // Same episode within the cooldown: one decrease.
+        dirs.observe(ThrottleSignal::Heavy, t0);
+        dirs.observe(ThrottleSignal::Heavy, t0);
+        dirs.observe(ThrottleSignal::Heavy, t0 + Duration::from_secs(3));
+        dirs.observe(
+            ThrottleSignal::Heavy,
+            t0 + cooldown - Duration::from_millis(1),
+        );
+        assert_eq!(dirs.current(), DirConcurrency::INIT / 2);
+
+        dirs.observe(ThrottleSignal::Heavy, t0 + cooldown);
+        assert_eq!(dirs.current(), DirConcurrency::INIT / 4);
+        for i in 2..10 {
+            dirs.observe(ThrottleSignal::Heavy, t0 + cooldown * i);
+        }
+        assert_eq!(dirs.current(), DirConcurrency::MIN);
+
+        for _ in 0..DirConcurrency::RAMP_UP_BATCHES - 1 {
+            dirs.observe(ThrottleSignal::Clear, t0);
+        }
+        dirs.observe(ThrottleSignal::Heavy, t0 + cooldown * 20);
+        for _ in 0..DirConcurrency::RAMP_UP_BATCHES - 1 {
+            dirs.observe(ThrottleSignal::Clear, t0);
+        }
+        assert_eq!(dirs.current(), DirConcurrency::MIN);
+    }
+
+    #[test]
+    fn test_classify_delete() {
+        let ok: opendal::Result<()> = Ok(());
+        let rate_limited: opendal::Result<()> = Err(opendal::Error::new(
+            opendal::ErrorKind::RateLimited,
+            "mock SlowDown",
+        ));
+        let other: opendal::Result<()> =
+            Err(opendal::Error::new(opendal::ErrorKind::Unexpected, "boom"));
+
+        assert_eq!(classify_delete(&ok, 0, 8), ThrottleSignal::Clear);
+        assert_eq!(classify_delete(&other, 0, 8), ThrottleSignal::Clear);
+        assert_eq!(classify_delete(&ok, 1, 8), ThrottleSignal::Light);
+        assert_eq!(classify_delete(&ok, 3, 8), ThrottleSignal::Light);
+        assert_eq!(classify_delete(&ok, 4, 8), ThrottleSignal::Heavy);
+        assert_eq!(classify_delete(&ok, 1, 1), ThrottleSignal::Heavy);
+        assert_eq!(classify_delete(&rate_limited, 0, 32), ThrottleSignal::Heavy);
+    }
+
+    #[test]
+    fn test_removed_files_are_mirrored_into_progress_sink() {
+        let sink = Arc::new(Progress::create());
+        let progress = VacuumProgress::new(Some(sink.clone()));
+        assert_eq!(progress.add_removed(3), 3);
+        assert_eq!(progress.add_removed(4), 7);
+        assert_eq!(progress.removed(), 7);
+        assert_eq!(sink.get_values().rows, 7);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_rate_limited_batch_is_not_counted_and_lowers_concurrency() -> anyhow::Result<()> {
+        let accessor = MockVacuumAccessor::new(HashMap::new(), HashMap::new(), HashMap::new());
+        let operator = OperatorBuilder::new(accessor.clone()).finish();
+        let progress = VacuumProgress::new(None);
+
+        accessor.throttle_next_batches(1);
+        let removed = delete_counted(
+            &operator,
+            vec!["spill/dir/file1".to_string(), "spill/dir/file2".to_string()],
+            "spill/dir/",
+            &progress,
+        )
+        .await;
+        assert_eq!(removed, 0);
+        assert_eq!(progress.concurrency(), DirConcurrency::INIT / 2);
+        assert_eq!(accessor.deleted_paths(), Vec::<String>::new());
+
+        let removed = delete_counted(
+            &operator,
+            vec!["spill/dir/file1".to_string(), "spill/dir/file2".to_string()],
+            "spill/dir/",
+            &progress,
+        )
+        .await;
+        assert_eq!(removed, 2);
+        assert_eq!(progress.concurrency(), DirConcurrency::INIT / 2);
+        assert_eq!(accessor.deleted_paths(), vec![
+            "spill/dir/file1".to_string(),
+            "spill/dir/file2".to_string()
+        ]);
+        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -356,7 +524,7 @@ mod unit {
             HashMap::new(),
         );
         let operator = OperatorBuilder::new(accessor.clone()).finish();
-        let removed_total = AtomicUsize::new(0);
+        let progress = VacuumProgress::new(None);
 
         let removed = vacuum_dir_with_probe(
             &operator,
@@ -364,12 +532,12 @@ mod unit {
             now,
             Duration::from_secs(60).as_millis() as i64,
             100,
-            &removed_total,
+            &progress,
         )
         .await?;
 
         assert_eq!(removed, 0);
-        assert_eq!(removed_total.load(Ordering::Relaxed), 0);
+        assert_eq!(progress.removed(), 0);
         assert_eq!(accessor.deleted_paths(), Vec::<String>::new());
         assert_eq!(accessor.list_call_count(), 1);
         assert_eq!(accessor.read_call_count(), 0);
@@ -388,7 +556,7 @@ mod unit {
             HashMap::new(),
         );
         let operator = OperatorBuilder::new(accessor.clone()).finish();
-        let removed_total = AtomicUsize::new(0);
+        let progress = VacuumProgress::new(None);
 
         let removed = vacuum_dir_with_probe(
             &operator,
@@ -396,12 +564,12 @@ mod unit {
             Utc::now().timestamp_millis(),
             Duration::from_secs(60).as_millis() as i64,
             100,
-            &removed_total,
+            &progress,
         )
         .await?;
 
         assert_eq!(removed, 3);
-        assert_eq!(removed_total.load(Ordering::Relaxed), 3);
+        assert_eq!(progress.removed(), 3);
         assert_eq!(accessor.deleted_paths(), vec![
             "spill/dir/file1".to_string(),
             "spill/dir/file2".to_string(),

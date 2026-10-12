@@ -15,6 +15,7 @@
 use std::collections::HashSet;
 use std::io::BufRead;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -22,9 +23,12 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use databend_common_base::base::Progress;
+use databend_common_base::base::ProgressValues;
 use databend_common_catalog::table_context::AbortChecker;
 use databend_common_exception::Result;
 use databend_common_storage::DataOperator;
+use databend_common_storage::opendal_rate_limited_retries;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
@@ -39,28 +43,183 @@ use parking_lot::Mutex;
 // Default retention duration for temporary files: 3 days.
 const DEFAULT_RETAIN_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 3);
 const SPILL_META_SUFFIX: &str = ".list";
-/// Max number of spill directories vacuumed concurrently by `VACUUM TEMPORARY FILES`.
-///
-/// Each directory needs a few sequential object-store round trips (stat / list / delete), and
-/// directories are independent of each other, so processing them one by one leaves the command
-/// bound by latency. On a tenant with hundreds of thousands of leftover directories the
-/// sequential version needs days to finish.
-///
-/// The value is deliberately small: every directory is deleted with one batch request carrying
-/// a few hundred keys, and object stores throttle mutations per key prefix (S3: 3,500 keys/s).
-/// With 32 in flight a single round already exceeded that budget, so most batches were rejected
-/// with `SlowDown` and retried after a back-off, which wasted the gain. 8 keeps the sustained
-/// rate close to the budget with far fewer rejected requests.
-const VACUUM_DIR_CONCURRENCY: usize = 8;
+/// Throttling observed by one delete batch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ThrottleSignal {
+    Clear,
+    /// Some requests were retried but the batch went through.
+    Light,
+    /// Rejected as rate limited, or most in-flight requests were retried.
+    Heavy,
+}
 
-/// Delete `paths` and return how many files should be counted as removed.
+/// AIMD bound on concurrently vacuumed spill directories.
 ///
-/// A batch that still fails after opendal's retries (e.g. S3 `SlowDown` under sustained load)
-/// is logged and counted as `0`, so `removed_total` and `LIMIT` only reflect files that were
-/// actually deleted. The leftovers are simply picked up by the next run.
-async fn delete_counted(operator: &Operator, paths: Vec<String>, from: &str) -> usize {
+/// Object stores throttle deletes per key prefix (S3: 3,500 keys/s), so the right concurrency
+/// depends on the store, not the node: 32 already triggers `SlowDown` storms, 1 is latency-bound.
+/// `Clear` ramps up by one every `RAMP_UP_BATCHES`; `Light` holds; `Heavy` halves, at most once
+/// per `DECREASE_COOLDOWN` so one throttling episode (visible to every overlapping batch for the
+/// 1s/2s/4s retry back-offs) is counted once. Takes the clock as a parameter for testability.
+struct DirConcurrency {
+    current: AtomicUsize,
+    ok_streak: AtomicUsize,
+    /// `ms since epoch + 1` of the last decrease; `0` = never.
+    last_decrease_ms: AtomicU64,
+    epoch: Instant,
+}
+
+impl DirConcurrency {
+    const INIT: usize = 8;
+    const MIN: usize = 1;
+    const MAX: usize = 32;
+    const RAMP_UP_BATCHES: usize = 16;
+    const DECREASE_COOLDOWN: Duration = Duration::from_secs(10);
+
+    fn new(epoch: Instant) -> Self {
+        Self {
+            current: AtomicUsize::new(Self::INIT),
+            ok_streak: AtomicUsize::new(0),
+            last_decrease_ms: AtomicU64::new(0),
+            epoch,
+        }
+    }
+
+    fn current(&self) -> usize {
+        self.current.load(Ordering::Relaxed)
+    }
+
+    fn observe(&self, signal: ThrottleSignal, now: Instant) {
+        match signal {
+            ThrottleSignal::Clear => self.ramp_up(),
+            ThrottleSignal::Light => self.ok_streak.store(0, Ordering::Relaxed),
+            ThrottleSignal::Heavy => {
+                self.ok_streak.store(0, Ordering::Relaxed);
+                self.back_off(now);
+            }
+        }
+    }
+
+    fn ramp_up(&self) {
+        // Modular streak: concurrent batches trigger exactly one increase per full streak.
+        let prev = self
+            .ok_streak
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |s| {
+                Some((s + 1) % Self::RAMP_UP_BATCHES)
+            })
+            .expect("closure always returns Some");
+        if prev + 1 != Self::RAMP_UP_BATCHES {
+            return;
+        }
+        let raised = self
+            .current
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |c| {
+                (c < Self::MAX).then_some(c + 1)
+            });
+        if let Ok(before) = raised {
+            info!(
+                "Vacuum temporary files: raising directory concurrency {} -> {}",
+                before,
+                before + 1
+            );
+        }
+    }
+
+    fn back_off(&self, now: Instant) {
+        let now_ms = now.saturating_duration_since(self.epoch).as_millis() as u64 + 1;
+        let last = self.last_decrease_ms.load(Ordering::Relaxed);
+        if last != 0 && now_ms.saturating_sub(last) < Self::DECREASE_COOLDOWN.as_millis() as u64 {
+            return;
+        }
+        // CAS on the timestamp picks a single winner among concurrent reporters.
+        if self
+            .last_decrease_ms
+            .compare_exchange(last, now_ms, Ordering::Relaxed, Ordering::Relaxed)
+            .is_err()
+        {
+            return;
+        }
+        let lowered = self
+            .current
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |c| {
+                (c > Self::MIN).then_some((c / 2).max(Self::MIN))
+            });
+        if let Ok(before) = lowered {
+            warn!(
+                "Vacuum temporary files: deletes are rate limited, lowering directory concurrency {} -> {}",
+                before,
+                (before / 2).max(Self::MIN)
+            );
+        }
+    }
+}
+
+/// Shared progress of one vacuum run.
+struct VacuumProgress {
+    removed: AtomicUsize,
+    dirs: DirConcurrency,
+    /// Reported as one row per removed file, so `system.processes` shows the running command.
+    sink: Option<Arc<Progress>>,
+}
+
+impl VacuumProgress {
+    fn new(sink: Option<Arc<Progress>>) -> Self {
+        Self {
+            removed: AtomicUsize::new(0),
+            dirs: DirConcurrency::new(Instant::now()),
+            sink,
+        }
+    }
+
+    fn removed(&self) -> usize {
+        self.removed.load(Ordering::Relaxed)
+    }
+
+    fn add_removed(&self, n: usize) -> usize {
+        if let Some(sink) = &self.sink {
+            sink.incr(&ProgressValues { rows: n, bytes: 0 });
+        }
+        self.removed.fetch_add(n, Ordering::Relaxed) + n
+    }
+
+    fn concurrency(&self) -> usize {
+        self.dirs.current()
+    }
+}
+
+/// `retried`: `RateLimited` retries recorded process-wide while the batch was in flight (the
+/// retry layer hides `SlowDown`, so a successful batch may still have been throttled).
+fn classify_delete(
+    result: &opendal::Result<()>,
+    retried: usize,
+    in_flight: usize,
+) -> ThrottleSignal {
+    let rate_limited = matches!(result, Err(e) if e.kind() == ErrorKind::RateLimited);
+    if rate_limited || retried >= in_flight.div_ceil(2) {
+        ThrottleSignal::Heavy
+    } else if retried > 0 {
+        ThrottleSignal::Light
+    } else {
+        ThrottleSignal::Clear
+    }
+}
+
+/// Delete `paths`, feed the concurrency controller, and return how many files were removed.
+/// A batch that still fails after retries counts as `0` and is left for the next run.
+async fn delete_counted(
+    operator: &Operator,
+    paths: Vec<String>,
+    from: &str,
+    progress: &VacuumProgress,
+) -> usize {
     let n = paths.len();
-    match operator.delete_iter(paths).await {
+    let in_flight = progress.concurrency();
+    let retries_before = opendal_rate_limited_retries();
+    let result = operator.delete_iter(paths).await;
+    let retried = opendal_rate_limited_retries().saturating_sub(retries_before) as usize;
+    progress
+        .dirs
+        .observe(classify_delete(&result, retried, in_flight), Instant::now());
+    match result {
         Ok(()) => n,
         Err(e) => {
             warn!(
@@ -94,8 +253,15 @@ pub async fn do_vacuum_temporary_files(
             )
             .await
         }
-        VacuumTempOptions::VacuumCommand(duration) => {
-            vacuum_by_duration(abort_checker, &temporary_dir, limit, duration).await
+        VacuumTempOptions::VacuumCommand(duration, progress) => {
+            vacuum_by_duration(
+                abort_checker,
+                &temporary_dir,
+                limit,
+                duration,
+                progress.clone(),
+            )
+            .await
         }
     }
 }
@@ -119,17 +285,15 @@ pub async fn do_vacuum_temporary_files(
 /// - If probing decides the directory is expired, the same lister is reused to finish deletion so
 ///   we don't pay for an additional probe list.
 ///
-/// Concurrency:
-/// - The top-level listing is consumed sequentially, but each spill directory is vacuumed as an
-///   independent task with at most `VACUUM_DIR_CONCURRENCY` in flight.
-/// - `limit` is a soft upper bound: no new directory is started once it is reached, but the
-///   directories already in flight finish their own deletion, so the final count may exceed
-///   `limit` by up to `VACUUM_DIR_CONCURRENCY` directories.
+/// Each spill directory is vacuumed as an independent task, bounded by [`DirConcurrency`].
+/// `limit` is soft: in-flight directories finish, so the total may exceed it by up to
+/// `DirConcurrency::MAX` directories.
 async fn vacuum_by_duration(
     abort_checker: AbortChecker,
     temporary_dir: &str,
     limit: usize,
     duration: &Option<Duration>,
+    sink: Arc<Progress>,
 ) -> Result<usize> {
     let operator = DataOperator::instance().spill_operator();
     let start_time = Instant::now();
@@ -140,7 +304,7 @@ async fn vacuum_by_duration(
         .unwrap()
         .as_millis() as i64;
 
-    let removed_total = Arc::new(AtomicUsize::new(0));
+    let progress = Arc::new(VacuumProgress::new(Some(sink)));
     let gc_metas: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
     let temporary_dir = format!("{}/", temporary_dir.trim_end_matches('/'));
     let mut ds = operator.lister_with(&temporary_dir).await?;
@@ -149,12 +313,12 @@ async fn vacuum_by_duration(
     let mut in_flight = FuturesUnordered::new();
 
     loop {
-        if removed_total.load(Ordering::Relaxed) >= limit {
+        if progress.removed() >= limit {
             break;
         }
 
-        // Keep the number of in-flight directory tasks bounded.
-        while in_flight.len() >= VACUUM_DIR_CONCURRENCY {
+        // Bound in-flight directory tasks by the adaptive limit.
+        while in_flight.len() >= progress.concurrency() {
             if let Some(res) = in_flight.next().await {
                 res?;
             }
@@ -171,7 +335,7 @@ async fn vacuum_by_duration(
             continue;
         }
 
-        let remaining = limit.saturating_sub(removed_total.load(Ordering::Relaxed));
+        let remaining = limit.saturating_sub(progress.removed());
         let name = de.name();
         if de.metadata().is_file() {
             let Some(last_modified) =
@@ -193,7 +357,7 @@ async fn vacuum_by_duration(
                     &temporary_dir,
                     de.path(),
                     remaining,
-                    &removed_total,
+                    &progress,
                 )
                 .await?;
                 gc_metas.lock().insert(name.to_owned());
@@ -213,7 +377,7 @@ async fn vacuum_by_duration(
                 timestamp,
                 expire_time,
                 limit,
-                removed_total.clone(),
+                progress.clone(),
                 gc_metas.clone(),
             ));
         }
@@ -224,17 +388,18 @@ async fn vacuum_by_duration(
         res?;
     }
 
-    let remaining = limit.saturating_sub(removed_total.load(Ordering::Relaxed));
+    let remaining = limit.saturating_sub(progress.removed());
     if !temp_files.is_empty() && temp_files.len() <= remaining {
-        let removed = delete_counted(&operator, temp_files, &temporary_dir).await;
-        removed_total.fetch_add(removed, Ordering::Relaxed);
+        let removed = delete_counted(&operator, temp_files, &temporary_dir, &progress).await;
+        progress.add_removed(removed);
     }
 
-    let removed_total = removed_total.load(Ordering::Relaxed);
+    let removed_total = progress.removed();
     // Log for the final total progress
     info!(
-        "vacuum command finished, total cleaned {} files, total elapsed: {} seconds",
+        "vacuum command finished, total cleaned {} files, final directory concurrency: {}, total elapsed: {} seconds",
         removed_total,
+        progress.concurrency(),
         start_time.elapsed().as_secs()
     );
     Ok(removed_total)
@@ -253,10 +418,10 @@ async fn vacuum_dir_entry(
     timestamp: i64,
     expire_time: i64,
     limit: usize,
-    removed_total: Arc<AtomicUsize>,
+    progress: Arc<VacuumProgress>,
     gc_metas: Arc<Mutex<HashSet<String>>>,
 ) -> Result<()> {
-    let removed_so_far = removed_total.load(Ordering::Relaxed);
+    let removed_so_far = progress.removed();
     if removed_so_far >= limit {
         return Ok(());
     }
@@ -276,13 +441,13 @@ async fn vacuum_dir_entry(
                 &temporary_dir,
                 &meta_path,
                 remaining,
-                &removed_total,
+                &progress,
             )
             .await?;
             if removed > 0 {
                 gc_metas.lock().insert(meta_name);
             } else {
-                vacuum_by_list_dir_with_operator(&operator, &dir_path, remaining, &removed_total)
+                vacuum_by_list_dir_with_operator(&operator, &dir_path, remaining, &progress)
                     .await?;
             }
         }
@@ -293,7 +458,7 @@ async fn vacuum_dir_entry(
                 timestamp,
                 expire_time,
                 remaining,
-                &removed_total,
+                &progress,
             )
             .await?;
             if removed > 0 {
@@ -359,7 +524,7 @@ async fn vacuum_dir_with_probe(
     timestamp: i64,
     expire_time: i64,
     limit: usize,
-    removed_total: &AtomicUsize,
+    progress: &VacuumProgress,
 ) -> Result<usize> {
     let start_time = Instant::now();
     let mut lister = match operator.lister_with(dir_path).recursive(true).await {
@@ -418,14 +583,15 @@ async fn vacuum_dir_with_probe(
     paths.push(dir_path.to_owned());
 
     paths.truncate(limit);
-    let cur_removed = delete_counted(operator, paths, dir_path).await;
+    let cur_removed = delete_counted(operator, paths, dir_path, progress).await;
 
-    let total = removed_total.fetch_add(cur_removed, Ordering::Relaxed) + cur_removed;
+    let total = progress.add_removed(cur_removed);
     info!(
-        "Vacuum temporary files progress(by probed dir): Total removed: {}, Current batch: {} (from '{}'), Time: {} sec",
+        "Vacuum temporary files progress(by probed dir): Total removed: {}, Current batch: {} (from '{}'), Concurrency: {}, Time: {} sec",
         total,
         cur_removed,
         dir_path,
+        progress.concurrency(),
         start_time.elapsed().as_secs(),
     );
 
@@ -441,7 +607,7 @@ async fn vacuum_query_hook(
     query_id: &str,
     mut limit: usize,
 ) -> Result<usize> {
-    let removed_total = AtomicUsize::new(0);
+    let progress = VacuumProgress::new(None);
     let metas_f = nodes
         .iter()
         .map(|i| async move {
@@ -466,13 +632,13 @@ async fn vacuum_query_hook(
             temporary_dir,
             buffer,
             limit,
-            &removed_total,
+            &progress,
         )
         .await?;
         limit = limit.saturating_sub(removed);
     }
 
-    Ok(removed_total.load(Ordering::Relaxed))
+    Ok(progress.removed())
 }
 
 /// Delete temporary files recorded in a spill meta buffer with the provided operator.
@@ -482,7 +648,7 @@ async fn vacuum_by_meta_buffer_with_operator(
     temporary_dir: &str,
     meta: Buffer,
     limit: usize,
-    removed_total: &AtomicUsize,
+    progress: &VacuumProgress,
 ) -> Result<usize> {
     let start_time = Instant::now();
     let meta = meta.to_bytes();
@@ -497,7 +663,7 @@ async fn vacuum_by_meta_buffer_with_operator(
         .cloned()
         .collect();
     let attempted = to_be_removed.len();
-    let cur_removed = delete_counted(operator, to_be_removed, meta_file_path).await;
+    let cur_removed = delete_counted(operator, to_be_removed, meta_file_path, progress).await;
 
     // Update the unfinished meta file. If the batch failed, keep the meta file untouched so the
     // next run retries the same files instead of leaving them as orphans.
@@ -509,14 +675,15 @@ async fn vacuum_by_meta_buffer_with_operator(
         operator.write(meta_file_path, remain).await?;
     }
 
-    let total = removed_total.fetch_add(cur_removed, Ordering::Relaxed) + cur_removed;
+    let total = progress.add_removed(cur_removed);
     // Log for the current batch
     info!(
-        "Vacuum temporary files progress(by meta file): Total removed: {}, Current batch: {} (from '{}'), Dir: '{}', Time: {} sec",
+        "Vacuum temporary files progress(by meta file): Total removed: {}, Current batch: {} (from '{}'), Dir: '{}', Concurrency: {}, Time: {} sec",
         total,
         cur_removed,
         meta_file_path,
         temporary_dir,
+        progress.concurrency(),
         start_time.elapsed().as_secs(),
     );
 
@@ -529,7 +696,7 @@ async fn vacuum_by_meta_with_operator(
     temporary_dir: &str,
     meta_file_path: &str,
     limit: usize,
-    removed_total: &AtomicUsize,
+    progress: &VacuumProgress,
 ) -> Result<usize> {
     let meta: Buffer;
     let r = operator.read(meta_file_path).await;
@@ -544,7 +711,7 @@ async fn vacuum_by_meta_with_operator(
         temporary_dir,
         meta,
         limit,
-        removed_total,
+        progress,
     )
     .await
 }
@@ -554,7 +721,7 @@ async fn vacuum_by_list_dir_with_operator(
     operator: &Operator,
     dir_path: &str,
     limit: usize,
-    removed_total: &AtomicUsize,
+    progress: &VacuumProgress,
 ) -> Result<usize> {
     let start_time = Instant::now();
     let mut r = operator.lister_with(dir_path).recursive(true).await?;
@@ -571,15 +738,16 @@ async fn vacuum_by_list_dir_with_operator(
     batches.push(dir_path.to_owned());
 
     batches.truncate(limit);
-    let cur_removed = delete_counted(operator, batches, dir_path).await;
+    let cur_removed = delete_counted(operator, batches, dir_path, progress).await;
 
-    let total = removed_total.fetch_add(cur_removed, Ordering::Relaxed) + cur_removed;
+    let total = progress.add_removed(cur_removed);
     // Log progress for the current batch
     info!(
-        "Vacuum temporary files progress(by list dir): Total removed: {}, Current batch: {} (from '{}'), Time: {} sec",
+        "Vacuum temporary files progress(by list dir): Total removed: {}, Current batch: {} (from '{}'), Concurrency: {}, Time: {} sec",
         total,
         cur_removed,
         dir_path,
+        progress.concurrency(),
         start_time.elapsed().as_secs(),
     );
 

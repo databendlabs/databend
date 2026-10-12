@@ -27,6 +27,7 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextProgress;
 use crate::sessions::TableContextQueryState;
 
 pub struct VacuumTemporaryFilesInterpreter {
@@ -63,7 +64,11 @@ impl Interpreter for VacuumTemporaryFilesInterpreter {
                 .do_vacuum_temporary_files(
                     self.ctx.clone().get_abort_checker(),
                     temporary_files_prefix,
-                    &VacuumTempOptions::VacuumCommand(self.plan.retain),
+                    // Removed files show up as `scan_progress_read_rows` in `system.processes`.
+                    &VacuumTempOptions::VacuumCommand(
+                        self.plan.retain,
+                        self.ctx.get_scan_progress(),
+                    ),
                     self.plan.limit.map(|x| x as usize).unwrap_or(usize::MAX),
                 )
                 .await?;

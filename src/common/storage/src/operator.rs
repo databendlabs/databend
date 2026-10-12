@@ -71,6 +71,14 @@ use crate::runtime_layer::RuntimeLayer;
 static METRIC_OPENDAL_RETRIES_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, String)>>> =
     LazyLock::new(|| register_counter_family("opendal_retries_count"));
 
+/// Process-wide count of opendal retries caused by `RateLimited`; sample around a request to
+/// detect throttling that the retry layer absorbed.
+pub fn opendal_rate_limited_retries() -> u64 {
+    METRIC_OPENDAL_RETRIES_COUNT
+        .get_or_create(&vec![("err", opendal::ErrorKind::RateLimited.to_string())])
+        .get()
+}
+
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
     init_operator_with_policy_scope(cfg, EndpointPolicyScope::Trusted)
