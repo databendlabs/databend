@@ -589,10 +589,17 @@ mod unit {
         );
         let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
 
+        // One unit of budget still makes progress.
+        let outcome = delete_by_list(&deleter, "spill/dir/", 1).await?;
+        assert_eq!(outcome.map(|o| o.removed), Some(1));
+        assert_eq!(accessor.deleted_paths(), vec![
+            "spill/dir/file0".to_string()
+        ]);
+
         let outcome = delete_by_list(&deleter, "spill/dir/", 2).await?;
         assert_eq!(outcome.map(|o| o.removed), Some(2));
         // Budget hit before the listing ended: no directory marker.
-        assert_eq!(accessor.deleted_paths(), vec![
+        assert_eq!(accessor.deleted_paths()[1..], [
             "spill/dir/file0".to_string(),
             "spill/dir/file1".to_string(),
         ]);
@@ -605,7 +612,7 @@ mod unit {
         )
         .await?;
         assert_eq!(outcome.map(|o| o.removed), Some(3));
-        assert_eq!(accessor.deleted_paths()[2..], [
+        assert_eq!(accessor.deleted_paths()[3..], [
             "spill/dir/file0".to_string(),
             "spill/dir/file1".to_string(),
             "spill/dir/file2".to_string(),

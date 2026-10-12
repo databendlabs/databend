@@ -454,11 +454,12 @@ async fn vacuum_by_duration(
                 }
             }
         } else {
-            run.gc_metas.insert(format!(
-                "{}{}",
-                name.trim_end_matches('/'),
-                SPILL_META_SUFFIX
-            ));
+            // Claim the sibling meta file. If it was already handled this run (deleted, or its
+            // batch was throttled and left for the next run), the directory is done too.
+            let meta_name = format!("{}{}", name.trim_end_matches('/'), SPILL_META_SUFFIX);
+            if !run.gc_metas.insert(meta_name) {
+                continue;
+            }
             let (dir_path, metadata) = de.into_parts();
             in_flight.push(vacuum_dir_entry(
                 deleter.clone(),
@@ -576,9 +577,10 @@ async fn delete_by_meta_buffer(
     Ok(Some(outcome))
 }
 
-/// Collect up to `max` paths from a recursive listing of `dir_path`, skipping the directory
-/// entry itself. The directory marker is appended only when the listing was exhausted with
-/// capacity left, so an abandoned directory with more files than `max` is never fully buffered.
+/// Collect paths from a recursive listing of `dir_path` until `max` are buffered or the listing
+/// ends, skipping the directory entry itself. When the listing was exhausted the directory
+/// marker is appended if there is capacity left, so a directory with more files than `max` is
+/// never fully buffered and is only removed once it is empty.
 async fn collect_dir_paths(
     lister: &mut opendal::Lister,
     dir_path: &str,
@@ -586,24 +588,21 @@ async fn collect_dir_paths(
     max: usize,
 ) -> Result<()> {
     while paths.len() < max {
-        let entry = match lister.try_next().await {
-            Ok(Some(entry)) => entry,
+        match lister.try_next().await {
+            Ok(Some(entry)) if entry.path() == dir_path => continue,
+            Ok(Some(entry)) => paths.push(entry.path().to_string()),
             Ok(None) => {
                 paths.push(dir_path.to_owned());
-                break;
+                return Ok(());
             }
             Err(e) if e.kind() == ErrorKind::NotFound => continue,
             Err(e) => return Err(e.into()),
-        };
-        if entry.path() != dir_path {
-            paths.push(entry.path().to_string());
         }
     }
     Ok(())
 }
 
 /// Delete everything under `dir_path` found by a recursive listing, then the directory itself.
-/// `None` when nothing was listed.
 async fn delete_by_list(
     deleter: &SpillDeleter,
     dir_path: &str,
@@ -616,8 +615,7 @@ async fn delete_by_list(
         .await?;
     let mut paths = Vec::new();
     collect_dir_paths(&mut lister, dir_path, &mut paths, max).await?;
-    // Only the directory marker: nothing to vacuum.
-    if paths.len() <= 1 {
+    if paths.is_empty() {
         return Ok(None);
     }
     Ok(Some(deleter.delete(paths, dir_path).await))
