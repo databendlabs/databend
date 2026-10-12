@@ -7137,8 +7137,10 @@ impl SchemaApiTestSuite {
             }
             assert!(mt.get_pb(&DatabaseId::new(db_id)).await?.is_some());
 
-            // This is a separate vacuum request, not an automatic rescan within the first one.
-            // It distinguishes a completely cleaned database from one still containing a bad table.
+            // The first request reached the table limit, so it could not establish that every
+            // table had been collected and had to keep the database metadata. A subsequent vacuum
+            // request can remove that metadata after confirming no tables remain; if an
+            // undecodable table remains, it must keep both the table and the database metadata.
             let (table_ids, drop_ids) = vacuum().await?;
             assert!(table_ids.is_empty(), "scenario: {scenario}");
             if let Some(table_id) = bad_table_id {
