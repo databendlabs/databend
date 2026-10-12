@@ -16,12 +16,20 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
-use databend_common_pipeline_transforms::sorts::sort_merge;
+use databend_common_pipeline_transforms::sorts::SortedBlockIterator;
+use databend_common_pipeline_transforms::sorts::sort_merge_incremental;
+use databend_common_pipeline_transforms::sorts::sort_merge_sources;
 use databend_common_settings::Settings;
 
+/// Sorts the data of one window partition: runs are sorted when they are
+/// spilled, and a restored partition merges its runs. Output is pulled one
+/// block at a time, so only the current block of every run is held.
 pub trait DataProcessorStrategy: Send + Sync + 'static {
     const NAME: &'static str;
-    fn process_data_blocks(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>>;
+    /// Sort blocks into one run, emitted as sorted pages.
+    fn sort_run(&self, data_blocks: Vec<DataBlock>) -> Result<SortedBlockIterator>;
+    /// Merge the sorted runs of one partition.
+    fn merge_runs(&self, runs: Vec<SortedBlockIterator>) -> Result<SortedBlockIterator>;
 }
 
 pub struct CompactStrategy {
@@ -49,10 +57,10 @@ impl CompactStrategy {
 impl DataProcessorStrategy for CompactStrategy {
     const NAME: &'static str = "Compact";
 
-    fn process_data_blocks(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+    fn sort_run(&self, data_blocks: Vec<DataBlock>) -> Result<SortedBlockIterator> {
         let blocks_num = data_blocks.len();
         if blocks_num < 2 {
-            return Ok(data_blocks);
+            return Ok(Box::new(data_blocks.into_iter().map(Ok)));
         }
 
         let mut accumulated_rows = 0;
@@ -80,9 +88,18 @@ impl DataProcessorStrategy for CompactStrategy {
             result.push(Self::concat_blocks(std::mem::take(&mut staged_blocks))?);
         }
 
-        Ok(result)
+        Ok(Box::new(result.into_iter().map(Ok)))
+    }
+
+    fn merge_runs(&self, runs: Vec<SortedBlockIterator>) -> Result<SortedBlockIterator> {
+        // Compaction keeps no order across runs: emit them one after another.
+        Ok(Box::new(runs.into_iter().flatten()))
     }
 }
+
+/// Upper bound of a sorted page, so a page of wide rows stays small when it is
+/// read back next to the current page of every other run.
+const PAGE_BYTES: usize = 8 * 1024 * 1024;
 
 pub struct SortStrategy {
     sort_desc: Vec<SortColumnDescription>,
@@ -111,17 +128,36 @@ impl SortStrategy {
 impl DataProcessorStrategy for SortStrategy {
     const NAME: &'static str = "Sort";
 
-    fn process_data_blocks(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
+    fn sort_run(&self, data_blocks: Vec<DataBlock>) -> Result<SortedBlockIterator> {
+        let (rows, bytes) = data_blocks.iter().fold((0, 0), |(rows, bytes), block| {
+            (rows + block.num_rows(), bytes + block.memory_size())
+        });
+        let page_rows = match bytes.checked_div(rows) {
+            Some(row_bytes) if row_bytes > 0 => (PAGE_BYTES / row_bytes).max(1),
+            _ => self.max_block_size,
+        }
+        .min(self.max_block_size);
         let data_blocks = data_blocks
             .into_iter()
             .map(|data_block| DataBlock::sort(&data_block, &self.sort_desc, None))
             .collect::<Result<Vec<_>>>()?;
 
-        sort_merge(
+        sort_merge_incremental(
+            self.schema.clone(),
+            page_rows,
+            self.sort_desc.clone(),
+            data_blocks,
+            self.enable_fixed_rows,
+            self.enable_loser_tree,
+        )
+    }
+
+    fn merge_runs(&self, runs: Vec<SortedBlockIterator>) -> Result<SortedBlockIterator> {
+        sort_merge_sources(
             self.schema.clone(),
             self.max_block_size,
             self.sort_desc.clone(),
-            data_blocks,
+            runs,
             self.enable_fixed_rows,
             self.enable_loser_tree,
         )
