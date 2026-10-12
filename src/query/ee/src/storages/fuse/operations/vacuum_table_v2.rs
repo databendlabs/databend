@@ -34,7 +34,9 @@ use databend_storages_common_index::ExternalFile;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::meta::try_extract_uuid_v7_timestamp_from_path;
+use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION;
 use futures_util::TryStreamExt;
 use log::info;
 use log::warn;
@@ -252,6 +254,37 @@ pub async fn do_vacuum2(
         removed_inverted_index_v2,
     ));
 
+    // User dictionaries are referenced by index definitions in the table meta, not by snapshots:
+    // pruning always tokenizes with the dictionary of the current index definition.
+    let start = std::time::Instant::now();
+    let protected_dictionaries = table_info
+        .meta
+        .indexes
+        .values()
+        .filter_map(|index| {
+            index
+                .options
+                .get(INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION)
+                .cloned()
+        })
+        .collect::<HashSet<_>>();
+    let removed_dictionaries = purge_inverted_index_dict_objects(
+        fuse_table.get_operator_ref(),
+        &ctx,
+        fuse_table
+            .meta_location_generator()
+            .inverted_index_dict_location_prefix(),
+        &protected_dictionaries,
+        gc_root_timestamp,
+    )
+    .await?;
+    ctx.set_status_info(&format!(
+        "Removed unreferenced inverted-index user dictionaries for table {}, elapsed: {:?}, removed: {}",
+        table_info.desc,
+        start.elapsed(),
+        removed_dictionaries,
+    ));
+
     let start = std::time::Instant::now();
 
     // Bloom indexes are still derived from data-block paths. Current `_i_i_v2` objects are deleted
@@ -327,6 +360,64 @@ pub async fn do_vacuum2(
     ));
 
     Ok(())
+}
+
+/// Removes user dictionary objects under `prefix` that no current index definition references.
+///
+/// Fresh UUID-v7 objects are kept even if their index has not committed yet.
+async fn purge_inverted_index_dict_objects(
+    operator: &Operator,
+    ctx: &Arc<dyn TableContext>,
+    prefix: &str,
+    protected_locations: &HashSet<String>,
+    gc_root_timestamp: DateTime<Utc>,
+) -> Result<usize> {
+    let file_remover = Files::create(Arc::clone(ctx), operator.clone());
+    let mut lister = operator.lister_with(prefix).recursive(true).await?;
+    let mut pending = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
+    let mut removed = 0;
+
+    while let Some(entry) = lister.try_next().await? {
+        if let Err(err) = ctx.check_aborting() {
+            return Err(err.with_context(format!(
+                "aborted while scanning inverted-index user dictionaries under {prefix}"
+            )));
+        }
+        if entry.metadata().is_dir() || protected_locations.contains(entry.path()) {
+            continue;
+        }
+        if !entry
+            .path()
+            .rsplit('/')
+            .next()
+            .is_some_and(|name| name.starts_with(VACUUM2_OBJECT_KEY_PREFIX))
+        {
+            continue;
+        }
+        match try_extract_uuid_v7_timestamp_from_path(entry.path()) {
+            Ok(Some(timestamp)) if timestamp < gc_root_timestamp => {}
+            Ok(_) => continue,
+            Err(error) => {
+                warn!(
+                    "skip user dictionary with unparsable UUID during vacuum: path={}, error={}",
+                    entry.path(),
+                    error
+                );
+                continue;
+            }
+        }
+        pending.push(entry.path().to_string());
+        if pending.len() == VACUUM2_BLOCK_DELETE_CHUNK_SIZE {
+            file_remover.remove_file_in_batch(&pending).await?;
+            removed += pending.len();
+            pending.clear();
+        }
+    }
+    if !pending.is_empty() {
+        file_remover.remove_file_in_batch(&pending).await?;
+        removed += pending.len();
+    }
+    Ok(removed)
 }
 
 async fn purge_inverted_index_v2_objects(
@@ -740,6 +831,50 @@ mod tests {
             assert!(dal.exists(&after_cutoff).await?);
             assert!(dal.exists(&stray).await?);
             assert!(dal.exists(&outside).await?);
+            Ok(())
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn inverted_index_dict_gc_keeps_referenced_and_recent_objects() -> anyhow::Result<()>
+        {
+            const PREFIX: &str = "1/2/_i_i_d/";
+
+            let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+            let query_ctx = fixture.new_query_ctx().await?;
+            let ctx: Arc<dyn TableContext> = query_ctx;
+            let dal = Operator::new(Memory::default())?.finish();
+            let cutoff = Utc
+                .with_ymd_and_hms(2025, 1, 2, 0, 0, 0)
+                .single()
+                .expect("valid gc-root timestamp");
+            let location = |timestamp| {
+                let uuid =
+                    databend_storages_common_table_meta::meta::uuid_from_date_time(timestamp);
+                format!("{PREFIX}h{}.csv", uuid.simple())
+            };
+            let referenced = location(cutoff - chrono::Duration::minutes(2));
+            let orphan = location(cutoff - chrono::Duration::minutes(1));
+            let at_cutoff = location(cutoff);
+            let recent = location(cutoff + chrono::Duration::seconds(1));
+            let malformed = format!("{PREFIX}hnot-a-uuid.csv");
+            let content = b"AI,noun,AI\n".to_vec();
+            for path in [&referenced, &orphan, &malformed] {
+                dal.write(path, content.clone()).await?;
+            }
+
+            // Vacuum captured its protection set before a new DDL uploaded the same dictionary.
+            // The new upload must have a fresh path and survive even without a protected reference.
+            let protected = HashSet::from([referenced.clone()]);
+            dal.write(&at_cutoff, content.clone()).await?;
+            dal.write(&recent, content.clone()).await?;
+            let removed =
+                purge_inverted_index_dict_objects(&dal, &ctx, PREFIX, &protected, cutoff).await?;
+            assert_eq!(removed, 1);
+            assert!(!dal.exists(&orphan).await?);
+            for path in [&referenced, &at_cutoff, &recent, &malformed] {
+                assert!(dal.exists(path).await?);
+            }
+            assert_eq!(dal.read(&recent).await?.to_vec(), content);
             Ok(())
         }
 

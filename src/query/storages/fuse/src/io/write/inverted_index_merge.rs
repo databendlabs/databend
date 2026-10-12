@@ -210,6 +210,7 @@ mod tests {
             version: "v1".into(),
             schema: DataSchema::new(vec![DataField::new("content", DataType::String)]),
             options: BTreeMap::new(),
+            user_dictionary: None,
         };
         let locations = TableMetaLocationGenerator::new("reuse".into());
         let spec = builder.into_write_spec();
@@ -251,6 +252,7 @@ mod tests {
             version: "v1".into(),
             schema: DataSchema::new(vec![DataField::new("content", DataType::String)]),
             options: BTreeMap::new(),
+            user_dictionary: None,
         };
         let spec: Box<dyn BlockIndexSpec> = Box::new(builder.into_write_spec());
         assert!(spec.prepare_merge(&[])?.is_none());
