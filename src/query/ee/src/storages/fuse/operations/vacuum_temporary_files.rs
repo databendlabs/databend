@@ -30,6 +30,7 @@ use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use futures_util::stream::FuturesUnordered;
 use log::info;
+use log::warn;
 use opendal::Buffer;
 use opendal::ErrorKind;
 use opendal::Operator;
@@ -44,7 +45,32 @@ const SPILL_META_SUFFIX: &str = ".list";
 /// directories are independent of each other, so processing them one by one leaves the command
 /// bound by latency. On a tenant with hundreds of thousands of leftover directories the
 /// sequential version needs days to finish.
-const VACUUM_DIR_CONCURRENCY: usize = 32;
+///
+/// The value is deliberately small: every directory is deleted with one batch request carrying
+/// a few hundred keys, and object stores throttle mutations per key prefix (S3: 3,500 keys/s).
+/// With 32 in flight a single round already exceeded that budget, so most batches were rejected
+/// with `SlowDown` and retried after a back-off, which wasted the gain. 8 keeps the sustained
+/// rate close to the budget with far fewer rejected requests.
+const VACUUM_DIR_CONCURRENCY: usize = 8;
+
+/// Delete `paths` and return how many files should be counted as removed.
+///
+/// A batch that still fails after opendal's retries (e.g. S3 `SlowDown` under sustained load)
+/// is logged and counted as `0`, so `removed_total` and `LIMIT` only reflect files that were
+/// actually deleted. The leftovers are simply picked up by the next run.
+async fn delete_counted(operator: &Operator, paths: Vec<String>, from: &str) -> usize {
+    let n = paths.len();
+    match operator.delete_iter(paths).await {
+        Ok(()) => n,
+        Err(e) => {
+            warn!(
+                "Vacuum temporary files: failed to delete {} files from '{}', will retry in the next run: {}",
+                n, from, e
+            );
+            0
+        }
+    }
+}
 
 #[async_backtrace::framed]
 pub async fn do_vacuum_temporary_files(
@@ -200,8 +226,8 @@ async fn vacuum_by_duration(
 
     let remaining = limit.saturating_sub(removed_total.load(Ordering::Relaxed));
     if !temp_files.is_empty() && temp_files.len() <= remaining {
-        removed_total.fetch_add(temp_files.len(), Ordering::Relaxed);
-        let _ = operator.delete_iter(temp_files).await;
+        let removed = delete_counted(&operator, temp_files, &temporary_dir).await;
+        removed_total.fetch_add(removed, Ordering::Relaxed);
     }
 
     let removed_total = removed_total.load(Ordering::Relaxed);
@@ -391,8 +417,8 @@ async fn vacuum_dir_with_probe(
 
     paths.push(dir_path.to_owned());
 
-    let cur_removed = paths.len().min(limit);
-    let _ = operator.delete_iter(paths.into_iter().take(limit)).await;
+    paths.truncate(limit);
+    let cur_removed = delete_counted(operator, paths, dir_path).await;
 
     let total = removed_total.fetch_add(cur_removed, Ordering::Relaxed) + cur_removed;
     info!(
@@ -465,17 +491,19 @@ async fn vacuum_by_meta_buffer_with_operator(
     let (to_be_removed, remain) = files.split_at(limit.min(files.len()));
     let remain = remain.to_vec();
 
-    let cur_removed = to_be_removed.len();
-    let _ = operator
-        .delete_iter(
-            files
-                .into_iter()
-                .filter(|f| f.starts_with(temporary_dir))
-                .take(limit),
-        )
-        .await;
+    let to_be_removed: Vec<String> = to_be_removed
+        .iter()
+        .filter(|f| f.starts_with(temporary_dir))
+        .cloned()
+        .collect();
+    let attempted = to_be_removed.len();
+    let cur_removed = delete_counted(operator, to_be_removed, meta_file_path).await;
 
-    // update unfinished meta file
+    // Update the unfinished meta file. If the batch failed, keep the meta file untouched so the
+    // next run retries the same files instead of leaving them as orphans.
+    if attempted > 0 && cur_removed == 0 {
+        return Ok(0);
+    }
     if !remain.is_empty() {
         let remain = remain.join("\n");
         operator.write(meta_file_path, remain).await?;
@@ -542,8 +570,8 @@ async fn vacuum_by_list_dir_with_operator(
     }
     batches.push(dir_path.to_owned());
 
-    let cur_removed = batches.len().min(limit);
-    let _ = operator.delete_iter(batches.into_iter().take(limit)).await;
+    batches.truncate(limit);
+    let cur_removed = delete_counted(operator, batches, dir_path).await;
 
     let total = removed_total.fetch_add(cur_removed, Ordering::Relaxed) + cur_removed;
     // Log progress for the current batch
