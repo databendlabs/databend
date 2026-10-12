@@ -776,10 +776,19 @@ async fn resolve_dir_last_modified(
     if let Some(v) = metadata.last_modified() {
         return Some(v.into_inner().as_millisecond());
     }
-    if operator.info().scheme() == Scheme::Fs.into_static()
+    if has_native_directories(operator)
         && let Some(v) = stat_last_modified(operator, dir_path).await
     {
         return Some(v);
     }
     stat_last_modified(operator, meta_path).await
+}
+
+/// Backends whose directories are real objects with their own mtime. Object stores simulate
+/// `stat(dir)` with a `list(limit = 1)` that never carries `last_modified`.
+fn has_native_directories(operator: &Operator) -> bool {
+    let scheme = operator.info().scheme();
+    [Scheme::Fs, Scheme::Hdfs, Scheme::Webhdfs]
+        .iter()
+        .any(|s| s.into_static() == scheme)
 }
