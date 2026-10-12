@@ -6972,9 +6972,10 @@ impl SchemaApiTestSuite {
         let drop_ids = vacuum().await?;
         assert!(drop_ids.is_empty(), "got: {:?}", drop_ids);
 
-        // A retained TableId key or an empty second scan does not prove that history survived.
-        // Repair the existing keys, without rebuilding history, and require rediscovery and GC.
-        // db2.t1 still has no drop_on, so its eligibility must come from the dropped database.
+        // Replace the undecodable TableId metadata with decodable values. The test does not
+        // recreate the tables or write table-history entries: the next vacuum must find these
+        // tables through the entries preserved by the earlier vacuum, then collect their metadata.
+        // db2.t1 still has no drop_on, so it is eligible only because its database was dropped.
         info!("--- repaired tables remain discoverable and can be garbage collected");
         for (table_id, table_meta) in [
             (undecodable_db1_t1, db1_t1_meta),
