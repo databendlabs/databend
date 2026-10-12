@@ -307,10 +307,12 @@ async fn resolve_file_last_modified(
 /// Resolve a directory's `last_modified` from the listing metadata first, then from its `.list`
 /// file.
 ///
-/// The directory path itself is deliberately not `stat`ed: on object stores a "directory" is only
-/// a key prefix, so the request can never return a `last_modified` and only adds a round trip
-/// (opendal may even issue a follow-up list to confirm the prefix exists). Backends that do have
-/// directory metadata already expose it through the listing entry.
+/// The directory path itself is deliberately not `stat`ed. For object stores without a native
+/// `create_dir` capability (e.g. S3), opendal's `CompleteLayer` answers `stat("dir/")` with a
+/// `list(limit = 1)` and returns a `DIR` metadata that carries no `last_modified`, so the call
+/// can never resolve a timestamp and only costs one extra LIST request per directory. Backends
+/// that do have directory mtimes (e.g. local fs) fall through to the probe path below, which
+/// reads the first file's `last_modified` and yields the same decision.
 async fn resolve_dir_last_modified(
     operator: &Operator,
     metadata: &opendal::Metadata,
