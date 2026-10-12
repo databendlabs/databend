@@ -26,8 +26,13 @@ use databend_common_settings::Settings;
 /// block at a time, so only the current block of every run is held.
 pub trait DataProcessorStrategy: Send + Sync + 'static {
     const NAME: &'static str;
-    /// Sort blocks into one run, emitted as sorted pages.
-    fn sort_run(&self, data_blocks: Vec<DataBlock>) -> Result<SortedBlockIterator>;
+    /// Sort blocks into one run, emitted as sorted pages. `spilled_bytes` is
+    /// how much of the partition has been spilled before this run.
+    fn sort_run(
+        &self,
+        data_blocks: Vec<DataBlock>,
+        spilled_bytes: usize,
+    ) -> Result<SortedBlockIterator>;
     /// Merge the sorted runs of one partition.
     fn merge_runs(&self, runs: Vec<SortedBlockIterator>) -> Result<SortedBlockIterator>;
 }
@@ -57,7 +62,11 @@ impl CompactStrategy {
 impl DataProcessorStrategy for CompactStrategy {
     const NAME: &'static str = "Compact";
 
-    fn sort_run(&self, data_blocks: Vec<DataBlock>) -> Result<SortedBlockIterator> {
+    fn sort_run(
+        &self,
+        data_blocks: Vec<DataBlock>,
+        _spilled_bytes: usize,
+    ) -> Result<SortedBlockIterator> {
         let blocks_num = data_blocks.len();
         if blocks_num < 2 {
             return Ok(Box::new(data_blocks.into_iter().map(Ok)));
@@ -97,6 +106,17 @@ impl DataProcessorStrategy for CompactStrategy {
     }
 }
 
+/// A partition that spills at most this much has only a few runs. They are
+/// kept in pages of PAGE_BYTES, so the partition is read back in a few large
+/// reads instead of waiting on many small ones.
+const SMALL_PARTITION_BYTES: usize = 64 * 1024 * 1024;
+/// Runs of a larger partition are split into about this many pages, so
+/// restoring it holds about 1/PAGES_PER_RUN of each run instead of the whole
+/// run. It also bounds the pages, and so the reads waited on, per run.
+const PAGES_PER_RUN: usize = 16;
+/// Lower bound of a sorted page. It stays above the spill reader's range merge
+/// size (512 KiB), so pages of small runs do not turn into many tiny reads.
+const PAGE_MIN_BYTES: usize = 1024 * 1024;
 /// Upper bound of a sorted page, so a page of wide rows stays small when it is
 /// read back next to the current page of every other run.
 const PAGE_BYTES: usize = 8 * 1024 * 1024;
@@ -128,12 +148,21 @@ impl SortStrategy {
 impl DataProcessorStrategy for SortStrategy {
     const NAME: &'static str = "Sort";
 
-    fn sort_run(&self, data_blocks: Vec<DataBlock>) -> Result<SortedBlockIterator> {
+    fn sort_run(
+        &self,
+        data_blocks: Vec<DataBlock>,
+        spilled_bytes: usize,
+    ) -> Result<SortedBlockIterator> {
         let (rows, bytes) = data_blocks.iter().fold((0, 0), |(rows, bytes), block| {
             (rows + block.num_rows(), bytes + block.memory_size())
         });
+        let page_bytes = if spilled_bytes + bytes <= SMALL_PARTITION_BYTES {
+            PAGE_BYTES
+        } else {
+            (bytes / PAGES_PER_RUN).clamp(PAGE_MIN_BYTES, PAGE_BYTES)
+        };
         let page_rows = match bytes.checked_div(rows) {
-            Some(row_bytes) if row_bytes > 0 => (PAGE_BYTES / row_bytes).max(1),
+            Some(row_bytes) if row_bytes > 0 => (page_bytes / row_bytes).max(1),
             _ => self.max_block_size,
         }
         .min(self.max_block_size);

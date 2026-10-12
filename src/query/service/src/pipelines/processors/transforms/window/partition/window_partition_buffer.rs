@@ -193,6 +193,7 @@ struct PartitionSlot {
     readers: Vec<PartitionFileReader>,
     buffered_blocks: Vec<DataBlock>,
     buffered_size: usize,
+    spilled_size: usize,
 }
 
 impl PartitionSlot {
@@ -203,6 +204,7 @@ impl PartitionSlot {
             readers: Default::default(),
             buffered_blocks: Default::default(),
             buffered_size: Default::default(),
+            spilled_size: Default::default(),
         }
     }
 
@@ -337,8 +339,12 @@ impl WindowPartitionBuffer {
             if partition.buffered_blocks.is_empty() {
                 continue;
             }
+            let spilled_size = partition.spilled_size;
+            let buffered_size = partition.buffered_size;
             if let Some(blocks) = partition.take_blocks(Some(spill_unit_size)) {
-                let run = strategy.sort_run(concat_data_blocks(blocks, self.sort_block_size)?)?;
+                partition.spilled_size += buffered_size;
+                let blocks = concat_data_blocks(blocks, self.sort_block_size)?;
+                let run = strategy.sort_run(blocks, spilled_size)?;
                 partition.spill_blocks(&self.ctx, &self.prefix, self.writer_pool_bytes, run)?;
                 return Ok(());
             }
@@ -356,8 +362,11 @@ impl WindowPartitionBuffer {
         if let Some((partition, size)) = preferred_partition
             && size >= self.min_row_group_size
         {
+            let spilled_size = partition.spilled_size;
+            partition.spilled_size += size;
             let blocks = partition.take_blocks(None).unwrap();
-            let run = strategy.sort_run(concat_data_blocks(blocks, self.sort_block_size)?)?;
+            let blocks = concat_data_blocks(blocks, self.sort_block_size)?;
+            let run = strategy.sort_run(blocks, spilled_size)?;
             partition.spill_blocks(&self.ctx, &self.prefix, self.writer_pool_bytes, run)?;
         } else {
             self.can_spill = false;
@@ -383,7 +392,8 @@ impl WindowPartitionBuffer {
             if let Some(blocks) = partition.take_blocks(None)
                 && !blocks.is_empty()
             {
-                runs.push(strategy.sort_run(concat_data_blocks(blocks, self.sort_block_size)?)?);
+                let blocks = concat_data_blocks(blocks, self.sort_block_size)?;
+                runs.push(strategy.sort_run(blocks, partition.spilled_size)?);
             }
 
             if !runs.is_empty() {
@@ -475,6 +485,89 @@ mod tests {
             output.push(block);
         }
         assert!(buffer.restore(&strategy)?.is_none());
+        assert_eq!(
+            pretty_format_blocks(&[DataBlock::concat(&output)?])?,
+            pretty_format_blocks(&[DataBlock::sort(&input, &sort_desc, None)?])?
+        );
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn runs_are_split_once_partition_is_large() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+
+        // About 200 bytes per row; every 4 MiB spill becomes one run. Blocks
+        // are built separately, as slices would report the whole buffer.
+        let rows = 40_000u64;
+        let make_block = |range: std::ops::Range<u64>| {
+            DataBlock::new_from_columns(vec![
+                UInt64Type::from_data(range.clone().map(|i| i * 7919 % rows).collect::<Vec<_>>()),
+                StringType::from_data(range.map(|i| format!("{i:0>200}")).collect::<Vec<_>>()),
+            ])
+        };
+        let blocks = (0..rows)
+            .step_by(500)
+            .map(|start| make_block(start..start + 500))
+            .collect::<Vec<_>>();
+        let input = DataBlock::concat(&blocks)?;
+        let sort_desc = vec![SortColumnDescription {
+            offset: 0,
+            asc: true,
+            nulls_first: false,
+        }];
+        let strategy =
+            SortStrategy::try_create(&settings, sort_desc.clone(), Arc::new(input.infer_schema()))?;
+        let spill_unit = 4 * 1024 * 1024;
+        let memory = MemorySettings::builder()
+            .with_workload_group(false)
+            .with_max_memory_usage(0)
+            .with_spill_unit_size(spill_unit)
+            .build();
+        let mut buffer = WindowPartitionBuffer::new(
+            ctx.clone(),
+            ctx.query_id_spill_prefix(),
+            4 * 1024 * 1024,
+            1,
+            1024,
+            memory,
+        )?;
+        buffer.min_row_group_size = spill_unit;
+
+        let mut added = 0;
+        for block in blocks {
+            added += block.memory_size();
+            buffer.add_data_block(0, block);
+            while buffer.need_spill() {
+                buffer.spill(&strategy)?;
+            }
+        }
+        let partition = &buffer.partitions[0];
+        assert_eq!(partition.spilled_size + partition.buffered_size, added);
+
+        // The partition is small: each 4 MiB run stays in one page.
+        let PartitionSpillState::Writing { writer } = &partition.state else {
+            panic!("partition should have spilled runs");
+        };
+        assert!(writer.runs.len() >= 2, "{:?}", writer.runs);
+        assert!(
+            writer.runs.iter().all(|run| run.len() == 1),
+            "{:?}",
+            writer.runs
+        );
+
+        // Once the partition is large, the same run is split into pages of
+        // the 1 MiB lower bound.
+        let run = make_block(0..20_000);
+        assert_eq!(strategy.sort_run(vec![run.clone()], 0)?.count(), 1);
+        assert!(strategy.sort_run(vec![run], 64 * 1024 * 1024)?.count() >= 3);
+
+        let mut merged = buffer.restore(&strategy)?.unwrap();
+        let mut output = Vec::new();
+        while let Some(block) = merged.next().transpose()? {
+            output.push(block);
+        }
         assert_eq!(
             pretty_format_blocks(&[DataBlock::concat(&output)?])?,
             pretty_format_blocks(&[DataBlock::sort(&input, &sort_desc, None)?])?
