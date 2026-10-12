@@ -285,28 +285,6 @@ mod unit {
     }
 
     #[test]
-    fn test_dir_concurrency_light_throttling_holds_and_restarts_streak() {
-        let (dirs, t0) = controller();
-
-        for _ in 0..DirConcurrency::RAMP_UP_BATCHES - 1 {
-            dirs.observe(ThrottleSignal::Clear, t0);
-        }
-        dirs.observe(ThrottleSignal::Light, t0);
-        assert_eq!(
-            dirs.current(),
-            DirConcurrency::INIT,
-            "light throttling keeps the bound"
-        );
-
-        for _ in 0..DirConcurrency::RAMP_UP_BATCHES - 1 {
-            dirs.observe(ThrottleSignal::Clear, t0);
-        }
-        assert_eq!(dirs.current(), DirConcurrency::INIT);
-        dirs.observe(ThrottleSignal::Clear, t0);
-        assert_eq!(dirs.current(), DirConcurrency::INIT + 1);
-    }
-
-    #[test]
     fn test_dir_concurrency_halves_at_most_once_per_cooldown() {
         let (dirs, t0) = controller();
         let cooldown = DirConcurrency::DECREASE_COOLDOWN;
@@ -350,21 +328,26 @@ mod unit {
 
         assert_eq!(classify_delete(&ok, 0, 8), ThrottleSignal::Clear);
         assert_eq!(classify_delete(&other, 0, 8), ThrottleSignal::Clear);
-        assert_eq!(classify_delete(&ok, 1, 8), ThrottleSignal::Light);
-        assert_eq!(classify_delete(&ok, 3, 8), ThrottleSignal::Light);
-        assert_eq!(classify_delete(&ok, 4, 8), ThrottleSignal::Heavy);
-        assert_eq!(classify_delete(&ok, 1, 1), ThrottleSignal::Heavy);
+        // Sporadic retries never throttle, whatever the bound.
+        assert_eq!(classify_delete(&ok, 7, 1), ThrottleSignal::Clear);
+        assert_eq!(classify_delete(&ok, 7, 8), ThrottleSignal::Clear);
+        assert_eq!(classify_delete(&ok, 8, 1), ThrottleSignal::Heavy);
+        assert_eq!(classify_delete(&ok, 8, 8), ThrottleSignal::Heavy);
+        // Above INIT the threshold scales with the bound.
+        assert_eq!(classify_delete(&ok, 15, 32), ThrottleSignal::Clear);
+        assert_eq!(classify_delete(&ok, 16, 32), ThrottleSignal::Heavy);
         assert_eq!(classify_delete(&rate_limited, 0, 32), ThrottleSignal::Heavy);
     }
 
     #[test]
-    fn test_removed_files_are_mirrored_into_progress_sink() {
-        let sink = Arc::new(Progress::create());
-        let progress = VacuumProgress::new(Some(sink.clone()));
+    fn test_removed_files_are_reported() {
+        let reported = Arc::new(Mutex::new(Vec::new()));
+        let sink = reported.clone();
+        let progress = VacuumProgress::new(Some(Arc::new(move |total| sink.lock().push(total))));
         assert_eq!(progress.add_removed(3), 3);
         assert_eq!(progress.add_removed(4), 7);
         assert_eq!(progress.removed(), 7);
-        assert_eq!(sink.get_values().rows, 7);
+        assert_eq!(*reported.lock(), vec![3, 7]);
     }
 
     #[tokio::test(flavor = "multi_thread")]

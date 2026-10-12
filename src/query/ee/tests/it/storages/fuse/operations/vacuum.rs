@@ -16,7 +16,6 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::Progress;
 use databend_common_catalog::table_context::CheckAbort;
 use databend_common_config::MetaConfig;
 use databend_common_exception::ErrorCode;
@@ -158,10 +157,7 @@ async fn test_do_vacuum_temporary_files() -> anyhow::Result<()> {
     let r = do_vacuum_temporary_files(
         Arc::new(AbortRightNow),
         "test_dir/".to_string(),
-        &VacuumTempOptions::VacuumCommand(
-            Some(Duration::from_secs(2)),
-            Arc::new(Progress::create()),
-        ),
+        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2)), Arc::new(|_| {})),
         1,
     )
     .await;
@@ -173,10 +169,7 @@ async fn test_do_vacuum_temporary_files() -> anyhow::Result<()> {
     do_vacuum_temporary_files(
         no_abort.clone(),
         "test_dir/".to_string(),
-        &VacuumTempOptions::VacuumCommand(
-            Some(Duration::from_secs(2)),
-            Arc::new(Progress::create()),
-        ),
+        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2)), Arc::new(|_| {})),
         1,
     )
     .await?;
@@ -193,10 +186,7 @@ async fn test_do_vacuum_temporary_files() -> anyhow::Result<()> {
     do_vacuum_temporary_files(
         no_abort.clone(),
         "test_dir/".to_string(),
-        &VacuumTempOptions::VacuumCommand(
-            Some(Duration::from_secs(2)),
-            Arc::new(Progress::create()),
-        ),
+        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2)), Arc::new(|_| {})),
         2,
     )
     .await?;
@@ -207,10 +197,7 @@ async fn test_do_vacuum_temporary_files() -> anyhow::Result<()> {
     do_vacuum_temporary_files(
         no_abort.clone(),
         "test_dir/".to_string(),
-        &VacuumTempOptions::VacuumCommand(
-            Some(Duration::from_secs(3)),
-            Arc::new(Progress::create()),
-        ),
+        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(3)), Arc::new(|_| {})),
         1000,
     )
     .await?;

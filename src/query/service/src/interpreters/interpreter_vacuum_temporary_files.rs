@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::ProgressValues;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -29,6 +30,7 @@ use crate::sessions::TableContext;
 use crate::sessions::TableContextLicense;
 use crate::sessions::TableContextProgress;
 use crate::sessions::TableContextQueryState;
+use crate::sessions::TableContextTelemetry;
 
 pub struct VacuumTemporaryFilesInterpreter {
     ctx: Arc<QueryContext>,
@@ -60,15 +62,20 @@ impl Interpreter for VacuumTemporaryFilesInterpreter {
             let handler = get_vacuum_handler();
 
             let temporary_files_prefix = self.ctx.query_tenant_spill_prefix();
+            // Surface progress in `system.processes`: `status` and `scan_progress_read_rows`.
+            let report_ctx = self.ctx.clone();
+            let report = Arc::new(move |removed: usize| {
+                report_ctx.get_scan_progress().set(&ProgressValues {
+                    rows: removed,
+                    bytes: 0,
+                });
+                report_ctx.set_status_info(&format!("[VACUUM] removed {removed} temporary files"));
+            });
             let removed_files = handler
                 .do_vacuum_temporary_files(
                     self.ctx.clone().get_abort_checker(),
                     temporary_files_prefix,
-                    // Removed files show up as `scan_progress_read_rows` in `system.processes`.
-                    &VacuumTempOptions::VacuumCommand(
-                        self.plan.retain,
-                        self.ctx.get_scan_progress(),
-                    ),
+                    &VacuumTempOptions::VacuumCommand(self.plan.retain, report),
                     self.plan.limit.map(|x| x as usize).unwrap_or(usize::MAX),
                 )
                 .await?;

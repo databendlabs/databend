@@ -23,12 +23,11 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use databend_common_base::base::Progress;
-use databend_common_base::base::ProgressValues;
 use databend_common_catalog::table_context::AbortChecker;
 use databend_common_exception::Result;
 use databend_common_storage::DataOperator;
 use databend_common_storage::opendal_rate_limited_retries;
+use databend_enterprise_vacuum_handler::vacuum_handler::VacuumReport;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
@@ -47,9 +46,7 @@ const SPILL_META_SUFFIX: &str = ".list";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ThrottleSignal {
     Clear,
-    /// Some requests were retried but the batch went through.
-    Light,
-    /// Rejected as rate limited, or most in-flight requests were retried.
+    /// Rejected as rate limited, or a burst of retries while the batch was in flight.
     Heavy,
 }
 
@@ -57,8 +54,8 @@ enum ThrottleSignal {
 ///
 /// Object stores throttle deletes per key prefix (S3: 3,500 keys/s), so the right concurrency
 /// depends on the store, not the node: 32 already triggers `SlowDown` storms, 1 is latency-bound.
-/// `Clear` ramps up by one every `RAMP_UP_BATCHES`; `Light` holds; `Heavy` halves, at most once
-/// per `DECREASE_COOLDOWN` so one throttling episode (visible to every overlapping batch for the
+/// `Clear` ramps up by one every `RAMP_UP_BATCHES`; `Heavy` halves, at most once per
+/// `DECREASE_COOLDOWN` so one throttling episode (visible to every overlapping batch for the
 /// 1s/2s/4s retry back-offs) is counted once. Takes the clock as a parameter for testability.
 struct DirConcurrency {
     current: AtomicUsize,
@@ -91,7 +88,6 @@ impl DirConcurrency {
     fn observe(&self, signal: ThrottleSignal, now: Instant) {
         match signal {
             ThrottleSignal::Clear => self.ramp_up(),
-            ThrottleSignal::Light => self.ok_streak.store(0, Ordering::Relaxed),
             ThrottleSignal::Heavy => {
                 self.ok_streak.store(0, Ordering::Relaxed);
                 self.back_off(now);
@@ -157,16 +153,15 @@ impl DirConcurrency {
 struct VacuumProgress {
     removed: AtomicUsize,
     dirs: DirConcurrency,
-    /// Reported as one row per removed file, so `system.processes` shows the running command.
-    sink: Option<Arc<Progress>>,
+    report: Option<VacuumReport>,
 }
 
 impl VacuumProgress {
-    fn new(sink: Option<Arc<Progress>>) -> Self {
+    fn new(report: Option<VacuumReport>) -> Self {
         Self {
             removed: AtomicUsize::new(0),
             dirs: DirConcurrency::new(Instant::now()),
-            sink,
+            report,
         }
     }
 
@@ -175,10 +170,11 @@ impl VacuumProgress {
     }
 
     fn add_removed(&self, n: usize) -> usize {
-        if let Some(sink) = &self.sink {
-            sink.incr(&ProgressValues { rows: n, bytes: 0 });
+        let total = self.removed.fetch_add(n, Ordering::Relaxed) + n;
+        if let Some(report) = &self.report {
+            report(total);
         }
-        self.removed.fetch_add(n, Ordering::Relaxed) + n
+        total
     }
 
     fn concurrency(&self) -> usize {
@@ -188,16 +184,19 @@ impl VacuumProgress {
 
 /// `retried`: `RateLimited` retries recorded process-wide while the batch was in flight (the
 /// retry layer hides `SlowDown`, so a successful batch may still have been throttled).
+///
+/// Sporadic retries are noise the retry layer already absorbs and must not stall the ramp-up;
+/// only a burst of at least half the in-flight batches, and never fewer than a full `INIT`
+/// round, counts as throttling.
 fn classify_delete(
     result: &opendal::Result<()>,
     retried: usize,
     in_flight: usize,
 ) -> ThrottleSignal {
     let rate_limited = matches!(result, Err(e) if e.kind() == ErrorKind::RateLimited);
-    if rate_limited || retried >= in_flight.div_ceil(2) {
+    let burst = in_flight.div_ceil(2).max(DirConcurrency::INIT);
+    if rate_limited || retried >= burst {
         ThrottleSignal::Heavy
-    } else if retried > 0 {
-        ThrottleSignal::Light
     } else {
         ThrottleSignal::Clear
     }
@@ -253,13 +252,13 @@ pub async fn do_vacuum_temporary_files(
             )
             .await
         }
-        VacuumTempOptions::VacuumCommand(duration, progress) => {
+        VacuumTempOptions::VacuumCommand(duration, report) => {
             vacuum_by_duration(
                 abort_checker,
                 &temporary_dir,
                 limit,
                 duration,
-                progress.clone(),
+                report.clone(),
             )
             .await
         }
@@ -293,7 +292,7 @@ async fn vacuum_by_duration(
     temporary_dir: &str,
     limit: usize,
     duration: &Option<Duration>,
-    sink: Arc<Progress>,
+    report: VacuumReport,
 ) -> Result<usize> {
     let operator = DataOperator::instance().spill_operator();
     let start_time = Instant::now();
@@ -304,7 +303,7 @@ async fn vacuum_by_duration(
         .unwrap()
         .as_millis() as i64;
 
-    let progress = Arc::new(VacuumProgress::new(Some(sink)));
+    let progress = Arc::new(VacuumProgress::new(Some(report)));
     let gc_metas: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
     let temporary_dir = format!("{}/", temporary_dir.trim_end_matches('/'));
     let mut ds = operator.lister_with(&temporary_dir).await?;
