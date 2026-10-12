@@ -6972,9 +6972,9 @@ impl SchemaApiTestSuite {
         let drop_ids = vacuum().await?;
         assert!(drop_ids.is_empty(), "got: {:?}", drop_ids);
 
-        // Replace the undecodable TableId metadata with decodable values. The test does not
-        // recreate the tables or write table-history entries: the next vacuum must find these
-        // tables through the entries preserved by the earlier vacuum, then collect their metadata.
+        // Once the skipped metadata becomes decodable, vacuum must finish cleaning up the
+        // remaining tables and the dropped database. This could follow a metadata repair or
+        // a reader upgrade; this test simulates recovery by restoring decodable metadata.
         // db2.t1 still has no drop_on, so it is eligible only because its database was dropped.
         info!("--- repaired tables remain discoverable and can be garbage collected");
         for (table_id, table_meta) in [
