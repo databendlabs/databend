@@ -148,19 +148,38 @@ impl SortStrategy {
 impl DataProcessorStrategy for SortStrategy {
     const NAME: &'static str = "Sort";
 
+    /// Each page of a spilled run is one row group, and restoring a partition
+    /// holds the current page of every run plus about two prefetched ones. So
+    /// the page size decides restore memory, and the page count decides how
+    /// many reads each run waits on:
+    ///
+    /// - A partition that has spilled at most SMALL_PARTITION_BYTES, this run
+    ///   included, has only a few runs, as each spill is at least 10 MiB. Its
+    ///   pages stay at PAGE_BYTES: it is small enough to read back whole, and
+    ///   too few runs are merged to hide the latency of many small reads.
+    /// - Runs of a larger partition are split into about PAGES_PER_RUN pages,
+    ///   within [PAGE_MIN_BYTES, PAGE_BYTES], so each run holds about
+    ///   1/PAGES_PER_RUN of itself. Such a partition has many runs, so a read
+    ///   of one run overlaps with merging the others.
+    ///
+    /// A page also holds at most max_block_size rows.
     fn sort_run(
         &self,
         data_blocks: Vec<DataBlock>,
         spilled_bytes: usize,
     ) -> Result<SortedBlockIterator> {
+        // Size pages as they are written: constant columns are expanded to
+        // full columns there, though memory_size() counts them once.
         let (rows, bytes) = data_blocks.iter().fold((0, 0), |(rows, bytes), block| {
-            (rows + block.num_rows(), bytes + block.memory_size())
+            let block_bytes = block.estimate_block_size(block.num_columns());
+            (rows + block.num_rows(), bytes + block_bytes)
         });
         let page_bytes = if spilled_bytes + bytes <= SMALL_PARTITION_BYTES {
             PAGE_BYTES
         } else {
             (bytes / PAGES_PER_RUN).clamp(PAGE_MIN_BYTES, PAGE_BYTES)
         };
+        // Turn the page size into rows by the average row width of this run.
         let page_rows = match bytes.checked_div(rows) {
             Some(row_bytes) if row_bytes > 0 => (page_bytes / row_bytes).max(1),
             _ => self.max_block_size,

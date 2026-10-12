@@ -60,6 +60,15 @@ fn concat_data_blocks(data_blocks: Vec<DataBlock>, target_size: usize) -> Result
     Ok(result)
 }
 
+/// Bytes the blocks take once written: constant columns are expanded to full
+/// columns, though memory_size() counts them once.
+fn written_size(blocks: &[DataBlock]) -> usize {
+    blocks
+        .iter()
+        .map(|block| block.estimate_block_size(block.num_columns()))
+        .sum()
+}
+
 struct PartitionFileWriter {
     path: String,
     writer: SpillsDataWriter,
@@ -340,9 +349,8 @@ impl WindowPartitionBuffer {
                 continue;
             }
             let spilled_size = partition.spilled_size;
-            let buffered_size = partition.buffered_size;
             if let Some(blocks) = partition.take_blocks(Some(spill_unit_size)) {
-                partition.spilled_size += buffered_size;
+                partition.spilled_size += written_size(&blocks);
                 let blocks = concat_data_blocks(blocks, self.sort_block_size)?;
                 let run = strategy.sort_run(blocks, spilled_size)?;
                 partition.spill_blocks(&self.ctx, &self.prefix, self.writer_pool_bytes, run)?;
@@ -363,8 +371,8 @@ impl WindowPartitionBuffer {
             && size >= self.min_row_group_size
         {
             let spilled_size = partition.spilled_size;
-            partition.spilled_size += size;
             let blocks = partition.take_blocks(None).unwrap();
+            partition.spilled_size += written_size(&blocks);
             let blocks = concat_data_blocks(blocks, self.sort_block_size)?;
             let run = strategy.sort_run(blocks, spilled_size)?;
             partition.spill_blocks(&self.ctx, &self.prefix, self.writer_pool_bytes, run)?;
@@ -406,6 +414,7 @@ impl WindowPartitionBuffer {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_expression::BlockEntry;
     use databend_common_expression::FromData;
     use databend_common_expression::SortColumnDescription;
     use databend_common_expression::types::StringType;
@@ -537,14 +546,15 @@ mod tests {
 
         let mut added = 0;
         for block in blocks {
-            added += block.memory_size();
+            added += written_size(std::slice::from_ref(&block));
             buffer.add_data_block(0, block);
             while buffer.need_spill() {
                 buffer.spill(&strategy)?;
             }
         }
         let partition = &buffer.partitions[0];
-        assert_eq!(partition.spilled_size + partition.buffered_size, added);
+        let buffered = written_size(&partition.buffered_blocks);
+        assert_eq!(partition.spilled_size + buffered, added);
 
         // The partition is small: each 4 MiB run stays in one page.
         let PartitionSpillState::Writing { writer } = &partition.state else {
@@ -571,6 +581,65 @@ mod tests {
         assert_eq!(
             pretty_format_blocks(&[DataBlock::concat(&output)?])?,
             pretty_format_blocks(&[DataBlock::sort(&input, &sort_desc, None)?])?
+        );
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn pages_count_constant_columns_at_full_size() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+
+        // A 200-byte constant is stored once in memory but written to every
+        // row, so 60K rows make about 12 MiB of pages.
+        let rows = 60_000u64;
+        let block = DataBlock::new(
+            vec![
+                UInt64Type::from_data((0..rows).map(|i| i * 7919 % rows).collect::<Vec<_>>())
+                    .into(),
+                BlockEntry::new_const_column_arg::<StringType>("x".repeat(200), rows as usize),
+            ],
+            rows as usize,
+        );
+        let sort_desc = vec![SortColumnDescription {
+            offset: 0,
+            asc: true,
+            nulls_first: false,
+        }];
+        let strategy =
+            SortStrategy::try_create(&settings, sort_desc, Arc::new(block.infer_schema()))?;
+
+        // The partition counts what it writes, not the in-memory size.
+        let memory = MemorySettings::builder()
+            .with_workload_group(false)
+            .with_max_memory_usage(0)
+            .with_spill_unit_size(usize::MAX)
+            .build();
+        let mut buffer = WindowPartitionBuffer::new(
+            ctx.clone(),
+            ctx.query_id_spill_prefix(),
+            4 * 1024 * 1024,
+            1,
+            1024,
+            memory,
+        )?;
+        buffer.min_row_group_size = 1;
+        buffer.add_data_block(0, block.clone());
+        buffer.spill(&strategy)?;
+        assert!(buffer.partitions[0].spilled_size >= 200 * rows as usize);
+
+        let pages = strategy
+            .sort_run(vec![block], 0)?
+            .collect::<Result<Vec<_>>>()?;
+        assert!(pages.len() >= 2, "{}", pages.len());
+        for page in &pages {
+            let page_bytes = page.estimate_block_size(page.num_columns());
+            assert!(page_bytes <= 8 * 1024 * 1024, "{page_bytes}");
+        }
+        assert_eq!(
+            pages.iter().map(DataBlock::num_rows).sum::<usize>(),
+            rows as usize
         );
         Ok(())
     }
