@@ -47,6 +47,7 @@ use log::warn;
 use opendal::Buffer;
 use opendal::ErrorKind;
 use opendal::Operator;
+use opendal::Scheme;
 use parking_lot::Mutex;
 
 // Default retention duration for temporary files: 3 days.
@@ -507,7 +508,7 @@ async fn vacuum_dir_entry(
     }
 
     let Some(last_modified) =
-        resolve_dir_last_modified(deleter.operator(), &metadata, &meta_path).await
+        resolve_dir_last_modified(deleter.operator(), &metadata, &dir_path, &meta_path).await
     else {
         let delete = delete_by_probe(&deleter, &dir_path, expiry, max).await?;
         return Ok(outcome(delete));
@@ -730,19 +731,26 @@ async fn resolve_file_last_modified(
     stat_last_modified(operator, path).await
 }
 
-/// Resolve `last_modified` for a directory: prefer the entry metadata, fall back to the sibling
-/// `.list` meta file. `None` means the age is unknown and the directory must be probed.
+/// Resolve `last_modified` for a directory: the entry metadata, then the directory itself where
+/// directories are real, then the sibling `.list` meta file. `None` means the age is unknown and
+/// the directory must be probed.
 ///
-/// The directory path itself is deliberately not `stat`ed: on stores without native directories
-/// (S3) opendal answers `stat("dir/")` with a `list(limit = 1)` that carries no `last_modified`,
-/// so it can never resolve a timestamp and only costs one extra LIST per directory.
+/// `stat(dir)` is only issued on backends with native directories, where it returns the mtime
+/// that moves every time a file is added. On object stores opendal answers it with a
+/// `list(limit = 1)` that never carries `last_modified`, so it would only cost one LIST.
 async fn resolve_dir_last_modified(
     operator: &Operator,
     metadata: &opendal::Metadata,
+    dir_path: &str,
     meta_path: &str,
 ) -> Option<i64> {
     if let Some(v) = metadata.last_modified() {
         return Some(v.into_inner().as_millisecond());
+    }
+    if operator.info().scheme() == Scheme::Fs.into_static()
+        && let Some(v) = stat_last_modified(operator, dir_path).await
+    {
+        return Some(v);
     }
     stat_last_modified(operator, meta_path).await
 }

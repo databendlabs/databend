@@ -408,7 +408,8 @@ mod unit {
         let operator = OperatorBuilder::new(accessor).finish();
 
         let last_modified =
-            resolve_dir_last_modified(&operator, &dir_meta(None), "spill/dir.list").await;
+            resolve_dir_last_modified(&operator, &dir_meta(None), "spill/dir/", "spill/dir.list")
+                .await;
 
         assert_eq!(last_modified, Some(meta_ts));
         Ok(())
@@ -542,6 +543,38 @@ mod unit {
             0,
             "no fallback listing under throttling"
         );
+        Ok(())
+    }
+
+    /// On a real filesystem the directory mtime moves with every new file, so a live spill
+    /// directory whose first file is old must not be aged from that file.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_fs_live_directory_with_old_first_file_is_kept() -> anyhow::Result<()> {
+        let root = tempfile::tempdir()?;
+        let dir = root.path().join("spill").join("dir");
+        std::fs::create_dir_all(&dir)?;
+        let old_file = dir.join("file0");
+        std::fs::write(&old_file, b"x")?;
+        std::fs::File::open(&old_file)?
+            .set_modified(std::time::SystemTime::now() - Duration::from_secs(2 * 3600))?;
+        // Creating a second file now refreshes the directory mtime.
+        std::fs::write(dir.join("file1"), b"y")?;
+
+        let operator =
+            Operator::new(opendal::services::Fs::default().root(root.path().to_str().unwrap()))?
+                .finish();
+        let outcome = run_dir_vacuum_for_test(
+            &operator,
+            "spill/",
+            "spill/dir/",
+            &dir_meta(None),
+            expiry(Utc::now().timestamp_millis(), Duration::from_secs(60)),
+            100,
+        )
+        .await?;
+
+        assert!(outcome.delete.is_none(), "live directory must be kept");
+        assert!(old_file.exists());
         Ok(())
     }
 
