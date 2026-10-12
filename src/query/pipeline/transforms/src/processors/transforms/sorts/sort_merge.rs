@@ -173,33 +173,14 @@ impl SortedStream for BlockStream {
     }
 }
 
-/// Merge sorted blocks into blocks of at most `block_size` rows.
-pub fn sort_merge(
-    schema: DataSchemaRef,
-    block_size: usize,
-    sort_desc: Vec<SortColumnDescription>,
-    data_blocks: Vec<DataBlock>,
-    enable_fixed_rows: bool,
-    enable_loser_tree: bool,
-) -> Result<Vec<DataBlock>> {
-    sort_merge_incremental(
-        schema,
-        block_size,
-        sort_desc,
-        data_blocks,
-        enable_fixed_rows,
-        enable_loser_tree,
-    )?
-    .collect()
-}
-
 /// Sorted blocks pulled one at a time: a merge output, or a sorted run.
 pub type SortedBlockIterator = Box<dyn Iterator<Item = Result<DataBlock>> + Send>;
 
-/// Merge sorted blocks, letting the caller pull the output. The merger owns
-/// the input blocks and drops each one after its last row is emitted, so the
-/// merged output does not have to be held next to the whole input.
-pub fn sort_merge_incremental(
+/// Merge sorted blocks into blocks of at most `block_size` rows, pulled one at
+/// a time by the caller. The merger owns the input blocks and drops each one
+/// after its last row is emitted, so the merged output does not have to be
+/// held next to the whole input.
+pub fn sort_merge(
     schema: DataSchemaRef,
     block_size: usize,
     sort_desc: Vec<SortColumnDescription>,

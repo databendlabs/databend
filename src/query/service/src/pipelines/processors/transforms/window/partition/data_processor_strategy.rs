@@ -17,7 +17,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_transforms::sorts::SortedBlockIterator;
-use databend_common_pipeline_transforms::sorts::sort_merge_incremental;
+use databend_common_pipeline_transforms::sorts::sort_merge;
 use databend_common_pipeline_transforms::sorts::sort_merge_sources;
 use databend_common_settings::Settings;
 
@@ -190,7 +190,7 @@ impl DataProcessorStrategy for SortStrategy {
             .map(|data_block| DataBlock::sort(&data_block, &self.sort_desc, None))
             .collect::<Result<Vec<_>>>()?;
 
-        sort_merge_incremental(
+        sort_merge(
             self.schema.clone(),
             page_rows,
             self.sort_desc.clone(),
