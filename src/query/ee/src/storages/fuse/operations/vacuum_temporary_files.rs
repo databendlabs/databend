@@ -26,7 +26,6 @@
 //   settled into the budget, the concurrency policy and the logs.
 
 use std::collections::HashSet;
-use std::io::BufRead;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -34,6 +33,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use databend_common_catalog::table_context::AbortChecker;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_storage::DataOperator;
 use databend_common_storage::opendal_rate_limited_retries;
@@ -585,23 +585,32 @@ async fn delete_by_meta_buffer(
     meta: Buffer,
     max: usize,
 ) -> Result<Option<DeleteOutcome>> {
-    let meta = meta.to_bytes();
-    let files: Vec<String> = meta.lines().map(|x| Ok(x?)).collect::<Result<Vec<_>>>()?;
-    let (to_be_removed, remain) = files.split_at(max.min(files.len()));
-
-    let to_be_removed: Vec<String> = to_be_removed
-        .iter()
-        .filter(|f| f.starts_with(temporary_dir))
-        .cloned()
-        .collect();
+    // Only the first `max` paths are materialized; the rest of the manifest stays a slice of
+    // the buffer we already hold and is written back as-is.
+    let bytes = meta.to_bytes();
+    let text = std::str::from_utf8(&bytes).map_err(|e| {
+        ErrorCode::StorageOther(format!("spill meta {meta_path} is not utf-8: {e}"))
+    })?;
+    let mut to_be_removed = Vec::new();
+    let mut consumed = 0;
+    for line in text.split_inclusive('\n') {
+        if to_be_removed.len() >= max {
+            break;
+        }
+        consumed += line.len();
+        let path = line.trim_end_matches(['\n', '\r']);
+        if path.starts_with(temporary_dir) {
+            to_be_removed.push(path.to_owned());
+        }
+    }
     if to_be_removed.is_empty() {
         return Ok(None);
     }
     let outcome = deleter.delete(to_be_removed, meta_path).await;
-    if outcome.removed > 0 && !remain.is_empty() {
+    if outcome.removed > 0 && consumed < bytes.len() {
         deleter
             .operator()
-            .write(meta_path, remain.join("\n"))
+            .write(meta_path, bytes.slice(consumed..))
             .await?;
     }
     Ok(Some(outcome))
