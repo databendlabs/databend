@@ -449,7 +449,6 @@ mod unit {
             outcome.delete.is_none(),
             "a skipped directory must not feed the budget or the concurrency policy"
         );
-        assert_eq!(outcome.gc_meta, None);
         assert_eq!(accessor.deleted_paths(), Vec::<String>::new());
         assert_eq!(accessor.list_call_count(), 0);
         assert_eq!(accessor.read_call_count(), 0);
@@ -492,14 +491,57 @@ mod unit {
         .await?;
 
         assert_eq!(outcome.delete.map(|d| d.removed), Some(2));
-        // Reported with the name the top-level listing uses for the sibling meta file.
-        assert_eq!(outcome.gc_meta.as_deref(), Some("dir.list"));
         assert_eq!(accessor.deleted_paths(), vec![
             "spill/dir/file1".to_string(),
             "spill/dir/file2".to_string()
         ]);
         assert_eq!(accessor.list_call_count(), 0);
         assert_eq!(accessor.read_call_count(), 1);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_throttled_meta_batch_is_deferred_not_retried_by_listing() -> anyhow::Result<()> {
+        let now = Utc::now().timestamp_millis();
+        let old_ts = (Utc::now() - ChronoDuration::hours(2)).timestamp_millis();
+        let accessor = MockVacuumAccessor::new(
+            HashMap::from([("spill/dir/".to_string(), vec![(
+                "spill/dir/file1".to_string(),
+                file_meta(Some(old_ts)),
+            )])]),
+            HashMap::from([(
+                "spill/dir.list".to_string(),
+                StatResult::Meta(Box::new(file_meta(Some(old_ts)))),
+            )]),
+            HashMap::from([(
+                "spill/dir.list".to_string(),
+                ReadResult::Buffer(Buffer::from("spill/dir/file1")),
+            )]),
+        );
+        accessor.throttle_next_batches(1);
+        let operator = OperatorBuilder::new(accessor.clone()).finish();
+        let outcome = run_dir_vacuum_for_test(
+            &operator,
+            "spill/",
+            "spill/dir/",
+            &dir_meta(None),
+            expiry(now, Duration::from_secs(60)),
+            100,
+        )
+        .await?;
+
+        let delete = outcome.delete.expect("a meta batch was attempted");
+        assert_eq!(delete.removed, 0);
+        assert!(
+            delete.rate_limited,
+            "the throttling signal must reach the scheduler"
+        );
+        assert_eq!(accessor.deleted_paths(), Vec::<String>::new());
+        assert_eq!(
+            accessor.list_call_count(),
+            0,
+            "no fallback listing under throttling"
+        );
         Ok(())
     }
 

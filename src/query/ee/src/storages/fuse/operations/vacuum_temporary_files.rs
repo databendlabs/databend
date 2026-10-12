@@ -307,8 +307,6 @@ struct DirOutcome {
     dir_path: String,
     /// `None`: the directory was skipped, no delete was attempted.
     delete: Option<DeleteOutcome>,
-    /// Meta file consumed by this task; the scheduler skips it when the listing reaches it.
-    gc_meta: Option<String>,
 }
 
 /// Bookkeeping of one `VACUUM TEMPORARY FILES` run. Owned by the scheduler; the only place
@@ -336,9 +334,6 @@ impl Run {
     }
 
     fn settle(&mut self, outcome: DirOutcome) {
-        if let Some(meta) = outcome.gc_meta {
-            self.gc_metas.insert(meta);
-        }
         let Some(delete) = outcome.delete else {
             return;
         };
@@ -386,8 +381,11 @@ impl Run {
 /// - The top-level listing is consumed sequentially; each spill directory is vacuumed as an
 ///   independent task, bounded by [`AdaptiveConcurrency`].
 /// - `limit` is a soft upper bound: no new directory is started once it is reached, but tasks
-///   already in flight finish, so the final count may exceed it by up to
+///   already in flight finish, so the final count may exceed it by the contents of up to
 ///   `AdaptiveConcurrency::MAX` directories.
+/// - A directory's sibling `.list` meta file is claimed when the directory task is scheduled, so
+///   the top-level listing never vacuums the same meta file concurrently, whatever order the
+///   store lists the two entries in.
 async fn vacuum_by_duration(
     abort_checker: AbortChecker,
     temporary_dir: &str,
@@ -439,7 +437,7 @@ async fn vacuum_by_duration(
             }
 
             if name.ends_with(SPILL_META_SUFFIX) {
-                if run.gc_metas.contains(name) {
+                if !run.gc_metas.insert(name.to_owned()) {
                     continue;
                 }
                 let delete =
@@ -447,8 +445,7 @@ async fn vacuum_by_duration(
                         .await?;
                 run.settle(DirOutcome {
                     dir_path: de.path().to_owned(),
-                    delete: Some(delete),
-                    gc_meta: Some(name.to_owned()),
+                    delete,
                 });
             } else {
                 temp_files.push(de.path().to_owned());
@@ -457,6 +454,11 @@ async fn vacuum_by_duration(
                 }
             }
         } else {
+            run.gc_metas.insert(format!(
+                "{}{}",
+                name.trim_end_matches('/'),
+                SPILL_META_SUFFIX
+            ));
             let (dir_path, metadata) = de.into_parts();
             in_flight.push(vacuum_dir_entry(
                 deleter.clone(),
@@ -478,7 +480,6 @@ async fn vacuum_by_duration(
         run.settle(DirOutcome {
             dir_path: temporary_dir.to_string(),
             delete: Some(delete),
-            gc_meta: None,
         });
     }
 
@@ -495,69 +496,48 @@ async fn vacuum_dir_entry(
     expiry: Expiry,
     max: usize,
 ) -> Result<DirOutcome> {
-    let dir = dir_path.trim_end_matches('/');
-    let meta_path = format!("{}{}", dir, SPILL_META_SUFFIX);
-    // Name as the top-level listing reports the sibling meta file (no trailing '/').
-    let meta_name = format!(
-        "{}{}",
-        dir.rsplit('/').next().unwrap_or(dir),
-        SPILL_META_SUFFIX
-    );
-    let skipped = |dir_path| DirOutcome {
-        dir_path,
-        delete: None,
-        gc_meta: None,
+    let meta_path = format!("{}{}", dir_path.trim_end_matches('/'), SPILL_META_SUFFIX);
+    let outcome = |delete| DirOutcome {
+        dir_path: dir_path.clone(),
+        delete,
     };
     if max == 0 {
-        return Ok(skipped(dir_path));
+        return Ok(outcome(None));
     }
 
-    match resolve_dir_last_modified(deleter.operator(), &metadata, &meta_path).await {
-        Some(last_modified) => {
-            if !expiry.expired(last_modified) {
-                return Ok(skipped(dir_path));
-            }
-            let by_meta = delete_by_meta(&deleter, &temporary_dir, &meta_path, max).await?;
-            if by_meta.removed > 0 {
-                return Ok(DirOutcome {
-                    dir_path,
-                    delete: Some(by_meta),
-                    gc_meta: Some(meta_name),
-                });
-            }
-            let delete = delete_by_list(&deleter, &dir_path, max).await?;
-            Ok(DirOutcome {
-                dir_path,
-                delete: Some(delete),
-                gc_meta: None,
-            })
-        }
-        None => {
-            let delete = delete_by_probe(&deleter, &dir_path, expiry, max).await?;
-            let gc_meta = (delete.removed > 0).then_some(meta_name);
-            Ok(DirOutcome {
-                dir_path,
-                delete: Some(delete),
-                gc_meta,
-            })
-        }
+    let Some(last_modified) =
+        resolve_dir_last_modified(deleter.operator(), &metadata, &meta_path).await
+    else {
+        let delete = delete_by_probe(&deleter, &dir_path, expiry, max).await?;
+        return Ok(outcome(Some(delete)));
+    };
+    if !expiry.expired(last_modified) {
+        return Ok(outcome(None));
     }
+    // A meta batch that was attempted is final for this run, whether it succeeded or was
+    // throttled; only a directory without a usable meta file falls back to listing.
+    let delete = match delete_by_meta(&deleter, &temporary_dir, &meta_path, max).await? {
+        Some(by_meta) => by_meta,
+        None => delete_by_list(&deleter, &dir_path, max).await?,
+    };
+    Ok(outcome(Some(delete)))
 }
 
 // ---------------------------------------------------------------------------------------------
 // Directory strategies
 // ---------------------------------------------------------------------------------------------
 
-/// Delete the files recorded in a spill meta file. A missing meta file yields an empty outcome.
+/// Delete the files recorded in a spill meta file. `None` when there is no meta file or it
+/// lists nothing to delete, i.e. no batch was attempted.
 async fn delete_by_meta(
     deleter: &SpillDeleter,
     temporary_dir: &str,
     meta_path: &str,
     max: usize,
-) -> Result<DeleteOutcome> {
+) -> Result<Option<DeleteOutcome>> {
     let meta = match deleter.operator().read(meta_path).await {
         Ok(meta) => meta,
-        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(DeleteOutcome::default()),
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(e.into()),
     };
     delete_by_meta_buffer(deleter, temporary_dir, meta_path, meta, max).await
@@ -573,7 +553,7 @@ async fn delete_by_meta_buffer(
     meta_path: &str,
     meta: Buffer,
     max: usize,
-) -> Result<DeleteOutcome> {
+) -> Result<Option<DeleteOutcome>> {
     let meta = meta.to_bytes();
     let files: Vec<String> = meta.lines().map(|x| Ok(x?)).collect::<Result<Vec<_>>>()?;
     let (to_be_removed, remain) = files.split_at(max.min(files.len()));
@@ -583,19 +563,17 @@ async fn delete_by_meta_buffer(
         .filter(|f| f.starts_with(temporary_dir))
         .cloned()
         .collect();
-    let attempted = to_be_removed.len();
-    let outcome = deleter.delete(to_be_removed, meta_path).await;
-
-    if attempted > 0 && outcome.removed == 0 {
-        return Ok(outcome);
+    if to_be_removed.is_empty() {
+        return Ok(None);
     }
-    if !remain.is_empty() {
+    let outcome = deleter.delete(to_be_removed, meta_path).await;
+    if outcome.removed > 0 && !remain.is_empty() {
         deleter
             .operator()
             .write(meta_path, remain.join("\n"))
             .await?;
     }
-    Ok(outcome)
+    Ok(Some(outcome))
 }
 
 /// Delete everything under `dir_path` found by a recursive listing, then the directory itself.
@@ -718,7 +696,7 @@ async fn vacuum_query_hook(
             budget.remaining(),
         )
         .await?;
-        budget.record(outcome.removed);
+        budget.record(outcome.map_or(0, |o| o.removed));
     }
 
     Ok(budget.removed())
