@@ -34,7 +34,7 @@ use databend_common_pipeline_transforms::sorts::core::SortKeyDescription;
 use databend_common_pipeline_transforms::sorts::core::select_row_type;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::executor::physical_plans::SortDesc;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_storages_parquet::ReadSettings;
 use itertools::Itertools;
 
@@ -466,7 +466,7 @@ impl FinalTopNParams {
 impl PhysicalPlanBuilder {
     pub async fn build_top_n(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         top_n: &databend_common_sql::plans::TopN,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,

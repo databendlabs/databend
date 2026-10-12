@@ -26,6 +26,8 @@ use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -196,6 +198,74 @@ async fn test_no_check_timestamp_maps_missing_prev_snapshot() -> anyhow::Result<
             ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND,
             "unexpected error: {e}"
         ),
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_stream_navigation_maps_missing_snapshot() -> anyhow::Result<()> {
+    // A STREAM keeps a pointer to a base snapshot. Once vacuum removes that object, reading
+    // the stream must report TableHistoricalDataNotFound, not a raw StorageNotFound from the
+    // object store.
+
+    let fixture = TestFixture::setup().await?;
+    let db = fixture.default_db_name();
+    let tbl = fixture.default_table_name();
+
+    fixture.create_default_database().await?;
+    fixture.create_default_table().await?;
+
+    let qry = format!("insert into {}.{} values (1, (2, 3)) ", db, tbl);
+    let strm = fixture.execute_query(qry.as_str()).await?;
+    strm.try_collect::<Vec<DataBlock>>().await?;
+
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let base_snapshot = fuse_table.snapshot_loc().unwrap();
+
+    // Advance the table so the base snapshot is no longer the current one.
+    let qry = format!("insert into {}.{} values (2, (4, 6)) ", db, tbl);
+    let strm = fixture.execute_query(qry.as_str()).await?;
+    strm.try_collect::<Vec<DataBlock>>().await?;
+
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    assert_ne!(fuse_table.snapshot_loc().unwrap(), base_snapshot);
+
+    // A stream table info pointing at the base snapshot of this table.
+    let mut stream_info = table.get_table_info().clone();
+    stream_info.meta.options.insert(
+        OPT_KEY_SOURCE_TABLE_ID.to_string(),
+        table.get_table_info().ident.table_id.to_string(),
+    );
+    stream_info
+        .meta
+        .options
+        .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), base_snapshot.clone());
+
+    // Simulate vacuum: remove the base snapshot object and drop its cache entry.
+    fuse_table.get_operator().delete(&base_snapshot).await?;
+    if let Some(cache) = CacheManager::instance().get_table_snapshot_cache() {
+        cache.evict(&base_snapshot);
+    }
+
+    let ctx = fixture.new_query_ctx().await?;
+    let tbl_ctx: std::sync::Arc<dyn TableContext> = ctx.clone();
+    let res = fuse_table
+        .navigate_to_point(&tbl_ctx, &NavigationPoint::StreamInfo(stream_info))
+        .await;
+
+    match res {
+        Ok(_) => panic!("expected historical data not found when stream base snapshot is missing"),
+        Err(e) => {
+            assert_eq!(
+                e.code(),
+                ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND,
+                "unexpected error: {e}"
+            );
+            assert!(e.message().contains("STREAM"), "unexpected message: {e}");
+        }
     }
 
     Ok(())

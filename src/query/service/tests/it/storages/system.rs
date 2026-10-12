@@ -653,3 +653,89 @@ async fn test_show_tables_ignores_broken_attached_table_refresh() -> anyhow::Res
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_history_etl_reads_tenant_meta() -> anyhow::Result<()> {
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::ScalarRef;
+    use databend_meta_client::kvapi::KVApi;
+    use databend_meta_client::types::UpsertKV;
+
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let meta = UserApiProvider::instance().get_meta_store_client();
+    let prefix = format!("{}/history_log_transform/", ctx.get_tenant().tenant_name());
+    // This node is absent from the reader's cluster. All information must come from meta.
+    for (key, value) in [
+        (
+            format!("{prefix}query_history/heartbeat"),
+            br#"{"from_node_id":"remote-cluster-node"}"#.as_slice(),
+        ),
+        (
+            format!("{prefix}query_history/batch_number"),
+            b"42".as_slice(),
+        ),
+        (
+            format!("{prefix}query_history/last_error"),
+            br#"{"message":"previous failure","time":1788834000000000}"#.as_slice(),
+        ),
+        (
+            format!("{prefix}login_history/last_error"),
+            br#"{"message":"first batch failed","time":1788834000000000}"#.as_slice(),
+        ),
+        (
+            format!("other-{prefix}log_history/batch_number"),
+            b"99".as_slice(),
+        ),
+    ] {
+        meta.upsert_kv(UpsertKV::update(&key, value)).await?;
+    }
+    let blocks = execute_query(
+        ctx,
+        "SELECT table_name, heartbeat_node_id, batch_number,
+        last_success_time IS NOT NULL, last_error_time, last_error
+        FROM system.history_etl ORDER BY table_name",
+    )
+    .await?
+    .try_collect::<Vec<DataBlock>>()
+    .await?;
+    let block = DataBlock::concat(&blocks)?;
+    assert_eq!(block.num_rows(), 2);
+    assert_eq!(
+        block.get_by_offset(0).index(0),
+        Some(ScalarRef::String("login_history"))
+    );
+    assert_eq!(block.get_by_offset(1).index(0), Some(ScalarRef::Null));
+    assert_eq!(block.get_by_offset(2).index(0), Some(ScalarRef::Null));
+    assert_eq!(
+        block.get_by_offset(3).index(0),
+        Some(ScalarRef::Boolean(false))
+    );
+    assert_eq!(
+        block.get_by_offset(0).index(1),
+        Some(ScalarRef::String("query_history"))
+    );
+    assert_eq!(
+        block.get_by_offset(1).index(1),
+        Some(ScalarRef::String("remote-cluster-node"))
+    );
+    assert_eq!(
+        block.get_by_offset(2).index(1),
+        Some(ScalarRef::Number(
+            databend_common_expression::types::number::NumberScalar::UInt64(42)
+        ))
+    );
+    assert_eq!(
+        block.get_by_offset(3).index(1),
+        Some(ScalarRef::Boolean(true))
+    );
+    assert_eq!(
+        block.get_by_offset(4).index(1),
+        Some(ScalarRef::Timestamp(1788834000000000))
+    );
+    assert_eq!(
+        block.get_by_offset(5).index(1),
+        Some(ScalarRef::String("previous failure"))
+    );
+    Ok(())
+}

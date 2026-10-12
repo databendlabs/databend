@@ -32,3 +32,6 @@ pub use filter::NormalizeDisjunctiveFilterOptimizer;
 pub use filter::PullUpFilterOptimizer;
 pub use join::FinalizeSpatialJoinOptimizer;
 pub use join::SingleToInnerOptimizer;
+
+mod eliminate_eval_scalar;
+pub use eliminate_eval_scalar::EliminateEvalScalarOptimizer;

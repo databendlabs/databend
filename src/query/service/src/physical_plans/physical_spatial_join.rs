@@ -29,8 +29,8 @@ use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::optimizer::ir::Distribution;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::RelExpr;
-use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Exchange;
 use databend_common_sql::plans::SpatialJoinCandidate;
@@ -177,17 +177,17 @@ impl PhysicalPlanBuilder {
     pub async fn try_build_spatial_join(
         &mut self,
         candidate: SpatialJoinCandidate,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         required: ColumnSet,
         left_required: ColumnSet,
         right_required: ColumnSet,
     ) -> Result<Option<PhysicalPlan>> {
         let max_build_rows = self.ctx.get_settings().get_spatial_join_max_build_rows()? as f64;
         let stat_ctx = StatContext::new(self.func_ctx.clone());
-        let left_card = RelExpr::with_s_expr(s_expr.left_child())
+        let left_card = RelExpr::with_p_expr(s_expr.left_child())
             .derive_cardinality(&stat_ctx)?
             .cardinality;
-        let right_card = RelExpr::with_s_expr(s_expr.right_child())
+        let right_card = RelExpr::with_p_expr(s_expr.right_child())
             .derive_cardinality(&stat_ctx)?
             .cardinality;
         let smaller_side = if left_card < right_card {
@@ -201,11 +201,11 @@ impl PhysicalPlanBuilder {
         let build_side = if is_cluster {
             let left_exchange = s_expr.left_child().get_data_distribution()?;
             let right_exchange = s_expr.right_child().get_data_distribution()?;
-            let left_distribution = RelExpr::with_s_expr(s_expr.left_child())
+            let left_distribution = RelExpr::with_p_expr(s_expr.left_child())
                 .derive_physical_prop()?
                 .distribution
                 .clone();
-            let right_distribution = RelExpr::with_s_expr(s_expr.right_child())
+            let right_distribution = RelExpr::with_p_expr(s_expr.right_child())
                 .derive_physical_prop()?
                 .distribution
                 .clone();

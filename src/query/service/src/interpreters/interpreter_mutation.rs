@@ -31,7 +31,7 @@ use databend_common_pipeline::sinks::EmptySink;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::planner::MetadataRef;
 use databend_common_sql::plans;
 use databend_common_sql::plans::Mutation;
@@ -60,7 +60,7 @@ use crate::stream::DataBlockStream;
 
 pub struct MutationInterpreter {
     ctx: Arc<QueryContext>,
-    s_expr: SExpr,
+    s_expr: PExpr,
     schema: DataSchemaRef,
     metadata: MetadataRef,
     materialized_view_refresh_target: Option<u64>,
@@ -69,7 +69,7 @@ pub struct MutationInterpreter {
 impl MutationInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
-        s_expr: SExpr,
+        s_expr: PExpr,
         schema: DataSchemaRef,
         metadata: MetadataRef,
     ) -> Result<MutationInterpreter> {
@@ -84,7 +84,7 @@ impl MutationInterpreter {
 
     pub fn try_create_materialized_view_refresh(
         ctx: Arc<QueryContext>,
-        s_expr: SExpr,
+        s_expr: PExpr,
         schema: DataSchemaRef,
         metadata: MetadataRef,
         target_table_id: u64,
@@ -140,14 +140,10 @@ impl Interpreter for MutationInterpreter {
                     .add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
             }
 
-            // Execute hook.
+            // Execute hook. The table lock acquired by the binder is handed over to the hook
+            // chain, which keeps it for the main pipeline and the compact hook and releases it
+            // before analyze.
             self.execute_hook(&mutation, &mut build_res).await;
-
-            let lock_guard = mutation
-                .lock_guard
-                .as_ref()
-                .and_then(|holder| holder.try_take());
-            build_res.main_pipeline.add_lock_guard(lock_guard);
 
             Ok(build_res)
         })
@@ -187,7 +183,8 @@ impl MutationInterpreter {
             mutation.table_name.clone(),
             mutation_kind,
             hook_lock_opt,
-        );
+        )
+        .with_lock_guard(mutation.lock_guard.clone());
         hook_operator.execute(&mut build_res.main_pipeline).await;
     }
 

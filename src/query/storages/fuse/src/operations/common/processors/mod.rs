@@ -14,6 +14,7 @@
 
 mod hilbert_range_exchange;
 mod multi_table_insert_commit;
+mod recluster_inverted_index_merge;
 mod sink_commit;
 mod transform_block_writer;
 mod transform_constraint_verify;
@@ -22,6 +23,11 @@ mod transform_merge_commit_meta;
 mod transform_mutation_aggregator;
 mod transform_partition_by;
 mod transform_reaggregate_aggregate_state;
+pub use recluster_inverted_index_merge::ReclusterIndexInput;
+pub use recluster_inverted_index_merge::ReclusterIndexMergeInputs;
+pub use recluster_inverted_index_merge::ReclusterIndexOutput;
+pub use recluster_inverted_index_merge::ReclusterIndexRowRange;
+pub use recluster_inverted_index_merge::TransformReclusterIndexMerge;
 mod transform_serialize_block;
 mod transform_serialize_segment;
 mod transform_vector_cluster;

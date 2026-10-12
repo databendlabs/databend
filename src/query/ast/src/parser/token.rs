@@ -650,8 +650,6 @@ pub enum TokenKind {
     DOW,
     #[token("WEEK", ignore(ascii_case))]
     WEEK,
-    #[token("DELTA", ignore(ascii_case))]
-    DELTA,
     #[token("DOY", ignore(ascii_case))]
     DOY,
     #[token("DOWNLOAD", ignore(ascii_case))]
@@ -1558,6 +1556,8 @@ pub enum TokenKind {
     ENABLED,
     #[token("WEBHOOK", ignore(ascii_case))]
     WEBHOOK,
+    #[token("WEBHOOK_BODY_TEMPLATE", ignore(ascii_case))]
+    WEBHOOK_BODY_TEMPLATE,
     #[token("WEDNESDAY", ignore(ascii_case))]
     WEDNESDAY,
     #[token("ERROR_INTEGRATION", ignore(ascii_case))]

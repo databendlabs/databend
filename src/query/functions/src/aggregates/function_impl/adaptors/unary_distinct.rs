@@ -64,8 +64,9 @@ pub(crate) fn create_unary_distinct<const SKIP_NULLS: bool, C: Combinator>(
     ) -> Result<AggregateCallRef> {
         let mut fields = vec![AggrStateType::Custom(Layout::new::<UnaryDistinctState<S>>())];
         fields.extend_from_slice(state.fields());
-        let state =
-            AggregateStateDescription::new(fields, vec![S::serde_item()]).with_manual_drop(true);
+        let state = AggregateStateDescription::new(fields, vec![S::serde_item()])
+            .with_manual_drop(true)
+            .with_state_version(state.state_version());
         combinator.create::<false>(
             signature,
             metadata,

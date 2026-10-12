@@ -21,10 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
-use databend_common_expression::Scalar;
-use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::types::DataType;
 use databend_common_metrics::storage::metrics_inc_omit_filter_rowgroups;
 use databend_common_metrics::storage::metrics_inc_omit_filter_rows;
 use databend_common_storage::OperatorRegistry;
@@ -81,18 +78,11 @@ pub struct ParquetWholeFileReader {
 }
 
 impl ParquetWholeFileReader {
-    // partition_fields is only used for delta table engine.
     pub async fn prepare_data_stream(
         &self,
         loc: &str,
         size: u64,
-        partition_fields: Option<&[(TableField, Scalar)]>,
     ) -> Result<ParquetRecordBatchStream<ParquetFileReader>> {
-        let partition_values_map = partition_fields.map(|arr| {
-            arr.iter()
-                .map(|(f, v)| (f.name().to_string(), v.clone()))
-                .collect::<std::collections::HashMap<String, Scalar>>()
-        });
         let (op, path) = self.op_registry.get_operator_path(loc)?;
         let reader: Reader = op.reader(path).await?;
         let reader = ParquetFileReader::new(reader, size);
@@ -110,17 +100,12 @@ impl ParquetWholeFileReader {
 
         // Prune row groups.
         if let Some(pruner) = &self.pruner {
-            let (selected_row_groups, omits, _) =
-                pruner.prune_row_groups(&file_meta, None, partition_values_map.as_ref())?;
+            let (selected_row_groups, omits, _) = pruner.prune_row_groups(&file_meta, None)?;
             all_pruned = omits.iter().all(|x| *x);
             builder = builder.with_row_groups(selected_row_groups.clone());
 
             if !all_pruned {
-                let row_selection = pruner.prune_pages(
-                    &file_meta,
-                    &selected_row_groups,
-                    partition_values_map.as_ref(),
-                )?;
+                let row_selection = pruner.prune_pages(&file_meta, &selected_row_groups)?;
 
                 if let Some(row_selection) = row_selection {
                     builder = builder.with_row_selection(row_selection);
@@ -135,17 +120,9 @@ impl ParquetWholeFileReader {
             if let Some(predicate) = self.predicate.as_ref() {
                 let projection = predicate.projection().clone();
                 let predicate = predicate.clone();
-                let partition_block_scalars = partition_fields
-                    .map(|arr| {
-                        Arc::<[_]>::from_iter(
-                            arr.iter()
-                                .map(|(f, v)| (DataType::from(f.data_type()), v.clone())),
-                        )
-                    })
-                    .unwrap_or_default();
                 let predicate_fn = move |batch| {
                     predicate
-                        .evaluate(&batch, partition_block_scalars.clone())
+                        .evaluate(&batch)
                         .map_err(|e| ArrowError::from_external_error(Box::new(e)))
                 };
                 builder = builder.with_row_filter(RowFilter::new(vec![Box::new(
@@ -200,14 +177,13 @@ impl ParquetWholeFileReader {
 
         let mut full_match = false;
         if let Some(pruner) = &self.pruner {
-            let (selected_row_groups, omits, _) =
-                pruner.prune_row_groups(&file_meta, None, None)?;
+            let (selected_row_groups, omits, _) = pruner.prune_row_groups(&file_meta, None)?;
 
             full_match = omits.iter().all(|x| *x);
             builder = builder.with_row_groups(selected_row_groups.clone());
 
             if !full_match {
-                let row_selection = pruner.prune_pages(&file_meta, &selected_row_groups, None)?;
+                let row_selection = pruner.prune_pages(&file_meta, &selected_row_groups)?;
 
                 if let Some(row_selection) = row_selection {
                     builder = builder.with_row_selection(row_selection);
@@ -224,7 +200,7 @@ impl ParquetWholeFileReader {
                 let predicate = predicate.clone();
                 let predicate_fn = move |batch| {
                     predicate
-                        .evaluate(&batch, Default::default())
+                        .evaluate(&batch)
                         .map_err(|e| ArrowError::from_external_error(Box::new(e)))
                 };
                 builder = builder.with_row_filter(RowFilter::new(vec![Box::new(

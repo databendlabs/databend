@@ -62,9 +62,9 @@ impl Binder {
                 let materialized_cte_info = MaterializedCTEInfo {
                     cte_name: format!("__materialized_cte_{materialized_cte_id}_{cte_name}"),
                     bound_s_expr: s_expr,
-                    bound_context: cte_bind_context,
+                    bound_columns: cte_bind_context.columns,
                 };
-                Some(materialized_cte_info)
+                Some(Arc::new(materialized_cte_info))
             } else {
                 None
             };
@@ -89,7 +89,7 @@ impl Binder {
                     .virtual_column_outputs
                     .remove(&cte_name)
                     .unwrap_or_default(),
-                query: *cte.query.clone(),
+                query: Arc::new(*cte.query.clone()),
                 recursive: with.recursive,
                 logical_recursive_cte_id,
                 columns: vec![],

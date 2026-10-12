@@ -670,8 +670,13 @@ fn apply_stats(
             column_stats,
             histogram_stats,
         };
-        if let Some(new_expr) = s_expr.accept(&mut applier)? {
-            **s_expr = new_expr;
+        let databend_common_sql::optimizer::ir::QueryPlan::Logical(expr) = s_expr.as_mut() else {
+            return Err(ErrorCode::Internal(
+                "Test statistics must be applied before physical planning",
+            ));
+        };
+        if let Some(new_expr) = expr.accept(&mut applier)? {
+            *expr = new_expr;
         }
     }
     Ok(())

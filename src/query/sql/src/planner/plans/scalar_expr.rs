@@ -1303,6 +1303,10 @@ pub struct SubqueryExpr {
     pub compare_op: Option<SubqueryComparisonOp>,
     // Output column of Any/All and scalar subqueries.
     pub output_column: ColumnBinding,
+    // All output columns when a row value is compared positionally against a
+    // multi-column subquery, such as `(a, b) IN (SELECT x, y FROM t)`.
+    // Empty for every other subquery, including a single tuple-typed column.
+    pub row_columns: Vec<ColumnBinding>,
     pub projection_index: Option<Symbol>,
     pub(crate) data_type: Box<DataType>,
     #[educe(Hash(method = "hash_column_set"))]

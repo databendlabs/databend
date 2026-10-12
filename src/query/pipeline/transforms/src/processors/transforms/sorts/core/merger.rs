@@ -15,6 +15,7 @@
 use std::cmp::Reverse;
 use std::collections::VecDeque;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ChunkIndex;
 use databend_common_expression::Column;
@@ -30,6 +31,13 @@ pub trait SortedStream {
     /// If the block is [None] and it's not pending, it means the stream is finished.
     /// If the block is [None] but it's pending, it means the stream is not finished yet.
     fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)>;
+}
+
+/// An input stream and its already-decoded, unconsumed head after interrupting
+/// a merge at an output boundary.
+pub struct RecoveredMergeStream<S> {
+    pub stream: S,
+    pub head: Option<(DataBlock, Column)>,
 }
 
 struct BufferState {
@@ -116,6 +124,7 @@ where A: SortAlgorithm
 {
     batch_rows: usize,
     limit: Option<usize>,
+    flush_before_refill: bool,
     unsorted_streams: Vec<S>,
 
     pending_streams: VecDeque<usize>,
@@ -139,9 +148,23 @@ where A: SortAlgorithm
             sorted_cursors,
             batch_rows,
             limit,
+            flush_before_refill: false,
             pending_streams,
             buffers,
         }
+    }
+
+    /// Release exhausted batches at refill boundaries without a byte budget.
+    /// Ordinary sort callers keep their existing output batching by default.
+    pub fn with_flush_before_refill(mut self) -> Self {
+        self.flush_before_refill = true;
+        self
+    }
+
+    /// Materialize a selected prefix before waiting for an unknown next head.
+    /// This releases exhausted batches without a separate memory threshold.
+    pub(crate) fn should_flush(&self) -> bool {
+        self.flush_before_refill && self.buffers.has_output() && self.has_pending_stream()
     }
 
     #[inline(always)]
@@ -245,6 +268,37 @@ where A: SortAlgorithm
     pub fn streams(self) -> Vec<S> {
         self.unsorted_streams
     }
+
+    /// Recover each stream's unconsumed suffix after flushing the selected
+    /// output prefix. Used by external mergers to reduce fan-in under pressure.
+    pub fn into_remaining_streams(mut self) -> Result<Vec<RecoveredMergeStream<S>>> {
+        if self.buffers.has_output() {
+            return Err(ErrorCode::Internal(
+                "flush the selected merge prefix before recovering streams",
+            ));
+        }
+        let mut heads = vec![None; self.unsorted_streams.len()];
+        while let Some(Reverse(cursor)) = self.sorted_cursors.peek() {
+            let stream = cursor.input_index;
+            let buffer = self.buffers.stream_to_buffer[stream].expect("active cursor buffer");
+            let mut indices = ChunkIndex::default();
+            indices.push_merge_range(
+                buffer as _,
+                cursor.row_index as _,
+                (cursor.num_rows() - cursor.row_index) as _,
+            );
+            let block = self.buffers.buffer.take(&indices);
+            let keys = cursor.rows_column_suffix();
+            heads[stream] = Some((block, keys));
+            self.sorted_cursors.pop();
+        }
+        Ok(self
+            .unsorted_streams
+            .into_iter()
+            .zip(heads)
+            .map(|(stream, head)| RecoveredMergeStream { stream, head })
+            .collect())
+    }
 }
 
 impl<A, S> Merger<A, S>
@@ -255,7 +309,8 @@ where
     #[inline]
     pub fn poll_pending_stream(&mut self) -> Result<()> {
         let mut continue_pendings = Vec::new();
-        while let Some(i) = self.pending_streams.pop_front() {
+        while !self.pending_streams.is_empty() {
+            let i = self.pending_streams.pop_front().expect("pending stream");
             debug_assert!(self.buffers.stream_to_buffer[i].is_none());
             let (input, pending) = self.unsorted_streams[i].next()?;
             if pending {
@@ -282,10 +337,17 @@ where
             return Ok(None);
         }
 
+        if self.should_flush() {
+            return Ok(Some(self.build_output()?));
+        }
         if self.has_pending_stream() {
             self.poll_pending_stream()?;
             if self.has_pending_stream() {
-                return Ok(None);
+                return if self.should_flush() {
+                    Ok(Some(self.build_output()?))
+                } else {
+                    Ok(None)
+                };
             }
         }
 
@@ -299,10 +361,17 @@ where
         }
 
         while self.evaluate_cursor() {
+            if self.should_flush() {
+                return Ok(Some(self.build_output()?));
+            }
             if self.has_pending_stream() {
                 self.poll_pending_stream()?;
                 if self.has_pending_stream() {
-                    return Ok(None);
+                    return if self.should_flush() {
+                        Ok(Some(self.build_output()?))
+                    } else {
+                        Ok(None)
+                    };
                 }
             }
         }

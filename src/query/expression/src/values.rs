@@ -43,6 +43,9 @@ use geo::Geometry;
 use geo::Point;
 use geozero::CoordDimensions;
 use geozero::ToWkb;
+use geozero::wkb::FromWkb;
+use geozero::wkb::WkbDialect;
+use geozero::wkt::Ewkt;
 use itertools::Itertools;
 use jsonb::RawJsonb;
 use serde::Deserialize;
@@ -1099,10 +1102,24 @@ impl<'b> PartialEq<ScalarRef<'b>> for ScalarRef<'_> {
     }
 }
 
+const NULL_HASH_MARKER: [u8; 9] = *b"\xffNULL\x00\x00\x00\x00";
+const EMPTY_ARRAY_HASH_MARKER: [u8; 9] = *b"\xffEARR\x00\x00\x00\x00";
+const EMPTY_MAP_HASH_MARKER: [u8; 9] = *b"\xffEMAP\x00\x00\x00\x00";
+
+/// Hashing must agree with [`PartialEq`] on both `Scalar` and `ScalarRef`:
+/// values that compare equal produce the same hash. Containers hash their
+/// length and every element (including NULLs) so that different NULL
+/// positions stay distinguishable.
 impl Hash for ScalarRef<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
-            ScalarRef::Null | ScalarRef::EmptyArray | ScalarRef::EmptyMap => {}
+            // Payload-less variants write a marker so that a NULL element
+            // inside a container cannot be confused with a neighbouring value.
+            // The marker is nine bytes long, which no fixed-width value and
+            // no string (bytes followed by 0xff) can produce.
+            ScalarRef::Null => state.write(&NULL_HASH_MARKER),
+            ScalarRef::EmptyArray => state.write(&EMPTY_ARRAY_HASH_MARKER),
+            ScalarRef::EmptyMap => state.write(&EMPTY_MAP_HASH_MARKER),
             ScalarRef::Number(t) => with_number_type!(|NUM_TYPE| match t {
                 NumberScalar::NUM_TYPE(v) => {
                     v.hash(state);
@@ -1120,20 +1137,36 @@ impl Hash for ScalarRef<'_> {
             ScalarRef::TimestampTz(v) => v.hash(state),
             ScalarRef::Date(v) => v.hash(state),
             ScalarRef::Interval(v) => v.0.hash(state),
-            ScalarRef::Array(v) => {
-                let str = serialize_column(v);
-                str.hash(state);
+            ScalarRef::Array(v) | ScalarRef::Map(v) => {
+                v.len().hash(state);
+                for value in v.iter() {
+                    value.hash(state);
+                }
             }
-            ScalarRef::Map(v) => {
-                let str = serialize_column(v);
-                str.hash(state);
-            }
-            ScalarRef::Bitmap(v) => v.hash(state),
+            // `Scalar::eq` compares bitmaps by their decoded members, so the
+            // hash must not depend on the encoding. Undecodable payloads only
+            // compare equal bytewise and fall back to hashing the bytes.
+            ScalarRef::Bitmap(v) => match deserialize_bitmap(v) {
+                Ok(bitmap) => {
+                    bitmap.len().hash(state);
+                    for member in bitmap.iter() {
+                        member.hash(state);
+                    }
+                }
+                Err(_) => v.hash(state),
+            },
             ScalarRef::Tuple(v) => {
                 v.hash(state);
             }
             ScalarRef::Variant(v) => v.hash(state),
-            ScalarRef::Geometry(v) => v.hash(state),
+            // Mirrors `compare_geometry`: decodable geometries compare by their
+            // EWKT text, undecodable ones bytewise.
+            ScalarRef::Geometry(v) => {
+                match Ewkt::from_wkb(&mut std::io::Cursor::new(*v), WkbDialect::Ewkb) {
+                    Ok(ewkt) => ewkt.0.hash(state),
+                    Err(_) => v.hash(state),
+                }
+            }
             ScalarRef::Geography(v) => v.hash(state),
             ScalarRef::Vector(v) => v.hash(state),
             ScalarRef::Opaque(v) => v.hash(state),

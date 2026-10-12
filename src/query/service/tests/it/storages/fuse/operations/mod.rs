@@ -17,6 +17,7 @@ mod alter_table;
 mod analyze;
 mod clustering;
 mod commit;
+mod fault_injection;
 mod logical_change_retry;
 
 mod create_or_replace_ownership_object;

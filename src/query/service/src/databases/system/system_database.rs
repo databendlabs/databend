@@ -38,6 +38,7 @@ use databend_common_storages_system::DictionariesTable;
 use databend_common_storages_system::EnginesTable;
 use databend_common_storages_system::FullStreamsTable;
 use databend_common_storages_system::FunctionsTable;
+use databend_common_storages_system::HistoryEtlTable;
 use databend_common_storages_system::IndexesTable;
 use databend_common_storages_system::LocksTable;
 #[cfg(feature = "jemalloc")]
@@ -170,6 +171,7 @@ impl SystemDatabase {
                     DATABEND_OPT_LEVEL,
                 ),
                 QueryCacheTable::create(sys_db_meta.next_table_id()),
+                HistoryEtlTable::create(sys_db_meta.next_table_id()),
                 TableFunctionsTable::create(sys_db_meta.next_table_id()),
                 CachesTable::create(sys_db_meta.next_table_id()),
                 IndexesTable::create(sys_db_meta.next_table_id()),

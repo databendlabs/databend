@@ -125,7 +125,6 @@ pub enum ParquetSourceType {
     StageTable,
     ResultCache,
     Iceberg,
-    DeltaLake,
     Hive,
     StreamingLoad,
 }

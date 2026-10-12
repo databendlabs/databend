@@ -19,6 +19,9 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use bumpalo::Bump;
+use databend_common_base::base::OrderedFloat;
+use databend_common_hashtable::BloomHash;
+use databend_common_hashtable::FastHash;
 use databend_common_hashtable::HashMap;
 use databend_common_hashtable::HashtableLike;
 use databend_common_hashtable::ShortStringHashMap;
@@ -86,6 +89,43 @@ fn test_hash_map() {
 #[test]
 fn test_stack_hash_map() {
     simple_test!(StackHashMap);
+}
+
+#[test]
+fn test_float_equality_class_hashes() {
+    fn check_same<T: FastHash + BloomHash>(class: &[T]) {
+        let (first, rest) = class.split_first().unwrap();
+        for other in rest {
+            assert_eq!(first.fast_hash(), other.fast_hash());
+            assert_eq!(first.bloom_hash(), other.bloom_hash());
+        }
+    }
+
+    check_same(&[OrderedFloat(0.0f32), OrderedFloat(-0.0f32)]);
+    check_same(&[OrderedFloat(0.0f64), OrderedFloat(-0.0f64)]);
+    check_same(&[
+        OrderedFloat(f32::NAN),
+        OrderedFloat(-f32::NAN),
+        OrderedFloat(f32::from_bits(0x7fc0_0001)),
+        OrderedFloat(f32::from_bits(0xffc0_0001)),
+    ]);
+    check_same(&[
+        OrderedFloat(f64::NAN),
+        OrderedFloat(-f64::NAN),
+        OrderedFloat(f64::from_bits(0x7ff8_0000_0000_0001)),
+        OrderedFloat(f64::from_bits(0xfff8_0000_0000_0001)),
+        OrderedFloat((-1.0f64).sqrt()),
+    ]);
+
+    // Distinct classes must stay distinguishable.
+    assert_ne!(
+        OrderedFloat(0.0f64).fast_hash(),
+        OrderedFloat(f64::NAN).fast_hash()
+    );
+    assert_ne!(
+        OrderedFloat(1.0f64).bloom_hash(),
+        OrderedFloat(-1.0f64).bloom_hash()
+    );
 }
 
 #[test]

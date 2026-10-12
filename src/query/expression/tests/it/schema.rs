@@ -47,6 +47,7 @@ fn test_aggregate_state_table_physical_type() {
         params: vec![],
         argument_types: vec![TableDataType::Number(NumberDataType::UInt64)],
         state_type: Box::new(state_type.clone()),
+        state_version: 0,
     };
 
     assert_eq!(aggregate_state.physical_type().as_ref(), &state_type);

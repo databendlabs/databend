@@ -170,6 +170,11 @@ use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
 use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::ToTenant;
+use databend_common_proto_conv::FromToProto;
+use databend_common_proto_conv::MIN_READER_VER;
+use databend_common_proto_conv::VER;
+use databend_common_protos::pb;
+use databend_common_protos::prost::Message;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::kvapi::StructKey;
@@ -318,6 +323,10 @@ impl SchemaApiTestSuite {
             + 'static,
     {
         self.table_commit_table_meta(&b.build().await).await?;
+        self.vacuum_skips_recent_ctas_orphan(&b.build().await)
+            .await?;
+        self.vacuum_skips_undecodable_table(&b.build().await)
+            .await?;
         self.table_commit_after_drop_different_engine(&b.build().await)
             .await?;
         self.table_commit_table_meta_engine_mismatch(&b.build().await)
@@ -6649,6 +6658,10 @@ impl SchemaApiTestSuite {
             let db_id = orphan_util.db_id();
             let tenant = orphan_util.tenant();
 
+            // CTAS staging tables are protected from vacuum for the default retention
+            // period (1 day), so create it as if it were dropped 2 days ago.
+            let orphan_created_on = Utc::now() - Duration::days(2);
+
             let create_table_req = CreateTableReq {
                 create_option: CreateOption::CreateOrReplace,
                 catalog_name: Some("default".to_string()),
@@ -6657,7 +6670,7 @@ impl SchemaApiTestSuite {
                     db_name: db_name.to_string(),
                     table_name: tbl_name.to_string(),
                 },
-                table_meta: drop_table_meta(created_on),
+                table_meta: drop_table_meta(orphan_created_on),
                 source_table_option: None,
                 as_dropped: true,
                 materialized_view: None,
@@ -6705,6 +6718,212 @@ impl SchemaApiTestSuite {
             let seqv = mt.get_kv(&table_key.to_string_key()).await?;
             assert!(seqv.is_none());
         }
+
+        Ok(())
+    }
+
+    /// A vacuum with retention 0 must not collect the staging table of an in-progress CTAS,
+    /// otherwise its data is removed while the CTAS is still writing.
+    async fn vacuum_skips_recent_ctas_orphan<
+        MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + GarbageCollectionApi,
+    >(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant_name = "vacuum_skips_recent_ctas_orphan_tenant";
+        let db_name = "db1";
+        let tbl_name = "t1";
+
+        let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "");
+        util.create_db().await?;
+        let tenant = util.tenant();
+
+        let staging_table_req = |drop_on: DateTime<Utc>| CreateTableReq {
+            create_option: CreateOption::CreateOrReplace,
+            catalog_name: Some("default".to_string()),
+            name_ident: TableNameIdent {
+                tenant: tenant.clone(),
+                db_name: db_name.to_string(),
+                table_name: tbl_name.to_string(),
+            },
+            table_meta: TableMeta {
+                schema: Arc::new(TableSchema::new(vec![TableField::new(
+                    "number",
+                    TableDataType::Number(NumberDataType::UInt64),
+                )])),
+                engine: "JSON".to_string(),
+                created_on: drop_on,
+                drop_on: Some(drop_on),
+                ..TableMeta::default()
+            },
+            source_table_option: None,
+            as_dropped: true,
+            materialized_view: None,
+            table_properties: None,
+            table_partition: None,
+        };
+
+        let dropped_table_ids = |drop_ids: &[DroppedId]| -> Vec<u64> {
+            drop_ids
+                .iter()
+                .filter_map(|id| match id {
+                    DroppedId::Table { id, .. } => Some(id.table_id),
+                    DroppedId::Db { .. } => None,
+                })
+                .collect()
+        };
+
+        info!("--- a just created CTAS staging table is not collected with retention 0");
+        {
+            let req = staging_table_req(Utc::now());
+            let resp = mt.create_table(req.clone()).await?;
+
+            let list_req =
+                ListDroppedTableReq::new4(&tenant, None::<String>, Some(Utc::now()), None);
+            let list_resp = mt.get_drop_table_infos(list_req).await?;
+            assert!(
+                !dropped_table_ids(&list_resp.drop_ids).contains(&resp.table_id),
+                "in-progress CTAS staging table must not be vacuumed"
+            );
+
+            // the CTAS can still be committed
+            mt.commit_table_meta(CommitTableMetaReq {
+                name_ident: req.name_ident.clone(),
+                db_id: resp.db_id,
+                table_id: resp.table_id,
+                prev_table_id: resp.prev_table_id,
+                orphan_table_name: resp.orphan_table_name.clone(),
+            })
+            .await?;
+
+            let table_key = TableId::new(resp.table_id);
+            let seqv = mt.get_pb(&table_key).await?.unwrap();
+            assert!(seqv.data.drop_on.is_none());
+        }
+
+        Ok(())
+    }
+
+    /// A table meta that can not be decoded, e.g., with an unknown index type written by a newer
+    /// version, must not fail the whole vacuum. It is skipped, and its database is kept, otherwise
+    /// the skipped table can never be found again.
+    async fn vacuum_skips_undecodable_table<
+        MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + GarbageCollectionApi,
+    >(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant_name = "vacuum_skips_undecodable_table_tenant";
+        let tenant = Tenant::new_literal(tenant_name);
+        let drop_on = Some(Utc::now() - Duration::days(1));
+
+        // Create a table, then overwrite its meta with a dropped one that has an unknown index type.
+        let create_undecodable_table = |db_name: &'static str, tbl_name: &'static str| async move {
+            let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "JSON");
+            let (table_id, table_meta) = util.create_table().await?;
+
+            let mut table_pb = TableMeta {
+                drop_on,
+                ..table_meta
+            }
+            .to_pb();
+            table_pb.indexes.insert("idx".to_string(), pb::TableIndex {
+                ver: VER,
+                min_reader_ver: MIN_READER_VER,
+                name: "idx".to_string(),
+                index_type: 4,
+                ..Default::default()
+            });
+            let table_key = TableId::new(table_id);
+            upsert_test_data(mt, &table_key, table_pb.encode_to_vec()).await?;
+
+            assert!(
+                mt.get_pb(&table_key).await.is_err(),
+                "the table meta must be undecodable"
+            );
+
+            anyhow::Ok(table_id)
+        };
+
+        let vacuum = || async {
+            let req = ListDroppedTableReq::new(&tenant);
+            let resp = mt.get_drop_table_infos(req).await?;
+
+            mt.gc_drop_tables(GcDroppedTableReq {
+                tenant: tenant.clone(),
+                catalog: "default".to_string(),
+                drop_ids: resp.drop_ids.clone(),
+            })
+            .await?;
+
+            anyhow::Ok(resp.drop_ids)
+        };
+
+        // db1 is not dropped: t1 is undecodable, t2 is a normal dropped table.
+        let db1_name = "db1";
+        let mut db1 = DbTableHarness::new(mt, tenant_name, db1_name, "", "");
+        db1.create_db().await?;
+        let undecodable_db1_t1 = create_undecodable_table(db1_name, "t1").await?;
+        let mut db1_t2 = DbTableHarness::new(mt, tenant_name, db1_name, "t2", "JSON");
+        let (dropped_db1_t2, _) = db1_t2.create_table().await?;
+        mt.drop_table_by_id(DropTableByIdReq {
+            if_exists: false,
+            tenant: tenant.clone(),
+            tb_id: dropped_db1_t2,
+            table_name: "t2".to_string(),
+            db_id: *db1.db_id(),
+            db_name: db1_name.to_string(),
+            engine: "JSON".to_string(),
+            temp_prefix: "".to_string(),
+        })
+        .await?;
+
+        // db2 is dropped: t1 is undecodable, t2 is a normal table.
+        let db2_name = "db2";
+        let mut db2 = DbTableHarness::new(mt, tenant_name, db2_name, "", "");
+        db2.create_db().await?;
+        let db2_id = *db2.db_id();
+        let undecodable_db2_t1 = create_undecodable_table(db2_name, "t1").await?;
+        let mut db2_t2 = DbTableHarness::new(mt, tenant_name, db2_name, "t2", "JSON");
+        let (db2_t2, _) = db2_t2.create_table().await?;
+        db2.drop_db().await?;
+
+        info!("--- vacuum must not fail because of the undecodable tables");
+        let drop_ids = vacuum().await?;
+
+        let table_ids: BTreeSet<u64> = drop_ids
+            .iter()
+            .filter_map(|id| match id {
+                DroppedId::Table { id, .. } => Some(id.table_id),
+                DroppedId::Db { .. } => None,
+            })
+            .collect();
+        assert_eq!(table_ids, BTreeSet::from([dropped_db1_t2, db2_t2]));
+
+        assert!(
+            !drop_ids.iter().any(|id| matches!(id, DroppedId::Db { .. })),
+            "a dropped db with undecodable tables must not be removed, got: {:?}",
+            drop_ids
+        );
+
+        info!("--- decodable tables are removed");
+        for table_id in [dropped_db1_t2, db2_t2] {
+            let got = mt.get_kv(&TableId::new(table_id).to_string_key()).await?;
+            assert!(got.is_none(), "table {} should be removed", table_id);
+        }
+
+        info!("--- undecodable tables and the dropped db are kept");
+        for table_id in [undecodable_db1_t1, undecodable_db2_t1] {
+            let got = mt.get_kv(&TableId::new(table_id).to_string_key()).await?;
+            assert!(got.is_some(), "table {} should be kept", table_id);
+        }
+
+        let got = mt.get_kv(&DatabaseId::new(db2_id).to_string_key()).await?;
+        assert!(got.is_some(), "db2 should be kept");
+
+        info!("--- vacuum again does not fail either");
+        let drop_ids = vacuum().await?;
+        assert!(drop_ids.is_empty(), "got: {:?}", drop_ids);
 
         Ok(())
     }

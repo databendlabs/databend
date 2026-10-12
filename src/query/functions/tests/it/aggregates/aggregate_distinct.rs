@@ -7,6 +7,8 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::aggregate_function::DistinctPolicy;
 use databend_common_expression::aggregate_function::EagerAggregation;
 use databend_common_expression::aggregate_function::RawAggregateCall;
+use databend_common_expression::types::BitmapType;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int64Type;
@@ -14,7 +16,11 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::number::UInt64Type;
+use databend_common_expression::utils::bitmap::is_hybrid_encoding;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
+use databend_common_io::HYBRID_HEADER_LEN;
+use databend_common_io::HybridBitmap;
+use databend_common_io::LARGE_THRESHOLD;
 use goldenfile::Mint;
 
 use super::support::AggregationSimulator;
@@ -454,6 +460,63 @@ fn test_eager_aggregation_strategies() -> Result<()> {
     Ok(())
 }
 
+/// DISTINCT sets key rows by `Scalar`, whose equality decodes bitmaps. Two
+/// encodings of the same bitmap must count as one value, also after the
+/// serialized state round trip and in multi-argument DISTINCT.
+#[test]
+fn test_distinct_bitmap_encoding_equality() -> Result<()> {
+    let members = (0..(LARGE_THRESHOLD as u64 + 8)).collect::<HybridBitmap>();
+    let mut hybrid = Vec::new();
+    members.serialize_into(&mut hybrid)?;
+    // A hybrid large bitmap is the legacy roaring encoding behind a fixed header.
+    let legacy = hybrid[HYBRID_HEADER_LEN..].to_vec();
+    assert!(!is_hybrid_encoding(&legacy));
+    let mut other = Vec::new();
+    (0..(LARGE_THRESHOLD as u64 + 9))
+        .collect::<HybridBitmap>()
+        .serialize_into(&mut other)?;
+
+    let values = BitmapType::from_data(vec![hybrid, legacy, other]);
+    for name in ["count_distinct", "uniq"] {
+        for each_row in [false, true] {
+            for with_serialize in [false, true] {
+                let (result, _) = eval_aggregate_for_test(
+                    name,
+                    vec![],
+                    &[values.clone().into()],
+                    3,
+                    each_row,
+                    with_serialize,
+                    vec![],
+                )?;
+                assert_eq!(
+                    result.index(0).unwrap(),
+                    ScalarRef::Number(NumberScalar::UInt64(2)),
+                    "{name} each_row={each_row} with_serialize={with_serialize}"
+                );
+                let (result, _) = eval_aggregate_for_test(
+                    name,
+                    vec![],
+                    &[
+                        values.clone().into(),
+                        BooleanType::from_data(vec![true; 3]).into(),
+                    ],
+                    3,
+                    each_row,
+                    with_serialize,
+                    vec![],
+                )?;
+                assert_eq!(
+                    result.index(0).unwrap(),
+                    ScalarRef::Number(NumberScalar::UInt64(2)),
+                    "{name} each_row={each_row} with_serialize={with_serialize}"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 #[test]
 fn test_aggregate_route_documentation_visibility() {
     for name in ["count", "sum"] {
@@ -494,15 +557,13 @@ fn test_distinct_float_equality() -> Result<()> {
                     result.index(0).unwrap(),
                     ScalarRef::Number(NumberScalar::UInt64(2))
                 );
-                // Multi-argument DISTINCT retains bytewise row equality, including
-                // signed zeros and different NaN payloads.
+                // Multi-argument DISTINCT uses the same float equality as a single argument.
                 let (result, _) = eval_aggregate_for_test(
                     name,
                     vec![],
                     &[
                         values.clone().into(),
-                        databend_common_expression::types::BooleanType::from_data(vec![true; 4])
-                            .into(),
+                        BooleanType::from_data(vec![true; 4]).into(),
                     ],
                     4,
                     each_row,
@@ -511,7 +572,7 @@ fn test_distinct_float_equality() -> Result<()> {
                 )?;
                 assert_eq!(
                     result.index(0).unwrap(),
-                    ScalarRef::Number(NumberScalar::UInt64(4))
+                    ScalarRef::Number(NumberScalar::UInt64(2))
                 );
             }
         }

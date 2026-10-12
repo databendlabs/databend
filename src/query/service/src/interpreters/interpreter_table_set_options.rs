@@ -23,7 +23,6 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
-use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::plans::MaintenanceTarget;
 use databend_common_sql::plans::SetOptionsPlan;
 use databend_common_storages_factory::Table;
@@ -35,7 +34,7 @@ use databend_common_storages_fuse::FuseSegmentFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
-use databend_common_storages_fuse::operations::AnalyzeHistogramInfo;
+use databend_common_storages_fuse::operations::AnalyzeOptions;
 use databend_common_storages_fuse::segment_format_from_location;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -45,7 +44,6 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::Abstract
 use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegmentBuilder;
 use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
 use databend_storages_common_table_meta::meta::column_oriented_segment::VirtualBlockInput;
-use databend_storages_common_table_meta::table::OPT_KEY_ANALYZE_FREQUENCY_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
@@ -65,8 +63,6 @@ use log::error;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::common::check_maintenance_target;
-use crate::interpreters::common::table_option_validation::analyze_count_min_sketch_error_rate_from_options;
-use crate::interpreters::common::table_option_validation::analyze_top_n_size_from_options;
 use crate::interpreters::common::table_option_validation::is_valid_analyze_count_min_sketch_error_rate;
 use crate::interpreters::common::table_option_validation::is_valid_analyze_frequency_columns;
 use crate::interpreters::common::table_option_validation::is_valid_analyze_histogram_algorithm;
@@ -86,9 +82,8 @@ use crate::interpreters::common::table_option_validation::is_valid_option_of_typ
 use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::interpreters::common::table_option_validation::is_valid_virtual_column_layout_options;
+use crate::interpreters::hook::analyze_hook::execute_analyze;
 use crate::pipelines::PipelineBuildResult;
-use crate::pipelines::executor::ExecutorSettings;
-use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
@@ -418,36 +413,10 @@ async fn analyze_table(
             FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE,
         )));
     };
-    let Some(table_snapshot) = fuse_table.read_table_snapshot().await? else {
-        return Ok(table);
-    };
-
     let mut effective_options = fuse_table.get_table_info().options().clone();
     effective_options.extend(options.clone());
-    let top_n_size = analyze_top_n_size_from_options(&effective_options)?;
-    let count_min_sketch_error_rate =
-        analyze_count_min_sketch_error_rate_from_options(&effective_options)?;
-    let frequency_columns = effective_options
-        .get(OPT_KEY_ANALYZE_FREQUENCY_COLUMNS)
-        .cloned();
-    let mut pipeline = Pipeline::create();
-    fuse_table.do_analyze(
-        ctx.clone(),
-        table_snapshot,
-        &mut pipeline,
-        AnalyzeHistogramInfo::None,
-        top_n_size,
-        frequency_columns,
-        count_min_sketch_error_rate,
-        false,
-        true,
-    )?;
-    pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
-    let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
-    let pipelines = vec![pipeline];
-    let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
-    ctx.set_executor(complete_executor.get_inner())?;
-    complete_executor.execute().await?;
+    let analyze_options = AnalyzeOptions::from_table_options(&effective_options)?;
+    execute_analyze(ctx.clone(), fuse_table, analyze_options).await?;
     let table = table.refresh(ctx.as_ref()).await?;
     Ok(table)
 }

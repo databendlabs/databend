@@ -547,7 +547,7 @@ mod tests {
             col_stats: block_col_stats,
             col_metas,
             cluster_stats: None,
-            partition_stats: Some(PartitionStatistics::new(vec![Scalar::String(
+            partition_stats: Some(PartitionStatistics::new(0, vec![Scalar::String(
                 "partition-a".to_string(),
             )])),
             location: ("block.parquet".to_string(), 0),
@@ -576,7 +576,7 @@ mod tests {
             compressed_byte_size: 16,
             index_size: 0,
             col_stats: summary_col_stats,
-            partition_stats: Some(PartitionStatistics::new(vec![Scalar::String(
+            partition_stats: Some(PartitionStatistics::new(0, vec![Scalar::String(
                 "partition-a".to_string(),
             )])),
             ..Default::default()

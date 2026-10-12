@@ -39,10 +39,12 @@ use crate::statistics::partition_values;
 #[derive(Clone)]
 pub struct PartitionPruningInfo {
     pub partition_keys: Vec<RemoteExpr<String>>,
+    pub partition_key_id: Option<u32>,
 }
 
 pub struct PartitionPruner {
     partition_keys: Vec<Expr<String>>,
+    partition_key_id: Option<u32>,
     filter: Expr<String>,
     func_ctx: FunctionContext,
 }
@@ -75,13 +77,16 @@ impl PartitionPruner {
 
         Some(Self {
             partition_keys,
+            partition_key_id: info.partition_key_id,
             filter,
             func_ctx,
         })
     }
 
     pub fn should_keep(&self, stats: Option<&PartitionStatistics>) -> bool {
-        let Some(values) = partition_values(stats, self.partition_keys.len()) else {
+        let Some(values) =
+            partition_values(stats, self.partition_keys.len(), self.partition_key_id)
+        else {
             return true;
         };
 
@@ -505,7 +510,7 @@ mod tests {
 
     #[test]
     fn test_should_keep_returns_true_for_segment_without_partition_metadata() {
-        // Segments written before PARTITION BY was added have no cluster statistics.
+        // Segments written before PARTITION BY was added have no partition statistics.
         // The pruner must keep them conservatively rather than silently dropping rows.
         let partition_expr = column_ref("p", DataType::Number(NumberDataType::Int64));
         let filter = call("eq", vec![partition_expr.clone(), {
@@ -518,11 +523,22 @@ mod tests {
 
         let pruner = PartitionPruner {
             partition_keys: vec![partition_expr],
+            partition_key_id: Some(1),
             filter,
             func_ctx: FunctionContext::default(),
         };
 
         // No partition stats at all — must keep the segment.
         assert!(pruner.should_keep(None));
+
+        let old_key = PartitionStatistics::new(0, vec![Scalar::Number(2_i64.into())]);
+        assert!(pruner.should_keep(Some(&old_key)));
+        let legacy = PartitionStatistics {
+            values: old_key.values.clone(),
+            partition_key_id: None,
+        };
+        assert!(pruner.should_keep(Some(&legacy)));
+        let current_key = PartitionStatistics::new(1, old_key.values);
+        assert!(!pruner.should_keep(Some(&current_key)));
     }
 }

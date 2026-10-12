@@ -22,6 +22,7 @@ message CreateNotificationRequest {
   string webhook_url = 7;
   optional string webhook_method = 8;
   optional string webhook_authorization_header = 9;
+  optional string webhook_body_template = 10;
 
   optional string comments = 90;
 }
@@ -50,6 +51,7 @@ message Notification {
   string webhook_url = 6;
   optional string webhook_method = 7;
   optional string webhook_authorization_header = 8;
+  optional string webhook_body_template = 9;
 
   optional string comments = 90;
   utils.Timestamp created_time = 91;
@@ -86,6 +88,7 @@ message AlterNotificationRequest {
   optional string webhook_method = 6;
   optional string webhook_authorization_header = 7;
   optional string comments = 8;
+  optional string webhook_body_template = 9;
 }
 
 message AlterNotificationResponse {

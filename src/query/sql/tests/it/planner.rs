@@ -26,7 +26,7 @@ use databend_common_meta_app::schema::CatalogOption;
 use databend_common_sql::FormatOptions;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::Planner;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::Plan;
@@ -280,10 +280,10 @@ fn format_statistics_trace_summary(plan: &Plan) -> Result<String> {
         ));
     };
 
-    Ok(statistics_trace_summary_tree(s_expr, metadata)?.format_pretty()?)
+    Ok(statistics_trace_summary_tree(s_expr.planned()?.expr(), metadata)?.format_pretty()?)
 }
 
-fn statistics_trace_summary_tree(s_expr: &SExpr, metadata: &MetadataRef) -> Result<FormatTreeNode> {
+fn statistics_trace_summary_tree(s_expr: &PExpr, metadata: &MetadataRef) -> Result<FormatTreeNode> {
     match s_expr.plan() {
         RelOperator::MaterializedCTE(cte) => {
             let children = s_expr
@@ -416,6 +416,39 @@ async fn test_like_escape_preserves_existing_binding_semantics() -> Result<()> {
         ctx.bind_sql(sql).await?;
     }
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_tuple_in_multicolumn_subquery() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    ctx.register_setup_sql("CREATE TABLE orders(user_id INT NULL, product_id INT NULL)")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE wide(a INT NULL, b INT NULL, c INT NULL, d INT NULL)")
+        .await?;
+    for sql in [
+        "SELECT * FROM orders WHERE (user_id, product_id) IN (SELECT user_id, product_id FROM orders GROUP BY user_id, product_id)",
+        "SELECT * FROM wide WHERE (a, b, c, d) IN (SELECT a, b, c, d FROM wide)",
+        "SELECT * FROM orders WHERE (user_id, product_id) NOT IN (SELECT user_id, product_id FROM orders)",
+        "SELECT (user_id, product_id) IN (SELECT user_id, product_id FROM orders) FROM orders",
+        "SELECT * FROM orders AS o WHERE (o.user_id, o.product_id) IN (SELECT i.user_id, i.product_id FROM orders AS i WHERE i.user_id = o.user_id)",
+    ] {
+        let plan = ctx.bind_sql(sql).await?;
+        ctx.optimize_plan(plan).await?;
+    }
+    for sql in [
+        "SELECT * FROM orders WHERE user_id IN (SELECT user_id, product_id FROM orders)",
+        "SELECT * FROM orders WHERE (user_id, product_id) IN (SELECT user_id FROM orders)",
+        "SELECT (SELECT user_id, product_id FROM orders) FROM orders",
+    ] {
+        assert!(ctx.bind_sql(sql).await.is_err(), "should reject {sql}");
+    }
+    // Three-valued NOT IN over many nullable fields is bounded at plan time.
+    let plan = ctx
+        .bind_sql("SELECT * FROM wide WHERE (a, b, c, d) NOT IN (SELECT a, b, c, d FROM wide)")
+        .await?;
+    let err = ctx.optimize_plan(plan).await.unwrap_err();
+    assert!(err.message().contains("nullable fields"), "{err}");
     Ok(())
 }
 

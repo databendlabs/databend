@@ -16,6 +16,7 @@
 mod decorrelate;
 mod flatten_plan;
 mod flatten_scalar;
+mod row_value;
 mod subquery_decorrelator;
 
 use std::collections::HashMap;

@@ -47,6 +47,7 @@ fn test_v2_min_max_any_heap_states_require_manual_drop() -> Result<()> {
         params: vec![],
         argument_types: vec![],
         state_type: Box::new(DataType::Binary),
+        state_version: 0,
     }));
 
     for data_type in [DataType::Binary, aggregate_state] {

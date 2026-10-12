@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use crate::ColumnSet;
 use crate::optimizer::ir::Matcher;
+use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
@@ -93,7 +94,15 @@ impl Rule for RulePushDownFilterWindow {
         let (window_plan, allowed, rejected) =
             if matches!(window_expr.plan(), RelOperator::WindowGroup(_)) {
                 let window_group: WindowGroup = window_expr.plan().clone().try_into()?;
-                let allowed = window_group_partition_by_columns(&window_group)?;
+                let mut allowed = window_group_partition_by_columns(&window_group)?;
+                // WindowGroup evaluates its scalar inputs internally. A reused
+                // partition expression can reference a column that does not yet
+                // exist below the group.
+                let child_columns = RelExpr::with_s_expr(window_expr.child(0)?)
+                    .derive_relational_prop()?
+                    .output_columns
+                    .clone();
+                allowed.retain(|column| child_columns.contains(column));
                 let rejected = window_group_rejected_columns(&window_group)?;
                 (RelOperator::WindowGroup(window_group), allowed, rejected)
             } else {

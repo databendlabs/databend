@@ -64,7 +64,6 @@ pub struct ParquetReaderBuilder<'a> {
     // only for full file reader
     pruner: Option<ParquetPruner>,
     topk: Option<&'a TopK>,
-    partition_columns: Vec<String>,
 
     // Can be reused to build multiple readers.
     built_predicate: Option<(Arc<ParquetPredicate>, Vec<usize>)>,
@@ -133,7 +132,6 @@ impl<'a> ParquetReaderBuilder<'a> {
             built_predicate: None,
             built_topk: None,
             built_output: None,
-            partition_columns: vec![],
         }
     }
 
@@ -162,11 +160,6 @@ impl<'a> ParquetReaderBuilder<'a> {
         self
     }
 
-    pub fn with_partition_columns(mut self, partition_columns: Vec<String>) -> Self {
-        self.partition_columns = partition_columns;
-        self
-    }
-
     fn build_predicate(&mut self) -> Result<()> {
         if self.built_predicate.is_some() {
             return Ok(());
@@ -178,7 +171,6 @@ impl<'a> ParquetReaderBuilder<'a> {
                     &prewhere,
                     &self.table_schema,
                     &self.schema_desc,
-                    &self.partition_columns,
                     self.arrow_schema.as_ref(),
                 )
             })
@@ -356,7 +348,6 @@ impl<'a> ParquetReaderBuilder<'a> {
             default_policy,
             transformer,
             table_schema: self.table_schema.clone(),
-            partition_columns: self.partition_columns.clone(),
         })
     }
 

@@ -18,11 +18,14 @@ use arrow_schema::Schema;
 use chrono_tz::Tz;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnRef;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
+use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Scalar;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::arrow::serialize_column;
+use databend_common_expression::type_check::check_cast;
 use databend_common_expression::types::AggregateFunctionParam;
 use databend_common_expression::types::AggregateStateDataType;
 use databend_common_expression::types::DataType;
@@ -56,6 +59,7 @@ fn test_aggregate_state_physical_type() {
         params: vec![],
         argument_types: vec![DataType::Number(NumberDataType::UInt64)],
         state_type: Box::new(state_type.clone()),
+        state_version: 0,
     }));
 
     assert_eq!(aggregate_state.physical_type().as_ref(), &state_type);
@@ -72,6 +76,28 @@ fn test_aggregate_state_physical_type() {
             .into_owned(),
         DataType::Tuple(vec![DataType::String, state_type.clone()])
     );
+
+    let DataType::AggregateState(mut future_state) = aggregate_state.clone() else {
+        unreachable!()
+    };
+    future_state.state_version = 1;
+    let future_state = DataType::AggregateState(future_state);
+    let expr = ColumnRef {
+        span: None,
+        id: 0,
+        data_type: aggregate_state.clone(),
+        display_name: "state".to_string(),
+    };
+    let error = check_cast(
+        None,
+        false,
+        expr.into(),
+        &future_state,
+        &FunctionRegistry::empty(),
+    )
+    .unwrap_err();
+    assert!(error.message().contains("source sum version 0"));
+    assert!(error.message().contains("destination sum version 1"));
 
     let logical_container = DataType::Tuple(vec![
         DataType::Array(Box::new(aggregate_state.clone())),

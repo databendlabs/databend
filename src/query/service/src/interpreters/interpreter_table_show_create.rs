@@ -54,6 +54,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table::StreamMode;
 use databend_storages_common_table_meta::table::is_internal_opt_key;
+use databend_storages_common_table_meta::table::is_internal_table_index_option;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 use itertools::Itertools;
@@ -309,7 +310,10 @@ impl ShowCreateTableInterpreter {
                 let column_names_str = column_names.join(", ").to_string();
                 let mut options = Vec::with_capacity(index_field.options.len());
                 for (key, value) in index_field.options.iter() {
-                    let option = format!("{} = '{}'", key, value);
+                    if is_internal_table_index_option(key) {
+                        continue;
+                    }
+                    let option = format!("{} = {}", key, QuotedString(value, '\''));
                     options.push(option);
                 }
                 let mut index_str = format!(
@@ -389,7 +393,7 @@ impl ShowCreateTableInterpreter {
             table_create_sql.push_str(format!(" TTL {expr:#}").as_str());
         }
 
-        if !hide_options_in_show_create_table || engine == "ICEBERG" || engine == "DELTA" {
+        if !hide_options_in_show_create_table || engine == "ICEBERG" {
             // Dynamic tables are recreated from their query, not an existing snapshot.
             // Only emit options accepted by CREATE DYNAMIC TABLE.
             let options = table_info.options().iter().filter(|(key, _)| {
@@ -400,7 +404,7 @@ impl ShowCreateTableInterpreter {
             table_create_sql.push_str(&Self::format_table_options(options));
         }
 
-        if engine != "ICEBERG" && engine != "DELTA" && !table_info.is_shared() {
+        if engine != "ICEBERG" && !table_info.is_shared() {
             if let Some(sp) = &table_info.meta.storage_params {
                 table_create_sql.push_str(format!(" '{}' ", sp).as_str());
             }

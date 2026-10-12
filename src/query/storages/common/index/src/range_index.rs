@@ -68,7 +68,6 @@ use crate::spatial_false_domain;
 pub struct RangeIndex {
     expr: Expr<String>,
     func_ctx: FunctionContext,
-    schema: TableSchemaRef,
 
     // Default stats for each column if no stats are available (e.g. for new-add columns)
     default_stats: StatisticsOfColumns,
@@ -165,7 +164,6 @@ impl RangeIndex {
         Self {
             expr,
             func_ctx,
-            schema,
             default_stats,
             predicates,
             column_slots,
@@ -290,23 +288,6 @@ impl RangeIndex {
                 ..
             })
         ))
-    }
-
-    #[fastrace::trace]
-    pub fn apply_with_partition_columns(
-        &self,
-        stats: &StatisticsOfColumns,
-        partition_columns: &HashMap<String, Scalar>,
-    ) -> Result<bool> {
-        let expr = self.expr.fill_const_column(partition_columns);
-        Self::create_from_parts(
-            expr,
-            self.func_ctx.clone(),
-            self.schema.clone(),
-            self.default_stats.clone(),
-            self.predicates.clone(),
-        )
-        .apply(stats, None, None, |_| false)
     }
 
     pub fn supported_table_type(data_type: &TableDataType) -> bool {

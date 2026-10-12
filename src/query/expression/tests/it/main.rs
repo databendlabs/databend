@@ -40,6 +40,7 @@ mod hilbert;
 mod kernel;
 mod meta_scalar;
 
+mod scalar_hash;
 mod schema;
 mod serde;
 mod sort;

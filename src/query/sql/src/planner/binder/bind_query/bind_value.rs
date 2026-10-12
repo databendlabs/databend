@@ -43,6 +43,7 @@ use crate::ScalarExpr;
 use crate::Symbol;
 use crate::Visibility;
 use crate::binder::wrap_cast;
+use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
@@ -50,6 +51,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::CacheScan;
 use crate::plans::CacheSource;
 use crate::plans::ConstantTableScan;
+use crate::plans::EvalScalar;
 use crate::plans::ExpressionScan;
 use crate::plans::HashJoinBuildCacheInfo;
 use crate::plans::RelOperator;
@@ -336,9 +338,11 @@ impl Binder {
                     })
                     .collect();
 
+                // The scan outputs exactly the cached columns; the distinct aggregate above
+                // reads them, so they must be reported as outputs.
                 let s_expr = SExpr::create_leaf(CacheScan {
                     cache_source,
-                    columns: ColumnSet::new(),
+                    columns: cache_scan_column_indexes.iter().copied().collect(),
                     schema: DataSchemaRefExt::create(cache_scan_fields),
                 })
                 .build_unary(Aggregate {
@@ -349,6 +353,36 @@ impl Binder {
                 .build_unary(scan);
 
                 Ok((s_expr, join_condition_columns))
+            }
+            RelOperator::EvalScalar(eval_scalar) => {
+                let (child, correlated_columns) =
+                    self.construct_expression_scan(s_expr.child(0)?, metadata.clone())?;
+
+                // Flattening projects every derived outer column as an identity item, but
+                // the branch above keeps only the cache columns the lateral values actually
+                // use. Drop the identity items whose column the child no longer produces, so
+                // the plan does not reference columns that nothing computes.
+                let child_outputs = RelExpr::with_s_expr(&child)
+                    .derive_relational_prop()?
+                    .output_columns
+                    .clone();
+                let items = eval_scalar
+                    .items
+                    .iter()
+                    .filter(|item| {
+                        !matches!(
+                            &item.scalar,
+                            ScalarExpr::BoundColumnRef(column_ref)
+                                if column_ref.column.index == item.index
+                                    && !child_outputs.contains(&item.index)
+                        )
+                    })
+                    .cloned()
+                    .collect();
+                let s_expr = s_expr
+                    .replace_plan(Arc::new(RelOperator::EvalScalar(EvalScalar { items })))
+                    .replace_children(vec![Arc::new(child)]);
+                Ok((s_expr, correlated_columns))
             }
             _ => {
                 let mut correlated_columns = ColumnSet::new();

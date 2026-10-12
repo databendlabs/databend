@@ -1,0 +1,71 @@
+# CTAS REPLACE leaves the old table with drop_on = NULL. A name-filtered
+# history lookup must exclude it, just like the database-wide scan does.
+statement ok
+CREATE DATABASE db_12_0007_history
+
+statement ok
+CREATE TABLE db_12_0007_history.history_name_filter_120007 (id INT)
+
+# Preserve the original ID so the ID-only lookup can be checked after REPLACE.
+statement ok
+SET VARIABLE history_name_filter_old_id = (SELECT table_id FROM system.tables
+WHERE database = 'db_12_0007_history' AND name = 'history_name_filter_120007')
+
+statement ok
+CREATE OR REPLACE TABLE db_12_0007_history.history_name_filter_120007 AS SELECT 1 AS id
+
+statement ok
+SET VARIABLE history_name_filter_new_id = (SELECT table_id FROM system.tables
+WHERE database = 'db_12_0007_history' AND name = 'history_name_filter_120007')
+
+query B
+SELECT count(*) = 1 AND max(table_id) = (
+    SELECT table_id FROM system.tables
+    WHERE database = 'db_12_0007_history' AND name = 'history_name_filter_120007'
+) FROM system.tables_with_history
+WHERE name = 'history_name_filter_120007'
+----
+1
+
+query B
+SELECT count(*) = 1 FROM system.tables_with_history
+WHERE database = 'db_12_0007_history' AND name = 'history_name_filter_120007'
+----
+1
+
+# Check the actual rows as well as the counts above. A superseded ID
+# must return no rows, while the new ID still resolves to the current table.
+query I
+SELECT table_id FROM system.tables_with_history
+WHERE table_id = $history_name_filter_old_id
+----
+
+query B
+SELECT table_id = $history_name_filter_new_id FROM system.tables_with_history
+WHERE table_id = $history_name_filter_new_id
+----
+1
+
+query B
+SELECT table_id = $history_name_filter_new_id FROM system.tables_with_history
+WHERE database = 'db_12_0007_history' AND name = 'history_name_filter_120007'
+ORDER BY table_id
+----
+1
+
+# A dropped table is still visible when there is no current table.
+statement ok
+DROP TABLE db_12_0007_history.history_name_filter_120007
+
+query B
+SELECT count(*) = 1 FROM system.tables_with_history
+WHERE database = 'db_12_0007_history' AND name = 'history_name_filter_120007'
+  AND dropped_on IS NOT NULL
+----
+1
+
+statement ok
+UNSET VARIABLE (history_name_filter_old_id, history_name_filter_new_id)
+
+statement ok
+DROP DATABASE db_12_0007_history

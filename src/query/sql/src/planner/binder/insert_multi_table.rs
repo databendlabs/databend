@@ -67,7 +67,7 @@ impl Binder {
             let (s_expr, bind_context) = self.bind_table_reference(bind_context, &table_ref)?;
 
             let select_plan = Plan::Query {
-                s_expr: Box::new(s_expr),
+                s_expr: Box::new(s_expr.into()),
                 metadata: self.metadata.clone(),
                 bind_context: Box::new(bind_context.clone()),
                 rewrite_kind: None,

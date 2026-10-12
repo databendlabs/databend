@@ -18,6 +18,7 @@ use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::ScalarExpr;
 
 use crate::framework::golden::SqlTestCase;
 use crate::framework::golden::SqlTestOutcome;
@@ -27,6 +28,47 @@ use crate::framework::golden::write_case_header;
 use crate::framework::golden::write_case_outcome;
 
 mod alias_resolution;
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_window_input_reuse_preserves_nondeterministic_expressions() -> Result<()> {
+    let case = SqlTestCase {
+        name: "window_input_reuse_preserves_nondeterministic_expressions",
+        description: "Only deterministic window inputs may replace SELECT expressions.",
+        setup_sqls: &["CREATE TABLE t(number UInt64)"],
+        sql: "SELECT number + 1 AS n, rand() AS r, \
+              row_number() OVER (PARTITION BY number + 1 ORDER BY rand()) FROM t",
+    };
+    let ctx = setup_context(&case).await?;
+    let Plan::Query {
+        s_expr,
+        bind_context,
+        ..
+    } = ctx.bind_sql(case.sql).await?
+    else {
+        panic!("expected query plan");
+    };
+    let RelOperator::EvalScalar(projection) = s_expr.logical()?.plan() else {
+        panic!("expected SELECT projection");
+    };
+    for (name, reused) in [("n", true), ("r", false)] {
+        let column = bind_context
+            .columns
+            .iter()
+            .find(|column| column.column_name == name)
+            .unwrap();
+        let item = projection
+            .items
+            .iter()
+            .find(|item| item.index == column.index)
+            .unwrap();
+        assert_eq!(
+            matches!(item.scalar, ScalarExpr::BoundColumnRef(_)),
+            reused,
+            "projection {name}"
+        );
+    }
+    Ok(())
+}
 
 const TEST_UDAF_SQL: &str = r#"
 CREATE OR REPLACE FUNCTION weighted_avg (a INT, b INT) STATE { sum INT, weight INT } RETURNS FLOAT
@@ -233,7 +275,7 @@ async fn test_binder_mutation_internal_column_strategy() -> Result<()> {
         let Plan::DataMutation { s_expr, .. } = plan else {
             panic!("expected mutation plan for {sql}");
         };
-        let RelOperator::Mutation(mutation) = s_expr.plan() else {
+        let RelOperator::Mutation(mutation) = s_expr.logical()?.plan() else {
             panic!("expected mutation operator for {sql}");
         };
         assert_eq!(mutation.strategy, expected_strategy, "sql: {sql}");
@@ -454,7 +496,7 @@ async fn test_many_window_expressions_bind_as_flat_window_group() -> Result<()> 
     };
 
     let mut stats = WindowPlanStats::default();
-    collect_window_plan_stats(&s_expr, &mut stats);
+    collect_window_plan_stats(s_expr.logical()?, &mut stats);
 
     assert_eq!(stats.window_group_nodes, 1);
     assert_eq!(stats.window_nodes, 0);
@@ -484,7 +526,7 @@ async fn test_mixed_partition_windows_bind_as_partitioned_window_groups() -> Res
     };
 
     let mut stats = WindowPlanStats::default();
-    collect_window_plan_stats(&s_expr, &mut stats);
+    collect_window_plan_stats(s_expr.logical()?, &mut stats);
 
     assert_eq!(stats.window_group_nodes, 2);
     assert_eq!(stats.window_nodes, 0);

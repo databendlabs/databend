@@ -482,6 +482,7 @@ pub enum AlterTableAction {
     AlterTablePartitionBy {
         partition_by: Vec<Expr>,
     },
+    DropTablePartitionKey,
     DropTableClusterKey,
     /// `ALTER TABLE ... SET TTL <expr>` sets or replaces the TTL definition.
     SetTableTtl {
@@ -577,6 +578,9 @@ impl Display for AlterTableAction {
                 write!(f, "PARTITION BY (")?;
                 write_comma_separated_list(f, partition_by)?;
                 write!(f, ")")?;
+            }
+            AlterTableAction::DropTablePartitionKey => {
+                write!(f, "DROP PARTITION KEY")?;
             }
             AlterTableAction::DropTableClusterKey => {
                 write!(f, "DROP CLUSTER KEY")?;
@@ -945,7 +949,6 @@ pub enum Engine {
     View,
     Random,
     Iceberg,
-    Delta,
     Paimon,
 }
 
@@ -960,7 +963,6 @@ impl Display for Engine {
             Engine::View => write!(f, "VIEW"),
             Engine::Random => write!(f, "RANDOM"),
             Engine::Iceberg => write!(f, "ICEBERG"),
-            Engine::Delta => write!(f, "DELTA"),
             Engine::Paimon => write!(f, "PAIMON"),
         }
     }
@@ -977,7 +979,6 @@ impl From<&str> for Engine {
             "view" => Engine::View,
             "random" => Engine::Random,
             "iceberg" => Engine::Iceberg,
-            "delta" => Engine::Delta,
             "paimon" => Engine::Paimon,
             _ => unreachable!("invalid engine: {}", s),
         }

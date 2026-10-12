@@ -49,6 +49,7 @@ fn test_datetime() {
     test_to_date(file);
     test_date_add_subtract(file);
     test_timestamp_add_subtract(file);
+    test_string_time_add_subtract(file);
     test_date_date_add_sub(file);
     test_timestamp_date_add_sub(file);
     test_date_arith(file);
@@ -297,6 +298,34 @@ fn test_timestamp_add_subtract(file: &mut impl Write) {
     run_ast(file, "subtract_seconds(a, b)", &[
         ("a", TimestampType::from_data(vec![-100, 0, 100])),
         ("b", Int32Type::from_data(vec![1, 2, 3])),
+    ]);
+}
+
+// String inputs for hour/minute/second arithmetic must resolve to the Timestamp
+// overload so the time component is preserved. Day-based arithmetic keeps the
+// Date overload, since its semantics are whole days.
+fn test_string_time_add_subtract(file: &mut impl Write) {
+    run_ast(file, "add_hours('2026-09-26 08:34:00', 1)", &[]);
+    run_ast(file, "add_minutes('2026-09-26 08:34:00', 1)", &[]);
+    run_ast(file, "add_seconds('2026-09-26 08:34:00', 1)", &[]);
+    run_ast(file, "subtract_hours('2026-09-26 08:34:00', 1)", &[]);
+    run_ast(file, "subtract_minutes('2026-09-26 08:34:00', 1)", &[]);
+    run_ast(file, "subtract_seconds('2026-09-26 08:34:00', 1)", &[]);
+    run_ast(file, "subtract_minutes('2026-09-26', 5)", &[]);
+    run_ast(file, "add_days('2026-09-26 08:34:00', 1)", &[]);
+    run_ast(file, "add_hours(a, b)", &[
+        (
+            "a",
+            StringType::from_data(vec!["2026-09-26 08:34:00", "2026-09-26"]),
+        ),
+        ("b", Int32Type::from_data(vec![1, 2])),
+    ]);
+    run_ast(file, "subtract_seconds(a, b)", &[
+        (
+            "a",
+            StringType::from_data(vec!["2026-09-26 08:34:00", "2026-09-26"]),
+        ),
+        ("b", Int32Type::from_data(vec![1, 2])),
     ]);
 }
 

@@ -17,6 +17,8 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::optimizer::ir::Expr;
+use crate::optimizer::ir::ExprKind;
 use crate::optimizer::ir::Group;
 use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::expr::MExpr;
@@ -80,9 +82,9 @@ macro_rules! match_op {
 }
 
 impl Matcher {
-    /// Check if the `SExpr` can be matched by the `Matcher`.
+    /// Check whether a relational expression matches this pattern.
     #[recursive::recursive]
-    pub fn matches(&self, s_expr: &SExpr) -> bool {
+    pub fn matches<K: ExprKind<Operator = RelOperator>>(&self, s_expr: &Expr<K>) -> bool {
         match self {
             Matcher::MatchOp { op_type, children } => {
                 if s_expr.plan().rel_op() != *op_type {

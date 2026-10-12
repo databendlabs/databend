@@ -247,7 +247,7 @@ impl Binder {
 
                 let mut read_context = BindContext::with_parent(bind_context.clone())?;
                 read_context.planning_materialized_view_rewrite = true;
-                let (read_plan, read_context, read_mode) = self.bind_materialized_view_with_mode(
+                let read_result = self.bind_materialized_view_with_mode(
                     &mut read_context,
                     source_entry.catalog(),
                     &mv_database,
@@ -260,7 +260,9 @@ impl Binder {
                     Some((source_table.clone(), source_entry.database().to_string())),
                     false,
                 )?;
-                let read_mode = match read_mode {
+                let read_plan = read_result.s_expr;
+                let read_context = read_result.bind_context;
+                let read_mode = match read_result.read_mode {
                     MaterializedViewReadMode::Fresh => MaterializedViewCandidateReadMode::Fresh,
                     MaterializedViewReadMode::Hybrid => MaterializedViewCandidateReadMode::Hybrid,
                     MaterializedViewReadMode::LiveFallback => continue,
@@ -656,7 +658,7 @@ impl Binder {
             ));
         };
         let physical_schema = normalize_null_fields(Self::materialized_view_physical_schema(
-            storage_expr,
+            storage_expr.logical()?,
             physical_bind_context,
             physical_metadata.clone(),
             physical_rewriter.physical_names(),
@@ -768,6 +770,7 @@ impl Binder {
             table_indexes: None,
             table_constraints: None,
             attached_columns: None,
+            index_user_dictionaries: None,
         };
         let plan = CreateMaterializedViewPlan {
             table_plan,

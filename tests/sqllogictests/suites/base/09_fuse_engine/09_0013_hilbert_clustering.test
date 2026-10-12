@@ -201,13 +201,13 @@ SELECT max(level) > 0, count() FROM clustering_statistics('test_hilbert', 't_sma
 1 1
 
 # hilbert is syntax in CLUSTER BY HILBERT(...), not a scalar function.
-statement error 1008
+statement error UDFs are not allowed in persisted or storage-level expressions
 CREATE OR REPLACE TABLE bad_function(a int, b int) CLUSTER BY (hilbert(a, b))
 
-statement error 1008
+statement error UDFs are not allowed in persisted or storage-level expressions
 CREATE OR REPLACE TABLE bad_position(a int, b int, c int) CLUSTER BY (hilbert(a, b), c)
 
-statement error 1008
+statement error UDFs are not allowed in persisted or storage-level expressions
 CREATE OR REPLACE TABLE bad_dimension(a int) CLUSTER BY (hilbert(a))
 
 statement error 1008

@@ -62,7 +62,9 @@ use crate::planner::binder::select::SelectAliasCatalog;
 use crate::planner::binder::select::SelectClauseFact;
 use crate::planner::binder::select::SelectList;
 use crate::planner::binder::sort::OrderItems;
+use crate::planner::binder::window::WindowInputColumns;
 use crate::plans::ScalarExpr;
+use crate::plans::VisitorMut as _;
 
 #[derive(Clone, Default)]
 struct SelectClauseFacts {
@@ -448,18 +450,25 @@ impl Binder {
 
         // bind window
         // window run after the HAVING clause but before the ORDER BY clause.
+        let mut window_inputs = WindowInputColumns::default();
         if !from_context.windows.window_functions.is_empty() {
-            let window_functions = from_context.windows.window_functions.clone();
-            s_expr = self.bind_window_functions(&window_functions, s_expr)?;
+            (s_expr, window_inputs) =
+                self.bind_window_functions(&from_context.windows.window_functions, s_expr)?;
+            for item in select_info.projection_scalars.values_mut() {
+                window_inputs.visit(&mut item.scalar)?;
+            }
         }
 
         // Bind lazy Set-returning functions after aggregate plan.
         if !from_context.srf_info.lazy_srf_set.is_empty() {
             s_expr = self.bind_project_set(&mut from_context, s_expr, true)?;
+            // Preserve the existing reuse boundary: extending QUALIFY reuse
+            // across ProjectSet row expansion is outside this refactor's scope.
+            window_inputs = WindowInputColumns::default();
         }
 
         if let Some(qualify) = qualify {
-            s_expr = self.bind_qualify(&mut from_context, qualify, s_expr)?;
+            s_expr = self.bind_qualify(&mut from_context, qualify, s_expr, &mut window_inputs)?;
         }
 
         if stmt.distinct {

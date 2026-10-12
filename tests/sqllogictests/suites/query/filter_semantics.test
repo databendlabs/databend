@@ -1,0 +1,79 @@
+# Regressions found by the metamorphic oracle harness (tests/fuzz/tlp.py).
+
+statement ok
+CREATE OR REPLACE TABLE fs_t(a INT NULL, c STRING NULL)
+
+statement ok
+INSERT INTO fs_t VALUES (1, 'ab'), (NULL, 'b'), (2, NULL), (2, 'héllo')
+
+# `a = 1 AND a = 2` is contradictory, and folding it to FALSE is fine when the conjunction
+# is the filter itself (FALSE and NULL both drop the row). Nested under a function that
+# distinguishes FALSE from NULL it is not: for a NULL `a` the conjunction is NULL.
+query I
+SELECT count(*) FROM fs_t WHERE a = 1 AND a = 2
+----
+0
+
+query I
+SELECT count(*) FROM fs_t WHERE (a = 1 AND a = 2) IS NULL
+----
+1
+
+query I
+SELECT count(*) FROM fs_t WHERE NOT (a = 1 AND a = 2)
+----
+3
+
+query I
+SELECT count(*) FROM fs_t WHERE if(a = 1 AND a = 2, 0, 1) = 1
+----
+4
+
+query I
+SELECT count(*) FROM fs_t WHERE coalesce(a = 1 AND a = 2, TRUE)
+----
+1
+
+# An equivalence asserted by the filter may still be substituted inside nested functions:
+# for the rows that pass `a = 1`, `a = 2` is FALSE, never NULL.
+query I
+SELECT count(*) FROM fs_t WHERE a = 1 AND is_null(a = 2)
+----
+0
+
+# TLP: the three partitions of any predicate add up to the whole table.
+query I
+SELECT (SELECT count(*) FROM fs_t WHERE (a = 1 AND a = 2) OR c LIKE 'a%')
+     + (SELECT count(*) FROM fs_t WHERE NOT ((a = 1 AND a = 2) OR c LIKE 'a%'))
+     + (SELECT count(*) FROM fs_t WHERE ((a = 1 AND a = 2) OR c LIKE 'a%') IS NULL)
+----
+4
+
+# The LIKE fast path of the filter selector must accept a constant operand: the replicated
+# side of a cross join arrives as a constant block entry.
+statement ok
+CREATE OR REPLACE TABLE fs_r(x INT NULL)
+
+statement ok
+INSERT INTO fs_r VALUES (1), (2), (NULL)
+
+query I
+SELECT count(*) FROM fs_t l CROSS JOIN fs_r r WHERE NOT (l.c NOT LIKE '%b%' AND r.x > 1)
+----
+8
+
+query I
+SELECT count(*) FROM fs_t l CROSS JOIN fs_r r WHERE l.c LIKE '%b%' OR r.x <= 1
+----
+8
+
+query I
+SELECT count(*) FROM fs_t l CROSS JOIN fs_r r WHERE NOT (l.c LIKE 'h%' AND r.x IS NULL)
+----
+10
+
+statement ok
+DROP TABLE fs_t
+
+statement ok
+DROP TABLE fs_r

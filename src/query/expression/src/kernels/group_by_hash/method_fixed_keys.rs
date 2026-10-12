@@ -202,7 +202,20 @@ impl FixedKey for u32 {
         match column {
             Column::Number(NumberColumn::UInt32(_)) => Some(KeysState::Column(column.clone())),
             Column::Number(NumberColumn::Float32(buffer)) => {
-                let buffer = unsafe { std::mem::transmute(buffer.clone()) };
+                // Reinterpret the bits directly unless some value is not the
+                // canonical representative of its equality class (`-0.0` or a
+                // NaN payload other than `f32::NAN`).
+                let buffer = if buffer
+                    .iter()
+                    .any(|value| value.to_bits() != value.canonicalize().to_bits())
+                {
+                    buffer
+                        .iter()
+                        .map(|value| value.canonicalize().to_bits())
+                        .collect()
+                } else {
+                    unsafe { std::mem::transmute(buffer.clone()) }
+                };
                 Some(KeysState::Column(Column::Number(u32::upcast_column(
                     buffer,
                 ))))
@@ -225,7 +238,20 @@ impl FixedKey for u64 {
         match column {
             Column::Number(NumberColumn::UInt64(_)) => Some(KeysState::Column(column.clone())),
             Column::Number(NumberColumn::Float64(buffer)) => {
-                let buffer = unsafe { std::mem::transmute(buffer.clone()) };
+                // Reinterpret the bits directly unless some value is not the
+                // canonical representative of its equality class (`-0.0` or a
+                // NaN payload other than `f64::NAN`).
+                let buffer = if buffer
+                    .iter()
+                    .any(|value| value.to_bits() != value.canonicalize().to_bits())
+                {
+                    buffer
+                        .iter()
+                        .map(|value| value.canonicalize().to_bits())
+                        .collect()
+                } else {
+                    unsafe { std::mem::transmute(buffer.clone()) }
+                };
                 Some(KeysState::Column(Column::Number(u64::upcast_column(
                     buffer,
                 ))))
@@ -435,7 +461,7 @@ fn fixed_hash(keys_vec: &mut KeysVec, col_index: usize, column: &Column) -> Resu
                             for (row, (value, valid)) in c.iter().zip(bitmap.iter()).enumerate() {
                                 if valid {
                                     let slice = keys_vec.value(row, col_index);
-                                    value.marshal(slice);
+                                    value.canonicalize().marshal(slice);
                                 } else {
                                     keys_vec.set_null(row, col_index);
                                 }
@@ -444,7 +470,7 @@ fn fixed_hash(keys_vec: &mut KeysVec, col_index: usize, column: &Column) -> Resu
                         None => {
                             for (row, value) in c.iter().enumerate() {
                                 let slice = keys_vec.value(row, col_index);
-                                value.marshal(slice);
+                                value.canonicalize().marshal(slice);
                             }
                         }
                     }

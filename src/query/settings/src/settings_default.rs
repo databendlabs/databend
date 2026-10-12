@@ -281,6 +281,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("flight_query_leak_timeout_secs", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(180),
+                    desc: "Sets the maximum time in seconds a node waits after a distributed query environment is initialized for the coordinator to start the query. Once exceeded, the query is treated as leaked and cleaned up. Raise it when fragment preparation (e.g. lazy block pruning of a large DELETE across many nodes) takes longer than the default.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
                 ("flight_client_keep_alive_time_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the idle time in seconds before a flight TCP connection sends keepalive probes. 0 disables keepalive.",
@@ -1023,6 +1030,20 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_recluster_inverted_index_merge", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Reuse compatible inverted indexes during horizontal multiway recluster.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_recluster_multiway_merge", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable streaming multiway merge for horizontal recluster MergeBlocks tasks.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("recluster_timeout_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(12 * 60 * 60),
                     desc: "Sets the seconds that recluster final will be timeout.",
@@ -1649,7 +1670,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
                 ("enable_experimental_virtual_column", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables experimental virtual column",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,

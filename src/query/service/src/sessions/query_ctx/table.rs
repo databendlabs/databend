@@ -476,23 +476,6 @@ impl TableContextTableManagement for QueryContext {
         self.get_table_meta_timestamps_impl(table, previous_snapshot, true)
     }
 
-    #[async_backtrace::framed]
-    async fn load_datalake_schema(
-        &self,
-        kind: &str,
-        sp: &StorageParams,
-    ) -> Result<(TableSchema, String)> {
-        match kind {
-            "delta" => {
-                let table = DeltaTable::load(sp).await?;
-                DeltaTable::get_meta(&table).await
-            }
-            _ => Err(ErrorCode::Internal(
-                "Unsupported datalake type for schema loading",
-            )),
-        }
-    }
-
     #[cfg(feature = "storage-stage")]
     async fn create_stage_table(
         &self,

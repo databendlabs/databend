@@ -18,7 +18,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::optimizer::Optimizer;
-use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::PExpr;
 use crate::plans::RelOperator;
 
 /// Optimizer that removes unused CTEs from the query plan.
@@ -28,7 +28,7 @@ pub struct CleanupUnusedCTEOptimizer;
 
 impl CleanupUnusedCTEOptimizer {
     /// Collect all CTE names that are referenced by MaterializeCTERef nodes and count their references
-    fn collect_referenced_ctes(s_expr: &SExpr) -> Result<HashMap<String, usize>> {
+    fn collect_referenced_ctes(s_expr: &PExpr) -> Result<HashMap<String, usize>> {
         let mut referenced_ctes = HashMap::new();
         Self::collect_referenced_ctes_recursive(s_expr, &mut referenced_ctes)?;
         Ok(referenced_ctes)
@@ -37,7 +37,7 @@ impl CleanupUnusedCTEOptimizer {
     /// Recursively traverse the expression tree to find MaterializeCTERef nodes and count references
     #[recursive::recursive]
     fn collect_referenced_ctes_recursive(
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         referenced_ctes: &mut HashMap<String, usize>,
     ) -> Result<()> {
         // Check if current node is a MaterializeCTERef
@@ -58,9 +58,9 @@ impl CleanupUnusedCTEOptimizer {
     /// Remove unused CTEs from the expression tree and update ref_count
     #[recursive::recursive]
     fn remove_unused_ctes(
-        mut s_expr: SExpr,
+        mut s_expr: PExpr,
         referenced_ctes: &HashMap<String, usize>,
-    ) -> Result<SExpr> {
+    ) -> Result<PExpr> {
         if let RelOperator::Sequence(_) = s_expr.plan()
             && matches!(s_expr.left_child().plan(), RelOperator::MaterializedCTE(_))
         {
@@ -85,9 +85,9 @@ impl CleanupUnusedCTEOptimizer {
                 Arc::unwrap_or_clone(left_child.children.pop().unwrap()),
                 referenced_ctes,
             )?;
-            let left_child_expr = SExpr::create_unary(cte, left_input);
+            let left_child_expr = PExpr::create_unary(cte, left_input);
             let right_child_expr = Self::remove_unused_ctes(right_child, referenced_ctes)?;
-            return Ok(SExpr::create_binary(
+            return Ok(PExpr::create_binary(
                 s_expr.plan,
                 left_child_expr,
                 right_child_expr,
@@ -108,12 +108,12 @@ impl CleanupUnusedCTEOptimizer {
 }
 
 #[async_trait::async_trait]
-impl Optimizer for CleanupUnusedCTEOptimizer {
+impl Optimizer<PExpr> for CleanupUnusedCTEOptimizer {
     fn name(&self) -> String {
         "CleanupUnusedCTEOptimizer".to_string()
     }
 
-    async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
+    async fn optimize(&mut self, s_expr: PExpr) -> Result<PExpr> {
         // Collect all referenced CTEs and their ref_count
         let referenced_ctes = Self::collect_referenced_ctes(&s_expr)?;
 
@@ -135,22 +135,22 @@ mod tests {
     use crate::plans::Sequence;
     use crate::plans::UnionAll;
 
-    fn dummy_scan() -> SExpr {
-        SExpr::create_leaf(DummyTableScan::new())
+    fn dummy_scan() -> PExpr {
+        PExpr::create_leaf(DummyTableScan::new())
     }
 
-    fn cte_ref(cte_name: &str) -> SExpr {
-        SExpr::create_leaf(RelOperator::MaterializedCTERef(MaterializedCTERef {
+    fn cte_ref(cte_name: &str) -> PExpr {
+        PExpr::create_leaf(RelOperator::MaterializedCTERef(MaterializedCTERef {
             cte_name: cte_name.to_string(),
             output_columns: vec![],
-            def: dummy_scan(),
+            def: crate::optimizer::ir::SExpr::create_leaf(DummyTableScan::new()),
             column_mapping: HashMap::new(),
             stat_info: None,
         }))
     }
 
-    fn union_all(left: SExpr, right: SExpr) -> SExpr {
-        SExpr::create_binary(
+    fn union_all(left: PExpr, right: PExpr) -> PExpr {
+        PExpr::create_binary(
             UnionAll {
                 left_outputs: vec![],
                 right_outputs: vec![],
@@ -163,7 +163,7 @@ mod tests {
         )
     }
 
-    fn materialized_cte_ref_count(s_expr: &SExpr, cte_name: &str) -> Option<usize> {
+    fn materialized_cte_ref_count(s_expr: &PExpr, cte_name: &str) -> Option<usize> {
         if let RelOperator::MaterializedCTE(cte) = s_expr.plan()
             && cte.cte_name == cte_name
         {
@@ -177,20 +177,20 @@ mod tests {
 
     #[test]
     fn test_cleanup_updates_nested_materialized_cte_ref_count() {
-        let inner_producer = SExpr::create_unary(
+        let inner_producer = PExpr::create_unary(
             MaterializedCTE::new("inner".to_string(), None),
             Arc::new(dummy_scan()),
         );
-        let outer_definition = SExpr::create_binary(
+        let outer_definition = PExpr::create_binary(
             Sequence,
             Arc::new(inner_producer),
             Arc::new(union_all(cte_ref("inner"), cte_ref("inner"))),
         );
-        let outer_producer = SExpr::create_unary(
+        let outer_producer = PExpr::create_unary(
             MaterializedCTE::new("outer".to_string(), None),
             Arc::new(outer_definition),
         );
-        let root = SExpr::create_binary(
+        let root = PExpr::create_binary(
             Sequence,
             Arc::new(outer_producer),
             Arc::new(cte_ref("outer")),

@@ -38,12 +38,11 @@ use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
-use databend_common_sql::TypeCheck;
 use databend_common_sql::binder::wrap_cast;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::AggregateFunctionSignature;
 use databend_common_sql::executor::physical_plans::SortDesc;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::plans::WindowFuncFrame;
 use databend_common_sql::plans::WindowFuncFrameBound;
 use databend_common_sql::plans::WindowFuncType;
@@ -516,7 +515,7 @@ fn window_top_n(window: &WindowSpec) -> Option<(usize, WindowPartitionTopNFunc)>
 impl PhysicalPlanBuilder {
     pub async fn build_window_group(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         window_group: &databend_common_sql::plans::WindowGroup,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
@@ -525,32 +524,38 @@ impl PhysicalPlanBuilder {
             required.remove(&window.index);
         }
         for item in &window_group.scalar_items {
-            item.scalar.collect_used_columns(&mut required);
             required.insert(item.index);
         }
         for window in &window_group.windows {
             for item in &window.arguments {
-                item.scalar.collect_used_columns(&mut required);
                 required.insert(item.index);
             }
             for item in &window.partition_by {
-                item.scalar.collect_used_columns(&mut required);
                 required.insert(item.index);
             }
             for item in &window.order_by {
-                item.order_by_item
-                    .scalar
-                    .collect_used_columns(&mut required);
                 required.insert(item.order_by_item.index);
             }
         }
 
         let child = s_expr.child(0)?;
-        let input = self.build(child, required.clone()).await?;
+        // Sources are needed to evaluate the window inputs, but only the
+        // resulting columns and the parent's outputs need to survive the sort.
+        let mut input_required = required.clone();
+        for item in &window_group.scalar_items {
+            input_required.remove(&item.index);
+        }
+        for item in &window_group.scalar_items {
+            item.scalar.collect_used_columns(&mut input_required);
+        }
+        let input = self.build(child, input_required).await?;
         let input = if window_group.scalar_items.is_empty() {
             input
         } else {
-            let mut projections = required.iter().copied().collect::<Vec<_>>();
+            let mut projections = required
+                .union(self.metadata.read().get_retained_column())
+                .copied()
+                .collect::<Vec<_>>();
             for item in &window_group.scalar_items {
                 projections.push(item.index);
             }
@@ -606,7 +611,7 @@ impl PhysicalPlanBuilder {
 
     pub async fn build_window(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         window: &databend_common_sql::plans::Window,
         mut required: ColumnSet,
         _stat_info: PlanStatsInfo,
@@ -617,20 +622,15 @@ impl PhysicalPlanBuilder {
         // left join ( select dense_rank() over(order by t1.a desc) as rk
         // from (select 'a2' as a) t1 )s2 on s1.rk=s2.rk;
 
-        // The scalar items in window function is not replaced yet.
-        // The will be replaced in physical plan builder.
+        // The child EvalScalar has already evaluated these expressions. Keep
+        // their results across the sort/window, not their source columns.
         window.arguments.iter().for_each(|item| {
-            item.scalar.collect_used_columns(&mut required);
             required.insert(item.index);
         });
         window.partition_by.iter().for_each(|item| {
-            item.scalar.collect_used_columns(&mut required);
             required.insert(item.index);
         });
         window.order_by.iter().for_each(|item| {
-            item.order_by_item
-                .scalar
-                .collect_used_columns(&mut required);
             required.insert(item.order_by_item.index);
         });
 
@@ -660,6 +660,10 @@ impl PhysicalPlanBuilder {
         let mut w = window.clone();
 
         if w.frame.units.is_range() && w.order_by.len() == 1 {
+            let mut common_ty = input_schema
+                .field_with_name(&w.order_by[0].order_by_item.index.to_string())?
+                .data_type()
+                .clone();
             let order_by = &mut w.order_by[0].order_by_item.scalar;
 
             let mut start = match &mut w.frame.start_bound {
@@ -673,7 +677,6 @@ impl PhysicalPlanBuilder {
                 _ => None,
             };
 
-            let mut common_ty = order_by.type_check(input_schema)?.data_type().clone();
             if common_ty.remove_nullable().is_timestamp() {
                 for scalar in start.iter_mut().chain(end.iter_mut()) {
                     let scalar_ty = scalar.as_ref().infer_data_type();

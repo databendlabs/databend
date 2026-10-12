@@ -188,7 +188,7 @@ async fn test_fuse_do_refresh_inverted_index() -> anyhow::Result<()> {
             inverted_index_option: None,
         };
 
-        let prepared = create_inverted_index_query(&inverted_index_info)?;
+        let prepared = create_inverted_index_query(&inverted_index_info, None)?;
 
         let index_reader = InvertedIndexReader::create(
             dal.clone(),

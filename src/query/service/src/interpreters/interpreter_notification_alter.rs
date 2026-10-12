@@ -44,32 +44,38 @@ impl AlterNotificationInterpreter {
 impl AlterNotificationInterpreter {
     fn build_request(&self) -> AlterNotificationRequest {
         let plan = self.plan.clone();
+        // Cloud Control only accepts operation_type "SET" and applies every
+        // field that is present as a patch; absent fields are left untouched.
+        let base = AlterNotificationRequest {
+            tenant_id: self.ctx.get_tenant().tenant_name().to_string(),
+            name: plan.name,
+            operation_type: "SET".to_string(),
+            ..Default::default()
+        };
         match plan.options {
             AlterNotificationOptions::Set(set_options) => {
-                let req = AlterNotificationRequest {
-                    tenant_id: self.ctx.get_tenant().tenant_name().to_string(),
-                    name: plan.name,
-                    operation_type: "SET".to_string(),
+                let (webhook_url, webhook_method, webhook_authorization_header) =
+                    match set_options.webhook_opts {
+                        Some(opts) => (opts.url, opts.method, opts.authorization_header),
+                        None => Default::default(),
+                    };
+                AlterNotificationRequest {
                     enabled: set_options.enabled,
-                    webhook_url: set_options
-                        .webhook_opts
-                        .as_ref()
-                        .map(|x| x.url.clone())
-                        .unwrap_or_default(),
-                    webhook_method: set_options
-                        .webhook_opts
-                        .as_ref()
-                        .map(|x| x.method.clone())
-                        .unwrap_or_default(),
-                    webhook_authorization_header: set_options
-                        .webhook_opts
-                        .as_ref()
-                        .map(|x| x.authorization_header.clone())
-                        .unwrap_or_default(),
+                    webhook_url,
+                    webhook_method,
+                    webhook_authorization_header,
+                    webhook_body_template: set_options.webhook_body_template,
                     comments: set_options.comments,
-                };
-                req
+                    ..base
+                }
             }
+            AlterNotificationOptions::Unset(unset_options) => AlterNotificationRequest {
+                // The wire form of UNSET is a present-but-empty template; Cloud
+                // Control turns it into NULL. Do not send "UNSET" as the
+                // operation_type, Cloud Control rejects it.
+                webhook_body_template: unset_options.webhook_body_template.then(String::new),
+                ..base
+            },
         }
     }
 }

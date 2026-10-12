@@ -49,7 +49,6 @@ use databend_common_sql::plans::AlterSharePlanAction;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::MaintenanceTarget;
 use databend_common_sql::plans::ModifyColumnAction;
-use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::PresignAction;
 use databend_common_sql::plans::RewriteKind;
@@ -1842,7 +1841,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::DropDatabase(plan) => {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Drop, plan.if_exists).await?;
             }
-            Plan::UndropDatabase(_) | Plan::DropIndex(_) => {
+            Plan::UndropDatabase(_) => {
                 // undroptable/db need convert name to id. But because of drop, can not find the id. Upgrade Object to Database.
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Drop, false, false)
                     .await?;
@@ -1962,6 +1961,10 @@ impl AccessChecker for PrivilegeAccess {
                 }
                 if let Some(query) = &plan.as_select {
                     self.check(ctx, query).await?;
+                }
+                for dictionary in plan.index_user_dictionaries.iter().flatten().map(|(_, d)| d) {
+                    self.validate_stage_access(&dictionary.stage_info, UserPrivilegeType::Read)
+                        .await?;
                 }
             }
             Plan::CreateMaterializedView(plan) => {
@@ -2130,6 +2133,9 @@ impl AccessChecker for PrivilegeAccess {
             Plan::AlterTablePartitionBy(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, plan.if_exists, false).await?
             }
+            Plan::DropTablePartitionKey(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, plan.if_exists, false).await?
+            }
             Plan::DropTableClusterKey(plan) => {
                 match &plan.target {
                     MaintenanceTarget::Table => self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?,
@@ -2245,10 +2251,9 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_insert_source(ctx, &plan.source).await?;
             }
             Plan::DataMutation { s_expr, .. } => {
-                let plan: Mutation = s_expr.plan().clone().try_into()?;
+                let plan = s_expr.mutation()?;
                 if enable_experimental_rbac_check {
-                    let s_expr = s_expr.child(0)?;
-                    match s_expr.get_udfs() {
+                    match s_expr.input_udfs() {
                         Ok(udfs) => {
                             if !udfs.is_empty() {
                                 self.validate_udf_access(udfs).await?;
@@ -2437,7 +2442,6 @@ impl AccessChecker for PrivilegeAccess {
             Plan::RenameDatabase(_)
             | Plan::RevertTable(_)
             | Plan::AlterUDF(_)
-            | Plan::RefreshIndex(_)
             | Plan::AlterRole(_)
             | Plan::AlterUser(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false, false)
@@ -2545,7 +2549,6 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::AlterPasswordPolicy(_)
             | Plan::DropPasswordPolicy(_)
             | Plan::DescPasswordPolicy(_)
-            | Plan::CreateIndex(_)
             | Plan::CreateNotification(_)
             | Plan::DropNotification(_)
             | Plan::DescNotification(_)
@@ -2568,6 +2571,10 @@ impl AccessChecker for PrivilegeAccess {
             Plan::CreateTableIndex(plan) => {
                 self.validate_table_index_access(&plan.catalog, &plan.database, &plan.table)
                     .await?;
+                if let Some(dictionary) = &plan.user_dictionary {
+                    self.validate_stage_access(&dictionary.stage_info, UserPrivilegeType::Read)
+                        .await?;
+                }
             }
             Plan::CreateDatamaskPolicy(_) => {
                 self

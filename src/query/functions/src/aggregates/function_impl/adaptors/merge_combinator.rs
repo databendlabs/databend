@@ -37,8 +37,10 @@ use super::AggregateMetadata;
 use super::AggregateSignature;
 use super::AggregateStateDescription;
 use super::AggregateStateSet;
+use super::AggregateStateSettings;
 use super::ArgumentsPattern;
 use super::Combinator;
+use super::EXECUTION_ONLY_STATE_VERSION;
 use super::FunctionInputLayout;
 use super::MergeResultInput;
 use super::MergeSerializedInput;
@@ -46,6 +48,8 @@ use super::MergeStatesInput;
 use super::RawAggregateCall;
 use super::SerializeInput;
 use super::combine_validity;
+use super::input_rows::remove_serialized_input_rows_flag;
+use super::input_rows::state_type_with_input_rows_flag;
 use super::state_combinator::aggregate_state_data_type;
 
 type MergeBuild<'a> = dyn Fn(&[Scalar], &[DataType]) -> Result<AggregateCallRef> + 'a;
@@ -95,9 +99,22 @@ pub(crate) struct MergeCombinator {
     pub(crate) signature: AggregateSignature,
     pub(crate) metadata: AggregateMetadata,
     pub(crate) returns_state: bool,
+    pub(crate) state_settings: AggregateStateSettings,
+}
+
+/// How MERGE reads an incoming persisted state that predates the current layout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StateMigration {
+    /// The input has a trailing input-rows flag and the output does not.
+    DropInputRowsFlag,
 }
 
 impl Combinator for MergeCombinator {
+    fn with_state_settings(mut self, settings: AggregateStateSettings) -> Self {
+        self.state_settings = settings;
+        self
+    }
+
     fn create<const ORDERED: bool>(
         self,
         signature: AggregateSignature,
@@ -128,30 +145,31 @@ impl MergeCombinator {
     ) -> Result<AggregateCallRef> {
         let state_type = StateSerdeType::new(state.serde_items().to_vec()).data_type();
         let argument_type = self.signature.args_type[0].remove_nullable();
-        let result_state_type = if let DataType::AggregateState(persisted) = argument_type {
-            if state_type != *persisted.state_type {
-                return Err(ErrorCode::BadDataValueType(format!(
-                    "Aggregate state layout does not match the signature of {}",
-                    self.signature.name
-                )));
-            }
-            DataType::AggregateState(persisted)
-        } else {
-            if state_type != argument_type {
-                return Err(ErrorCode::BadDataValueType(format!(
-                    "Aggregate state layout does not match the signature of {}",
-                    self.signature.name
-                )));
-            }
-            aggregate_state_data_type(
-                &nested_signature.name,
-                &nested_signature.params,
-                nested_signature.args_type,
-                state_type,
-            )?
+        let persisted_type = match &argument_type {
+            DataType::AggregateState(persisted) => persisted.state_type.as_ref(),
+            legacy => legacy,
         };
+        let migration = self.resolve_migration(&state_type, persisted_type)?;
+        // _merge_state uses the output format selected by the write policy,
+        // even if the input must first be converted to the execution layout.
         self.signature.return_type = if self.returns_state {
-            result_state_type
+            debug_assert_ne!(state.state_version(), EXECUTION_ONLY_STATE_VERSION);
+            match argument_type {
+                DataType::AggregateState(persisted) => {
+                    DataType::AggregateState(Box::new(AggregateStateDataType {
+                        state_type: Box::new(state_type),
+                        state_version: state.state_version(),
+                        ..*persisted
+                    }))
+                }
+                _ => aggregate_state_data_type(
+                    &nested_signature.name,
+                    &nested_signature.params,
+                    nested_signature.args_type,
+                    state_type,
+                    state.state_version(),
+                )?,
+            }
         } else {
             nested_signature.return_type
         };
@@ -163,7 +181,32 @@ impl MergeCombinator {
             MergeEval {
                 nested: eval,
                 returns_state: self.returns_state,
+                migration,
             },
+        )))
+    }
+
+    /// The function selector validates input versions and supplies the input
+    /// and output layout settings. Equal physical layouts need no conversion
+    /// even if their versions differ; this only handles physical conversion.
+    /// Currently we can drop an old input-rows flag, but cannot add one back.
+    fn resolve_migration(
+        &self,
+        state_type: &DataType,
+        persisted_type: &DataType,
+    ) -> Result<Option<StateMigration>> {
+        if persisted_type == state_type {
+            return Ok(None);
+        }
+        if self.state_settings.input_nullable_input_rows_flag
+            && !self.state_settings.preserve_nullable_input_rows_flag
+            && *persisted_type == state_type_with_input_rows_flag(state_type)
+        {
+            return Ok(Some(StateMigration::DropInputRowsFlag));
+        }
+        Err(ErrorCode::BadDataValueType(format!(
+            "Aggregate state layout does not match the signature of {}",
+            self.signature.name
         )))
     }
 }
@@ -428,10 +471,11 @@ fn persist_params(params: &[Scalar]) -> Result<Vec<AggregateFunctionParam>> {
 struct MergeEval<I> {
     nested: I,
     returns_state: bool,
+    migration: Option<StateMigration>,
 }
 
 impl<I> MergeEval<I> {
-    fn physical_input(entry: &BlockEntry) -> (BlockEntry, Option<Bitmap>) {
+    fn physical_input(&self, entry: &BlockEntry) -> (BlockEntry, Option<Bitmap>) {
         let validity = column_merge_validity(entry, None);
         let entry = entry.clone().remove_nullable();
         let entry = match entry {
@@ -440,7 +484,12 @@ impl<I> MergeEval<I> {
             }
             entry => entry,
         };
-        (entry, validity)
+        match self.migration {
+            None => (entry, validity),
+            Some(StateMigration::DropInputRowsFlag) => {
+                remove_serialized_input_rows_flag(&entry, validity.as_ref())
+            }
+        }
     }
 }
 
@@ -451,7 +500,7 @@ impl<I: AggregateEval> AggregateEval for MergeEval<I> {
 
     fn accumulate(&self, input: AccumulateInput<'_>) -> Result<()> {
         let entry = &input.columns[0];
-        let (state, validity) = Self::physical_input(entry);
+        let (state, validity) = self.physical_input(entry);
         let validity = match (validity, input.validity) {
             (Some(validity), Some(input_validity)) => Some(&validity & input_validity),
             (Some(validity), None) => Some(validity),
@@ -467,7 +516,7 @@ impl<I: AggregateEval> AggregateEval for MergeEval<I> {
     }
 
     fn accumulate_keys(&self, input: AccumulateKeysInput<'_>) -> Result<()> {
-        let (state, validity) = Self::physical_input(&input.columns[0]);
+        let (state, validity) = self.physical_input(&input.columns[0]);
         let validity = combine_validity(validity, input.validity);
         self.nested.merge_serialized(MergeSerializedInput {
             states: input.states,
@@ -477,7 +526,7 @@ impl<I: AggregateEval> AggregateEval for MergeEval<I> {
     }
 
     fn accumulate_row(&self, input: AccumulateRowInput<'_>) -> Result<()> {
-        let (state, validity) = Self::physical_input(&input.columns[0]);
+        let (state, validity) = self.physical_input(&input.columns[0]);
         if validity
             .as_ref()
             .is_some_and(|validity| !validity.get(input.row).unwrap())

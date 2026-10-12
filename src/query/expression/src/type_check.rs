@@ -181,6 +181,26 @@ pub fn check_cast<Index: ColumnIndex>(
     {
         return Ok(expr);
     }
+    let source_aggregate_state = match expr.data_type().remove_nullable() {
+        DataType::AggregateState(state) => Some(state),
+        _ => None,
+    };
+    let destination_aggregate_state = match wrapped_dest_type.remove_nullable() {
+        DataType::AggregateState(state) => Some(state),
+        _ => None,
+    };
+    if let (Some(source), Some(destination)) = (source_aggregate_state, destination_aggregate_state)
+        && source != destination
+    {
+        return Err(ErrorCode::BadArguments(format!(
+            "aggregate state metadata does not match: source {} version {}, destination {} version {}",
+            source.function_name,
+            source.state_version,
+            destination.function_name,
+            destination.state_version,
+        ))
+        .set_span(span));
+    }
     if expr.data_type() == &wrapped_dest_type
         || expr.data_type().matches_physical_type(&wrapped_dest_type)
     {

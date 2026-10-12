@@ -14,8 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::ast::DeclareItem;
-use databend_common_ast::ast::ScriptStatement;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
@@ -26,7 +24,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_script::Executor;
 use databend_common_script::ReturnValue;
-use databend_common_script::compile;
+use databend_common_script::compile_block;
 use databend_common_sql::plans::ExecuteImmediatePlan;
 use tokio::sync::Mutex;
 
@@ -127,23 +125,13 @@ impl Interpreter for ExecuteImmediateInterpreter {
     fn execute2(&self) -> futures::future::BoxFuture<'_, Result<PipelineBuildResult>> {
         Box::pin(async move {
             let res: Result<_> = try {
-                let mut ast = self.plan.script_block.clone();
-                let mut src = vec![];
-                for declare in ast.declares {
-                    match declare {
-                        DeclareItem::Var(declare) => src.push(ScriptStatement::LetVar { declare }),
-                        DeclareItem::Set(declare) => {
-                            src.push(ScriptStatement::LetStatement { declare })
-                        }
-                    }
-                }
-                src.append(&mut ast.body);
-                let compiled = compile(&src)?;
+                let span = self.plan.script_block.span;
+                let compiled = compile_block(self.plan.script_block.clone())?;
 
                 let client = ScriptClient {
                     ctx: self.ctx.clone(),
                 };
-                let mut executor = Executor::load(ast.span, client, compiled);
+                let mut executor = Executor::load(span, client, compiled);
                 let settings = self.ctx.get_settings();
                 let script_max_steps = settings.get_script_max_steps()?;
                 let result = executor.run(script_max_steps as usize).await?;

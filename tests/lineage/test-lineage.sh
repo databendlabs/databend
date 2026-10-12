@@ -146,6 +146,9 @@ run_lineage_suite refresh 8000
 wait_for_lineage \
     "SELECT count(*) FROM system_history.lineage_history WHERE target_database = 'lineage_history_legacy' AND target_name = 'legacy_view' AND lineage_kind = 'CREATE_VIEW' AND query_info['backfilled_at'] IS NOT NULL" \
     "Refreshed legacy View lineage"
+wait_for_lineage \
+    "SELECT count(*) FROM system_history.lineage_history WHERE target_database = 'lineage_history_legacy' AND target_name = 'legacy_mv' AND lineage_kind = 'CREATE_MATERIALIZED_VIEW' AND query_info['backfilled_at'] IS NOT NULL" \
+    "Refreshed legacy materialized view lineage"
 
 bash ./tests/lineage/test_external_catalog_fields.sh
 run_lineage_suite check 8000

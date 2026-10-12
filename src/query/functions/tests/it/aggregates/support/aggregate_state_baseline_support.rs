@@ -111,6 +111,7 @@ impl PreparedCall {
             params: vec![],
             argument_types: self.arguments.clone(),
             state_type: Box::new(self.state.clone()),
+            state_version: 0,
         }))
     }
 }

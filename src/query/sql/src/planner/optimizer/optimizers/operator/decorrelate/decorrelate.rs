@@ -30,6 +30,8 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::DerivedColumnScope;
+use super::row_value::row_value_equality;
+use super::row_value::row_value_fields;
 use crate::ColumnSet;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::JoinPredicate;
@@ -275,6 +277,12 @@ impl SubqueryDecorrelatorOptimizer {
                     &mut left_conditions,
                 )?;
 
+                // These conditions reconnect the flattened subquery result to the outer row.
+                // They are internal correlation keys rather than user-written equality
+                // predicates, so NULL correlation groups must match each other.
+                let is_null_equal =
+                    Self::nullable_condition_indexes(&left_conditions, &right_conditions);
+
                 let join_type = if matches!(subquery.contain_agg, Some(true)) && {
                     let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
                     rel_expr
@@ -292,7 +300,7 @@ impl SubqueryDecorrelatorOptimizer {
                     equi_conditions: JoinEquiCondition::new_conditions(
                         left_conditions,
                         right_conditions,
-                        vec![],
+                        is_null_equal,
                     ),
                     non_equi_conditions: vec![],
                     join_type,
@@ -339,16 +347,8 @@ impl SubqueryDecorrelatorOptimizer {
                     &mut left_conditions,
                     &mut right_conditions,
                 )?;
-                let mut is_null_equal = Vec::new();
-                for (i, (l, r)) in left_conditions
-                    .iter()
-                    .zip(right_conditions.iter())
-                    .enumerate()
-                {
-                    if l.data_type().is_nullable() || r.data_type().is_nullable() {
-                        is_null_equal.push(i);
-                    }
-                }
+                let is_null_equal =
+                    Self::nullable_condition_indexes(&left_conditions, &right_conditions);
 
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
@@ -404,16 +404,8 @@ impl SubqueryDecorrelatorOptimizer {
                     &mut right_conditions,
                 )?;
 
-                let mut is_null_equal = Vec::new();
-                for (i, (l, r)) in left_conditions
-                    .iter()
-                    .zip(right_conditions.iter())
-                    .enumerate()
-                {
-                    if l.data_type().is_nullable() || r.data_type().is_nullable() {
-                        is_null_equal.push(i);
-                    }
-                }
+                let is_null_equal =
+                    Self::nullable_condition_indexes(&left_conditions, &right_conditions);
 
                 let output_column = subquery.output_column.clone();
                 let column_name = format!("subquery_{}", output_column.index);
@@ -431,11 +423,18 @@ impl SubqueryDecorrelatorOptimizer {
                 let op = subquery.compare_op.as_ref().unwrap().clone();
                 // Make <child_expr op right_condition> as non_equi_conditions even if op is equal operator.
                 // Because it's not null-safe.
-                let non_equi_conditions = vec![ScalarExpr::FunctionCall(op.to_func_call(
-                    subquery.span,
-                    child_expr,
-                    right_condition,
-                )?)];
+                let non_equi_conditions = if subquery.row_columns.is_empty() {
+                    vec![ScalarExpr::FunctionCall(op.to_func_call(
+                        subquery.span,
+                        child_expr,
+                        right_condition,
+                    )?)]
+                } else {
+                    // Row values are compared field by field so a NULL field
+                    // yields NULL instead of the tuple comparison result.
+                    let (left, right) = row_value_fields(subquery)?;
+                    vec![row_value_equality(subquery, &left, &right)?]
+                };
 
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
@@ -520,6 +519,20 @@ impl SubqueryDecorrelatorOptimizer {
             right_conditions.push(right_column);
         }
         Ok(())
+    }
+
+    pub(crate) fn nullable_condition_indexes(
+        left_conditions: &[ScalarExpr],
+        right_conditions: &[ScalarExpr],
+    ) -> Vec<usize> {
+        left_conditions
+            .iter()
+            .zip(right_conditions)
+            .enumerate()
+            .filter_map(|(index, (left, right))| {
+                (left.data_type().is_nullable() || right.data_type().is_nullable()).then_some(index)
+            })
+            .collect()
     }
 
     // Check if need to join outer and inner table

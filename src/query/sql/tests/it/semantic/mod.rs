@@ -13,5 +13,6 @@
 // limitations under the License.
 
 mod binder;
+mod expression_parser;
 mod identifier;
 mod type_check;

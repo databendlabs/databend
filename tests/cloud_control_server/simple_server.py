@@ -413,6 +413,10 @@ def create_notification_request_to_notification(id, create_notification_request)
     notification.webhook_authorization_header = (
         create_notification_request.webhook_authorization_header
     )
+    if create_notification_request.HasField("webhook_body_template"):
+        notification.webhook_body_template = (
+            create_notification_request.webhook_body_template
+        )
     notification.comments = create_notification_request.comments
     t = timestamp_pb2.Timestamp()
     dt = datetime.utcnow()
@@ -744,6 +748,13 @@ class NotificationService(notification_pb2_grpc.NotificationServiceServicer):
                 )
             if request.HasField("comments"):
                 notification.comments = request.comments
+            # Mirrors Cloud Control: a present-but-empty template clears it,
+            # an absent field leaves it untouched.
+            if request.HasField("webhook_body_template"):
+                if request.webhook_body_template == "":
+                    notification.ClearField("webhook_body_template")
+                else:
+                    notification.webhook_body_template = request.webhook_body_template
         return notification_pb2.AlterNotificationResponse(
             notification_id=notification.notification_id
         )

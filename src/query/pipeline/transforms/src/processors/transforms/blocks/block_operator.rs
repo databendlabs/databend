@@ -114,3 +114,77 @@ impl Transform for CompoundBlockOperator {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::Expr;
+    use databend_common_expression::FromData;
+    use databend_common_expression::RawExpr;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::type_check::check;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::Int64Type;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
+    use databend_common_functions::BUILTIN_FUNCTIONS;
+
+    use super::*;
+
+    fn column(id: usize) -> RawExpr {
+        RawExpr::ColumnRef {
+            span: None,
+            id,
+            data_type: DataType::Number(NumberDataType::Int64),
+            display_name: format!("column_{id}"),
+        }
+    }
+
+    fn plus(expr: RawExpr, value: i64) -> RawExpr {
+        RawExpr::FunctionCall {
+            span: None,
+            name: "plus".to_string(),
+            params: vec![],
+            args: vec![expr, RawExpr::Constant {
+                span: None,
+                scalar: Scalar::Number(NumberScalar::Int64(value)),
+                data_type: None,
+            }],
+        }
+    }
+
+    #[test]
+    fn test_compact_map_preserves_dependent_offsets() {
+        let t = plus(plus(column(0), 1), 2);
+        let p = plus(t.clone(), 3);
+        let expr = |raw: RawExpr| -> Expr { check(&raw, &BUILTIN_FUNCTIONS).unwrap() };
+        let operators = vec![
+            BlockOperator::Map {
+                exprs: vec![expr(plus(column(0), 100)), expr(t)],
+                projections: None,
+            },
+            BlockOperator::Map {
+                exprs: vec![expr(p.clone()), expr(p), expr(column(2))],
+                projections: None,
+            },
+        ];
+        let ctx = FunctionContext::default();
+        let input = DataBlock::new_from_columns(vec![Int64Type::from_data(vec![0, 1, 2, 3])]);
+        let expected = operators
+            .iter()
+            .fold(input.clone(), |block, op| op.execute(&ctx, block).unwrap());
+        let compacted = CompoundBlockOperator::compact_map(operators, 1);
+        assert_eq!(compacted.len(), 1);
+        let BlockOperator::Map { exprs, .. } = &compacted[0] else {
+            unreachable!()
+        };
+        assert_eq!(exprs.len(), 7); // Only T and P are materialized; their child is pruned.
+        let actual = compacted[0].execute(&ctx, input).unwrap();
+        assert_eq!(actual.num_columns(), expected.num_columns());
+        for column in 0..expected.num_columns() {
+            assert_eq!(
+                actual.get_by_offset(column).value(),
+                expected.get_by_offset(column).value()
+            );
+        }
+    }
+}

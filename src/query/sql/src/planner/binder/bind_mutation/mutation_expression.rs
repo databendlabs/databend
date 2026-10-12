@@ -713,21 +713,3 @@ pub struct MutationExpressionBindResult {
     pub source: Option<SExpr>,
     pub predicates: Vec<ScalarExpr>,
 }
-
-pub fn target_probe(s_expr: &SExpr, target_table_index: usize) -> Result<bool> {
-    if !matches!(s_expr.plan(), RelOperator::Join(_)) {
-        return Ok(false);
-    }
-
-    fn contains_target_table(s_expr: &SExpr, target_table_index: usize) -> bool {
-        if let RelOperator::Scan(scan) = s_expr.plan() {
-            scan.table_index == target_table_index
-        } else {
-            s_expr
-                .children()
-                .any(|child| contains_target_table(child, target_table_index))
-        }
-    }
-
-    Ok(contains_target_table(s_expr.child(0)?, target_table_index))
-}

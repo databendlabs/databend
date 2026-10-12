@@ -224,6 +224,10 @@ impl BlockReader {
         self.schema().into()
     }
 
+    pub fn default_values(&self) -> &[Scalar] {
+        &self.default_vals
+    }
+
     pub fn operator(&self) -> Operator {
         self.operator.clone()
     }

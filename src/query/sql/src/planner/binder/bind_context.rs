@@ -347,15 +347,19 @@ impl CteContext {
     }
 }
 
+/// `CteInfo` is cloned whenever a `CteContext` is cloned, which happens for every
+/// nested `BindContext` and every table reference. Keep the heavy payloads
+/// (`query`, `materialized_cte_info`) behind `Arc` so that cloning the map is
+/// cheap and does not deep-copy previously bound CTE definitions.
 #[derive(Clone, Debug)]
 pub struct CteInfo {
     pub columns_alias: Vec<String>,
     pub virtual_column_outputs: BTreeSet<String>,
-    pub query: Query,
+    pub query: Arc<Query>,
     pub recursive: bool,
     pub logical_recursive_cte_id: Option<u32>,
     pub columns: Vec<ColumnBinding>,
-    pub materialized_cte_info: Option<MaterializedCTEInfo>,
+    pub materialized_cte_info: Option<Arc<MaterializedCTEInfo>>,
     pub user_specified_materialized: bool,
 }
 
@@ -363,7 +367,13 @@ pub struct CteInfo {
 pub struct MaterializedCTEInfo {
     pub cte_name: String,
     pub bound_s_expr: SExpr,
-    pub bound_context: BindContext,
+    /// Output column bindings of the producer side of this CTE.
+    ///
+    /// Only the columns are kept here. Storing the whole producer `BindContext`
+    /// would embed its `cte_map` (and therefore every previously bound CTE)
+    /// into this entry, making the size of `CteInfo` grow exponentially with
+    /// the number of materialized CTEs.
+    pub bound_columns: Vec<ColumnBinding>,
 }
 
 impl BindContext {

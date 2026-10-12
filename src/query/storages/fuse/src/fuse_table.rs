@@ -643,6 +643,13 @@ impl FuseTable {
         self.resolve_partition_keys().map_or(0, |keys| keys.len())
     }
 
+    pub fn partition_key_id(&self) -> Option<u32> {
+        // Legacy definitions use ID 0 for new writes. Their historical statistics
+        // have no ID and are therefore never confused with these new statistics.
+        self.partition_key_str()
+            .map(|_| self.table_info.meta.partition_key_id.unwrap_or(0))
+    }
+
     pub fn use_hash_write_distribution(&self) -> bool {
         self.partition_key_count() != 0
             && self
@@ -678,7 +685,10 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
     ) -> Option<PartitionPruningInfo> {
         let partition_keys = self.linear_partition_keys(ctx);
-        (!partition_keys.is_empty()).then_some(PartitionPruningInfo { partition_keys })
+        (!partition_keys.is_empty()).then_some(PartitionPruningInfo {
+            partition_keys,
+            partition_key_id: self.partition_key_id(),
+        })
     }
 
     pub fn linear_partition_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
@@ -1283,13 +1293,10 @@ impl Table for FuseTable {
         _ctx: Arc<dyn TableContext>,
     ) -> Result<Box<dyn ColumnStatisticsProvider>> {
         let provider = if let Some(snapshot) = self.read_table_snapshot().await? {
-            let mut stats = snapshot.summary.col_stats.clone();
-            // add virtual column stats
-            if let Some(virtual_col_stats) = &snapshot.summary.virtual_col_stats {
-                for (col_id, stat) in virtual_col_stats {
-                    stats.insert(*col_id, stat.clone());
-                }
-            }
+            // Snapshot-level virtual column statistics are ignored: current persisted ids are
+            // segment-local and can collide with table column ids here. Even older persisted
+            // ids cannot be reliably matched to paths using query-time virtual column ids.
+            let stats = snapshot.summary.col_stats.clone();
             let table_statistics = self.read_table_snapshot_statistics(Some(&snapshot)).await?;
             let additional_stats_meta = snapshot.summary.additional_stats_meta.as_ref();
             let column_distinct_values = match additional_stats_meta.and_then(|v| v.hll.as_ref()) {

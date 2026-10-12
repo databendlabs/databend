@@ -79,7 +79,13 @@ impl Interpreter for OptimizeCompactBlockInterpreter {
             let mut build_res = PipelineBuildResult::create();
             let mut builder =
                 PhysicalPlanBuilder::new(MetadataRef::default(), self.ctx.clone(), false);
-            match builder.build(&self.s_expr, ColumnSet::new()).await {
+            match builder
+                .build(
+                    &databend_common_sql::optimizer::ir::PExpr::from(self.s_expr.clone()),
+                    ColumnSet::new(),
+                )
+                .await
+            {
                 Ok(physical_plan) => {
                     build_res =
                         build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan)

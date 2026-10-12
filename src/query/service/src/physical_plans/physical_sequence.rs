@@ -17,7 +17,7 @@ use std::any::Any;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_sql::ColumnSet;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlan;
@@ -103,7 +103,7 @@ impl IPhysicalPlan for Sequence {
 impl PhysicalPlanBuilder {
     pub(crate) async fn build_sequence(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         _sequence: &databend_common_sql::plans::Sequence,
         stat_info: PlanStatsInfo,
         required: ColumnSet,

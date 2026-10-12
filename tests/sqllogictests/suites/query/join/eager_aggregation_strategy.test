@@ -45,3 +45,59 @@ DROP TABLE eager_strategy_left;
 
 statement ok
 DROP TABLE eager_strategy_right;
+
+# https://github.com/databendlabs/databend/issues/20591
+# A pushed-down rank limit must not be copied into an eager aggregate below the join:
+# the first groups of one join input may all be filtered out by the join.
+# force_eager_aggregate makes the plan independent of table statistics.
+statement ok
+set force_eager_aggregate = 1;
+
+statement ok
+CREATE TABLE eager_rank_limit_l (k BIGINT NOT NULL, v BIGINT);
+
+statement ok
+CREATE TABLE eager_rank_limit_r (k BIGINT NOT NULL, flag BOOLEAN);
+
+statement ok
+INSERT INTO eager_rank_limit_l VALUES (1, -1), (2, -2), (3, -3), (4, -4), (5, -5), (6, -6), (7, -7), (8, -8), (9, -9);
+
+statement ok
+INSERT INTO eager_rank_limit_r VALUES (1, false), (2, false), (3, false), (4, true), (5, true), (6, true), (7, true), (8, true), (9, true);
+
+query III
+SELECT sum(l.v), l.k, l.v
+FROM eager_rank_limit_l l JOIN eager_rank_limit_r r ON r.k = l.k
+WHERE r.flag
+GROUP BY l.k, l.v
+ORDER BY l.k, l.v
+LIMIT 3;
+----
+-4 4 -4
+-5 5 -5
+-6 6 -6
+
+query III
+SELECT sum(s.v), s.k, s.v
+FROM (
+    SELECT l.k, r.flag, l.v
+    FROM eager_rank_limit_l l
+    JOIN LATERAL (SELECT * FROM eager_rank_limit_r rr WHERE rr.k = l.k) r ON TRUE
+) s
+WHERE s.flag
+GROUP BY s.k, s.v
+ORDER BY s.k, s.v
+LIMIT 3;
+----
+-4 4 -4
+-5 5 -5
+-6 6 -6
+
+statement ok
+DROP TABLE eager_rank_limit_l;
+
+statement ok
+DROP TABLE eager_rank_limit_r;
+
+statement ok
+unset force_eager_aggregate;

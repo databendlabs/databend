@@ -47,6 +47,52 @@ pub fn try_add_multi_sort_merge(
     enable_loser_tree: bool,
     enable_fixed_rows_sort: bool,
 ) -> Result<()> {
+    add_multi_sort_merge(
+        pipeline,
+        key_desc,
+        block_size,
+        limit,
+        remove_order_col,
+        enable_loser_tree,
+        enable_fixed_rows_sort,
+        false,
+    )
+}
+
+/// Emit selected prefixes at input refill boundaries for streaming recluster.
+/// No memory allowance or retained-byte threshold is introduced.
+pub fn try_add_multi_sort_merge_with_flush_before_refill(
+    pipeline: &mut Pipeline,
+    key_desc: SortKeyDescription,
+    block_size: usize,
+    limit: Option<usize>,
+    remove_order_col: bool,
+    enable_loser_tree: bool,
+    enable_fixed_rows_sort: bool,
+) -> Result<()> {
+    add_multi_sort_merge(
+        pipeline,
+        key_desc,
+        block_size,
+        limit,
+        remove_order_col,
+        enable_loser_tree,
+        enable_fixed_rows_sort,
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn add_multi_sort_merge(
+    pipeline: &mut Pipeline,
+    key_desc: SortKeyDescription,
+    block_size: usize,
+    limit: Option<usize>,
+    remove_order_col: bool,
+    enable_loser_tree: bool,
+    enable_fixed_rows_sort: bool,
+    flush_before_refill: bool,
+) -> Result<()> {
     match pipeline.output_len() {
         0 => panic!("Cannot resize empty pipe."),
         1 => Ok(()),
@@ -65,6 +111,7 @@ pub fn try_add_multi_sort_merge(
                 limit,
                 remove_order_col,
                 enable_loser_tree,
+                flush_before_refill,
             };
             pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
                 ProcessorPtr::create(select_row_type(&mut builder, enable_fixed_rows_sort)?),
@@ -84,6 +131,7 @@ struct MultiSortMergeBuilder {
     limit: Option<usize>,
     remove_order_col: bool,
     enable_loser_tree: bool,
+    flush_before_refill: bool,
 }
 
 impl RowsTypeVisitor for MultiSortMergeBuilder {
@@ -116,7 +164,10 @@ impl MultiSortMergeBuilder {
             .iter()
             .map(|i| InputBlockStream::new(i.clone(), remove_order_col, sort_row_offset))
             .collect::<Vec<_>>();
-        let merger = Merger::<A, _>::new(streams, self.block_size, self.limit);
+        let mut merger = Merger::<A, _>::new(streams, self.block_size, self.limit);
+        if self.flush_before_refill {
+            merger = merger.with_flush_before_refill();
+        }
 
         Ok(Box::new(MultiSortMergeProcessor {
             merger,
@@ -213,8 +264,13 @@ where A: SortAlgorithm + 'static
             return Ok(Event::Finished);
         }
 
+        if self.merger.should_flush() {
+            return Ok(Event::Sync);
+        }
         self.merger.poll_pending_stream()?;
-
+        if self.merger.should_flush() {
+            return Ok(Event::Sync);
+        }
         if self.merger.has_pending_stream() {
             Ok(Event::NeedData)
         } else {

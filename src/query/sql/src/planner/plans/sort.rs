@@ -142,11 +142,7 @@ impl Operator for Sort {
             return Ok(input_physical_prop);
         };
 
-        let partition_by = window
-            .partition_by
-            .iter()
-            .map(|s| s.scalar.clone())
-            .collect();
+        let partition_by = window.distribution_keys()?;
         Ok(PhysicalProperty {
             distribution: Distribution::GlobalHash(partition_by),
         })
@@ -172,11 +168,7 @@ impl Operator for Sort {
             return Ok(required);
         }
 
-        let partition_by = window
-            .partition_by
-            .iter()
-            .map(|s| s.scalar.clone())
-            .collect();
+        let partition_by = window.distribution_keys()?;
         required.distribution = Distribution::GlobalHash(partition_by);
 
         Ok(required)
@@ -201,11 +193,7 @@ impl Operator for Sort {
             return Ok(vec![vec![required]]);
         }
 
-        let partition_by = window
-            .partition_by
-            .iter()
-            .map(|s| s.scalar.clone())
-            .collect();
+        let partition_by = window.distribution_keys()?;
 
         required.distribution = Distribution::GlobalHash(partition_by);
         Ok(vec![vec![required]])

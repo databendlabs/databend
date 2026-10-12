@@ -61,17 +61,32 @@ impl Exchange for PartitionKeyExchange {
 
 /// This file implements append to table pipeline builder.
 impl PipelineBuilder {
-    /// Coalesce hash-partitioned writes on the current node. Distributed inputs
-    /// must route the same partition keys to one node before reaching this stage.
+    /// Coalesce hash-partitioned writes on the current node. This only regroups rows
+    /// within this node: for one writer per partition key across the cluster, callers
+    /// must route the same partition keys to one node first (INSERT and COPY do this
+    /// with a hash exchange; INSERT ALL and MERGE INTO do not).
     pub fn build_table_write_layout(
         ctx: Arc<QueryContext>,
         pipeline: &mut Pipeline,
         table: Arc<dyn Table>,
     ) -> Result<()> {
+        let input_schema = DataSchema::from(&table.schema().remove_virtual_computed_fields());
+        Self::build_table_write_layout_with_schema(ctx, pipeline, table.as_ref(), input_schema)
+    }
+
+    /// Same as [`Self::build_table_write_layout`] for inputs whose columns differ from the
+    /// table schema (MERGE INTO carries stream columns, REPLACE INTO may carry a DELETE WHEN
+    /// column). Partition keys are resolved by name.
+    pub fn build_table_write_layout_with_schema(
+        ctx: Arc<QueryContext>,
+        pipeline: &mut Pipeline,
+        table: &dyn Table,
+        input_schema: DataSchema,
+    ) -> Result<()> {
         if table.engine() != "FUSE" {
             return Ok(());
         }
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let fuse_table = FuseTable::try_from_table(table)?;
         if !fuse_table.use_hash_write_distribution() {
             return Ok(());
         }
@@ -79,8 +94,6 @@ impl PipelineBuilder {
         let Some(partition_info) = fuse_table.partition_pruning_info(ctx.clone()) else {
             return Ok(());
         };
-        let table_schema = table.schema().remove_virtual_computed_fields();
-        let input_schema = DataSchema::from(&table_schema);
         let num_input_columns = input_schema.num_fields();
         let partition_exprs = partition_info
             .partition_keys

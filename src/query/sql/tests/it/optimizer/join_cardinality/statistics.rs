@@ -138,8 +138,13 @@ async fn write_sql_join_statistics_case(
         return Err(ErrorCode::Internal("SELECT should bind to a query plan"));
     };
     let metadata = metadata.read();
-    let joins =
-        collect_join_cardinalities(file, &metadata, &s_expr, case.expected_join_type, case.name)?;
+    let joins = collect_join_cardinalities(
+        file,
+        &metadata,
+        s_expr.planned()?.expr(),
+        case.expected_join_type,
+        case.name,
+    )?;
     assert_eq!(joins, 1);
     writeln!(file)?;
     Ok(())

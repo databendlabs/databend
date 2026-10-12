@@ -18,7 +18,7 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_ast::ast::Engine;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_config::GlobalConfig;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRefExt;
@@ -28,16 +28,18 @@ use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TablePartition;
-use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::always_callback;
@@ -49,21 +51,20 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FuseSegmentFormat;
 use databend_common_storages_fuse::FuseStorageFormat;
-use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::InvertedIndexUserDictionary;
+use databend_common_storages_fuse::io::MAX_INVERTED_INDEX_USER_DICTIONARY_SIZE;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_attach_table::get_attach_table_handler;
 use databend_meta_client::types::MatchSeq;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::abort_staged_temp_table;
-use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
-use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
@@ -242,7 +243,8 @@ impl CreateTableInterpreter {
 
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
-        let mut req = self.build_request(None)?;
+        let mut req = self.build_request()?;
+        let dictionary_indexes = self.take_dictionary_indexes(&mut req.table_meta).await?;
 
         // create a dropped table first.
         req.as_dropped = true;
@@ -296,12 +298,44 @@ impl CreateTableInterpreter {
         // For the situation above, we implicitly cast the data type when inserting data.
         // The casting and schema checking is in interpreter_insert.rs, function check_schema_cast.
 
-        let table_info = TableInfo::new(
+        let mut table_info = TableInfo::new(
             &self.plan.database,
             &self.plan.table,
             TableIdent::new(table_id, table_id_seq),
             table_meta,
         );
+
+        // The staged table is not visible yet, so the dictionary-backed indexes are in place
+        // strictly before any data is written through `table_info`.
+        let has_dictionary_indexes = !dictionary_indexes.is_empty();
+        let mut result = self
+            .register_dictionary_indexes(catalog.as_ref(), &table_info, dictionary_indexes)
+            .await;
+        if result.is_ok() && has_dictionary_indexes {
+            result = catalog
+                .get_table_meta_by_id(table_id)
+                .await
+                .and_then(|meta| {
+                    meta.ok_or_else(|| {
+                        ErrorCode::UnknownTable(format!(
+                            "table `{}` disappeared while registering its inverted indexes",
+                            table_info.desc
+                        ))
+                    })
+                })
+                .map(|meta| table_info.meta = meta.data);
+        }
+        if let Err(e) = result {
+            if let Some(prefix) = &temp_prefix {
+                cleanup_staged_temp_table(
+                    self.ctx.get_current_session().temp_tbl_mgr(),
+                    table_id,
+                    prefix,
+                )
+                .await?;
+            }
+            return Err(e);
+        }
 
         let insert_plan = Insert {
             catalog: self.plan.catalog.clone(),
@@ -314,9 +348,9 @@ impl CreateTableInterpreter {
             table_info: Some(table_info),
             lineage_target_table_id: None,
             lineage_target_catalog_type: if self.plan.engine == Engine::Iceberg {
-                databend_common_meta_app::schema::CatalogType::Iceberg
+                CatalogType::Iceberg
             } else {
-                databend_common_meta_app::schema::CatalogType::Default
+                CatalogType::Default
             },
         };
 
@@ -444,42 +478,12 @@ impl CreateTableInterpreter {
     #[async_backtrace::framed]
     async fn create_table(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
-        let mut stat = None;
-        if !GlobalConfig::instance().query.common.management_mode {
-            if let Some(snapshot_loc) = self.plan.options.get(OPT_KEY_SNAPSHOT_LOCATION) {
-                // using application level data operator is a temp workaround
-                // please see discussions https://github.com/datafuselabs/databend/pull/10424
-                let operator = self.ctx.get_application_level_data_operator()?.operator();
-                let reader = MetaReaders::table_snapshot_reader(operator);
-
-                let params = LoadParams {
-                    location: snapshot_loc.clone(),
-                    len_hint: None,
-                    ver: TableSnapshot::VERSION,
-                    put_cache: true,
-                };
-
-                let snapshot = reader.read(&params).await?;
-                stat = Some(TableStatistics {
-                    number_of_rows: snapshot.summary.row_count,
-                    data_bytes: snapshot.summary.uncompressed_byte_size,
-                    compressed_data_bytes: snapshot.summary.compressed_byte_size,
-                    index_data_bytes: snapshot.summary.index_size,
-                    bloom_index_size: snapshot.summary.bloom_index_size,
-                    ngram_index_size: snapshot.summary.ngram_index_size,
-                    inverted_index_size: snapshot.summary.inverted_index_size,
-                    vector_index_size: snapshot.summary.vector_index_size,
-                    virtual_column_size: snapshot.summary.virtual_column_size,
-                    number_of_segments: Some(snapshot.segments.len() as u64),
-                    number_of_blocks: Some(snapshot.summary.block_count),
-                });
-            }
-        }
-        let req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {
+        let mut req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {
             self.build_attach_request(storage_prefix).await
         } else {
-            self.build_request(stat)
+            self.build_request()
         }?;
+        let dictionary_indexes = self.take_dictionary_indexes(&mut req.table_meta).await?;
 
         if !catalog.support_partition()
             && (req.table_properties.is_some() || req.table_partition.is_some())
@@ -490,28 +494,137 @@ impl CreateTableInterpreter {
             )));
         }
 
-        let reply = catalog.create_table(req.clone()).await?;
-        if let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX) {
-            self.register_temp_table(prefix).await?;
+        let staged = !dictionary_indexes.is_empty();
+        if staged {
+            req.as_dropped = true;
+            req.table_meta.drop_on = Some(Utc::now());
         }
-
-        // iceberg table do not need to generate ownership.
-        if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) && !catalog.is_external() {
-            let tenant = self.ctx.get_tenant();
-            self.process_ownership(&tenant, reply).await?;
+        let reply = catalog.create_table(req.clone()).await?;
+        if staged && !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
+            return Ok(PipelineBuildResult::create());
+        }
+        if let Err(e) = self
+            .finish_create_table(catalog.as_ref(), &req, &reply, dictionary_indexes)
+            .await
+        {
+            if staged && let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX) {
+                cleanup_staged_temp_table(
+                    self.ctx.get_current_session().temp_tbl_mgr(),
+                    reply.table_id,
+                    prefix,
+                )
+                .await?;
+            }
+            // Persistent staged tables remain dropped and are reclaimed by vacuum.
+            return Err(e);
         }
 
         Ok(PipelineBuildResult::create())
+    }
+
+    /// Initializes the created table and publishes it after its dictionary indexes are ready.
+    async fn finish_create_table(
+        &self,
+        catalog: &dyn Catalog,
+        req: &CreateTableReq,
+        reply: &CreateTableReply,
+        dictionary_indexes: Vec<(String, TableIndex, InvertedIndexUserDictionary)>,
+    ) -> Result<()> {
+        let temp_prefix = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX);
+        if let Some(prefix) = temp_prefix {
+            self.register_temp_table(prefix).await?;
+        }
+        if temp_prefix.is_none() && !catalog.is_external() {
+            self.process_ownership(&self.ctx.get_tenant(), reply.clone())
+                .await?;
+        }
+        if req.as_dropped {
+            let table_id_seq = reply.table_id_seq.ok_or_else(|| {
+                ErrorCode::Internal("Staged table creation did not return table_id_seq")
+            })?;
+            let table_info = TableInfo::new(
+                &self.plan.database,
+                &self.plan.table,
+                TableIdent::new(reply.table_id, table_id_seq),
+                req.table_meta.clone(),
+            );
+            self.register_dictionary_indexes(catalog, &table_info, dictionary_indexes)
+                .await?;
+            // Publish only after every index is ready, until then the old table stays visible.
+            catalog
+                .commit_table_meta(CommitTableMetaReq {
+                    name_ident: req.name_ident.clone(),
+                    db_id: reply.db_id,
+                    table_id: reply.table_id,
+                    prev_table_id: reply.prev_table_id,
+                    orphan_table_name: reply.orphan_table_name.clone(),
+                })
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// Takes the inline indexes that declare a `user_dictionary` out of `table_meta`, together
+    /// with their dictionary read from the stage. They are registered after `create_table`,
+    /// once the table storage prefix that the dictionary location depends on exists.
+    async fn take_dictionary_indexes(
+        &self,
+        table_meta: &mut TableMeta,
+    ) -> Result<Vec<(String, TableIndex, InvertedIndexUserDictionary)>> {
+        let mut indexes = Vec::new();
+        for (name, user_dictionary) in self.plan.index_user_dictionaries.iter().flatten() {
+            let Some(index) = table_meta.indexes.remove(name) else {
+                continue;
+            };
+            let content = user_dictionary
+                .read(MAX_INVERTED_INDEX_USER_DICTIONARY_SIZE)
+                .await?;
+            let user_dictionary = InvertedIndexUserDictionary::try_new(content)?;
+            indexes.push((name.clone(), index, user_dictionary));
+        }
+        Ok(indexes)
+    }
+
+    /// Uploads each dictionary and registers its index with the resulting location.
+    async fn register_dictionary_indexes(
+        &self,
+        catalog: &dyn Catalog,
+        table_info: &TableInfo,
+        indexes: Vec<(String, TableIndex, InvertedIndexUserDictionary)>,
+    ) -> Result<()> {
+        if indexes.is_empty() {
+            return Ok(());
+        }
+        let table = catalog.get_table_by_info(table_info)?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+
+        let tenant = self.ctx.get_tenant();
+        for (name, mut index, dictionary) in indexes {
+            let location = dictionary.upload(fuse_table).await?;
+            index.options.insert(
+                INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION.to_string(),
+                location,
+            );
+            let req = CreateTableIndexReq {
+                create_option: CreateOption::Create,
+                index_type: index.index_type,
+                tenant: tenant.clone(),
+                table_id: table_info.ident.table_id,
+                name,
+                column_ids: index.column_ids,
+                sync_creation: index.sync_creation,
+                options: index.options,
+            };
+            catalog.create_table_index(req).await?;
+        }
+        Ok(())
     }
 
     /// Build CreateTableReq from CreateTablePlanV2.
     ///
     /// - Rebuild `DataSchema` with default exprs.
     /// - Update cluster key of table meta.
-    pub(crate) fn build_request(
-        &self,
-        statistics: Option<TableStatistics>,
-    ) -> Result<CreateTableReq> {
+    pub(crate) fn build_request(&self) -> Result<CreateTableReq> {
         let fields = self.plan.schema.fields().clone();
         let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
         for field in fields.iter() {
@@ -567,12 +680,14 @@ impl CreateTableInterpreter {
             schema: schema.clone(),
             engine: self.plan.engine.to_string(),
             storage_params: self.plan.storage_params.clone(),
+            partition_key_seq: u32::from(options.contains_key(OPT_KEY_PARTITION_BY)),
+            partition_key_id: options.contains_key(OPT_KEY_PARTITION_BY).then_some(1),
             options,
             engine_options: self.plan.engine_options.clone(),
             field_comments,
             field_stats_truncate_len,
             drop_on: None,
-            statistics: statistics.unwrap_or_default(),
+            statistics: Default::default(),
             comment: comment.unwrap_or_default(),
             indexes,
             constraints,

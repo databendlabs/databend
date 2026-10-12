@@ -1470,9 +1470,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     let vacuum_all = value(Statement::VacuumAll(VacuumAllStmt), rule! { VACUUM ~ ALL });
     let vacuum_drop_table = map(
         rule! {
-            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#ident)?
+            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#ident)? ~ (LIMIT ~ #literal_u64)?
         },
-        |(_, _, _, database_option)| {
+        // `LIMIT` is accepted for compatibility with clients that still send the
+        // legacy `VACUUM DROP TABLE [FROM db] LIMIT n` syntax; the value is ignored.
+        |(_, _, _, database_option, _limit)| {
             Statement::VacuumDropTable(VacuumDropTableStmt {
                 database: database_option.map(|(_, database)| database),
             })
@@ -2854,6 +2856,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ TYPE ~ "=" ~ #ident
             ~ ENABLED ~ "=" ~ #literal_bool
             ~ #notification_webhook_clause?
+            ~ ( WEBHOOK_BODY_TEMPLATE ~ ^"=" ~ ^#literal_string )?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
         },
         |(
@@ -2869,6 +2872,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             _,
             enabled,
             webhook,
+            body_template,
             comment,
         )| {
             Statement::CreateNotification(CreateNotificationStmt {
@@ -2877,6 +2881,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 notification_type: notification_type.to_string(),
                 enabled,
                 webhook_opts: webhook,
+                webhook_body_template: body_template.map(|(_, _, template)| template),
                 comments: comment.map(|(_, _, comments)| comments),
             })
         },
@@ -5255,6 +5260,13 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, _, partition_by, _)| AlterTableAction::AlterTablePartitionBy { partition_by },
     );
 
+    let drop_table_partition_key = map(
+        rule! {
+            DROP ~ PARTITION ~ KEY
+        },
+        |(_, _, _)| AlterTableAction::DropTablePartitionKey,
+    );
+
     let drop_table_cluster_key = map(
         rule! {
             DROP ~ CLUSTER ~ KEY
@@ -5371,6 +5383,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
             | #drop_table_branch
             | #drop_table_tag
             | #alter_table_partition_by
+            | #drop_table_partition_key
             | #alter_table_cluster_key
             | #drop_table_cluster_key
             | #drop_constraint
@@ -5978,7 +5991,6 @@ pub fn engine(i: Input) -> IResult<Engine> {
         value(Engine::View, rule! { VIEW }),
         value(Engine::Random, rule! { RANDOM }),
         value(Engine::Iceberg, rule! { ICEBERG }),
-        value(Engine::Delta, rule! { DELTA }),
         value(Engine::Paimon, rule! { PAIMON }),
     ));
 
@@ -6947,6 +6959,16 @@ pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions>
             AlterNotificationOptions::Set(AlterNotificationSetOptions::webhook_opts(webhook))
         },
     );
+    let webhook_body_template = map(
+        rule! {
+            SET ~ WEBHOOK_BODY_TEMPLATE ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, _, template)| {
+            AlterNotificationOptions::Set(AlterNotificationSetOptions::webhook_body_template(
+                template,
+            ))
+        },
+    );
     let comment = map(
         rule! {
             SET ~ (COMMENT | COMMENTS) ~ ^"=" ~ #literal_string
@@ -6955,11 +6977,23 @@ pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions>
             AlterNotificationOptions::Set(AlterNotificationSetOptions::comments(comment))
         },
     );
+    let unset_webhook_body_template = map(
+        rule! {
+            UNSET ~ WEBHOOK_BODY_TEMPLATE
+        },
+        |(_, _)| {
+            AlterNotificationOptions::Unset(AlterNotificationUnsetOptions {
+                webhook_body_template: true,
+            })
+        },
+    );
     map(
         rule! {
             #enabled
             | #webhook
+            | #webhook_body_template
             | #comment
+            | #unset_webhook_body_template
         },
         |opts| opts,
     )

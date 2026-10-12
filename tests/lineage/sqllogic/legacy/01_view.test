@@ -12,3 +12,9 @@ CREATE TABLE lineage_history_legacy.src(a INT)
 statement ok
 CREATE VIEW lineage_history_legacy.legacy_view AS
 SELECT a AS x FROM lineage_history_legacy.src
+
+# A materialized view created without lineage capture has no CREATE_MATERIALIZED_VIEW edge either;
+# REFRESH LINEAGE recomputes it from the stored original query and logical schema.
+statement ok
+CREATE MATERIALIZED VIEW lineage_history_legacy.legacy_mv AS
+SELECT a AS x FROM lineage_history_legacy.src

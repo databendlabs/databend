@@ -1,0 +1,918 @@
+ast            : to_char(n, 'FM999.00')
+raw expr       : to_char(n::Int64, 'FM999.00')
+checked expr   : to_string<Int64, String>(n, "FM999.00")
+evaluation:
++--------+------------+----------+
+|        | n          | Output   |
++--------+------------+----------+
+| Type   | Int64      | String   |
+| Domain | {-12..=34} | Unknown  |
+| Row 0  | -12        | '-12.00' |
+| Row 1  | 0          | '.00'    |
+| Row 2  | 34         | '34.00'  |
++--------+------------+----------+
+evaluation (internal):
++--------+----------------------------------+
+| Column | Data                             |
++--------+----------------------------------+
+| n      | Column(Int64([-12, 0, 34]))      |
+| Output | StringColumn[-12.00, .00, 34.00] |
++--------+----------------------------------+
+
+
+ast            : to_string(n, 'FM999.00')
+raw expr       : to_string(n::Int64, 'FM999.00')
+checked expr   : to_string<Int64, String>(n, "FM999.00")
+evaluation:
++--------+------------+----------+
+|        | n          | Output   |
++--------+------------+----------+
+| Type   | Int64      | String   |
+| Domain | {-12..=34} | Unknown  |
+| Row 0  | -12        | '-12.00' |
+| Row 1  | 0          | '.00'    |
+| Row 2  | 34         | '34.00'  |
++--------+------------+----------+
+evaluation (internal):
++--------+----------------------------------+
+| Column | Data                             |
++--------+----------------------------------+
+| n      | Column(Int64([-12, 0, 34]))      |
+| Output | StringColumn[-12.00, .00, 34.00] |
++--------+----------------------------------+
+
+
+ast            : to_char(n, fmt)
+raw expr       : to_char(n::Int64, fmt::String)
+checked expr   : to_string<Int64, String>(n, fmt)
+evaluation:
++--------+------------+------------------------+----------+
+|        | n          | fmt                    | Output   |
++--------+------------+------------------------+----------+
+| Type   | Int64      | String                 | String   |
+| Domain | {-12..=34} | {"FM000"..="FM999.00"} | Unknown  |
+| Row 0  | -12        | 'FM999.00'             | '-12.00' |
+| Row 1  | 0          | 'FM000'                | '000'    |
+| Row 2  | 34         | 'FM999.0'              | '34.0'   |
++--------+------------+------------------------+----------+
+evaluation (internal):
++--------+------------------------------------------------+
+| Column | Data                                           |
++--------+------------------------------------------------+
+| n      | Column(Int64([-12, 0, 34]))                    |
+| fmt    | Column(StringColumn[FM999.00, FM000, FM999.0]) |
+| Output | StringColumn[-12.00, 000, 34.0]                |
++--------+------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_char(n, '9.9.9')
+  | ^^^^^^^^^^^^^^^^^^^ SyntaxException. Code: 1005, Text = multiple decimal points. while evaluating function `to_string(-12, '9.9.9')` in expr `to_string(n, '9.9.9')`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_char(n, bad_fmt)
+  | ^^^^^^^^^^^^^^^^^^^ SyntaxException. Code: 1005, Text = multiple decimal points. while evaluating function `to_string(0, '9.9.9')` in expr `to_string(n, bad_fmt)`
+
+
+
+ast            : to_char(n, null_fmt)
+raw expr       : to_char(n::Int64, null_fmt::String NULL)
+checked expr   : to_string<Int64 NULL, String NULL>(CAST<Int64>(n AS Int64 NULL), null_fmt)
+evaluation:
++--------+------------+-----------------------------------+-------------+
+|        | n          | null_fmt                          | Output      |
++--------+------------+-----------------------------------+-------------+
+| Type   | Int64      | String NULL                       | String NULL |
+| Domain | {-12..=34} | {"FM999.0"..="FM999.00"} ∪ {NULL} | Unknown     |
+| Row 0  | -12        | 'FM999.00'                        | '-12.00'    |
+| Row 1  | 0          | NULL                              | NULL        |
+| Row 2  | 34         | 'FM999.0'                         | '34.0'      |
++--------+------------+-----------------------------------+-------------+
+evaluation (internal):
++----------+---------------------------------------------------------------------------------------------------+
+| Column   | Data                                                                                              |
++----------+---------------------------------------------------------------------------------------------------+
+| n        | Column(Int64([-12, 0, 34]))                                                                       |
+| null_fmt | Column(NullableColumn { column: StringColumn[FM999.00, 9.9.9, FM999.0], validity: [0b_____101] }) |
+| Output   | NullableColumn { column: StringColumn[-12.00, , 34.0], validity: [0b_____101] }                   |
++----------+---------------------------------------------------------------------------------------------------+
+
+
+ast            : to_char(n, NULL)
+raw expr       : to_char(n::Int64, NULL)
+checked expr   : to_string<Int64 NULL, String NULL>(CAST<Int64>(n AS Int64 NULL), CAST<NULL>(NULL AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : if(a = 0, 'skipped', to_char(n, bad_fmt))
+raw expr       : if(eq(a::Int64, 0), 'skipped', to_char(n::Int64, bad_fmt::String))
+checked expr   : if<T0=String><Boolean NULL, T0, T0>(CAST<Boolean>(eq<Int64, Int64>(a, 0_i64) AS Boolean NULL), "skipped", to_string<Int64, String>(n, bad_fmt))
+evaluation:
++--------+------------+---------+------------------------+-----------+
+|        | n          | a       | bad_fmt                | Output    |
++--------+------------+---------+------------------------+-----------+
+| Type   | Int64      | Int64   | String                 | String    |
+| Domain | {-12..=34} | {0..=1} | {"9.9.9"..="FM999.00"} | Unknown   |
+| Row 0  | -12        | 1       | 'FM999.00'             | '-12.00'  |
+| Row 1  | 0          | 0       | '9.9.9'                | 'skipped' |
+| Row 2  | 34         | 1       | 'FM999.0'              | '34.0'    |
++--------+------------+---------+------------------------+-----------+
+evaluation (internal):
++---------+------------------------------------------------+
+| Column  | Data                                           |
++---------+------------------------------------------------+
+| n       | Column(Int64([-12, 0, 34]))                    |
+| a       | Column(Int64([1, 0, 1]))                       |
+| bad_fmt | Column(StringColumn[FM999.00, 9.9.9, FM999.0]) |
+| Output  | StringColumn[-12.00, skipped, 34.0]            |
++---------+------------------------------------------------+
+
+
+ast            : if(a >= 0, 'skipped', to_char(n, '9.9.9'))
+raw expr       : if(gte(a::Int64, 0), 'skipped', to_char(n::Int64, '9.9.9'))
+checked expr   : if<T0=String><Boolean NULL, T0, T0>(CAST<Boolean>(gte<Int64, Int64>(a, CAST<UInt8>(0_u8 AS Int64)) AS Boolean NULL), "skipped", to_string<Int64, String>(n, "9.9.9"))
+optimized expr : "skipped"
+evaluation:
++--------+------------+---------+-------------------------+
+|        | n          | a       | Output                  |
++--------+------------+---------+-------------------------+
+| Type   | Int64      | Int64   | String                  |
+| Domain | {-12..=34} | {0..=1} | {"skipped"..="skipped"} |
+| Row 0  | -12        | 1       | 'skipped'               |
+| Row 1  | 0          | 0       | 'skipped'               |
+| Row 2  | 34         | 1       | 'skipped'               |
++--------+------------+---------+-------------------------+
+evaluation (internal):
++--------+-----------------------------------------+
+| Column | Data                                    |
++--------+-----------------------------------------+
+| n      | Column(Int64([-12, 0, 34]))             |
+| a      | Column(Int64([1, 0, 1]))                |
+| Output | StringColumn[skipped, skipped, skipped] |
++--------+-----------------------------------------+
+
+
+error: 
+  --> SQL:1:22
+  |
+1 | if(a = 0, 'skipped', to_char(n, '9.9.9'))
+  |                      ^^^^^^^^^^^^^^^^^^^ SyntaxException. Code: 1005, Text = multiple decimal points. while evaluating function `to_string(-12, '9.9.9')` in expr `to_string(n, '9.9.9')`, during run expr: `if(CAST(a = 0 AS Boolean NULL), 'skipped', to_string(n, '9.9.9'))`
+
+
+
+ast            : to_char(n, 'FM999.00')
+raw expr       : to_char(n::Float32, 'FM999.00')
+checked expr   : to_string<Float32, String>(n, "FM999.00")
+evaluation:
++--------+-----------------+----------+
+|        | n               | Output   |
++--------+-----------------+----------+
+| Type   | Float32         | String   |
+| Domain | {-12.5..=34.25} | Unknown  |
+| Row 0  | -12.5           | '-12.50' |
+| Row 1  | 0               | '.00'    |
+| Row 2  | 34.25           | '34.25'  |
++--------+-----------------+----------+
+evaluation (internal):
++--------+------------------------------------+
+| Column | Data                               |
++--------+------------------------------------+
+| n      | Column(Float32([-12.5, 0, 34.25])) |
+| Output | StringColumn[-12.50, .00, 34.25]   |
++--------+------------------------------------+
+
+
+ast            : to_string(n, 'FM999.00')
+raw expr       : to_string(n::Float32, 'FM999.00')
+checked expr   : to_string<Float32, String>(n, "FM999.00")
+evaluation:
++--------+-----------------+----------+
+|        | n               | Output   |
++--------+-----------------+----------+
+| Type   | Float32         | String   |
+| Domain | {-12.5..=34.25} | Unknown  |
+| Row 0  | -12.5           | '-12.50' |
+| Row 1  | 0               | '.00'    |
+| Row 2  | 34.25           | '34.25'  |
++--------+-----------------+----------+
+evaluation (internal):
++--------+------------------------------------+
+| Column | Data                               |
++--------+------------------------------------+
+| n      | Column(Float32([-12.5, 0, 34.25])) |
+| Output | StringColumn[-12.50, .00, 34.25]   |
++--------+------------------------------------+
+
+
+ast            : to_char(n, fmt)
+raw expr       : to_char(n::Float32, fmt::String)
+checked expr   : to_string<Float32, String>(n, fmt)
+evaluation:
++--------+-----------------+------------------------+----------+
+|        | n               | fmt                    | Output   |
++--------+-----------------+------------------------+----------+
+| Type   | Float32         | String                 | String   |
+| Domain | {-12.5..=34.25} | {"FM000"..="FM999.00"} | Unknown  |
+| Row 0  | -12.5           | 'FM999.00'             | '-12.50' |
+| Row 1  | 0               | 'FM000'                | '000'    |
+| Row 2  | 34.25           | 'FM999.0'              | '34.2'   |
++--------+-----------------+------------------------+----------+
+evaluation (internal):
++--------+------------------------------------------------+
+| Column | Data                                           |
++--------+------------------------------------------------+
+| n      | Column(Float32([-12.5, 0, 34.25]))             |
+| fmt    | Column(StringColumn[FM999.00, FM000, FM999.0]) |
+| Output | StringColumn[-12.50, 000, 34.2]                |
++--------+------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_char(n, '9.9.9')
+  | ^^^^^^^^^^^^^^^^^^^ SyntaxException. Code: 1005, Text = multiple decimal points. while evaluating function `to_string(-12.5, '9.9.9')` in expr `to_string(n, '9.9.9')`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_char(n, bad_fmt)
+  | ^^^^^^^^^^^^^^^^^^^ SyntaxException. Code: 1005, Text = multiple decimal points. while evaluating function `to_string(0, '9.9.9')` in expr `to_string(n, bad_fmt)`
+
+
+
+ast            : to_char(n, null_fmt)
+raw expr       : to_char(n::Float32, null_fmt::String NULL)
+checked expr   : to_string<Float32 NULL, String NULL>(CAST<Float32>(n AS Float32 NULL), null_fmt)
+evaluation:
++--------+-----------------+-----------------------------------+-------------+
+|        | n               | null_fmt                          | Output      |
++--------+-----------------+-----------------------------------+-------------+
+| Type   | Float32         | String NULL                       | String NULL |
+| Domain | {-12.5..=34.25} | {"FM999.0"..="FM999.00"} ∪ {NULL} | Unknown     |
+| Row 0  | -12.5           | 'FM999.00'                        | '-12.50'    |
+| Row 1  | 0               | NULL                              | NULL        |
+| Row 2  | 34.25           | 'FM999.0'                         | '34.2'      |
++--------+-----------------+-----------------------------------+-------------+
+evaluation (internal):
++----------+---------------------------------------------------------------------------------------------------+
+| Column   | Data                                                                                              |
++----------+---------------------------------------------------------------------------------------------------+
+| n        | Column(Float32([-12.5, 0, 34.25]))                                                                |
+| null_fmt | Column(NullableColumn { column: StringColumn[FM999.00, 9.9.9, FM999.0], validity: [0b_____101] }) |
+| Output   | NullableColumn { column: StringColumn[-12.50, , 34.2], validity: [0b_____101] }                   |
++----------+---------------------------------------------------------------------------------------------------+
+
+
+ast            : to_char(n, NULL)
+raw expr       : to_char(n::Float32, NULL)
+checked expr   : to_string<Float32 NULL, String NULL>(CAST<Float32>(n AS Float32 NULL), CAST<NULL>(NULL AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : if(a = 0, 'skipped', to_char(n, bad_fmt))
+raw expr       : if(eq(a::Int64, 0), 'skipped', to_char(n::Float32, bad_fmt::String))
+checked expr   : if<T0=String><Boolean NULL, T0, T0>(CAST<Boolean>(eq<Int64, Int64>(a, 0_i64) AS Boolean NULL), "skipped", to_string<Float32, String>(n, bad_fmt))
+evaluation:
++--------+-----------------+---------+------------------------+-----------+
+|        | n               | a       | bad_fmt                | Output    |
++--------+-----------------+---------+------------------------+-----------+
+| Type   | Float32         | Int64   | String                 | String    |
+| Domain | {-12.5..=34.25} | {0..=1} | {"9.9.9"..="FM999.00"} | Unknown   |
+| Row 0  | -12.5           | 1       | 'FM999.00'             | '-12.50'  |
+| Row 1  | 0               | 0       | '9.9.9'                | 'skipped' |
+| Row 2  | 34.25           | 1       | 'FM999.0'              | '34.2'    |
++--------+-----------------+---------+------------------------+-----------+
+evaluation (internal):
++---------+------------------------------------------------+
+| Column  | Data                                           |
++---------+------------------------------------------------+
+| n       | Column(Float32([-12.5, 0, 34.25]))             |
+| a       | Column(Int64([1, 0, 1]))                       |
+| bad_fmt | Column(StringColumn[FM999.00, 9.9.9, FM999.0]) |
+| Output  | StringColumn[-12.50, skipped, 34.2]            |
++---------+------------------------------------------------+
+
+
+ast            : if(a >= 0, 'skipped', to_char(n, '9.9.9'))
+raw expr       : if(gte(a::Int64, 0), 'skipped', to_char(n::Float32, '9.9.9'))
+checked expr   : if<T0=String><Boolean NULL, T0, T0>(CAST<Boolean>(gte<Int64, Int64>(a, CAST<UInt8>(0_u8 AS Int64)) AS Boolean NULL), "skipped", to_string<Float32, String>(n, "9.9.9"))
+optimized expr : "skipped"
+evaluation:
++--------+-----------------+---------+-------------------------+
+|        | n               | a       | Output                  |
++--------+-----------------+---------+-------------------------+
+| Type   | Float32         | Int64   | String                  |
+| Domain | {-12.5..=34.25} | {0..=1} | {"skipped"..="skipped"} |
+| Row 0  | -12.5           | 1       | 'skipped'               |
+| Row 1  | 0               | 0       | 'skipped'               |
+| Row 2  | 34.25           | 1       | 'skipped'               |
++--------+-----------------+---------+-------------------------+
+evaluation (internal):
++--------+-----------------------------------------+
+| Column | Data                                    |
++--------+-----------------------------------------+
+| n      | Column(Float32([-12.5, 0, 34.25]))      |
+| a      | Column(Int64([1, 0, 1]))                |
+| Output | StringColumn[skipped, skipped, skipped] |
++--------+-----------------------------------------+
+
+
+error: 
+  --> SQL:1:22
+  |
+1 | if(a = 0, 'skipped', to_char(n, '9.9.9'))
+  |                      ^^^^^^^^^^^^^^^^^^^ SyntaxException. Code: 1005, Text = multiple decimal points. while evaluating function `to_string(-12.5, '9.9.9')` in expr `to_string(n, '9.9.9')`, during run expr: `if(CAST(a = 0 AS Boolean NULL), 'skipped', to_string(n, '9.9.9'))`
+
+
+
+ast            : to_char(n, 'FM999.00')
+raw expr       : to_char(n::Float64, 'FM999.00')
+checked expr   : to_string<Float64, String>(n, "FM999.00")
+evaluation:
++--------+-----------------+----------+
+|        | n               | Output   |
++--------+-----------------+----------+
+| Type   | Float64         | String   |
+| Domain | {-12.5..=34.25} | Unknown  |
+| Row 0  | -12.5           | '-12.50' |
+| Row 1  | 0               | '.00'    |
+| Row 2  | 34.25           | '34.25'  |
++--------+-----------------+----------+
+evaluation (internal):
++--------+------------------------------------+
+| Column | Data                               |
++--------+------------------------------------+
+| n      | Column(Float64([-12.5, 0, 34.25])) |
+| Output | StringColumn[-12.50, .00, 34.25]   |
++--------+------------------------------------+
+
+
+ast            : to_string(n, 'FM999.00')
+raw expr       : to_string(n::Float64, 'FM999.00')
+checked expr   : to_string<Float64, String>(n, "FM999.00")
+evaluation:
++--------+-----------------+----------+
+|        | n               | Output   |
++--------+-----------------+----------+
+| Type   | Float64         | String   |
+| Domain | {-12.5..=34.25} | Unknown  |
+| Row 0  | -12.5           | '-12.50' |
+| Row 1  | 0               | '.00'    |
+| Row 2  | 34.25           | '34.25'  |
++--------+-----------------+----------+
+evaluation (internal):
++--------+------------------------------------+
+| Column | Data                               |
++--------+------------------------------------+
+| n      | Column(Float64([-12.5, 0, 34.25])) |
+| Output | StringColumn[-12.50, .00, 34.25]   |
++--------+------------------------------------+
+
+
+ast            : to_char(n, fmt)
+raw expr       : to_char(n::Float64, fmt::String)
+checked expr   : to_string<Float64, String>(n, fmt)
+evaluation:
++--------+-----------------+------------------------+----------+
+|        | n               | fmt                    | Output   |
++--------+-----------------+------------------------+----------+
+| Type   | Float64         | String                 | String   |
+| Domain | {-12.5..=34.25} | {"FM000"..="FM999.00"} | Unknown  |
+| Row 0  | -12.5           | 'FM999.00'             | '-12.50' |
+| Row 1  | 0               | 'FM000'                | '000'    |
+| Row 2  | 34.25           | 'FM999.0'              | '34.2'   |
++--------+-----------------+------------------------+----------+
+evaluation (internal):
++--------+------------------------------------------------+
+| Column | Data                                           |
++--------+------------------------------------------------+
+| n      | Column(Float64([-12.5, 0, 34.25]))             |
+| fmt    | Column(StringColumn[FM999.00, FM000, FM999.0]) |
+| Output | StringColumn[-12.50, 000, 34.2]                |
++--------+------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_char(n, '9.9.9')
+  | ^^^^^^^^^^^^^^^^^^^ SyntaxException. Code: 1005, Text = multiple decimal points. while evaluating function `to_string(-12.5, '9.9.9')` in expr `to_string(n, '9.9.9')`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_char(n, bad_fmt)
+  | ^^^^^^^^^^^^^^^^^^^ SyntaxException. Code: 1005, Text = multiple decimal points. while evaluating function `to_string(0, '9.9.9')` in expr `to_string(n, bad_fmt)`
+
+
+
+ast            : to_char(n, null_fmt)
+raw expr       : to_char(n::Float64, null_fmt::String NULL)
+checked expr   : to_string<Float64 NULL, String NULL>(CAST<Float64>(n AS Float64 NULL), null_fmt)
+evaluation:
++--------+-----------------+-----------------------------------+-------------+
+|        | n               | null_fmt                          | Output      |
++--------+-----------------+-----------------------------------+-------------+
+| Type   | Float64         | String NULL                       | String NULL |
+| Domain | {-12.5..=34.25} | {"FM999.0"..="FM999.00"} ∪ {NULL} | Unknown     |
+| Row 0  | -12.5           | 'FM999.00'                        | '-12.50'    |
+| Row 1  | 0               | NULL                              | NULL        |
+| Row 2  | 34.25           | 'FM999.0'                         | '34.2'      |
++--------+-----------------+-----------------------------------+-------------+
+evaluation (internal):
++----------+---------------------------------------------------------------------------------------------------+
+| Column   | Data                                                                                              |
++----------+---------------------------------------------------------------------------------------------------+
+| n        | Column(Float64([-12.5, 0, 34.25]))                                                                |
+| null_fmt | Column(NullableColumn { column: StringColumn[FM999.00, 9.9.9, FM999.0], validity: [0b_____101] }) |
+| Output   | NullableColumn { column: StringColumn[-12.50, , 34.2], validity: [0b_____101] }                   |
++----------+---------------------------------------------------------------------------------------------------+
+
+
+ast            : to_char(n, NULL)
+raw expr       : to_char(n::Float64, NULL)
+checked expr   : to_string<Float64 NULL, String NULL>(CAST<Float64>(n AS Float64 NULL), CAST<NULL>(NULL AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : if(a = 0, 'skipped', to_char(n, bad_fmt))
+raw expr       : if(eq(a::Int64, 0), 'skipped', to_char(n::Float64, bad_fmt::String))
+checked expr   : if<T0=String><Boolean NULL, T0, T0>(CAST<Boolean>(eq<Int64, Int64>(a, 0_i64) AS Boolean NULL), "skipped", to_string<Float64, String>(n, bad_fmt))
+evaluation:
++--------+-----------------+---------+------------------------+-----------+
+|        | n               | a       | bad_fmt                | Output    |
++--------+-----------------+---------+------------------------+-----------+
+| Type   | Float64         | Int64   | String                 | String    |
+| Domain | {-12.5..=34.25} | {0..=1} | {"9.9.9"..="FM999.00"} | Unknown   |
+| Row 0  | -12.5           | 1       | 'FM999.00'             | '-12.50'  |
+| Row 1  | 0               | 0       | '9.9.9'                | 'skipped' |
+| Row 2  | 34.25           | 1       | 'FM999.0'              | '34.2'    |
++--------+-----------------+---------+------------------------+-----------+
+evaluation (internal):
++---------+------------------------------------------------+
+| Column  | Data                                           |
++---------+------------------------------------------------+
+| n       | Column(Float64([-12.5, 0, 34.25]))             |
+| a       | Column(Int64([1, 0, 1]))                       |
+| bad_fmt | Column(StringColumn[FM999.00, 9.9.9, FM999.0]) |
+| Output  | StringColumn[-12.50, skipped, 34.2]            |
++---------+------------------------------------------------+
+
+
+ast            : if(a >= 0, 'skipped', to_char(n, '9.9.9'))
+raw expr       : if(gte(a::Int64, 0), 'skipped', to_char(n::Float64, '9.9.9'))
+checked expr   : if<T0=String><Boolean NULL, T0, T0>(CAST<Boolean>(gte<Int64, Int64>(a, CAST<UInt8>(0_u8 AS Int64)) AS Boolean NULL), "skipped", to_string<Float64, String>(n, "9.9.9"))
+optimized expr : "skipped"
+evaluation:
++--------+-----------------+---------+-------------------------+
+|        | n               | a       | Output                  |
++--------+-----------------+---------+-------------------------+
+| Type   | Float64         | Int64   | String                  |
+| Domain | {-12.5..=34.25} | {0..=1} | {"skipped"..="skipped"} |
+| Row 0  | -12.5           | 1       | 'skipped'               |
+| Row 1  | 0               | 0       | 'skipped'               |
+| Row 2  | 34.25           | 1       | 'skipped'               |
++--------+-----------------+---------+-------------------------+
+evaluation (internal):
++--------+-----------------------------------------+
+| Column | Data                                    |
++--------+-----------------------------------------+
+| n      | Column(Float64([-12.5, 0, 34.25]))      |
+| a      | Column(Int64([1, 0, 1]))                |
+| Output | StringColumn[skipped, skipped, skipped] |
++--------+-----------------------------------------+
+
+
+error: 
+  --> SQL:1:22
+  |
+1 | if(a = 0, 'skipped', to_char(n, '9.9.9'))
+  |                      ^^^^^^^^^^^^^^^^^^^ SyntaxException. Code: 1005, Text = multiple decimal points. while evaluating function `to_string(-12.5, '9.9.9')` in expr `to_string(n, '9.9.9')`, during run expr: `if(CAST(a = 0 AS Boolean NULL), 'skipped', to_string(n, '9.9.9'))`
+
+
+
+ast            : to_char(n, 'FM999.00')
+raw expr       : to_char(n::Int64 NULL, 'FM999.00')
+checked expr   : to_string<Int64 NULL, String NULL>(n, CAST<String>("FM999.00" AS String NULL))
+optimized expr : to_string<Int64 NULL, String NULL>(n, "FM999.00")
+evaluation:
++--------+---------------------+-------------+
+|        | n                   | Output      |
++--------+---------------------+-------------+
+| Type   | Int64 NULL          | String NULL |
+| Domain | {-12..=34} ∪ {NULL} | Unknown     |
+| Row 0  | -12                 | '-12.00'    |
+| Row 1  | NULL                | NULL        |
+| Row 2  | 34                  | '34.00'     |
++--------+---------------------+-------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------+
+| Column | Data                                                                             |
++--------+----------------------------------------------------------------------------------+
+| n      | Column(NullableColumn { column: Int64([-12, 0, 34]), validity: [0b_____101] })   |
+| Output | NullableColumn { column: StringColumn[-12.00, , 34.00], validity: [0b_____101] } |
++--------+----------------------------------------------------------------------------------+
+
+
+ast            : if(a = 1, 'skipped', to_char(n, '9.9.9'))
+raw expr       : if(eq(a::Int64, 1), 'skipped', to_char(n::Int64 NULL, '9.9.9'))
+checked expr   : if<T0=String NULL><Boolean NULL, T0, T0>(CAST<Boolean>(eq<Int64, Int64>(a, 1_i64) AS Boolean NULL), CAST<String>("skipped" AS String NULL), to_string<Int64 NULL, String NULL>(n, CAST<String>("9.9.9" AS String NULL)))
+optimized expr : if<T0=String NULL><Boolean NULL, T0, T0>(CAST<Boolean>(eq<Int64, Int64>(a, 1_i64) AS Boolean NULL), "skipped", to_string<Int64 NULL, String NULL>(n, "9.9.9"))
+evaluation:
++--------+---------------------+---------+-------------+
+|        | n                   | a       | Output      |
++--------+---------------------+---------+-------------+
+| Type   | Int64 NULL          | Int64   | String NULL |
+| Domain | {-12..=34} ∪ {NULL} | {0..=1} | Unknown     |
+| Row 0  | -12                 | 1       | 'skipped'   |
+| Row 1  | NULL                | 0       | NULL        |
+| Row 2  | 34                  | 1       | 'skipped'   |
++--------+---------------------+---------+-------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------+
+| Column | Data                                                                                |
++--------+-------------------------------------------------------------------------------------+
+| n      | Column(NullableColumn { column: Int64([-12, 0, 34]), validity: [0b_____101] })      |
+| a      | Column(Int64([1, 0, 1]))                                                            |
+| Output | NullableColumn { column: StringColumn[skipped, , skipped], validity: [0b_____101] } |
++--------+-------------------------------------------------------------------------------------+
+
+
+ast            : to_char(if(a >= 0, NULL, n), '9.9.9')
+raw expr       : to_char(if(gte(a::Int64, 0), NULL, n::Int64 NULL), '9.9.9')
+checked expr   : to_string<Int64 NULL, String NULL>(if<T0=Int64 NULL><Boolean NULL, T0, T0>(CAST<Boolean>(gte<Int64, Int64>(a, CAST<UInt8>(0_u8 AS Int64)) AS Boolean NULL), CAST<NULL>(NULL AS Int64 NULL), n), CAST<String>("9.9.9" AS String NULL))
+optimized expr : NULL
+evaluation:
++--------+---------------------+---------+-------------+
+|        | n                   | a       | Output      |
++--------+---------------------+---------+-------------+
+| Type   | Int64 NULL          | Int64   | String NULL |
+| Domain | {-12..=34} ∪ {NULL} | {0..=1} | {NULL}      |
+| Row 0  | -12                 | 1       | NULL        |
+| Row 1  | NULL                | 0       | NULL        |
+| Row 2  | 34                  | 1       | NULL        |
++--------+---------------------+---------+-------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------+
+| Column | Data                                                                           |
++--------+--------------------------------------------------------------------------------+
+| n      | Column(NullableColumn { column: Int64([-12, 0, 34]), validity: [0b_____101] }) |
+| a      | Column(Int64([1, 0, 1]))                                                       |
+| Output | NullableColumn { column: StringColumn[, , ], validity: [0b_____000] }          |
++--------+--------------------------------------------------------------------------------+
+
+
+ast            : to_char(n, 'FM999.00')
+raw expr       : to_char(n::Float32 NULL, 'FM999.00')
+checked expr   : to_string<Float32 NULL, String NULL>(n, CAST<String>("FM999.00" AS String NULL))
+optimized expr : to_string<Float32 NULL, String NULL>(n, "FM999.00")
+evaluation:
++--------+--------------------------+-------------+
+|        | n                        | Output      |
++--------+--------------------------+-------------+
+| Type   | Float32 NULL             | String NULL |
+| Domain | {-12.5..=34.25} ∪ {NULL} | Unknown     |
+| Row 0  | -12.5                    | '-12.50'    |
+| Row 1  | NULL                     | NULL        |
+| Row 2  | 34.25                    | '34.25'     |
++--------+--------------------------+-------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------+
+| Column | Data                                                                                  |
++--------+---------------------------------------------------------------------------------------+
+| n      | Column(NullableColumn { column: Float32([-12.5, 0, 34.25]), validity: [0b_____101] }) |
+| Output | NullableColumn { column: StringColumn[-12.50, , 34.25], validity: [0b_____101] }      |
++--------+---------------------------------------------------------------------------------------+
+
+
+ast            : if(a = 1, 'skipped', to_char(n, '9.9.9'))
+raw expr       : if(eq(a::Int64, 1), 'skipped', to_char(n::Float32 NULL, '9.9.9'))
+checked expr   : if<T0=String NULL><Boolean NULL, T0, T0>(CAST<Boolean>(eq<Int64, Int64>(a, 1_i64) AS Boolean NULL), CAST<String>("skipped" AS String NULL), to_string<Float32 NULL, String NULL>(n, CAST<String>("9.9.9" AS String NULL)))
+optimized expr : if<T0=String NULL><Boolean NULL, T0, T0>(CAST<Boolean>(eq<Int64, Int64>(a, 1_i64) AS Boolean NULL), "skipped", to_string<Float32 NULL, String NULL>(n, "9.9.9"))
+evaluation:
++--------+--------------------------+---------+-------------+
+|        | n                        | a       | Output      |
++--------+--------------------------+---------+-------------+
+| Type   | Float32 NULL             | Int64   | String NULL |
+| Domain | {-12.5..=34.25} ∪ {NULL} | {0..=1} | Unknown     |
+| Row 0  | -12.5                    | 1       | 'skipped'   |
+| Row 1  | NULL                     | 0       | NULL        |
+| Row 2  | 34.25                    | 1       | 'skipped'   |
++--------+--------------------------+---------+-------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------+
+| Column | Data                                                                                  |
++--------+---------------------------------------------------------------------------------------+
+| n      | Column(NullableColumn { column: Float32([-12.5, 0, 34.25]), validity: [0b_____101] }) |
+| a      | Column(Int64([1, 0, 1]))                                                              |
+| Output | NullableColumn { column: StringColumn[skipped, , skipped], validity: [0b_____101] }   |
++--------+---------------------------------------------------------------------------------------+
+
+
+ast            : to_char(if(a >= 0, NULL, n), '9.9.9')
+raw expr       : to_char(if(gte(a::Int64, 0), NULL, n::Float32 NULL), '9.9.9')
+checked expr   : to_string<Float32 NULL, String NULL>(if<T0=Float32 NULL><Boolean NULL, T0, T0>(CAST<Boolean>(gte<Int64, Int64>(a, CAST<UInt8>(0_u8 AS Int64)) AS Boolean NULL), CAST<NULL>(NULL AS Float32 NULL), n), CAST<String>("9.9.9" AS String NULL))
+optimized expr : NULL
+evaluation:
++--------+--------------------------+---------+-------------+
+|        | n                        | a       | Output      |
++--------+--------------------------+---------+-------------+
+| Type   | Float32 NULL             | Int64   | String NULL |
+| Domain | {-12.5..=34.25} ∪ {NULL} | {0..=1} | {NULL}      |
+| Row 0  | -12.5                    | 1       | NULL        |
+| Row 1  | NULL                     | 0       | NULL        |
+| Row 2  | 34.25                    | 1       | NULL        |
++--------+--------------------------+---------+-------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------+
+| Column | Data                                                                                  |
++--------+---------------------------------------------------------------------------------------+
+| n      | Column(NullableColumn { column: Float32([-12.5, 0, 34.25]), validity: [0b_____101] }) |
+| a      | Column(Int64([1, 0, 1]))                                                              |
+| Output | NullableColumn { column: StringColumn[, , ], validity: [0b_____000] }                 |
++--------+---------------------------------------------------------------------------------------+
+
+
+ast            : to_char(n, 'FM999.00')
+raw expr       : to_char(n::Float64 NULL, 'FM999.00')
+checked expr   : to_string<Float64 NULL, String NULL>(n, CAST<String>("FM999.00" AS String NULL))
+optimized expr : to_string<Float64 NULL, String NULL>(n, "FM999.00")
+evaluation:
++--------+--------------------------+-------------+
+|        | n                        | Output      |
++--------+--------------------------+-------------+
+| Type   | Float64 NULL             | String NULL |
+| Domain | {-12.5..=34.25} ∪ {NULL} | Unknown     |
+| Row 0  | -12.5                    | '-12.50'    |
+| Row 1  | NULL                     | NULL        |
+| Row 2  | 34.25                    | '34.25'     |
++--------+--------------------------+-------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------+
+| Column | Data                                                                                  |
++--------+---------------------------------------------------------------------------------------+
+| n      | Column(NullableColumn { column: Float64([-12.5, 0, 34.25]), validity: [0b_____101] }) |
+| Output | NullableColumn { column: StringColumn[-12.50, , 34.25], validity: [0b_____101] }      |
++--------+---------------------------------------------------------------------------------------+
+
+
+ast            : if(a = 1, 'skipped', to_char(n, '9.9.9'))
+raw expr       : if(eq(a::Int64, 1), 'skipped', to_char(n::Float64 NULL, '9.9.9'))
+checked expr   : if<T0=String NULL><Boolean NULL, T0, T0>(CAST<Boolean>(eq<Int64, Int64>(a, 1_i64) AS Boolean NULL), CAST<String>("skipped" AS String NULL), to_string<Float64 NULL, String NULL>(n, CAST<String>("9.9.9" AS String NULL)))
+optimized expr : if<T0=String NULL><Boolean NULL, T0, T0>(CAST<Boolean>(eq<Int64, Int64>(a, 1_i64) AS Boolean NULL), "skipped", to_string<Float64 NULL, String NULL>(n, "9.9.9"))
+evaluation:
++--------+--------------------------+---------+-------------+
+|        | n                        | a       | Output      |
++--------+--------------------------+---------+-------------+
+| Type   | Float64 NULL             | Int64   | String NULL |
+| Domain | {-12.5..=34.25} ∪ {NULL} | {0..=1} | Unknown     |
+| Row 0  | -12.5                    | 1       | 'skipped'   |
+| Row 1  | NULL                     | 0       | NULL        |
+| Row 2  | 34.25                    | 1       | 'skipped'   |
++--------+--------------------------+---------+-------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------+
+| Column | Data                                                                                  |
++--------+---------------------------------------------------------------------------------------+
+| n      | Column(NullableColumn { column: Float64([-12.5, 0, 34.25]), validity: [0b_____101] }) |
+| a      | Column(Int64([1, 0, 1]))                                                              |
+| Output | NullableColumn { column: StringColumn[skipped, , skipped], validity: [0b_____101] }   |
++--------+---------------------------------------------------------------------------------------+
+
+
+ast            : to_char(if(a >= 0, NULL, n), '9.9.9')
+raw expr       : to_char(if(gte(a::Int64, 0), NULL, n::Float64 NULL), '9.9.9')
+checked expr   : to_string<Float64 NULL, String NULL>(if<T0=Float64 NULL><Boolean NULL, T0, T0>(CAST<Boolean>(gte<Int64, Int64>(a, CAST<UInt8>(0_u8 AS Int64)) AS Boolean NULL), CAST<NULL>(NULL AS Float64 NULL), n), CAST<String>("9.9.9" AS String NULL))
+optimized expr : NULL
+evaluation:
++--------+--------------------------+---------+-------------+
+|        | n                        | a       | Output      |
++--------+--------------------------+---------+-------------+
+| Type   | Float64 NULL             | Int64   | String NULL |
+| Domain | {-12.5..=34.25} ∪ {NULL} | {0..=1} | {NULL}      |
+| Row 0  | -12.5                    | 1       | NULL        |
+| Row 1  | NULL                     | 0       | NULL        |
+| Row 2  | 34.25                    | 1       | NULL        |
++--------+--------------------------+---------+-------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------+
+| Column | Data                                                                                  |
++--------+---------------------------------------------------------------------------------------+
+| n      | Column(NullableColumn { column: Float64([-12.5, 0, 34.25]), validity: [0b_____101] }) |
+| a      | Column(Int64([1, 0, 1]))                                                              |
+| Output | NullableColumn { column: StringColumn[, , ], validity: [0b_____000] }                 |
++--------+---------------------------------------------------------------------------------------+
+
+
+ast            : to_char(12::Int64, 'FM999.00')
+raw expr       : to_char(CAST(12 AS Int64), 'FM999.00')
+checked expr   : to_string<Int64, String>(CAST<UInt8>(12_u8 AS Int64), "FM999.00")
+optimized expr : "12.00"
+output type    : String
+output domain  : {"12.00"..="12.00"}
+output         : '12.00'
+
+
+ast            : to_char(12::Int64, fmt)
+raw expr       : to_char(CAST(12 AS Int64), fmt::String)
+checked expr   : to_string<Int64, String>(CAST<UInt8>(12_u8 AS Int64), fmt)
+optimized expr : to_string<Int64, String>(12_i64, fmt)
+evaluation:
++--------+------------------------+---------+
+|        | fmt                    | Output  |
++--------+------------------------+---------+
+| Type   | String                 | String  |
+| Domain | {"FM000"..="FM999.00"} | Unknown |
+| Row 0  | 'FM999.00'             | '12.00' |
+| Row 1  | 'FM000'                | '012'   |
+| Row 2  | 'FM999.0'              | '12.0'  |
++--------+------------------------+---------+
+evaluation (internal):
++--------+------------------------------------------------+
+| Column | Data                                           |
++--------+------------------------------------------------+
+| fmt    | Column(StringColumn[FM999.00, FM000, FM999.0]) |
+| Output | StringColumn[12.00, 012, 12.0]                 |
++--------+------------------------------------------------+
+
+
+ast            : to_char(NULL::Nullable(Int64), '9.9.9')
+raw expr       : to_char(CAST(NULL AS Int64 NULL), '9.9.9')
+checked expr   : to_string<Int64 NULL, String NULL>(CAST<NULL>(NULL AS Int64 NULL), CAST<String>("9.9.9" AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : if(a >= 0, 'skipped', to_char(12::Int64, '9.9.9'))
+raw expr       : if(gte(a::Int64, 0), 'skipped', to_char(CAST(12 AS Int64), '9.9.9'))
+checked expr   : if<T0=String><Boolean NULL, T0, T0>(CAST<Boolean>(gte<Int64, Int64>(a, CAST<UInt8>(0_u8 AS Int64)) AS Boolean NULL), "skipped", to_string<Int64, String>(CAST<UInt8>(12_u8 AS Int64), "9.9.9"))
+optimized expr : "skipped"
+evaluation:
++--------+---------+-------------------------+
+|        | a       | Output                  |
++--------+---------+-------------------------+
+| Type   | Int64   | String                  |
+| Domain | {0..=1} | {"skipped"..="skipped"} |
+| Row 0  | 1       | 'skipped'               |
+| Row 1  | 0       | 'skipped'               |
+| Row 2  | 1       | 'skipped'               |
++--------+---------+-------------------------+
+evaluation (internal):
++--------+-----------------------------------------+
+| Column | Data                                    |
++--------+-----------------------------------------+
+| a      | Column(Int64([1, 0, 1]))                |
+| Output | StringColumn[skipped, skipped, skipped] |
++--------+-----------------------------------------+
+
+
+ast            : to_char(12::Float32, 'FM999.00')
+raw expr       : to_char(CAST(12 AS Float32), 'FM999.00')
+checked expr   : to_string<Float32, String>(CAST<UInt8>(12_u8 AS Float32), "FM999.00")
+optimized expr : "12.00"
+output type    : String
+output domain  : {"12.00"..="12.00"}
+output         : '12.00'
+
+
+ast            : to_char(12::Float32, fmt)
+raw expr       : to_char(CAST(12 AS Float32), fmt::String)
+checked expr   : to_string<Float32, String>(CAST<UInt8>(12_u8 AS Float32), fmt)
+optimized expr : to_string<Float32, String>(12_f32, fmt)
+evaluation:
++--------+------------------------+---------+
+|        | fmt                    | Output  |
++--------+------------------------+---------+
+| Type   | String                 | String  |
+| Domain | {"FM000"..="FM999.00"} | Unknown |
+| Row 0  | 'FM999.00'             | '12.00' |
+| Row 1  | 'FM000'                | '012'   |
+| Row 2  | 'FM999.0'              | '12.0'  |
++--------+------------------------+---------+
+evaluation (internal):
++--------+------------------------------------------------+
+| Column | Data                                           |
++--------+------------------------------------------------+
+| fmt    | Column(StringColumn[FM999.00, FM000, FM999.0]) |
+| Output | StringColumn[12.00, 012, 12.0]                 |
++--------+------------------------------------------------+
+
+
+ast            : to_char(NULL::Nullable(Float32), '9.9.9')
+raw expr       : to_char(CAST(NULL AS Float32 NULL), '9.9.9')
+checked expr   : to_string<Float32 NULL, String NULL>(CAST<NULL>(NULL AS Float32 NULL), CAST<String>("9.9.9" AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : if(a >= 0, 'skipped', to_char(12::Float32, '9.9.9'))
+raw expr       : if(gte(a::Int64, 0), 'skipped', to_char(CAST(12 AS Float32), '9.9.9'))
+checked expr   : if<T0=String><Boolean NULL, T0, T0>(CAST<Boolean>(gte<Int64, Int64>(a, CAST<UInt8>(0_u8 AS Int64)) AS Boolean NULL), "skipped", to_string<Float32, String>(CAST<UInt8>(12_u8 AS Float32), "9.9.9"))
+optimized expr : "skipped"
+evaluation:
++--------+---------+-------------------------+
+|        | a       | Output                  |
++--------+---------+-------------------------+
+| Type   | Int64   | String                  |
+| Domain | {0..=1} | {"skipped"..="skipped"} |
+| Row 0  | 1       | 'skipped'               |
+| Row 1  | 0       | 'skipped'               |
+| Row 2  | 1       | 'skipped'               |
++--------+---------+-------------------------+
+evaluation (internal):
++--------+-----------------------------------------+
+| Column | Data                                    |
++--------+-----------------------------------------+
+| a      | Column(Int64([1, 0, 1]))                |
+| Output | StringColumn[skipped, skipped, skipped] |
++--------+-----------------------------------------+
+
+
+ast            : to_char(12::Float64, 'FM999.00')
+raw expr       : to_char(CAST(12 AS Float64), 'FM999.00')
+checked expr   : to_string<Float64, String>(CAST<UInt8>(12_u8 AS Float64), "FM999.00")
+optimized expr : "12.00"
+output type    : String
+output domain  : {"12.00"..="12.00"}
+output         : '12.00'
+
+
+ast            : to_char(12::Float64, fmt)
+raw expr       : to_char(CAST(12 AS Float64), fmt::String)
+checked expr   : to_string<Float64, String>(CAST<UInt8>(12_u8 AS Float64), fmt)
+optimized expr : to_string<Float64, String>(12_f64, fmt)
+evaluation:
++--------+------------------------+---------+
+|        | fmt                    | Output  |
++--------+------------------------+---------+
+| Type   | String                 | String  |
+| Domain | {"FM000"..="FM999.00"} | Unknown |
+| Row 0  | 'FM999.00'             | '12.00' |
+| Row 1  | 'FM000'                | '012'   |
+| Row 2  | 'FM999.0'              | '12.0'  |
++--------+------------------------+---------+
+evaluation (internal):
++--------+------------------------------------------------+
+| Column | Data                                           |
++--------+------------------------------------------------+
+| fmt    | Column(StringColumn[FM999.00, FM000, FM999.0]) |
+| Output | StringColumn[12.00, 012, 12.0]                 |
++--------+------------------------------------------------+
+
+
+ast            : to_char(NULL::Nullable(Float64), '9.9.9')
+raw expr       : to_char(CAST(NULL AS Float64 NULL), '9.9.9')
+checked expr   : to_string<Float64 NULL, String NULL>(CAST<NULL>(NULL AS Float64 NULL), CAST<String>("9.9.9" AS String NULL))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : if(a >= 0, 'skipped', to_char(12::Float64, '9.9.9'))
+raw expr       : if(gte(a::Int64, 0), 'skipped', to_char(CAST(12 AS Float64), '9.9.9'))
+checked expr   : if<T0=String><Boolean NULL, T0, T0>(CAST<Boolean>(gte<Int64, Int64>(a, CAST<UInt8>(0_u8 AS Int64)) AS Boolean NULL), "skipped", to_string<Float64, String>(CAST<UInt8>(12_u8 AS Float64), "9.9.9"))
+optimized expr : "skipped"
+evaluation:
++--------+---------+-------------------------+
+|        | a       | Output                  |
++--------+---------+-------------------------+
+| Type   | Int64   | String                  |
+| Domain | {0..=1} | {"skipped"..="skipped"} |
+| Row 0  | 1       | 'skipped'               |
+| Row 1  | 0       | 'skipped'               |
+| Row 2  | 1       | 'skipped'               |
++--------+---------+-------------------------+
+evaluation (internal):
++--------+-----------------------------------------+
+| Column | Data                                    |
++--------+-----------------------------------------+
+| a      | Column(Int64([1, 0, 1]))                |
+| Output | StringColumn[skipped, skipped, skipped] |
++--------+-----------------------------------------+
+
+

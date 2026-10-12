@@ -364,6 +364,8 @@ pub enum TableDataType {
         params: Vec<AggregateFunctionParam>,
         argument_types: Vec<TableDataType>,
         state_type: Box<TableDataType>,
+        #[serde(default)]
+        state_version: u64,
     },
     // Only used to persist DataType in meta
     StageLocation,
@@ -1406,11 +1408,13 @@ impl From<&TableDataType> for DataType {
                 params,
                 argument_types,
                 state_type,
+                state_version,
             } => DataType::AggregateState(Box::new(AggregateStateDataType {
                 function_name: function_name.clone(),
                 params: params.clone(),
                 argument_types: argument_types.iter().map(Into::into).collect(),
                 state_type: Box::new(state_type.as_ref().into()),
+                state_version: *state_version,
             })),
             TableDataType::Interval => DataType::Interval,
             TableDataType::Number(ty) => DataType::Number(*ty),
@@ -1784,6 +1788,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
                 .map(infer_schema_type)
                 .collect::<Result<Vec<_>>>()?,
             state_type: Box::new(infer_schema_type(&state.state_type)?),
+            state_version: state.state_version,
         }),
         DataType::Number(number_type) => Ok(TableDataType::Number(*number_type)),
         DataType::Timestamp => Ok(TableDataType::Timestamp),

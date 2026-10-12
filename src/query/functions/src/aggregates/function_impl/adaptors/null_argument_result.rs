@@ -23,17 +23,19 @@ use databend_common_expression::StateSerdeItem;
 
 use super::*;
 
+#[cfg(test)]
 pub(crate) fn try_create_null_argument_result_function(
     request: RawAggregateCall<'_>,
     call_metadata: AggregateMetadata,
 ) -> Result<AggregateCallRef> {
-    create_with_combinator(request, call_metadata, PlainCombinator)
+    create_with_combinator(request, call_metadata, PlainCombinator, 0)
 }
 
 pub(super) fn create_with_combinator(
     request: RawAggregateCall<'_>,
     call_metadata: AggregateMetadata,
     combinator: impl Combinator,
+    state_version: u64,
 ) -> Result<AggregateCallRef> {
     let (data_type, result) = call_metadata.null_argument_result.value();
     let return_type = data_type.clone();
@@ -49,7 +51,12 @@ pub(super) fn create_with_combinator(
         AggregateStateDescription::new(vec![AggrStateType::Custom(Layout::new::<u8>())], vec![
             StateSerdeItem::DataType(data_type),
         ]);
-    combinator.create::<false>(signature, call_metadata, state, FixedResultEval { result })
+    combinator.create::<false>(
+        signature,
+        call_metadata,
+        state.with_state_version(state_version),
+        FixedResultEval { result },
+    )
 }
 
 struct FixedResultEval {
