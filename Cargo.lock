@@ -3912,6 +3912,7 @@ dependencies = [
  "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-proto-conv",
+ "databend-common-protos",
  "databend-meta-client 260205.13.5",
  "fastrace",
  "log",
