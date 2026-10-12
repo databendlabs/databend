@@ -53,7 +53,7 @@ enum ThrottleSignal {
     Heavy,
 }
 
-/// AIMD bound on concurrently vacuumed spill directories.
+/// Additive-increase / multiplicative-decrease bound on concurrently vacuumed spill directories.
 ///
 /// Object stores throttle deletes per key prefix (S3: 3,500 keys/s), so the right concurrency
 /// depends on the store, not the node: 32 already triggers `SlowDown` storms, 1 is latency-bound.
