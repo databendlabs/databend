@@ -61,6 +61,13 @@ use databend_storages_common_table_meta::meta::ColumnTopNEntry;
 use crate::framework::golden::open_golden_file;
 use crate::framework::golden::write_case_title;
 
+#[derive(Default)]
+struct CaseOptions {
+    and_strategy: Option<FilterAndStrategy>,
+    top_n: Option<TopNSet>,
+    count_min_sketch: Option<CountMinSketchSet>,
+}
+
 fn run_case(
     file: &mut impl Write,
     expr_text: &str,
@@ -73,6 +80,7 @@ fn run_case(
         columns,
         column_stats,
         StatCardinality::estimate(100.0),
+        CaseOptions::default(),
     )
 }
 
@@ -82,6 +90,7 @@ fn run_case_with_predicates(
     columns: &[(&str, DataType)],
     column_stats: ColumnStatSet,
     cardinality: StatCardinality,
+    options: CaseOptions,
 ) -> Result<()> {
     let exprs = expr_texts
         .iter()
@@ -90,15 +99,7 @@ fn run_case_with_predicates(
             raw_expr_to_scalar(&raw_expr, columns)
         })
         .collect::<Vec<_>>();
-    run_scalar_case_with_predicates(
-        file,
-        expr_texts,
-        &exprs,
-        column_stats,
-        cardinality,
-        None,
-        None,
-    )
+    run_scalar_case_with_predicates(file, expr_texts, &exprs, column_stats, cardinality, options)
 }
 
 fn run_scalar_case_with_predicates(
@@ -107,19 +108,25 @@ fn run_scalar_case_with_predicates(
     predicates: &[ScalarExpr],
     column_stats: ColumnStatSet,
     cardinality: StatCardinality,
-    top_n: Option<TopNSet>,
-    count_min_sketch: Option<CountMinSketchSet>,
+    options: CaseOptions,
 ) -> Result<()> {
     writeln!(file, "expr          : {}", expr_texts.join(", "))?;
 
     let in_stats = column_stats_to_string(&column_stats);
-    let in_top_n = top_n.as_ref().map(top_n_to_string);
-    let in_count_min_sketch = count_min_sketch.as_ref().map(count_min_sketch_to_string);
+    let in_top_n = options.top_n.as_ref().map(top_n_to_string);
+    let in_count_min_sketch = options
+        .count_min_sketch
+        .as_ref()
+        .map(count_min_sketch_to_string);
     let mut estimator = SelectivityEstimator::new(column_stats, cardinality);
-    if let Some(top_n) = top_n {
+    if let Some(strategy) = options.and_strategy {
+        writeln!(file, "and strategy  : {strategy:?}")?;
+        estimator = estimator.with_and_strategy(strategy);
+    }
+    if let Some(top_n) = options.top_n {
         estimator = estimator.with_top_n(top_n);
     }
-    if let Some(count_min_sketch) = count_min_sketch {
+    if let Some(count_min_sketch) = options.count_min_sketch {
         estimator = estimator.with_count_min_sketch(count_min_sketch);
     }
     let estimated_rows = estimator.apply(
@@ -406,8 +413,10 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
             &[predicate],
             top_n_stats.clone(),
             StatCardinality::estimate(1000.0),
-            Some(top_n.clone()),
-            None,
+            CaseOptions {
+                top_n: Some(top_n.clone()),
+                ..Default::default()
+            },
         )?;
     }
 
@@ -436,8 +445,10 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
             &[predicate],
             count_min_sketch_stats.clone(),
             StatCardinality::estimate(1000.0),
-            None,
-            Some(count_min_sketch.clone()),
+            CaseOptions {
+                count_min_sketch: Some(count_min_sketch.clone()),
+                ..Default::default()
+            },
         )?;
     }
 
@@ -459,8 +470,10 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
             &[predicate],
             count_min_sketch_stats.clone(),
             StatCardinality::estimate(1000.0),
-            None,
-            Some(coarse_count_min_sketch.clone()),
+            CaseOptions {
+                count_min_sketch: Some(coarse_count_min_sketch.clone()),
+                ..Default::default()
+            },
         )?;
     }
 
@@ -490,8 +503,10 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
             &[predicate],
             hot_count_min_sketch_stats.clone(),
             StatCardinality::estimate(200000.0),
-            None,
-            Some(hot_count_min_sketch.clone()),
+            CaseOptions {
+                count_min_sketch: Some(hot_count_min_sketch.clone()),
+                ..Default::default()
+            },
         )?;
     }
 
@@ -522,8 +537,11 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         &[predicate],
         count_min_sketch_stats.clone(),
         StatCardinality::estimate(1000.0),
-        Some(top_n_precedence),
-        Some(conflicting_count_min_sketch),
+        CaseOptions {
+            top_n: Some(top_n_precedence),
+            count_min_sketch: Some(conflicting_count_min_sketch),
+            ..Default::default()
+        },
     )?;
 
     write_case_title(
@@ -560,8 +578,11 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         &[predicate],
         wide_hot_stats,
         StatCardinality::estimate(1000000.0),
-        Some(approximate_top_n_hit),
-        Some(tighter_count_min_sketch),
+        CaseOptions {
+            top_n: Some(approximate_top_n_hit),
+            count_min_sketch: Some(tighter_count_min_sketch),
+            ..Default::default()
+        },
     )?;
 
     write_case_title(
@@ -597,8 +618,10 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
             &[predicate],
             top_n_stats.clone(),
             StatCardinality::estimate(1000.0),
-            Some(constrained_top_n.clone()),
-            None,
+            CaseOptions {
+                top_n: Some(constrained_top_n.clone()),
+                ..Default::default()
+            },
         )?;
     }
 
@@ -625,8 +648,10 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
             &[predicate],
             top_n_stats.clone(),
             StatCardinality::estimate(1000.0),
-            Some(approximate_top_n.clone()),
-            None,
+            CaseOptions {
+                top_n: Some(approximate_top_n.clone()),
+                ..Default::default()
+            },
         )?;
     }
 
@@ -660,8 +685,10 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
             &[predicate],
             fallback_top_n_stats.clone(),
             StatCardinality::estimate(1000.0),
-            Some(fallback_top_n.clone()),
-            None,
+            CaseOptions {
+                top_n: Some(fallback_top_n.clone()),
+                ..Default::default()
+            },
         )?;
     }
 
@@ -696,8 +723,10 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
             &[predicate],
             nullable_top_n_stats.clone(),
             StatCardinality::estimate(100.0),
-            Some(nullable_top_n.clone()),
-            None,
+            CaseOptions {
+                top_n: Some(nullable_top_n.clone()),
+                ..Default::default()
+            },
         )?;
     }
 
@@ -805,8 +834,7 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
         &[typed_number_predicate],
         number_stats.clone(),
         StatCardinality::estimate(100.0),
-        None,
-        None,
+        CaseOptions::default(),
     )?;
     let decimal_size = DecimalSize::new(10, 2).unwrap();
     let decimal_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::Float {
@@ -963,6 +991,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         &[("s", UInt64Type::data_type())],
         skewed_histogram_stats,
         StatCardinality::estimate(55.0),
+        CaseOptions::default(),
     )?;
     let nullable_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
         min: 0,
@@ -981,6 +1010,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         &[("n", UInt64Type::data_type().wrap_nullable())],
         nullable_histogram_stats,
         StatCardinality::estimate(100.0),
+        CaseOptions::default(),
     )?;
     let tail_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
         min: 0,
@@ -1000,6 +1030,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
             &[("tail", UInt64Type::data_type())],
             tail_histogram_stats.clone(),
             StatCardinality::estimate(738.0),
+            CaseOptions::default(),
         )?;
     }
 
@@ -1060,8 +1091,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         std::slice::from_ref(&float_gte_15),
         float_histogram_stats.clone(),
         StatCardinality::estimate(200.0),
-        None,
-        None,
+        CaseOptions::default(),
     )?;
     run_scalar_case_with_predicates(
         &mut file,
@@ -1069,8 +1099,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         &[float_gte_15, float_lte_19],
         float_histogram_stats,
         StatCardinality::estimate(200.0),
-        None,
-        None,
+        CaseOptions::default(),
     )?;
 
     write_case_title(
@@ -1095,6 +1124,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         &[("mismatch", UInt64Type::data_type().wrap_nullable())],
         row_count_mismatch_stats,
         StatCardinality::estimate(100.0),
+        CaseOptions::default(),
     )?;
 
     write_case_title(
@@ -1122,6 +1152,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         &[("d", UInt64Type::data_type())],
         distorted_histogram_stats,
         StatCardinality::estimate(100.0),
+        CaseOptions::default(),
     )?;
 
     write_case_title(
@@ -1150,6 +1181,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         &[("s", DataType::String)],
         analyzed_string_histogram_stats.clone(),
         StatCardinality::estimate(100.0),
+        CaseOptions::default(),
     )?;
     // A previous independent filter may scale the analyzed histogram without
     // observing which values survived. The [m,z] bucket's derived distinct count
@@ -1175,6 +1207,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         &[("s", DataType::String)],
         derived_string_histogram_stats,
         StatCardinality::estimate(50.0),
+        CaseOptions::default(),
     )?;
     run_case_with_predicates(
         &mut file,
@@ -1182,6 +1215,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         &[("s", DataType::String)],
         analyzed_string_histogram_stats,
         StatCardinality::estimate(100.0),
+        CaseOptions::default(),
     )?;
 
     Ok(())
@@ -1254,6 +1288,7 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         &[("a", UInt64Type::data_type())],
         logical_stats.clone(),
         StatCardinality::estimate(100.0),
+        CaseOptions::default(),
     )?;
     run_case_with_predicates(
         &mut file,
@@ -1261,6 +1296,7 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         &[("a", UInt64Type::data_type())],
         logical_stats.clone(),
         StatCardinality::estimate(100.0),
+        CaseOptions::default(),
     )?;
 
     write_case_title(
@@ -1321,6 +1357,7 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         &[("a", UInt64Type::data_type())],
         histogram_stats.clone(),
         StatCardinality::estimate(100.0),
+        CaseOptions::default(),
     )?;
     for expr in ["or_filters(a > 3, a > 4)", "not(a > 3)"] {
         run_case(
@@ -1390,6 +1427,7 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         ],
         combined_histogram_stats,
         StatCardinality::estimate(100.0),
+        CaseOptions::default(),
     )?;
 
     write_case_title(
@@ -1430,6 +1468,7 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         ],
         distribution_stats.clone(),
         StatCardinality::estimate(100.0),
+        CaseOptions::default(),
     )?;
     run_case(
         &mut file,
@@ -1472,6 +1511,7 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
             &[],
             ColumnStatSet::new(),
             StatCardinality::estimate(4.0),
+            CaseOptions::default(),
         )?;
     }
 
@@ -1495,6 +1535,7 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
             &[("a", UInt64Type::data_type())],
             nested_constant_stats.clone(),
             StatCardinality::estimate(4.0),
+            CaseOptions::default(),
         )?;
     }
 
@@ -1544,6 +1585,115 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         ],
         domain_folded_stats,
         StatCardinality::estimate(10.0),
+        CaseOptions::default(),
+    )?;
+
+    write_case_title(
+        &mut file,
+        "and_strategies",
+        "Independent multiplies only disjoint groups; a bridge merges all intersecting groups regardless of conjunct order. Min takes the global minimum.",
+    )?;
+    let and_stats = ColumnStatSet::from_iter([
+        (Symbol::new(0), ColumnStat::UInt {
+            min: 0,
+            max: 9,
+            ndv: NdvEstimate::exact(10.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }),
+        (Symbol::new(1), ColumnStat::UInt {
+            min: 0,
+            max: 99,
+            ndv: NdvEstimate::exact(100.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }),
+        (Symbol::new(2), ColumnStat::UInt {
+            min: 0,
+            max: 9,
+            ndv: NdvEstimate::exact(10.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }),
+    ]);
+    let and_columns = [
+        ("a", UInt64Type::data_type()),
+        ("b", UInt64Type::data_type()),
+        ("c", UInt64Type::data_type()),
+    ];
+    for strategy in [FilterAndStrategy::Min, FilterAndStrategy::Independent] {
+        for expr in [
+            "and_filters(a = 5, b = 7)",
+            "and_filters(a = 5, b = 7, c = 3)",
+            "and_filters(a = 5, a != 3, b = 7)",
+            "and_filters(a >= 2, a <= 6, b = 7)",
+            // A bridge must merge both groups whether it comes last or first.
+            "and_filters(a < 3, b < 10, or_filters(a = 1, b = 2))",
+            "and_filters(or_filters(a = 1, b = 2), a < 3, b < 10)",
+            // An unrelated c group must still multiply.
+            "and_filters(a < 3, b < 10, c < 5, or_filters(a = 1, b = 2))",
+            "and_filters(or_filters(a = 1, b = 2), a < 3, b < 10, c < 5)",
+            // One child can merge three groups.
+            "and_filters(a < 3, b < 10, c < 5, or_filters(or_filters(a = 1, b = 2), c = 1))",
+            "and_filters(or_filters(or_filters(a = 1, b = 2), c = 1), a < 3, b < 10, c < 5)",
+            // Multiple bridges merge groups transitively.
+            "and_filters(a < 3, b < 10, c < 5, or_filters(a = 1, b = 2), or_filters(b = 2, c = 1))",
+            "and_filters(or_filters(b = 2, c = 1), a < 3, b < 10, c < 5, or_filters(a = 1, b = 2))",
+            "a = 5",
+            "and_filters(a = 5, true)",
+            "and_filters(a = 5, false)",
+            "true",
+            "false",
+        ] {
+            run_case_with_predicates(
+                &mut file,
+                &[expr],
+                &and_columns,
+                and_stats.clone(),
+                StatCardinality::estimate(1_000_000.0),
+                CaseOptions {
+                    and_strategy: Some(strategy),
+                    ..Default::default()
+                },
+            )?;
+        }
+        // The predicate-list entry must agree with explicit AND composition.
+        for conjuncts in [
+            &["a < 3", "b < 10", "or_filters(a = 1, b = 2)"][..],
+            &["or_filters(a = 1, b = 2)", "a < 3", "b < 10"][..],
+            &[
+                "a < 3",
+                "b < 10",
+                "c < 5",
+                "or_filters(a = 1, b = 2)",
+                "or_filters(b = 2, c = 1)",
+            ][..],
+        ] {
+            run_case_with_predicates(
+                &mut file,
+                conjuncts,
+                &and_columns,
+                and_stats.clone(),
+                StatCardinality::estimate(1_000_000.0),
+                CaseOptions {
+                    and_strategy: Some(strategy),
+                    ..Default::default()
+                },
+            )?;
+        }
+    }
+    write_case_title(
+        &mut file,
+        "and_default_strategy",
+        "The default strategy should behave like Independent.",
+    )?;
+    run_case_with_predicates(
+        &mut file,
+        &["and_filters(a = 5, b = 7)"],
+        &and_columns,
+        and_stats,
+        StatCardinality::estimate(1_000_000.0),
+        CaseOptions::default(),
     )?;
 
     Ok(())
@@ -1574,6 +1724,7 @@ fn test_selectivity_null_outcomes() -> Result<()> {
         &[("n", UInt64Type::data_type().wrap_nullable())],
         estimated_zero_stats,
         StatCardinality::estimate(8.0),
+        CaseOptions::default(),
     )?;
     let estimated_zero_cardinality_stats =
         ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
@@ -1593,6 +1744,7 @@ fn test_selectivity_null_outcomes() -> Result<()> {
         &[("n", UInt64Type::data_type().wrap_nullable())],
         estimated_zero_cardinality_stats,
         StatCardinality::estimate(0.0),
+        CaseOptions::default(),
     )?;
     let unsatisfiable_range_stats =
         ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
@@ -1612,6 +1764,7 @@ fn test_selectivity_null_outcomes() -> Result<()> {
         &[("n", UInt64Type::data_type().wrap_nullable())],
         unsatisfiable_range_stats,
         StatCardinality::estimate(8.0),
+        CaseOptions::default(),
     )?;
     let exact_zero_cardinality_stats =
         ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
@@ -1631,6 +1784,7 @@ fn test_selectivity_null_outcomes() -> Result<()> {
         &[("n", UInt64Type::data_type().wrap_nullable())],
         exact_zero_cardinality_stats,
         StatCardinality::exact(0),
+        CaseOptions::default(),
     )?;
 
     write_case_title(
@@ -1647,6 +1801,7 @@ fn test_selectivity_null_outcomes() -> Result<()> {
         &[("n", UInt64Type::data_type().wrap_nullable())],
         exact_all_null_stats,
         StatCardinality::exact(8),
+        CaseOptions::default(),
     )?;
     let exact_nullable_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
         min: 0,
@@ -1665,6 +1820,7 @@ fn test_selectivity_null_outcomes() -> Result<()> {
         &[("n", UInt64Type::data_type().wrap_nullable())],
         exact_nullable_stats,
         StatCardinality::exact(8),
+        CaseOptions::default(),
     )?;
 
     Ok(())
@@ -1701,6 +1857,7 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
             &[("a", UInt64Type::data_type())],
             mod_stats.clone(),
             StatCardinality::estimate(100.0),
+            CaseOptions::default(),
         )?;
     }
     run_case_with_predicates(
@@ -1709,6 +1866,7 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
         &[("a", UInt64Type::data_type())],
         mod_stats,
         StatCardinality::estimate(100.0),
+        CaseOptions::default(),
     )?;
     let signed_mod_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::Int {
         min: -9,
@@ -1724,6 +1882,7 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
             &[("i", Int64Type::data_type())],
             signed_mod_stats.clone(),
             StatCardinality::estimate(100.0),
+            CaseOptions::default(),
         )?;
     }
     let signed_min_mod_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::Int {
@@ -1739,6 +1898,7 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
         &[("i", Int64Type::data_type())],
         signed_min_mod_stats,
         StatCardinality::estimate(100.0),
+        CaseOptions::default(),
     )?;
 
     write_case_title(
@@ -1765,6 +1925,7 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
             &[("s", DataType::String)],
             like_stats.clone(),
             StatCardinality::estimate(100.0),
+            CaseOptions::default(),
         )?;
     }
     let dynamic_like_stats = ColumnStatSet::from_iter([
@@ -1789,106 +1950,8 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
         &[("s", DataType::String), ("p", DataType::String)],
         dynamic_like_stats,
         StatCardinality::estimate(100.0),
+        CaseOptions::default(),
     )?;
 
-    Ok(())
-}
-
-fn and_strategy_estimate(
-    strategy: FilterAndStrategy,
-    expr_text: &str,
-    columns: &[(&str, DataType)],
-    column_stats: &ColumnStatSet,
-) -> Result<f64> {
-    let raw_expr = parse_raw_expr(expr_text, columns, &BUILTIN_FUNCTIONS);
-    let predicate = raw_expr_to_scalar(&raw_expr, columns);
-    SelectivityEstimator::new(column_stats.clone(), StatCardinality::estimate(AND_ROWS))
-        .with_and_strategy(strategy)
-        .apply(
-            &[predicate],
-            &databend_common_expression::FunctionContext::default(),
-        )
-}
-
-const AND_ROWS: f64 = 1_000_000.0;
-
-#[test]
-fn test_selectivity_and_strategies() -> Result<()> {
-    // a: 10 distinct values, b: 100 distinct values, c: 10 distinct values.
-    let stat = |ndv: f64, max: u64| ColumnStat::UInt {
-        min: 0,
-        max,
-        ndv: NdvEstimate::exact(ndv),
-        null_count: StatCount::exact(0),
-        histogram: None,
-    };
-    let column_stats = ColumnStatSet::from_iter([
-        (Symbol::new(0), stat(10.0, 9)),
-        (Symbol::new(1), stat(100.0, 99)),
-        (Symbol::new(2), stat(10.0, 9)),
-    ]);
-    let columns = [
-        ("a", UInt64Type::data_type()),
-        ("b", UInt64Type::data_type()),
-        ("c", UInt64Type::data_type()),
-    ];
-    let estimate = |strategy, expr| and_strategy_estimate(strategy, expr, &columns, &column_stats);
-    let close = |actual: f64, expected: f64| {
-        assert!(
-            (actual - expected).abs() < 1e-6 * expected.max(1.0),
-            "expected {expected}, got {actual}"
-        );
-    };
-
-    // Two predicates on different columns: a = 5 (0.1), b = 7 (0.01).
-    let expr = "and_filters(a = 5, b = 7)";
-    close(estimate(FilterAndStrategy::Min, expr)?, AND_ROWS * 0.01);
-    close(
-        estimate(FilterAndStrategy::Independent, expr)?,
-        AND_ROWS * 0.001,
-    );
-
-    // Three predicates: a = 5 (0.1), b = 7 (0.01), c = 3 (0.1).
-    let expr = "and_filters(a = 5, b = 7, c = 3)";
-    close(estimate(FilterAndStrategy::Min, expr)?, AND_ROWS * 0.01);
-    close(
-        estimate(FilterAndStrategy::Independent, expr)?,
-        AND_ROWS * 0.0001,
-    );
-
-    // Same column twice: `independent` must not multiply a = 5 with a != 3, but the
-    // unrelated b = 7 still multiplies.
-    let expr = "and_filters(a = 5, a != 3, b = 7)";
-    close(estimate(FilterAndStrategy::Min, expr)?, AND_ROWS * 0.01);
-    // min(a = 5, a != 3) = 0.1, times b = 7 (0.01)
-    close(
-        estimate(FilterAndStrategy::Independent, expr)?,
-        AND_ROWS * 0.1 * 0.01,
-    );
-
-    // A range split into two comparisons on one column is a single group.
-    let expr = "and_filters(a >= 2, a <= 6, b = 7)";
-    let min_only = estimate(FilterAndStrategy::Min, "and_filters(a >= 2, a <= 6)")?;
-    close(
-        estimate(FilterAndStrategy::Independent, expr)?,
-        min_only * 0.01,
-    );
-
-    // Single predicate: both strategies agree.
-    for strategy in [FilterAndStrategy::Min, FilterAndStrategy::Independent] {
-        close(estimate(strategy, "a = 5")?, AND_ROWS * 0.1);
-    }
-
-    // Default is independent.
-    let default =
-        SelectivityEstimator::new(column_stats.clone(), StatCardinality::estimate(AND_ROWS))
-            .apply(
-                &[raw_expr_to_scalar(
-                    &parse_raw_expr("and_filters(a = 5, b = 7)", &columns, &BUILTIN_FUNCTIONS),
-                    &columns,
-                )],
-                &databend_common_expression::FunctionContext::default(),
-            )?;
-    close(default, AND_ROWS * 0.001);
     Ok(())
 }

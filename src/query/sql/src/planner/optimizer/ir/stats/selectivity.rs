@@ -62,8 +62,8 @@ const HISTOGRAM_ROW_COUNT_TOLERANCE: f64 = 1e-9;
 /// Each child of `and_filters` is estimated against the same input rows. Combining
 /// them needs an assumption about how the predicates relate:
 /// - `Independent` (default): predicates on disjoint column sets are assumed
-///   independent and their estimates multiplied; predicates that share a column
-///   are first reduced with `Min`, so a range split into `>=` and `<=` or a
+///   independent and their estimates multiplied; predicates connected by shared
+///   columns are first reduced with `Min`, so a range split into `>=` and `<=` or a
 ///   pair like `x = 5 AND x != 3` is not double-counted.
 /// - `Min`: keep the narrowest single estimate (predicates fully correlated).
 ///   This was the historical behaviour; it is retained as an escape hatch for
@@ -98,16 +98,20 @@ impl FilterAndStrategy {
                         groups.push((*n, ColumnSet::new()));
                         continue;
                     }
-                    match groups
-                        .iter_mut()
-                        .find(|(_, group)| !group.is_disjoint(columns))
-                    {
-                        Some((group_n, group)) => {
-                            *group_n = group_n.min(*n);
-                            group.extend(columns.iter().copied());
+                    let mut group_n = *n;
+                    let mut group = columns.clone();
+                    // Existing groups are pairwise disjoint. A child can bridge
+                    // several of them, so consume every intersecting group before
+                    // inserting their union and multiplying independent groups.
+                    groups.retain_mut(|(existing_n, existing_group)| {
+                        if existing_group.is_disjoint(columns) {
+                            return true;
                         }
-                        None => groups.push((*n, columns.clone())),
-                    }
+                        group_n = group_n.min(*existing_n);
+                        group.append(existing_group);
+                        false
+                    });
+                    groups.push((group_n, group));
                 }
                 groups.iter().map(|(n, _)| *n).product()
             }
