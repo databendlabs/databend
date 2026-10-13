@@ -320,7 +320,7 @@ impl Binder {
                 // A view definition is an independent name scope: it must not
                 // see the caller's CTEs or columns, otherwise an outer CTE can
                 // capture a table referenced by the view.
-                let mut new_bind_context = bind_context.new_view_scope(view_ident)?;
+                let mut new_bind_context = bind_context.new_view_scope(view_ident);
                 if let Statement::Query(query) = &stmt {
                     self.metadata.write().add_table(
                         catalog.clone(),

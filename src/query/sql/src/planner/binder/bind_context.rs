@@ -417,10 +417,9 @@ impl BindContext {
         }
     }
 
-    const MAX_DEPTH: usize = 4096;
-
     pub fn with_parent(parent: BindContext) -> Result<Self> {
-        if parent.depth() >= Self::MAX_DEPTH {
+        const MAX_DEPTH: usize = 4096;
+        if parent.depth() >= MAX_DEPTH {
             return Err(ErrorCode::Internal(
                 "Query binder exceeds the maximum iterations",
             ));
@@ -465,20 +464,15 @@ impl BindContext {
     /// A view definition is an independent name scope: it must not resolve the
     /// caller's CTEs or columns, so the new context has no parent and an empty
     /// CTE context. The view expansion path is still carried over for loop
-    /// detection.
-    pub fn new_view_scope(&self, view: ViewIdent) -> Result<Self> {
-        // The view scope has no parent, so keep `with_parent`'s depth guard.
-        if self.depth() >= Self::MAX_DEPTH {
-            return Err(ErrorCode::Internal(
-                "Query binder exceeds the maximum iterations",
-            ));
-        }
+    /// detection: the caller checks `check_view_loop` before entering the view,
+    /// and that check stops any recursion that crosses a view boundary.
+    pub fn new_view_scope(&self, view: ViewIdent) -> Self {
         let mut bind_context = BindContext::new();
         bind_context.binding_views = self.binding_views.clone();
         bind_context.binding_views.insert(view);
         bind_context.udf_cache = self.udf_cache.clone();
         bind_context.planning_materialized_view_rewrite = self.planning_materialized_view_rewrite;
-        Ok(bind_context)
+        bind_context
     }
 
     pub fn check_view_loop(&self, ident: &ViewIdent) -> Result<()> {
