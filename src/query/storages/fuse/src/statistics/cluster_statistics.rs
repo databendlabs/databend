@@ -45,6 +45,7 @@ use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::VectorDistanceType;
 use databend_storages_common_table_meta::meta::valid_cluster_stats_hilbert_minmax;
 use databend_storages_common_table_meta::table::HILBERT_CLUSTER_DIMENSIONS;
+use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_DISTANCE;
 use log::warn;
 
 /// Vector cluster metadata resolved from a vector cluster key expression.
@@ -114,7 +115,12 @@ pub fn vector_cluster_info_from_column(
         .filter(|index| {
             index.index_type == TableIndexType::Vector && index.column_ids.contains(&column_id)
         })
-        .map(|index| index.options.get("distance").map(String::as_str));
+        .map(|index| {
+            index
+                .options
+                .get(VECTOR_INDEX_OPT_DISTANCE)
+                .map(String::as_str)
+        });
 
     let distance_type = VectorDistanceType::from_index_options(column_name, distances)?;
     Ok(VectorClusterInfo {

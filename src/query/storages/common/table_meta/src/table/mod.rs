@@ -15,11 +15,13 @@
 mod dynamic_table_keys;
 mod stream_keys;
 mod table_compression;
+mod table_index_keys;
 mod table_keys;
 mod table_prefix;
 
 pub use dynamic_table_keys::*;
 pub use stream_keys::*;
 pub use table_compression::TableCompression;
+pub use table_index_keys::*;
 pub use table_keys::*;
 pub use table_prefix::*;

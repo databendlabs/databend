@@ -38,6 +38,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::SharedLockGuard;
 use databend_storages_common_table_meta::table::ClusterType;
 
+use crate::plans::IndexUserDictionary;
 use crate::plans::MaintenanceTarget;
 use crate::plans::Plan;
 
@@ -68,6 +69,8 @@ pub struct CreateTablePlan {
     pub table_constraints: Option<BTreeMap<String, Constraint>>,
 
     pub attached_columns: Option<Vec<Identifier>>,
+    /// The `user_dictionary` option of each inline inverted index, keyed by index name.
+    pub index_user_dictionaries: Option<BTreeMap<String, IndexUserDictionary>>,
 }
 
 impl CreateTablePlan {
