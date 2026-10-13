@@ -321,20 +321,20 @@ impl<'a> EagerInput<'a> {
             let ScalarExpr::BoundColumnRef(right_column) = &condition.right else {
                 return Ok(vec![]);
             };
+            // Join keys are required by any aggregate pushed below the join. They may be
+            // temporary grouping keys even when neither side appears in the final GROUP BY.
+            // The final aggregate removes them again in `build_result`.
             let cond_column = Pair {
                 left: left_column.column.index,
                 right: right_column.column.index,
             };
             cond_column.for_each(|side, index| {
-                let opposite = side.opposite();
-                if eager_group_columns[side].contains(index)
-                    && !eager_group_columns[opposite].contains(&cond_column[opposite])
-                {
+                if !eager_group_columns[side].contains(index) {
                     final_agg.group_items.push(ScalarItem {
-                        scalar: opposite.join_condition(condition).clone(),
-                        index: cond_column[opposite],
+                        scalar: side.join_condition(condition).clone(),
+                        index: *index,
                     });
-                    eager_group_columns[opposite].insert(cond_column[opposite]);
+                    eager_group_columns[side].insert(*index);
                 }
             });
         }
