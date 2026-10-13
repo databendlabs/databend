@@ -36,6 +36,7 @@ mod outer_join_to_anti;
 mod physical_planner;
 mod planning_context;
 mod push_down_filter_project_set;
+mod push_down_filter_window_top_n;
 mod push_down_rank_limit_aggregate;
 mod selectivity;
 mod selectivity_smoke;
