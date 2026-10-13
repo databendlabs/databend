@@ -66,7 +66,15 @@ cargo build -p databend-binaries --bin databend-query
 ./target/debug/databend-sqllogictests --handlers http --run_file task_send_notification.test
 ```
 
-mock 自身的 ID 分配、删除隔离、optional query ID 及拒绝不写 history 可单独验证（需要匹配现有生成代码的 Python gRPC/protobuf 依赖）：
+mock 的 integration 和动态 history 按 `tenant_id` 隔离；两条既有 JSON history fixture 是共享的只读测试数据，不会因 DROP 被删除。删除 integration 仅清理当前 tenant 的对应动态 history。
+
+除了单文件回归，还应启用 Query 的 `--internal-enable-sandbox-tenant`，按 CI 的并发方式验证完整 `task` suite，避免只跑单文件漏掉跨 tenant 污染：
+
+```bash
+./target/debug/databend-sqllogictests --run_suite task --handlers http,hybrid --enable_sandbox --parallel 8
+```
+
+mock 自身的 ID 分配、tenant/删除隔离、fixture 保留、optional query ID 及拒绝不写 history 可单独验证（需要匹配现有生成代码的 Python gRPC/protobuf 依赖）：
 
 ```bash
 cd tests/cloud_control_server

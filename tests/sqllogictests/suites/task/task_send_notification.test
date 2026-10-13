@@ -102,3 +102,8 @@ SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_
 
 statement ok
 DROP NOTIFICATION INTEGRATION send_notify;
+
+query I
+SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_notify';
+----
+0
