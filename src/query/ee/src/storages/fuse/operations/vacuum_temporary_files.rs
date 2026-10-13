@@ -216,8 +216,9 @@ impl SpillDeleter {
 /// Every `RAMP_UP_BATCHES` clear batches raise the bound by one; a throttled batch halves it, at
 /// most once per `DECREASE_COOLDOWN` so one throttling episode (visible to every overlapping
 /// batch for the 1s/2s/4s retry back-offs) is counted once. A batch that failed for any other
-/// reason is not clear either: it holds the bound where it is, so a persistent backend error
-/// does not get amplified by ramping up.
+/// reason, or that went through only after a retry or two, is not clear either: it holds the
+/// bound where it is, so neither a persistent backend error nor steady low-level throttling
+/// gets amplified by ramping up.
 struct AdaptiveConcurrency(Mutex<ConcurrencyState>);
 
 struct ConcurrencyState {
@@ -245,7 +246,7 @@ impl AdaptiveConcurrency {
         self.0.lock().current
     }
 
-    /// Sporadic retries are noise the retry layer already absorbs and must not stall the ramp-up;
+    /// Sporadic retries are noise the retry layer already absorbs and must not halve the bound;
     /// only a burst of at least half the in-flight batches, and never fewer than a full `INIT`
     /// round, counts as throttling.
     fn is_throttled(&self, outcome: &DeleteOutcome) -> bool {
@@ -255,7 +256,8 @@ impl AdaptiveConcurrency {
     fn observe(&self, outcome: &DeleteOutcome, now: Instant) {
         if self.is_throttled(outcome) {
             self.back_off(now);
-        } else if outcome.failed {
+        } else if outcome.failed || outcome.retried > 0 {
+            // Not clear: the same signal `Pacing` ends the task on must not raise the bound.
             self.hold();
         } else {
             self.ramp_up();
@@ -688,7 +690,7 @@ async fn vacuum_meta_entry(
             delete.absorb(outcome);
             remaining = remaining.saturating_sub(outcome.charged);
         }
-        MetaVacuum::Nothing => {}
+        MetaVacuum::Missing | MetaVacuum::Nothing => {}
     }
     // The claim on the manifest keeps the directory task away, so vacuum the directory here and
     // drop the manifest with it.
@@ -746,7 +748,9 @@ async fn finish_directory_and_meta(
 
 /// How far a manifest-driven vacuum got.
 enum MetaVacuum {
-    /// No manifest, it names nothing under the spill prefix, or nothing it names fits `max`.
+    /// There is no manifest.
+    Missing,
+    /// The manifest names nothing under the spill prefix, or nothing it names fits `max`.
     Nothing,
     /// The task stops here: lines remain (budget or failure) or the store was throttling.
     /// Whatever is left is written back and picked up next run. When the manifest listed
@@ -760,7 +764,7 @@ enum MetaVacuum {
 impl MetaVacuum {
     fn outcome(&self) -> DeleteOutcome {
         match self {
-            MetaVacuum::Nothing => DeleteOutcome::default(),
+            MetaVacuum::Missing | MetaVacuum::Nothing => DeleteOutcome::default(),
             MetaVacuum::Partial(o) | MetaVacuum::Exhausted(o) => *o,
         }
     }
@@ -797,15 +801,18 @@ async fn vacuum_dir_entry(
     }
     // A partial meta batch is final for this run, whether it succeeded or was throttled. Only a
     // directory without a usable meta file, or one whose truncated meta never named the
-    // directory, falls back to listing.
-    let delete = match delete_by_meta(&deleter, &temporary_dir, &meta_path, max, &pacing).await? {
+    // directory, falls back to listing. The sibling manifest was claimed with this task, so
+    // when it exists it is finished here too: the top-level listing will skip it.
+    let by_meta = delete_by_meta(&deleter, &temporary_dir, &meta_path, max, &pacing).await?;
+    let delete = match by_meta {
         MetaVacuum::Partial(by_meta) => Some(by_meta),
-        MetaVacuum::Nothing => Some(
+        MetaVacuum::Missing => Some(
             delete_by_list(&deleter, &dir_path, max, &pacing)
                 .await?
                 .outcome,
         ),
-        MetaVacuum::Exhausted(mut by_meta) => {
+        MetaVacuum::Nothing | MetaVacuum::Exhausted(_) => {
+            let mut by_meta = by_meta.outcome();
             let remaining = max.saturating_sub(by_meta.charged);
             finish_directory_and_meta(
                 &deleter,
@@ -837,7 +844,7 @@ async fn delete_by_meta(
 ) -> Result<MetaVacuum> {
     let meta = match deleter.operator().read(meta_path).await {
         Ok(meta) => meta,
-        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(MetaVacuum::Nothing),
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(MetaVacuum::Missing),
         Err(e) => return Err(e.into()),
     };
     delete_by_meta_buffer(deleter, temporary_dir, meta_path, meta, max, pacing).await

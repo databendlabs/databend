@@ -449,12 +449,19 @@ mod unit {
     /// neither halve the bound nor count towards raising it, or a persistent backend error
     /// would see the vacuum ramp up to `MAX` while every delete fails.
     #[test]
-    fn test_adaptive_concurrency_holds_on_failed_batches() {
+    fn test_adaptive_concurrency_holds_on_failed_or_retried_batches() {
         let c = AdaptiveConcurrency::new();
         let t0 = Instant::now();
 
         for _ in 0..AdaptiveConcurrency::MAX * AdaptiveConcurrency::RAMP_UP_BATCHES {
             c.observe(&failed(), t0);
+        }
+        assert_eq!(c.current(), AdaptiveConcurrency::INIT);
+
+        // So does steady low-level throttling: a batch that needed a retry ends its task under
+        // `Pacing::Scheduled`, and must not raise the bound either.
+        for _ in 0..AdaptiveConcurrency::MAX * AdaptiveConcurrency::RAMP_UP_BATCHES {
+            c.observe(&retried(1), t0);
         }
         assert_eq!(c.current(), AdaptiveConcurrency::INIT);
 
@@ -667,6 +674,69 @@ mod unit {
         assert_eq!(accessor.deleted_paths(), Vec::<String>::new());
         assert_eq!(accessor.list_call_count(), 0);
         assert_eq!(accessor.read_call_count(), 0);
+        Ok(())
+    }
+
+    /// When the store lists `x/` before `x.list`, the directory task claims the manifest and
+    /// the top-level listing skips it, so an empty or unparseable manifest must be finished by
+    /// the directory task itself, or an unlimited run would leave it behind.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_directory_task_drops_the_empty_manifest_it_claimed() -> anyhow::Result<()> {
+        let now = Utc::now().timestamp_millis();
+        let old_ts = (Utc::now() - ChronoDuration::hours(2)).timestamp_millis();
+        let accessor = MockVacuumAccessor::new(
+            HashMap::from([("spill/dir/".to_string(), vec![(
+                "spill/dir/file1".to_string(),
+                file_meta(Some(old_ts)),
+            )])]),
+            HashMap::new(),
+            HashMap::from([(
+                "spill/dir.list".to_string(),
+                ReadResult::Buffer(Buffer::from("")),
+            )]),
+        );
+        let operator = OperatorBuilder::new(accessor.clone()).finish();
+        let outcome = run_dir_vacuum_for_test(
+            &operator,
+            "spill/",
+            "spill/dir/",
+            &dir_meta(Some(old_ts)),
+            expiry(now, Duration::from_secs(60)),
+            100,
+        )
+        .await?;
+
+        assert_eq!(outcome.delete.map(|d| d.removed), Some(3));
+        assert_eq!(accessor.deleted_paths(), vec![
+            "spill/dir/file1".to_string(),
+            "spill/dir/".to_string(),
+            "spill/dir.list".to_string(),
+        ]);
+
+        // Without a manifest there is nothing to finish but the directory.
+        let accessor = MockVacuumAccessor::new(
+            HashMap::from([("spill/dir/".to_string(), vec![(
+                "spill/dir/file1".to_string(),
+                file_meta(Some(old_ts)),
+            )])]),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        let operator = OperatorBuilder::new(accessor.clone()).finish();
+        let outcome = run_dir_vacuum_for_test(
+            &operator,
+            "spill/",
+            "spill/dir/",
+            &dir_meta(Some(old_ts)),
+            expiry(now, Duration::from_secs(60)),
+            100,
+        )
+        .await?;
+        assert_eq!(outcome.delete.map(|d| d.removed), Some(2));
+        assert_eq!(accessor.deleted_paths(), vec![
+            "spill/dir/file1".to_string(),
+            "spill/dir/".to_string(),
+        ]);
         Ok(())
     }
 
