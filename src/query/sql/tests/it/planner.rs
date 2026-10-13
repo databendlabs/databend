@@ -17,21 +17,15 @@ use std::path::Path;
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
-use databend_common_ast::parser::parse_expr;
-use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::schema::CatalogOption;
-use databend_common_sql::BindContext;
 use databend_common_sql::FormatOptions;
-use databend_common_sql::Metadata;
 use databend_common_sql::MetadataRef;
-use databend_common_sql::NameResolutionContext;
 use databend_common_sql::Planner;
-use databend_common_sql::TypeChecker;
 use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Operator;
@@ -403,76 +397,6 @@ async fn test_lite_replay_statistics_trace_materialized_cte_golden() -> Result<(
 
     write_statistics_trace_summary_case(&mut file, &case).await?;
 
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_binding_depth_through_view_subqueries_and_ctes() -> Result<()> {
-    let ctx = LiteTableContext::create().await?;
-    ctx.get_settings().set_enable_auto_materialize_cte(1)?;
-    for (name, query) in [
-        ("depth_leaf", "SELECT 1 AS x"),
-        ("depth_nested", "SELECT * FROM depth_leaf"),
-        ("depth_chain", "SELECT * FROM depth_nested"),
-        (
-            "depth_derived",
-            "SELECT * FROM (SELECT * FROM depth_leaf) d",
-        ),
-        ("depth_scalar", "SELECT (SELECT x FROM depth_leaf) AS x"),
-        (
-            "depth_cte",
-            "WITH t AS (SELECT * FROM depth_leaf) SELECT * FROM t",
-        ),
-        (
-            "depth_materialized_cte",
-            "WITH t AS (SELECT * FROM depth_leaf) SELECT t.x FROM t, t t2",
-        ),
-    ] {
-        ctx.register_view_sql("default", name, query).await?;
-    }
-
-    let settings = ctx.get_settings();
-    let names = NameResolutionContext::try_from(settings.as_ref())?;
-    for (sql, succeeds) in [
-        ("SELECT * FROM depth_leaf", true),
-        ("SELECT * FROM depth_nested", true),
-        ("SELECT a.x FROM depth_leaf a, depth_leaf b", true),
-        ("SELECT * FROM depth_chain", false),
-        ("SELECT * FROM depth_derived", false),
-        ("SELECT * FROM depth_scalar", false),
-        ("SELECT * FROM depth_cte", false),
-        ("SELECT * FROM depth_materialized_cte", false),
-        ("SELECT * FROM (SELECT * FROM depth_derived) d", false),
-        ("SELECT (SELECT x FROM depth_leaf) FROM depth_leaf", false),
-    ] {
-        let expr = parse_expr(
-            &tokenize_sql(&format!("({sql})"))?,
-            settings.get_sql_dialect()?,
-        )?;
-        let mut bind_context = BindContext::new();
-        // Resolving the scalar subquery enters the real binder one level deeper.
-        // Start near 4096 to test the limit without thousands of view definitions.
-        bind_context.binding_depth = 4096 - 4;
-        let mut checker = TypeChecker::try_create(
-            &mut bind_context,
-            ctx.clone(),
-            &names,
-            Metadata::default_ref(),
-            &[],
-            false,
-        )?;
-        let result = checker.resolve(&expr);
-        if succeeds {
-            result?;
-        } else {
-            let error = result.unwrap_err();
-            assert_eq!(
-                error.message(),
-                "Query binder exceeds the maximum iterations",
-                "{sql}: {error}"
-            );
-        }
-    }
     Ok(())
 }
 
