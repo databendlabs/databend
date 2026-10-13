@@ -60,7 +60,7 @@ pub struct BlockScanStats {
     pub rows: usize,
     /// Uncompressed size of all projected columns for the whole block. When
     /// row selection pushdown skips rows of the remaining columns, their
-    /// contribution is extrapolated from the rows that were decoded.
+    /// contribution is estimated from the rows that were decoded.
     pub bytes: usize,
 }
 
@@ -68,13 +68,12 @@ impl BlockScanStats {
     /// Account for columns that were materialized after `deserialize_and_filter`
     /// (e.g. virtual columns). `decoded_bytes` is the size of those columns as
     /// decoded for `decoded_rows` rows; when row selection pushdown left fewer
-    /// rows than the block holds, the size is extrapolated to the whole block.
+    /// rows than the block holds, the size is estimated for the whole block.
     pub fn add_decoded_bytes(&mut self, decoded_bytes: usize, decoded_rows: usize) {
         if decoded_bytes == 0 {
             return;
         }
-        self.bytes +=
-            extrapolate_remain_bytes(decoded_bytes, decoded_rows, self.rows, decoded_bytes);
+        self.bytes += estimate_block_bytes(decoded_bytes, decoded_rows, self.rows, decoded_bytes);
     }
 }
 
@@ -319,7 +318,7 @@ impl ReadState {
                 .flatten(),
         )?;
         if push_down_row_selection {
-            scan_stats.bytes += extrapolate_remain_bytes(
+            scan_stats.bytes += estimate_block_bytes(
                 remain_block.memory_size(),
                 remain_block.num_rows(),
                 part.nums_rows,
@@ -398,13 +397,14 @@ fn raw_bytes_of_chunks(columns_chunks: &HashMap<ColumnId, DataItem>) -> usize {
         .sum()
 }
 
-/// Estimate the uncompressed size of the remaining columns for the whole block
-/// when only `decoded_rows` of them were materialized.
+/// Estimate the uncompressed size of some columns for the whole block when
+/// only `decoded_rows` of them were materialized, by scaling `decoded_bytes`
+/// up to `total_rows`.
 ///
 /// Falls back to `raw_bytes` (the size of the column chunks that were read)
 /// when nothing was decoded, so blocks whose rows are all filtered out still
 /// account for the data that was read for them.
-fn extrapolate_remain_bytes(
+fn estimate_block_bytes(
     decoded_bytes: usize,
     decoded_rows: usize,
     total_rows: usize,
@@ -457,14 +457,14 @@ mod tests {
     }
 
     #[test]
-    fn test_extrapolate_remain_bytes() {
+    fn test_estimate_block_bytes() {
         // Scales decoded bytes up to the whole block.
-        assert_eq!(extrapolate_remain_bytes(40, 2, 10, 7), 200);
+        assert_eq!(estimate_block_bytes(40, 2, 10, 7), 200);
         // Fully decoded block is reported as is.
-        assert_eq!(extrapolate_remain_bytes(40, 10, 10, 7), 40);
-        assert_eq!(extrapolate_remain_bytes(40, 12, 10, 7), 40);
+        assert_eq!(estimate_block_bytes(40, 10, 10, 7), 40);
+        assert_eq!(estimate_block_bytes(40, 12, 10, 7), 40);
         // Nothing decoded: fall back to the raw chunk sizes that were read.
-        assert_eq!(extrapolate_remain_bytes(0, 0, 10, 7), 7);
+        assert_eq!(estimate_block_bytes(0, 0, 10, 7), 7);
     }
 
     #[test]
