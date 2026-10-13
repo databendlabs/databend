@@ -39,7 +39,7 @@ use databend_common_catalog::table_context::AbortChecker;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_storage::DataOperator;
-use databend_common_storage::opendal_rate_limited_retries;
+use databend_common_storage::RetryStats;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumReport;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 use futures_util::FutureExt;
@@ -69,15 +69,21 @@ const DELETE_BATCH_FILES: usize = 1000;
 /// Result of one delete batch.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct DeleteOutcome {
-    /// Files actually removed: a prefix of the batch, all of it unless `failed`.
+    /// Files known to be removed: those of the requests that went through, a prefix of the
+    /// batch, all of it unless `failed`.
     removed: usize,
+    /// What `LIMIT` is charged: `removed`, plus the paths of a request that failed with some
+    /// of its objects possibly deleted (a multi-delete reports per object). A run thus never
+    /// removes more than it says, even while the store is failing requests half-way.
+    charged: usize,
     /// A request was rejected, for whatever reason; the paths from `removed` on are left for
     /// the next run.
     failed: bool,
     /// The batch itself was rejected as rate limited.
     rate_limited: bool,
-    /// `RateLimited` retries recorded process-wide while the batch was in flight. The retry
-    /// layer hides `SlowDown`, so a successful batch may still have been throttled.
+    /// `RateLimited` retries of the vacuum's own operator while the batch was in flight. The
+    /// retry layer hides `SlowDown`, so a successful batch may still have been throttled;
+    /// concurrent batches of the same run can each see the same retry.
     retried: usize,
 }
 
@@ -85,6 +91,7 @@ impl DeleteOutcome {
     /// Merge the outcome of a further batch issued by the same task.
     fn absorb(&mut self, other: DeleteOutcome) {
         self.removed += other.removed;
+        self.charged += other.charged;
         self.failed |= other.failed;
         self.rate_limited |= other.rate_limited;
         self.retried += other.retried;
@@ -99,16 +106,23 @@ struct SpillDeleter {
     /// request at a time so a failure mid-batch still accounts for the requests that went
     /// through.
     request_size: usize,
+    /// Retries of this operator's own requests, so throttling is told apart from whatever else
+    /// the node is doing against storage.
+    retry_stats: Arc<RetryStats>,
     removed: AtomicUsize,
     report: Option<VacuumReport>,
 }
 
 impl SpillDeleter {
-    fn new(operator: Operator) -> Self {
-        Self::with_report(operator, None)
+    fn new(operator: Operator, retry_stats: Arc<RetryStats>) -> Self {
+        Self::with_report(operator, retry_stats, None)
     }
 
-    fn with_report(operator: Operator, report: Option<VacuumReport>) -> Self {
+    fn with_report(
+        operator: Operator,
+        retry_stats: Arc<RetryStats>,
+        report: Option<VacuumReport>,
+    ) -> Self {
         let request_size = operator
             .info()
             .full_capability()
@@ -118,6 +132,7 @@ impl SpillDeleter {
         Self {
             operator,
             request_size,
+            retry_stats,
             removed: AtomicUsize::new(0),
             report,
         }
@@ -129,15 +144,18 @@ impl SpillDeleter {
 
     async fn delete(&self, paths: Vec<String>, from: &str) -> DeleteOutcome {
         let n = paths.len();
-        let retries_before = opendal_rate_limited_retries();
+        let retries_before = self.retry_stats.rate_limited();
         let mut removed = 0;
+        let mut in_flight = 0;
         let result: opendal::Result<()> = async {
             let mut deleter = self.operator.deleter().await?;
             for request in paths.chunks(self.request_size) {
+                in_flight = request.len();
                 deleter
                     .delete_iter(request.iter().map(String::as_str))
                     .await?;
                 deleter.close().await?;
+                in_flight = 0;
                 removed += request.len();
                 let total =
                     self.removed.fetch_add(request.len(), Ordering::Relaxed) + request.len();
@@ -148,10 +166,14 @@ impl SpillDeleter {
             Ok(())
         }
         .await;
-        let retried = opendal_rate_limited_retries().saturating_sub(retries_before) as usize;
+        let retried = self
+            .retry_stats
+            .rate_limited()
+            .saturating_sub(retries_before) as usize;
         match result {
             Ok(()) => DeleteOutcome {
                 removed,
+                charged: removed,
                 failed: false,
                 rate_limited: false,
                 retried,
@@ -164,10 +186,18 @@ impl SpillDeleter {
                     from,
                     e
                 );
+                let rate_limited = e.kind() == ErrorKind::RateLimited;
                 DeleteOutcome {
                     removed,
+                    // A request rejected as rate limited was not executed at all; any other
+                    // failure may have removed some of its objects before the error.
+                    charged: if rate_limited {
+                        removed
+                    } else {
+                        removed + in_flight
+                    },
                     failed: true,
-                    rate_limited: e.kind() == ErrorKind::RateLimited,
+                    rate_limited,
                     retried,
                 }
             }
@@ -274,27 +304,34 @@ impl AdaptiveConcurrency {
 struct RunBudget {
     limit: usize,
     removed: usize,
+    charged: usize,
 }
 
 impl RunBudget {
     fn new(limit: usize) -> Self {
-        Self { limit, removed: 0 }
+        Self {
+            limit,
+            removed: 0,
+            charged: 0,
+        }
     }
 
+    /// Files known to be removed: what the command reports.
     fn removed(&self) -> usize {
         self.removed
     }
 
     fn remaining(&self) -> usize {
-        self.limit.saturating_sub(self.removed)
+        self.limit.saturating_sub(self.charged)
     }
 
     fn exhausted(&self) -> bool {
-        self.removed >= self.limit
+        self.charged >= self.limit
     }
 
-    fn record(&mut self, removed: usize) {
-        self.removed += removed;
+    fn record(&mut self, outcome: &DeleteOutcome) {
+        self.removed += outcome.removed;
+        self.charged += outcome.charged;
     }
 }
 
@@ -439,7 +476,7 @@ impl Run {
         let Some(delete) = outcome.delete else {
             return;
         };
-        self.budget.record(delete.removed);
+        self.budget.record(&delete);
         let now = Instant::now();
         self.concurrency.observe(&delete, now);
         if now.duration_since(self.last_progress_log) >= Self::PROGRESS_LOG_INTERVAL {
@@ -498,8 +535,13 @@ async fn vacuum_by_duration(
     retain: Duration,
     report: VacuumReport,
 ) -> Result<usize> {
+    // A dedicated operator, so the retries sampled around each delete are those of this
+    // command's own requests and not of everything else the node sends to storage.
+    let retry_stats = Arc::new(RetryStats::default());
+    let operator = DataOperator::instance().observed_spill_operator(retry_stats.clone())?;
     let deleter = Arc::new(SpillDeleter::with_report(
-        DataOperator::instance().spill_operator(),
+        operator,
+        retry_stats,
         Some(report),
     ));
     let expiry = Expiry::new(retain);
@@ -644,7 +686,7 @@ async fn vacuum_meta_entry(
             // before `unload_spill_meta` appended them. Whatever it listed is gone; finish
             // the directory it describes below.
             delete.absorb(outcome);
-            remaining = remaining.saturating_sub(outcome.removed);
+            remaining = remaining.saturating_sub(outcome.charged);
         }
         MetaVacuum::Nothing => {}
     }
@@ -716,10 +758,10 @@ enum MetaVacuum {
 }
 
 impl MetaVacuum {
-    fn removed(&self) -> usize {
+    fn outcome(&self) -> DeleteOutcome {
         match self {
-            MetaVacuum::Nothing => 0,
-            MetaVacuum::Partial(o) | MetaVacuum::Exhausted(o) => o.removed,
+            MetaVacuum::Nothing => DeleteOutcome::default(),
+            MetaVacuum::Partial(o) | MetaVacuum::Exhausted(o) => *o,
         }
     }
 }
@@ -764,7 +806,7 @@ async fn vacuum_dir_entry(
                 .outcome,
         ),
         MetaVacuum::Exhausted(mut by_meta) => {
-            let remaining = max.saturating_sub(by_meta.removed);
+            let remaining = max.saturating_sub(by_meta.charged);
             finish_directory_and_meta(
                 &deleter,
                 &dir_path,
@@ -1067,7 +1109,12 @@ async fn vacuum_query_hook(
     query_id: &str,
     limit: usize,
 ) -> Result<usize> {
-    let deleter = SpillDeleter::new(DataOperator::instance().spill_operator());
+    // The hook drains regardless of throttling, so the shared spill operator is fine here and
+    // the retry sample it never consults stays at zero.
+    let deleter = SpillDeleter::new(
+        DataOperator::instance().spill_operator(),
+        Arc::new(RetryStats::default()),
+    );
     let mut budget = RunBudget::new(limit);
 
     let metas_f = nodes
@@ -1096,7 +1143,7 @@ async fn vacuum_query_hook(
             &Pacing::Drain,
         )
         .await?;
-        budget.record(outcome.removed());
+        budget.record(&outcome.outcome());
     }
 
     Ok(budget.removed())

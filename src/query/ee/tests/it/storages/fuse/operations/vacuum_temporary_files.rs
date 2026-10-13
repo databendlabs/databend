@@ -369,7 +369,7 @@ mod unit {
         max: usize,
     ) -> Result<DirOutcome> {
         vacuum_dir_entry(
-            Arc::new(SpillDeleter::new(operator.clone())),
+            Arc::new(SpillDeleter::new(operator.clone(), Arc::default())),
             temporary_dir.into(),
             dir_path.to_owned(),
             metadata.clone(),
@@ -383,6 +383,7 @@ mod unit {
     fn clear() -> DeleteOutcome {
         DeleteOutcome {
             removed: 1,
+            charged: 1,
             failed: false,
             rate_limited: false,
             retried: 0,
@@ -392,6 +393,7 @@ mod unit {
     fn rate_limited() -> DeleteOutcome {
         DeleteOutcome {
             removed: 0,
+            charged: 0,
             failed: true,
             rate_limited: true,
             retried: 0,
@@ -402,6 +404,7 @@ mod unit {
     fn failed() -> DeleteOutcome {
         DeleteOutcome {
             removed: 0,
+            charged: 1,
             failed: true,
             rate_limited: false,
             retried: 0,
@@ -411,6 +414,7 @@ mod unit {
     fn retried(n: usize) -> DeleteOutcome {
         DeleteOutcome {
             removed: 1,
+            charged: 1,
             failed: false,
             rate_limited: false,
             retried: n,
@@ -544,14 +548,24 @@ mod unit {
     }
 
     #[test]
-    fn test_run_budget_tracks_remaining() {
+    fn test_run_budget_charges_failed_requests_but_reports_removed() {
         let mut budget = RunBudget::new(10);
-        budget.record(3);
-        budget.record(4);
-        assert_eq!(budget.removed(), 7);
-        assert_eq!(budget.remaining(), 3);
+        let mut three = clear();
+        three.removed = 3;
+        three.charged = 3;
+        budget.record(&three);
+        budget.record(&three);
+        assert_eq!(budget.removed(), 6);
+        assert_eq!(budget.remaining(), 4);
         assert!(!budget.exhausted());
-        budget.record(3);
+
+        // A request that failed half-way may have removed some of its objects: `LIMIT` is
+        // charged for all of them, the command only reports what is known to be gone.
+        let mut mixed = failed();
+        mixed.removed = 2;
+        mixed.charged = 4;
+        budget.record(&mixed);
+        assert_eq!(budget.removed(), 8);
         assert!(budget.exhausted());
         assert_eq!(budget.remaining(), 0);
     }
@@ -559,17 +573,30 @@ mod unit {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_rate_limited_batch_is_not_counted() -> anyhow::Result<()> {
         let accessor = MockVacuumAccessor::new(HashMap::new(), HashMap::new(), HashMap::new());
-        let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
+        let deleter = SpillDeleter::new(
+            OperatorBuilder::new(accessor.clone()).finish(),
+            Arc::default(),
+        );
         let paths = vec!["spill/dir/file1".to_string(), "spill/dir/file2".to_string()];
 
+        // Rejected as rate limited: nothing was executed, nothing is charged.
         accessor.throttle_next_batches(1);
         let outcome = deleter.delete(paths.clone(), "spill/dir/").await;
         assert_eq!(outcome.removed, 0);
+        assert_eq!(outcome.charged, 0);
         assert!(outcome.rate_limited);
         assert_eq!(accessor.deleted_paths(), Vec::<String>::new());
 
+        // Any other failure may have removed part of the request: charged in full.
+        accessor.fail_next_batches(1, opendal::ErrorKind::Unexpected);
+        let outcome = deleter.delete(paths.clone(), "spill/dir/").await;
+        assert_eq!(outcome.removed, 0);
+        assert_eq!(outcome.charged, 2);
+        assert!(outcome.failed && !outcome.rate_limited);
+
         let outcome = deleter.delete(paths.clone(), "spill/dir/").await;
         assert_eq!(outcome.removed, 2);
+        assert_eq!(outcome.charged, 2);
         assert!(!outcome.rate_limited);
         assert_eq!(accessor.deleted_paths(), paths);
         Ok(())
@@ -786,7 +813,10 @@ mod unit {
                 ReadResult::Buffer(Buffer::from(paths.join("\n"))),
             )]),
         );
-        let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
+        let deleter = SpillDeleter::new(
+            OperatorBuilder::new(accessor.clone()).finish(),
+            Arc::default(),
+        );
 
         // No LIMIT: every path goes, but never more than DELETE_BATCH_FILES per batch.
         let outcome = delete_by_meta(
@@ -821,7 +851,10 @@ mod unit {
             HashMap::new(),
             HashMap::new(),
         );
-        let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
+        let deleter = SpillDeleter::new(
+            OperatorBuilder::new(accessor.clone()).finish(),
+            Arc::default(),
+        );
 
         // No LIMIT: the directory is drained in batches rather than buffered whole.
         let by_list = delete_by_list(&deleter, "spill/dir/", usize::MAX, &scheduled()).await?;
@@ -860,7 +893,10 @@ mod unit {
             HashMap::new(),
             HashMap::new(),
         );
-        let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
+        let deleter = SpillDeleter::new(
+            OperatorBuilder::new(accessor.clone()).finish(),
+            Arc::default(),
+        );
 
         // The query is cancelled right after the first batch.
         let pacing = Pacing::Scheduled(AbortAfter::checks(0));
@@ -885,7 +921,10 @@ mod unit {
             HashMap::new(),
         );
         accessor.throttle_next_batches(1);
-        let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
+        let deleter = SpillDeleter::new(
+            OperatorBuilder::new(accessor.clone()).finish(),
+            Arc::default(),
+        );
 
         let by_list = delete_by_list(&deleter, "spill/dir/", usize::MAX, &scheduled()).await?;
         assert_eq!(by_list.outcome.removed, 0);
@@ -915,6 +954,7 @@ mod unit {
         );
         let deleter = Arc::new(SpillDeleter::new(
             OperatorBuilder::new(accessor.clone()).finish(),
+            Arc::default(),
         ));
 
         let outcome = vacuum_meta_entry(
@@ -954,6 +994,7 @@ mod unit {
         );
         let deleter = Arc::new(SpillDeleter::new(
             OperatorBuilder::new(accessor.clone()).finish(),
+            Arc::default(),
         ));
 
         let outcome = vacuum_meta_entry(
@@ -987,7 +1028,10 @@ mod unit {
                 ReadResult::Buffer(Buffer::from("spill/dir.list\nspill/dir/\n")),
             )]),
         );
-        let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
+        let deleter = SpillDeleter::new(
+            OperatorBuilder::new(accessor.clone()).finish(),
+            Arc::default(),
+        );
 
         // Budget for one object: neither line is taken by the manifest pass (the listing
         // fallback deals with the pair instead).
@@ -1018,7 +1062,10 @@ mod unit {
                 ReadResult::Buffer(Buffer::from(lines.join("\n"))),
             )]),
         );
-        let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
+        let deleter = SpillDeleter::new(
+            OperatorBuilder::new(accessor.clone()).finish(),
+            Arc::default(),
+        );
         let outcome = delete_by_meta(
             &deleter,
             "spill/",
@@ -1048,7 +1095,10 @@ mod unit {
             )]),
         );
         accessor.set_delete_max_size(2);
-        let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
+        let deleter = SpillDeleter::new(
+            OperatorBuilder::new(accessor.clone()).finish(),
+            Arc::default(),
+        );
 
         // Requests of 2, 2, 1; the second one fails.
         accessor.fail_batches_after(1, 1, opendal::ErrorKind::Unexpected);
@@ -1058,6 +1108,7 @@ mod unit {
             panic!("a failed request stops the task");
         };
         assert_eq!(o.removed, 2);
+        assert_eq!(o.charged, 4, "the failed request is charged in full");
         assert!(o.failed);
         assert_eq!(accessor.deleted_paths(), lines[..2].to_vec());
         // The manifest is rewritten without the two paths that are gone.
@@ -1085,6 +1136,7 @@ mod unit {
         let sink = reported.clone();
         let deleter = SpillDeleter::with_report(
             OperatorBuilder::new(accessor.clone()).finish(),
+            Arc::default(),
             Some(Arc::new(move |n| sink.lock().push(n))),
         );
 
@@ -1112,6 +1164,7 @@ mod unit {
         );
         let deleter = Arc::new(SpillDeleter::new(
             OperatorBuilder::new(accessor.clone()).finish(),
+            Arc::default(),
         ));
 
         let outcome = vacuum_meta_entry(
@@ -1151,7 +1204,10 @@ mod unit {
         };
         let run = |accessor: Arc<MockVacuumAccessor>, max| {
             vacuum_meta_entry(
-                Arc::new(SpillDeleter::new(OperatorBuilder::new(accessor).finish())),
+                Arc::new(SpillDeleter::new(
+                    OperatorBuilder::new(accessor).finish(),
+                    Arc::default(),
+                )),
                 Arc::from("spill/"),
                 "spill/dir.list".to_string(),
                 max,
@@ -1217,6 +1273,7 @@ mod unit {
         accessor.throttle_next_batches(1);
         let deleter = Arc::new(SpillDeleter::new(
             OperatorBuilder::new(accessor.clone()).finish(),
+            Arc::default(),
         ));
 
         let outcome = vacuum_meta_entry(
@@ -1253,6 +1310,7 @@ mod unit {
         accessor.fail_next_batches(1, opendal::ErrorKind::Unexpected);
         let deleter = Arc::new(SpillDeleter::new(
             OperatorBuilder::new(accessor.clone()).finish(),
+            Arc::default(),
         ));
 
         let outcome = vacuum_meta_entry(
@@ -1283,7 +1341,10 @@ mod unit {
             HashMap::new(),
             HashMap::new(),
         );
-        let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
+        let deleter = SpillDeleter::new(
+            OperatorBuilder::new(accessor.clone()).finish(),
+            Arc::default(),
+        );
 
         let outcome = delete_by_probe(
             &deleter,
@@ -1315,7 +1376,10 @@ mod unit {
             HashMap::new(),
             HashMap::new(),
         );
-        let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
+        let deleter = SpillDeleter::new(
+            OperatorBuilder::new(accessor.clone()).finish(),
+            Arc::default(),
+        );
 
         // One unit of budget still makes progress.
         let by_list = delete_by_list(&deleter, "spill/dir/", 1, &scheduled()).await?;
@@ -1362,7 +1426,10 @@ mod unit {
             HashMap::new(),
             HashMap::new(),
         );
-        let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
+        let deleter = SpillDeleter::new(
+            OperatorBuilder::new(accessor.clone()).finish(),
+            Arc::default(),
+        );
 
         let outcome = delete_by_probe(
             &deleter,

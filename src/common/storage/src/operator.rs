@@ -16,7 +16,10 @@ use std::env;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
+use std::sync::Arc;
 use std::sync::LazyLock;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use anyhow::anyhow;
@@ -71,12 +74,26 @@ use crate::runtime_layer::RuntimeLayer;
 static METRIC_OPENDAL_RETRIES_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, String)>>> =
     LazyLock::new(|| register_counter_family("opendal_retries_count"));
 
-/// Process-wide count of opendal retries caused by `RateLimited`; sample around a request to
-/// detect throttling that the retry layer absorbed.
-pub fn opendal_rate_limited_retries() -> u64 {
-    METRIC_OPENDAL_RETRIES_COUNT
-        .get_or_create(&vec![("err", opendal::ErrorKind::RateLimited.to_string())])
-        .get()
+/// Retries the retry layer absorbed for one operator, for callers that need to tell throttling
+/// of their own requests apart from the node-wide `opendal_retries_count` metric.
+#[derive(Debug, Default)]
+pub struct RetryStats {
+    rate_limited: AtomicU64,
+}
+
+impl RetryStats {
+    /// Retries caused by `RateLimited` so far; sample around a request to detect throttling the
+    /// retry layer hid.
+    pub fn rate_limited(&self) -> u64 {
+        self.rate_limited.load(Ordering::Relaxed)
+    }
+}
+
+/// Build a fresh, uncached operator for `cfg` whose retries are counted in `stats`. The cached
+/// operators are shared by everything on the node that uses the same storage parameters, so
+/// this is the way to attribute retries to one activity.
+pub fn init_operator_observed(cfg: &StorageParams, stats: Arc<RetryStats>) -> Result<Operator> {
+    init_operator_uncached_with(cfg, EndpointPolicyScope::Trusted, Some(stats))
 }
 
 /// init_operator will init an opendal operator based on storage config.
@@ -102,68 +119,97 @@ pub(crate) fn init_operator_uncached(
     cfg: &StorageParams,
     endpoint_policy_scope: EndpointPolicyScope,
 ) -> Result<Operator> {
+    init_operator_uncached_with(cfg, endpoint_policy_scope, None)
+}
+
+fn init_operator_uncached_with(
+    cfg: &StorageParams,
+    endpoint_policy_scope: EndpointPolicyScope,
+    retry_stats: Option<Arc<RetryStats>>,
+) -> Result<Operator> {
     let op = match &cfg {
         StorageParams::Azblob(cfg) => build_operator(
             init_azblob_operator(cfg)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
+            retry_stats.clone(),
         )?,
-        StorageParams::Fs(cfg) => {
-            build_operator(init_fs_operator(cfg)?, None, endpoint_policy_scope)?
-        }
+        StorageParams::Fs(cfg) => build_operator(
+            init_fs_operator(cfg)?,
+            None,
+            endpoint_policy_scope,
+            retry_stats.clone(),
+        )?,
         StorageParams::Gcs(cfg) => build_operator(
             init_gcs_operator(cfg)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
+            retry_stats.clone(),
         )?,
         #[cfg(feature = "storage-hdfs")]
         StorageParams::Hdfs(cfg) => build_operator(
             init_hdfs_operator(cfg)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
+            retry_stats.clone(),
         )?,
         StorageParams::Http(cfg) => {
             let (builder, layer) = init_http_operator(cfg)?;
-            build_operator(builder, cfg.network_config.as_ref(), endpoint_policy_scope)?
-                .layer(layer)
+            build_operator(
+                builder,
+                cfg.network_config.as_ref(),
+                endpoint_policy_scope,
+                retry_stats.clone(),
+            )?
+            .layer(layer)
         }
         StorageParams::Ipfs(cfg) => build_operator(
             init_ipfs_operator(cfg)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
+            retry_stats.clone(),
         )?,
-        StorageParams::Memory => {
-            build_operator(init_memory_operator()?, None, endpoint_policy_scope)?
-        }
+        StorageParams::Memory => build_operator(
+            init_memory_operator()?,
+            None,
+            endpoint_policy_scope,
+            retry_stats.clone(),
+        )?,
         StorageParams::Obs(cfg) => build_operator(
             init_obs_operator(cfg)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
+            retry_stats.clone(),
         )?,
         StorageParams::S3(cfg) => build_operator(
             init_s3_operator(cfg)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
+            retry_stats.clone(),
         )?,
         StorageParams::Oss(cfg) => build_operator(
             init_oss_operator(cfg)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
+            retry_stats.clone(),
         )?,
         StorageParams::Webhdfs(cfg) => build_operator(
             init_webhdfs_operator(cfg)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
+            retry_stats.clone(),
         )?,
         StorageParams::Cos(cfg) => build_operator(
             init_cos_operator(cfg)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
+            retry_stats.clone(),
         )?,
         StorageParams::Huggingface(cfg) => build_operator(
             init_huggingface_operator(cfg)?,
             cfg.network_config.as_ref(),
             endpoint_policy_scope,
+            retry_stats.clone(),
         )?,
         v => {
             return Err(Error::new(
@@ -198,6 +244,7 @@ fn build_operator<B: Builder>(
     builder: B,
     cfg: Option<&StorageNetworkParams>,
     endpoint_policy_scope: EndpointPolicyScope,
+    retry_stats: Option<Arc<RetryStats>>,
 ) -> Result<Operator> {
     let ob = Operator::new(builder)?
         // Timeout layer is required to be the first layer so that internal
@@ -268,7 +315,7 @@ fn build_operator<B: Builder>(
         .layer(
             RetryLayer::new()
                 .with_jitter()
-                .with_notify(DatabendRetryInterceptor),
+                .with_notify(DatabendRetryInterceptor { retry_stats }),
         )
         // Add async backtrace
         .layer(AsyncBacktraceLayer)
@@ -598,12 +645,19 @@ fn init_huggingface_operator(cfg: &StorageHuggingfaceConfig) -> Result<impl Buil
     Ok(builder)
 }
 
-pub struct DatabendRetryInterceptor;
+pub struct DatabendRetryInterceptor {
+    retry_stats: Option<Arc<RetryStats>>,
+}
 
 impl RetryInterceptor for DatabendRetryInterceptor {
     fn intercept(&self, err: &opendal::Error, dur: Duration) {
         let labels = vec![("err", err.kind().to_string())];
         METRIC_OPENDAL_RETRIES_COUNT.get_or_create(&labels).inc();
+        if err.kind() == opendal::ErrorKind::RateLimited
+            && let Some(stats) = &self.retry_stats
+        {
+            stats.rate_limited.fetch_add(1, Ordering::Relaxed);
+        }
         warn!(
             target: "opendal::layers::retry",
             "will retry after {:.2}s because: {:?}",
@@ -622,6 +676,9 @@ pub struct DataOperator {
     spill_operator: Operator,
     params: StorageParams,
     spill_params: Option<StorageParams>,
+    /// What `spill_operator` was built from: `spill_params`, or `params` with the storage class
+    /// forced to Standard.
+    spill_storage_params: StorageParams,
 }
 
 impl DataOperator {
@@ -636,6 +693,13 @@ impl DataOperator {
 
     pub fn spill_params(&self) -> Option<&StorageParams> {
         self.spill_params.as_ref()
+    }
+
+    /// A fresh operator on the spill store whose retries are counted in `stats`, for activities
+    /// that must detect throttling of their own requests. Not cached: build one per activity,
+    /// not per request.
+    pub fn observed_spill_operator(&self, stats: Arc<RetryStats>) -> Result<Operator> {
+        init_operator_observed(&self.spill_storage_params, stats)
     }
 
     pub fn params(&self) -> StorageParams {
@@ -677,6 +741,7 @@ impl DataOperator {
             params: data_params,
             spill_operator,
             spill_params,
+            spill_storage_params: params,
         })
     }
 
