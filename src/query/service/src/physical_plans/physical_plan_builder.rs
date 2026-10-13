@@ -25,8 +25,9 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::MetadataRef;
+use databend_common_sql::optimizer::ir::PExpr;
+use databend_common_sql::optimizer::ir::PlannedQuery;
 use databend_common_sql::optimizer::ir::RelExpr;
-use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::RelOperator;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -68,8 +69,8 @@ impl PhysicalPlanBuilder {
         }
     }
 
-    pub fn build_plan_stat_info(&self, s_expr: &SExpr) -> Result<PlanStatsInfo> {
-        let rel_expr = RelExpr::with_s_expr(s_expr);
+    pub fn build_plan_stat_info(&self, s_expr: &PExpr) -> Result<PlanStatsInfo> {
+        let rel_expr = RelExpr::with_p_expr(s_expr);
         let stat_context = StatContext::new(self.func_ctx.clone());
         let stat_info = rel_expr.derive_cardinality(&stat_context)?;
 
@@ -78,7 +79,16 @@ impl PhysicalPlanBuilder {
         })
     }
 
-    pub async fn build(&mut self, s_expr: &SExpr, required: ColumnSet) -> Result<PhysicalPlan> {
+    /// Build a planned query; recursive operator builders consume its physical expression.
+    pub async fn build_query(
+        &mut self,
+        query: &PlannedQuery,
+        required: ColumnSet,
+    ) -> Result<PhysicalPlan> {
+        self.build(query.expr(), required).await
+    }
+
+    pub async fn build(&mut self, s_expr: &PExpr, required: ColumnSet) -> Result<PhysicalPlan> {
         let is_root_build = self.build_depth == 0;
         if is_root_build {
             self.ctx.clear_pruned_partitions_stats();
@@ -121,7 +131,7 @@ impl PhysicalPlanBuilder {
     #[async_recursion::async_recursion(#[recursive::recursive])]
     pub async fn build_physical_plan(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         required: ColumnSet,
     ) -> Result<PhysicalPlan> {
         // Build stat info.
@@ -209,7 +219,7 @@ impl PhysicalPlanBuilder {
 
     pub(crate) fn derive_children_required_columns(
         &self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         parent_required: &ColumnSet,
     ) -> Result<Vec<ColumnSet>> {
         let arity = s_expr.arity();
@@ -406,14 +416,14 @@ impl PhysicalPlanBuilder {
     }
 
     #[recursive::recursive]
-    fn requires_cte_column_collection(s_expr: &SExpr) -> bool {
+    fn requires_cte_column_collection(s_expr: &PExpr) -> bool {
         matches!(
             s_expr.plan(),
             RelOperator::Sequence(_) | RelOperator::MaterializedCTERef(_)
         ) || s_expr.children().any(Self::requires_cte_column_collection)
     }
 
-    fn collect_cte_required_columns(&mut self, s_expr: &SExpr, required: ColumnSet) -> Result<()> {
+    fn collect_cte_required_columns(&mut self, s_expr: &PExpr, required: ColumnSet) -> Result<()> {
         match s_expr.plan() {
             RelOperator::MaterializedCTERef(cte_ref) => {
                 let mut required_mapped = ColumnSet::new();
@@ -478,7 +488,7 @@ pub struct MutationBuildInfo {
 mod tests {
     use std::collections::HashMap;
 
-    use databend_common_sql::optimizer::ir::SExpr;
+    use databend_common_sql::optimizer::ir::PExpr;
     use databend_common_sql::plans::DummyTableScan;
     use databend_common_sql::plans::Limit;
     use databend_common_sql::plans::MaterializedCTERef;
@@ -488,28 +498,28 @@ mod tests {
 
     #[test]
     fn test_requires_cte_column_collection() {
-        let leaf = SExpr::create_leaf(DummyTableScan::new());
+        let leaf = PExpr::create_leaf(DummyTableScan::new());
         let limit = Limit {
             before_exchange: false,
             limit: Some(1),
             offset: 0,
             lazy_columns: Default::default(),
         };
-        let ordinary_plan = SExpr::create_unary(limit.clone(), leaf.clone());
+        let ordinary_plan = PExpr::create_unary(limit.clone(), leaf.clone());
         assert!(!PhysicalPlanBuilder::requires_cte_column_collection(
             &ordinary_plan
         ));
 
-        let sequence = SExpr::create_binary(Sequence, leaf.clone(), leaf.clone());
-        let nested_sequence = SExpr::create_unary(limit, sequence);
+        let sequence = PExpr::create_binary(Sequence, leaf.clone(), leaf.clone());
+        let nested_sequence = PExpr::create_unary(limit, sequence);
         assert!(PhysicalPlanBuilder::requires_cte_column_collection(
             &nested_sequence
         ));
 
-        let cte_ref = SExpr::create_leaf(MaterializedCTERef {
+        let cte_ref = PExpr::create_leaf(MaterializedCTERef {
             cte_name: "cte".to_string(),
             output_columns: vec![],
-            def: leaf,
+            def: databend_common_sql::optimizer::ir::SExpr::create_leaf(DummyTableScan::new()),
             column_mapping: HashMap::new(),
             stat_info: None,
         });

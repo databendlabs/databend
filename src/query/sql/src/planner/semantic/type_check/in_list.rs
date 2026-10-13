@@ -78,7 +78,7 @@ where A: super::TypeCheckAdapter
         list: &CoreExprArgs,
         not: bool,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let inlist_to_join_threshold = self.adapter.settings().get_inlist_to_join_threshold()?;
+        let inlist_to_join_threshold = self.adapter.inlist_to_join_threshold()?;
         if list.len() >= inlist_to_join_threshold {
             let deref!((expr_scalar, expr_ty)) = self.resolve_core(arena, expr)?;
             let deref!((subquery, data_type)) =
@@ -91,7 +91,7 @@ where A: super::TypeCheckAdapter
         }
 
         let deref!((expr_scalar, _)) = self.resolve_core(arena, expr)?;
-        let max_inlist_to_or = self.adapter.settings().get_max_inlist_to_or()? as usize;
+        let max_inlist_to_or = self.adapter.max_inlist_to_or()? as usize;
 
         if list.len() > max_inlist_to_or
             && list

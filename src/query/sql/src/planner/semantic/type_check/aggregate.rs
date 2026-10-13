@@ -480,7 +480,7 @@ where A: TypeCheckAdapter
         };
         if !base_func_name.eq_ignore_ascii_case("sum")
             || arguments.len() != expected_args_len
-            || !self.adapter.settings().get_enable_decimal_sum_widening()?
+            || !self.adapter.enable_decimal_sum_widening()?
         {
             return Ok(());
         }

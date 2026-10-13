@@ -19,6 +19,7 @@
 
 mod chunk_grid;
 mod chunked;
+mod merge;
 mod operator;
 
 use std::ops::Range;
@@ -28,6 +29,7 @@ use opendal::Buffer;
 
 pub use self::chunk_grid::ChunkGrid;
 pub use self::chunked::ChunkedRangeReader;
+pub use self::merge::MergeRangeReader;
 pub use self::operator::OperatorRangeReader;
 
 /// One link in the ranged-read chain.
@@ -45,6 +47,20 @@ pub trait RangeReader: Send {
 
     /// Read a range, fetching it on demand when no hint was accepted.
     fn read(&mut self, range: Range<u64>) -> Result<Buffer>;
+}
+
+impl<R: RangeReader + ?Sized> RangeReader for Box<R> {
+    fn prefetch(&mut self, ranges: &[Range<u64>]) -> bool {
+        (**self).prefetch(ranges)
+    }
+
+    fn discard(&mut self, range: Range<u64>) {
+        (**self).discard(range);
+    }
+
+    fn read(&mut self, range: Range<u64>) -> Result<Buffer> {
+        (**self).read(range)
+    }
 }
 
 #[cfg(test)]

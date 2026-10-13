@@ -1,0 +1,100 @@
+# Each INSERT creates a separate MEMORY block. Reusing the aggregation hash
+# buffer must not split identical keys when the first key has a singleton type.
+statement ok
+SET max_threads = 1
+
+statement ok
+SET force_aggregate_data_spill = 0
+
+statement ok
+CREATE TABLE singleton_keys_src (id INT NOT NULL) ENGINE = MEMORY
+
+statement ok
+INSERT INTO singleton_keys_src VALUES (1)
+
+statement ok
+INSERT INTO singleton_keys_src VALUES (2)
+
+query TI
+SELECT NULL AS k, CAST(7 AS INT) AS tag FROM singleton_keys_src GROUP BY NULL, CAST(7 AS INT)
+----
+NULL 7
+
+query TII
+SELECT NULL AS k, CAST(7 AS INT) AS tag, count(*) FROM singleton_keys_src GROUP BY NULL, CAST(7 AS INT)
+----
+NULL 7 2
+
+# EmptyArray and EmptyMap use the same singleton-key hashing path.
+query I
+SELECT count(*) FROM (SELECT [] AS k, CAST(7 AS INT) AS tag FROM singleton_keys_src GROUP BY [], CAST(7 AS INT))
+----
+1
+
+query I
+SELECT count(*) FROM (SELECT map([], []) AS k, CAST(7 AS INT) AS tag FROM singleton_keys_src GROUP BY map([], []), CAST(7 AS INT))
+----
+1
+
+# The join path produces a combined block; it must agree with the scan path.
+query TI
+SELECT NULL AS k, CAST(7 AS INT) AS tag
+FROM singleton_keys_src l JOIN singleton_keys_src r ON l.id = r.id
+GROUP BY NULL, CAST(7 AS INT)
+----
+NULL 7
+
+statement ok
+INSERT INTO singleton_keys_src VALUES (1), (2), (3)
+
+# Non-constant keys must remain distinct, while equal keys merge across blocks.
+query TII rowsort
+SELECT NULL AS k, id, count(*) FROM singleton_keys_src GROUP BY NULL, id
+----
+NULL 1 2
+NULL 2 2
+NULL 3 1
+
+# Trailing singleton keys and typed nullable constants remain supported.
+query ITI rowsort
+SELECT id, NULL AS k, count(*) FROM singleton_keys_src GROUP BY id, NULL
+----
+1 NULL 2
+2 NULL 2
+3 NULL 1
+
+query III rowsort
+SELECT NULL::INT AS k, id, count(*) FROM singleton_keys_src GROUP BY NULL::INT, id
+----
+NULL 1 2
+NULL 2 2
+NULL 3 1
+
+statement ok
+SET max_threads = 4
+
+query TII rowsort
+SELECT NULL AS k, id, count(*) FROM singleton_keys_src GROUP BY NULL, id
+----
+NULL 1 2
+NULL 2 2
+NULL 3 1
+
+statement ok
+SET force_aggregate_data_spill = 1
+
+query TII rowsort
+SELECT NULL AS k, id, count(*) FROM singleton_keys_src GROUP BY NULL, id
+----
+NULL 1 2
+NULL 2 2
+NULL 3 1
+
+statement ok
+DROP TABLE singleton_keys_src
+
+statement ok
+UNSET force_aggregate_data_spill
+
+statement ok
+UNSET max_threads

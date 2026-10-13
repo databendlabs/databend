@@ -126,10 +126,12 @@ use fastrace::func_name;
 use log::debug;
 use log::error;
 use log::info;
+use log::warn;
 use seq_marked::SeqValue;
 
 use super::database_api::DatabaseApi;
 use super::database_util::get_db_or_err;
+use super::garbage_collection_api::HistoryTablesForGc;
 use super::garbage_collection_api::ORPHAN_POSTFIX;
 use super::garbage_collection_api::get_history_tables_for_gc;
 use super::schema_api::VersionedTable;
@@ -2099,7 +2101,10 @@ where
                 };
 
                 let capacity = the_limit - vacuum_tables.len();
-                let table_nivs = get_history_tables_for_gc(
+                let HistoryTablesForGc {
+                    tables: table_nivs,
+                    has_undecodable_table,
+                } = get_history_tables_for_gc(
                     self,
                     table_drop_time_range,
                     db_info.database_id.db_id,
@@ -2116,7 +2121,15 @@ where
                 let db_name_ident = db_info.name_ident.clone();
 
                 // A DB can be removed only when all its tables are removed.
-                if vacuum_db && capacity > table_nivs.len() {
+                // An undecodable table is skipped and not removed,
+                // thus the DB must be kept, otherwise the table can never be found.
+                if vacuum_db && has_undecodable_table {
+                    warn!(
+                        "get_drop_table_infos: keep dropped db {}({}) because it has undecodable tables",
+                        db_info.database_id.db_id,
+                        db_info.name_ident.display()
+                    );
+                } else if vacuum_db && capacity > table_nivs.len() {
                     vacuum_ids.push(DroppedId::Db {
                         db_id: db_info.database_id.db_id,
                         db_name: db_name.clone(),
@@ -2153,7 +2166,8 @@ where
             the_limit,
             false,
         )
-        .await?;
+        .await?
+        .tables;
 
         let mut drop_ids = vec![];
         let mut vacuum_tables = vec![];

@@ -1,0 +1,188 @@
+=== current_database_rejected ===
+description: current_database() must be rejected instead of folding to a literal.
+sql: current_database()
+status: error
+code: 1065
+message: `current_database()` depends on the session or query context and is not allowed in persisted or storage-level expressions
+
+=== database_alias_rejected ===
+description: Aliases of current_database() must be rejected with the canonical name.
+sql: database()
+status: error
+code: 1065
+message: `current_database()` depends on the session or query context and is not allowed in persisted or storage-level expressions
+
+=== nested_current_database_rejected ===
+description: A context function nested inside a deterministic expression must be rejected.
+sql: concat(to_string(number), current_database())
+status: error
+code: 1065
+message: `current_database()` depends on the session or query context and is not allowed in persisted or storage-level expressions
+
+=== current_catalog_rejected ===
+description: current_catalog() depends on the session.
+sql: current_catalog()
+status: error
+code: 1065
+message: `current_catalog()` depends on the session or query context and is not allowed in persisted or storage-level expressions
+
+=== version_rejected ===
+description: version() depends on the running server build.
+sql: version()
+status: error
+code: 1065
+message: `version()` depends on the session or query context and is not allowed in persisted or storage-level expressions
+
+=== connection_id_rejected ===
+description: connection_id() depends on the session.
+sql: connection_id()
+status: error
+code: 1065
+message: `connection_id()` depends on the session or query context and is not allowed in persisted or storage-level expressions
+
+=== client_session_id_rejected ===
+description: client_session_id() depends on the session.
+sql: client_session_id()
+status: error
+code: 1065
+message: `client_session_id()` depends on the session or query context and is not allowed in persisted or storage-level expressions
+
+=== current_user_rejected ===
+description: current_user() depends on the authenticated user.
+sql: current_user()
+status: error
+code: 1065
+message: `current_user()` depends on the session or query context and is not allowed in persisted or storage-level expressions
+
+=== current_role_rejected ===
+description: current_role() depends on the session role.
+sql: current_role()
+status: error
+code: 1065
+message: `current_role()` depends on the session or query context and is not allowed in persisted or storage-level expressions
+
+=== current_secondary_roles_rejected ===
+description: current_secondary_roles() depends on the session roles.
+sql: current_secondary_roles()
+status: error
+code: 1065
+message: `current_secondary_roles()` depends on the session or query context and is not allowed in persisted or storage-level expressions
+
+=== current_available_roles_rejected ===
+description: current_available_roles() depends on the session roles.
+sql: current_available_roles()
+status: error
+code: 1065
+message: `current_available_roles()` depends on the session or query context and is not allowed in persisted or storage-level expressions
+
+=== current_tenant_id_rejected ===
+description: current_tenant_id() depends on the session tenant.
+sql: current_tenant_id()
+status: error
+code: 1065
+message: `current_tenant_id()` depends on the session or query context and is not allowed in persisted or storage-level expressions
+
+=== is_role_in_session_rejected ===
+description: is_role_in_session() depends on the effective roles.
+sql: is_role_in_session('reader')
+status: error
+code: 1065
+message: `is_role_in_session()` depends on the session or query context and is not allowed in persisted or storage-level expressions
+
+=== timezone_rejected ===
+description: timezone() depends on the session settings.
+sql: timezone()
+status: error
+code: 1065
+message: `timezone()` depends on the session or query context and is not allowed in persisted or storage-level expressions
+
+=== last_query_id_rejected ===
+description: last_query_id() depends on the session query history.
+sql: last_query_id(-1)
+status: error
+code: 1065
+message: `last_query_id()` depends on the session or query context and is not allowed in persisted or storage-level expressions
+
+=== getvariable_rejected ===
+description: getvariable() depends on session variables.
+sql: getvariable('x')
+status: error
+code: 1065
+message: `getvariable()` depends on the session or query context and is not allowed in persisted or storage-level expressions
+
+=== session_variable_rejected ===
+description: $var lowers to getvariable() and must be rejected too.
+sql: number + $x
+status: error
+code: 1065
+message: `getvariable()` depends on the session or query context and is not allowed in persisted or storage-level expressions
+
+=== sql_udf_rejected ===
+description: The persisted-expression adapter has no UDF loading capability.
+sql: context_udf(text)
+status: error
+code: 1065
+message: UDFs are not allowed in persisted or storage-level expressions
+
+=== sequence_capability_unavailable ===
+description: The persisted adapter cannot resolve a sequence even if Full gains that capability.
+sql: nextval(seq)
+status: error
+code: 1065
+message: type check adapter does not provide sequence resolver
+
+=== dictionary_capability_unavailable ===
+description: The persisted adapter has no dictionary resolver.
+sql: dict_get(dict, 'field', number)
+status: error
+code: 1065
+message: type check adapter does not provide dictionary resolver
+
+=== stage_capability_unavailable ===
+description: The persisted adapter has no stage resolver.
+sql: read_file('@stage', 'file.txt')
+status: error
+code: 1065
+message: type check adapter does not provide stage resolver
+
+=== subquery_capability_unavailable ===
+description: The persisted adapter has no subquery planner.
+sql: (SELECT 1)
+status: error
+code: 1065
+message: type check adapter does not provide subquery planner
+
+=== array_sort_default_nulls_order_rejected ===
+description: array_sort() without NULLS FIRST/LAST reads the session null-order setting.
+sql: array_sort([3, 1, 2])
+status: error
+code: 1065
+message: `array_sort()` depends on the session or query context and is not allowed in persisted or storage-level expressions; specify NULLS FIRST or NULLS LAST explicitly
+
+=== array_sort_default_nulls_order_with_sort_order_rejected ===
+description: An explicit sort order alone still leaves the null order to the session.
+sql: array_sort([3, 1, 2], 'desc')
+status: error
+code: 1065
+message: `array_sort()` depends on the session or query context and is not allowed in persisted or storage-level expressions; specify NULLS FIRST or NULLS LAST explicitly
+
+=== array_sort_explicit_nulls_order_allowed ===
+description: array_sort() with an explicit null order does not read session context.
+sql: array_sort([3, 1, 2], 'desc', 'nulls last')
+status: ok
+scalar: [3, 2, 1]
+type: Array(UInt8)
+
+=== coalesce_allowed ===
+description: Pure special-function rewrites stay allowed.
+sql: coalesce(text, pattern)
+status: ok
+scalar: if(is_not_null(text (#1)), assume_not_null(text (#1)), is_not_null(pattern (#2)), assume_not_null(pattern (#2)), NULL)
+type: String NULL
+
+=== greatest_allowed ===
+description: Pure special-function rewrites stay allowed.
+sql: greatest(number, 1)
+status: ok
+scalar: if(array_contains(array(number (#0), 1), NULL), NULL, array_max(array(number (#0), 1)))
+type: Int64 NULL

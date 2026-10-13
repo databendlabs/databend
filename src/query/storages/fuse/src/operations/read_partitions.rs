@@ -82,6 +82,10 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::ROW_COUN
 use databend_storages_common_table_meta::meta::column_oriented_segment::meta_name;
 use databend_storages_common_table_meta::meta::column_oriented_segment::stat_name;
 use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::NGRAM_INDEX_OPT_BLOOM_SIZE;
+use databend_storages_common_table_meta::table::NGRAM_INDEX_OPT_FALSE_POSITIVE_RATE;
+use databend_storages_common_table_meta::table::NGRAM_INDEX_OPT_GRAM_SIZE;
+use databend_storages_common_table_meta::table::NGRAM_INDEX_OPT_HASH_ALGORITHM;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
@@ -686,32 +690,23 @@ impl FuseTable {
         }
 
         let push_down = pruner.push_down.clone();
-        // The static TopN pruner accumulates every surviving block meta
-        // behind a single-stream barrier before emitting a minimal cover.
-        // The runtime TopN boundary subsumes its value-statistics branch
-        // (skip it to keep the pipeline streaming), but not the
-        // inverted-index based limit prune. Plan-time (eager) pruning always
-        // keeps it: filters are only registered at pipeline build.
+        // Inverted-index based limit / TopN prune. It accumulates every
+        // surviving block meta behind a single-stream barrier, but only runs
+        // when the filter is fully answered by the inverted index, so the exact
+        // matched row counts are known. Value-statistics TopN pruning is left
+        // to the runtime TopN filter, which keeps the pipeline streaming.
         if push_down
             .as_ref()
             .filter(|p| {
-                let value_top_n = !p.order_by.is_empty()
-                    && p.limit.is_some()
-                    && p.filters.is_none()
-                    && p.secure_filters.is_none();
-                let index_limit =
-                    p.limit.is_some() && p.secure_filters.is_none() && p.filter_only_use_index();
-                (value_top_n && runtime_scan_filters.preferred_filter().is_none()) || index_limit
+                p.limit.is_some() && p.secure_filters.is_none() && p.filter_only_use_index()
             })
             .is_some()
         {
-            // if there are ordering + limit clause and no filter, use topn pruner
             let schema = pruner.table_schema.clone();
             let push_down = push_down.as_ref().unwrap();
             let limit = push_down.limit.unwrap();
             let sort = push_down.order_by.clone();
-            let filter_only_use_index = push_down.filter_only_use_index();
-            let topn_pruner = TopNPruner::create(schema, sort, limit, filter_only_use_index);
+            let topn_pruner = TopNPruner::create(schema, sort, limit);
             let pruning_ctx = pruner.pruning_ctx.clone();
             prune_pipeline.resize(1, false)?;
             prune_pipeline.add_transform(move |input, output| {
@@ -1015,19 +1010,19 @@ impl FuseTable {
                 continue;
             }
 
-            let gram_size = match index.options.get("gram_size") {
+            let gram_size = match index.options.get(NGRAM_INDEX_OPT_GRAM_SIZE) {
                 None => DEFAULT_GRAM_SIZE,
                 Some(s) => s.parse::<usize>()?,
             };
-            let bloom_size = match index.options.get("bloom_size") {
+            let bloom_size = match index.options.get(NGRAM_INDEX_OPT_BLOOM_SIZE) {
                 None => DEFAULT_BLOOM_SIZE,
                 Some(s) => s.parse::<u64>()?,
             };
-            let false_positive_rate = match index.options.get("false_positive_rate") {
+            let false_positive_rate = match index.options.get(NGRAM_INDEX_OPT_FALSE_POSITIVE_RATE) {
                 None => DEFAULT_NGRAM_FALSE_POSITIVE_RATE,
                 Some(s) => s.parse::<f64>()?,
             };
-            let hash_algorithm = match index.options.get("hash_algorithm") {
+            let hash_algorithm = match index.options.get(NGRAM_INDEX_OPT_HASH_ALGORITHM) {
                 None => NgramHashAlgorithm::City64V0,
                 Some(s) => NgramHashAlgorithm::parse(s)?,
             };

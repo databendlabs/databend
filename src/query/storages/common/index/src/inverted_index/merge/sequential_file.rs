@@ -145,7 +145,10 @@ impl SequentialFileHandle {
             .fetched_bytes
             .fetch_add(data.len() as u64, Ordering::Relaxed);
         window.start = range.start;
-        window.data = data;
+        // Backend buffers can retain much more than their visible slice (e.g.
+        // fs reserves 2 MiB even for tiny ranges). Detach persistent windows so
+        // fan-in residency tracks requested bytes rather than backend capacity.
+        window.data = Buffer::from(data.to_vec());
 
         let next = range.end..(range.end + self.window_size).min(self.len);
         if !next.is_empty() && window.reader.prefetch(&[self.physical(&next)]) {
@@ -229,6 +232,49 @@ mod tests {
             len as u64,
             window,
         )
+    }
+
+    #[test]
+    fn test_small_fs_windows_do_not_retain_backend_buffers() {
+        use databend_common_base::runtime::MemStat;
+        use databend_common_base::runtime::ThreadTracker;
+        use opendal::services::Fs;
+
+        init_test_runtime();
+        let root =
+            std::env::temp_dir().join(format!("recluster-index-window-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("object"), pattern(512)).unwrap();
+        let operator = Operator::new(Fs::default().root(root.to_str().unwrap()))
+            .unwrap()
+            .finish();
+        let memory = MemStat::create("small fs index windows".into());
+        let mut payload = ThreadTracker::new_tracking_payload();
+        payload.mem_stat = Some(memory.clone());
+        let guard = ThreadTracker::tracking(payload);
+        let handles = (0..24)
+            .map(|_| {
+                let handle = SequentialFileHandle::new(
+                    operator.clone(),
+                    "object".into(),
+                    PathBuf::from("seg.idx"),
+                    0,
+                    512,
+                    SEQUENTIAL_WINDOW_SIZE,
+                );
+                assert_eq!(handle.read_bytes(0..512).unwrap().as_slice(), pattern(512));
+                handle
+            })
+            .collect::<Vec<_>>();
+        guard.flush().unwrap();
+        assert!(
+            memory.get_memory_usage() < 16 * 1024 * 1024,
+            "tiny windows retain {} bytes",
+            memory.get_memory_usage()
+        );
+        drop(handles);
+        drop(guard);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

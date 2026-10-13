@@ -279,6 +279,7 @@ hashlink = "0.8"
 headers = "0.4.0"
 hex = "0.4.3"
 hickory-resolver = "0.25"
+hmac = "0.12.1"
 http = "1"
 humantime = "2.1.0"
 hyper = "1"
@@ -291,6 +292,8 @@ quote = "1.0"
 ## Arrow 58 compatible variant metadata support.
 iceberg = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "9e6116a67bd34790bb73da62beff6a8086d6d012", features = [
     "storage-all",
+    # Not in iceberg-rust's `storage-all`: without it every abfs[s]:// table fails to load.
+    "storage-azdls",
 ] }
 iceberg-catalog-glue = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "9e6116a67bd34790bb73da62beff6a8086d6d012" }
 iceberg-catalog-hms = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "9e6116a67bd34790bb73da62beff6a8086d6d012" }
@@ -532,12 +535,12 @@ result_large_err = "allow"
 map_entry = "allow"
 
 [profile.release]
-debug = 1
+debug = "line-tables-only"
 lto = "thin"
 overflow-checks = false
-opt-level = "s"         # defaults to be 3
+opt-level = "s"            # defaults to be 3
 incremental = false
-codegen-units = 1       ## better performance see below comment
+codegen-units = 1          ## better performance see below comment
 ## DONT'T DELETE THIS: If we want best performance, we should use this profile but it will take longer time to compile.
 ## Test SQL:
 ## select sum(number) from numbers_mt(10000000000); ~ 3x performance
@@ -549,9 +552,12 @@ overflow-checks = true
 incremental = false
 debug-assertions = true
 
-# [profile.release.package]
-# databend-query = { codegen-units = 4 }
-# databend-binaries = { codegen-units = 4 }
+# Service / entrypoint crates: no hot vectorized kernels live here (those stay at
+# codegen-units = 1 above). Single-unit codegen of databend-query (~19 min) and
+# the ThinLTO link of databend-binaries (~15 min) dominate release build time.
+[profile.release.package]
+databend-query = { codegen-units = 4 }
+databend-binaries = { codegen-units = 4 }
 
 [profile.dev]
 split-debuginfo = "unpacked"

@@ -12,12 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod inverted_index_user_dictionary;
 mod locations;
 pub mod read;
 mod segments;
 mod snapshots;
 mod write;
 
+pub use inverted_index_user_dictionary::InvertedIndexUserDictionary;
+pub use inverted_index_user_dictionary::MAX_INVERTED_INDEX_USER_DICTIONARY_SIZE;
+pub use inverted_index_user_dictionary::resolve_inverted_index_user_dictionary;
+pub use inverted_index_user_dictionary::resolve_inverted_index_user_dictionary_blocking;
 pub use locations::TableMetaLocationGenerator;
 pub use read::BlockReadContext;
 pub use read::BlockReadResult;
@@ -25,6 +30,12 @@ pub use read::BlockReader;
 pub use read::BloomBlockFilterReader;
 pub use read::CompactSegmentInfoReader;
 pub use read::DataItem;
+pub use read::FuseLowLevelBlockReadOptions;
+pub use read::FuseLowLevelBlockReader;
+pub use read::FuseLowLevelColumnBatchReader;
+pub use read::FuseLowLevelColumnReader;
+pub use read::FuseLowLevelDataReader;
+pub use read::FuseLowLevelFullRowReader;
 pub use read::InvertedIndexReader;
 pub use read::MetaReaders;
 pub use read::RowSelection;
@@ -60,6 +71,7 @@ pub use write::VirtualColumnBuilder;
 pub use write::VirtualColumnLayoutPlanner;
 pub use write::VirtualColumnLayoutPolicy;
 pub use write::WriteSettings;
+pub(crate) use write::block_index;
 pub use write::build_column_hlls;
 pub(crate) use write::build_virtual_segment_schema;
 pub(crate) use write::create_index_schema;

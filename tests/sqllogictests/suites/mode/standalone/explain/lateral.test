@@ -165,3 +165,338 @@ HashJoin
                 ├── push downs: [filters: [], limit: NONE]
                 ├── apply join filters: [#0]
                 └── estimated rows: 10.00
+
+statement ok
+create or replace table lateral_nullable_outer(id int, k int null)
+
+statement ok
+insert into lateral_nullable_outer values (1, 1), (2, NULL), (3, 5)
+
+statement ok
+create or replace table lateral_nullable_inner(k int null, v int)
+
+statement ok
+insert into lateral_nullable_inner values (1, 10), (NULL, 20), (NULL, 30)
+
+# The key reconnecting a lateral subquery on a nullable correlated column is NULL-safe, so it
+# doesn't produce a runtime filter.
+query T
+explain select o.id, t.v from lateral_nullable_outer o, lateral (select v from lateral_nullable_inner i where i.k = o.k) t
+----
+HashJoin
+├── output columns: [o.id (#0), i.v (#3)]
+├── join type: INNER
+├── build keys: [k (#2)]
+├── probe keys: [k (#1)]
+├── keys is null equal: [true]
+├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:k (#2), probe targets:[k (#1)@scan0], filter type:
+├── estimated rows: 0.60
+├── Filter(Build)
+│   ├── output columns: [i.k (#2), i.v (#3)]
+│   ├── filters: [is_true(outer.k (#2) = outer.k (#2))]
+│   ├── estimated rows: 0.60
+│   └── TableScan
+│       ├── table: default.default.lateral_nullable_inner
+│       ├── scan id: 1
+│       ├── output columns: [k (#2), v (#3)]
+│       ├── read rows: 3
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│       ├── push downs: [filters: [is_true(lateral_nullable_inner.k (#2) = lateral_nullable_inner.k (#2))], limit: NONE]
+│       └── estimated rows: 3.00
+└── TableScan(Probe)
+    ├── table: default.default.lateral_nullable_outer
+    ├── scan id: 0
+    ├── output columns: [id (#0), k (#1)]
+    ├── read rows: 3
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
+    └── estimated rows: 3.00
+
+# A scalar aggregate is LEFT joined back to keep outer rows without input. `count` never
+# returns NULL, so unmatched rows are recognized by its NULL value and no marker is added.
+query T
+explain select o.id, t.c from lateral_nullable_outer o, lateral (select count(*) + 1 c from lateral_nullable_inner i where i.k = o.k) t
+----
+EvalScalar
+├── output columns: [o.id (#0), c (#5)]
+├── expressions: [COUNT(*) (#4) + 1]
+├── estimated rows: 3.00
+└── EvalScalar
+    ├── output columns: [o.id (#0), COUNT(*) (#4)]
+    ├── expressions: [CAST(if(CAST(is_not_null(COUNT(*) (#6)) AS Boolean NULL), COUNT(*) (#6), 0) AS UInt64)]
+    ├── estimated rows: 3.00
+    └── HashJoin
+        ├── output columns: [o.id (#0), COUNT(*) (#6)]
+        ├── join type: LEFT OUTER
+        ├── build keys: [k (#2)]
+        ├── probe keys: [k (#1)]
+        ├── keys is null equal: [true]
+        ├── filters: []
+        ├── estimated rows: 3.00
+        ├── AggregateFinal(Build)
+        │   ├── output columns: [COUNT(*) (#6), i.k (#2)]
+        │   ├── group by: [k]
+        │   ├── aggregate functions: [count()]
+        │   ├── estimated rows: 0.60
+        │   └── AggregatePartial
+        │       ├── group by: [k]
+        │       ├── aggregate functions: [count()]
+        │       ├── estimated rows: 0.60
+        │       └── Filter
+        │           ├── output columns: [i.k (#2)]
+        │           ├── filters: [is_true(i.k (#2) = k (#2))]
+        │           ├── estimated rows: 0.60
+        │           └── TableScan
+        │               ├── table: default.default.lateral_nullable_inner
+        │               ├── scan id: 1
+        │               ├── output columns: [k (#2)]
+        │               ├── read rows: 3
+        │               ├── read size: < 1 KiB
+        │               ├── partitions total: 1
+        │               ├── partitions scanned: 1
+        │               ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+        │               ├── push downs: [filters: [is_true(lateral_nullable_inner.k (#2) = lateral_nullable_inner.k (#2))], limit: NONE]
+        │               └── estimated rows: 3.00
+        └── TableScan(Probe)
+            ├── table: default.default.lateral_nullable_outer
+            ├── scan id: 0
+            ├── output columns: [id (#0), k (#1)]
+            ├── read rows: 3
+            ├── read size: < 1 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 3.00
+
+# A correlated scalar aggregate nested in the aggregate input also loses its groups for
+# outer values without input, although it returns one row for them, so the outer
+# aggregate can't be filled with its empty-input value. Keep the generic plan.
+query T
+explain select o.id, t.n from lateral_nullable_outer o, lateral (select count(*) n from (select count(*) c from lateral_nullable_inner i where i.k = o.k) s) t
+----
+HashJoin
+├── output columns: [o.id (#0), COUNT(*) (#5)]
+├── join type: INNER
+├── build keys: [k (#2)]
+├── probe keys: [k (#1)]
+├── keys is null equal: [true]
+├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:k (#2), probe targets:[k (#1)@scan0], filter type:
+├── estimated rows: 0.60
+├── AggregateFinal(Build)
+│   ├── output columns: [COUNT(*) (#5), i.k (#2)]
+│   ├── group by: [k]
+│   ├── aggregate functions: [count()]
+│   ├── estimated rows: 0.60
+│   └── AggregatePartial
+│       ├── group by: [k]
+│       ├── aggregate functions: [count()]
+│       ├── estimated rows: 0.60
+│       └── AggregateFinal
+│           ├── output columns: [i.k (#2)]
+│           ├── group by: [k]
+│           ├── aggregate functions: []
+│           ├── estimated rows: 0.60
+│           └── AggregatePartial
+│               ├── group by: [k]
+│               ├── aggregate functions: []
+│               ├── estimated rows: 0.60
+│               └── Filter
+│                   ├── output columns: [i.k (#2)]
+│                   ├── filters: [is_true(i.k (#2) = k (#2))]
+│                   ├── estimated rows: 0.60
+│                   └── TableScan
+│                       ├── table: default.default.lateral_nullable_inner
+│                       ├── scan id: 1
+│                       ├── output columns: [k (#2)]
+│                       ├── read rows: 3
+│                       ├── read size: < 1 KiB
+│                       ├── partitions total: 1
+│                       ├── partitions scanned: 1
+│                       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│                       ├── push downs: [filters: [is_true(lateral_nullable_inner.k (#2) = lateral_nullable_inner.k (#2))], limit: NONE]
+│                       └── estimated rows: 3.00
+└── TableScan(Probe)
+    ├── table: default.default.lateral_nullable_outer
+    ├── scan id: 0
+    ├── output columns: [id (#0), k (#1)]
+    ├── read rows: 3
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
+    └── estimated rows: 3.00
+
+# LEFT JOIN LATERAL with HAVING and an ON condition: HAVING and ON are evaluated into
+# lateral_matched flags instead of filters, and the right side column is replaced by a column
+# that is NULL when the flag is false, so the outer row is kept.
+query T
+explain select o.id, t.c from lateral_nullable_outer o left join lateral (select count(*) c from lateral_nullable_inner i where i.k = o.k having count(*) < 2) t on t.c = 0
+----
+EvalScalar
+├── output columns: [o.id (#0), c (#9)]
+├── expressions: [if(CAST(lateral_matched (#8) AS Boolean NULL), t.c (#5), NULL)]
+├── estimated rows: 3.00
+└── EvalScalar
+    ├── output columns: [o.id (#0), c (#5), lateral_matched (#8)]
+    ├── expressions: [if(CAST(lateral_matched (#7) AS Boolean NULL), is_true(t.c (#5) = 0), false)]
+    ├── estimated rows: 3.00
+    └── EvalScalar
+        ├── output columns: [o.id (#0), lateral_matched (#7), c (#5)]
+        ├── expressions: [if(CAST(lateral_matched (#7) AS Boolean NULL), CAST(t.c (#4) AS UInt64 NULL), NULL)]
+        ├── estimated rows: 3.00
+        └── EvalScalar
+            ├── output columns: [o.id (#0), COUNT(*) (#4), lateral_matched (#7)]
+            ├── expressions: [is_true(COUNT(*) (#4) < 2)]
+            ├── estimated rows: 3.00
+            └── EvalScalar
+                ├── output columns: [o.id (#0), COUNT(*) (#4)]
+                ├── expressions: [CAST(if(CAST(is_not_null(COUNT(*) (#6)) AS Boolean NULL), COUNT(*) (#6), 0) AS UInt64)]
+                ├── estimated rows: 3.00
+                └── HashJoin
+                    ├── output columns: [o.id (#0), COUNT(*) (#6)]
+                    ├── join type: LEFT OUTER
+                    ├── build keys: [k (#2)]
+                    ├── probe keys: [k (#1)]
+                    ├── keys is null equal: [true]
+                    ├── filters: []
+                    ├── estimated rows: 3.00
+                    ├── AggregateFinal(Build)
+                    │   ├── output columns: [COUNT(*) (#6), i.k (#2)]
+                    │   ├── group by: [k]
+                    │   ├── aggregate functions: [count()]
+                    │   ├── estimated rows: 0.60
+                    │   └── AggregatePartial
+                    │       ├── group by: [k]
+                    │       ├── aggregate functions: [count()]
+                    │       ├── estimated rows: 0.60
+                    │       └── Filter
+                    │           ├── output columns: [i.k (#2)]
+                    │           ├── filters: [is_true(i.k (#2) = k (#2))]
+                    │           ├── estimated rows: 0.60
+                    │           └── TableScan
+                    │               ├── table: default.default.lateral_nullable_inner
+                    │               ├── scan id: 1
+                    │               ├── output columns: [k (#2)]
+                    │               ├── read rows: 3
+                    │               ├── read size: < 1 KiB
+                    │               ├── partitions total: 1
+                    │               ├── partitions scanned: 1
+                    │               ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                    │               ├── push downs: [filters: [is_true(lateral_nullable_inner.k (#2) = lateral_nullable_inner.k (#2))], limit: NONE]
+                    │               └── estimated rows: 3.00
+                    └── TableScan(Probe)
+                        ├── table: default.default.lateral_nullable_outer
+                        ├── scan id: 0
+                        ├── output columns: [id (#0), k (#1)]
+                        ├── read rows: 3
+                        ├── read size: < 1 KiB
+                        ├── partitions total: 1
+                        ├── partitions scanned: 1
+                        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                        ├── push downs: [filters: [], limit: NONE]
+                        └── estimated rows: 3.00
+
+# A window function above the scalar aggregate isn't evaluated row by row, so the rewrite
+# doesn't apply and the generic plan is kept: an INNER join without a fill projection.
+query T
+explain select o.id, t.c from lateral_nullable_outer o, lateral (select count(*) c, row_number() over () r from lateral_nullable_inner i where i.k = o.k) t
+----
+HashJoin
+├── output columns: [o.id (#0), COUNT(*) (#4)]
+├── join type: INNER
+├── build keys: [k (#7)]
+├── probe keys: [k (#1)]
+├── keys is null equal: [true]
+├── filters: []
+├── build join filters:
+│   └── filter id:1, build key:k (#7), probe targets:[k (#1)@scan0], filter type:
+├── estimated rows: 3.00
+├── Window(Build)
+│   ├── output columns: [COUNT(*) (#4), k (#7), row_number() OVER () (#5)]
+│   ├── aggregate function: [row_number]
+│   ├── partition by: [k]
+│   ├── order by: []
+│   ├── frame: [Range: Preceding(None) ~ Following(None)]
+│   └── AggregateFinal
+│       ├── output columns: [COUNT(*) (#4), k (#7)]
+│       ├── group by: [k]
+│       ├── aggregate functions: [count()]
+│       ├── estimated rows: 1.00
+│       └── AggregatePartial
+│           ├── group by: [k]
+│           ├── aggregate functions: [count()]
+│           ├── estimated rows: 1.00
+│           └── HashJoin
+│               ├── output columns: [k (#7)]
+│               ├── join type: INNER
+│               ├── build keys: [k (#7)]
+│               ├── probe keys: [i.k (#2)]
+│               ├── keys is null equal: [false]
+│               ├── filters: []
+│               ├── build join filters:
+│               │   └── filter id:0, build key:k (#7), probe targets:[i.k (#2)@scan1], filter type:bloom,inlist,min_max
+│               ├── estimated rows: 1.00
+│               ├── AggregateFinal(Build)
+│               │   ├── output columns: [k (#7)]
+│               │   ├── group by: [k]
+│               │   ├── aggregate functions: []
+│               │   ├── estimated rows: 1.00
+│               │   └── AggregatePartial
+│               │       ├── group by: [k]
+│               │       ├── aggregate functions: []
+│               │       ├── estimated rows: 1.00
+│               │       └── TableScan
+│               │           ├── table: default.default.lateral_nullable_outer
+│               │           ├── scan id: 2
+│               │           ├── output columns: [k (#7)]
+│               │           ├── read rows: 3
+│               │           ├── read size: < 1 KiB
+│               │           ├── partitions total: 1
+│               │           ├── partitions scanned: 1
+│               │           ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│               │           ├── push downs: [filters: [], limit: NONE]
+│               │           └── estimated rows: 3.00
+│               └── TableScan(Probe)
+│                   ├── table: default.default.lateral_nullable_inner
+│                   ├── scan id: 1
+│                   ├── output columns: [k (#2)]
+│                   ├── read rows: 3
+│                   ├── read size: < 1 KiB
+│                   ├── partitions total: 1
+│                   ├── partitions scanned: 1
+│                   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│                   ├── push downs: [filters: [], limit: NONE]
+│                   ├── apply join filters: [#0]
+│                   └── estimated rows: 3.00
+└── TableScan(Probe)
+    ├── table: default.default.lateral_nullable_outer
+    ├── scan id: 0
+    ├── output columns: [id (#0), k (#1)]
+    ├── read rows: 3
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#1]
+    └── estimated rows: 3.00
+
+statement ok
+drop table lateral_nullable_outer
+
+statement ok
+drop table lateral_nullable_inner

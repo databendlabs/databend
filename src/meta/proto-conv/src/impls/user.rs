@@ -380,15 +380,16 @@ impl FromToProto for mt::principal::UserGrantSet {
 
         let mut entries = Vec::new();
         for entry in p.entries.into_iter() {
-            // If we add new GrantObject in new version
-            // Rollback to old version, GrantEntry.object will be None
-            // GrantEntry::from_pb will return err so user can not login in old version.
-            // Silently dropping unrecognized grant entries and logging the error is
-            // intentional: the node must still start and serve other users even when
-            // some grant entries are unrecognizable (e.g. during a version rollback).
+            // If we add a new GrantObject in a newer version, after rollback its protobuf
+            // oneof variant is unknown and GrantEntry.object will be None.
+            // GrantEntry::from_pb will return an error. Dropping only that entry and logging
+            // a warning is intentional: the principal remains usable, while all other grants
+            // and role memberships are preserved.
             match mt::principal::GrantEntry::from_pb(entry) {
                 Ok(entry) => entries.push(entry),
-                Err(e) => log::error!("GrantEntry::from_pb with error : {e}"),
+                Err(error) => log::warn!(
+                    "Skipped one incompatible grant entry while decoding grants for a user or role: {error}. Impact: only this grant entry is ignored; all other grants and role memberships are preserved, and this incompatibility does not by itself block login"
+                ),
             }
         }
         let mut roles = HashSet::new();

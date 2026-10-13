@@ -81,7 +81,9 @@ fn combine_group_hash_const<const IS_FIRST: bool>(
     values: &mut [u64],
 ) {
     match data_type {
-        DataType::Null | DataType::EmptyArray | DataType::EmptyMap => {}
+        DataType::Null | DataType::EmptyArray | DataType::EmptyMap => {
+            apply_const_hash::<IS_FIRST>(values, NULL_HASH_VAL);
+        }
         DataType::Nullable(inner) => {
             if scalar.is_null() {
                 apply_const_hash::<IS_FIRST>(values, NULL_HASH_VAL);
@@ -263,7 +265,9 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
 
     fn visit_column(&mut self, column: Column) -> Result<()> {
         match column {
-            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => (),
+            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
+                apply_const_hash::<IS_FIRST>(self.values, NULL_HASH_VAL);
+            }
             _ => {
                 Self::default_visit_column(column, self)?;
             }
@@ -341,8 +345,7 @@ where I: Index
 {
     fn visit_scalar(&mut self, scalar: Scalar) -> Result<()> {
         let hash = match scalar {
-            Scalar::EmptyArray | Scalar::EmptyMap => return Ok(()),
-            Scalar::Null => NULL_HASH_VAL,
+            Scalar::Null | Scalar::EmptyArray | Scalar::EmptyMap => NULL_HASH_VAL,
             Scalar::Number(v) => with_number_type!(|NUM_TYPE| match v {
                 NumberScalar::NUM_TYPE(v) => v.agg_hash(),
             }),
@@ -366,15 +369,15 @@ where I: Index
     }
 
     fn visit_null(&mut self, _len: usize) -> Result<()> {
-        Ok(())
+        self.visit_indices(|_| NULL_HASH_VAL)
     }
 
     fn visit_empty_array(&mut self, _len: usize) -> Result<()> {
-        Ok(())
+        self.visit_indices(|_| NULL_HASH_VAL)
     }
 
     fn visit_empty_map(&mut self, _len: usize) -> Result<()> {
-        Ok(())
+        self.visit_indices(|_| NULL_HASH_VAL)
     }
 
     fn visit_any_number(&mut self, column: crate::types::NumberColumn) -> Result<()> {
@@ -690,6 +693,60 @@ mod tests {
             );
             assert_eq!(const_hashes, col_hashes);
         }
+    }
+
+    #[test]
+    fn test_singleton_group_hash_ignores_previous_hashes() {
+        let num_rows = 3;
+        let block = sample_block(num_rows);
+        let full_block = block.convert_to_full();
+
+        // Null, EmptyArray and EmptyMap have only one possible value. Each must
+        // initialize the first key even when the hash buffer is reused.
+        for singleton in 0..3 {
+            for projection in [vec![singleton], vec![singleton, 6], vec![6, singleton]] {
+                let mut expected = vec![0; num_rows];
+                group_hash_entries(ProjectedBlock::project(&projection, &block), &mut expected);
+
+                for input in [&block, &full_block] {
+                    let entries = ProjectedBlock::project(&projection, input);
+                    let mut hashes = vec![u64::MAX; num_rows];
+                    group_hash_entries(entries, &mut hashes);
+                    assert_eq!(hashes, expected, "projection: {projection:?}");
+                    group_hash_entries(entries, &mut hashes);
+                    assert_eq!(hashes, expected, "reused buffer: {projection:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_singleton_group_hash_value_spread_matches_entries() -> Result<()> {
+        let num_rows = 3;
+        let block = sample_block(num_rows);
+        let full_block = block.convert_to_full();
+        let indices = [0_u32, 2];
+
+        for singleton in 0..3 {
+            for projection in [vec![singleton], vec![singleton, 6], vec![6, singleton]] {
+                let mut expected = vec![0; num_rows];
+                group_hash_entries(ProjectedBlock::project(&projection, &block), &mut expected);
+
+                for input in [&block, &full_block] {
+                    let mut hashes = vec![u64::MAX; num_rows];
+                    for (i, entry) in ProjectedBlock::project(&projection, input)
+                        .iter()
+                        .enumerate()
+                    {
+                        group_hash_value_spread(&indices, entry.value(), i == 0, &mut hashes)?;
+                    }
+                    assert_eq!(hashes[0], expected[0], "projection: {projection:?}");
+                    assert_eq!(hashes[1], u64::MAX, "unselected row must be unchanged");
+                    assert_eq!(hashes[2], expected[2], "projection: {projection:?}");
+                }
+            }
+        }
+        Ok(())
     }
 
     #[test]

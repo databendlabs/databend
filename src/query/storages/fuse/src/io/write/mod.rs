@@ -16,6 +16,7 @@ pub(crate) mod block_index;
 mod block_statistics_writer;
 mod block_writer;
 mod bloom_index_writer;
+mod inverted_index_merge;
 mod inverted_index_writer;
 mod json_path_statistics_builder;
 mod meta_writer;

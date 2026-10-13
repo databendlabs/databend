@@ -1470,9 +1470,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     let vacuum_all = value(Statement::VacuumAll(VacuumAllStmt), rule! { VACUUM ~ ALL });
     let vacuum_drop_table = map(
         rule! {
-            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#ident)?
+            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#ident)? ~ (LIMIT ~ #literal_u64)?
         },
-        |(_, _, _, database_option)| {
+        // `LIMIT` is accepted for compatibility with clients that still send the
+        // legacy `VACUUM DROP TABLE [FROM db] LIMIT n` syntax; the value is ignored.
+        |(_, _, _, database_option, _limit)| {
             Statement::VacuumDropTable(VacuumDropTableStmt {
                 database: database_option.map(|(_, database)| database),
             })
@@ -5258,6 +5260,13 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, _, partition_by, _)| AlterTableAction::AlterTablePartitionBy { partition_by },
     );
 
+    let drop_table_partition_key = map(
+        rule! {
+            DROP ~ PARTITION ~ KEY
+        },
+        |(_, _, _)| AlterTableAction::DropTablePartitionKey,
+    );
+
     let drop_table_cluster_key = map(
         rule! {
             DROP ~ CLUSTER ~ KEY
@@ -5374,6 +5383,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
             | #drop_table_branch
             | #drop_table_tag
             | #alter_table_partition_by
+            | #drop_table_partition_key
             | #alter_table_cluster_key
             | #drop_table_cluster_key
             | #drop_constraint

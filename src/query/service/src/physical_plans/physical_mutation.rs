@@ -60,7 +60,7 @@ use databend_common_sql::binder::MutationType;
 use databend_common_sql::binder::wrap_cast;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::parse_computed_field_index_expr;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::ConstantExpr;
@@ -271,7 +271,7 @@ fn add_matched_mutation_workers(
 impl PhysicalPlanBuilder {
     pub async fn build_mutation(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         mutation: &databend_common_sql::plans::Mutation,
         mut required: ColumnSet,
     ) -> Result<PhysicalPlan> {
