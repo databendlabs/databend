@@ -680,7 +680,7 @@ mod unit {
     }
 
     /// When the store lists `x/` before `x.list`, the directory task claims the manifest and
-    /// the top-level listing skips it, so an empty or unparseable manifest must be finished by
+    /// the top-level listing skips it, so an empty or unparsable manifest must be finished by
     /// the directory task itself, or an unlimited run would leave it behind.
     #[tokio::test(flavor = "multi_thread")]
     async fn test_directory_task_drops_the_empty_manifest_it_claimed() -> anyhow::Result<()> {
