@@ -477,7 +477,11 @@ mod unit {
             ]),
             HashMap::from([(
                 "spill/dir.list".to_string(),
-                ReadResult::Buffer(Buffer::from("spill/dir/file1\nspill/dir/file2")),
+                // A complete manifest, as written by `unload_spill_meta`: files, then itself,
+                // then the directory.
+                ReadResult::Buffer(Buffer::from(
+                    "spill/dir/file1\nspill/dir/file2\nspill/dir.list\nspill/dir/",
+                )),
             )]),
         );
         let operator = OperatorBuilder::new(accessor.clone()).finish();
@@ -491,10 +495,12 @@ mod unit {
         )
         .await?;
 
-        assert_eq!(outcome.delete.map(|d| d.removed), Some(2));
+        assert_eq!(outcome.delete.map(|d| d.removed), Some(4));
         assert_eq!(accessor.deleted_paths(), vec![
             "spill/dir/file1".to_string(),
-            "spill/dir/file2".to_string()
+            "spill/dir/file2".to_string(),
+            "spill/dir.list".to_string(),
+            "spill/dir/".to_string(),
         ]);
         assert_eq!(accessor.list_call_count(), 0);
         assert_eq!(accessor.read_call_count(), 1);
@@ -597,8 +603,49 @@ mod unit {
 
         // No LIMIT: every path goes, but never more than META_BATCH_FILES per batch.
         let outcome = delete_by_meta(&deleter, "spill/", "spill/dir.list", usize::MAX).await?;
-        assert_eq!(outcome.map(|o| o.removed), Some(2500));
+        assert!(matches!(outcome, MetaVacuum::Exhausted(o) if o.removed == 2500));
         assert_eq!(accessor.deleted_paths(), paths);
+        Ok(())
+    }
+
+    /// A manifest truncated after some valid paths but before the lines naming itself and the
+    /// directory: the listed files go, then the directory is finished by listing and the
+    /// manifest is dropped, so nothing is stranded behind the claim on it.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_truncated_manifest_finishes_directory_by_listing() -> anyhow::Result<()> {
+        let old_ts = (Utc::now() - ChronoDuration::hours(2)).timestamp_millis();
+        let accessor = MockVacuumAccessor::new(
+            HashMap::from([("spill/dir/".to_string(), vec![
+                ("spill/dir/file1".to_string(), file_meta(Some(old_ts))),
+                ("spill/dir/file2".to_string(), file_meta(Some(old_ts))),
+            ])]),
+            HashMap::new(),
+            HashMap::from([(
+                "spill/dir.list".to_string(),
+                ReadResult::Buffer(Buffer::from("spill/dir/file1")),
+            )]),
+        );
+        let deleter = Arc::new(SpillDeleter::new(
+            OperatorBuilder::new(accessor.clone()).finish(),
+        ));
+
+        let outcome = vacuum_meta_entry(
+            deleter,
+            Arc::from("spill/"),
+            "spill/dir.list".to_string(),
+            100,
+        )
+        .await?;
+
+        // The mock listing is static, so file1 shows up again in the listing pass.
+        assert_eq!(outcome.delete.map(|d| d.removed), Some(5));
+        assert_eq!(accessor.deleted_paths(), vec![
+            "spill/dir/file1".to_string(),
+            "spill/dir/file1".to_string(),
+            "spill/dir/file2".to_string(),
+            "spill/dir/".to_string(),
+            "spill/dir.list".to_string(),
+        ]);
         Ok(())
     }
 

@@ -523,24 +523,58 @@ async fn vacuum_meta_entry(
             delete: None,
         });
     }
-    if let Some(delete) = delete_by_meta(&deleter, &temporary_dir, &meta_path, max).await? {
-        return Ok(DirOutcome {
-            dir_path: meta_path,
-            delete: Some(delete),
-        });
+    let mut delete = DeleteOutcome::default();
+    let mut remaining = max;
+    match delete_by_meta(&deleter, &temporary_dir, &meta_path, max).await? {
+        MetaVacuum::Partial(outcome) => {
+            return Ok(DirOutcome {
+                dir_path: meta_path,
+                delete: Some(outcome),
+            });
+        }
+        MetaVacuum::Exhausted(outcome) => {
+            // The manifest ended without naming itself and its directory: it was truncated
+            // before `unload_spill_meta` appended them. Whatever it listed is gone; finish
+            // the directory it describes below.
+            delete.absorb(outcome);
+            remaining = remaining.saturating_sub(outcome.removed);
+        }
+        MetaVacuum::Nothing => {}
     }
-    // The manifest names nothing we can delete (empty, truncated or foreign paths). The claim
-    // on it keeps the directory task away, so vacuum the directory it describes here and drop
-    // the useless manifest with it.
+    // The claim on the manifest keeps the directory task away, so vacuum the directory here and
+    // drop the manifest with it.
     let dir_path = format!("{}/", meta_path.trim_end_matches(SPILL_META_SUFFIX));
-    let mut delete = delete_by_list(&deleter, &dir_path, max)
-        .await?
-        .unwrap_or_default();
+    if remaining > 0
+        && let Some(outcome) = delete_by_list(&deleter, &dir_path, remaining).await?
+    {
+        delete.absorb(outcome);
+    }
     delete.absorb(deleter.delete(vec![meta_path.clone()], &meta_path).await);
     Ok(DirOutcome {
         dir_path: meta_path,
         delete: Some(delete),
     })
+}
+
+/// How far a manifest-driven vacuum got.
+enum MetaVacuum {
+    /// No manifest, or it names nothing under the spill prefix.
+    Nothing,
+    /// Batches were issued and lines remain (budget, failure or throttling); the rest was
+    /// written back for the next run. When the manifest listed itself it is gone by now.
+    Partial(DeleteOutcome),
+    /// Every line was processed but the manifest never named itself, so neither it nor its
+    /// directory marker were removed.
+    Exhausted(DeleteOutcome),
+}
+
+impl MetaVacuum {
+    fn removed(&self) -> usize {
+        match self {
+            MetaVacuum::Nothing => 0,
+            MetaVacuum::Partial(o) | MetaVacuum::Exhausted(o) => o.removed,
+        }
+    }
 }
 
 /// Vacuum one spill directory. Runs concurrently; returns its outcome instead of touching shared
@@ -571,11 +605,22 @@ async fn vacuum_dir_entry(
     if !expiry.expired(last_modified) {
         return Ok(outcome(None));
     }
-    // A meta batch that was attempted is final for this run, whether it succeeded or was
-    // throttled; only a directory without a usable meta file falls back to listing.
+    // A partial meta batch is final for this run, whether it succeeded or was throttled. Only a
+    // directory without a usable meta file, or one whose truncated meta never named the
+    // directory, falls back to listing.
     let delete = match delete_by_meta(&deleter, &temporary_dir, &meta_path, max).await? {
-        Some(by_meta) => Some(by_meta),
-        None => delete_by_list(&deleter, &dir_path, max).await?,
+        MetaVacuum::Partial(by_meta) => Some(by_meta),
+        MetaVacuum::Nothing => delete_by_list(&deleter, &dir_path, max).await?,
+        MetaVacuum::Exhausted(mut by_meta) => {
+            let remaining = max.saturating_sub(by_meta.removed);
+            if remaining > 0
+                && let Some(by_list) = delete_by_list(&deleter, &dir_path, remaining).await?
+            {
+                by_meta.absorb(by_list);
+            }
+            by_meta.absorb(deleter.delete(vec![meta_path.clone()], &meta_path).await);
+            Some(by_meta)
+        }
     };
     Ok(outcome(delete))
 }
@@ -591,10 +636,10 @@ async fn delete_by_meta(
     temporary_dir: &str,
     meta_path: &str,
     max: usize,
-) -> Result<Option<DeleteOutcome>> {
+) -> Result<MetaVacuum> {
     let meta = match deleter.operator().read(meta_path).await {
         Ok(meta) => meta,
-        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(MetaVacuum::Nothing),
         Err(e) => return Err(e.into()),
     };
     delete_by_meta_buffer(deleter, temporary_dir, meta_path, meta, max).await
@@ -610,7 +655,7 @@ async fn delete_by_meta_buffer(
     meta_path: &str,
     meta: Buffer,
     max: usize,
-) -> Result<Option<DeleteOutcome>> {
+) -> Result<MetaVacuum> {
     // The manifest is walked in place: at most `META_BATCH_FILES` paths are materialized per
     // batch, whatever `max` is, so a large manifest never becomes a second full copy. What was
     // not deleted is written back as a slice of the buffer already held.
@@ -621,6 +666,7 @@ async fn delete_by_meta_buffer(
 
     let mut total = DeleteOutcome::default();
     let mut attempted = false;
+    let mut names_itself = false;
     let mut consumed = 0;
     let mut budget = max;
     while budget > 0 {
@@ -633,6 +679,7 @@ async fn delete_by_meta_buffer(
             batch_end += line.len();
             let path = line.trim_end_matches(['\n', '\r']);
             if path.starts_with(temporary_dir) {
+                names_itself |= path == meta_path;
                 batch.push(path.to_owned());
             }
         }
@@ -656,7 +703,13 @@ async fn delete_by_meta_buffer(
     }
 
     if !attempted {
-        return Ok(None);
+        return Ok(MetaVacuum::Nothing);
+    }
+    let exhausted = text[consumed..]
+        .lines()
+        .all(|l| !l.trim_end_matches('\r').starts_with(temporary_dir));
+    if exhausted && !names_itself {
+        return Ok(MetaVacuum::Exhausted(total));
     }
     if total.removed > 0 && consumed < bytes.len() {
         deleter
@@ -664,7 +717,7 @@ async fn delete_by_meta_buffer(
             .write(meta_path, bytes.slice(consumed..))
             .await?;
     }
-    Ok(Some(total))
+    Ok(MetaVacuum::Partial(total))
 }
 
 /// Collect paths from a recursive listing of `dir_path` until `max` are buffered or the listing
@@ -790,7 +843,7 @@ async fn vacuum_query_hook(
             budget.remaining(),
         )
         .await?;
-        budget.record(outcome.map_or(0, |o| o.removed));
+        budget.record(outcome.removed());
     }
 
     Ok(budget.removed())
