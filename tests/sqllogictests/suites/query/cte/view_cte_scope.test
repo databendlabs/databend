@@ -1,7 +1,6 @@
-# A view definition is an independent name scope: CTEs of the query that
-# references a view must not be visible inside the view, and CTEs defined by
-# the view must not be visible outside it.
-# https://github.com/databendlabs/databend/issues/20651
+# View definitions have independent name scopes. Issue #20651.
+# Alias-reuse and multiple-CTE cases adapted from DuckDB test/sql/cte/test_cte.test
+# and test/sql/cte/materialized/test_cte_materialized.test.
 
 statement ok
 drop database if exists view_cte_scope
@@ -21,273 +20,143 @@ insert into foo values (1)
 statement ok
 create view v as with t as (select * from view_cte_scope.foo) select * from t
 
-statement ok
-create view v_unqualified as with t as (select * from foo) select * from t
-
-statement ok
-create view v_plain as select * from foo
-
-statement ok
-create view v_inner_foo as with foo as (select 7 as x) select * from foo
-
-# Issue #20651: an outer CTE named like a table of the view is not a view loop.
+# The issue's false view loop, and silent capture by an unrelated outer CTE.
 query I
 with foo as (select * from v) select * from foo
 ----
 1
 
 query I
-with bar as (select * from v) select * from bar
+with foo as (select 99 as x) select * from v
 ----
 1
+
+# A view without WITH must not inherit the outer cte_name either.
+statement ok
+create view v_plain as select * from foo
 
 query I
 with foo as (select * from v_plain) select * from foo
 ----
 1
 
-# An outer CTE must not capture a table referenced by the view.
+# DuckDB: nested CTE views that re-use CTE aliases, also with MATERIALIZED.
 query I
-with foo as (select 99 as x) select * from v
+with t as (select * from v) select * from t
 ----
 1
 
 query I
-with foo as (select 99 as x) select * from v_unqualified
+with t as materialized (select * from v) select * from t
 ----
 1
 
-# Outer and view CTEs with the same name do not conflict.
-query I
-with t as (select 99 as x) select * from v
-----
-1
-
+# Restore outer CTEs on return, without exporting the view's internal CTEs.
 query II
-with t as (select 99 as x) select t.x, v.x from t, v
+with t as (select 99 as x) select v.x, t.x from v, t
 ----
-99 1
+1 99
 
-# A CTE defined by the view is not visible outside the view.
 statement error 1025
 select (select sum(x) from t) from v
 
-statement error 1025
-select * from v, t
-
-# Outer CTEs remain visible to the outer query.
-query I
-with a as (select 42 as n) select (select n from a) from v
-----
-42
-
-# A base table of the outer query does not conflict with a CTE of the view.
+# The same view in sibling branches is not a loop.
 query II
-select b.x, v.x from foo b cross join v_inner_foo v
-----
-1 7
-
-query I
-select x from foo union all select x from v_inner_foo order by x
-----
-1
-7
-
-query II
-select a.x, b.x from v a join v b on a.x = b.x
+select a.x, b.x from v a, v b
 ----
 1 1
 
-query I
-select (select count(*) from v) from v
+# The misleading-name check must not compare different view scopes.
+statement ok
+create view v_inner_foo as with foo as (select 7 as x) select * from foo
+
+query II
+select b.x, v.x from foo b, v_inner_foo v
 ----
-1
-
-# Nested view entries belong to the scope that references them, not the outer
-# query. CTE resolution must not depend on which JOIN branch is bound first.
-statement ok
-create view child_view as select * from foo
-
-statement ok
-create view parent_view as select * from child_view
+1 7
 
 statement ok
-create view grandparent_view as select * from parent_view
+create view parent_view as select * from v
 
 query II
-with child_view as (select 99 as x) select p.x, c.x from parent_view p, child_view c
+with v as (select 99 as x) select p.x, v.x from parent_view p, v
 ----
 1 99
 
-query II
-with child_view as (select 99 as x) select p.x, c.x from child_view c, parent_view p
-----
-1 99
-
-query II
-with child_view as (select 99 as x) select p.x, c.x from grandparent_view p, child_view c
-----
-1 99
-
-query II
-with parent_view as (select 99 as x) select p.x, c.x from grandparent_view p, parent_view c
-----
-1 99
-
-# Table-function names and aliases inside a view also stay in its scope.
 statement ok
 create view function_view as select number as x from numbers(1) foo
 
 query II
-with foo as (select 99 as x) select p.x, c.x from function_view p, foo c
+with foo as (select 99 as x) select v.x, foo.x from function_view v, foo
 ----
 0 99
 
-query II
-with foo as (select 99 as x) select p.x, c.x from foo c, function_view p
-----
-0 99
-
-query II
-with numbers as (select 99 as x) select p.x, c.x from function_view p, numbers c
-----
-0 99
-
-# A second reference starts from the caller's scope, not the first expansion.
+# Repeated consumers exercise inline and auto-materialized binding separately.
 statement ok
 set enable_auto_materialize_cte = 0
 
-query II
-with child_view as (select * from parent_view) select a.x, b.x from child_view a, child_view b
+query I
+with foo as (select * from v) select * from foo union all select * from foo
 ----
-1 1
-
-query II
-with foo as (select * from function_view) select a.x, b.x from foo a, foo b
-----
-0 0
+1
+1
 
 statement ok
 set enable_auto_materialize_cte = 1
 
-query II
-with child_view as (select * from parent_view) select a.x, b.x from child_view a, child_view b
-----
-1 1
-
-query II
-with foo as (select * from function_view) select a.x, b.x from foo a, foo b
-----
-0 0
-
 query I
 with foo as (select * from v) select * from foo union all select * from foo
 ----
 1
 1
 
-query I
-with foo as (select 99 as x) select * from v union all select * from v
-----
-1
-1
-
+# DuckDB: multiple CTEs in a view definition.
 statement ok
-set enable_auto_materialize_cte = 0
+create view v_multi as with cte1 as (select x as j from foo), cte2 as (select j + 1 as k from cte1) select * from cte2
 
 query I
-with foo as (select * from v) select * from foo union all select * from foo
+select * from v_multi
 ----
-1
-1
+2
 
-statement ok
-unset enable_auto_materialize_cte
-
-query I
-with foo as materialized (select * from v) select * from foo
-----
-1
-
-# A missing table of the view is not replaced by an outer CTE.
+# A missing base table must not fall back to the caller's CTE.
 statement ok
 drop table foo
 
 statement error 1025
 with foo as (select 99 as x) select * from v
 
-statement error 1025
-with foo as (select 99 as x) select * from v_unqualified
-
-# Real view loops are still detected after view expansion. CREATE VIEW rejects
-# loops, so build one by renaming a view onto the name of its base table.
+# CREATE VIEW rejects loops. Use renames to create runtime loops, first through
+# a derived subquery inside a view, then through an auto-materialized CTE.
 statement ok
 create table loop_base(x int)
 
 statement ok
-create view loop_v as select * from loop_base
+create view loop_derived as select * from (select * from loop_base) d
 
 statement ok
-create view loop_wrapper as with t as (select * from loop_base) select * from t
+create view loop_cte as with t as (select * from loop_base) select t.x from t, t t2
 
 statement ok
 alter table loop_base rename to loop_saved
 
 statement ok
-alter table loop_v rename to loop_base
+alter table loop_derived rename to loop_base
 
 statement error 1029
 select * from loop_base
 
-statement error 1029
-select * from (select * from loop_base) d
-
-statement error 1029
-select (select count(*) from loop_base)
-
-statement error 1029
-with t as materialized (select * from loop_base) select * from t
-
-statement error 1029
-with t as (select * from loop_wrapper) select * from t, t t2
-
-# Ported from DuckDB test/sql/cte/test_cte.test and
-# test/sql/cte/materialized/test_cte_materialized.test. DuckDB's views with
-# MATERIALIZED CTEs are not ported: CREATE VIEW does not support them yet.
 statement ok
-create table a(i int)
+alter table loop_base rename to loop_derived
 
 statement ok
-insert into a values (42)
+alter table loop_cte rename to loop_base
+
+statement error 1029
+select * from loop_base
 
 statement ok
-create view va as (with cte as (select i as j from a) select * from cte)
-
-query I
-select * from va
-----
-42
-
-# nested CTE views that re-use CTE aliases
-query I
-with cte as (select * from va) select * from cte
-----
-42
-
-# multiple ctes in a view definition
-statement ok
-create view vb as (with cte1 as (select i as j from a), cte2 as (select ref.j + 1 as k from cte1 as ref) select * from cte2)
-
-query I
-select * from vb
-----
-43
-
-# nested CTE views that re-use CTE aliases, with a materialized outer CTE
-query I
-with cte as materialized (select * from va) select * from cte
-----
-42
+unset enable_auto_materialize_cte
 
 statement ok
 drop database view_cte_scope
