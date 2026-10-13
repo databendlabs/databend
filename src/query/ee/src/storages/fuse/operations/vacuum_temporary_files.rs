@@ -573,6 +573,10 @@ async fn vacuum_by_duration(
 
 /// Vacuum the files recorded in an expired spill meta file. Runs in the same bounded pool as
 /// directory tasks.
+///
+/// Every outcome leaves the pair in a state the next run, with the same `LIMIT`, can advance:
+/// a manifest is deleted only together with its tail, is rewritten without the names already
+/// deleted, and the listing fallback gives a single remaining slot to a directory entry.
 async fn vacuum_meta_entry(
     deleter: Arc<SpillDeleter>,
     temporary_dir: Arc<str>,
@@ -625,9 +629,9 @@ async fn vacuum_meta_entry(
 /// List-delete what is left under `dir_path`, then drop the manifest that failed to describe
 /// it. Under throttling the manifest is kept so the next run finishes the directory; the task
 /// ends here either way and the scheduler sees the signal. One unit of `max` is reserved for
-/// the manifest so the task never removes more than `max` objects; with no room for both, the
-/// manifest only goes once the directory is known to be empty, and the pair is finished next
-/// run otherwise.
+/// the manifest so the task never removes more than `max` objects; with room for one object
+/// only, a directory entry goes if there is one (the manifest keeps the claim), else the
+/// manifest, so even `LIMIT 1` makes progress on the pair.
 async fn finish_directory_and_meta(
     deleter: &SpillDeleter,
     dir_path: &str,
@@ -648,7 +652,8 @@ async fn finish_directory_and_meta(
         if !by_list.finished {
             return Ok(());
         }
-    } else if !dir_is_empty(deleter, dir_path).await? {
+    } else if let Some(path) = first_dir_entry(deleter, dir_path).await? {
+        delete.absorb(deleter.delete(vec![path], dir_path).await);
         return Ok(());
     }
     if delete.retried == 0 && !delete.rate_limited {
@@ -659,7 +664,7 @@ async fn finish_directory_and_meta(
 
 /// How far a manifest-driven vacuum got.
 enum MetaVacuum {
-    /// No manifest, or it names nothing under the spill prefix.
+    /// No manifest, it names nothing under the spill prefix, or nothing it names fits `max`.
     Nothing,
     /// The task stops here: lines remain (budget or failure) or the store was throttling.
     /// Whatever is left is written back and picked up next run. When the manifest listed
@@ -779,20 +784,35 @@ async fn delete_by_meta_buffer(
     let mut total = DeleteOutcome::default();
     let mut attempted = false;
     let mut stopped_early = false;
-    let mut names_itself = false;
+    let mut manifest_deleted = false;
     let mut consumed = 0;
     let mut budget = max;
     while budget > 0 {
         let mut batch = Vec::new();
         let mut batch_end = consumed;
+        let mut names_itself = false;
+        let cap = budget.min(DELETE_BATCH_FILES);
         for line in text[consumed..].split_inclusive('\n') {
-            if batch.len() >= budget.min(DELETE_BATCH_FILES) {
+            if batch.len() >= cap {
                 break;
             }
-            batch_end += line.len();
             let path = line.trim_end_matches(['\n', '\r']);
+            if path == meta_path {
+                // The manifest goes only together with everything it still names after itself
+                // (normally just the directory marker). Deleting it any earlier would have
+                // the remainder written back into a manifest that was just removed, which no
+                // later run could ever finish within the same budget.
+                let after = text[batch_end + line.len()..]
+                    .lines()
+                    .filter(|l| l.trim_end_matches('\r').starts_with(temporary_dir))
+                    .count();
+                if batch.len() + 1 + after > cap {
+                    break;
+                }
+                names_itself = true;
+            }
+            batch_end += line.len();
             if path.starts_with(temporary_dir) {
-                names_itself |= path == meta_path;
                 batch.push(path.to_owned());
             }
         }
@@ -809,6 +829,7 @@ async fn delete_by_meta_buffer(
             break;
         }
         consumed = batch_end;
+        manifest_deleted |= names_itself;
         if !pacing.continues_after(&outcome) {
             // The store pushed back or the query is being aborted: the rest stays in the
             // manifest and the task ends here.
@@ -823,16 +844,19 @@ async fn delete_by_meta_buffer(
     let exhausted = text[consumed..]
         .lines()
         .all(|l| !l.trim_end_matches('\r').starts_with(temporary_dir));
-    // A task that stopped early ends here either way; a truncated manifest is finished next
-    // run rather than followed by a listing while the store is pushing back.
-    if exhausted && !names_itself && !stopped_early {
-        return Ok(MetaVacuum::Exhausted(total));
-    }
-    if total.removed > 0 && consumed < bytes.len() {
+    // What was deleted leaves the manifest on disk too, even when that leaves it empty: should
+    // the directory not be finished in this task (budget, throttling, abort), the next run
+    // must go straight to the listing instead of re-deleting, and re-counting, the same names.
+    if total.removed > 0 && !manifest_deleted {
         deleter
             .operator()
             .write(meta_path, bytes.slice(consumed..))
             .await?;
+    }
+    // A task that stopped early ends here either way; a truncated manifest is finished next
+    // run rather than followed by a listing while the store is pushing back.
+    if exhausted && !manifest_deleted && !stopped_early {
+        return Ok(MetaVacuum::Exhausted(total));
     }
     Ok(MetaVacuum::Partial(total))
 }
@@ -862,8 +886,9 @@ async fn collect_dir_paths(
     Ok(false)
 }
 
-/// Whether a recursive listing of `dir_path` yields nothing but the directory entry itself.
-async fn dir_is_empty(deleter: &SpillDeleter, dir_path: &str) -> Result<bool> {
+/// The first path a recursive listing of `dir_path` yields, the directory entry itself aside;
+/// `None` for an empty directory.
+async fn first_dir_entry(deleter: &SpillDeleter, dir_path: &str) -> Result<Option<String>> {
     let mut lister = deleter
         .operator()
         .lister_with(dir_path)
@@ -872,8 +897,8 @@ async fn dir_is_empty(deleter: &SpillDeleter, dir_path: &str) -> Result<bool> {
     loop {
         match lister.try_next().await {
             Ok(Some(entry)) if entry.path() == dir_path => continue,
-            Ok(Some(_)) => return Ok(false),
-            Ok(None) => return Ok(true),
+            Ok(Some(entry)) => return Ok(Some(entry.path().to_string())),
+            Ok(None) => return Ok(None),
             Err(e) if e.kind() == ErrorKind::NotFound => continue,
             Err(e) => return Err(e.into()),
         }

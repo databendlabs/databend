@@ -35,10 +35,12 @@ mod unit {
     use opendal::raw::OpList;
     use opendal::raw::OpRead;
     use opendal::raw::OpStat;
+    use opendal::raw::OpWrite;
     use opendal::raw::RpDelete;
     use opendal::raw::RpList;
     use opendal::raw::RpRead;
     use opendal::raw::RpStat;
+    use opendal::raw::RpWrite;
     use opendal::raw::Timestamp;
     use opendal::raw::oio;
     use opendal::raw::oio::Entry;
@@ -94,12 +96,42 @@ mod unit {
         }
     }
 
+    /// `(path, content)` pairs written back by the vacuum, in order.
+    type Writes = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
+
+    /// Records what the vacuum writes back (manifest rewrites) under the path it was opened for.
+    #[derive(Debug)]
+    struct RecordingWriter {
+        path: String,
+        buf: Vec<u8>,
+        written: Writes,
+    }
+
+    impl oio::Write for RecordingWriter {
+        async fn write(&mut self, bs: Buffer) -> opendal::Result<()> {
+            self.buf.extend_from_slice(&bs.to_bytes());
+            Ok(())
+        }
+
+        async fn close(&mut self) -> opendal::Result<Metadata> {
+            self.written
+                .lock()
+                .push((self.path.clone(), std::mem::take(&mut self.buf)));
+            Ok(Metadata::new(EntryMode::FILE))
+        }
+
+        async fn abort(&mut self) -> opendal::Result<()> {
+            Ok(())
+        }
+    }
+
     #[derive(Debug)]
     struct MockVacuumAccessor {
         list_entries: HashMap<String, Vec<(String, Metadata)>>,
         stat_results: HashMap<String, StatResult>,
         read_results: HashMap<String, ReadResult>,
         deleted: Arc<Mutex<Vec<String>>>,
+        written: Writes,
         failing_batches: Arc<AtomicUsize>,
         failure_kind: Mutex<opendal::ErrorKind>,
         list_calls: AtomicUsize,
@@ -118,6 +150,7 @@ mod unit {
                 stat_results,
                 read_results,
                 deleted: Arc::new(Mutex::new(Vec::new())),
+                written: Arc::new(Mutex::new(Vec::new())),
                 failing_batches: Arc::new(AtomicUsize::new(0)),
                 failure_kind: Mutex::new(opendal::ErrorKind::RateLimited),
                 list_calls: AtomicUsize::new(0),
@@ -139,6 +172,15 @@ mod unit {
             self.deleted.lock().clone()
         }
 
+        /// Every `(path, content)` written back, in order.
+        fn written(&self) -> Vec<(String, String)> {
+            self.written
+                .lock()
+                .iter()
+                .map(|(p, b)| (p.clone(), String::from_utf8_lossy(b).into_owned()))
+                .collect()
+        }
+
         fn list_call_count(&self) -> usize {
             self.list_calls.load(Ordering::Acquire)
         }
@@ -155,7 +197,7 @@ mod unit {
 
     impl Access for MockVacuumAccessor {
         type Reader = Buffer;
-        type Writer = ();
+        type Writer = RecordingWriter;
         type Lister = VecLister;
         type Deleter = RecordingDeleter;
 
@@ -164,6 +206,7 @@ mod unit {
             info.set_native_capability(opendal::Capability {
                 stat: true,
                 read: true,
+                write: true,
                 list: true,
                 delete: true,
                 delete_max_size: Some(1000),
@@ -201,6 +244,18 @@ mod unit {
                     "mock read not found",
                 )),
             }
+        }
+
+        async fn write(
+            &self,
+            path: &str,
+            _args: OpWrite,
+        ) -> opendal::Result<(RpWrite, Self::Writer)> {
+            Ok((RpWrite::default(), RecordingWriter {
+                path: path.to_string(),
+                buf: Vec::new(),
+                written: self.written.clone(),
+            }))
         }
 
         async fn delete(&self) -> opendal::Result<(RpDelete, Self::Deleter)> {
@@ -725,6 +780,11 @@ mod unit {
         assert!(matches!(outcome, MetaVacuum::Exhausted(o) if o.removed == 2500));
         assert_eq!(accessor.deleted_paths(), paths);
         assert_eq!(accessor.delete_call_count(), 3);
+        // Nothing it named is left, on disk either.
+        assert_eq!(accessor.written(), vec![(
+            "spill/dir.list".to_string(),
+            String::new()
+        )]);
         Ok(())
     }
 
@@ -894,6 +954,105 @@ mod unit {
         Ok(())
     }
 
+    /// A manifest names itself right before its directory marker. It must only be deleted in
+    /// the batch that also takes everything after it, or the remainder would be written back
+    /// into a manifest that was just removed and no run with the same `LIMIT` could finish it.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_manifest_is_deleted_only_with_its_tail() -> anyhow::Result<()> {
+        let accessor = MockVacuumAccessor::new(
+            HashMap::new(),
+            HashMap::new(),
+            HashMap::from([(
+                "spill/dir.list".to_string(),
+                ReadResult::Buffer(Buffer::from("spill/dir.list\nspill/dir/\n")),
+            )]),
+        );
+        let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
+
+        // Budget for one object: neither line is taken by the manifest pass (the listing
+        // fallback deals with the pair instead).
+        let outcome = delete_by_meta(&deleter, "spill/", "spill/dir.list", 1, &scheduled()).await?;
+        assert!(matches!(outcome, MetaVacuum::Nothing));
+        assert_eq!(accessor.deleted_paths(), Vec::<String>::new());
+
+        // Budget for two: both go in one batch.
+        let outcome = delete_by_meta(&deleter, "spill/", "spill/dir.list", 2, &scheduled()).await?;
+        assert!(matches!(outcome, MetaVacuum::Partial(o) if o.removed == 2));
+        assert_eq!(accessor.deleted_paths(), vec![
+            "spill/dir.list".to_string(),
+            "spill/dir/".to_string(),
+        ]);
+
+        // The same holds at the batch-size boundary: 999 files, then the manifest and its
+        // marker together in a second batch rather than the manifest alone in the first.
+        let mut lines: Vec<String> = (0..DELETE_BATCH_FILES - 1)
+            .map(|i| format!("spill/dir/file{i:04}"))
+            .collect();
+        lines.push("spill/dir.list".to_string());
+        lines.push("spill/dir/".to_string());
+        let accessor = MockVacuumAccessor::new(
+            HashMap::new(),
+            HashMap::new(),
+            HashMap::from([(
+                "spill/dir.list".to_string(),
+                ReadResult::Buffer(Buffer::from(lines.join("\n"))),
+            )]),
+        );
+        let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
+        let outcome = delete_by_meta(
+            &deleter,
+            "spill/",
+            "spill/dir.list",
+            usize::MAX,
+            &scheduled(),
+        )
+        .await?;
+        assert!(matches!(outcome, MetaVacuum::Partial(o) if o.removed == DELETE_BATCH_FILES + 1));
+        assert_eq!(accessor.delete_call_count(), 2);
+        assert_eq!(accessor.deleted_paths(), lines);
+        Ok(())
+    }
+
+    /// A truncated manifest whose names use up the whole budget is rewritten empty, so the
+    /// next run goes to the listing instead of re-deleting the same names forever.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_exhausted_manifest_is_rewritten_when_budget_runs_out() -> anyhow::Result<()> {
+        let old_ts = (Utc::now() - ChronoDuration::hours(2)).timestamp_millis();
+        let accessor = MockVacuumAccessor::new(
+            HashMap::from([("spill/dir/".to_string(), vec![(
+                "spill/dir/file1".to_string(),
+                file_meta(Some(old_ts)),
+            )])]),
+            HashMap::new(),
+            HashMap::from([(
+                "spill/dir.list".to_string(),
+                ReadResult::Buffer(Buffer::from("spill/dir/file1\n")),
+            )]),
+        );
+        let deleter = Arc::new(SpillDeleter::new(
+            OperatorBuilder::new(accessor.clone()).finish(),
+        ));
+
+        let outcome = vacuum_meta_entry(
+            deleter,
+            Arc::from("spill/"),
+            "spill/dir.list".to_string(),
+            1,
+            scheduled(),
+        )
+        .await?;
+
+        assert_eq!(outcome.delete.map(|d| d.removed), Some(1));
+        assert_eq!(accessor.deleted_paths(), vec![
+            "spill/dir/file1".to_string()
+        ]);
+        assert_eq!(accessor.written(), vec![(
+            "spill/dir.list".to_string(),
+            String::new()
+        )]);
+        Ok(())
+    }
+
     /// The manifest dropped after a listing fallback is counted against the task's budget
     /// like any other object: a task never removes more than `max`.
     #[tokio::test(flavor = "multi_thread")]
@@ -919,21 +1078,24 @@ mod unit {
             )
         };
 
-        // Empty directory, empty manifest, budget for one object: only the manifest goes, and
-        // only because the directory was found empty.
+        // Empty directory, empty manifest, budget for one object: the manifest goes, and only
+        // because the directory was found empty.
         let accessor = new_accessor(vec![]);
         let outcome = run(accessor.clone(), 1).await?;
         assert_eq!(outcome.delete.map(|d| d.removed), Some(1));
         assert_eq!(accessor.deleted_paths(), vec!["spill/dir.list".to_string()]);
 
-        // Same with a file left: the budget goes to the file, the manifest keeps the claim.
+        // Same with a file left: the one slot goes to the file so `LIMIT 1` still makes
+        // progress, and the manifest keeps the claim.
         let accessor = new_accessor(vec![(
             "spill/dir/file1".to_string(),
             file_meta(Some(old_ts)),
         )]);
         let outcome = run(accessor.clone(), 1).await?;
-        assert_eq!(outcome.delete.map(|d| d.removed), Some(0));
-        assert_eq!(accessor.deleted_paths(), Vec::<String>::new());
+        assert_eq!(outcome.delete.map(|d| d.removed), Some(1));
+        assert_eq!(accessor.deleted_paths(), vec![
+            "spill/dir/file1".to_string()
+        ]);
 
         // Budget for two: the marker and the manifest, never a third object.
         let accessor = new_accessor(vec![]);
