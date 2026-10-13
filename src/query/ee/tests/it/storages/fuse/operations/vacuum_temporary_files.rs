@@ -68,7 +68,8 @@ mod unit {
     struct RecordingDeleter {
         deleted: Arc<Mutex<Vec<String>>>,
         pending: Vec<String>,
-        throttled_batches: Arc<AtomicUsize>,
+        failing_batches: Arc<AtomicUsize>,
+        failure_kind: opendal::ErrorKind,
     }
 
     impl oio::Delete for RecordingDeleter {
@@ -78,16 +79,13 @@ mod unit {
         }
 
         async fn flush(&mut self) -> opendal::Result<usize> {
-            let throttled = self
-                .throttled_batches
+            let failing = self
+                .failing_batches
                 .try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
                 .is_ok();
-            if throttled {
+            if failing {
                 self.pending.clear();
-                return Err(opendal::Error::new(
-                    opendal::ErrorKind::RateLimited,
-                    "mock SlowDown",
-                ));
+                return Err(opendal::Error::new(self.failure_kind, "mock batch failure"));
             }
             let n = self.pending.len();
             self.deleted.lock().append(&mut self.pending);
@@ -101,7 +99,8 @@ mod unit {
         stat_results: HashMap<String, StatResult>,
         read_results: HashMap<String, ReadResult>,
         deleted: Arc<Mutex<Vec<String>>>,
-        throttled_batches: Arc<AtomicUsize>,
+        failing_batches: Arc<AtomicUsize>,
+        failure_kind: Mutex<opendal::ErrorKind>,
         list_calls: AtomicUsize,
         read_calls: AtomicUsize,
     }
@@ -117,14 +116,20 @@ mod unit {
                 stat_results,
                 read_results,
                 deleted: Arc::new(Mutex::new(Vec::new())),
-                throttled_batches: Arc::new(AtomicUsize::new(0)),
+                failing_batches: Arc::new(AtomicUsize::new(0)),
+                failure_kind: Mutex::new(opendal::ErrorKind::RateLimited),
                 list_calls: AtomicUsize::new(0),
                 read_calls: AtomicUsize::new(0),
             })
         }
 
         fn throttle_next_batches(&self, n: usize) {
-            self.throttled_batches.store(n, Ordering::Release);
+            self.fail_next_batches(n, opendal::ErrorKind::RateLimited);
+        }
+
+        fn fail_next_batches(&self, n: usize, kind: opendal::ErrorKind) {
+            *self.failure_kind.lock() = kind;
+            self.failing_batches.store(n, Ordering::Release);
         }
 
         fn deleted_paths(&self) -> Vec<String> {
@@ -194,7 +199,8 @@ mod unit {
             Ok((RpDelete::default(), RecordingDeleter {
                 deleted: self.deleted.clone(),
                 pending: Vec::new(),
-                throttled_batches: self.throttled_batches.clone(),
+                failing_batches: self.failing_batches.clone(),
+                failure_kind: *self.failure_kind.lock(),
             }))
         }
 
@@ -715,6 +721,41 @@ mod unit {
         assert_eq!(delete.removed, 0);
         assert!(delete.rate_limited);
         // No second request in the same task: the manifest stays for the next run.
+        assert_eq!(accessor.deleted_paths(), Vec::<String>::new());
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_failed_listing_fallback_keeps_the_manifest() -> anyhow::Result<()> {
+        let old_ts = (Utc::now() - ChronoDuration::hours(2)).timestamp_millis();
+        let accessor = MockVacuumAccessor::new(
+            HashMap::from([("spill/dir/".to_string(), vec![(
+                "spill/dir/file1".to_string(),
+                file_meta(Some(old_ts)),
+            )])]),
+            HashMap::new(),
+            HashMap::from([(
+                "spill/dir.list".to_string(),
+                ReadResult::Buffer(Buffer::from("")),
+            )]),
+        );
+        accessor.fail_next_batches(1, opendal::ErrorKind::Unexpected);
+        let deleter = Arc::new(SpillDeleter::new(
+            OperatorBuilder::new(accessor.clone()).finish(),
+        ));
+
+        let outcome = vacuum_meta_entry(
+            deleter,
+            Arc::from("spill/"),
+            "spill/dir.list".to_string(),
+            100,
+        )
+        .await?;
+
+        let delete = outcome.delete.expect("the listing batch was attempted");
+        assert_eq!(delete.removed, 0);
+        assert!(!delete.rate_limited);
+        // Files are still there, so the manifest must survive for the next run.
         assert_eq!(accessor.deleted_paths(), Vec::<String>::new());
         Ok(())
     }

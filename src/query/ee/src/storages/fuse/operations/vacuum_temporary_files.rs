@@ -565,6 +565,11 @@ async fn finish_directory_and_meta(
         && let Some(by_list) = delete_by_list(deleter, dir_path, max).await?
     {
         delete.absorb(by_list);
+        // A failed listing batch, throttled or not, leaves files behind: keep the manifest
+        // so the directory is claimed and finished next run.
+        if by_list.removed == 0 {
+            return Ok(());
+        }
     }
     if delete.retried == 0 && !delete.rate_limited {
         delete.absorb(deleter.delete(vec![meta_path.to_owned()], meta_path).await);
