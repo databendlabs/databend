@@ -80,7 +80,7 @@ impl NotificationService for MockNotificationService {
         let request = request.into_inner();
         assert_eq!(request.tenant_id, "tenant");
         assert_eq!(request.message, "alert");
-        assert_eq!(request.source_id.as_deref(), Some("query-id"));
+        assert_eq!(request.query_id.as_deref(), Some("query-id"));
         match request.name.as_str() {
             "old-server" => Err(Status::unimplemented("old server")),
             "failed" => Err(Status::internal("persistence failed")),
@@ -91,11 +91,11 @@ impl NotificationService for MockNotificationService {
                     message: "rejected".into(),
                     code: 13,
                 }),
-                notification_id: String::new(),
+                delivery_id: String::new(),
             })),
             _ => Ok(Response::new(EnqueueNotificationResponse {
                 error: None,
-                notification_id: "delivery-id".into(),
+                delivery_id: "delivery-id".into(),
             })),
         }
     }
@@ -135,11 +135,11 @@ async fn enqueue_acceptance_errors_and_no_retry() -> anyhow::Result<()> {
                 tenant_id: "tenant".into(),
                 name: name.into(),
                 message: "alert".into(),
-                source_id: Some("query-id".into()),
+                query_id: Some("query-id".into()),
             }))
             .await;
         if name == "accepted" {
-            assert_eq!(result?.notification_id, "delivery-id");
+            assert_eq!(result?.delivery_id, "delivery-id");
         } else {
             let error = result.unwrap_err();
             if name == "old-server" {

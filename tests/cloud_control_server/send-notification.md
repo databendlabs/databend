@@ -30,10 +30,25 @@ $$;
 
 - 使用 Local 分布、单 source 的 `TableFunctionTemplate`，首次执行 source 时发出一次 RPC；创建 table、绑定、读取 partitions 和普通 EXPLAIN 不调用 RPC。EXPLAIN ANALYZE 会实际执行查询，不属于无副作用的 EXPLAIN。
 - binder 禁用本次查询的结果缓存，避免重复 SQL 被缓存吞掉通知。
-- tenant 和 query ID 来自可信 Query context；query ID 作为 `source_id`，不是幂等键。RPC metadata 同时携带 tenant、user、query ID 和 notification client version。
+- tenant 和 query ID 来自可信 Query context；query ID 作为 `query_id`，不是幂等键。RPC metadata 同时携带 tenant、user、query ID 和 notification client version。proto 中 `query_id` 是 optional，Cloud Control 允许省略；Query 入口始终携带当前 query ID。
 - 沿用 Cloud Control 配置地址和 timeout，通过 `make_request` 设置 RPC deadline。不自动重试 RPC，不降级为同步 webhook。
 - gRPC 失败或 response error 均转为 SQL 错误。旧 Cloud Control 的 `Unimplemented` 明确报告不支持主动通知。
-- 后台投递失败不会回溯修改 SQL 或 Task 结果。Query 的 `system.notification_history` 暂未暴露 `source_id`；可以直接查询 `system.notification_history` 的现有结果；按 Query ID 精确定位使用 Cloud Control 日志/history RPC/数据库，SQL history 的 Query ID 字段展示属于后续工作。
+- 后台投递失败不会回溯修改 SQL 或 Task 结果。Query 的 `system.notification_history` 暂未暴露 `query_id`；可以直接查询 `system.notification_history` 的现有结果；按 Query ID 精确定位使用 Cloud Control 日志/history RPC/数据库，SQL history 的 Query ID 字段展示属于后续工作。
+
+## 对象与状态流
+
+```text
+Query(query_id)
+  -> EnqueueNotification
+  -> notification_delivery(id=delivery_id, integration_id, query_id, pending)
+  -> Worker claim(processing, attempt_count, lease)
+  -> HTTP attempts(http_attempt, same delivery_id)
+  -> Atomic terminal delivery + USER notification_history(query_id)
+```
+
+这是持久化队列加后台 worker 的异步链路，不是流处理引擎。入队响应的 `delivery_id` 为本次投递任务 ID，不返回 SQL 结果；`integration_id` 绑定既有配置对象，值等于既有 `notification.notification_id`，旧管理 RPC 不改名。一个 Query/integration 可以对应多条 delivery；HTTP 重试沿用同一 delivery，history 有独立主键，不能按两个自增 ID 相等关联。`query_id` 是关联键，不是幂等键。
+
+`unfinished` 仅是 pending + processing 的指标口径，不是新的队列状态。
 
 ## 验证
 
@@ -41,6 +56,7 @@ $$;
 cargo check -p databend-query --lib
 cargo test -p databend-common-cloud-control enqueue_acceptance_errors_and_no_retry
 cargo test -p databend-query --lib validates_arguments_without_sending
+cargo test -p databend-query --test it test_send_notification_planning_is_result_free_and_uncacheable
 cargo build -p databend-binaries --bin databend-query
 ```
 
@@ -50,7 +66,7 @@ cargo build -p databend-binaries --bin databend-query
 ./target/debug/databend-sqllogictests --handlers http --run_file task_send_notification.test
 ```
 
-mock 自身的 ID 分配、删除隔离和拒绝不写 history 可单独验证（需要匹配现有生成代码的 Python gRPC/protobuf 依赖）：
+mock 自身的 ID 分配、删除隔离、optional query ID 及拒绝不写 history 可单独验证（需要匹配现有生成代码的 Python gRPC/protobuf 依赖）：
 
 ```bash
 cd tests/cloud_control_server

@@ -81,7 +81,7 @@ impl SimpleTableFunc for SendNotification {
             tenant_id: tenant,
             name: self.name.clone(),
             message: self.message.clone(),
-            source_id: Some(query_id),
+            query_id: Some(query_id),
         };
         // The local, single-source template invokes apply once, and only when
         // the pipeline is executed. CALL hides the internal placeholder column.

@@ -769,7 +769,10 @@ class NotificationService(notification_pb2_grpc.NotificationServiceServicer):
         del NOTIFICATION_DB[name]
         # Keep independently run SQL cases isolated without removing fixtures.
         for key in list(NOTIFICATION_HISTORY_DB):
-            if key.startswith("delivery:") and NOTIFICATION_HISTORY_DB[key].name == name:
+            if (
+                key.startswith("delivery:")
+                and NOTIFICATION_HISTORY_DB[key].name == name
+            ):
                 del NOTIFICATION_HISTORY_DB[key]
         return notification_pb2.DropNotificationResponse()
 
@@ -793,8 +796,6 @@ class NotificationService(notification_pb2_grpc.NotificationServiceServicer):
         size = len(request.message.encode("utf-8"))
         if not 0 < size <= 262144:
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Invalid message size")
-        if not request.HasField("source_id") or not request.source_id:
-            context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Missing query ID")
         # Deleting another integration's history must not reuse a delivery ID.
         delivery_id = str(next(NOTIFICATION_DELIVERY_IDS))
         timestamp = timestamp_pb2.Timestamp()
@@ -805,17 +806,24 @@ class NotificationService(notification_pb2_grpc.NotificationServiceServicer):
             notification_pb2.NotificationHistory(
                 name=request.name,
                 message=request.message,
+                query_id=request.query_id if request.HasField("query_id") else None,
                 message_source="USER",
                 status="success",
                 created_time=timestamp,
                 processed_time=timestamp,
             )
         )
-        return notification_pb2.EnqueueNotificationResponse(notification_id=delivery_id)
+        return notification_pb2.EnqueueNotificationResponse(delivery_id=delivery_id)
 
     def ListNotificationHistory(self, request, context):
         print("ListNotificationHistory", request)
         notification_histories = list(NOTIFICATION_HISTORY_DB.values())
+        if request.HasField("query_id"):
+            notification_histories = [
+                history
+                for history in notification_histories
+                if history.HasField("query_id") and history.query_id == request.query_id
+            ]
 
         if (
             request.HasField("result_limit")
@@ -919,8 +927,12 @@ class WorkerService(resource_pb2_grpc.WorkerServiceServicer):
             for key in request.unset_options:
                 options.pop(key, None)
             worker["options"] = options
-        suspend_action = resource_pb2.AlterWorkerRequest.WorkerStateAction.Value("Suspend")
-        resume_action = resource_pb2.AlterWorkerRequest.WorkerStateAction.Value("Resume")
+        suspend_action = resource_pb2.AlterWorkerRequest.WorkerStateAction.Value(
+            "Suspend"
+        )
+        resume_action = resource_pb2.AlterWorkerRequest.WorkerStateAction.Value(
+            "Resume"
+        )
         if request.state_action == suspend_action:
             worker.setdefault("options", {})["suspended"] = "true"
         elif request.state_action == resume_action:

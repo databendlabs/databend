@@ -35,7 +35,7 @@ class SendNotificationMockTest(unittest.TestCase):
     def enqueue(self, name, query_id):
         return self.service.EnqueueNotification(
             notification_pb2.EnqueueNotificationRequest(
-                tenant_id="tenant", name=name, message="alert", source_id=query_id
+                tenant_id="tenant", name=name, message="alert", query_id=query_id
             ),
             self.context,
         )
@@ -51,7 +51,7 @@ class SendNotificationMockTest(unittest.TestCase):
         )
         third = self.enqueue("second", "query-3")
         self.assertEqual(
-            [first.notification_id, second.notification_id, third.notification_id],
+            [first.delivery_id, second.delivery_id, third.delivery_id],
             ["1", "2", "3"],
         )
         self.assertEqual(
@@ -60,6 +60,26 @@ class SendNotificationMockTest(unittest.TestCase):
         self.assertEqual(
             simple_server.NOTIFICATION_HISTORY_DB["delivery:2"].name, "second"
         )
+
+    def test_history_preserves_and_filters_query_id(self):
+        self.create_integration("oncall")
+        self.enqueue("oncall", "query-1")
+        self.enqueue("oncall", "query-2")
+        for query_id in ["query-1", "query-2", "missing"]:
+            with self.subTest(query_id=query_id):
+                response = self.service.ListNotificationHistory(
+                    notification_pb2.ListNotificationHistoryRequest(
+                        tenant_id="tenant", query_id=query_id
+                    ),
+                    self.context,
+                )
+                if query_id == "missing":
+                    self.assertFalse(response.notification_histories)
+                else:
+                    self.assertEqual(len(response.notification_histories), 1)
+                    self.assertEqual(
+                        response.notification_histories[0].query_id, query_id
+                    )
 
     def test_missing_and_disabled_integrations_are_not_enqueued(self):
         self.create_integration("disabled", enabled=False)
@@ -72,12 +92,30 @@ class SendNotificationMockTest(unittest.TestCase):
             self.assertEqual(error.exception.args[0], code)
         self.assertFalse(simple_server.NOTIFICATION_HISTORY_DB)
 
-    def test_missing_query_id_is_rejected_without_writing_history(self):
+    def test_query_id_is_optional_and_preserves_presence(self):
         self.create_integration("oncall")
-        with self.assertRaises(RuntimeError) as error:
-            self.enqueue("oncall", "")
-        self.assertEqual(error.exception.args[0], grpc.StatusCode.INVALID_ARGUMENT)
-        self.assertFalse(simple_server.NOTIFICATION_HISTORY_DB)
+        for query_id in [None, "", "query-id"]:
+            with self.subTest(query_id=query_id):
+                response = self.enqueue("oncall", query_id)
+                history = simple_server.NOTIFICATION_HISTORY_DB[
+                    "delivery:" + response.delivery_id
+                ]
+                self.assertEqual(history.HasField("query_id"), query_id is not None)
+                self.assertEqual(history.query_id, query_id or "")
+        unfiltered = self.service.ListNotificationHistory(
+            notification_pb2.ListNotificationHistoryRequest(tenant_id="tenant"),
+            self.context,
+        )
+        self.assertEqual(len(unfiltered.notification_histories), 3)
+        empty_id = self.service.ListNotificationHistory(
+            notification_pb2.ListNotificationHistoryRequest(
+                tenant_id="tenant", query_id=""
+            ),
+            self.context,
+        )
+        self.assertEqual(len(empty_id.notification_histories), 1)
+        self.assertTrue(empty_id.notification_histories[0].HasField("query_id"))
+        self.assertEqual(empty_id.notification_histories[0].query_id, "")
 
 
 if __name__ == "__main__":
