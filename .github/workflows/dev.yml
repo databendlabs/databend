@@ -20,7 +20,6 @@ jobs:
     outputs:
       any_src_changed: ${{ steps.src.outputs.any_changed }}
       bendpy_changed: ${{ steps.bendpy.outputs.any_changed }}
-      deps_changed: ${{ steps.deps.outputs.any_changed }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -43,21 +42,6 @@ jobs:
         with:
           files: |
             src/bendpy/**
-      # macOS clippy only catches platform-specific breakage, which comes from
-      # dependency / toolchain / build-script changes, not from ordinary Rust
-      # edits that linux check already covers.
-      - name: Check Dependency File Changes
-        uses: tj-actions/changed-files@v47
-        id: deps
-        with:
-          files: |
-            Cargo.toml
-            Cargo.lock
-            rust-toolchain.toml
-            .cargo/**
-            **/Cargo.toml
-            **/build.rs
-            .github/actions/check_macos/**
       - name: Output Source File Changes
         run: |
           if [[ "${{ steps.src.outputs.any_changed }}" == "true" ]]; then
@@ -82,7 +66,7 @@ jobs:
 
   mac_check:
     needs: changes
-    if: needs.changes.outputs.deps_changed == 'true'
+    if: needs.changes.outputs.any_src_changed == 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
@@ -132,7 +116,6 @@ jobs:
           AI_ASSISTANCE_TEST_RESULT: ${{ needs.ai_assistance_test.result }}
           SRC_CHANGED: ${{ needs.changes.outputs.any_src_changed }}
           BENDPY_CHANGED: ${{ needs.changes.outputs.bendpy_changed }}
-          DEPS_CHANGED: ${{ needs.changes.outputs.deps_changed }}
           LINUX_BUILD_RESULT: ${{ needs.linux.result }}
           MAC_CHECK_RESULT: ${{ needs.mac_check.result }}
           BENDPY_RESULT: ${{ needs.test_bendpy.result }}
@@ -142,16 +125,8 @@ jobs:
               core.setFailed(`AI assistance validator tests did not complete successfully (${process.env.AI_ASSISTANCE_TEST_RESULT}), not ready to merge`);
               return;
             }
-            if (process.env.SRC_CHANGED == 'false' && process.env.BENDPY_CHANGED == 'false' && process.env.DEPS_CHANGED == 'false') {
+            if (process.env.SRC_CHANGED == 'false' && process.env.BENDPY_CHANGED == 'false') {
               core.info('No source file changes detected, skipping');
-              return;
-            }
-            // mac_check runs whenever dependency/toolchain/build-script files change,
-            // independently of whether any_src_changed is true (e.g. a PR touching only
-            // .github/actions/check_macos/**). It must be green in that case; otherwise
-            // it is skipped and Linux clippy already covers the change.
-            if (process.env.DEPS_CHANGED == 'true' && process.env.MAC_CHECK_RESULT != 'success') {
-              core.setFailed(`macOS check did not complete successfully (${process.env.MAC_CHECK_RESULT}), not ready to merge`);
               return;
             }
             if (process.env.BENDPY_CHANGED == 'true' && process.env.BENDPY_RESULT != 'success') {
@@ -159,11 +134,15 @@ jobs:
               return;
             }
             if (process.env.SRC_CHANGED == 'false') {
-              core.info('Required dependency / bendpy checks succeeded, ready to merge');
+              core.info('Required bendpy checks succeeded, ready to merge');
+              return;
+            }
+            if (process.env.MAC_CHECK_RESULT != 'success') {
+              core.setFailed(`macOS check did not complete successfully (${process.env.MAC_CHECK_RESULT}), not ready to merge`);
               return;
             }
             if (process.env.LINUX_BUILD_RESULT == 'success') {
-              core.info('Linux build succeeded, ready to merge');
+              core.info('Linux build and macOS check succeeded, ready to merge');
               return;
             }
             core.setFailed('Build failed, not ready to merge');
