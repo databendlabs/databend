@@ -32,6 +32,7 @@ use crate::Symbol;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -196,3 +197,5 @@ impl Operator for Mutation {
         RelOp::MergeInto
     }
 }
+
+impl PhysicalOperator for Mutation {}

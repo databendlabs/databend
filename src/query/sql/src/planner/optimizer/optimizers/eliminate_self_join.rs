@@ -21,9 +21,31 @@ use log::info;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::SExprVisitor;
+use crate::optimizer::ir::VisitAction;
 use crate::optimizer::optimizers::DPhpyOptimizer;
 use crate::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
+use crate::optimizer::optimizers::rule::EagerAggregationRewriter;
 use crate::optimizer::optimizers::rule::RuleID;
+
+/// Speculative preparation retains the recursive-rule policy: children first,
+/// then the first legal eager candidate. Forced eager aggregation uses a different policy.
+struct PrepareSelfJoin(EagerAggregationRewriter);
+
+impl SExprVisitor for PrepareSelfJoin {
+    fn visit(&mut self, _: &SExpr) -> Result<VisitAction> {
+        Ok(VisitAction::Continue)
+    }
+
+    fn post_visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
+        if !expr.applied_rule(&RuleID::EagerAggregation)
+            && let Some(candidate) = self.0.candidates(expr)?.into_iter().next()
+        {
+            return Ok(VisitAction::Replace(candidate));
+        }
+        Ok(VisitAction::Continue)
+    }
+}
 
 pub struct EliminateSelfJoinOptimizer {
     opt_ctx: Arc<OptimizerContext>,
@@ -47,9 +69,11 @@ impl Optimizer for EliminateSelfJoinOptimizer {
         // return the original input plan to avoid keeping the eager-aggregation rewrite as a
         // standalone optimization.
         let start = Instant::now();
-        static RULES_EAGER_AGGREGATION: &[RuleID] = &[RuleID::EagerAggregation];
-        let optimizer = RecursiveRuleOptimizer::new(self.opt_ctx.clone(), RULES_EAGER_AGGREGATION);
-        let s_expr_after_eager_aggregation = optimizer.optimize_sync(s_expr.clone())?;
+        let mut prepare =
+            PrepareSelfJoin(EagerAggregationRewriter::new(self.opt_ctx.get_metadata()));
+        let s_expr_after_eager_aggregation = s_expr
+            .accept(&mut prepare)?
+            .unwrap_or_else(|| s_expr.clone());
 
         static RULES_ELIMINATE_SELF_JOIN: &[RuleID] = &[RuleID::EliminateSelfJoin];
         let optimizer =

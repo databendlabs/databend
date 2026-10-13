@@ -131,7 +131,10 @@ impl PhysicalPlanner {
         }
         let mut search = CascadesOptimizer::new(self.opt_ctx.clone())?;
         if self.opt_ctx.is_optimizer_disabled(CascadesOptimizer::NAME) {
-            return Ok(input.into());
+            // Skipping search must still lower logical aggregates for execution.
+            let output = crate::optimizer::ir::DefaultPhysicalPlanner::plan(&input)?;
+            self.validate(&output)?;
+            return Ok(output);
         }
         // Trace the real logical-to-physical transition; the input is not yet executable.
         let before = self.opt_ctx.get_enable_trace().then(|| input.clone());

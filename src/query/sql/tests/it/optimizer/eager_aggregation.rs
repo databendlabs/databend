@@ -24,11 +24,10 @@ use databend_common_sql::optimizer::optimizers::operator::RuleNormalizeAggregate
 use databend_common_sql::optimizer::optimizers::operator::RuleStatsAggregateOptimizer;
 use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
 use databend_common_sql::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
+use databend_common_sql::optimizer::optimizers::rule::EagerAggregationOptimizer;
 use databend_common_sql::optimizer::optimizers::rule::Rule;
 use databend_common_sql::optimizer::optimizers::rule::RuleEagerAggregation;
-use databend_common_sql::optimizer::optimizers::rule::RuleID;
 use databend_common_sql::optimizer::optimizers::rule::TransformResult;
-use databend_common_sql::plans::AggregateMode;
 use databend_common_sql::plans::Plan;
 
 use crate::framework::LiteTableContext;
@@ -73,7 +72,6 @@ async fn write_rule_results(file: &mut impl std::io::Write, case: &SqlTestCase) 
     before_expr.accept(&mut extractor)?;
     let results = extractor.results.results();
     for (result_index, result) in results.iter().enumerate() {
-        assert_no_initial_aggregate(result)?;
         result.validate_types(metadata)?;
         result.validate_column_scope(metadata)?;
         writeln!(file, "apply_plan_{result_index}:")?;
@@ -147,21 +145,6 @@ impl SExprVisitor for Extractor {
     }
 }
 
-/// The rule runs after `SplitAggregate`, so every candidate must stay split.
-fn assert_no_initial_aggregate(expr: &SExpr) -> Result<()> {
-    struct Check;
-    impl SExprVisitor for Check {
-        fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
-            if let Some(aggregate) = expr.plan().as_aggregate() {
-                assert_ne!(aggregate.mode, AggregateMode::Initial);
-            }
-            Ok(VisitAction::Continue)
-        }
-    }
-    expr.accept(&mut Check)?;
-    Ok(())
-}
-
 /// Mirrors the production pipeline up to the point where `RuleEagerAggregation` runs,
 /// without the cost-based join reordering in between.
 async fn optimize_before(
@@ -173,9 +156,7 @@ async fn optimize_before(
         .await?;
     let expr = RuleNormalizeAggregateOptimizer::new().optimize_sync(expr)?;
     let expr = PullUpFilterOptimizer::new(opt_ctx.clone()).optimize_sync(expr)?;
-    let expr =
-        RecursiveRuleOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES).optimize_sync(expr)?;
-    RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::SplitAggregate]).optimize_sync(expr)
+    RecursiveRuleOptimizer::new(opt_ctx, &DEFAULT_REWRITE_RULES).optimize_sync(expr)
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -351,11 +332,8 @@ GROUP BY ss_store_sk",
         unreachable!("test query should bind to Plan::Query")
     };
 
-    let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?);
-    let split = RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::SplitAggregate])
-        .optimize_sync((*s_expr).into_logical()?)?;
-    let rewritten = RuleEagerAggregation::new(metadata.clone()).optimize_sync(&split)?;
-    assert_no_initial_aggregate(&rewritten)?;
+    let rewritten =
+        EagerAggregationOptimizer::new(metadata.clone()).optimize_sync(s_expr.logical()?)?;
     rewritten.validate_types(&metadata)?;
 
     Ok(())
@@ -390,15 +368,10 @@ GROUP BY ss_store_sk"
         else {
             unreachable!("test query should bind to Plan::Query")
         };
-        let opt_ctx =
-            OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?);
-        let split = RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::SplitAggregate])
-            .optimize_sync((*s_expr).into_logical()?)?;
         let mut results = TransformResult::new();
-        RuleEagerAggregation::new(metadata.clone()).apply(&split, &mut results)?;
+        RuleEagerAggregation::new(metadata.clone()).apply(s_expr.logical()?, &mut results)?;
         assert_eq!(!results.results().is_empty(), eligible, "{aggregate}");
         for result in results.results() {
-            assert_no_initial_aggregate(result)?;
             result.validate_types(&metadata)?;
             result.validate_column_scope(&metadata)?;
         }
@@ -441,7 +414,6 @@ GROUP BY o_orderkey ORDER BY s DESC LIMIT 5",
         let results = extractor.results.results();
         assert!(!results.is_empty(), "{sql}");
         for result in results {
-            assert_no_initial_aggregate(result)?;
             result.validate_types(&metadata)?;
             result.validate_column_scope(&metadata)?;
         }
@@ -469,12 +441,8 @@ GROUP BY ss_store_sk"
         else {
             unreachable!("test query should bind to Plan::Query")
         };
-        let opt_ctx =
-            OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?);
-        let split = RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::SplitAggregate])
-            .optimize_sync((*s_expr).into_logical()?)?;
         let mut results = TransformResult::new();
-        RuleEagerAggregation::new(metadata.clone()).apply(&split, &mut results)?;
+        RuleEagerAggregation::new(metadata.clone()).apply(s_expr.logical()?, &mut results)?;
         assert!(results.results().is_empty(), "{aggregate}");
     }
     Ok(())

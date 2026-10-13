@@ -22,7 +22,6 @@ use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::PVisitAction as VisitAction;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::optimize;
-use databend_common_sql::plans::AggregateMode;
 use databend_common_sql::plans::Plan;
 
 use crate::framework::golden::SqlTestCase;
@@ -140,13 +139,15 @@ async fn test_when_subqueries_are_planned_with_source() -> Result<()> {
                 impl ExprVisitor<databend_common_sql::optimizer::ir::Physical> for Check {
                     fn visit(&mut self, expr: &PExpr) -> Result<VisitAction> {
                         self.joins += usize::from(expr.plan().as_join().is_some());
-                        if let Some(aggregate) = expr.plan().as_aggregate() {
-                            assert_ne!(
-                                aggregate.mode,
-                                AggregateMode::Initial,
-                                "WHEN aggregate skipped source lowering"
-                            );
-                        }
+                        assert!(
+                            !expr.plan().is_aggregate()
+                                || matches!(
+                                    expr.plan().as_aggregate().unwrap().mode,
+                                    databend_common_sql::plans::AggregateMode::Partial
+                                        | databend_common_sql::plans::AggregateMode::Final
+                                ),
+                            "WHEN aggregate skipped source lowering"
+                        );
                         Ok(VisitAction::Continue)
                     }
                 }

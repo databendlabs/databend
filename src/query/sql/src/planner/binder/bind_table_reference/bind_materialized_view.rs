@@ -68,7 +68,6 @@ use crate::optimizer::ir::SExpr;
 use crate::parse_materialized_view_query;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
-use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::ScalarItem;
@@ -273,7 +272,6 @@ impl Binder {
         }
 
         let aggregate = Aggregate {
-            mode: AggregateMode::Initial,
             group_items,
             aggregate_functions,
             from_distinct: false,

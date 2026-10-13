@@ -1,0 +1,324 @@
+=== grouped_aggregate ===
+description: Default planning and Memo search consume the same local implementation definitions.
+sql: SELECT k, sum(v) FROM t GROUP BY k
+raw_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2)]
+└── Aggregate(Initial)
+    ├── group items: [t.k (#0) AS (#0)]
+    ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+    └── EvalScalar
+        ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+default_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2)]
+└── Aggregate(Final)
+    ├── group items: [t.k (#0) AS (#0)]
+    ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+    └── Aggregate(Partial)
+        ├── group items: [t.k (#0) AS (#0)]
+        ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+        └── EvalScalar
+            ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+selected_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2)]
+└── Aggregate(Final)
+    ├── group items: [t.k (#0) AS (#0)]
+    ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+    └── Aggregate(Partial)
+        ├── group items: [t.k (#0) AS (#0)]
+        ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+        └── EvalScalar
+            ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+=== nested_aggregate_fragments ===
+description: Default planning and Memo search consume the same local implementation definitions.
+sql: SELECT sum(total) FROM (SELECT k, sum(v) AS total FROM t GROUP BY k) grouped
+raw_plan:
+EvalScalar
+├── scalars: [sum(total) (#3) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [sum(sum(v) (#2)) AS (#3)]
+    └── EvalScalar
+        ├── scalars: [sum(v) (#2) AS (#2)]
+        └── EvalScalar
+            ├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2)]
+            └── Aggregate(Initial)
+                ├── group items: [t.k (#0) AS (#0)]
+                ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+                └── EvalScalar
+                    ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+                    └── Scan
+                        ├── table: default.t (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+default_plan:
+EvalScalar
+├── scalars: [sum(total) (#3) AS (#3)]
+└── Aggregate(Final)
+    ├── group items: []
+    ├── aggregate functions: [sum(sum(v) (#2)) AS (#3)]
+    └── Aggregate(Partial)
+        ├── group items: []
+        ├── aggregate functions: [sum(sum(v) (#2)) AS (#3)]
+        └── EvalScalar
+            ├── scalars: [sum(v) (#2) AS (#2)]
+            └── EvalScalar
+                ├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2)]
+                └── Aggregate(Final)
+                    ├── group items: [t.k (#0) AS (#0)]
+                    ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+                    └── Aggregate(Partial)
+                        ├── group items: [t.k (#0) AS (#0)]
+                        ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+                        └── EvalScalar
+                            ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+                            └── Scan
+                                ├── table: default.t (#0)
+                                ├── filters: []
+                                ├── order by: []
+                                └── limit: NONE
+
+selected_plan:
+EvalScalar
+├── scalars: [sum(total) (#3) AS (#3)]
+└── Aggregate(Final)
+    ├── group items: []
+    ├── aggregate functions: [sum(sum(v) (#2)) AS (#3)]
+    └── Aggregate(Partial)
+        ├── group items: []
+        ├── aggregate functions: [sum(sum(v) (#2)) AS (#3)]
+        └── EvalScalar
+            ├── scalars: [sum(v) (#2) AS (#2)]
+            └── EvalScalar
+                ├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2)]
+                └── Aggregate(Final)
+                    ├── group items: [t.k (#0) AS (#0)]
+                    ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+                    └── Aggregate(Partial)
+                        ├── group items: [t.k (#0) AS (#0)]
+                        ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+                        └── EvalScalar
+                            ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+                            └── Scan
+                                ├── table: default.t (#0)
+                                ├── filters: []
+                                ├── order by: []
+                                └── limit: NONE
+
+=== union_aggregate_stage_dispatch ===
+description: Default planning and Memo search consume the same local implementation definitions.
+sql: SELECT k, sum(v) AS total FROM t WHERE v > 0 GROUP BY k
+             UNION ALL SELECT k, sum(v) AS total FROM t WHERE v < 0 GROUP BY k
+             ORDER BY k LIMIT 3
+raw_plan:
+Limit
+├── limit: [3]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [k (#6) ASC NULLS LAST]
+    ├── limit: [NONE]
+    └── UnionAll
+        ├── output: [k (#6), total (#7)]
+        ├── left: [t.k (#0), sum(v) (#2)]
+        ├── right: [t.k (#3), sum(v) (#5)]
+        ├── cte_scan_names: []
+        ├── logical_recursive_cte_id: None
+        ├── EvalScalar
+        │   ├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2)]
+        │   └── Aggregate(Initial)
+        │       ├── group items: [t.k (#0) AS (#0)]
+        │       ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+        │       └── EvalScalar
+        │           ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+        │           └── Filter
+        │               ├── filters: [gt(t.v (#1), 0)]
+        │               └── Scan
+        │                   ├── table: default.t (#0)
+        │                   ├── filters: []
+        │                   ├── order by: []
+        │                   └── limit: NONE
+        └── EvalScalar
+            ├── scalars: [t.k (#3) AS (#3), sum(v) (#5) AS (#5)]
+            └── Aggregate(Initial)
+                ├── group items: [t.k (#3) AS (#3)]
+                ├── aggregate functions: [sum(t.v (#4)) AS (#5)]
+                └── EvalScalar
+                    ├── scalars: [t.k (#3) AS (#3), t.v (#4) AS (#4)]
+                    └── Filter
+                        ├── filters: [lt(t.v (#4), 0)]
+                        └── Scan
+                            ├── table: default.t (#1)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+default_plan:
+Limit
+├── limit: [3]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [k (#6) ASC NULLS LAST]
+    ├── limit: [NONE]
+    └── UnionAll
+        ├── output: [k (#6), total (#7)]
+        ├── left: [t.k (#0), sum(v) (#2)]
+        ├── right: [t.k (#3), sum(v) (#5)]
+        ├── cte_scan_names: []
+        ├── logical_recursive_cte_id: None
+        ├── EvalScalar
+        │   ├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2)]
+        │   └── Aggregate(Final)
+        │       ├── group items: [t.k (#0) AS (#0)]
+        │       ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+        │       └── Aggregate(Partial)
+        │           ├── group items: [t.k (#0) AS (#0)]
+        │           ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+        │           └── EvalScalar
+        │               ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+        │               └── Filter
+        │                   ├── filters: [gt(t.v (#1), 0)]
+        │                   └── Scan
+        │                       ├── table: default.t (#0)
+        │                       ├── filters: []
+        │                       ├── order by: []
+        │                       └── limit: NONE
+        └── EvalScalar
+            ├── scalars: [t.k (#3) AS (#3), sum(v) (#5) AS (#5)]
+            └── Aggregate(Final)
+                ├── group items: [t.k (#3) AS (#3)]
+                ├── aggregate functions: [sum(t.v (#4)) AS (#5)]
+                └── Aggregate(Partial)
+                    ├── group items: [t.k (#3) AS (#3)]
+                    ├── aggregate functions: [sum(t.v (#4)) AS (#5)]
+                    └── EvalScalar
+                        ├── scalars: [t.k (#3) AS (#3), t.v (#4) AS (#4)]
+                        └── Filter
+                            ├── filters: [lt(t.v (#4), 0)]
+                            └── Scan
+                                ├── table: default.t (#1)
+                                ├── filters: []
+                                ├── order by: []
+                                └── limit: NONE
+
+selected_plan:
+Limit
+├── limit: [3]
+├── offset: [0]
+└── Sort
+    ├── sort keys: [k (#6) ASC NULLS LAST]
+    ├── limit: [NONE]
+    └── UnionAll
+        ├── output: [k (#6), total (#7)]
+        ├── left: [t.k (#0), sum(v) (#2)]
+        ├── right: [t.k (#3), sum(v) (#5)]
+        ├── cte_scan_names: []
+        ├── logical_recursive_cte_id: None
+        ├── EvalScalar
+        │   ├── scalars: [t.k (#0) AS (#0), sum(v) (#2) AS (#2)]
+        │   └── Aggregate(Final)
+        │       ├── group items: [t.k (#0) AS (#0)]
+        │       ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+        │       └── Aggregate(Partial)
+        │           ├── group items: [t.k (#0) AS (#0)]
+        │           ├── aggregate functions: [sum(t.v (#1)) AS (#2)]
+        │           └── EvalScalar
+        │               ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+        │               └── Filter
+        │                   ├── filters: [gt(t.v (#1), 0)]
+        │                   └── Scan
+        │                       ├── table: default.t (#0)
+        │                       ├── filters: []
+        │                       ├── order by: []
+        │                       └── limit: NONE
+        └── EvalScalar
+            ├── scalars: [t.k (#3) AS (#3), sum(v) (#5) AS (#5)]
+            └── Aggregate(Final)
+                ├── group items: [t.k (#3) AS (#3)]
+                ├── aggregate functions: [sum(t.v (#4)) AS (#5)]
+                └── Aggregate(Partial)
+                    ├── group items: [t.k (#3) AS (#3)]
+                    ├── aggregate functions: [sum(t.v (#4)) AS (#5)]
+                    └── EvalScalar
+                        ├── scalars: [t.k (#3) AS (#3), t.v (#4) AS (#4)]
+                        └── Filter
+                            ├── filters: [lt(t.v (#4), 0)]
+                            └── Scan
+                                ├── table: default.t (#1)
+                                ├── filters: []
+                                ├── order by: []
+                                └── limit: NONE
+
+=== grouping_sets_stage_scope ===
+description: Default planning and Memo search consume the same local implementation definitions.
+sql: SELECT k, grouping(k) AS g, sum(v) AS total FROM t
+             GROUP BY GROUPING SETS ((k), ())
+raw_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), sum(v) (#4) AS (#4), grouping(0)(_grouping_id (#3)) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: [t.k (#0) AS (#0), _grouping_id (#3) AS (#3)]
+    ├── aggregate functions: [sum(t.v (#1)) AS (#4)]
+    └── EvalScalar
+        ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+default_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), sum(v) (#4) AS (#4), grouping(0)(_grouping_id (#3)) AS (#5)]
+└── Aggregate(Final)
+    ├── group items: [t.k (#0) AS (#0), _grouping_id (#3) AS (#3)]
+    ├── aggregate functions: [sum(t.v (#1)) AS (#4)]
+    └── Aggregate(Partial)
+        ├── group items: [t.k (#0) AS (#0), _grouping_id (#3) AS (#3)]
+        ├── aggregate functions: [sum(t.v (#1)) AS (#4)]
+        └── EvalScalar
+            ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+selected_plan:
+EvalScalar
+├── scalars: [t.k (#0) AS (#0), sum(v) (#4) AS (#4), grouping(0)(_grouping_id (#3)) AS (#5)]
+└── Aggregate(Final)
+    ├── group items: [t.k (#0) AS (#0), _grouping_id (#3) AS (#3)]
+    ├── aggregate functions: [sum(t.v (#1)) AS (#4)]
+    └── Aggregate(Partial)
+        ├── group items: [t.k (#0) AS (#0), _grouping_id (#3) AS (#3)]
+        ├── aggregate functions: [sum(t.v (#1)) AS (#4)]
+        └── EvalScalar
+            ├── scalars: [t.k (#0) AS (#0), t.v (#1) AS (#1)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+

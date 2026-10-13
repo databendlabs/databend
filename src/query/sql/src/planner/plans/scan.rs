@@ -51,6 +51,7 @@ use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics as OpStatistics;
 use crate::optimizer::ir::TopNSet;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::SortItem;
@@ -302,12 +303,6 @@ impl Operator for Scan {
         }))
     }
 
-    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        Ok(PhysicalProperty {
-            distribution: Distribution::Random,
-        })
-    }
-
     fn derive_stats(&self, _rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         let used_columns = self.used_columns();
 
@@ -438,6 +433,14 @@ impl Operator for Scan {
                 count_min_sketch: output_count_min_sketch,
             },
         }))
+    }
+}
+
+impl PhysicalOperator for Scan {
+    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
+        Ok(PhysicalProperty {
+            distribution: Distribution::Random,
+        })
     }
 
     // Won't be invoked at all, since `PhysicalScan` is leaf node

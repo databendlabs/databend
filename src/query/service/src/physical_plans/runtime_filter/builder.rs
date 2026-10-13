@@ -36,7 +36,7 @@ use databend_common_sql::plans::Exchange;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinEquiCondition;
 use databend_common_sql::plans::JoinType;
-use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::PhysicalRelOperator;
 use databend_common_sql::plans::ScalarExpr;
 
 use super::types::PhysicalRuntimeFilter;
@@ -322,7 +322,7 @@ fn propagate_probe_targets(
 fn collect_equi_conditions(s_expr: &PExpr) -> Result<Vec<JoinEquiCondition>> {
     let mut conditions = Vec::new();
 
-    if let RelOperator::Join(join) = s_expr.plan() {
+    if let PhysicalRelOperator::Join(join) = s_expr.plan() {
         if matches!(join.join_type, JoinType::Inner) {
             conditions.extend(join.equi_conditions.clone());
         }

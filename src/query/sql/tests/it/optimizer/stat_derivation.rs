@@ -27,6 +27,7 @@ use databend_common_sql::optimizer::CollectStatisticsOptimizer;
 use databend_common_sql::optimizer::Optimizer;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::ColumnStat;
+use databend_common_sql::optimizer::ir::DefaultPhysicalPlanner;
 use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::StatContext;
@@ -169,7 +170,7 @@ async fn write_case(file: &mut impl Write, case: &StatsCase) -> Result<()> {
         let s_expr = collector.optimize((*s_expr).into_logical()?).await?;
         let s_expr = RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::PushDownLimitSort])
             .optimize_sync(s_expr)?;
-        (PExpr::from(s_expr), metadata)
+        (DefaultPhysicalPlanner::plan(&s_expr)?, metadata)
     } else {
         let Plan::Query {
             s_expr, metadata, ..
