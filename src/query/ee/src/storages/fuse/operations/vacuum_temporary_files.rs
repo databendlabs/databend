@@ -69,6 +69,8 @@ const DELETE_BATCH_FILES: usize = 1000;
 struct DeleteOutcome {
     /// Files actually removed. A batch that fails counts as `0` and is left for the next run.
     removed: usize,
+    /// The batch was rejected, for whatever reason, and nothing in it was removed.
+    failed: bool,
     /// The batch itself was rejected as rate limited.
     rate_limited: bool,
     /// `RateLimited` retries recorded process-wide while the batch was in flight. The retry
@@ -80,6 +82,7 @@ impl DeleteOutcome {
     /// Merge the outcome of a further batch issued by the same task.
     fn absorb(&mut self, other: DeleteOutcome) {
         self.removed += other.removed;
+        self.failed |= other.failed;
         self.rate_limited |= other.rate_limited;
         self.retried += other.retried;
     }
@@ -107,6 +110,7 @@ impl SpillDeleter {
         match result {
             Ok(()) => DeleteOutcome {
                 removed: n,
+                failed: false,
                 rate_limited: false,
                 retried,
             },
@@ -117,6 +121,7 @@ impl SpillDeleter {
                 );
                 DeleteOutcome {
                     removed: 0,
+                    failed: true,
                     rate_limited: e.kind() == ErrorKind::RateLimited,
                     retried,
                 }
@@ -135,7 +140,9 @@ impl SpillDeleter {
 /// depends on the store, not the node: 32 already triggers `SlowDown` storms, 1 is latency-bound.
 /// Every `RAMP_UP_BATCHES` clear batches raise the bound by one; a throttled batch halves it, at
 /// most once per `DECREASE_COOLDOWN` so one throttling episode (visible to every overlapping
-/// batch for the 1s/2s/4s retry back-offs) is counted once.
+/// batch for the 1s/2s/4s retry back-offs) is counted once. A batch that failed for any other
+/// reason is not clear either: it holds the bound where it is, so a persistent backend error
+/// does not get amplified by ramping up.
 struct AdaptiveConcurrency(Mutex<ConcurrencyState>);
 
 struct ConcurrencyState {
@@ -173,9 +180,15 @@ impl AdaptiveConcurrency {
     fn observe(&self, outcome: &DeleteOutcome, now: Instant) {
         if self.is_throttled(outcome) {
             self.back_off(now);
+        } else if outcome.failed {
+            self.hold();
         } else {
             self.ramp_up();
         }
+    }
+
+    fn hold(&self) {
+        self.0.lock().clear_streak = 0;
     }
 
     fn ramp_up(&self) {
@@ -270,7 +283,7 @@ impl Pacing {
     /// `false` once the task must stop issuing batches: the last one failed, or, when
     /// scheduled, the store pushed back or the command is being aborted.
     fn continues_after(&self, outcome: &DeleteOutcome) -> bool {
-        if outcome.removed == 0 {
+        if outcome.failed {
             return false;
         }
         match self {
@@ -790,7 +803,7 @@ async fn delete_by_meta_buffer(
         budget -= batch.len();
         let outcome = deleter.delete(batch, meta_path).await;
         total.absorb(outcome);
-        if outcome.removed == 0 {
+        if outcome.failed {
             // Failed batch: keep it in the manifest for the next run.
             stopped_early = true;
             break;
@@ -900,7 +913,7 @@ async fn delete_listed(
         total.absorb(outcome);
         if exhausted {
             // The marker was in this batch: the directory is gone iff the batch went through.
-            finished = outcome.removed > 0;
+            finished = !outcome.failed;
             break;
         }
         if !pacing.continues_after(&outcome) {

@@ -305,6 +305,7 @@ mod unit {
     fn clear() -> DeleteOutcome {
         DeleteOutcome {
             removed: 1,
+            failed: false,
             rate_limited: false,
             retried: 0,
         }
@@ -313,7 +314,18 @@ mod unit {
     fn rate_limited() -> DeleteOutcome {
         DeleteOutcome {
             removed: 0,
+            failed: true,
             rate_limited: true,
+            retried: 0,
+        }
+    }
+
+    /// Rejected for a reason other than throttling (network, backend error).
+    fn failed() -> DeleteOutcome {
+        DeleteOutcome {
+            removed: 0,
+            failed: true,
+            rate_limited: false,
             retried: 0,
         }
     }
@@ -321,6 +333,7 @@ mod unit {
     fn retried(n: usize) -> DeleteOutcome {
         DeleteOutcome {
             removed: 1,
+            failed: false,
             rate_limited: false,
             retried: n,
         }
@@ -348,6 +361,32 @@ mod unit {
             c.observe(&clear(), t0);
         }
         assert_eq!(c.current(), AdaptiveConcurrency::MAX);
+    }
+
+    /// A batch that failed for a reason other than throttling is not a clear batch: it must
+    /// neither halve the bound nor count towards raising it, or a persistent backend error
+    /// would see the vacuum ramp up to `MAX` while every delete fails.
+    #[test]
+    fn test_adaptive_concurrency_holds_on_failed_batches() {
+        let c = AdaptiveConcurrency::new();
+        let t0 = Instant::now();
+
+        for _ in 0..AdaptiveConcurrency::MAX * AdaptiveConcurrency::RAMP_UP_BATCHES {
+            c.observe(&failed(), t0);
+        }
+        assert_eq!(c.current(), AdaptiveConcurrency::INIT);
+
+        // A failure also resets the streak of clear batches.
+        for _ in 0..AdaptiveConcurrency::RAMP_UP_BATCHES - 1 {
+            c.observe(&clear(), t0);
+        }
+        c.observe(&failed(), t0);
+        c.observe(&clear(), t0);
+        assert_eq!(c.current(), AdaptiveConcurrency::INIT);
+        for _ in 0..AdaptiveConcurrency::RAMP_UP_BATCHES - 1 {
+            c.observe(&clear(), t0);
+        }
+        assert_eq!(c.current(), AdaptiveConcurrency::INIT + 1);
     }
 
     #[test]
@@ -416,9 +455,10 @@ mod unit {
         assert!(Pacing::Drain.continues_after(&clear()));
         assert!(Pacing::Drain.continues_after(&retried(1)));
         assert!(
-            !Pacing::Drain.continues_after(&rate_limited()),
+            !Pacing::Drain.continues_after(&failed()),
             "a failed batch still stops"
         );
+        assert!(!Pacing::Drain.continues_after(&rate_limited()));
 
         // The command stops issuing batches once it is aborted.
         let aborted = Pacing::Scheduled(AbortAfter::checks(0));
