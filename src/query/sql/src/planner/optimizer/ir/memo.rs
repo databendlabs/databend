@@ -167,3 +167,59 @@ impl Memo {
         self.groups.len()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Symbol;
+    use crate::optimizer::ir::PhysicalProperty;
+    use crate::optimizer::optimizers::rule::AppliedRules;
+    use crate::plans::Join;
+
+    #[test]
+    fn memo_property_views_resolve_child_positions_not_parent_group() -> Result<()> {
+        let mut memo = Memo::new(StatContext::default());
+        let mut groups = vec![];
+        for (column, rows) in [(1, 10.0), (2, 20.0), (99, 777.0)] {
+            groups.push(memo.add_group(
+                Arc::new(RelationalProperty {
+                    output_columns: [Symbol::new(column)].into_iter().collect(),
+                    ..Default::default()
+                }),
+                Arc::new(StatInfo {
+                    cardinality: rows,
+                    ..Default::default()
+                }),
+            ));
+        }
+        let expr = MExpr::new(
+            groups[2],
+            0,
+            Arc::new(RelOperator::Join(Join::default())),
+            vec![groups[0], groups[1]],
+            AppliedRules::default(),
+        );
+        let child_physical_props = vec![PhysicalProperty::default(); 2];
+        for view in [
+            RelExpr::with_m_expr(&expr, &memo),
+            RelExpr::with_opt_context(&expr, &memo, &child_physical_props),
+        ] {
+            for (index, group) in groups[..2].iter().enumerate() {
+                assert!(Arc::ptr_eq(
+                    &view.derive_relational_prop_child(index)?,
+                    &memo.group(*group)?.relational_prop,
+                ));
+                assert!(Arc::ptr_eq(
+                    &view.derive_cardinality_child(index, &StatContext::default())?,
+                    &memo.group(*group)?.stat_info,
+                ));
+            }
+            assert!(view.derive_relational_prop_child(2).is_err());
+            assert!(
+                view.derive_cardinality_child(2, &StatContext::default())
+                    .is_err()
+            );
+        }
+        Ok(())
+    }
+}

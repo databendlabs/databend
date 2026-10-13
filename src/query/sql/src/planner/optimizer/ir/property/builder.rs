@@ -98,13 +98,13 @@ impl<'a> RelExpr<'a> {
                 rel_expr.derive_relational_prop()
             }
             RelExpr::MExpr { expr, memo } => {
-                Ok(memo.group(expr.group_index)?.relational_prop.clone())
+                Ok(expr.child_group(memo, index)?.relational_prop.clone())
             }
             RelExpr::OptContext {
                 expr,
                 memo,
                 children_best_props: _,
-            } => Ok(memo.group(expr.group_index)?.relational_prop.clone()),
+            } => Ok(expr.child_group(memo, index)?.relational_prop.clone()),
         }
     }
 
@@ -135,9 +135,9 @@ impl<'a> RelExpr<'a> {
                 let rel_expr = RelExpr::with_s_expr(child);
                 rel_expr.derive_cardinality(stat_ctx)
             }
-            RelExpr::MExpr { expr, memo } => Ok(memo.group(expr.group_index)?.stat_info.clone()),
+            RelExpr::MExpr { expr, memo } => Ok(expr.child_group(memo, index)?.stat_info.clone()),
             RelExpr::OptContext { expr, memo, .. } => {
-                Ok(memo.group(expr.group_index)?.stat_info.clone())
+                Ok(expr.child_group(memo, index)?.stat_info.clone())
             }
         }
     }
