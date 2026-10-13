@@ -51,6 +51,7 @@ pub struct VirtualColumnInfo {
     /// from them are served by the virtual column file. Source columns that the
     /// scan outputs or uses in prewhere are excluded, since their own values
     /// are required.
+    #[serde(default)]
     pub ignorable_source_column_ids: HashSet<u32>,
     /// The virtual column fields info.
     pub virtual_column_fields: Vec<VirtualColumnField>,
