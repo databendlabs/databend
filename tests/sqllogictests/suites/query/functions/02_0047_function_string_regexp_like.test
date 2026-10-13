@@ -405,3 +405,44 @@ query B
 SELECT GLOB('abc', 'abcd')
 ----
 0
+
+# Partial evaluation preserves row alignment and NULLs, and masks errors only
+# on inactive rows. CASE uses the same partial-evaluation path as IF.
+query BB
+SELECT
+    IF(enabled, source REGEXP pat, FALSE),
+    CASE WHEN NOT enabled THEN FALSE
+         WHEN enabled THEN regexp_like(source, pat, mt)
+         ELSE FALSE END
+FROM (VALUES
+    (0, TRUE,  'dog cat', 'dog', 'c'),
+    (1, FALSE, 'dog cat', '[',   'invalid'),
+    (2, TRUE,  'cat',     'dog', 'c'),
+    (3, TRUE,  NULL,      '[',   'invalid'),
+    (4, TRUE,  'dog cat', NULL,  'invalid')
+) AS t(id, enabled, source, pat, mt)
+ORDER BY id
+----
+1 1
+0 0
+0 0
+NULL NULL
+NULL NULL
+
+# Scalar calls still work when row zero is inactive.
+query BB
+SELECT
+    IF(number = 1, 'dog' REGEXP 'dog', FALSE),
+    IF(number = 1, regexp_like('dog', 'dog'), FALSE)
+FROM numbers(2)
+ORDER BY number
+----
+0 0
+1 1
+
+# An invalid pattern on an active row must still report an error.
+statement error 1006
+SELECT IF(number = 1, to_string(number) REGEXP '[', FALSE) FROM numbers(2)
+
+statement error 1006
+SELECT IF(number = 1, regexp_like(to_string(number), '['), FALSE) FROM numbers(2)

@@ -399,6 +399,7 @@ impl TestFixture {
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,
+            index_user_dictionaries: None,
         }
     }
 
@@ -429,6 +430,7 @@ impl TestFixture {
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,
+            index_user_dictionaries: None,
         }
     }
 
@@ -474,6 +476,7 @@ impl TestFixture {
             table_constraints: None,
             attached_columns: None,
             table_partition: None,
+            index_user_dictionaries: None,
         }
     }
 
@@ -515,6 +518,7 @@ impl TestFixture {
             table_constraints: None,
             attached_columns: None,
             table_properties: Default::default(),
+            index_user_dictionaries: None,
         }
     }
 
@@ -565,6 +569,7 @@ impl TestFixture {
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,
+            index_user_dictionaries: None,
         }
     }
 

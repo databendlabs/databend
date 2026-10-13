@@ -637,6 +637,7 @@ async fn create_memory_table_for_cte_scan(
                     table_indexes: None,
                     table_constraints: None,
                     attached_columns: None,
+                    index_user_dictionaries: None,
                 });
             }
 

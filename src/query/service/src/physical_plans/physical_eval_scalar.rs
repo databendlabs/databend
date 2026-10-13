@@ -35,7 +35,7 @@ use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::optimizer::ir::Matcher;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::Filter;
 use databend_common_sql::plans::FunctionCall;
@@ -209,7 +209,7 @@ impl IPhysicalPlan for EvalScalar {
 impl PhysicalPlanBuilder {
     pub async fn build_eval_scalar(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         eval_scalar: &databend_common_sql::plans::EvalScalar,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
@@ -305,8 +305,8 @@ impl PhysicalPlanBuilder {
     fn try_eliminate_flatten_columns(
         &mut self,
         scalar_items: &Vec<ScalarItem>,
-        s_expr: &SExpr,
-    ) -> Result<Option<SExpr>> {
+        s_expr: &PExpr,
+    ) -> Result<Option<PExpr>> {
         // (1) ProjectSet
         //      \
         //       *
@@ -352,7 +352,7 @@ impl PhysicalPlanBuilder {
             let mut new_child = child.clone();
             new_child.plan = Arc::new(new_project_set.into());
             let new_filter =
-                SExpr::create_unary(Arc::new(s_expr.plan().clone()), Arc::new(new_child));
+                PExpr::create_unary(Arc::new(s_expr.plan().clone()), Arc::new(new_child));
             Ok(Some(new_filter))
         } else {
             let project_set: ProjectSet = s_expr.plan().clone().try_into()?;

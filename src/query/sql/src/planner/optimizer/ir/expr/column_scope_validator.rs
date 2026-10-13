@@ -15,7 +15,8 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use super::SExpr;
+use super::node::Expr;
+use super::node::RelExprKind;
 use crate::ColumnSet;
 use crate::MetadataRef;
 use crate::Symbol;
@@ -26,7 +27,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::Visitor as ScalarExprVisitor;
 
-impl SExpr {
+impl<K: RelExprKind> Expr<K> {
     /// Validate that every column an operator references is produced by its inputs.
     ///
     /// For each node, the columns referenced by its scalar expressions must be a subset of
@@ -50,7 +51,7 @@ struct ColumnScopeValidator<'a> {
 
 impl ColumnScopeValidator<'_> {
     #[recursive::recursive]
-    fn validate(&self, s_expr: &SExpr, ambient: &ColumnSet) -> Result<()> {
+    fn validate<K: RelExprKind>(&self, s_expr: &Expr<K>, ambient: &ColumnSet) -> Result<()> {
         let plan = s_expr.plan();
 
         let mut available = ambient.clone();
@@ -86,14 +87,14 @@ impl ColumnScopeValidator<'_> {
         if let RelOperator::WindowGroup(group) = plan {
             // The physical builder evaluates scalar items over the child before evaluating
             // windows. An item cannot read its own output or another item's output.
-            self.validate_scalars(
+            self.validate_scalars::<K>(
                 plan,
                 group.scalar_items.iter().map(|item| &item.scalar),
                 &available,
             )?;
             let mut window_available = available.clone();
             window_available.extend(group.scalar_items.iter().map(|item| item.index));
-            self.validate_scalars(
+            self.validate_scalars::<K>(
                 plan,
                 group
                     .windows
@@ -102,7 +103,7 @@ impl ColumnScopeValidator<'_> {
                 &window_available,
             )?;
         } else {
-            self.validate_scalars(plan, plan.scalar_expr_iter(), &available)?;
+            self.validate_scalars::<K>(plan, plan.scalar_expr_iter(), &available)?;
         }
         // The right side of a LATERAL join is correlated to the left side without a
         // `SubqueryExpr`, so the left outputs become its ambient scope.
@@ -126,7 +127,7 @@ impl ColumnScopeValidator<'_> {
         Ok(())
     }
 
-    fn validate_scalars<'a>(
+    fn validate_scalars<'a, K: RelExprKind>(
         &self,
         plan: &RelOperator,
         scalars: impl IntoIterator<Item = &'a ScalarExpr>,
@@ -151,7 +152,8 @@ impl ColumnScopeValidator<'_> {
         drop(metadata);
         if !unresolved.is_empty() {
             return Err(ErrorCode::Internal(format!(
-                "SExpr column scope violation in {:?}: references {} which no input produces; available columns: {}",
+                "{} column scope violation in {:?}: references {} which no input produces; available columns: {}",
+                K::NAME,
                 plan.rel_op(),
                 self.describe(&unresolved),
                 self.describe(&available.iter().copied().collect::<Vec<_>>()),
@@ -217,6 +219,7 @@ mod tests {
     use crate::ColumnBindingBuilder;
     use crate::Metadata;
     use crate::Visibility;
+    use crate::optimizer::ir::SExpr;
     use crate::plans::BoundColumnRef;
     use crate::plans::EvalScalar;
     use crate::plans::ExpressionScan;

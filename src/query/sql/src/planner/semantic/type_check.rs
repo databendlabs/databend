@@ -37,7 +37,6 @@ use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
-use databend_common_settings::Settings;
 use databend_common_users::UserApiProvider;
 use databend_common_users::security_policy_cache::CachedSecurityPolicy;
 use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
@@ -64,6 +63,8 @@ mod date;
 mod in_list;
 mod lambda;
 mod literal;
+mod persisted;
+pub use persisted::PersistedTypeCheckAdapter;
 mod resolve;
 mod rewrite_function;
 mod scalar_function;
@@ -264,6 +265,39 @@ pub enum AuthFunction {
     CurrentTenantId,
 }
 
+impl NamespaceFunction {
+    pub fn name(&self) -> &'static str {
+        match self {
+            NamespaceFunction::CurrentCatalog => "current_catalog()",
+            NamespaceFunction::CurrentDatabase => "current_database()",
+        }
+    }
+}
+
+impl SessionFunction<'_> {
+    pub fn name(&self) -> &'static str {
+        match self {
+            SessionFunction::Version => "version()",
+            SessionFunction::ConnectionId => "connection_id()",
+            SessionFunction::ClientSessionId => "client_session_id()",
+            SessionFunction::LastQueryId(_) => "last_query_id()",
+            SessionFunction::Variable(_) => "getvariable()",
+        }
+    }
+}
+
+impl AuthFunction {
+    pub fn name(&self) -> &'static str {
+        match self {
+            AuthFunction::CurrentUser => "current_user()",
+            AuthFunction::CurrentRole => "current_role()",
+            AuthFunction::CurrentSecondaryRoles => "current_secondary_roles()",
+            AuthFunction::CurrentAvailableRoles => "current_available_roles()",
+            AuthFunction::CurrentTenantId => "current_tenant_id()",
+        }
+    }
+}
+
 pub struct TypeCheckSubqueryPlan {
     pub s_expr: SExpr,
     pub output_context: BindContext,
@@ -296,8 +330,25 @@ struct FullTypeCheckAdapterDependencies {
     cloud_control_api_provider: Option<Arc<CloudControlApiProvider>>,
 }
 
+/// Attach a location to semantic diagnostics without changing runtime/access
+/// errors or replacing a more precise location from a nested expression.
+fn with_semantic_span(err: ErrorCode, span: Span) -> ErrorCode {
+    if err.code() == ErrorCode::SemanticError("").code() && err.span().is_none() {
+        err.set_span(span)
+    } else {
+        err
+    }
+}
+
 fn missing_type_check_adapter_dependency(name: &str) -> ErrorCode {
-    ErrorCode::Internal(format!("type check adapter does not provide {name}"))
+    ErrorCode::SemanticError(format!("type check adapter does not provide {name}"))
+}
+
+fn unsupported_context_function(name: &str, hint: Option<&str>) -> ErrorCode {
+    let hint = hint.map(|hint| format!("; {hint}")).unwrap_or_default();
+    ErrorCode::SemanticError(format!(
+        "`{name}` depends on the session or query context and is not allowed in persisted or storage-level expressions{hint}"
+    ))
 }
 
 pub trait UdfAdapter: Clone {
@@ -342,7 +393,24 @@ pub trait TypeCheckAdapter: Clone + Sized {
 
     fn function_context(&self) -> Result<FunctionContext>;
 
-    fn settings(&self) -> Arc<Settings>;
+    fn sql_dialect(&self) -> Result<Dialect>;
+
+    fn inlist_to_join_threshold(&self) -> Result<usize>;
+
+    fn max_inlist_to_or(&self) -> Result<u64>;
+
+    fn enable_decimal_sum_widening(&self) -> Result<bool>;
+
+    fn timezone(&self) -> Result<String> {
+        Err(unsupported_context_function("timezone()", None))
+    }
+
+    fn default_nulls_first(&self, _asc: bool) -> Result<bool> {
+        Err(unsupported_context_function(
+            "array_sort()",
+            Some("specify NULLS FIRST or NULLS LAST explicitly"),
+        ))
+    }
 
     fn aggregate_function_registry(&self) -> &'static AggregateRegistry;
 
@@ -383,27 +451,23 @@ pub trait TypeCheckAdapter: Clone + Sized {
         Err(missing_type_check_adapter_dependency("subquery planner"))
     }
 
-    fn resolve_namespace_function(&self, _function: NamespaceFunction) -> Result<Scalar> {
-        Err(missing_type_check_adapter_dependency("namespace function"))
+    fn resolve_namespace_function(&self, function: NamespaceFunction) -> Result<Scalar> {
+        Err(unsupported_context_function(function.name(), None))
     }
 
-    fn resolve_session_function(&self, _function: SessionFunction<'_>) -> Result<Scalar> {
-        Err(missing_type_check_adapter_dependency("session function"))
+    fn resolve_session_function(&self, function: SessionFunction<'_>) -> Result<Scalar> {
+        Err(unsupported_context_function(function.name(), None))
     }
 
-    fn resolve_authorization_function(&self, _function: AuthFunction) -> Result<Scalar> {
-        Err(missing_type_check_adapter_dependency(
-            "authorization function",
-        ))
+    fn resolve_authorization_function(&self, function: AuthFunction) -> Result<Scalar> {
+        Err(unsupported_context_function(function.name(), None))
     }
 
     fn resolve_effective_role_names(&self) -> Result<Vec<String>> {
-        Err(missing_type_check_adapter_dependency(
-            "effective role names",
-        ))
+        Err(unsupported_context_function("is_role_in_session()", None))
     }
 
-    fn set_result_cache_uncacheable(&self);
+    fn set_result_cache_uncacheable(&self) {}
 
     fn resolve_data_mask_policy(
         &self,
@@ -444,4 +508,32 @@ pub struct TypeChecker<'a, A> {
     // true if currently resolving a masking policy expression.
     // This prevents infinite recursion when a masking policy references the masked column itself.
     in_masking_policy: bool,
+}
+
+#[cfg(test)]
+mod diagnostic_tests {
+    use super::*;
+
+    #[test]
+    fn semantic_span_preserves_nested_locations_and_permission_errors() {
+        let span = Some((0..10).into());
+        let nested_span = Some((2..5).into());
+        assert_eq!(
+            with_semantic_span(ErrorCode::SemanticError("unsupported capability"), span).span(),
+            span
+        );
+        assert_eq!(
+            with_semantic_span(
+                ErrorCode::SemanticError("nested context").set_span(nested_span),
+                span,
+            )
+            .span(),
+            nested_span
+        );
+        let permission = ErrorCode::PermissionDenied("ACCESS SEQUENCE is required");
+        let unchanged = with_semantic_span(permission.clone(), span);
+        assert_eq!(unchanged.span(), permission.span());
+        assert_eq!(unchanged.code(), permission.code());
+        assert_eq!(unchanged.message(), permission.message());
+    }
 }

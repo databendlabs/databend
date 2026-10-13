@@ -123,8 +123,13 @@ async fn write_sql_join_input(
 
     writeln!(file, "query         : {}", query.name)?;
     writeln!(file, "sql           : {}", query.sql)?;
-    let joins =
-        collect_join_cardinalities(file, &metadata, &s_expr, expected_join_type, case.name)?;
+    let joins = collect_join_cardinalities(
+        file,
+        &metadata,
+        s_expr.planned()?.expr(),
+        expected_join_type,
+        case.name,
+    )?;
     assert_eq!(joins, 1);
     Ok(())
 }

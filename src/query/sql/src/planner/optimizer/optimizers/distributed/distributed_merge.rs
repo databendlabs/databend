@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::optimizer::ir::Matcher;
-use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::PExpr;
 use crate::plans::Exchange;
 use crate::plans::Join;
 use crate::plans::RelOp;
@@ -33,7 +33,7 @@ impl BroadcastToShuffleOptimizer {
         }
     }
 
-    pub fn is_broadcast(&self, s_expr: &SExpr) -> Result<bool> {
+    pub fn is_broadcast(&self, s_expr: &PExpr) -> Result<bool> {
         let right = s_expr.child(1)?;
         Ok(matches!(
             right.plan(),
@@ -41,7 +41,7 @@ impl BroadcastToShuffleOptimizer {
         ))
     }
 
-    pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn optimize(&self, s_expr: &PExpr) -> Result<PExpr> {
         let left_exchange_input = s_expr.child(0)?;
 
         let right_exchange = s_expr.child(1)?;
@@ -58,13 +58,13 @@ impl BroadcastToShuffleOptimizer {
             .unzip();
 
         let new_join_children = vec![
-            Arc::new(SExpr::create_unary(
+            Arc::new(PExpr::create_unary(
                 Arc::new(RelOperator::Exchange(Exchange::NodeToNodeHash(
                     left_conditions,
                 ))),
                 Arc::new(left_exchange_input.clone()),
             )),
-            Arc::new(SExpr::create_unary(
+            Arc::new(PExpr::create_unary(
                 Arc::new(RelOperator::Exchange(Exchange::NodeToNodeHash(
                     right_conditions,
                 ))),

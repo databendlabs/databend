@@ -486,7 +486,7 @@ impl ReplaceInterpreter {
         let select_interpreter = SelectInterpreter::try_create(
             ctx.clone(),
             *(bind_context.clone()),
-            *s_expr.clone(),
+            s_expr.planned()?.clone(),
             metadata.clone(),
             formatted_ast.clone(),
             false,

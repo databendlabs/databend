@@ -33,6 +33,7 @@ use super::ShowCreateDictionaryPlan;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::binder::ExplainConfig;
+use crate::optimizer::ir::QueryPlan;
 use crate::optimizer::ir::SExpr;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AddTableConstraintPlan;
@@ -65,7 +66,6 @@ use crate::plans::CreateDatabasePlan;
 use crate::plans::CreateDatamaskPolicyPlan;
 use crate::plans::CreateDynamicTablePlan;
 use crate::plans::CreateFileFormatPlan;
-use crate::plans::CreateIndexPlan;
 use crate::plans::CreateMaterializedViewPlan;
 use crate::plans::CreateNetworkPolicyPlan;
 use crate::plans::CreateNotificationPlan;
@@ -107,7 +107,6 @@ use crate::plans::DropConnectionPlan;
 use crate::plans::DropDatabasePlan;
 use crate::plans::DropDatamaskPolicyPlan;
 use crate::plans::DropFileFormatPlan;
-use crate::plans::DropIndexPlan;
 use crate::plans::DropMaterializedViewPlan;
 use crate::plans::DropNetworkPolicyPlan;
 use crate::plans::DropNotificationPlan;
@@ -124,6 +123,7 @@ use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableConstraintPlan;
 use crate::plans::DropTableIndexPlan;
+use crate::plans::DropTablePartitionKeyPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
 use crate::plans::DropTableTagPlan;
@@ -154,7 +154,6 @@ use crate::plans::PresignPlan;
 use crate::plans::ReclusterPlan;
 use crate::plans::RefreshDatabaseCachePlan;
 use crate::plans::RefreshDynamicTablePlan;
-use crate::plans::RefreshIndexPlan;
 use crate::plans::RefreshLineagePlan;
 use crate::plans::RefreshMaterializedViewPlan;
 use crate::plans::RefreshTableCachePlan;
@@ -223,7 +222,7 @@ use crate::plans::worker_schema;
 pub enum Plan {
     // `SELECT` statement
     Query {
-        s_expr: Box<SExpr>,
+        s_expr: Box<QueryPlan>,
         metadata: MetadataRef,
         bind_context: Box<BindContext>,
         rewrite_kind: Option<RewriteKind>,
@@ -330,6 +329,7 @@ pub enum Plan {
     DropTableConstraint(Box<DropTableConstraintPlan>),
     AlterTableClusterKey(Box<AlterTableClusterKeyPlan>),
     AlterTablePartitionBy(Box<AlterTablePartitionByPlan>),
+    DropTablePartitionKey(Box<DropTablePartitionKeyPlan>),
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
     AlterTableTtl(Box<AlterTableTtlPlan>),
     ReclusterTable(Box<ReclusterPlan>),
@@ -365,7 +365,7 @@ pub enum Plan {
     InsertMultiTable(Box<InsertMultiTable>),
     Replace(Box<Replace>),
     DataMutation {
-        s_expr: Box<SExpr>,
+        s_expr: Box<crate::optimizer::ir::MutationPlan>,
         schema: DataSchemaRef,
         metadata: MetadataRef,
     },
@@ -391,9 +391,6 @@ pub enum Plan {
     DropStream(Box<DropStreamPlan>),
 
     // Indexes
-    CreateIndex(Box<CreateIndexPlan>),
-    DropIndex(Box<DropIndexPlan>),
-    RefreshIndex(Box<RefreshIndexPlan>),
     CreateTableIndex(Box<CreateTableIndexPlan>),
     DropTableIndex(Box<DropTableIndexPlan>),
     RefreshTableIndex(Box<RefreshTableIndexPlan>),
@@ -708,8 +705,10 @@ impl Plan {
             ignore_result,
         } = self
         {
-            if let RelOperator::Exchange(Exchange::Merge) = s_expr.plan.as_ref() {
-                let s_expr = Box::new(s_expr.child(0).unwrap().clone());
+            if s_expr.planned().is_ok_and(|plan| {
+                matches!(plan.expr().plan(), RelOperator::Exchange(Exchange::Merge))
+            }) {
+                let s_expr = Box::new(s_expr.remove_root_merge());
                 return Plan::Query {
                     s_expr,
                     metadata: metadata.clone(),
@@ -745,7 +744,7 @@ impl Plan {
         };
 
         Plan::Query {
-            s_expr: Box::new(s_expr),
+            s_expr: Box::new(s_expr.into()),
             metadata: metadata.clone(),
             bind_context: bind_context.clone(),
             rewrite_kind: rewrite_kind.clone(),

@@ -28,7 +28,7 @@ use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::evaluator::BlockOperator;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use itertools::Itertools;
 
 use crate::physical_plans::Exchange;
@@ -209,7 +209,7 @@ impl UnionAll {
 impl PhysicalPlanBuilder {
     pub async fn build_union_all(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         union_all: &databend_common_sql::plans::UnionAll,
         required: ColumnSet,
         stat_info: PlanStatsInfo,

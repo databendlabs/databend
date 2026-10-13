@@ -20,10 +20,10 @@ use databend_common_expression::Scalar;
 use databend_common_expression::types::NumberScalar;
 
 use crate::optimizer::ir::Distribution;
+use crate::optimizer::ir::ExprVisitor;
+use crate::optimizer::ir::PExpr;
+use crate::optimizer::ir::PVisitAction as VisitAction;
 use crate::optimizer::ir::RelExpr;
-use crate::optimizer::ir::SExpr;
-use crate::optimizer::ir::SExprVisitor;
-use crate::optimizer::ir::VisitAction;
 use crate::plans::ConstantExpr;
 use crate::plans::Exchange;
 use crate::plans::RelOperator;
@@ -31,7 +31,7 @@ use crate::plans::ScalarExpr;
 
 /// Outcome of aligning materialized CTE placement with the distributed plan.
 pub enum MaterializedCTEDistribution {
-    Distributed(SExpr),
+    Distributed(PExpr),
     RequiresLocal,
 }
 
@@ -46,7 +46,7 @@ impl MaterializedCTEDistributionOptimizer {
 
     /// Resolve materialized CTE placement after distribution properties are
     /// settled, but before Exchange-sensitive operators are split into stages.
-    pub fn optimize(&self, s_expr: &SExpr) -> Result<MaterializedCTEDistribution> {
+    pub fn optimize(&self, s_expr: &PExpr) -> Result<MaterializedCTEDistribution> {
         let result = s_expr
             .accept(&mut SerialProducerRedistributor)?
             .unwrap_or_else(|| s_expr.clone());
@@ -71,13 +71,13 @@ impl MaterializedCTEDistributionOptimizer {
 struct SerialProducerRedistributor;
 
 impl SerialProducerRedistributor {
-    fn match_merge_backed_producer(expr: &SExpr) -> Result<Option<&SExpr>> {
+    fn match_merge_backed_producer(expr: &PExpr) -> Result<Option<&PExpr>> {
         let RelOperator::Sequence(_) = expr.plan() else {
             return Ok(None);
         };
 
         let producer = expr.left_child();
-        let physical_prop = RelExpr::with_s_expr(producer).derive_physical_prop()?;
+        let physical_prop = RelExpr::with_p_expr(producer).derive_physical_prop()?;
         if physical_prop.distribution != Distribution::Serial {
             return Ok(None);
         }
@@ -90,7 +90,7 @@ impl SerialProducerRedistributor {
 
         let mut expr = producer.unary_child();
         loop {
-            let physical_prop = RelExpr::with_s_expr(expr).derive_physical_prop()?;
+            let physical_prop = RelExpr::with_p_expr(expr).derive_physical_prop()?;
             if physical_prop.distribution != Distribution::Serial {
                 return Ok(None);
             }
@@ -105,12 +105,12 @@ impl SerialProducerRedistributor {
     }
 }
 
-impl SExprVisitor for SerialProducerRedistributor {
-    fn visit(&mut self, _expr: &SExpr) -> Result<VisitAction> {
+impl ExprVisitor<crate::optimizer::ir::Physical> for SerialProducerRedistributor {
+    fn visit(&mut self, _expr: &PExpr) -> Result<VisitAction> {
         Ok(VisitAction::Continue)
     }
 
-    fn post_visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
+    fn post_visit(&mut self, expr: &PExpr) -> Result<VisitAction> {
         let Some(producer) = Self::match_merge_backed_producer(expr)? else {
             return Ok(VisitAction::Continue);
         };
@@ -132,15 +132,15 @@ struct SerialSequenceFinder {
     found: bool,
 }
 
-impl SExprVisitor for SerialSequenceFinder {
-    fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
+impl ExprVisitor<crate::optimizer::ir::Physical> for SerialSequenceFinder {
+    fn visit(&mut self, expr: &PExpr) -> Result<VisitAction> {
         if self.found {
             return Ok(VisitAction::SkipChildren);
         }
 
         if matches!(expr.plan(), RelOperator::Sequence(_)) {
             let left = expr.left_child();
-            let physical_prop = RelExpr::with_s_expr(left).derive_physical_prop()?;
+            let physical_prop = RelExpr::with_p_expr(left).derive_physical_prop()?;
             if physical_prop.distribution == Distribution::Serial {
                 self.found = true;
                 return Ok(VisitAction::SkipChildren);

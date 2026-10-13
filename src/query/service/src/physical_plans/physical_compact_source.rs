@@ -101,6 +101,7 @@ impl IPhysicalPlan for CompactSource {
         let thresholds = table.get_block_thresholds();
         let cluster_key_info = table.cluster_key_info();
         let partition_key_count = table.partition_key_count();
+        let partition_key_id = table.partition_key_id();
         let virtual_column_layout_policy = table.virtual_column_layout_policy();
         let mut max_threads = builder.settings.get_max_threads()? as usize;
 
@@ -130,6 +131,7 @@ impl IPhysicalPlan for CompactSource {
                                 dal.clone(),
                                 cluster_key_info,
                                 partition_key_count,
+                                partition_key_id,
                                 thresholds,
                                 virtual_column_layout_policy,
                                 lazy_parts,

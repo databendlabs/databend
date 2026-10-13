@@ -43,7 +43,7 @@ use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinType;
 use tokio::sync::Barrier;
@@ -540,7 +540,7 @@ impl PhysicalPlanBuilder {
     /// left-child then right-child order.
     pub async fn build_join_sides(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         left_required: ColumnSet,
         right_required: ColumnSet,
     ) -> Result<(PhysicalPlan, PhysicalPlan)> {
@@ -1283,7 +1283,7 @@ impl PhysicalPlanBuilder {
     pub async fn build_hash_join(
         &mut self,
         join: &Join,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         mut required: ColumnSet,
         mut others_required: ColumnSet,
         left_required: ColumnSet,

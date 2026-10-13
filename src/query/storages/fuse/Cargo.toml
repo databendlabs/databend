@@ -65,6 +65,7 @@ lindera = { workspace = true }
 lindera-analysis = { workspace = true }
 lindera-tantivy = { workspace = true }
 log = { workspace = true }
+lru = { workspace = true }
 match-template = { workspace = true }
 opendal = { workspace = true }
 parking_lot = { workspace = true }
@@ -79,6 +80,7 @@ sha2 = { workspace = true }
 siphasher = { workspace = true }
 tantivy = { workspace = true }
 tantivy-jieba = { workspace = true }
+tempfile = { workspace = true }
 thrift = { workspace = true }
 tokio = { workspace = true }
 typetag = { workspace = true }

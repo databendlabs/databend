@@ -50,7 +50,7 @@ async fn write_rule_results(file: &mut impl std::io::Write, case: &SqlTestCase) 
     let settings = ctx.get_settings();
     let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?)
         .with_settings(&settings)?;
-    let before_expr = optimize_before(opt_ctx.clone(), s_expr).await?;
+    let before_expr = optimize_before(opt_ctx.clone(), s_expr.logical()?).await?;
     let before_plan = plan.replace_query_s_expr(before_expr.clone());
 
     write_case_header(file, case)?;
@@ -352,8 +352,8 @@ GROUP BY ss_store_sk",
     };
 
     let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?);
-    let split =
-        RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::SplitAggregate]).optimize_sync(*s_expr)?;
+    let split = RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::SplitAggregate])
+        .optimize_sync((*s_expr).into_logical()?)?;
     let rewritten = RuleEagerAggregation::new(metadata.clone()).optimize_sync(&split)?;
     assert_no_initial_aggregate(&rewritten)?;
     rewritten.validate_types(&metadata)?;
@@ -393,7 +393,7 @@ GROUP BY ss_store_sk"
         let opt_ctx =
             OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?);
         let split = RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::SplitAggregate])
-            .optimize_sync(*s_expr)?;
+            .optimize_sync((*s_expr).into_logical()?)?;
         let mut results = TransformResult::new();
         RuleEagerAggregation::new(metadata.clone()).apply(&split, &mut results)?;
         assert_eq!(!results.results().is_empty(), eligible, "{aggregate}");
@@ -432,7 +432,7 @@ GROUP BY o_orderkey ORDER BY s DESC LIMIT 5",
         };
         let opt_ctx =
             OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?);
-        let before = optimize_before(opt_ctx, &s_expr).await?;
+        let before = optimize_before(opt_ctx, s_expr.logical()?).await?;
         let mut extractor = Extractor {
             rule: RuleEagerAggregation::new(metadata.clone()),
             results: TransformResult::new(),
@@ -472,7 +472,7 @@ GROUP BY ss_store_sk"
         let opt_ctx =
             OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?);
         let split = RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::SplitAggregate])
-            .optimize_sync(*s_expr)?;
+            .optimize_sync((*s_expr).into_logical()?)?;
         let mut results = TransformResult::new();
         RuleEagerAggregation::new(metadata.clone()).apply(&split, &mut results)?;
         assert!(results.results().is_empty(), "{aggregate}");

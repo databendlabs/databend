@@ -346,7 +346,7 @@ impl Planner {
             plan.capture_bound_query_lineage();
         }
 
-        // Step 4: Optimize the SExpr with optimizers, and generate optimized physical SExpr
+        // Step 4: Optimize logical inputs, then select and finalize query implementations.
         // Single-statement EXECUTE IMMEDIATE can apply inner settings during binding.
         let settings = self.ctx.get_settings();
         let func_ctx = self.ctx.get_function_context()?;

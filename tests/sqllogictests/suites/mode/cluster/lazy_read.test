@@ -47,11 +47,11 @@ RowFetch
                 ├── table: default.default.t_lazy
                 ├── scan id: 0
                 ├── output columns: [a (#0), _row_id (#7)]
-                ├── read rows: 200
+                ├── read rows: 300
                 ├── read size: < 1 KiB
                 ├── partitions total: 3
-                ├── partitions scanned: 2
-                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>, topn pruning: 3 to 2 cost: <slt:ignore>>]
+                ├── partitions scanned: 3
+                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
                 ├── push downs: [filters: [], limit: 2]
                 └── estimated rows: 300.00
 
@@ -112,11 +112,11 @@ TopN(Final)
             ├── table: default.default.t_lazy
             ├── scan id: 0
             ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
-            ├── read rows: 200
-            ├── read size: 1.26 KiB
+            ├── read rows: 300
+            ├── read size: 1.73 KiB
             ├── partitions total: 3
-            ├── partitions scanned: 2
-            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>, topn pruning: 3 to 2 cost: <slt:ignore>>]
+            ├── partitions scanned: 3
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: 2]
             └── estimated rows: 300.00
 

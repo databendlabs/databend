@@ -227,6 +227,107 @@ TopN(Final)
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: <slt:ignore>
 
+# Runtime TopN pruning over interleaved block ranges
+# (https://github.com/databendlabs/databend/issues/20612). Blocks [2] and [3]
+# are covered by the range of [1, 1002] and must be kept; the filler blocks are
+# entirely worse than the top 3 and are pruned by the runtime boundary. A
+# single reader makes the scan order and the pruned row count deterministic.
+statement ok
+create or replace table t_top_n_interleaved (a int not null) row_per_block = 5;
+
+statement ok
+insert into t_top_n_interleaved values (1), (1000), (1001), (1002);
+
+statement ok
+insert into t_top_n_interleaved values (2);
+
+statement ok
+insert into t_top_n_interleaved values (3);
+
+statement ok
+insert into t_top_n_interleaved select number + 2000 from numbers(50);
+
+statement ok
+set max_threads = 1;
+
+statement ok
+set max_storage_io_requests = 1;
+
+# Only the 6 rows of [1, 1002], [2] and [3] are scanned out of 56.
+query T
+explain analyze partial select a from t_top_n_interleaved order by a limit 3
+----
+TableScan
+├── table: default.default.t_top_n_interleaved
+├── estimated rows: 56.00
+└── output rows: 6
+
+query I
+select a from t_top_n_interleaved order by a limit 3
+----
+1
+2
+3
+
+# Without TopN the runtime filter is not registered and every row is scanned.
+query T
+settings (enable_top_n = 0) explain analyze partial select a from t_top_n_interleaved order by a limit 3
+----
+TableScan
+├── table: default.default.t_top_n_interleaved
+├── estimated rows: 56.00
+└── output rows: 56
+
+query I
+settings (enable_top_n = 0) select a from t_top_n_interleaved order by a limit 3
+----
+1
+2
+3
+
+# Mirrored DESC layout: [-3, 10], [9], [8], then filler blocks below.
+statement ok
+create or replace table t_top_n_interleaved_desc (a int not null) row_per_block = 5;
+
+statement ok
+insert into t_top_n_interleaved_desc values (10), (-1), (-2), (-3);
+
+statement ok
+insert into t_top_n_interleaved_desc values (9);
+
+statement ok
+insert into t_top_n_interleaved_desc values (8);
+
+statement ok
+insert into t_top_n_interleaved_desc select number - 2000 from numbers(50);
+
+query T
+explain analyze partial select a from t_top_n_interleaved_desc order by a desc limit 3
+----
+TableScan
+├── table: default.default.t_top_n_interleaved_desc
+├── estimated rows: 56.00
+└── output rows: 6
+
+query I
+select a from t_top_n_interleaved_desc order by a desc limit 3
+----
+10
+9
+8
+
+statement ok
+unset max_storage_io_requests;
+
+statement ok
+unset max_threads;
+
+statement ok
+drop table t_top_n_interleaved;
+
+statement ok
+drop table t_top_n_interleaved_desc;
+
 statement ok
 unset enable_top_n;
 

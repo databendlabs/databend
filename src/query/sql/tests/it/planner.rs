@@ -26,7 +26,7 @@ use databend_common_meta_app::schema::CatalogOption;
 use databend_common_sql::FormatOptions;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::Planner;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::Plan;
@@ -280,10 +280,10 @@ fn format_statistics_trace_summary(plan: &Plan) -> Result<String> {
         ));
     };
 
-    Ok(statistics_trace_summary_tree(s_expr, metadata)?.format_pretty()?)
+    Ok(statistics_trace_summary_tree(s_expr.planned()?.expr(), metadata)?.format_pretty()?)
 }
 
-fn statistics_trace_summary_tree(s_expr: &SExpr, metadata: &MetadataRef) -> Result<FormatTreeNode> {
+fn statistics_trace_summary_tree(s_expr: &PExpr, metadata: &MetadataRef) -> Result<FormatTreeNode> {
     match s_expr.plan() {
         RelOperator::MaterializedCTE(cte) => {
             let children = s_expr

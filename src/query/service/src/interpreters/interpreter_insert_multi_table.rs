@@ -325,7 +325,7 @@ impl InsertMultiTableInterpreter {
                     ordered_source_projection_columns(&result_columns, &source_required);
                 let mut required = bind_context.column_set();
                 required.extend(source_required);
-                let input_source = builder1.build(s_expr, required).await?;
+                let input_source = builder1.build_query(s_expr.planned()?, required).await?;
 
                 // Lazy materialization (triggered by WHERE + LIMIT) may reorder physical output
                 // columns and inject internal columns like _row_id.  Add a reorder EvalScalar

@@ -99,7 +99,13 @@ async fn write_decimal_case(
     let metadata = metadata.read();
 
     writeln!(file, "sql           : {sql}")?;
-    let joins = collect_join_cardinalities(file, &metadata, &s_expr, JoinType::Inner, name)?;
+    let joins = collect_join_cardinalities(
+        file,
+        &metadata,
+        s_expr.planned()?.expr(),
+        JoinType::Inner,
+        name,
+    )?;
     assert_eq!(joins, 1);
     writeln!(file)?;
     Ok(())

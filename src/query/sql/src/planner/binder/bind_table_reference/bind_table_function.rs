@@ -252,7 +252,7 @@ impl Binder {
                             }
                             .into(),
                         ),
-                        s_expr,
+                        (*s_expr).into_logical()?,
                     );
 
                     return Ok(Some((s_expr, *bind_context)));

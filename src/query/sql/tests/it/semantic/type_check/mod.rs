@@ -202,8 +202,28 @@ impl TypeCheckAdapter for TestTypeCheckAdapter {
         Ok(self.func_ctx.clone())
     }
 
-    fn settings(&self) -> Arc<Settings> {
-        self.settings.clone()
+    fn sql_dialect(&self) -> Result<databend_common_ast::parser::Dialect> {
+        self.settings.get_sql_dialect()
+    }
+
+    fn inlist_to_join_threshold(&self) -> Result<usize> {
+        self.settings.get_inlist_to_join_threshold()
+    }
+
+    fn max_inlist_to_or(&self) -> Result<u64> {
+        self.settings.get_max_inlist_to_or()
+    }
+
+    fn enable_decimal_sum_widening(&self) -> Result<bool> {
+        self.settings.get_enable_decimal_sum_widening()
+    }
+
+    fn timezone(&self) -> Result<String> {
+        self.settings.get_timezone()
+    }
+
+    fn default_nulls_first(&self, asc: bool) -> Result<bool> {
+        Ok(self.settings.get_nulls_first()(asc))
     }
 
     fn aggregate_function_registry(&self) -> &'static AggregateRegistry {
@@ -360,10 +380,10 @@ fn resolve_type_check_sql_with_aliases(
 ) -> Result<(ScalarExpr, DataType)> {
     init_testing_globals();
     let tokens = tokenize_sql(sql)?;
-    let dialect = adapter.settings().get_sql_dialect()?;
+    let dialect = adapter.sql_dialect()?;
     let expr = parse_expr(&tokens, dialect)?;
 
-    let name_resolution_ctx = NameResolutionContext::try_from(adapter.settings().as_ref())?;
+    let name_resolution_ctx = NameResolutionContext::try_from(adapter.settings.as_ref())?;
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let mut type_checker = TypeChecker::try_create_with_adapter(
         bind_context,

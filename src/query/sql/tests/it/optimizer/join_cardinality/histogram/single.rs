@@ -14,11 +14,19 @@
 
 use std::io::Write;
 
+use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_sql::optimizer::CollectStatisticsOptimizer;
+use databend_common_sql::optimizer::Optimizer;
+use databend_common_sql::optimizer::OptimizerContext;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::StatContext;
+use databend_common_sql::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
+use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
+use databend_common_sql::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
 use databend_common_sql::optimizer::optimizers::rule::Rule;
 use databend_common_sql::optimizer::optimizers::rule::RuleCommuteJoin;
 use databend_common_sql::optimizer::optimizers::rule::TransformResult;
@@ -58,12 +66,20 @@ fn large_overlap_stats() -> TableStats {
     }
 }
 
-fn find_join(expr: &SExpr, join_type: JoinType) -> Option<&SExpr> {
+fn find_join(expr: &PExpr, join_type: JoinType) -> Option<&PExpr> {
     if matches!(expr.plan(), RelOperator::Join(join) if join.join_type == join_type) {
         return Some(expr);
     }
     expr.children()
         .find_map(|child| find_join(child, join_type))
+}
+
+fn find_logical_join(expr: &SExpr, join_type: JoinType) -> Option<&SExpr> {
+    if matches!(expr.plan(), RelOperator::Join(join) if join.join_type == join_type) {
+        return Some(expr);
+    }
+    expr.children()
+        .find_map(|child| find_logical_join(child, join_type))
 }
 
 async fn write_optimizer_commuted_right_single(
@@ -88,20 +104,37 @@ async fn write_optimizer_commuted_right_single(
     )
     .await?;
 
+    let raw = ctx.bind_sql(case.input.sql).await?;
     let Plan::Query {
         s_expr, metadata, ..
-    } = ctx
-        .optimize_plan(ctx.bind_sql(case.input.sql).await?)
-        .await?
+    } = ctx.optimize_plan(raw.clone()).await?
     else {
         return Err(ErrorCode::Internal("SELECT should bind to a query plan"));
     };
     let mut state = TransformResult::new();
-    let (right_single, optimizer) = match find_join(&s_expr, JoinType::RightSingle) {
+    let physical_commuted;
+    let (right_single, optimizer) = match find_join(s_expr.planned()?.expr(), JoinType::RightSingle)
+    {
         Some(right_single) => (right_single, "full optimizer"),
         None => {
-            let left_single = find_join(&s_expr, JoinType::LeftSingle)
-                .ok_or_else(|| ErrorCode::Internal("optimizer did not derive SINGLE from SQL"))?;
+            // CommuteJoin is a logical rule. Derive its input from bound SQL before
+            // physical selection rather than converting an execution tree backwards.
+            let Plan::Query { s_expr, .. } = raw else {
+                unreachable!()
+            };
+            let context =
+                OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?);
+            let logical = SubqueryDecorrelatorOptimizer::new(context.clone(), None)
+                .optimize_sync((*s_expr).into_logical()?)?;
+            let logical = CollectStatisticsOptimizer::new(context.clone())
+                .optimize(logical)
+                .await?;
+            let logical = RecursiveRuleOptimizer::new(context, &DEFAULT_REWRITE_RULES)
+                .optimize_sync(logical)?;
+            let left_single =
+                find_logical_join(&logical, JoinType::LeftSingle).ok_or_else(|| {
+                    ErrorCode::Internal("logical optimizer did not derive SINGLE from SQL")
+                })?;
             RuleCommuteJoin::new(StatContext::default()).apply(left_single, &mut state)?;
             let left_cardinality = RelExpr::with_s_expr(left_single.child(0)?)
                 .derive_cardinality(&StatContext::default())?
@@ -118,7 +151,8 @@ async fn write_optimizer_commuted_right_single(
                 .ok_or_else(|| ErrorCode::Internal(format!(
                     "join commute rule did not derive RIGHT SINGLE: left={left_cardinality}, right={right_cardinality}"
                 )))?;
-            (right_single, "CommuteJoin")
+            physical_commuted = PExpr::from(right_single.clone());
+            (&physical_commuted, "CommuteJoin")
         }
     };
 

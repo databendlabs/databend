@@ -21,9 +21,7 @@ use crate::IndexType;
 use crate::Metadata;
 use crate::ScalarExpr;
 use crate::Symbol;
-use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
-use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::RelOperator;
@@ -158,14 +156,17 @@ where
         }
     }
 
-    pub fn humanize_s_expr(&self, s_expr: &SExpr) -> Result<FormatTreeNode> {
+    pub fn humanize_expr<K: crate::optimizer::ir::RelExprKind>(
+        &self,
+        s_expr: &crate::optimizer::ir::Expr<K>,
+    ) -> Result<FormatTreeNode> {
         let op = s_expr.plan();
         let mut tree = self
             .operator_humanizer
             .humanize_operator(self.id_humanizer, op);
 
         if self.id_humanizer.options().verbose {
-            let rel_expr = RelExpr::with_s_expr(s_expr);
+            let rel_expr = K::rel_expr(s_expr);
             let prop = rel_expr.derive_relational_prop()?;
             let stat = rel_expr.derive_cardinality(self.id_humanizer.stat_context())?;
             let properties = self.humanize_property(&prop);
@@ -213,13 +214,13 @@ where
             // in the surrounding Sequence.
         } else if s_expr.plan.is_join() {
             tree.children
-                .push(self.humanize_s_expr(s_expr.build_side_child())?);
+                .push(self.humanize_expr(s_expr.build_side_child())?);
             tree.children
-                .push(self.humanize_s_expr(s_expr.probe_side_child())?);
+                .push(self.humanize_expr(s_expr.probe_side_child())?);
         } else {
             let children = s_expr
                 .children()
-                .map(|s_expr| self.humanize_s_expr(s_expr))
+                .map(|s_expr| self.humanize_expr(s_expr))
                 .collect::<Result<Vec<_>>>()?;
             tree.children.extend(children);
         };

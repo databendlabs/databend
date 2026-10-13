@@ -149,21 +149,19 @@ pub async fn main() -> Result<()> {
         hooks.prepare(&hook_env)?
     };
 
+    // Run every requested handler even if an earlier one fails, so a failure in
+    // `http` does not hide the `hybrid` result when several handlers share one
+    // job. Errors are aggregated and reported together at the end.
     let test_result = async {
         let mut containers = vec![];
+        let mut failures: Vec<(String, DSqlLogicTestError)> = vec![];
         for handler in handlers.iter() {
-            match *handler {
-                HANDLER_MYSQL => {
-                    run_mysql_client(args.clone(), &files).await?;
-                }
-                HANDLER_HTTP => {
-                    run_http_client(args.clone(), &files).await?;
-                }
-                HANDLER_HYBRID => {
-                    run_hybrid_client(args.clone(), &files, &mut containers).await?;
-                }
+            let result = match *handler {
+                HANDLER_MYSQL => run_mysql_client(args.clone(), &files).await,
+                HANDLER_HTTP => run_http_client(args.clone(), &files).await,
+                HANDLER_HYBRID => run_hybrid_client(args.clone(), &files, &mut containers).await,
                 handler if handler.starts_with("ttc") => {
-                    if handler != "ttc_dev" {
+                    let image_result = if handler != "ttc_dev" {
                         let image = format!("ghcr.io/databendlabs/{handler}:latest");
                         run_ttc_container(
                             &image,
@@ -172,21 +170,44 @@ pub async fn main() -> Result<()> {
                             &mut containers,
                             QueryResultFormat::Json,
                         )
-                        .await?;
+                        .await
+                    } else {
+                        Ok(())
+                    };
+                    match image_result {
+                        Ok(()) => {
+                            run_ttc_client(args.clone(), &files, ClientType::Ttc {
+                                image: handler.to_string(),
+                                port: TTC_PORT_START,
+                                query_result_format: QueryResultFormat::Json,
+                            })
+                            .await
+                        }
+                        Err(e) => Err(e),
                     }
-                    run_ttc_client(args.clone(), &files, ClientType::Ttc {
-                        image: handler.to_string(),
-                        port: TTC_PORT_START,
-                        query_result_format: QueryResultFormat::Json,
-                    })
-                    .await?;
                 }
                 _ => {
                     return Err(format!("Unknown test handler: {handler}").into());
                 }
+            };
+            if let Err(e) = result {
+                println!("Handler {handler} failed: {e}");
+                failures.push((handler.to_string(), e));
             }
         }
-        Ok::<(), DSqlLogicTestError>(())
+        match failures.len() {
+            0 => Ok::<(), DSqlLogicTestError>(()),
+            1 => Err(failures.pop().unwrap().1),
+            _ => Err(DSqlLogicTestError::SelfError(format!(
+                "{} handlers failed: {}",
+                failures.len(),
+                failures
+                    .iter()
+                    .map(|(h, e)| format!("[{h}] {e}"))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            ))),
+        }
     }
     .await;
 

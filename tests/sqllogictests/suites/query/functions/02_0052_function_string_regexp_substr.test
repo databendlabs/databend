@@ -100,3 +100,36 @@ DROP TABLE IF EXISTS tt1
 
 statement ok
 DROP TABLE IF EXISTS tt2
+
+# CASE preserves row alignment and NULLs, and masks invalid patterns, match
+# types and positions on inactive rows. Active rows without a match remain NULL.
+query T
+SELECT CASE WHEN enabled THEN regexp_substr(source, pat, pos, 1, mt)
+            ELSE 'skipped' END
+FROM (VALUES
+    (0, TRUE,  'dog cat', 'dog', 'c',       1),
+    (1, FALSE, 'dog cat', '[',   'invalid', 0),
+    (2, TRUE,  'cat',     'dog', 'c',       1),
+    (3, TRUE,  NULL,      '[',   'invalid', 0),
+    (4, TRUE,  'dog cat', NULL,  'invalid', 0)
+) AS t(id, enabled, source, pat, mt, pos)
+ORDER BY id
+----
+dog
+skipped
+NULL
+NULL
+NULL
+
+# Scalar calls still work when row zero is inactive.
+query T
+SELECT IF(number = 1, regexp_substr('dog', 'dog'), 'skipped')
+FROM numbers(2)
+ORDER BY number
+----
+skipped
+dog
+
+# An invalid pattern on an active row must still report an error.
+statement error 1006
+SELECT IF(number = 1, regexp_substr(to_string(number), '['), '') FROM numbers(2)

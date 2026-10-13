@@ -17,8 +17,6 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::ir::SExprVisitor;
-use databend_common_sql::optimizer::ir::VisitAction;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::ScalarExpr;
@@ -80,7 +78,7 @@ async fn test_optimizer_rejects_plan_referencing_missing_column() -> Result<()> 
         unreachable!("expected a query plan");
     };
     let broken = Plan::Query {
-        s_expr: Box::new(drop_scan_column(&s_expr, "b", &metadata)),
+        s_expr: Box::new(drop_scan_column(s_expr.logical()?, "b", &metadata).into()),
         metadata,
         bind_context,
         rewrite_kind,
@@ -161,8 +159,13 @@ struct DeadProjectionCollector {
     expression_scans: usize,
 }
 
-impl SExprVisitor for DeadProjectionCollector {
-    fn visit(&mut self, s_expr: &SExpr) -> Result<VisitAction> {
+impl databend_common_sql::optimizer::ir::ExprVisitor<databend_common_sql::optimizer::ir::Physical>
+    for DeadProjectionCollector
+{
+    fn visit(
+        &mut self,
+        s_expr: &databend_common_sql::optimizer::ir::PExpr,
+    ) -> Result<databend_common_sql::optimizer::ir::PVisitAction> {
         match s_expr.plan() {
             RelOperator::ExpressionScan(_) => self.expression_scans += 1,
             RelOperator::EvalScalar(eval_scalar) => {
@@ -183,7 +186,7 @@ impl SExprVisitor for DeadProjectionCollector {
             }
             _ => {}
         }
-        Ok(VisitAction::Continue)
+        Ok(databend_common_sql::optimizer::ir::PVisitAction::Continue)
     }
 }
 
@@ -239,7 +242,7 @@ async fn test_lateral_values_drops_unresolvable_projection_items() -> Result<()>
         };
 
         let mut collector = DeadProjectionCollector::default();
-        s_expr.accept(&mut collector)?;
+        s_expr.planned()?.expr().accept(&mut collector)?;
         // Proves the case reached the lateral `VALUES` branch of the binder.
         assert!(
             collector.expression_scans > 0,

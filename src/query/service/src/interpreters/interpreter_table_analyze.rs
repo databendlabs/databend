@@ -137,7 +137,9 @@ impl AnalyzeTableInterpreter {
                 let mut builder =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                 (
-                    builder.build(s_expr, bind_context.column_set()).await?,
+                    builder
+                        .build_query(s_expr.planned()?, bind_context.column_set())
+                        .await?,
                     (**bind_context).clone(),
                 )
             }

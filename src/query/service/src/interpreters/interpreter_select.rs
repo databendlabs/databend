@@ -62,12 +62,12 @@ use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 use crate::sessions::TableContextTelemetry;
 use crate::sql::BindContext;
-use crate::sql::optimizer::ir::SExpr;
+use crate::sql::optimizer::ir::PlannedQuery;
 
 /// Interpret SQL query with new SQL planner
 pub struct SelectInterpreter {
     ctx: Arc<QueryContext>,
-    s_expr: SExpr,
+    query: PlannedQuery,
     bind_context: BindContext,
     metadata: MetadataRef,
     formatted_ast: Option<String>,
@@ -78,14 +78,14 @@ impl SelectInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         bind_context: BindContext,
-        s_expr: SExpr,
+        query: PlannedQuery,
         metadata: MetadataRef,
         formatted_ast: Option<String>,
         ignore_result: bool,
     ) -> Result<Self> {
         Ok(SelectInterpreter {
             ctx,
-            s_expr,
+            query,
             bind_context,
             metadata,
             formatted_ast,
@@ -128,7 +128,7 @@ impl SelectInterpreter {
         let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone(), false);
         self.ctx.set_status_info("Building physical plan");
         builder
-            .build(&self.s_expr, self.bind_context.column_set())
+            .build_query(&self.query, self.bind_context.column_set())
             .await
     }
 

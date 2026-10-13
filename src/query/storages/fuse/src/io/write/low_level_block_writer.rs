@@ -2064,12 +2064,14 @@ mod tests {
                 version: "v1".to_string(),
                 schema: index_schema.clone(),
                 options: BTreeMap::new(),
+                user_dictionary: None,
             },
             InvertedIndexBuilder {
                 name: "second".to_string(),
                 version: "v1".to_string(),
                 schema: index_schema,
                 options: BTreeMap::new(),
+                user_dictionary: None,
             },
         ];
         let meta_locations = TableMetaLocationGenerator::new("root".to_string());

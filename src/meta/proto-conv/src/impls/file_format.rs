@@ -369,7 +369,7 @@ impl FromToProto for mt::principal::LokiFileFormatParams {
         pb::LokiFileFormatParams {
             ver: VER,
             // Loki is a new oneof alternative that older readers cannot interpret.
-            min_reader_ver: 188,
+            min_reader_ver: 189,
             missing_field_as: Some(self.missing_field_as.to_string()),
         }
     }

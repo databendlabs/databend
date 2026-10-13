@@ -100,5 +100,9 @@ serde_yaml = { workspace = true }
 name = "type_check"
 harness = false
 
+[[bench]]
+name = "cse"
+harness = false
+
 [lints]
 workspace = true

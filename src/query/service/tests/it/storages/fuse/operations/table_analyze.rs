@@ -104,7 +104,7 @@ async fn test_table_modify_column_ndv_statistics() -> anyhow::Result<()> {
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(query).await?;
     if let Plan::DataMutation { s_expr, schema, .. } = plan {
-        do_mutation(ctx.clone(), *s_expr.clone(), schema.clone()).await?;
+        do_mutation(ctx.clone(), (*s_expr).into_planned()?, schema.clone()).await?;
     }
     ctx.evict_table_from_cache("default", "default", "t")?;
     fixture.execute_command(statistics_sql).await?;
@@ -136,7 +136,7 @@ async fn test_table_update_analyze_statistics() -> anyhow::Result<()> {
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(&query).await?;
     if let Plan::DataMutation { s_expr, schema, .. } = plan {
-        do_mutation(ctx.clone(), *s_expr.clone(), schema.clone()).await?;
+        do_mutation(ctx.clone(), (*s_expr).into_planned()?, schema.clone()).await?;
     }
 
     // check summary after update

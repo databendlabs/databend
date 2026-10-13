@@ -23,7 +23,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::executor::physical_plans::FragmentKind;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::format::ExchangeFormatter;
@@ -96,7 +96,7 @@ impl IPhysicalPlan for Exchange {
 impl PhysicalPlanBuilder {
     pub async fn build_exchange(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         exchange: &databend_common_sql::plans::Exchange,
         mut required: ColumnSet,
     ) -> Result<PhysicalPlan> {

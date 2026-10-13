@@ -18,3 +18,73 @@ ORDER BY number
 
 statement ok
 UNSET max_threads
+
+# Top-n from QUALIFY must not truncate rows used by other windows in the same group.
+query III
+SELECT number % 3 AS k,
+       count(*) OVER (PARTITION BY number % 3) AS c,
+       row_number() OVER (PARTITION BY number % 3 ORDER BY number DESC) AS r
+FROM numbers(30)
+QUALIFY r = 1
+ORDER BY k
+----
+0 10 1
+1 10 1
+2 10 1
+
+query IIII
+SELECT number % 3 AS k,
+       number,
+       sum(number) OVER (PARTITION BY number % 3) AS s,
+       row_number() OVER (PARTITION BY number % 3 ORDER BY number DESC) AS r
+FROM numbers(30)
+QUALIFY r <= 2
+ORDER BY k, number
+----
+0 24 135 2
+0 27 135 1
+1 25 145 2
+1 28 145 1
+2 26 155 2
+2 29 155 1
+
+# The top-n window is not the first window of the group.
+query IIII
+SELECT number % 3 AS k,
+       count(*) OVER (PARTITION BY number % 3) AS c,
+       sum(number) OVER (PARTITION BY number % 3 ORDER BY number, number + 1) AS s,
+       row_number() OVER (PARTITION BY number % 3 ORDER BY number DESC) AS r
+FROM numbers(30)
+QUALIFY r = 1
+ORDER BY k
+----
+0 10 135 1
+1 10 145 1
+2 10 155 1
+
+# An aggregate window evaluated before the top-n window still sees all rows.
+query III
+SELECT number % 3 AS k,
+       sum(number) OVER (PARTITION BY number % 3 ORDER BY number, number + 1) AS s,
+       row_number() OVER (PARTITION BY number % 3 ORDER BY number DESC) AS r
+FROM numbers(30)
+QUALIFY r = 1
+ORDER BY k
+----
+0 135 1
+1 145 1
+2 155 1
+
+# Ranking windows with the same order can still share the top-n.
+query IIII
+SELECT number % 3 AS k,
+       number,
+       row_number() OVER (PARTITION BY number % 3 ORDER BY number DESC) AS r,
+       rank() OVER (PARTITION BY number % 3 ORDER BY number DESC) AS rk
+FROM numbers(30)
+QUALIFY r = 1
+ORDER BY k
+----
+0 27 1 1
+1 28 1 1
+2 29 1 1

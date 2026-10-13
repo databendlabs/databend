@@ -20,4 +20,3 @@ mod update;
 
 pub use bind::MutationStrategy;
 pub use bind::MutationType;
-pub use mutation_expression::target_probe;

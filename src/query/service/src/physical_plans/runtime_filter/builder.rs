@@ -31,7 +31,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::IndexType;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::Symbol;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::plans::Exchange;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinEquiCondition;
@@ -85,7 +85,7 @@ pub fn supported_join_type_for_runtime_filter(join_type: &JoinType) -> bool {
 /// * `ctx` - Table context
 /// * `metadata` - Metadata reference
 /// * `join` - Join plan
-/// * `s_expr` - SExpr for the join
+/// * `s_expr` - PExpr for the join
 /// * `build_keys` - Build side keys
 /// * `probe_keys` - Probe keys with their scan, source column, connector, and null-equality metadata
 ///
@@ -95,7 +95,7 @@ pub async fn build_runtime_filter(
     ctx: Arc<dyn TableContext>,
     metadata: &MetadataRef,
     join: &Join,
-    s_expr: &SExpr,
+    s_expr: &PExpr,
     build_keys: &[RemoteExpr],
     probe_keys: Vec<Option<RuntimeFilterProbeKey<RemoteExpr<String>>>>,
     build_table_indexes: Vec<Option<IndexType>>,
@@ -210,7 +210,7 @@ async fn get_build_table_rows(
 
 fn find_probe_targets(
     metadata: &MetadataRef,
-    s_expr: &SExpr,
+    s_expr: &PExpr,
     probe_key: RemoteExpr<String>,
     probe_scan_id: usize,
     probe_key_col_idx: Symbol,
@@ -319,7 +319,7 @@ fn propagate_probe_targets(
     Ok(result)
 }
 
-fn collect_equi_conditions(s_expr: &SExpr) -> Result<Vec<JoinEquiCondition>> {
+fn collect_equi_conditions(s_expr: &PExpr) -> Result<Vec<JoinEquiCondition>> {
     let mut conditions = Vec::new();
 
     if let RelOperator::Join(join) = s_expr.plan() {

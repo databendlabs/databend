@@ -68,7 +68,6 @@ pub use async_function_desc::AsyncFunctionDesc;
 pub use bind_context::*;
 pub use bind_mutation::MutationStrategy;
 pub use bind_mutation::MutationType;
-pub use bind_mutation::target_probe;
 pub use bind_query::bind_values;
 pub use bind_table_reference::is_range_join_condition;
 pub use bind_table_reference::parse_result_scan_args;

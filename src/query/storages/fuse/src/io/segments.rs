@@ -15,6 +15,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -27,6 +28,7 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use fastrace::func_path;
 use fastrace::prelude::*;
 use opendal::Operator;
+use tokio::sync::Semaphore;
 
 use super::read::SegmentReader;
 use crate::io::MetaReaders;
@@ -114,6 +116,44 @@ impl SegmentsIO {
             "fuse-req-segments-worker".to_owned(),
         )
         .await
+    }
+
+    /// Read a batch on the global IO runtime using a caller's shared IO budget.
+    /// Results follow input order. Submitted reads may finish after cancellation;
+    /// acquiring before spawn bounds tasks waiting for IO permits.
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn read_segments_with_semaphore<T>(
+        dal: Operator,
+        table_schema: TableSchemaRef,
+        segment_locations: &[Location],
+        put_cache: bool,
+        semaphore: Arc<Semaphore>,
+    ) -> Result<Vec<Result<T>>>
+    where
+        T: TryFrom<Arc<CompactSegmentInfo>> + Send + 'static,
+    {
+        let runtime = GlobalIORuntime::instance();
+        let mut tasks = Vec::with_capacity(segment_locations.len());
+        for location in segment_locations {
+            let permit =
+                semaphore.clone().acquire_owned().await.map_err(|e| {
+                    ErrorCode::Internal(format!("segment IO semaphore closed: {e}"))
+                })?;
+            let dal = dal.clone();
+            let schema = table_schema.clone();
+            let location = location.clone();
+            tasks.push(runtime.spawn(async move {
+                let _permit = permit;
+                let segment = Self::read_compact_segment(dal, location, schema, put_cache).await?;
+                segment
+                    .try_into()
+                    .map_err(|_| ErrorCode::Internal("Failed to convert compact segment info"))
+            }));
+        }
+        futures::future::try_join_all(tasks)
+            .await
+            .map_err(|e| ErrorCode::Internal(format!("segment IO task failed: {e}")))
     }
 
     #[async_backtrace::framed]

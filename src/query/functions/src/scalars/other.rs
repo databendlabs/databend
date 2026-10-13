@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_base::base::OrderedFloat;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
+use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
@@ -414,91 +415,60 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<Int64Type, StringType, StringType, _, _>(
         "to_string",
         |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<Int64Type, StringType, StringType>(
-            |value, fmt, builder, ctx| {
-                if let Some(validity) = &ctx.validity
-                    && !validity.get_bit(builder.len())
-                {
-                    builder.commit_row();
-                    return;
-                }
-
-                // TODO: We should cache FmtCacheEntry
-                match fmt
-                    .parse::<FmtCacheEntry>()
-                    .and_then(|entry| entry.process_i64(value))
-                {
-                    Ok(s) => {
-                        builder.put_and_commit(s);
-                    }
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                        builder.commit_row()
-                    }
-                }
-            },
-        ),
+        |value, fmt, ctx| number_to_char::<Int64Type>(value, fmt, ctx, FmtCacheEntry::process_i64),
     );
 
     registry.register_passthrough_nullable_2_arg::<Float32Type, StringType, StringType, _, _>(
         "to_string",
         |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<Float32Type, StringType, StringType>(
-            |value, fmt, builder, ctx| {
-                if let Some(validity) = &ctx.validity
-                    && !validity.get_bit(builder.len())
-                {
-                    builder.commit_row();
-                    return;
-                }
-
-                // TODO: We should cache FmtCacheEntry
-                match fmt
-                    .parse::<FmtCacheEntry>()
-                    .and_then(|entry| entry.process_f32(*value))
-                {
-                    Ok(s) => {
-                        builder.put_str(&s);
-                        builder.commit_row()
-                    }
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                        builder.commit_row()
-                    }
-                }
-            },
-        ),
+        |value, fmt, ctx| {
+            number_to_char::<Float32Type>(value, fmt, ctx, |entry, value| entry.process_f32(*value))
+        },
     );
 
     registry.register_passthrough_nullable_2_arg::<Float64Type, StringType, StringType, _, _>(
         "to_string",
         |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<Float64Type, StringType, StringType>(
-            |value, fmt, builder, ctx| {
-                if let Some(validity) = &ctx.validity
-                    && !validity.get_bit(builder.len())
-                {
-                    builder.commit_row();
-                    return;
-                }
-
-                // TODO: We should cache FmtCacheEntry
-                match fmt
-                    .parse::<FmtCacheEntry>()
-                    .and_then(|entry| entry.process_f64(*value))
-                {
-                    Ok(s) => {
-                        builder.put_str(&s);
-                        builder.commit_row()
-                    }
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                        builder.commit_row()
-                    }
-                }
-            },
-        ),
+        |value, fmt, ctx| {
+            number_to_char::<Float64Type>(value, fmt, ctx, |entry, value| entry.process_f64(*value))
+        },
     );
+}
+
+fn number_to_char<I: AccessType>(
+    value: Value<I>,
+    fmt: Value<StringType>,
+    ctx: &mut EvalContext,
+    process: impl Fn(&FmtCacheEntry, I::ScalarRef<'_>) -> Result<String> + Copy + Send + Sync,
+) -> Value<StringType> {
+    // Cache both successful parses and errors for this evaluation only. Errors must
+    // still be reported per valid row to preserve NULL and short-circuit semantics.
+    let cached = fmt.as_scalar().map(|fmt| fmt.parse::<FmtCacheEntry>());
+    vectorize_with_builder_2_arg::<I, StringType, StringType>(|value, fmt, builder, ctx| {
+        if let Some(validity) = &ctx.validity
+            && !validity.get_bit(builder.len())
+        {
+            builder.commit_row();
+            return;
+        }
+
+        let result = match &cached {
+            Some(entry) => entry
+                .as_ref()
+                .map_err(Clone::clone)
+                .and_then(|entry| process(entry, value)),
+            None => fmt
+                .parse::<FmtCacheEntry>()
+                .and_then(|entry| process(&entry, value)),
+        };
+        match result {
+            Ok(s) => builder.put_and_commit(s),
+            Err(e) => {
+                ctx.set_error(builder.len(), e.to_string());
+                builder.commit_row();
+            }
+        }
+    })(value, fmt, ctx)
 }
 
 /// Compute `grouping` by `grouping_id` and `cols`.

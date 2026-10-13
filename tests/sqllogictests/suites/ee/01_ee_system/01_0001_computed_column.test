@@ -306,6 +306,15 @@ select * from t_variant;
 1 {"videoInfo":{"Duration":10,"Name":"H264"}} H264 10
 2 {"videoInfo":{"Duration":20,"Name":"H265"}} H265 20
 
+# Explicit null ordering makes array_sort() context independent (issue #19833).
+# Creating a valid computed column requires an Enterprise license, so keep this
+# positive case in the EE suite rather than the unlicensed base suite.
+statement ok
+create or replace table t_ctx_sort(a array(int), b array(int) as (array_sort(a, 'asc', 'nulls last')) stored)
+
+statement ok
+drop table t_ctx_sort
+
 statement ok
 DROP DATABASE test_computed_column
 

@@ -188,7 +188,7 @@ impl Binder {
                     None
                 };
                 Plan::Query {
-                    s_expr: Box::new(s_expr),
+                    s_expr: Box::new(s_expr.into()),
                     metadata: self.metadata.clone(),
                     bind_context: Box::new(bind_context),
                     rewrite_kind: None,

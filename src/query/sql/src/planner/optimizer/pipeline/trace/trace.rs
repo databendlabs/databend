@@ -21,7 +21,6 @@ use log::info;
 use parking_lot::Mutex;
 
 use crate::Metadata;
-use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::StatContext;
 
 /// Represents a trace entry for a rule execution
@@ -129,14 +128,14 @@ impl OptimizerTraceCollector {
     /// * `before` - Expression state before optimization
     /// * `after` - Expression state after optimization
     /// * `metadata` - Metadata for expression comparison
-    pub fn trace_optimizer(
+    pub fn trace_optimizer<K: crate::optimizer::ir::RelExprKind>(
         &self,
         name: String,
         index: usize,
         total: usize,
         time: Duration,
-        before: &SExpr,
-        after: &SExpr,
+        before: &crate::optimizer::ir::Expr<K>,
+        after: &crate::optimizer::ir::Expr<K>,
         metadata: &Metadata,
         stat_context: &StatContext,
     ) -> Result<()> {
@@ -164,13 +163,13 @@ impl OptimizerTraceCollector {
     /// * `before` - Expression state before rule application
     /// * `after` - Expression state after rule application
     /// * `metadata` - Metadata for expression comparison
-    pub fn trace_rule(
+    pub fn trace_rule<K: crate::optimizer::ir::RelExprKind>(
         &self,
         rule_name: String,
         optimizer_name: String,
         time: Duration,
-        before: &SExpr,
-        after: &SExpr,
+        before: &crate::optimizer::ir::Expr<K>,
+        after: &crate::optimizer::ir::Expr<K>,
         metadata: &Metadata,
         stat_context: &StatContext,
     ) -> Result<()> {

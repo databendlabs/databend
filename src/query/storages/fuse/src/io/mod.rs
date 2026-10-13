@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod granule_index;
+mod inverted_index_user_dictionary;
 mod locations;
 mod range_reader;
 pub mod read;
@@ -20,6 +21,10 @@ mod segments;
 mod snapshots;
 mod write;
 
+pub use inverted_index_user_dictionary::InvertedIndexUserDictionary;
+pub use inverted_index_user_dictionary::MAX_INVERTED_INDEX_USER_DICTIONARY_SIZE;
+pub use inverted_index_user_dictionary::resolve_inverted_index_user_dictionary;
+pub use inverted_index_user_dictionary::resolve_inverted_index_user_dictionary_blocking;
 pub use locations::TableMetaLocationGenerator;
 pub use locations::compact_index_version;
 pub(crate) use range_reader::create_file_range_reader;

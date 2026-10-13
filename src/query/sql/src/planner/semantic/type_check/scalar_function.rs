@@ -454,8 +454,7 @@ where A: TypeCheckAdapter
         if (func_name == "substr" || func_name == "substring")
             && self
                 .adapter
-                .settings()
-                .get_sql_dialect()
+                .sql_dialect()
                 .unwrap()
                 .substr_index_zero_literal_as_one()
         {

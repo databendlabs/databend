@@ -27,8 +27,8 @@ use databend_common_sql::optimizer::CollectStatisticsOptimizer;
 use databend_common_sql::optimizer::Optimizer;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::ColumnStat;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::RelExpr;
-use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::ir::StatInfo;
 use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
@@ -84,7 +84,7 @@ fn column_statistics() -> HashMap<String, BasicColumnStatistics> {
     ])
 }
 
-fn find_operator(expr: &SExpr, operator: RelOp) -> Option<&SExpr> {
+fn find_operator(expr: &PExpr, operator: RelOp) -> Option<&PExpr> {
     if expr.plan().rel_op() == operator {
         return Some(expr);
     }
@@ -166,10 +166,10 @@ async fn write_case(file: &mut impl Write, case: &StatsCase) -> Result<()> {
         let opt_ctx =
             OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?);
         let mut collector = CollectStatisticsOptimizer::new(opt_ctx.clone());
-        let s_expr = collector.optimize(*s_expr).await?;
+        let s_expr = collector.optimize((*s_expr).into_logical()?).await?;
         let s_expr = RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::PushDownLimitSort])
             .optimize_sync(s_expr)?;
-        (s_expr, metadata)
+        (PExpr::from(s_expr), metadata)
     } else {
         let Plan::Query {
             s_expr, metadata, ..
@@ -177,12 +177,12 @@ async fn write_case(file: &mut impl Write, case: &StatsCase) -> Result<()> {
         else {
             return Err(ErrorCode::Internal("expected optimized query plan"));
         };
-        (*s_expr, metadata)
+        (s_expr.planned()?.expr().clone(), metadata)
     };
     let target = find_operator(&s_expr, case.operator.clone()).ok_or_else(|| {
         ErrorCode::Internal(format!("cannot find {:?} in optimized plan", case.operator))
     })?;
-    let stats = RelExpr::with_s_expr(target).derive_cardinality(&StatContext::default())?;
+    let stats = RelExpr::with_p_expr(target).derive_cardinality(&StatContext::default())?;
 
     write_case_title(file, case.name, case.description)?;
     writeln!(file, "sql: {}", case.sql)?;

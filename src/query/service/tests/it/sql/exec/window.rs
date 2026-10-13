@@ -124,7 +124,7 @@ async fn test_window_inputs_prune_json_after_evaluation() -> Result<()> {
                 panic!("expected query plan");
             };
             let plan = PhysicalPlanBuilder::new(metadata, ctx, false)
-                .build(&s_expr, bind_context.column_set())
+                .build_query(s_expr.planned()?, bind_context.column_set())
                 .await?;
             assert!(
                 check_window_input_json(&plan, keep_json, &format!("{nodes} nodes: {sql}"))? > 0

@@ -26,7 +26,7 @@ use databend_common_sql::ColumnEntry;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::Symbol;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -137,7 +137,7 @@ impl IPhysicalPlan for Limit {
 impl PhysicalPlanBuilder {
     pub async fn build_limit(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         limit: &databend_common_sql::plans::Limit,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,

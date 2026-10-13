@@ -42,7 +42,7 @@ use databend_common_sql::binder::wrap_cast;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::AggregateFunctionSignature;
 use databend_common_sql::executor::physical_plans::SortDesc;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::plans::WindowFuncFrame;
 use databend_common_sql::plans::WindowFuncFrameBound;
 use databend_common_sql::plans::WindowFuncType;
@@ -515,7 +515,7 @@ fn window_top_n(window: &WindowSpec) -> Option<(usize, WindowPartitionTopNFunc)>
 impl PhysicalPlanBuilder {
     pub async fn build_window_group(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         window_group: &databend_common_sql::plans::WindowGroup,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
@@ -611,7 +611,7 @@ impl PhysicalPlanBuilder {
 
     pub async fn build_window(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         window: &databend_common_sql::plans::Window,
         mut required: ColumnSet,
         _stat_info: PlanStatsInfo,

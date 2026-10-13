@@ -1598,3 +1598,288 @@ use default;
 
 statement ok
 drop database issue_20380_subquery;
+
+# A correlated scalar subquery over a scalar aggregate (no GROUP BY) returns the aggregate's
+# empty-input result for an outer value without input rows, not NULL.
+statement ok
+create or replace database scalar_agg_subquery;
+
+statement ok
+use scalar_agg_subquery;
+
+statement ok
+create table agg_outer(id int, k int null);
+
+statement ok
+insert into agg_outer values (1, 1), (2, NULL), (3, 5);
+
+statement ok
+create table agg_inner(k int null, v int);
+
+statement ok
+insert into agg_inner values (1, 10), (NULL, 20), (NULL, 30);
+
+statement ok
+set enable_experimental_new_join = 0;
+
+query II
+select o.id, (select count(*) + 1 from agg_inner i where i.k = o.k) from agg_outer o order by o.id;
+----
+1 2
+2 1
+3 1
+
+query IT
+select o.id, (select array_agg(v) from agg_inner i where i.k = o.k) from agg_outer o order by o.id;
+----
+1 [10]
+2 []
+3 []
+
+query II
+select o.id, (select coalesce(sum(v), 0) from agg_inner i where i.k = o.k) from agg_outer o order by o.id;
+----
+1 10
+2 0
+3 0
+
+query II
+select o.id, (select count(*) from agg_inner i where i.k = o.k) from agg_outer o order by o.id;
+----
+1 1
+2 0
+3 0
+
+query I
+select o.id from agg_outer o where (select count(*) + 1 from agg_inner i where i.k = o.k) = 1 order by o.id;
+----
+2
+3
+
+query IT
+select o.id, (select if(count(*) = 0, 'Y', 'N') from agg_inner i where i.k = o.k) from agg_outer o order by o.id;
+----
+1 N
+2 Y
+3 Y
+
+query II
+select o.id, (select count(*) from agg_inner i where i.k = o.k having count(*) > 1) from agg_outer o order by o.id;
+----
+1 NULL
+2 NULL
+3 NULL
+
+query II
+select o.id, (select count(*) from agg_inner i where i.k = o.k having count(*) = 0) from agg_outer o order by o.id;
+----
+1 NULL
+2 0
+3 0
+
+query I
+select o.id from agg_outer o where (select count(*) from agg_inner i where i.k = o.k) = 0 order by o.id;
+----
+2
+3
+
+query II
+select o.id, (select count(*) c from agg_inner i where i.k = o.k order by c limit 1) from agg_outer o order by o.id;
+----
+1 1
+2 0
+3 0
+
+query II
+select o.id, (select count(*) from agg_inner i where i.k = o.k limit 0) from agg_outer o order by o.id;
+----
+1 NULL
+2 NULL
+3 NULL
+
+query II
+select o.id, (select count(*) from agg_inner i where i.k = o.k limit 1 offset 1) from agg_outer o order by o.id;
+----
+1 NULL
+2 NULL
+3 NULL
+
+query II
+select o.id, (select 1 + sum(v) from agg_inner i where i.k = o.k) from agg_outer o order by o.id;
+----
+1 11
+2 NULL
+3 NULL
+
+query II
+select o.id, (select count(*) from agg_inner i where i.k = o.k and o.id > 0) from agg_outer o order by o.id;
+----
+1 1
+2 0
+3 0
+
+query II
+select o.id, (select count(distinct v) from agg_inner i where i.k = o.k) from agg_outer o order by o.id;
+----
+1 1
+2 0
+3 0
+
+# The projection above HAVING isn't evaluated on the row HAVING rejects, where it would
+# divide by zero.
+query II
+SELECT o.number, (SELECT (10 / (count(*)::INT - 1))::INT FROM numbers(1) i WHERE i.number = o.number HAVING count(*) = 0) FROM numbers(3) o ORDER BY o.number;
+----
+0 NULL
+1 -10
+2 -10
+
+# An expression over the filled count is evaluated for outer values without input rows, so
+# dividing by count(*) fails like the uncorrelated `(SELECT 1 / count(*) ... WHERE false)`.
+# nullif keeps the NULL result.
+statement error divided by zero
+select o.id, (select 1 / count(*) from agg_inner i where i.k = o.k) from agg_outer o order by o.id;
+
+query IF
+select o.id, (select 1 / nullif(count(*), 0) from agg_inner i where i.k = o.k) from agg_outer o order by o.id;
+----
+1 1.0
+2 NULL
+3 NULL
+
+statement ok
+set enable_experimental_new_join = 1;
+
+query II
+select o.id, (select count(*) + 1 from agg_inner i where i.k = o.k) from agg_outer o order by o.id;
+----
+1 2
+2 1
+3 1
+
+query IT
+select o.id, (select array_agg(v) from agg_inner i where i.k = o.k) from agg_outer o order by o.id;
+----
+1 [10]
+2 []
+3 []
+
+query II
+select o.id, (select coalesce(sum(v), 0) from agg_inner i where i.k = o.k) from agg_outer o order by o.id;
+----
+1 10
+2 0
+3 0
+
+query II
+select o.id, (select count(*) from agg_inner i where i.k = o.k) from agg_outer o order by o.id;
+----
+1 1
+2 0
+3 0
+
+query I
+select o.id from agg_outer o where (select count(*) + 1 from agg_inner i where i.k = o.k) = 1 order by o.id;
+----
+2
+3
+
+query IT
+select o.id, (select if(count(*) = 0, 'Y', 'N') from agg_inner i where i.k = o.k) from agg_outer o order by o.id;
+----
+1 N
+2 Y
+3 Y
+
+query II
+select o.id, (select count(*) from agg_inner i where i.k = o.k having count(*) > 1) from agg_outer o order by o.id;
+----
+1 NULL
+2 NULL
+3 NULL
+
+query II
+select o.id, (select count(*) from agg_inner i where i.k = o.k having count(*) = 0) from agg_outer o order by o.id;
+----
+1 NULL
+2 0
+3 0
+
+query I
+select o.id from agg_outer o where (select count(*) from agg_inner i where i.k = o.k) = 0 order by o.id;
+----
+2
+3
+
+query II
+select o.id, (select count(*) c from agg_inner i where i.k = o.k order by c limit 1) from agg_outer o order by o.id;
+----
+1 1
+2 0
+3 0
+
+query II
+select o.id, (select count(*) from agg_inner i where i.k = o.k limit 0) from agg_outer o order by o.id;
+----
+1 NULL
+2 NULL
+3 NULL
+
+query II
+select o.id, (select count(*) from agg_inner i where i.k = o.k limit 1 offset 1) from agg_outer o order by o.id;
+----
+1 NULL
+2 NULL
+3 NULL
+
+query II
+select o.id, (select 1 + sum(v) from agg_inner i where i.k = o.k) from agg_outer o order by o.id;
+----
+1 11
+2 NULL
+3 NULL
+
+query II
+select o.id, (select count(*) from agg_inner i where i.k = o.k and o.id > 0) from agg_outer o order by o.id;
+----
+1 1
+2 0
+3 0
+
+query II
+select o.id, (select count(distinct v) from agg_inner i where i.k = o.k) from agg_outer o order by o.id;
+----
+1 1
+2 0
+3 0
+
+# The projection above HAVING isn't evaluated on the row HAVING rejects, where it would
+# divide by zero.
+query II
+SELECT o.number, (SELECT (10 / (count(*)::INT - 1))::INT FROM numbers(1) i WHERE i.number = o.number HAVING count(*) = 0) FROM numbers(3) o ORDER BY o.number;
+----
+0 NULL
+1 -10
+2 -10
+
+# An expression over the filled count is evaluated for outer values without input rows, so
+# dividing by count(*) fails like the uncorrelated `(SELECT 1 / count(*) ... WHERE false)`.
+# nullif keeps the NULL result.
+statement error divided by zero
+select o.id, (select 1 / count(*) from agg_inner i where i.k = o.k) from agg_outer o order by o.id;
+
+query IF
+select o.id, (select 1 / nullif(count(*), 0) from agg_inner i where i.k = o.k) from agg_outer o order by o.id;
+----
+1 1.0
+2 NULL
+3 NULL
+
+statement ok
+unset enable_experimental_new_join;
+
+statement ok
+use default;
+
+statement ok
+drop database scalar_agg_subquery;

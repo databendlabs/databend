@@ -482,6 +482,7 @@ pub enum AlterTableAction {
     AlterTablePartitionBy {
         partition_by: Vec<Expr>,
     },
+    DropTablePartitionKey,
     DropTableClusterKey,
     /// `ALTER TABLE ... SET TTL <expr>` sets or replaces the TTL definition.
     SetTableTtl {
@@ -577,6 +578,9 @@ impl Display for AlterTableAction {
                 write!(f, "PARTITION BY (")?;
                 write_comma_separated_list(f, partition_by)?;
                 write!(f, ")")?;
+            }
+            AlterTableAction::DropTablePartitionKey => {
+                write!(f, "DROP PARTITION KEY")?;
             }
             AlterTableAction::DropTableClusterKey => {
                 write!(f, "DROP CLUSTER KEY")?;

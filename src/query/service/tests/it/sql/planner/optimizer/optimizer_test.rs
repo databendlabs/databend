@@ -73,7 +73,9 @@ impl TestCaseRunner for ServiceRunner {
         } = optimized
         {
             let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.0.clone(), false);
-            let physical = builder.build(s_expr, bind_context.column_set()).await?;
+            let physical = builder
+                .build_query(s_expr.planned()?, bind_context.column_set())
+                .await?;
             let metadata = metadata.read();
             Ok(Some(
                 physical

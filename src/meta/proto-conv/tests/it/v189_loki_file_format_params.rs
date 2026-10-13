@@ -23,25 +23,25 @@ use fastrace::func_name;
 
 use crate::common;
 
-// Frozen v188 bytes: do not rewrite when metadata versions advance.
+// Frozen v189 bytes: do not rewrite when metadata versions advance.
 #[test]
-fn test_decode_v188_loki_file_format_params() -> anyhow::Result<()> {
+fn test_decode_v189_loki_file_format_params() -> anyhow::Result<()> {
     let bytes = [
-        10, 13, 70, 73, 69, 76, 68, 95, 68, 69, 70, 65, 85, 76, 84, 160, 6, 188, 1, 168, 6, 188, 1,
+        10, 13, 70, 73, 69, 76, 68, 95, 68, 69, 70, 65, 85, 76, 84, 160, 6, 189, 1, 168, 6, 189, 1,
     ];
     let want = LokiFileFormatParams {
         missing_field_as: NullAs::FieldDefault,
     };
-    common::test_load_old(func_name!(), &bytes, 188, want.clone())?;
+    common::test_load_old(func_name!(), &bytes, 189, want.clone())?;
     common::test_pb_from_to(func_name!(), want)?;
     Ok(())
 }
 
 #[test]
-fn test_decode_v188_file_format_params_loki() -> anyhow::Result<()> {
+fn test_decode_v189_file_format_params_loki() -> anyhow::Result<()> {
     let bytes = [
-        98, 23, 10, 13, 70, 73, 69, 76, 68, 95, 68, 69, 70, 65, 85, 76, 84, 160, 6, 188, 1, 168, 6,
-        188, 1,
+        98, 23, 10, 13, 70, 73, 69, 76, 68, 95, 68, 69, 70, 65, 85, 76, 84, 160, 6, 189, 1, 168, 6,
+        189, 1,
     ];
     let want = FileFormatParams::Loki(LokiFileFormatParams {
         missing_field_as: NullAs::FieldDefault,
@@ -64,7 +64,7 @@ fn test_loki_format_defaults_and_validation() {
     for missing_field_as in [NullAs::Error, NullAs::Null, NullAs::FieldDefault] {
         let params = LokiFileFormatParams { missing_field_as };
         let pb = params.to_pb();
-        assert_eq!(pb.min_reader_ver, 188);
+        assert_eq!(pb.min_reader_ver, 189);
         assert_eq!(LokiFileFormatParams::from_pb(pb).unwrap(), params);
     }
     let mut pb = LokiFileFormatParams::default().to_pb();
