@@ -129,8 +129,10 @@ impl ColumnStatisticsState {
 mod tests {
     use std::sync::Arc;
 
+    use databend_common_expression::BlockEntry;
     use databend_common_expression::Column;
     use databend_common_expression::FromData;
+    use databend_common_expression::Scalar;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
@@ -143,7 +145,6 @@ mod tests {
     use databend_storages_common_index::RangeIndex;
 
     use super::*;
-    use crate::statistics::END_OF_UNICODE_RANGE;
     use crate::statistics::gen_columns_statistics;
 
     #[test]
@@ -198,6 +199,43 @@ mod tests {
     }
 
     #[test]
+    fn test_column_stats_state_string_successor() -> Result<()> {
+        let data_type = DataType::Nullable(Box::new(DataType::String));
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "a",
+            TableDataType::Nullable(Box::new(TableDataType::String)),
+        )]));
+        let truncate_lens = BTreeMap::from([(0, 4)]);
+        let stats_columns = vec![(0, data_type.clone())];
+        let input = "ab\u{10FFFF}\u{10FFFF}-suffix";
+        let blocks = [
+            DataBlock::new_from_columns(vec![StringType::from_opt_data(vec![None, Some(input)])]),
+            DataBlock::new(
+                vec![BlockEntry::new_const_column(
+                    data_type,
+                    Scalar::String(input.to_string()),
+                    2,
+                )],
+                2,
+            ),
+        ];
+
+        for block in blocks {
+            let expected =
+                gen_columns_statistics(&block, None, &schema, &truncate_lens, HashMap::new())?;
+            let mut state =
+                ColumnStatisticsState::new(&stats_columns, &stats_columns, &truncate_lens);
+            state.add_block(&schema, &block)?;
+            let actual = state.finalize(HashMap::new())?;
+
+            assert_eq!(actual, expected);
+            assert_eq!(actual[&0].max(), &Scalar::String("ac\0\0".to_string()));
+            assert_eq!(actual[&0].max().as_string().unwrap().chars().count(), 4);
+        }
+        Ok(())
+    }
+
+    #[test]
     fn test_column_stats_state_adaptive_string_prefix() -> Result<()> {
         let field = TableField::new("a", TableDataType::String);
         let schema = Arc::new(TableSchema::new(vec![field]));
@@ -221,7 +259,7 @@ mod tests {
         );
         assert_eq!(
             col_stats.max(),
-            &databend_common_expression::Scalar::String(format!("{prefix}{END_OF_UNICODE_RANGE}"))
+            &databend_common_expression::Scalar::String(format!("{prefix}{{"))
         );
         Ok(())
     }

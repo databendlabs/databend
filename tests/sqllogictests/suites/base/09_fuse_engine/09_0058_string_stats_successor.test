@@ -1,0 +1,81 @@
+# run-with-settings: enable_block_stream_write=0
+
+# Issue #20200: use a tight Unicode successor for string max statistics.
+# Run both streaming and non-streaming writes; hex keeps NUL padding visible.
+statement ok
+DROP TABLE IF EXISTS t_string_stats_successor;
+
+statement ok
+CREATE TABLE t_string_stats_successor (
+    ascii_value STRING STATS_TRUNCATE_LEN 4,
+    carry_value STRING STATS_TRUNCATE_LEN 4,
+    surrogate_gap STRING STATS_TRUNCATE_LEN 4
+) row_per_block=100;
+
+statement ok
+INSERT INTO t_string_stats_successor
+SELECT 'abcd-suffix',
+       concat('ab', char(1114111), char(1114111), '-suffix'),
+       concat('abc', char(55295), '-suffix');
+
+query TT
+SELECT column_name, to_hex(statistics:max::string)
+FROM fuse_block_statistics('default', 't_string_stats_successor')
+ORDER BY column_id;
+----
+ascii_value 61626365
+carry_value 61630000
+surrogate_gap 616263ee8080
+
+# Both upper bounds now exclude thresholds admitted by the old U+10FFFF bound.
+query B
+SELECT statistics:max::string < 'abcf'
+FROM fuse_block_statistics('default', 't_string_stats_successor')
+WHERE column_name = 'ascii_value';
+----
+1
+
+query B
+SELECT statistics:max::string < 'ac0'
+FROM fuse_block_statistics('default', 't_string_stats_successor')
+WHERE column_name = 'carry_value';
+----
+1
+
+query II
+SELECT count_if(ascii_value >= 'abcf'), count_if(carry_value >= 'ac0')
+FROM t_string_stats_successor;
+----
+0 0
+
+# A carried successor must remain approximate: MIN/MAX must return the actual
+# value, not the truncated min or the synthetic "ac\0\0" max.
+query B
+SELECT MIN(carry_value) = concat('ab', char(1114111), char(1114111), '-suffix')
+FROM t_string_stats_successor;
+----
+1
+
+# Check MAX separately so an inexact MIN cannot prevent an otherwise unsafe
+# statistics-only MAX rewrite.
+query B
+SELECT MAX(carry_value) = concat('ab', char(1114111), char(1114111), '-suffix')
+FROM t_string_stats_successor;
+----
+1
+
+query BB
+SELECT MIN(surrogate_gap) = concat('abc', char(55295), '-suffix'),
+       MAX(surrogate_gap) = concat('abc', char(55295), '-suffix')
+FROM t_string_stats_successor;
+----
+1 1
+
+query I
+SELECT count(*) FROM t_string_stats_successor
+WHERE ascii_value >= 'abcf' OR carry_value >= 'ac0';
+----
+0
+
+statement ok
+DROP TABLE t_string_stats_successor;
