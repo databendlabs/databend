@@ -82,7 +82,7 @@ jobs:
 
   mac_check:
     needs: changes
-    if: needs.changes.outputs.any_src_changed == 'true' && needs.changes.outputs.deps_changed == 'true'
+    if: needs.changes.outputs.deps_changed == 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
@@ -142,8 +142,16 @@ jobs:
               core.setFailed(`AI assistance validator tests did not complete successfully (${process.env.AI_ASSISTANCE_TEST_RESULT}), not ready to merge`);
               return;
             }
-            if (process.env.SRC_CHANGED == 'false' && process.env.BENDPY_CHANGED == 'false') {
+            if (process.env.SRC_CHANGED == 'false' && process.env.BENDPY_CHANGED == 'false' && process.env.DEPS_CHANGED == 'false') {
               core.info('No source file changes detected, skipping');
+              return;
+            }
+            // mac_check runs whenever dependency/toolchain/build-script files change,
+            // independently of whether any_src_changed is true (e.g. a PR touching only
+            // .github/actions/check_macos/**). It must be green in that case; otherwise
+            // it is skipped and Linux clippy already covers the change.
+            if (process.env.DEPS_CHANGED == 'true' && process.env.MAC_CHECK_RESULT != 'success') {
+              core.setFailed(`macOS check did not complete successfully (${process.env.MAC_CHECK_RESULT}), not ready to merge`);
               return;
             }
             if (process.env.BENDPY_CHANGED == 'true' && process.env.BENDPY_RESULT != 'success') {
@@ -151,16 +159,11 @@ jobs:
               return;
             }
             if (process.env.SRC_CHANGED == 'false') {
-              core.info('Required bendpy checks succeeded, ready to merge');
-              return;
-            }
-            const macSkippedOk = process.env.MAC_CHECK_RESULT == 'skipped' && process.env.DEPS_CHANGED != 'true';
-            if (process.env.MAC_CHECK_RESULT != 'success' && !macSkippedOk) {
-              core.setFailed(`macOS check did not complete successfully (${process.env.MAC_CHECK_RESULT}), not ready to merge`);
+              core.info('Required dependency / bendpy checks succeeded, ready to merge');
               return;
             }
             if (process.env.LINUX_BUILD_RESULT == 'success') {
-              core.info('Linux build and macOS check succeeded, ready to merge');
+              core.info('Linux build succeeded, ready to merge');
               return;
             }
             core.setFailed('Build failed, not ready to merge');
