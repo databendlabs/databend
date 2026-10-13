@@ -21,6 +21,11 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::info;
+use socket2::Domain;
+use socket2::Protocol;
+use socket2::Socket;
+use socket2::Type;
+use tokio::net::TcpListener;
 use tokio::sync::Notify;
 use tonic::transport::Identity;
 use tonic::transport::Server;
@@ -29,6 +34,28 @@ use tonic::transport::server::TcpIncoming;
 
 use super::v1::DatabendQueryFlightService;
 use crate::servers::Server as DatabendQueryServer;
+
+/// Backlog requested for the flight listener.
+///
+/// `TcpIncoming::bind` goes through `std::net::TcpListener::bind`, which
+/// hard-codes a backlog of 128. Every distributed query opens new flight
+/// connections to every node, so bursts can overflow such a small accept
+/// queue; the kernel then drops SYNs and clients back off for seconds.
+/// 4096 matches the default `net.core.somaxconn` of Linux >= 5.4; the kernel
+/// clamps it to that sysctl if it is lower.
+const FLIGHT_LISTEN_BACKLOG: i32 = 4096;
+
+fn bind_flight_listener(addr: SocketAddr) -> std::io::Result<TcpIncoming> {
+    let socket = Socket::new(Domain::for_address(addr), Type::STREAM, Some(Protocol::TCP))?;
+    // Keep the SO_REUSEADDR behavior of `std::net::TcpListener::bind`.
+    #[cfg(not(windows))]
+    socket.set_reuse_address(true)?;
+    socket.bind(&addr.into())?;
+    socket.listen(FLIGHT_LISTEN_BACKLOG)?;
+    socket.set_nonblocking(true)?;
+    let listener = TcpListener::from_std(socket.into())?;
+    Ok(TcpIncoming::from(listener))
+}
 
 pub struct FlightService {
     pub config: InnerConfig,
@@ -78,7 +105,7 @@ impl FlightService {
             builder
         };
 
-        let incoming = TcpIncoming::bind(addr)
+        let incoming = bind_flight_listener(addr)
             .map_err(|e| ErrorCode::CannotListenerPort(format!("{},{}", e, addr)))?
             .with_nodelay(Some(true))
             .with_keepalive(None);
@@ -104,5 +131,51 @@ impl DatabendQueryServer for FlightService {
     async fn start(&mut self, addr: SocketAddr) -> Result<SocketAddr> {
         self.start_with_incoming(addr).await?;
         Ok(addr)
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use std::time::Duration;
+
+    use tokio::net::TcpStream;
+
+    use super::*;
+
+    // Connections are never accepted, so every handshake must fit in the
+    // accept queue. With the std default backlog of 128 the extra SYNs are
+    // dropped and the connects time out.
+    #[tokio::test]
+    async fn test_flight_listener_backlog_exceeds_std_default() -> std::io::Result<()> {
+        const CONNECTIONS: usize = 256;
+
+        let somaxconn: usize = std::fs::read_to_string("/proc/sys/net/core/somaxconn")?
+            .trim()
+            .parse()
+            .unwrap_or(0);
+        if somaxconn <= CONNECTIONS {
+            return Ok(());
+        }
+
+        let incoming = bind_flight_listener("127.0.0.1:0".parse().unwrap())?;
+        let addr = incoming.local_addr()?;
+
+        let mut handles = Vec::with_capacity(CONNECTIONS);
+        for _ in 0..CONNECTIONS {
+            handles.push(tokio::spawn(async move {
+                tokio::time::timeout(Duration::from_secs(5), TcpStream::connect(addr)).await
+            }));
+        }
+
+        let mut streams = Vec::with_capacity(CONNECTIONS);
+        for handle in handles {
+            let stream = handle
+                .await
+                .expect("connect task panicked")
+                .expect("connect timed out, accept queue overflowed")?;
+            streams.push(stream);
+        }
+
+        Ok(())
     }
 }
