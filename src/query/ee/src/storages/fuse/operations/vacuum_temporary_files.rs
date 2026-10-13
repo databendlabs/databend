@@ -72,9 +72,10 @@ struct DeleteOutcome {
     /// Files known to be removed: those of the requests that went through, a prefix of the
     /// batch, all of it unless `failed`.
     removed: usize,
-    /// What `LIMIT` is charged: `removed`, plus the paths of a request that failed with some
-    /// of its objects possibly deleted (a multi-delete reports per object). A run thus never
-    /// removes more than it says, even while the store is failing requests half-way.
+    /// What `LIMIT` is charged: `removed`, plus the paths of a failed request, since a
+    /// multi-delete reports per object and may have removed some of them before the error,
+    /// whatever its kind. A run thus never removes more than it says, even while the store is
+    /// failing requests half-way.
     charged: usize,
     /// A request was rejected, for whatever reason; the paths from `removed` on are left for
     /// the next run.
@@ -186,18 +187,13 @@ impl SpillDeleter {
                     from,
                     e
                 );
-                let rate_limited = e.kind() == ErrorKind::RateLimited;
                 DeleteOutcome {
                     removed,
-                    // A request rejected as rate limited was not executed at all; any other
-                    // failure may have removed some of its objects before the error.
-                    charged: if rate_limited {
-                        removed
-                    } else {
-                        removed + in_flight
-                    },
+                    // Even a `RateLimited` error can follow per-object successes: the
+                    // store may accept part of a multi-delete and throttle the rest.
+                    charged: removed + in_flight,
                     failed: true,
-                    rate_limited,
+                    rate_limited: e.kind() == ErrorKind::RateLimited,
                     retried,
                 }
             }

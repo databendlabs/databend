@@ -393,7 +393,7 @@ mod unit {
     fn rate_limited() -> DeleteOutcome {
         DeleteOutcome {
             removed: 0,
-            charged: 0,
+            charged: 1,
             failed: true,
             rate_limited: true,
             retried: 0,
@@ -578,7 +578,7 @@ mod unit {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_rate_limited_batch_is_not_counted() -> anyhow::Result<()> {
+    async fn test_failed_batch_is_charged_but_not_counted() -> anyhow::Result<()> {
         let accessor = MockVacuumAccessor::new(HashMap::new(), HashMap::new(), HashMap::new());
         let deleter = SpillDeleter::new(
             OperatorBuilder::new(accessor.clone()).finish(),
@@ -586,15 +586,15 @@ mod unit {
         );
         let paths = vec!["spill/dir/file1".to_string(), "spill/dir/file2".to_string()];
 
-        // Rejected as rate limited: nothing was executed, nothing is charged.
+        // A failed request may have removed part of its objects before the error, a
+        // rate-limited one included: nothing is counted, everything is charged.
         accessor.throttle_next_batches(1);
         let outcome = deleter.delete(paths.clone(), "spill/dir/").await;
         assert_eq!(outcome.removed, 0);
-        assert_eq!(outcome.charged, 0);
+        assert_eq!(outcome.charged, 2);
         assert!(outcome.rate_limited);
         assert_eq!(accessor.deleted_paths(), Vec::<String>::new());
 
-        // Any other failure may have removed part of the request: charged in full.
         accessor.fail_next_batches(1, opendal::ErrorKind::Unexpected);
         let outcome = deleter.delete(paths.clone(), "spill/dir/").await;
         assert_eq!(outcome.removed, 0);
