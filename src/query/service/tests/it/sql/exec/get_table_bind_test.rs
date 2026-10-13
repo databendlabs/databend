@@ -1384,7 +1384,7 @@ async fn test_materialize_ttl_requires_alter_not_delete() -> Result<()> {
         let databend_common_sql::plans::Plan::DataMutation { s_expr, .. } = &plan else {
             panic!("MATERIALIZE TTL should be a data mutation");
         };
-        let mutation: databend_common_sql::plans::Mutation = s_expr.plan().clone().try_into()?;
+        let mutation = s_expr.mutation()?;
         assert_eq!(mutation.expected_ttl.as_deref(), Some("ts"));
         let result = match InterpreterFactory::get(ctx.clone(), &plan).await {
             Ok(interpreter) => match interpreter.execute(ctx).await {
