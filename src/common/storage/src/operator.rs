@@ -698,7 +698,13 @@ impl DataOperator {
     /// A fresh operator on the spill store whose retries are counted in `stats`, for activities
     /// that must detect throttling of their own requests. Not cached: build one per activity,
     /// not per request.
+    ///
+    /// An in-memory spill store is process state owned by `spill_operator` and cannot be opened
+    /// twice; it is returned as is, and `stats` stays at zero since memory never throttles.
     pub fn observed_spill_operator(&self, stats: Arc<RetryStats>) -> Result<Operator> {
+        if matches!(self.spill_storage_params, StorageParams::Memory) {
+            return Ok(self.spill_operator.clone());
+        }
         init_operator_observed(&self.spill_storage_params, stats)
     }
 
