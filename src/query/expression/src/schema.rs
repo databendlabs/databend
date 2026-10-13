@@ -1280,7 +1280,9 @@ impl TableField {
                 );
             }
             _ => {
-                *next_column_id += 1;
+                // The next id is not part of this field's ids. Internal columns use
+                // ids near u32::MAX (e.g. _row_id), so avoid overflowing here.
+                *next_column_id = next_column_id.saturating_add(1);
             }
         }
     }

@@ -316,6 +316,7 @@ mod tests {
             limit: Some(5),
             virtual_column: Some(VirtualColumnInfo {
                 source_column_ids: [1].into_iter().collect(),
+                ignorable_source_column_ids: [1].into_iter().collect(),
                 virtual_column_fields: vec![virtual_field.clone()],
             }),
             ..PushDownInfo::default()
@@ -358,6 +359,7 @@ mod tests {
             limit: Some(5),
             virtual_column: Some(VirtualColumnInfo {
                 source_column_ids: [1].into_iter().collect(),
+                ignorable_source_column_ids: [1].into_iter().collect(),
                 virtual_column_fields: vec![variant_field.clone()],
             }),
             ..PushDownInfo::default()
