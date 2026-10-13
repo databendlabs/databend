@@ -36,6 +36,11 @@ impl<K: RelExprKind> Expr<K> {
         let tree_humanizer = TreeHumanizer::new(id_humanizer, &operator_humanizer);
         tree_humanizer.humanize_expr(self)
     }
+
+    pub fn pretty_format(&self, metadata: &crate::Metadata, stats: &StatContext) -> Result<String> {
+        let ids = MetadataIdHumanizer::new(metadata, FormatOptions { verbose: false }, stats);
+        Ok(self.to_format_tree(&ids)?.format_pretty()?)
+    }
 }
 
 impl crate::optimizer::ir::QueryPlan {
