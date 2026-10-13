@@ -63,22 +63,19 @@ jobs:
           - { dirs: "tpcds", runner: "4c" }
           - { dirs: "tpch", runner: "2c" }
           - { dirs: "standalone", runner: "2c" }
-        handler:
-          - "hybrid"
-          - "http"
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/test_sqllogic_standalone_linux
         timeout-minutes: 20
         with:
           dirs: ${{ matrix.tests.dirs }}
-          handlers: ${{ matrix.handler }}
+          handlers: http,hybrid
           parallel: ${{ matrix.tests.parallel }}
       # Reuse the Query/Meta processes and test binary initialized by the preceding
-      # standalone/http step; this small suite does not justify another runner.
+      # standalone step; this small suite does not justify another runner.
       - name: Run native UDF sqllogic tests
         id: udf_native
-        if: matrix.tests.dirs == 'standalone' && matrix.handler == 'http'
+        if: matrix.tests.dirs == 'standalone'
         timeout-minutes: 10
         shell: bash
         run: |
@@ -99,7 +96,7 @@ jobs:
         if: failure() && steps.udf_native.outcome != 'failure'
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-standalone-${{ matrix.tests.dirs }}-${{ matrix.handler }}
+          name: test-sqllogic-standalone-${{ matrix.tests.dirs }}
 
   standalone_udf_server:
     runs-on:
@@ -171,21 +168,18 @@ jobs:
       matrix:
         dirs:
           - "query"
-        handler:
-          - "hybrid"
-          - "http"
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/test_sqllogic_standalone_linux_minio
         timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}
-          handlers: ${{ matrix.handler }}
+          handlers: http,hybrid
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-standalone-minio-${{ matrix.dirs }}-${{ matrix.handler }}
+          name: test-sqllogic-standalone-minio-${{ matrix.dirs }}
 
   standalone_minio_with_bendsave:
     runs-on:
@@ -305,9 +299,6 @@ jobs:
           - { dirs: "tpcds", runner: "4c" }
           - { dirs: "tpch", runner: "2c" }
           - { dirs: "cluster", runner: "2c" }
-        handler:
-          - "hybrid"
-          - "http"
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_license
@@ -318,13 +309,13 @@ jobs:
         timeout-minutes: 15
         with:
           dirs: ${{ matrix.tests.dirs }}
-          handlers: ${{ matrix.handler }}
+          handlers: http,hybrid
           parallel: ${{ matrix.tests.parallel }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-cluster-${{ matrix.tests.dirs }}-${{ matrix.handler }}
+          name: test-sqllogic-cluster-${{ matrix.tests.dirs }}
 
   stage:
     runs-on:
@@ -339,9 +330,6 @@ jobs:
         storage:
           - "s3"
           - "fs"
-        handler:
-          - "hybrid"
-          - "http"
         dedup:
           - "full_path"
           - "sub_path"
@@ -355,14 +343,14 @@ jobs:
         with:
           storage: ${{ matrix.storage }}
           dirs: stage
-          handlers: ${{ matrix.handler }}
+          handlers: http,hybrid
           dedup: ${{ matrix.dedup }}
           size: ${{ matrix.size }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-stage-${{ matrix.storage }}-${{ matrix.handler }}-${{ matrix.dedup }}-${{ matrix.size }}
+          name: test-sqllogic-stage-${{ matrix.storage }}-${{ matrix.dedup }}-${{ matrix.size }}
 
   standalone_no_table_meta_cache:
     runs-on:
