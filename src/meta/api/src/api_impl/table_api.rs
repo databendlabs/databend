@@ -124,7 +124,6 @@ use databend_meta_client::types::txn_op::Request;
 use databend_meta_client::types::txn_op_response::Response;
 use fastrace::func_name;
 use futures::StreamExt;
-use futures::TryStreamExt;
 use log::debug;
 use log::error;
 use log::info;
@@ -1881,27 +1880,22 @@ where
                 break;
             }
             let ids = chunk.iter().map(|(_, seq_id)| seq_id.data.clone());
-            let seq_metas = self
-                .get_pb_stream_low(ids)
-                .await?
-                .map(|result| match result {
-                    Ok((_, meta)) => Ok(meta),
+            let strm = self.get_pb_stream_low(ids).await?;
+            let seq_metas = strm.collect::<Vec<_>>().await;
+            for (result, (name, id)) in seq_metas.into_iter().zip(chunk) {
+                let meta = match result {
+                    Ok((_, meta)) => meta,
                     Err(PbApiReadError::PbDecodeError(err)) => {
-                        warn!(req :? = (&req); "list_tables: skip undecodable table: {}", err);
-                        Ok(None)
+                        warn!(req :? = (&req); "list_tables: skip table {}: cannot decode table meta: {}", name.table_name, err);
+                        continue;
                     }
-                    Err(err) => Err(MetaError::from(err)),
-                })
-                .try_collect::<Vec<_>>()
-                .await?;
-            res.extend(
-                chunk
-                    .into_iter()
-                    .zip(seq_metas)
-                    .filter_map(|((name, id), meta)| {
-                        meta.map(|meta| (name.table_name, id.data, meta))
-                    }),
-            );
+                    Err(err) => return Err(MetaError::from(err).into()),
+                };
+                let Some(meta) = meta else {
+                    continue;
+                };
+                res.push((name.table_name, id.data, meta));
+            }
         }
         Ok(res)
     }
