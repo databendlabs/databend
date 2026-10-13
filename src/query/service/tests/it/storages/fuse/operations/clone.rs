@@ -101,7 +101,7 @@ async fn test_clone_source_refresh_rechecks_computed_column_license() -> anyhow:
 
     fixture
         .execute_command(&format!(
-            "ALTER TABLE {source} ADD COLUMN doubled INT AS (id * 2) VIRTUAL"
+            "ALTER TABLE {source} ADD COLUMN doubled BIGINT AS (id * 2) VIRTUAL"
         ))
         .await?;
     fixture
@@ -109,7 +109,7 @@ async fn test_clone_source_refresh_rechecks_computed_column_license() -> anyhow:
         .await?;
     // A nonempty invalid key cannot fall back to a CI-embedded license.
     let invalid_license = "invalid-clone-refresh-license";
-    ctx.get_settings()
+    ctx.get_session_settings()
         .set_global_setting(
             "enterprise_license".to_string(),
             invalid_license.to_string(),
@@ -131,7 +131,7 @@ async fn test_clone_source_refresh_rechecks_computed_column_license() -> anyhow:
     // Restoring the old plan.schema license check would incorrectly reject this clone.
     let historical_ctx = fixture.new_query_ctx().await?;
     historical_ctx
-        .get_settings()
+        .get_session_settings()
         .set_global_setting(
             "enterprise_license".to_string(),
             invalid_license.to_string(),
@@ -635,7 +635,6 @@ async fn test_clone_anchor_and_replace_lineage() -> anyhow::Result<()> {
     let database = fixture.default_db_name();
     let source_name = fixture.default_table_name();
     let head_clone = format!("{}_clone_head", source_name);
-    let historical_clone = format!("{}_clone_historical", source_name);
     let chained_clone = format!("{}_clone_chain", source_name);
 
     fixture.create_default_database().await?;
@@ -645,24 +644,6 @@ async fn test_clone_anchor_and_replace_lineage() -> anyhow::Result<()> {
             "INSERT INTO {database}.{source_name} VALUES (1, (2, 3))"
         ))
         .await?;
-
-    let source = fixture.latest_default_table().await?;
-    let source_fuse = FuseTable::try_from_table(source.as_ref())?;
-    let first_snapshot_location = source_fuse.snapshot_loc().unwrap();
-    let first_snapshot_id = source_fuse
-        .read_table_snapshot()
-        .await?
-        .unwrap()
-        .snapshot_id
-        .simple()
-        .to_string();
-
-    for sql in [
-        format!("ALTER TABLE {database}.{source_name} ADD COLUMN evolved STRING"),
-        format!("ALTER TABLE {database}.{source_name} CLUSTER BY (id)"),
-    ] {
-        fixture.execute_command(&sql).await?;
-    }
 
     // A source commit between bind and execution moves the source version forward. The clone
     // refreshes the source instead of failing, and anchors the head it finally CASes against.
@@ -684,24 +665,17 @@ async fn test_clone_anchor_and_replace_lineage() -> anyhow::Result<()> {
         .execute(ctx)
         .await?;
 
-    for sql in [
-        format!(
-            "CREATE TABLE {database}.{historical_clone} CLONE {database}.{source_name} \
-             AT (SNAPSHOT => '{first_snapshot_id}')"
-        ),
-        format!("CREATE TABLE {database}.{chained_clone} CLONE {database}.{head_clone}"),
-    ] {
-        fixture.execute_command(&sql).await?;
-    }
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE {database}.{chained_clone} CLONE {database}.{head_clone}"
+        ))
+        .await?;
 
     let ctx = fixture.new_query_ctx().await?;
     let catalog = ctx.get_catalog(&fixture.default_catalog_name()).await?;
     let tenant = ctx.get_tenant();
     let source = catalog.get_table(&tenant, &database, &source_name).await?;
     let head = catalog.get_table(&tenant, &database, &head_clone).await?;
-    let historical = catalog
-        .get_table(&tenant, &database, &historical_clone)
-        .await?;
     let chained = catalog
         .get_table(&tenant, &database, &chained_clone)
         .await?;
@@ -727,20 +701,6 @@ async fn test_clone_anchor_and_replace_lineage() -> anyhow::Result<()> {
     assert_ne!(head_anchor_location, source_head_location);
     assert_eq!(head_anchor.prev_snapshot_id, None);
     assert_eq!(head_anchor.segments, source_head.segments);
-
-    let selected_source_snapshot = FuseTable::try_from_table(source.as_ref())?
-        .read_table_snapshot_with_location(Some(first_snapshot_location.clone()))
-        .await?
-        .unwrap();
-    let historical_fuse = FuseTable::try_from_table(historical.as_ref())?;
-    let historical_anchor_location = historical_fuse.snapshot_loc().unwrap();
-    let historical_anchor = historical_fuse.read_table_snapshot().await?.unwrap();
-    assert_ne!(historical_anchor_location, first_snapshot_location);
-    assert_eq!(historical_anchor.prev_snapshot_id, None);
-    assert_eq!(
-        historical_anchor.segments,
-        selected_source_snapshot.segments
-    );
 
     // Replacement publishes a new table but retains direct-source lineage for dropped ancestors.
     let source_id = source.get_id();

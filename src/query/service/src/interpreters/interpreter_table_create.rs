@@ -509,11 +509,19 @@ impl CreateTableInterpreter {
         // if the tag changed between attempts.
         let mut source_info = clone.table_info.clone();
         let mut attempts = 0;
-        let (reply, mut staged_table_meta, source_snapshot) = loop {
+        let (reply, mut staged_table_meta, source_snapshot, dictionaries) = loop {
             let (req, source_snapshot) = self.build_clone_request(&source_info, clone).await?;
+            // Read immutable dictionary snapshots before the source CAS. After it succeeds,
+            // the source may drop its index and vacuum the old dictionary while we stage ours.
+            // Never reread the original stage, whose content and permissions may have changed.
+            let source_table = catalog.get_table_by_info(&source_info)?;
+            let source = FuseTable::try_from_table(source_table.as_ref())?;
+            let dictionaries = Self::read_clone_dictionaries(source, &req.table_meta).await?;
             let staged_table_meta = req.table_meta.clone();
             match catalog.create_table(req).await {
-                Ok(reply) => break (reply, staged_table_meta, source_snapshot),
+                Ok(reply) => {
+                    break (reply, staged_table_meta, source_snapshot, dictionaries);
+                }
                 Err(err)
                     if attempts < CLONE_SOURCE_REFRESH_ATTEMPTS
                         && matches!(
@@ -562,6 +570,19 @@ impl CreateTableInterpreter {
         );
         let target =
             FuseTable::create_without_refresh_table_info(staged_table_info, storage_class)?;
+        // Dictionaries are small table-owned auxiliary files, not shared data blocks. Copy
+        // them before publication without registering new indexes or changing their versions.
+        // On failure the target stays dropped, just like a failed anchor write.
+        for (name, dictionary) in dictionaries {
+            let location = dictionary.upload(&target).await?;
+            let index = staged_table_meta.indexes.get_mut(&name).ok_or_else(|| {
+                ErrorCode::Internal(format!("clone dictionary index '{name}' disappeared"))
+            })?;
+            index.options.insert(
+                INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION.to_string(),
+                location,
+            );
+        }
         if let Some(snapshot) = source_snapshot {
             Self::write_clone_anchor(&target, &mut staged_table_meta, &snapshot).await?;
         }
@@ -599,6 +620,32 @@ impl CreateTableInterpreter {
         self.process_ownership(&tenant, reply).await?;
 
         Ok(PipelineBuildResult::create())
+    }
+
+    async fn read_clone_dictionaries(
+        source: &FuseTable,
+        table_meta: &TableMeta,
+    ) -> Result<Vec<(String, InvertedIndexUserDictionary)>> {
+        let mut dictionaries = Vec::new();
+        for (name, index) in &table_meta.indexes {
+            let Some(location) = index
+                .options
+                .get(INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION)
+            else {
+                continue;
+            };
+            let operator = source.get_operator_ref();
+            // Apply the existing dictionary size limit before downloading, as stage reads do.
+            let size = operator.stat(location).await?.content_length();
+            if size > MAX_INVERTED_INDEX_USER_DICTIONARY_SIZE as u64 {
+                return Err(ErrorCode::IndexOptionInvalid(format!(
+                    "clone user dictionary `{location}` exceeds the {MAX_INVERTED_INDEX_USER_DICTIONARY_SIZE} bytes limit"
+                )));
+            }
+            let content = operator.read(location).await?.to_vec();
+            dictionaries.push((name.clone(), InvertedIndexUserDictionary::try_new(content)?));
+        }
+        Ok(dictionaries)
     }
 
     /// Build the staged CREATE request for one observed source version. The selected source

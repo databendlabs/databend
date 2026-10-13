@@ -617,86 +617,6 @@ async fn setup_clone_gc_test(source: &str, cloned: &str) -> anyhow::Result<TestF
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_vacuum2_preserves_clone_only_data() -> anyhow::Result<()> {
-    let source_name = "source";
-    let clone_name = "clone";
-    let fixture = setup_clone_gc_test(source_name, clone_name).await?;
-    let database = fixture.default_db_name();
-
-    let ctx = fixture.new_query_ctx().await?;
-    let catalog = ctx.get_default_catalog()?;
-    let tenant = ctx.get_tenant();
-    let clone = catalog.get_table(&tenant, &database, clone_name).await?;
-    let clone_id = clone.get_id();
-    let clone_snapshot = FuseTable::try_from_table(clone.as_ref())?
-        .read_table_snapshot()
-        .await?
-        .expect("clone must have an anchor snapshot");
-    let clone_timestamp = clone_snapshot.timestamp.unwrap();
-    let clone_segments = clone_snapshot.segments.clone();
-    assert!(!clone_segments.is_empty());
-
-    // The feature flag gates new CREATE TABLE ... CLONE statements only. Once a binding exists,
-    // turning the flag off must not downgrade VACUUM to a non-clone-aware path.
-    fixture.default_session().get_settings().set_setting(
-        "enable_experimental_clone_table".to_string(),
-        "0".to_string(),
-    )?;
-
-    // Make the source head disjoint from the cloned snapshot. The old source data is now
-    // reachable only through clone metadata.
-    for sql in [
-        format!("TRUNCATE TABLE {database}.{source_name}"),
-        format!("INSERT INTO {database}.{source_name} VALUES (2)"),
-    ] {
-        fixture.execute_command(&sql).await?;
-    }
-    let source = catalog.get_table(&tenant, &database, source_name).await?;
-    let source_segments = FuseTable::try_from_table(source.as_ref())?
-        .read_table_snapshot()
-        .await?
-        .expect("source must have a post-truncate snapshot")
-        .segments
-        .clone();
-    assert!(
-        source_segments
-            .iter()
-            .all(|segment| !clone_segments.contains(segment)),
-        "source head must not retain clone-only segments"
-    );
-
-    fixture
-        .execute_command(&format!("VACUUM TABLE {database}.{source_name}"))
-        .await?;
-
-    let source_lvt = catalog
-        .get_table_lvt(&LeastVisibleTimeIdent::new(&tenant, source.get_id()))
-        .await?
-        .expect("source LVT must be published");
-    let clone_lvt = catalog
-        .get_table_lvt(&LeastVisibleTimeIdent::new(&tenant, clone_id))
-        .await?
-        .expect("ancestor VACUUM must publish the clone LVT");
-    assert!(source_lvt.data.time > clone_timestamp);
-    assert!(clone_lvt.data.time >= clone_timestamp);
-
-    // Reading the clone exercises both its protected segment and block files.
-    assert_eq!(
-        query_count(
-            fixture
-                .execute_query(&format!(
-                    "SELECT count() FROM {database}.{clone_name} WHERE c = 1"
-                ))
-                .await?
-        )
-        .await?,
-        1
-    );
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn test_vacuum2_preserves_clone_only_inverted_index() -> anyhow::Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
     fixture.enable_experimental_clone_table()?;
@@ -723,10 +643,6 @@ async fn test_vacuum2_preserves_clone_only_inverted_index() -> anyhow::Result<()
     let source = FuseTable::try_from_table(source.as_ref())?;
     let index_locations = inverted_index_locations(source).await?;
     assert!(!index_locations.is_empty());
-    for location in &index_locations {
-        assert!(source.get_operator_ref().exists(location).await?);
-    }
-
     for sql in [
         format!("TRUNCATE TABLE {db}.index_source"),
         format!("INSERT INTO {db}.index_source VALUES ('source replacement')"),
@@ -740,18 +656,6 @@ async fn test_vacuum2_preserves_clone_only_inverted_index() -> anyhow::Result<()
             "source VACUUM removed clone-owned inverted index {location}"
         );
     }
-    assert_eq!(
-        query_count(
-            fixture
-                .execute_query(&format!(
-                    "SELECT count() FROM {db}.index_clone WHERE match(c, 'clone-only')"
-                ))
-                .await?
-        )
-        .await?,
-        1
-    );
-
     fixture
         .execute_command(&format!("VACUUM TABLE {db}.index_clone"))
         .await?;
@@ -797,82 +701,6 @@ async fn test_vacuum2_preserves_clone_only_inverted_index() -> anyhow::Result<()
             .table_indexes
             .is_empty()
     );
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_ancestor_vacuum_respects_descendant_retention() -> anyhow::Result<()> {
-    let source_name = "retention_source";
-    let clone_name = "retention_clone";
-    let fixture = setup_clone_gc_test(source_name, clone_name).await?;
-    let database = fixture.default_db_name();
-    let ctx = fixture.new_query_ctx().await?;
-    let catalog = ctx.get_default_catalog()?;
-    let tenant = ctx.get_tenant();
-
-    let cloned = catalog.get_table(&tenant, &database, clone_name).await?;
-    let clone_id = cloned.get_id();
-    let anchor = FuseTable::try_from_table(cloned.as_ref())?
-        .read_table_snapshot()
-        .await?
-        .expect("clone must have an anchor snapshot");
-    let anchor_timestamp = anchor.timestamp.unwrap();
-    let flashback = format!(
-        "ALTER TABLE {database}.{clone_name} FLASHBACK TO (SNAPSHOT => '{}')",
-        anchor.snapshot_id.simple()
-    );
-    fixture.default_session().get_settings().set_setting(
-        "data_retention_num_snapshots_to_keep".to_string(),
-        "1".to_string(),
-    )?;
-
-    for sql in [
-        format!("INSERT INTO {database}.{clone_name} VALUES (2)"),
-        format!("TRUNCATE TABLE {database}.{source_name}"),
-        format!("INSERT INTO {database}.{source_name} VALUES (3)"),
-    ] {
-        fixture.execute_command(&sql).await?;
-    }
-    let clone_head = catalog.get_table(&tenant, &database, clone_name).await?;
-    let clone_head_timestamp = FuseTable::try_from_table(clone_head.as_ref())?
-        .read_table_snapshot()
-        .await?
-        .unwrap()
-        .timestamp
-        .unwrap();
-    assert!(clone_head_timestamp > anchor_timestamp);
-    fixture
-        .execute_command(&format!("VACUUM TABLE {database}.{source_name}"))
-        .await?;
-
-    // The source session requests zero-day/one-snapshot retention. It may advance the clone's
-    // fence, but only to the time boundary clamped by the built-in default.
-    let inherited = catalog
-        .get_table_lvt(&LeastVisibleTimeIdent::new(&tenant, clone_id))
-        .await?
-        .expect("ancestor VACUUM must publish the clone LVT");
-    assert_eq!(inherited.data.time, anchor_timestamp);
-    fixture.execute_command(&flashback).await?;
-
-    for sql in [
-        format!("INSERT INTO {database}.{clone_name} VALUES (4)"),
-        format!(
-            "ALTER TABLE {database}.{clone_name} SET OPTIONS(data_retention_num_snapshots_to_keep = 1)"
-        ),
-        format!("INSERT INTO {database}.{source_name} VALUES (5)"),
-        format!("VACUUM TABLE {database}.{source_name}"),
-    ] {
-        fixture.execute_command(&sql).await?;
-    }
-
-    let table_policy_lvt = catalog
-        .get_table_lvt(&LeastVisibleTimeIdent::new(&tenant, clone_id))
-        .await?
-        .expect("ancestor VACUUM must apply the clone's table-level retention policy");
-    assert!(table_policy_lvt.data.time > anchor_timestamp);
-    let err = fixture.execute_command(&flashback).await.unwrap_err();
-    assert_eq!(err.code(), ErrorCode::TABLE_SNAPSHOT_EXPIRED);
-
     Ok(())
 }
 

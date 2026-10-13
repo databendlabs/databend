@@ -820,8 +820,15 @@ pub fn validate_table_indexes_by_schema(
                 Binder::validate_inverted_index_columns(schema.clone(), &columns)?;
                 // Persisted metadata stores `index_record` as a JSON string. Decode it back to
                 // the CREATE INDEX input form so the same validation applies.
-                let mut options = index.options.clone();
-                if let Some(value) = options.get_mut("index_record") {
+                // System-derived options are legitimate in persisted metadata, but not in
+                // CREATE INDEX input. Filter only the validation copy, never the stored index.
+                let mut options = index
+                    .options
+                    .iter()
+                    .filter(|(key, _)| !is_internal_table_index_option(key))
+                    .map(|(key, value)| (key.clone(), value.clone()))
+                    .collect::<BTreeMap<_, _>>();
+                if let Some(value) = options.get_mut(INVERTED_INDEX_OPT_INDEX_RECORD) {
                     if let Ok(decoded) = serde_json::from_str::<String>(value) {
                         *value = decoded;
                     }

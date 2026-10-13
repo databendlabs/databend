@@ -39,6 +39,10 @@ CREATE TABLE clone CLONE source
 statement ok
 CREATE TABLE chained CLONE clone
 
+# The feature gate controls new clones, not protection of existing bindings.
+statement ok
+SET enable_experimental_clone_table = 0
+
 # The source head no longer references the cloned data.
 statement ok
 TRUNCATE TABLE source
@@ -58,6 +62,9 @@ query I
 SELECT id FROM chained ORDER BY id
 ----
 1
+
+statement ok
+SET enable_experimental_clone_table = 1
 
 # Vacuuming a newer group member must not expire an older live member's current head.
 statement ok
@@ -175,6 +182,19 @@ CREATE TABLE index_clone CLONE index_source
 statement ok
 CREATE TABLE index_grandchild CLONE index_clone
 
+# Ordinary vacuum on the owner and a child must preserve clone-only index files too.
+statement ok
+TRUNCATE TABLE index_source
+
+statement ok
+INSERT INTO index_source VALUES ('replacement')
+
+statement ok
+VACUUM TABLE index_source
+
+statement ok
+VACUUM TABLE index_clone
+
 statement ok
 DROP INVERTED INDEX clone_idx ON index_source
 
@@ -215,6 +235,56 @@ query I
 SELECT count() FROM index_grandchild
 ----
 1
+
+# Ancestor session retention must not shorten the descendant's default history.
+statement ok
+CREATE TABLE retention_source(id INT)
+
+statement ok
+INSERT INTO retention_source VALUES (1)
+
+statement ok
+CREATE TABLE retention_clone CLONE retention_source
+
+statement ok
+SET VARIABLE retention_anchor = (
+    SELECT snapshot_id FROM fuse_snapshot('db_03_vacuum_clone', 'retention_clone')
+    ORDER BY timestamp LIMIT 1
+)
+
+statement ok
+INSERT INTO retention_clone VALUES (2)
+
+statement ok
+TRUNCATE TABLE retention_source
+
+statement ok
+INSERT INTO retention_source VALUES (3)
+
+statement ok
+VACUUM TABLE retention_source
+
+statement ok
+ALTER TABLE retention_clone FLASHBACK TO (SNAPSHOT => $retention_anchor)
+
+# An explicit descendant table policy, unlike the ancestor session setting, advances its fence.
+statement ok
+INSERT INTO retention_clone VALUES (4)
+
+statement ok
+ALTER TABLE retention_clone SET OPTIONS(data_retention_num_snapshots_to_keep = 1)
+
+statement ok
+INSERT INTO retention_source VALUES (5)
+
+statement ok
+VACUUM TABLE retention_source
+
+statement error 2327
+ALTER TABLE retention_clone FLASHBACK TO (SNAPSHOT => $retention_anchor)
+
+statement ok
+UNSET VARIABLE retention_anchor
 
 statement ok
 DROP DATABASE db_03_vacuum_clone
