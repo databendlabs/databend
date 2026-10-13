@@ -648,6 +648,11 @@ async fn delete_by_meta_buffer(
             break;
         }
         consumed = batch_end;
+        if outcome.retried > 0 {
+            // The store pushed back. Hand the signal to the scheduler now instead of issuing
+            // more batches at the current concurrency; the rest stays in the manifest.
+            break;
+        }
     }
 
     if !attempted {
