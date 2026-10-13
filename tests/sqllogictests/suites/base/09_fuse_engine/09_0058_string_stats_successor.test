@@ -1,7 +1,10 @@
+# run-with-settings: enable_block_stream_write=1
 # run-with-settings: enable_block_stream_write=0
 
 # Issue #20200: use a tight Unicode successor for string max statistics.
-# Run both streaming and non-streaming writes; hex keeps NUL padding visible.
+# Explicitly exercise both write paths in addition to the default pass.
+# A Parquet table without clustering/partitioning can use streaming writes;
+# hex keeps NUL padding visible.
 statement ok
 DROP TABLE IF EXISTS t_string_stats_successor;
 
@@ -10,7 +13,7 @@ CREATE TABLE t_string_stats_successor (
     ascii_value STRING STATS_TRUNCATE_LEN 4,
     carry_value STRING STATS_TRUNCATE_LEN 4,
     surrogate_gap STRING STATS_TRUNCATE_LEN 4
-) row_per_block=100;
+) row_per_block=100 storage_format='parquet';
 
 # Use hexadecimal code points so the boundary cases are readable:
 # - U+10FFFF is the largest Unicode scalar; the two trailing scalars force
