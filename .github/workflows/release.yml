@@ -164,17 +164,24 @@ jobs:
   build_default:
     runs-on:
       - self-hosted
-      - "${{ matrix.runner }}"
+      - "${{ matrix.arch.runner }}"
       - Linux
       - 16c
       - aws
     needs: create_release
     strategy:
       fail-fast: false
+      # databend-query alone takes most of the wall time (single-core codegen +
+      # ThinLTO link), so it gets its own runner; the small binaries build in
+      # parallel on another. artifact_download fetches by sha/target/category
+      # and does not care which job uploaded a given binary.
       matrix:
-        include:
+        arch:
           - { target: x86_64-unknown-linux-gnu, runner: X64, opt_level: s }
           - { target: aarch64-unknown-linux-gnu, runner: ARM64, opt_level: 3 }
+        group:
+          - { name: query, artifacts: "query,meta,sqllogictests", test: true }
+          - { name: tools, artifacts: "metactl,metabench,metaverifier,sqlsmith", test: false }
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -190,18 +197,19 @@ jobs:
           DATABEND_TELEMETRY_ENDPOINT: ${{ secrets.DATABEND_TELEMETRY_ENDPOINT}}
           DATABEND_TELEMETRY_API_KEY: ${{ secrets.DATABEND_TELEMETRY_API_KEY}}
           DATABEND_TELEMETRY_SOURCE: "production"
-          CARGO_PROFILE_RELEASE_OPT_LEVEL: ${{ matrix.opt_level }}
+          CARGO_PROFILE_RELEASE_OPT_LEVEL: ${{ matrix.arch.opt_level }}
         with:
           sha: ${{ github.sha }}
-          target: ${{ matrix.target }}
-          artifacts: sqllogictests,sqlsmith,query,meta,metactl,metabench,metaverifier
+          target: ${{ matrix.arch.target }}
+          artifacts: ${{ matrix.group.artifacts }}
       - name: Basic Sqllogic Test
+        if: matrix.group.test
         shell: bash
         env:
           TEST_HANDLERS: http
         run: |
           mkdir -p ./target/${{ env.BUILD_PROFILE }}
-          cp ./target/${{ matrix.target }}/${{ env.BUILD_PROFILE }}/databend-* ./target/${{ env.BUILD_PROFILE }}/
+          cp ./target/${{ matrix.arch.target }}/${{ env.BUILD_PROFILE }}/databend-* ./target/${{ env.BUILD_PROFILE }}/
           bash ./scripts/ci/ci-run-sqllogic-tests.sh base
 
   build_docker:
