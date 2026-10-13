@@ -15,12 +15,15 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_index::FooterDirectory;
 use futures_util::future;
 use tantivy::Directory;
 use tantivy::Searcher;
+use tantivy::SegmentReader;
 use tantivy::Term;
+use tantivy::index::Segment;
 use tantivy::index::SegmentComponent;
 use tantivy::query::Query;
 use tantivy::query_grammar::UserInputAst;
@@ -179,138 +182,152 @@ impl InvertedIndexWarmupInfo {
         raw_bundle_directory: &FooterDirectory,
         has_score: bool,
     ) -> Result<()> {
-        // Fast fields are a single segment component. Keep the full file pinned for the
-        // synchronous range/exists scorer, irrespective of the exact JSON path.
+        let segments = searcher.index().searchable_segments()?;
+        let segments_by_id = segments
+            .iter()
+            .map(|segment| (segment.id(), segment))
+            .collect::<HashMap<_, _>>();
+        // Match IDs, not list positions: the Searcher and Index need not use the same order.
+        let readers = searcher
+            .segment_readers()
+            .iter()
+            .map(|reader| {
+                let segment = segments_by_id
+                    .get(&reader.segment_id())
+                    .copied()
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(
+                            "inverted-index warmup segment is missing from the index",
+                        )
+                    })?;
+                Ok((reader, segment))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        tokio::try_join!(
+            self.warm_metadata(searcher, &readers, has_score),
+            self.warm_payload(&readers, raw_bundle_directory),
+        )?;
+        Ok(())
+    }
+
+    /// Dictionary, fieldnorm, and fast-field reads do not depend on payload downloads.
+    async fn warm_metadata(
+        &self,
+        searcher: &Searcher,
+        readers: &[(&SegmentReader, &Segment)],
+        has_score: bool,
+    ) -> Result<()> {
+        let dictionary_fields = self
+            .dictionary_fields
+            .iter()
+            .chain(self.full_posting_fields.keys())
+            .copied()
+            .collect::<HashSet<_>>();
+        let warm_dictionaries = async {
+            let warmups = readers.iter().flat_map(|(reader, _)| {
+                dictionary_fields.iter().map(move |&field| async move {
+                    // Footer open-slices already cover synchronous inverted-index setup.
+                    reader
+                        .inverted_index(field)?
+                        .terms()
+                        .warm_up_dictionary()
+                        .await?;
+                    Ok::<(), ErrorCode>(())
+                })
+            });
+            future::try_join_all(warmups).await?;
+            Ok::<(), ErrorCode>(())
+        };
+
+        let warm_fieldnorms = async {
+            if has_score {
+                let fields = self
+                    .full_posting_fields
+                    .keys()
+                    .copied()
+                    .chain(self.exact_postings.keys().map(Term::field))
+                    .collect::<HashSet<_>>();
+                let warmups = readers.iter().flat_map(|(reader, _)| {
+                    let fieldnorms = reader.fieldnorms_readers().get_inner_file();
+                    fields
+                        .iter()
+                        .filter_map(move |&field| fieldnorms.open_read(field))
+                        .map(|file| async move {
+                            file.read_bytes_async().await?;
+                            Ok::<(), ErrorCode>(())
+                        })
+                });
+                future::try_join_all(warmups).await?;
+            }
+            Ok::<(), ErrorCode>(())
+        };
+
         let warm_fast_fields = async {
             if self
                 .fast_fields
                 .iter()
                 .any(|field| searcher.schema().get_field_entry(*field).is_fast())
             {
-                let segments = searcher.index().searchable_segments()?;
-                let files = segments
-                    .iter()
-                    .map(|segment| segment.open_read(SegmentComponent::FastFields))
-                    .collect::<std::result::Result<Vec<_>, _>>()?;
-                future::try_join_all(files.iter().map(|file| file.read_bytes_async())).await?;
-            }
-            Ok::<(), databend_common_exception::ErrorCode>(())
-        };
-
-        let warm_postings = async {
-            if !self.full_posting_fields.is_empty() {
-                let with_positions = self
-                    .full_posting_fields
-                    .values()
-                    .any(|positions| *positions);
-                let segments = searcher.index().searchable_segments()?;
-                let warmups = segments.iter().map(|segment| async move {
-                    // `warm_postings_full()` reads a field's CompositeFile slice, excluding the
-                    // managed/composite footers and the .idx token-count header. Explicitly read
-                    // through the original bundle directory, before ManagedDirectory slicing, so
-                    // the remote handle sees 0..physical_len and uses the full-component cache.
-                    let postings = raw_bundle_directory
-                        .open_read(&segment.relative_path(SegmentComponent::Postings))?;
-                    let positions = if with_positions {
-                        Some(
-                            raw_bundle_directory
-                                .open_read(&segment.relative_path(SegmentComponent::Positions))?,
-                        )
-                    } else {
-                        None
-                    };
-                    let warm_positions = async {
-                        if let Some(file) = &positions {
-                            file.read_bytes_async().await?;
-                        }
-                        Ok::<(), std::io::Error>(())
-                    };
-                    tokio::try_join!(postings.read_bytes_async(), warm_positions)?;
-                    Ok::<(), databend_common_exception::ErrorCode>(())
+                // Pin the complete managed .fast component, irrespective of the JSON path.
+                let warmups = readers.iter().map(|(_, segment)| async move {
+                    segment
+                        .open_read(SegmentComponent::FastFields)?
+                        .read_bytes_async()
+                        .await?;
+                    Ok::<(), ErrorCode>(())
                 });
                 future::try_join_all(warmups).await?;
             }
-
-            // Full physical components are pinned before per-field warmups. This also prevents
-            // exact queries on other fields from filling the page pool for the same .idx/.pos.
-            // Databend bundles contain one segment, but keep the directory warmup valid for
-            // searchers with multiple segments as well.
-            future::try_join_all(
-                searcher
-                    .segment_readers()
-                    .iter()
-                    .map(|segment| self.warm_segment(segment, has_score)),
-            )
-            .await?;
-            Ok::<(), databend_common_exception::ErrorCode>(())
+            Ok::<(), ErrorCode>(())
         };
 
-        tokio::try_join!(warm_fast_fields, warm_postings)?;
+        tokio::try_join!(warm_dictionaries, warm_fieldnorms, warm_fast_fields)?;
         Ok(())
     }
 
-    async fn warm_segment(
+    /// Within each segment, pin full components before warming exact terms on other fields.
+    /// Segments progress independently; a slow full read does not block another segment's terms.
+    async fn warm_payload(
         &self,
-        segment_reader: &tantivy::SegmentReader,
-        has_score: bool,
+        readers: &[(&SegmentReader, &Segment)],
+        raw_bundle_directory: &FooterDirectory,
     ) -> Result<()> {
-        let warm_full = async {
-            let warmups = self
-                .full_posting_fields
-                .iter()
-                .map(|(&field, _)| async move {
-                    let inverted_index = segment_reader.inverted_index(field)?;
-                    // The complete physical .idx/.pos have already been pinned above.
-                    inverted_index.terms().warm_up_dictionary().await?;
-                    Ok::<(), databend_common_exception::ErrorCode>(())
+        let with_positions = self
+            .full_posting_fields
+            .values()
+            .any(|positions| *positions);
+        let warmups = readers.iter().map(|(reader, segment)| async move {
+            if !self.full_posting_fields.is_empty() {
+                // Field slices exclude managed/composite footers and the .idx token-count header.
+                // Read physical components through the raw directory to populate the full pool.
+                let components = [SegmentComponent::Postings, SegmentComponent::Positions];
+                let count = if with_positions { 2 } else { 1 };
+                let full_reads = components[..count].iter().map(|&component| async move {
+                    raw_bundle_directory
+                        .open_read(&segment.relative_path(component))?
+                        .read_bytes_async()
+                        .await?;
+                    Ok::<(), ErrorCode>(())
                 });
-            future::try_join_all(warmups).await?;
-            Ok::<(), databend_common_exception::ErrorCode>(())
-        };
-
-        let warm_dictionaries = async {
-            let warmups = self.dictionary_fields.iter().map(|&field| async move {
-                segment_reader
-                    .inverted_index(field)?
-                    .terms()
-                    .warm_up_dictionary()
-                    .await?;
-                Ok::<(), databend_common_exception::ErrorCode>(())
-            });
-            future::try_join_all(warmups).await?;
-            Ok::<(), databend_common_exception::ErrorCode>(())
-        };
-
-        let warm_terms = async {
-            let mut warmups = Vec::with_capacity(self.exact_postings.len());
-            for (term, &with_positions) in &self.exact_postings {
-                let inverted_index = segment_reader.inverted_index(term.field())?;
-                warmups
-                    .push(async move { inverted_index.warm_postings(term, with_positions).await });
+                future::try_join_all(full_reads).await?;
             }
-            future::try_join_all(warmups).await?;
-            Ok::<(), databend_common_exception::ErrorCode>(())
-        };
 
-        let warm_fieldnorms = async {
-            if has_score {
-                let mut fields = self
-                    .full_posting_fields
-                    .keys()
-                    .copied()
-                    .collect::<HashSet<_>>();
-                fields.extend(self.exact_postings.keys().map(Term::field));
-                let fieldnorms = segment_reader.fieldnorms_readers().get_inner_file();
-                let files = fields
-                    .into_iter()
-                    .filter_map(|field| fieldnorms.open_read(field))
-                    .collect::<Vec<_>>();
-                future::try_join_all(files.iter().map(|file| file.read_bytes_async())).await?;
-            }
-            Ok::<(), databend_common_exception::ErrorCode>(())
-        };
-
-        tokio::try_join!(warm_full, warm_dictionaries, warm_terms, warm_fieldnorms)?;
+            // Do not overlap exact page reads with a full read of the same component.
+            let term_reads = self
+                .exact_postings
+                .iter()
+                .map(|(term, &positions)| async move {
+                    reader
+                        .inverted_index(term.field())?
+                        .warm_postings(term, positions)
+                        .await?;
+                    Ok::<(), ErrorCode>(())
+                });
+            future::try_join_all(term_reads).await?;
+            Ok::<(), ErrorCode>(())
+        });
+        future::try_join_all(warmups).await?;
         Ok(())
     }
 }
@@ -347,19 +364,29 @@ mod tests {
     }
 
     #[test]
-    fn exact_terms_and_boost_do_not_warm_full_postings() {
-        for text in ["body:alpha", "body:alpha^2", "body:\"alpha beta\"~1"] {
+    fn exact_queries_use_terms_and_set_dictionary() {
+        for text in [
+            "body:alpha",
+            "body:alpha^2",
+            "body:\"alpha beta\"~1",
+            "body: IN [alpha beta]",
+        ] {
             let (plan, field) = plan(text, None);
             assert!(plan.full_posting_fields.is_empty());
             assert_eq!(
                 plan.exact_postings.len(),
                 if text.contains("beta") { 2 } else { 1 }
             );
-            if text.contains("beta") {
-                assert!(plan.exact_postings.values().all(|&positions| positions));
-            } else {
-                assert!(!plan.exact_postings[&Term::from_field_text(field, "alpha")]);
-            }
+            assert!(
+                plan.exact_postings
+                    .values()
+                    .all(|&positions| positions == text.contains('"'))
+            );
+            assert_eq!(
+                plan.dictionary_fields.contains(&field),
+                text.contains(" IN ")
+            );
+            assert!(plan.fast_fields.is_empty());
         }
     }
 
@@ -370,6 +397,7 @@ mod tests {
             ("body:/alp.*/", None, false),
             ("body:[alpha TO delta]", None, false),
             ("body:\"alpha bet\"*", None, true),
+            ("body:\"alpha beta\" OR body:/alp.*/", None, true),
         ] {
             let (plan, field) = plan(text, fuzziness);
             assert_eq!(
@@ -378,54 +406,34 @@ mod tests {
                 "{text}"
             );
             assert!(plan.exact_postings.is_empty(), "{text}");
+            assert!(plan.dictionary_fields.is_empty(), "{text}");
+            assert!(plan.fast_fields.is_empty(), "{text}");
         }
     }
 
     #[test]
-    fn full_postings_absorb_phrase_positions() {
-        let (plan, field) = plan("body:\"alpha beta\" OR body:/alp.*/", None);
-        assert_eq!(plan.full_posting_fields.get(&field), Some(&true));
-        assert!(plan.exact_postings.is_empty());
-    }
-
-    #[test]
-    fn json_range_only_warms_fast_fields() {
+    fn fast_ranges_do_not_warm_postings() {
         let mut builder = Schema::builder();
-        let field = builder.add_json_field("meta", JsonObjectOptions::default().set_fast(None));
+        let meta = builder.add_json_field(
+            "meta",
+            JsonObjectOptions::default()
+                .set_indexing_options(TextFieldIndexing::default())
+                .set_fast(None),
+        );
+        let num = builder.add_u64_field("num", FAST);
         let schema = builder.build();
-        let query_text = "meta.n:[1 TO 9]";
-        let ast = parse_query(query_text).unwrap();
-        let parser = QueryParser::new(schema.clone(), vec![field], TokenizerManager::default());
-        let query = parser.parse_query(query_text).unwrap();
-        let plan =
-            InvertedIndexWarmupInfo::try_create(query.as_ref(), &ast, &schema, &[field], None)
-                .unwrap();
-        assert!(plan.fast_fields.contains(&field));
-        assert!(plan.full_posting_fields.is_empty());
-    }
-
-    #[test]
-    fn fast_only_range_does_not_warm_postings() {
-        let mut builder = Schema::builder();
-        let field = builder.add_u64_field("num", FAST);
-        let schema = builder.build();
-        let query_text = "num:[1 TO 9]";
-        let parser = QueryParser::new(schema.clone(), vec![field], TokenizerManager::default());
-        let query = parser.parse_query(query_text).unwrap();
-        let ast = parse_query(query_text).unwrap();
-        let plan =
-            InvertedIndexWarmupInfo::try_create(query.as_ref(), &ast, &schema, &[field], None)
-                .unwrap();
-        assert!(plan.fast_fields.contains(&field));
-        assert!(plan.full_posting_fields.is_empty());
-        assert!(plan.dictionary_fields.is_empty());
-    }
-
-    #[test]
-    fn non_fast_range_warms_full_postings() {
-        let (plan, field) = plan("body:[alpha TO delta]", None);
-        assert_eq!(plan.full_posting_fields.get(&field), Some(&false));
-        assert!(plan.fast_fields.is_empty());
+        let parser = QueryParser::new(schema.clone(), vec![meta], TokenizerManager::default());
+        for (text, field) in [("meta.n:[1 TO 9]", meta), ("num:[1 TO 9]", num)] {
+            let query = parser.parse_query(text).unwrap();
+            let ast = parse_query(text).unwrap();
+            let plan =
+                InvertedIndexWarmupInfo::try_create(query.as_ref(), &ast, &schema, &[meta], None)
+                    .unwrap();
+            assert_eq!(plan.fast_fields, HashSet::from([field]));
+            assert!(plan.exact_postings.is_empty());
+            assert!(plan.full_posting_fields.is_empty());
+            assert!(plan.dictionary_fields.is_empty());
+        }
     }
 
     #[test]

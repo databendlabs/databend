@@ -54,7 +54,6 @@ use lindera_analysis::token_filter::japanese_base_form::JapaneseBaseFormTokenFil
 use lindera_analysis::token_filter::japanese_stop_tags::JapaneseStopTagsTokenFilter;
 use lindera_tantivy::tokenizer::LinderaTokenizer;
 use log::debug;
-use log::info;
 use opendal::Operator;
 use tantivy::IndexBuilder;
 use tantivy::IndexSettings;
@@ -165,10 +164,6 @@ impl BlockIndexWriter for InvertedIndexBlockWriter {
 
     fn finish(self: Box<Self>) -> Result<PendingBlockIndexOutput> {
         let start = Instant::now();
-        info!(
-            "Start build inverted index for location: {}",
-            self.location.0
-        );
         let sizes = self.writer.finalize()?;
         let elapsed_ms = start.elapsed().as_millis() as u64;
         let total_size = sizes.bundle + sizes.siblings;
@@ -176,18 +171,19 @@ impl BlockIndexWriter for InvertedIndexBlockWriter {
         metrics_inc_block_inverted_index_write_nums(1);
         metrics_inc_block_inverted_index_write_bytes(total_size);
         metrics_inc_block_inverted_index_write_milliseconds(elapsed_ms);
-        info!(
+        debug!(
             "Finish build inverted index: location={}, bundle={} bytes, siblings={} bytes in {} ms",
             self.location.0, sizes.bundle, sizes.siblings, elapsed_ms
         );
+        let written_index = WrittenInvertedIndex {
+            index_name: self.index_name,
+            index_version: self.index_version,
+            location: self.location,
+            bundle_size: sizes.bundle,
+            total_size,
+        };
         Ok(PendingBlockIndexOutput {
-            inverted: vec![WrittenInvertedIndex {
-                index_name: self.index_name,
-                index_version: self.index_version,
-                location: self.location,
-                bundle_size: sizes.bundle,
-                total_size,
-            }],
+            inverted: vec![written_index],
             ..Default::default()
         })
     }
@@ -701,7 +697,7 @@ mod tests {
         let parser = QueryParser::new(
             schema.clone(),
             fields.clone(),
-            create_tokenizer_manager(&index_options()),
+            create_tokenizer_manager(&index_options(), None),
         );
         let query = parser.parse_query(&query_text).unwrap();
         let ast = parse_query(&query_text).unwrap();
@@ -749,7 +745,7 @@ mod tests {
         )
         .unwrap();
         let field = fields[0];
-        let tokenizers = create_tokenizer_manager(&options);
+        let tokenizers = create_tokenizer_manager(&options, None);
 
         for (text, fuzziness, expected) in [
             (
@@ -928,7 +924,7 @@ mod merge_tests {
         let parser = QueryParser::new(
             schema.clone(),
             fields.to_vec(),
-            create_tokenizer_manager(&index_options()),
+            create_tokenizer_manager(&index_options(), None),
         );
         let query = parser.parse_query(query_text).unwrap();
         let ast = parse_query(query_text).unwrap();
