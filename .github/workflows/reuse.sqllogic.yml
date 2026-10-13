@@ -75,7 +75,9 @@ jobs:
       # standalone step; this small suite does not justify another runner.
       - name: Run native UDF sqllogic tests
         id: udf_native
-        if: matrix.tests.dirs == 'standalone'
+        # Not gated on the previous step's status: a hybrid failure in the merged
+        # http,hybrid step must not skip this independent suite.
+        if: ${{ !cancelled() && matrix.tests.dirs == 'standalone' }}
         timeout-minutes: 10
         shell: bash
         run: |
