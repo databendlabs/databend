@@ -40,6 +40,9 @@ pub trait VacuumHandler: Sync + Send {
         tables: Vec<TableInfo>,
     ) -> VacuumDropTablesResult;
 
+    /// Returns the share of `vacuum_limit` used: files known to be removed plus those of failed
+    /// delete requests that may have been removed before the error. Files known to be removed
+    /// are reported through [`VacuumReport`].
     async fn do_vacuum_temporary_files(
         &self,
         abort_checker: AbortChecker,

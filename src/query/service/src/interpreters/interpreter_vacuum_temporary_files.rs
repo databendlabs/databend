@@ -84,7 +84,8 @@ impl Interpreter for VacuumTemporaryFilesInterpreter {
                         .set_status_info(&format!("[VACUUM] removed {removed} temporary files"));
                 }
             });
-            let removed_files = handler
+            // The share of LIMIT the file vacuum used (not only what it knows it removed).
+            let used_limit = handler
                 .do_vacuum_temporary_files(
                     self.ctx.clone().get_abort_checker(),
                     temporary_files_prefix,
@@ -97,7 +98,7 @@ impl Interpreter for VacuumTemporaryFilesInterpreter {
             let session_limit = self
                 .plan
                 .limit
-                .map(|limit| limit.saturating_sub(removed_files as u64));
+                .map(|limit| limit.saturating_sub(used_limit as u64));
             vacuum_inactive_temp_tables(&table_ctx, session_limit).await?;
 
             Ok(PipelineBuildResult::create())

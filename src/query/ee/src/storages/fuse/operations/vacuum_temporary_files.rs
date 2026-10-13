@@ -314,9 +314,15 @@ impl RunBudget {
         }
     }
 
-    /// Files known to be removed: what the command reports.
+    /// Files known to be removed: what progress and logs report.
     fn removed(&self) -> usize {
         self.removed
+    }
+
+    /// The share of `limit` used, `removed` included: what callers continuing under the same
+    /// `LIMIT` must subtract.
+    fn charged(&self) -> usize {
+        self.charged
     }
 
     fn remaining(&self) -> usize {
@@ -400,6 +406,9 @@ impl Expiry {
 // Entry point
 // ---------------------------------------------------------------------------------------------
 
+/// Returns the share of `limit` used: files known to be removed plus those of failed delete
+/// requests that may have been removed before the error. Callers continuing under the same
+/// `LIMIT` subtract it; the running count of files known to be removed goes to the report.
 #[async_backtrace::framed]
 pub async fn do_vacuum_temporary_files(
     abort_checker: AbortChecker,
@@ -490,14 +499,16 @@ impl Run {
         }
     }
 
+    /// Returns the budget used, see [`RunBudget::charged`].
     fn finish(self) -> usize {
         info!(
-            "Vacuum temporary files finished: removed {} files, final directory concurrency {}, elapsed {} sec",
+            "Vacuum temporary files finished: removed {} files ({} charged to the limit), final directory concurrency {}, elapsed {} sec",
             self.budget.removed(),
+            self.budget.charged(),
             self.concurrency.current(),
             self.started.elapsed().as_secs()
         );
-        self.budget.removed()
+        self.budget.charged()
     }
 }
 
@@ -1149,7 +1160,7 @@ async fn vacuum_query_hook(
         budget.record(&outcome.outcome());
     }
 
-    Ok(budget.removed())
+    Ok(budget.charged())
 }
 
 // ---------------------------------------------------------------------------------------------
