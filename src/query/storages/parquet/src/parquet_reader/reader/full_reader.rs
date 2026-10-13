@@ -20,7 +20,6 @@ use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::metrics_inc_omit_filter_rowgroups;
 use databend_common_metrics::storage::metrics_inc_omit_filter_rows;
@@ -42,6 +41,7 @@ use parquet::file::metadata::ParquetMetaDataReader;
 use parquet::schema::types::SchemaDescPtr;
 
 use crate::ParquetPruner;
+use crate::iceberg_schema::scan_data_schema;
 use crate::meta::check_parquet_schema;
 use crate::parquet_reader::DataBlockIterator;
 use crate::parquet_reader::predicate::ParquetPredicate;
@@ -143,7 +143,7 @@ impl ParquetWholeFileReader {
 
         if let Some(batch) = record_batch {
             let blocks = transform_record_batch(
-                &self.output_schema.as_ref().into(),
+                &scan_data_schema(&self.output_schema),
                 &batch,
                 &self.field_paths,
             )?;
@@ -210,7 +210,7 @@ impl ParquetWholeFileReader {
         }
         let reader = builder.build()?;
         let iter = reader.into_iter().map(|r| r.map_err(ErrorCode::from));
-        let output_data_schema: DataSchema = self.output_schema.as_ref().into();
+        let output_data_schema = scan_data_schema(&self.output_schema);
         let output_data_schema = Arc::new(output_data_schema);
         let field_paths = self.field_paths.clone();
         let mut transformer = self.transformer.clone();

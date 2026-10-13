@@ -58,7 +58,7 @@ impl PredicateBuilder {
                 return_type: _,
             } if args.len() == 1 && matches!(args[0], RemoteExpr::ColumnRef { .. }) => {
                 let (_, name, _, _) = args[0].as_column_ref().unwrap();
-                let r = Reference::new(name);
+                let r = Reference::new(name.replace(':', "."));
                 if let Some(op) = build_unary(r, id.name().as_ref()) {
                     return (false, op);
                 }
@@ -137,7 +137,7 @@ impl PredicateBuilder {
                 let val = scalar_to_datatum(val.1);
                 if let Some(datum) = val {
                     let (_, name, _, _) = args[0].as_column_ref().unwrap();
-                    let r = Reference::new(name);
+                    let r = Reference::new(name.replace(':', "."));
                     let p = build_binary(r, id.name().as_ref(), datum);
                     if let Some(op) = p {
                         return (false, op);
@@ -161,7 +161,7 @@ impl PredicateBuilder {
                 let val = scalar_to_datatum(val.1);
                 if let Some(datum) = val {
                     let (_, name, _, _) = args[1].as_column_ref().unwrap();
-                    let r = Reference::new(name);
+                    let r = Reference::new(name.replace(':', "."));
                     let p = build_reverse_binary(r, id.name().as_ref(), datum);
                     if let Some(op) = p {
                         return (false, op);
@@ -298,6 +298,16 @@ mod tests {
             predicate,
             Reference::new("report_time")
                 .greater_than_or_equal_to(Datum::timestamp_micros(timestamp))
+        );
+    }
+
+    #[test]
+    fn test_nested_field_paths_use_iceberg_separator() {
+        let (uncertain, predicate) = PredicateBuilder::build(&string_eq("item:value", "test"));
+        assert!(!uncertain);
+        assert_eq!(
+            predicate,
+            Reference::new("item.value").equal_to(Datum::string("test"))
         );
     }
 

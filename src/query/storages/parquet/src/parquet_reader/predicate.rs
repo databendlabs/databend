@@ -20,7 +20,6 @@ use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::plan::Projection;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchema;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -36,6 +35,9 @@ use parquet::schema::types::SchemaDescriptor;
 use super::utils::FieldPaths;
 use super::utils::bitmap_to_boolean_array;
 use super::utils::transform_record_batch;
+use crate::iceberg_schema::ICEBERG_ARROW_SCHEMA;
+use crate::iceberg_schema::project_schema;
+use crate::iceberg_schema::scan_data_schema;
 use crate::parquet_reader::utils::compute_output_field_paths;
 
 #[derive(Debug)]
@@ -78,7 +80,7 @@ impl ParquetPredicate {
     }
 
     pub fn evaluate(&self, batch: &RecordBatch) -> Result<BooleanArray> {
-        let data_schema = DataSchema::from(&self.schema);
+        let data_schema = scan_data_schema(&self.schema);
         let block = transform_record_batch(&data_schema, batch, &self.field_paths)?;
         let res = self.evaluate_block(&block)?;
         Ok(bitmap_to_boolean_array(res))
@@ -97,13 +99,15 @@ pub fn build_predicate(
     schema_desc: &SchemaDescriptor,
     arrow_schema: Option<&arrow_schema::Schema>,
 ) -> Result<(Arc<ParquetPredicate>, Vec<usize>)> {
-    let inner_projection = matches!(prewhere.output_columns, Projection::InnerColumns(_));
+    let inner_projection = matches!(prewhere.output_columns, Projection::InnerColumns(_))
+        || table_schema.metadata.contains_key(ICEBERG_ARROW_SCHEMA);
     let schema = prewhere.prewhere_columns.project_schema(table_schema);
     let filter = prewhere
         .filter
         .as_expr(&BUILTIN_FUNCTIONS)
         .project_column_ref(|name| schema.index_of(name))?;
-    let (projection, leaves) = prewhere.prewhere_columns.to_arrow_projection(schema_desc);
+    let (projection, leaves) =
+        project_schema(&prewhere.prewhere_columns, table_schema, schema_desc)?;
     let field_paths =
         compute_output_field_paths(schema_desc, &projection, &schema, inner_projection)?;
     let field_levels = parquet_to_arrow_field_levels(

@@ -28,6 +28,7 @@ use parquet::schema::types::SchemaDescriptor;
 use super::policy::ReadPolicy;
 use super::policy::ReadPolicyBuilder;
 use super::policy::ReadPolicyImpl;
+use crate::iceberg_schema::scan_data_schema;
 use crate::parquet_reader::predicate::ParquetPredicate;
 use crate::parquet_reader::read_policy::utils::read_all;
 use crate::parquet_reader::row_group::InMemoryRowGroup;
@@ -65,7 +66,7 @@ impl ReadPolicyBuilder for NoPretchPolicyBuilder {
                 .unwrap_or(row_group.row_count());
 
             let block = read_all(
-                &DataSchema::from(predicate.schema()),
+                &scan_data_schema(predicate.schema()),
                 &row_group,
                 predicate.field_levels(),
                 row_selection.clone(),

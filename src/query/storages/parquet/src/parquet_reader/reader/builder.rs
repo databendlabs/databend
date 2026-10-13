@@ -21,7 +21,6 @@ use databend_common_catalog::plan::TopK;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_storage::OperatorRegistry;
 use parquet::arrow::ArrowSchemaConverter;
@@ -31,6 +30,9 @@ use parquet::schema::types::SchemaDescPtr;
 use super::RowGroupReader;
 use crate::ParquetPruner;
 use crate::ParquetSourceType;
+use crate::iceberg_schema::ICEBERG_ARROW_SCHEMA;
+use crate::iceberg_schema::project_schema;
+use crate::iceberg_schema::scan_data_schema;
 use crate::parquet_reader::NoPretchPolicyBuilder;
 use crate::parquet_reader::ParquetWholeFileReader;
 use crate::parquet_reader::PredicateAndTopkPolicyBuilder;
@@ -184,7 +186,26 @@ impl<'a> ParquetReaderBuilder<'a> {
         }
         self.built_topk = self
             .topk
-            .map(|topk| build_topk(topk, &self.schema_desc, self.arrow_schema.as_ref()))
+            .map(|topk| {
+                let mut topk = topk.clone();
+                if self
+                    .table_schema
+                    .metadata
+                    .contains_key(ICEBERG_ARROW_SCHEMA)
+                {
+                    let schema = databend_common_expression::TableSchema {
+                        fields: vec![topk.field.clone()],
+                        metadata: self.table_schema.metadata.clone(),
+                        next_column_id: self.table_schema.next_column_id,
+                    };
+                    let (_, leaves) =
+                        project_schema(&Projection::Columns(vec![0]), &schema, &self.schema_desc)?;
+                    topk.leaf_id = *leaves.first().ok_or_else(|| {
+                        ErrorCode::TableSchemaMismatch("Missing Iceberg TopK field")
+                    })?;
+                }
+                build_topk(&topk, &self.schema_desc, self.arrow_schema.as_ref())
+            })
             .transpose()?;
         Ok(())
     }
@@ -197,6 +218,10 @@ impl<'a> ParquetReaderBuilder<'a> {
         let mut output_projection =
             PushDownInfo::projection_of_push_downs(&self.table_schema, self.push_downs);
         let inner_projection = matches!(output_projection, Projection::InnerColumns(_));
+        let iceberg = self
+            .table_schema
+            .metadata
+            .contains_key(ICEBERG_ARROW_SCHEMA);
 
         if let Some(prewhere) = self.push_downs.as_ref().and_then(|p| p.prewhere.as_ref()) {
             output_projection = prewhere.output_columns.clone();
@@ -208,13 +233,14 @@ impl<'a> ParquetReaderBuilder<'a> {
 
         // Build projection mask and field paths for transforming `RecordBatch` to output block.
         // The number of columns in `output_projection` may be less than the number of actual read columns.
-        let (projection, output_leaves) = output_projection.to_arrow_projection(&self.schema_desc);
+        let (projection, output_leaves) =
+            project_schema(&output_projection, &self.table_schema, &self.schema_desc)?;
         let output_table_schema = output_projection.project_schema(&self.table_schema);
         let output_field_paths = Arc::new(compute_output_field_paths(
             &self.schema_desc,
             &projection,
             &output_table_schema,
-            inner_projection,
+            inner_projection || iceberg,
         )?);
 
         self.built_output = Some((
@@ -256,7 +282,12 @@ impl<'a> ParquetReaderBuilder<'a> {
             .unwrap();
 
         let (_, _, output_schema, _) = self.built_output.as_ref().unwrap();
-        let transformer = if source_type.need_transformer() {
+        let transformer = if source_type.need_transformer()
+            && !self
+                .table_schema
+                .metadata
+                .contains_key(ICEBERG_ARROW_SCHEMA)
+        {
             Some(RecordBatchTransformer::build(output_schema.clone()))
         } else {
             None
@@ -295,16 +326,19 @@ impl<'a> ParquetReaderBuilder<'a> {
         }
         self.build_output()?;
 
-        let transformer = self
-            .built_output
-            .as_ref()
-            .and_then(|(_, _, output_schema, _)| {
-                if source_type.need_transformer() {
-                    Some(RecordBatchTransformer::build(output_schema.clone()))
-                } else {
-                    None
-                }
-            });
+        let (_, _, output_schema, _) = self.built_output.as_ref().unwrap();
+        // Iceberg alignment is done when converting each (possibly prewhere or
+        // remain-only) batch, rather than applying the full output schema to it.
+        let transformer = if source_type.need_transformer()
+            && !self
+                .table_schema
+                .metadata
+                .contains_key(ICEBERG_ARROW_SCHEMA)
+        {
+            Some(RecordBatchTransformer::build(output_schema.clone()))
+        } else {
+            None
+        };
 
         let mut policy_builders = default_policy_builders();
         let default_policy = match (self.built_predicate.as_ref(), self.built_topk.as_ref()) {
@@ -353,7 +387,7 @@ impl<'a> ParquetReaderBuilder<'a> {
 
     pub fn create_no_prefetch_policy_builder(&self) -> Result<Box<dyn ReadPolicyBuilder>> {
         let (projection, _, schema, output_field_paths) = self.built_output.as_ref().unwrap();
-        let data_schema = DataSchema::from(schema);
+        let data_schema = scan_data_schema(schema);
         NoPretchPolicyBuilder::create(
             &self.schema_desc,
             self.arrow_schema.as_ref(),

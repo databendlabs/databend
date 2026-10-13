@@ -54,6 +54,8 @@ use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_storage::IcebergFileIO;
 use databend_common_storages_orc::ORCSource;
 use databend_common_storages_orc::StripeDecoder;
+use databend_common_storages_parquet::ICEBERG_ARROW_SCHEMA;
+use databend_common_storages_parquet::ICEBERG_NAME_MAPPING;
 use databend_common_storages_parquet::ParquetReaderBuilder;
 use databend_common_storages_parquet::ParquetSource;
 use databend_common_storages_parquet::ParquetSourceType;
@@ -169,9 +171,18 @@ impl IcebergTable {
             field.column_id = field_id;
             fields.push(field);
         }
+        let mut metadata: BTreeMap<String, String> =
+            arrow_schema.metadata().clone().into_iter().collect();
+        metadata.insert(
+            ICEBERG_ARROW_SCHEMA.to_string(),
+            serde_json::to_string(&arrow_schema)?,
+        );
+        if let Some(mapping) = meta.properties().get(ICEBERG_NAME_MAPPING) {
+            metadata.insert(ICEBERG_NAME_MAPPING.to_string(), mapping.clone());
+        }
         Ok(TableSchema {
             fields,
-            metadata: arrow_schema.metadata().clone().into_iter().collect(),
+            metadata,
             next_column_id: 0,
         })
     }
@@ -373,7 +384,15 @@ impl IcebergTable {
                 )
             });
         } else {
-            let arrow_schema: Schema = table_schema.as_ref().into();
+            // TableSchema's Arrow conversion does not retain Iceberg field IDs,
+            // especially nested IDs. The initial reader needs the catalog schema
+            // just like the per-file readers rebuilt after resolving name mapping.
+            let arrow_schema = schema_to_arrow_schema(
+                self.table.metadata().current_schema().as_ref(),
+            )
+            .map_err(|e| {
+                ErrorCode::ReadTableDataError(format!("Cannot convert Iceberg schema: {e}"))
+            })?;
             let need_row_number = internal_columns.contains(&InternalColumnType::FileRowNumber);
             let topk = plan
                 .push_downs

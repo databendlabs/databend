@@ -28,6 +28,7 @@
 // FIXME: Remove this once the deprecated code is removed
 #![allow(deprecated)]
 
+mod iceberg_schema;
 mod parquet_part;
 mod read_settings;
 mod utils;
@@ -47,6 +48,8 @@ mod parquet_variant_table;
 mod schema;
 
 pub use copy_into_table::ParquetTableForCopy;
+pub use iceberg_schema::ICEBERG_ARROW_SCHEMA;
+pub use iceberg_schema::ICEBERG_NAME_MAPPING;
 pub use meta::read_metas_in_parallel_for_copy;
 pub use parquet_part::DeleteTask;
 pub use parquet_part::DeleteType;

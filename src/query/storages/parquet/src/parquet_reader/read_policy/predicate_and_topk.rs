@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TopKSorter;
@@ -125,7 +124,8 @@ impl PredicateAndTopkPolicyBuilder {
             remain_projection.clone(),
             arrow_schema.map(|s| &s.fields),
         )?;
-        let remain_schema = TableSchema::new(remain_fields);
+        let mut remain_schema = TableSchema::new(remain_fields);
+        remain_schema.metadata = output_schema.metadata.clone();
         let remain_field_paths = Arc::new(compute_output_field_paths(
             schema_desc,
             &remain_projection,
@@ -136,8 +136,8 @@ impl PredicateAndTopkPolicyBuilder {
         let mut src_schema = remain_schema;
         src_schema.fields.extend(output_prefetched_field);
 
-        let src_schema = Arc::new(DataSchema::from(&src_schema));
-        let dst_schema = Arc::new(DataSchema::from(output_schema));
+        let src_schema = Arc::new(crate::iceberg_schema::scan_data_schema(&src_schema));
+        let dst_schema = Arc::new(crate::iceberg_schema::scan_data_schema(output_schema));
 
         Ok(Box::new(Self {
             predicate: predicate.clone(),

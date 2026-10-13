@@ -1,0 +1,73 @@
+# Prepared by prepare_iceberg_decimal_data.py using pq.write_table -> add_files.
+# Two ID-less files retain original/intermediate aliases; a third has field IDs.
+# File order differs from the current table order, and both structs had the same
+# historical child name. Decimal physical encodings differ between the files.
+statement ok
+DROP CATALOG IF EXISTS ctl;
+
+statement ok
+CREATE CATALOG ctl TYPE=ICEBERG CONNECTION=(
+    TYPE='rest'
+    ADDRESS='http://127.0.0.1:8181'
+    WAREHOUSE='s3://iceberg-tpch/'
+    "s3.region"='us-east-1'
+    "s3.endpoint"='http://127.0.0.1:9002'
+);
+
+query IIIT rowsort
+SELECT k, left_item:value, right_item:value, d FROM ctl.test.t_name_mapping;
+----
+1 10 100 123.45
+2 20 200 -7.01
+3 30 300 42.00
+
+# Single-column projection must select by identity, not table position.
+query I rowsort
+SELECT k FROM ctl.test.t_name_mapping;
+----
+1
+2
+3
+
+# Read the complete structs too, rather than just their projected children.
+query ITTT rowsort
+SELECT k, left_item, right_item, d FROM ctl.test.t_name_mapping;
+----
+1 (10) (100) 123.45
+2 (20) (200) -7.01
+3 (30) (300) 42.00
+
+# Prewhere consumes different subsets of the file than the final output.
+query IIT rowsort
+SELECT k, left_item:value, d FROM ctl.test.t_name_mapping WHERE right_item:value >= 200;
+----
+2 20 -7.01
+3 30 42.00
+
+query I rowsort
+SELECT right_item:value FROM ctl.test.t_name_mapping WHERE k = 1;
+----
+100
+
+query IT rowsort
+SELECT k, d FROM ctl.test.t_name_mapping WHERE d > 0;
+----
+1 123.45
+3 42.00
+
+# TopK must use the file leaf corresponding to the renamed table field.
+query IT
+SELECT k, d FROM ctl.test.t_name_mapping ORDER BY k DESC LIMIT 2;
+----
+3 42.00
+2 -7.01
+
+query I
+SELECT k FROM ctl.test.t_name_mapping ORDER BY d LIMIT 1;
+----
+2
+
+query IIIT rowsort
+SELECT count(*), sum(left_item:value), sum(right_item:value), sum(d) FROM ctl.test.t_name_mapping;
+----
+3 60 600 158.44

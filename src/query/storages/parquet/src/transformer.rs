@@ -194,7 +194,7 @@ impl RecordBatchTransformer {
             .collect()
     }
 
-    fn extract_nested_array(
+    pub(crate) fn extract_nested_array(
         column: &Arc<dyn Array>,
         nested_indices: &[usize],
     ) -> databend_common_exception::Result<Arc<dyn Array>> {
@@ -213,7 +213,9 @@ impl RecordBatchTransformer {
                         current.data_type()
                     ))
                 })?;
-            current = struct_array.column(child_idx).clone();
+            let child = struct_array.column(child_idx);
+            let nulls = arrow_buffer::NullBuffer::union(struct_array.nulls(), child.nulls());
+            current = arrow_array::make_array(child.to_data().into_builder().nulls(nulls).build()?);
         }
         Ok(current)
     }
@@ -240,19 +242,17 @@ impl RecordBatchTransformer {
         current_index_path: &mut Vec<usize>,
         field_id_to_source_schema: &mut HashMap<ColumnId, (FieldRef, usize, Vec<usize>)>,
     ) -> databend_common_exception::Result<()> {
-        let this_field_id = field
-            .metadata()
-            .get(PARQUET_FIELD_ID_META_KEY)
-            .ok_or_else(|| ErrorCode::InvalidDate("field id not present in parquet metadata"))?
-            .parse()
-            .map_err(|e| {
-                ErrorCode::InvalidDate(format!("field id not parseable as an column id: {}", e))
+        // Unmapped fields in old files are not part of the current Iceberg
+        // schema. Skip them, but still visit their children.
+        if let Some(id) = field.metadata().get(PARQUET_FIELD_ID_META_KEY) {
+            let id = id.parse().map_err(|e| {
+                ErrorCode::TableSchemaMismatch(format!("Invalid Parquet field ID {id}: {e}"))
             })?;
-
-        field_id_to_source_schema.insert(
-            this_field_id,
-            (field.clone(), source_field_idx, current_index_path.clone()),
-        );
+            field_id_to_source_schema.insert(
+                id,
+                (field.clone(), source_field_idx, current_index_path.clone()),
+            );
+        }
 
         if let DataType::Struct(fields) = field.data_type() {
             for (child_idx, nested_field) in fields.iter().enumerate() {

@@ -17,6 +17,8 @@ use std::str::FromStr;
 use arrow_array::BooleanArray;
 use arrow_array::RecordBatch;
 use arrow_array::StructArray;
+use arrow_schema::Field;
+use arrow_schema::Schema;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -25,12 +27,19 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::types::Bitmap;
 use parquet::arrow::ArrowSchemaConverter;
 use parquet::arrow::ProjectionMask;
 use parquet::arrow::parquet_to_arrow_schema_by_columns;
 use parquet::schema::types::SchemaDescriptor;
+
+use crate::iceberg_schema::ICEBERG_ARROW_SCHEMA;
+use crate::iceberg_schema::align_array;
+use crate::iceberg_schema::target_field;
+use crate::iceberg_schema::target_field_id;
+use crate::transformer::RecordBatchTransformer;
 
 pub type DataBlockIterator = Box<dyn Iterator<Item = Result<DataBlock>> + Send>;
 
@@ -74,6 +83,43 @@ pub fn transform_record_batch(
     batch: &RecordBatch,
     field_paths: &Option<FieldPaths>,
 ) -> Result<DataBlock> {
+    if let Some(json) = data_schema.meta().get(ICEBERG_ARROW_SCHEMA) {
+        let target: Schema = serde_json::from_str(json).map_err(|e| {
+            ErrorCode::TableSchemaMismatch(format!("Invalid Iceberg Arrow schema: {e}"))
+        })?;
+        let sources =
+            RecordBatchTransformer::build_field_id_to_arrow_schema_map(batch.schema_ref())?;
+        // Prefetch policies pass a combined schema here but only read a subset
+        // of its fields. FieldPaths describes that exact subset and output order.
+        let fields: Vec<_> = match field_paths {
+            Some(paths) => paths.iter().map(|(field, _)| field).collect(),
+            None => data_schema.fields().iter().collect(),
+        };
+        let mut columns = Vec::with_capacity(fields.len());
+        for field in fields {
+            let id = target_field_id(&target, field.name())?;
+            let id = u32::try_from(id)
+                .map_err(|_| ErrorCode::TableSchemaMismatch("Invalid Iceberg field ID"))?;
+            let (_, index, nested) = sources.get(&id).ok_or_else(|| {
+                ErrorCode::TableSchemaMismatch(format!(
+                    "Iceberg field {} (ID {id}) does not exist in the batch",
+                    field.name()
+                ))
+            })?;
+            let array = RecordBatchTransformer::extract_nested_array(batch.column(*index), nested)?;
+            // DataSchema's Tuple type has no child names. Recover the named
+            // target from Iceberg before aligning structs (including in lists/maps).
+            let iceberg_field = target_field(&target, field.name())?;
+            let target_field = Field::from(&TableField::try_from(iceberg_field)?);
+            let array = align_array(array, target_field.data_type())?;
+            columns.push(Column::from_arrow_rs(array, field.data_type())?);
+        }
+        return Ok(if columns.is_empty() {
+            DataBlock::new(vec![], batch.num_rows())
+        } else {
+            DataBlock::new_from_columns(columns)
+        });
+    }
     if let Some(field_paths) = field_paths {
         let schema_aligned = batch.schema().fields().len() == data_schema.fields().len()
             && batch
@@ -128,6 +174,7 @@ pub fn compute_output_field_paths(
     if !inner_projection {
         return Ok(None);
     }
+    let iceberg = expected_schema.metadata.contains_key(ICEBERG_ARROW_SCHEMA);
     let expected_schema = DataSchema::from(expected_schema);
     let batch_schema = parquet_to_arrow_schema_by_columns(schema_desc, projection.clone(), None)?;
     let output_fields = expected_schema.fields();
@@ -146,7 +193,13 @@ pub fn compute_output_field_paths(
                 parquet::schema::types::Type::GroupType { fields, .. } => {
                     let idx = fields
                         .iter()
-                        .position(|t| parquet_field_name_matches_path_name(t.name(), name))
+                        .position(|t| {
+                            if iceberg {
+                                t.name() == name
+                            } else {
+                                parquet_field_name_matches_path_name(t.name(), name)
+                            }
+                        })
                         .ok_or_else(|| error_cannot_find_field(field.name(), parquet_schema))?;
                     path.push(idx);
                     ty = &fields[idx];

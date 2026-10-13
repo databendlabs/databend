@@ -47,6 +47,7 @@ use crate::ParquetFileMeta;
 use crate::ParquetFilePart;
 use crate::ParquetPart;
 use crate::ParquetReaderBuilder;
+use crate::iceberg_schema::resolve_iceberg_schema;
 use crate::meta::check_parquet_schema;
 use crate::meta::read_metadata_async_cached;
 use crate::parquet_part::DeleteTask;
@@ -460,14 +461,19 @@ impl ParquetSource {
         }
         // The schema of the table in iceberg may be inconsistent with the schema in parquet
         // Stage schema mismatches returned above, so only non-stage readers may need rebuilding.
-        let schema_differs =
-            !from_stage_table && expected_schema.root_schema() != file_schema.root_schema();
+        let schema_differs = self.source_type == ParquetSourceType::Iceberg
+            || (!from_stage_table && expected_schema.root_schema() != file_schema.root_schema());
         let reader = if schema_differs {
             let read_options = ParquetReadOptions::default()
                 .with_prune_row_groups(true)
                 .with_prune_pages(false);
 
-            let arrow_schema = parquet_to_arrow_schema(meta.file_metadata().schema_descr(), None)?;
+            let schema_desc = if self.source_type == ParquetSourceType::Iceberg {
+                Arc::new(resolve_iceberg_schema(file_schema, &self.table_schema)?)
+            } else {
+                meta.file_metadata().schema_descr_ptr()
+            };
+            let arrow_schema = parquet_to_arrow_schema(&schema_desc, None)?;
             let need_row_number = self
                 .internal_columns
                 .contains(&InternalColumnType::FileRowNumber);
@@ -478,7 +484,7 @@ impl ParquetSource {
                 self.ctx.clone(),
                 self.op_registry.clone(),
                 self.table_schema.clone(),
-                meta.file_metadata().schema_descr_ptr(),
+                schema_desc,
                 Some(arrow_schema),
                 None,
                 false,

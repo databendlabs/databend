@@ -12,9 +12,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from pyarrow.fs import S3FileSystem
 from pyiceberg.catalog import load_catalog
-from pyiceberg.io.pyarrow import schema_to_pyarrow
 from pyiceberg.schema import Schema
-from pyiceberg.types import DecimalType, LongType, NestedField
+from pyiceberg.types import DecimalType, LongType, NestedField, StructType
 
 
 catalog = load_catalog(
@@ -40,20 +39,14 @@ schema = Schema(
     NestedField(2, "d", DecimalType(15, 2)),
 )
 table = catalog.create_table(name, schema=schema)
-# Databend projects Iceberg columns by their Parquet field IDs, not by names.
-# Use the catalog's schema so the manually written file carries those IDs too.
-arrow_schema = schema_to_pyarrow(table.schema(), include_field_ids=True)
 
 
 def rows(keys, decimals):
     return pa.table(
         {
             "k": pa.array(keys, type=pa.int64()),
-            "d": pa.array(
-                [Decimal(value) for value in decimals], type=pa.decimal128(15, 2)
-            ),
-        },
-        schema=arrow_schema,
+            "d": pa.array([Decimal(value) for value in decimals], type=pa.decimal128(15, 2)),
+        }
     )
 
 
@@ -70,11 +63,9 @@ path = f"{parsed.netloc}{parsed.path}"
 with filesystem.open_output_stream(path) as output:
     pq.write_table(rows([1, 2, 3], ["123.45", "-7.01", "99999.99"]), output)
 with filesystem.open_input_file(path) as source:
-    parquet = pq.ParquetFile(source)
-    for field in table.schema().fields:
-        metadata = parquet.schema_arrow.field(field.name).metadata
-        assert int(metadata[b"PARQUET:field_id"]) == field.field_id
-    decimal = parquet.schema.column(1)
+    parquet_file = pq.ParquetFile(source)
+    assert all(not field.metadata for field in parquet_file.schema_arrow)
+    decimal = parquet_file.schema.column(1)
     assert decimal.physical_type == "FIXED_LEN_BYTE_ARRAY" and decimal.length == 7
 
 table.add_files([location])
@@ -82,3 +73,75 @@ table.add_files([location])
 # PyIceberg writes precision <= 18 decimals as INT64. Both files must be read
 # by the same Iceberg table, rather than planning from just one file's schema.
 table.append(rows([4], ["42.00"]))
+
+# Import ID-less files before two rounds of schema evolution. Historical aliases
+# (including identical child names in different structs) must resolve by mapping,
+# not by current names or by positions. Also read a new file with explicit IDs.
+name = "test.t_name_mapping"
+if catalog.table_exists(name):
+    catalog.drop_table(name)
+table = catalog.create_table(
+    name,
+    schema=Schema(
+        NestedField(1, "old_k", LongType()),
+        NestedField(2, "old_left", StructType(NestedField(3, "old_value", LongType()))),
+        NestedField(4, "old_right", StructType(NestedField(5, "old_value", LongType()))),
+        NestedField(6, "old_d", DecimalType(15, 2)),
+    ),
+)
+
+
+def import_aliases(key, prefix, decimal):
+    # Deliberately reverse file column order relative to the table schema.
+    child = pa.struct([pa.field(f"{prefix}_value", pa.int64())])
+    data = pa.table(
+        {
+            f"{prefix}_d": pa.array([Decimal(decimal)], pa.decimal128(15, 2)),
+            f"{prefix}_right": pa.array([{f"{prefix}_value": key * 100}], child),
+            f"{prefix}_left": pa.array([{f"{prefix}_value": key * 10}], child),
+            f"{prefix}_k": pa.array([key], pa.int64()),
+        }
+    )
+    location = f"{table.location().rstrip('/')}/data/{prefix}.parquet"
+    parsed = urlparse(location)
+    path = f"{parsed.netloc}{parsed.path}"
+    with filesystem.open_output_stream(path) as output:
+        pq.write_table(data, output)
+    with filesystem.open_input_file(path) as source:
+        arrow = pq.ParquetFile(source).schema_arrow
+        assert all(not field.metadata for field in arrow)
+    table.add_files([location])
+
+
+import_aliases(1, "old", "123.45")
+with table.update_schema() as update:
+    update.rename_column("old_k", "legacy_k")
+    update.rename_column("old_d", "legacy_d")
+    update.rename_column("old_left.old_value", "legacy_value")
+    update.rename_column("old_right.old_value", "legacy_value")
+    update.rename_column("old_left", "legacy_left")
+    update.rename_column("old_right", "legacy_right")
+
+import_aliases(2, "legacy", "-7.01")
+with table.update_schema() as update:
+    update.rename_column("legacy_k", "k")
+    update.rename_column("legacy_d", "d")
+    update.rename_column("legacy_left.legacy_value", "value")
+    update.rename_column("legacy_right.legacy_value", "value")
+    update.rename_column("legacy_left", "left_item")
+    update.rename_column("legacy_right", "right_item")
+with table.update_schema() as update:
+    update.move_first("d")
+    update.move_first("right_item")
+
+table.append(
+    pa.table(
+        {
+            "right_item": pa.array([{"value": 300}], pa.struct([pa.field("value", pa.int64())])),
+            "d": pa.array([Decimal("42.00")], pa.decimal128(15, 2)),
+            "k": pa.array([3], pa.int64()),
+            "left_item": pa.array([{"value": 30}], pa.struct([pa.field("value", pa.int64())])),
+        }
+    )
+)
+assert "schema.name-mapping.default" in table.properties

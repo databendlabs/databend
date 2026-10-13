@@ -92,7 +92,8 @@ impl TopkOnlyPolicyBuilder {
                 topk_in_output = true;
             }
         }
-        let remain_schema = TableSchema::new(remain_fields);
+        let mut remain_schema = TableSchema::new(remain_fields);
+        remain_schema.metadata = output_schema.metadata.clone();
         let remain_field_levels = parquet_to_arrow_field_levels(
             schema_desc,
             remain_projection.clone(),
@@ -109,10 +110,13 @@ impl TopkOnlyPolicyBuilder {
         if topk_in_output {
             src_schema.fields.push(topk_field.clone());
         }
-        let src_schema = Arc::new(DataSchema::from(&src_schema));
-        let dst_schema = Arc::new(DataSchema::from(output_schema));
-        let prefetch_schema = Arc::new(DataSchema::new(vec![DataField::from(topk_field)]));
-        let remain_schema = Arc::new(DataSchema::from(&remain_schema));
+        let src_schema = Arc::new(crate::iceberg_schema::scan_data_schema(&src_schema));
+        let dst_schema = Arc::new(crate::iceberg_schema::scan_data_schema(output_schema));
+        let prefetch_schema = Arc::new(DataSchema::new_from(
+            vec![DataField::from(topk_field)],
+            output_schema.metadata.clone(),
+        ));
+        let remain_schema = Arc::new(crate::iceberg_schema::scan_data_schema(&remain_schema));
 
         Ok(Box::new(Self {
             topk: topk.clone(),
