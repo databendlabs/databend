@@ -124,6 +124,7 @@ use databend_meta_client::types::txn_op::Request;
 use databend_meta_client::types::txn_op_response::Response;
 use fastrace::func_name;
 use futures::StreamExt;
+use futures::TryStreamExt;
 use log::debug;
 use log::error;
 use log::info;
@@ -1880,26 +1881,27 @@ where
                 break;
             }
             let ids = chunk.iter().map(|(_, seq_id)| seq_id.data.clone());
-            let seq_metas = self.get_pb_stream_low(ids).await?;
-            // The stream yields one result per key, including errors for early EOF.
-            let mut names_and_metas = futures::stream::iter(chunk).zip(seq_metas);
-            while let Some(((name, seq_id), result)) = names_and_metas.next().await {
-                match result {
-                    Ok((id, Some(meta))) => res.push((name.table_name, id, meta)),
-                    Ok((_, None)) => {}
+            let seq_metas = self
+                .get_pb_stream_low(ids)
+                .await?
+                .map(|result| match result {
+                    Ok((_, meta)) => Ok(meta),
                     Err(PbApiReadError::PbDecodeError(err)) => {
-                        warn!(
-                            "list_tables: skip table {} (tenant={}, db_id={}, table_id={}): cannot decode table meta: {}",
-                            name.table_name,
-                            req.tenant.tenant_name(),
-                            req.database_id.db_id,
-                            seq_id.data.table_id,
-                            err
-                        );
+                        warn!(req :? = (&req); "list_tables: skip undecodable table: {}", err);
+                        Ok(None)
                     }
-                    Err(err) => return Err(MetaError::from(err).into()),
-                }
-            }
+                    Err(err) => Err(MetaError::from(err)),
+                })
+                .try_collect::<Vec<_>>()
+                .await?;
+            res.extend(
+                chunk
+                    .into_iter()
+                    .zip(seq_metas)
+                    .filter_map(|((name, id), meta)| {
+                        meta.map(|meta| (name.table_name, id.data, meta))
+                    }),
+            );
         }
         Ok(res)
     }
