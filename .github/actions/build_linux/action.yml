@@ -99,7 +99,7 @@ runs:
         ldd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query || true
 
     - name: Spilt Binary Symbols
-      if: inputs.trim_debug == 'true' && contains(format(',{0},', inputs.artifacts), ',query,')
+      if: inputs.trim_debug == 'true' && (inputs.artifacts == 'all' || contains(format(',{0},', inputs.artifacts), ',query,'))
       shell: bash
       run: |
         objcopy --only-keep-debug ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query.debug
