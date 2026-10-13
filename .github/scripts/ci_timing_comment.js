@@ -207,7 +207,7 @@ async function cloudMetrics(github, context, core, run, jobs, withBreakdown) {
             m.builds[b[1]] = { dur: jobDur(j), breakdown: withBreakdown ? await buildBreakdown(github, context, core, j.id) : null };
         } else if (j.name === 'docker') {
             m.docker = jobDur(j);
-            if (j.completed_at) m.toImage = min(jobs.filter((x) => x.started_at).map((x) => x.started_at).sort()[0], j.completed_at);
+            if (j.conclusion === 'success') m.toImage = min(jobs.filter((x) => x.started_at).map((x) => x.started_at).sort()[0], j.completed_at);
         } else if (j.name === 'benchmark' || j.name.startsWith('benchmark /')) {
             m.benchmark = Number.isFinite(m.benchmark) ? Math.max(m.benchmark, jobDur(j)) : jobDur(j);
         }
@@ -256,14 +256,17 @@ async function baseline(github, context, core, workflowFile, metricsFn, excludeR
         if (workflowFile === 'main.yml') params.branch = 'main';
         const { data } = await github.rest.actions.listWorkflowRuns(params);
         runs = data.workflow_runs.filter((r) => r.id !== excludeRunId).slice(0, BASELINE_RUNS);
-        runs = data.workflow_runs;
     } catch (e) {
         core.warning(`baseline ${workflowFile}: ${e.message}`);
     }
     const all = [];
     for (const r of runs) {
         const jobs = await listJobs(github, context, r.id);
-        all.push(await metricsFn(github, context, core, r, jobs, false));
+        const m = await metricsFn(github, context, core, r, jobs, false);
+        // Docs / CI-only pushes finish "success" with build skipped; they are
+        // not comparable and would drag the baseline down.
+        const hasBuild = Number.isFinite(m.build) || Object.values(m.builds || {}).some((b) => Number.isFinite(b.dur));
+        if (hasBuild) all.push(m);
     }
     // Median of each scalar; groups / builds medianed per key. Breakdown is not
     // computed for baseline (would need 10 log downloads); shown as — .
