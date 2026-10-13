@@ -255,36 +255,32 @@ impl RunBudget {
 /// Decides, after each delete batch, whether a task issues the next one. Shared by the manifest
 /// and the listing loops so both stop for the same reasons.
 #[derive(Clone)]
-struct Pacing {
-    abort_checker: AbortChecker,
-    /// Under the command scheduler a batch the store pushed back on ends the task, so
-    /// [`AdaptiveConcurrency`] observes the signal before more requests go out; the remainder is
-    /// picked up next run. The query hook has no scheduler and no later pass for its query, so
+enum Pacing {
+    /// Under the `VACUUM TEMPORARY FILES` scheduler: a batch the store pushed back on ends the
+    /// task, so [`AdaptiveConcurrency`] observes the signal before more requests go out, and so
+    /// does the command being aborted. The remainder is picked up next run.
+    Scheduled(AbortChecker),
+    /// The query hook: no scheduler to hand a throttling signal to, no later pass for its query,
+    /// and the query itself may well be aborted already (that is one reason the hook runs), so
     /// it keeps going while batches succeed.
-    yield_on_throttle: bool,
+    Drain,
 }
 
 impl Pacing {
-    fn scheduled(abort_checker: AbortChecker) -> Self {
-        Self {
-            abort_checker,
-            yield_on_throttle: true,
-        }
-    }
-
-    fn drain(abort_checker: AbortChecker) -> Self {
-        Self {
-            abort_checker,
-            yield_on_throttle: false,
-        }
-    }
-
-    /// `false` once the task must stop issuing batches: the last one failed, the store pushed
-    /// back while yielding is required, or the query is being aborted.
+    /// `false` once the task must stop issuing batches: the last one failed, or, when
+    /// scheduled, the store pushed back or the command is being aborted.
     fn continues_after(&self, outcome: &DeleteOutcome) -> bool {
-        outcome.removed > 0
-            && !(self.yield_on_throttle && (outcome.rate_limited || outcome.retried > 0))
-            && self.abort_checker.try_check_aborting().is_ok()
+        if outcome.removed == 0 {
+            return false;
+        }
+        match self {
+            Pacing::Scheduled(abort_checker) => {
+                !outcome.rate_limited
+                    && outcome.retried == 0
+                    && abort_checker.try_check_aborting().is_ok()
+            }
+            Pacing::Drain => true,
+        }
     }
 }
 
@@ -454,7 +450,7 @@ async fn vacuum_by_duration(
 ) -> Result<usize> {
     let deleter = Arc::new(SpillDeleter::new(DataOperator::instance().spill_operator()));
     let expiry = Expiry::new(retain);
-    let pacing = Pacing::scheduled(abort_checker.clone());
+    let pacing = Pacing::Scheduled(abort_checker.clone());
     let mut run = Run::new(limit, report);
 
     let temporary_dir: Arc<str> = format!("{}/", temporary_dir.trim_end_matches('/')).into();
@@ -615,7 +611,10 @@ async fn vacuum_meta_entry(
 
 /// List-delete what is left under `dir_path`, then drop the manifest that failed to describe
 /// it. Under throttling the manifest is kept so the next run finishes the directory; the task
-/// ends here either way and the scheduler sees the signal.
+/// ends here either way and the scheduler sees the signal. One unit of `max` is reserved for
+/// the manifest so the task never removes more than `max` objects; with no room for both, the
+/// manifest only goes once the directory is known to be empty, and the pair is finished next
+/// run otherwise.
 async fn finish_directory_and_meta(
     deleter: &SpillDeleter,
     dir_path: &str,
@@ -624,8 +623,11 @@ async fn finish_directory_and_meta(
     pacing: &Pacing,
     delete: &mut DeleteOutcome,
 ) -> Result<()> {
-    if max > 0 {
-        let by_list = delete_by_list(deleter, dir_path, max, pacing).await?;
+    let Some(list_budget) = max.checked_sub(1) else {
+        return Ok(());
+    };
+    if list_budget > 0 {
+        let by_list = delete_by_list(deleter, dir_path, list_budget, pacing).await?;
         delete.absorb(by_list.outcome);
         // Anything short of an emptied directory (a failed or throttled batch, the budget, an
         // abort) leaves files behind: keep the manifest so the directory is claimed and
@@ -633,6 +635,8 @@ async fn finish_directory_and_meta(
         if !by_list.finished {
             return Ok(());
         }
+    } else if !dir_is_empty(deleter, dir_path).await? {
+        return Ok(());
     }
     if delete.retried == 0 && !delete.rate_limited {
         delete.absorb(deleter.delete(vec![meta_path.to_owned()], meta_path).await);
@@ -845,6 +849,24 @@ async fn collect_dir_paths(
     Ok(false)
 }
 
+/// Whether a recursive listing of `dir_path` yields nothing but the directory entry itself.
+async fn dir_is_empty(deleter: &SpillDeleter, dir_path: &str) -> Result<bool> {
+    let mut lister = deleter
+        .operator()
+        .lister_with(dir_path)
+        .recursive(true)
+        .await?;
+    loop {
+        match lister.try_next().await {
+            Ok(Some(entry)) if entry.path() == dir_path => continue,
+            Ok(Some(_)) => return Ok(false),
+            Ok(None) => return Ok(true),
+            Err(e) if e.kind() == ErrorKind::NotFound => continue,
+            Err(e) => return Err(e.into()),
+        }
+    }
+}
+
 /// Result of a listing-driven vacuum of one directory.
 struct ListVacuum {
     outcome: DeleteOutcome,
@@ -954,14 +976,13 @@ async fn delete_by_probe(
 // ---------------------------------------------------------------------------------------------
 
 async fn vacuum_query_hook(
-    abort_checker: AbortChecker,
+    _abort_checker: AbortChecker,
     temporary_dir: &str,
     nodes: &[usize],
     query_id: &str,
     limit: usize,
 ) -> Result<usize> {
     let deleter = SpillDeleter::new(DataOperator::instance().spill_operator());
-    let pacing = Pacing::drain(abort_checker);
     let mut budget = RunBudget::new(limit, None);
 
     let metas_f = nodes
@@ -987,7 +1008,7 @@ async fn vacuum_query_hook(
             &meta_path,
             buffer,
             budget.remaining(),
-            &pacing,
+            &Pacing::Drain,
         )
         .await?;
         budget.record(outcome.removed());

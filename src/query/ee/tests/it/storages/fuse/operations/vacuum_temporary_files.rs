@@ -278,7 +278,7 @@ mod unit {
     }
 
     fn scheduled() -> Pacing {
-        Pacing::scheduled(Arc::new(NoAbort))
+        Pacing::Scheduled(Arc::new(NoAbort))
     }
 
     /// Drive the real per-directory unit of work and return its outcome.
@@ -413,16 +413,15 @@ mod unit {
 
         // The query hook has no scheduler to hand the signal to and no later pass for its
         // query: absorbed retries must not strand the rest of the manifest.
-        let drain = Pacing::drain(Arc::new(NoAbort));
-        assert!(drain.continues_after(&clear()));
-        assert!(drain.continues_after(&retried(1)));
+        assert!(Pacing::Drain.continues_after(&clear()));
+        assert!(Pacing::Drain.continues_after(&retried(1)));
         assert!(
-            !drain.continues_after(&rate_limited()),
+            !Pacing::Drain.continues_after(&rate_limited()),
             "a failed batch still stops"
         );
 
-        // Either way a task stops issuing batches once the query is aborted.
-        let aborted = Pacing::drain(AbortAfter::checks(0));
+        // The command stops issuing batches once it is aborted.
+        let aborted = Pacing::Scheduled(AbortAfter::checks(0));
         assert!(!aborted.continues_after(&clear()));
     }
 
@@ -744,7 +743,7 @@ mod unit {
         let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
 
         // The query is cancelled right after the first batch.
-        let pacing = Pacing::scheduled(AbortAfter::checks(0));
+        let pacing = Pacing::Scheduled(AbortAfter::checks(0));
         let by_list = delete_by_list(&deleter, "spill/dir/", usize::MAX, &pacing).await?;
         assert_eq!(by_list.outcome.removed, DELETE_BATCH_FILES);
         assert!(!by_list.finished);
@@ -851,6 +850,69 @@ mod unit {
             "spill/dir/file1".to_string(),
             "spill/dir/".to_string(),
             "spill/dir.list".to_string(),
+        ]);
+        Ok(())
+    }
+
+    /// The manifest dropped after a listing fallback is counted against the task's budget
+    /// like any other object: a task never removes more than `max`.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_listing_fallback_reserves_budget_for_the_manifest() -> anyhow::Result<()> {
+        let old_ts = (Utc::now() - ChronoDuration::hours(2)).timestamp_millis();
+        let new_accessor = |files: Vec<(String, Metadata)>| {
+            MockVacuumAccessor::new(
+                HashMap::from([("spill/dir/".to_string(), files)]),
+                HashMap::new(),
+                HashMap::from([(
+                    "spill/dir.list".to_string(),
+                    ReadResult::Buffer(Buffer::from("")),
+                )]),
+            )
+        };
+        let run = |accessor: Arc<MockVacuumAccessor>, max| {
+            vacuum_meta_entry(
+                Arc::new(SpillDeleter::new(OperatorBuilder::new(accessor).finish())),
+                Arc::from("spill/"),
+                "spill/dir.list".to_string(),
+                max,
+                scheduled(),
+            )
+        };
+
+        // Empty directory, empty manifest, budget for one object: only the manifest goes, and
+        // only because the directory was found empty.
+        let accessor = new_accessor(vec![]);
+        let outcome = run(accessor.clone(), 1).await?;
+        assert_eq!(outcome.delete.map(|d| d.removed), Some(1));
+        assert_eq!(accessor.deleted_paths(), vec!["spill/dir.list".to_string()]);
+
+        // Same with a file left: the budget goes to the file, the manifest keeps the claim.
+        let accessor = new_accessor(vec![(
+            "spill/dir/file1".to_string(),
+            file_meta(Some(old_ts)),
+        )]);
+        let outcome = run(accessor.clone(), 1).await?;
+        assert_eq!(outcome.delete.map(|d| d.removed), Some(0));
+        assert_eq!(accessor.deleted_paths(), Vec::<String>::new());
+
+        // Budget for two: the marker and the manifest, never a third object.
+        let accessor = new_accessor(vec![]);
+        let outcome = run(accessor.clone(), 2).await?;
+        assert_eq!(outcome.delete.map(|d| d.removed), Some(2));
+        assert_eq!(accessor.deleted_paths(), vec![
+            "spill/dir/".to_string(),
+            "spill/dir.list".to_string(),
+        ]);
+
+        // One file, budget for two: file and marker fit, the manifest waits for the next run.
+        let accessor = new_accessor(vec![(
+            "spill/dir/file1".to_string(),
+            file_meta(Some(old_ts)),
+        )]);
+        let outcome = run(accessor.clone(), 2).await?;
+        assert_eq!(outcome.delete.map(|d| d.removed), Some(1));
+        assert_eq!(accessor.deleted_paths(), vec![
+            "spill/dir/file1".to_string()
         ]);
         Ok(())
     }
