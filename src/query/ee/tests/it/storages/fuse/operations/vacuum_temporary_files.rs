@@ -685,6 +685,41 @@ mod unit {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    async fn test_throttled_listing_fallback_keeps_the_manifest() -> anyhow::Result<()> {
+        let old_ts = (Utc::now() - ChronoDuration::hours(2)).timestamp_millis();
+        let accessor = MockVacuumAccessor::new(
+            HashMap::from([("spill/dir/".to_string(), vec![(
+                "spill/dir/file1".to_string(),
+                file_meta(Some(old_ts)),
+            )])]),
+            HashMap::new(),
+            HashMap::from([(
+                "spill/dir.list".to_string(),
+                ReadResult::Buffer(Buffer::from("")),
+            )]),
+        );
+        accessor.throttle_next_batches(1);
+        let deleter = Arc::new(SpillDeleter::new(
+            OperatorBuilder::new(accessor.clone()).finish(),
+        ));
+
+        let outcome = vacuum_meta_entry(
+            deleter,
+            Arc::from("spill/"),
+            "spill/dir.list".to_string(),
+            100,
+        )
+        .await?;
+
+        let delete = outcome.delete.expect("the listing batch was attempted");
+        assert_eq!(delete.removed, 0);
+        assert!(delete.rate_limited);
+        // No second request in the same task: the manifest stays for the next run.
+        assert_eq!(accessor.deleted_paths(), Vec::<String>::new());
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_probe_skips_fresh_directory() -> anyhow::Result<()> {
         let now = Utc::now().timestamp_millis();
         let accessor = MockVacuumAccessor::new(

@@ -544,16 +544,32 @@ async fn vacuum_meta_entry(
     // The claim on the manifest keeps the directory task away, so vacuum the directory here and
     // drop the manifest with it.
     let dir_path = format!("{}/", meta_path.trim_end_matches(SPILL_META_SUFFIX));
-    if remaining > 0
-        && let Some(outcome) = delete_by_list(&deleter, &dir_path, remaining).await?
-    {
-        delete.absorb(outcome);
-    }
-    delete.absorb(deleter.delete(vec![meta_path.clone()], &meta_path).await);
+    finish_directory_and_meta(&deleter, &dir_path, &meta_path, remaining, &mut delete).await?;
     Ok(DirOutcome {
         dir_path: meta_path,
         delete: Some(delete),
     })
+}
+
+/// List-delete what is left under `dir_path`, then drop the manifest that failed to describe
+/// it. Under throttling the manifest is kept so the next run finishes the directory; the task
+/// ends here either way and the scheduler sees the signal.
+async fn finish_directory_and_meta(
+    deleter: &SpillDeleter,
+    dir_path: &str,
+    meta_path: &str,
+    max: usize,
+    delete: &mut DeleteOutcome,
+) -> Result<()> {
+    if max > 0
+        && let Some(by_list) = delete_by_list(deleter, dir_path, max).await?
+    {
+        delete.absorb(by_list);
+    }
+    if delete.retried == 0 && !delete.rate_limited {
+        delete.absorb(deleter.delete(vec![meta_path.to_owned()], meta_path).await);
+    }
+    Ok(())
 }
 
 /// How far a manifest-driven vacuum got.
@@ -614,12 +630,8 @@ async fn vacuum_dir_entry(
         MetaVacuum::Nothing => delete_by_list(&deleter, &dir_path, max).await?,
         MetaVacuum::Exhausted(mut by_meta) => {
             let remaining = max.saturating_sub(by_meta.removed);
-            if remaining > 0
-                && let Some(by_list) = delete_by_list(&deleter, &dir_path, remaining).await?
-            {
-                by_meta.absorb(by_list);
-            }
-            by_meta.absorb(deleter.delete(vec![meta_path.clone()], &meta_path).await);
+            finish_directory_and_meta(&deleter, &dir_path, &meta_path, remaining, &mut by_meta)
+                .await?;
             Some(by_meta)
         }
     };
