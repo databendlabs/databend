@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
+use databend_common_base::runtime;
 use databend_common_cloud_control::notification_client::NotificationClient;
 use databend_common_cloud_control::pb::notification_service_server::NotificationService;
 use databend_common_cloud_control::pb::notification_service_server::NotificationServiceServer;
@@ -108,7 +109,7 @@ async fn enqueue_acceptance_errors_and_no_retry() -> anyhow::Result<()> {
         requests: requests.clone(),
     };
     let (client_io, server_io) = tokio::io::duplex(4096);
-    let server = tokio::spawn(async move {
+    let server = runtime::spawn(async move {
         Server::builder()
             .add_service(NotificationServiceServer::new(service))
             .serve_with_incoming(tokio_stream::iter(vec![Ok::<_, std::io::Error>(server_io)]))
