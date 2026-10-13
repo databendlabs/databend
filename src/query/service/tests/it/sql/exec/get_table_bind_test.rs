@@ -1142,61 +1142,86 @@ async fn test_ttl_virtual_computed_column_revalidation() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_materialize_retention_ttl_cutoff_and_pruning() -> Result<()> {
     let fixture = TestFixture::setup().await?;
-    fixture
-        .execute_command(
-            "CREATE TABLE ttl_retention (id INT, ts TIMESTAMP) TTL ts + INTERVAL 1 MONTH",
-        )
-        .await?;
-    for values in [
-        "(1, '2025-01-20 00:00:00'), (2, '2025-01-28 11:00:00')",
-        "(3, '2025-01-31 10:00:00'), (4, '2025-03-01 00:00:00')",
-        "(5, '2025-01-27 00:00:00'), (6, '2025-01-28 12:00:00')",
-    ] {
-        fixture
-            .execute_command(&format!("INSERT INTO ttl_retention VALUES {values}"))
-            .await?;
-    }
-    let base_ctx = fixture.new_query_ctx().await?;
-    let cutoff = chrono::DateTime::parse_from_rfc3339("2025-02-28T12:00:00Z").unwrap();
-    let ctx = fixture
-        .default_session()
-        .create_query_context_with_cluster(
-            base_ctx.get_cluster(),
-            &BUILD_INFO,
-            Some(cutoff.into()),
-        )?;
     let settings = fixture.default_session().get_settings();
-    settings.set_setting("timezone".into(), "UTC".into())?;
+    // Keep each INSERT as its own segment throughout setup and cleanup.
     settings.set_setting("enable_compact_after_write".into(), "0".into())?;
     settings.set_setting("enable_auto_analyze".into(), "0".into())?;
-    let (plan, _) = Planner::new(ctx.clone())
-        .plan_sql("ALTER TABLE ttl_retention MATERIALIZE TTL")
-        .await?;
-    InterpreterFactory::get(ctx.clone(), &plan)
-        .await?
-        .execute(ctx.clone())
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
-    // The cutoff is Jan 28 noon, not a per-row addition of one month.
-    // Range pruning skips the future segment and deletes the expired segment
-    // without reading it; only the two-row mixed block should be read.
-    assert_eq!(ctx.get_scan_progress_value().rows, 2);
-    let blocks = fixture
-        .execute_query("SELECT id FROM ttl_retention ORDER BY id")
-        .await?
-        .try_collect::<Vec<_>>()
-        .await?;
-    let ids = blocks
-        .iter()
-        .flat_map(|block| {
-            (0..block.num_rows()).map(|row| block.get_by_offset(0).index(row).unwrap().to_owned())
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(
-        ids,
-        [3, 4, 6].map(|id| Scalar::Number(NumberScalar::Int32(id)))
-    );
+    for (column_type, timezone, cutoff, expired, future, boundary) in [
+        (
+            "TIMESTAMP",
+            "UTC",
+            "2025-02-28T12:00:00Z",
+            "2025-01-27 00:00:00",
+            "2025-01-31 10:00:00",
+            "2025-01-28 12:00:00",
+        ),
+        (
+            "DATE",
+            "Asia/Shanghai",
+            "2025-02-27T16:00:00Z",
+            "2025-01-27",
+            "2025-01-31",
+            "2025-01-28",
+        ),
+    ] {
+        settings.set_setting("timezone".into(), timezone.into())?;
+        fixture
+            .execute_command(&format!(
+                "CREATE TABLE ttl_retention (id INT, ts {column_type}) TTL ts + INTERVAL 1 MONTH"
+            ))
+            .await?;
+        for values in [
+            format!("(1, '{expired}'), (2, '{expired}')"),
+            format!("(3, '{future}'), (4, '{future}')"),
+            format!("(5, '{expired}'), (6, '{boundary}')"),
+            "(7, NULL), (8, NULL)".to_string(),
+            format!("(9, '{expired}'), (10, NULL)"),
+        ] {
+            fixture
+                .execute_command(&format!("INSERT INTO ttl_retention VALUES {values}"))
+                .await?;
+        }
+        let base_ctx = fixture.new_query_ctx().await?;
+        let cutoff = chrono::DateTime::parse_from_rfc3339(cutoff).unwrap();
+        let ctx = fixture
+            .default_session()
+            .create_query_context_with_cluster(
+                base_ctx.get_cluster(),
+                &BUILD_INFO,
+                Some(cutoff.into()),
+            )?;
+        let (plan, _) = Planner::new(ctx.clone())
+            .plan_sql("ALTER TABLE ttl_retention MATERIALIZE TTL")
+            .await?;
+        InterpreterFactory::get(ctx.clone(), &plan)
+            .await?
+            .execute(ctx.clone())
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        // Skip future and NULL-only segments and delete the expired segment
+        // without reading it. Read both mixed blocks, preserving NULL and the
+        // exact cutoff. DATE uses midnight in the session timezone.
+        assert_eq!(ctx.get_scan_progress_value().rows, 4, "{column_type}");
+        let blocks = fixture
+            .execute_query("SELECT id FROM ttl_retention ORDER BY id")
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        let ids = blocks
+            .iter()
+            .flat_map(|block| {
+                (0..block.num_rows())
+                    .map(|row| block.get_by_offset(0).index(row).unwrap().to_owned())
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            ids,
+            [3, 4, 6, 7, 8, 10].map(|id| Scalar::Number(NumberScalar::Int32(id))),
+            "{column_type}"
+        );
+        fixture.execute_command("DROP TABLE ttl_retention").await?;
+    }
     Ok(())
 }
 
@@ -1230,6 +1255,15 @@ async fn test_retention_ttl_calendar_boundaries() -> Result<()> {
             "2024-03-09 16:59:59",
             "2024-03-09 17:00:00",
             "2024-03-09 17:00:01",
+        ),
+        (
+            "TIMESTAMP",
+            "0 DAY",
+            "2025-02-28T12:00:00Z",
+            "UTC",
+            "2025-02-28 11:59:59.999999",
+            "2025-02-28 12:00:00",
+            "2025-02-28 12:00:00.000001",
         ),
         (
             "DATE",
@@ -1303,6 +1337,48 @@ async fn test_retention_ttl_calendar_boundaries() -> Result<()> {
             "{column_type} {interval} {timezone}"
         );
         fixture.execute_command("DROP TABLE ttl_calendar").await?;
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_materialize_ttl_cutoff_overflow_before_deletion() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    for interval in ["10000 YEAR", "9223372036854775807 MICROSECOND"] {
+        // The interval itself is representable and allowed at definition time.
+        fixture
+            .execute_command(&format!(
+                "CREATE TABLE ttl_overflow (ts TIMESTAMP) TTL ts + INTERVAL {interval}"
+            ))
+            .await?;
+        fixture
+            .execute_command("INSERT INTO ttl_overflow VALUES ('2000-01-01')")
+            .await?;
+        let base_ctx = fixture.new_query_ctx().await?;
+        let cutoff = chrono::DateTime::parse_from_rfc3339("2025-02-28T12:00:00Z").unwrap();
+        let ctx = fixture
+            .default_session()
+            .create_query_context_with_cluster(
+                base_ctx.get_cluster(),
+                &BUILD_INFO,
+                Some(cutoff.into()),
+            )?;
+        let err = Planner::new(ctx.clone())
+            .plan_sql("ALTER TABLE ttl_overflow MATERIALIZE TTL")
+            .await
+            .unwrap_err();
+        assert!(err.message().contains("out of range"), "{interval}: {err}");
+        assert_eq!(ctx.get_scan_progress_value().rows, 0);
+        let blocks = fixture
+            .execute_query("SELECT count(*) FROM ttl_overflow")
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        assert!(matches!(
+            blocks[0].get_by_offset(0).index(0),
+            Some(ScalarRef::Number(NumberScalar::UInt64(1)))
+        ));
+        fixture.execute_command("DROP TABLE ttl_overflow").await?;
     }
     Ok(())
 }
