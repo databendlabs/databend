@@ -28,8 +28,6 @@
 
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
@@ -110,7 +108,13 @@ struct SpillDeleter {
     /// Retries of this operator's own requests, so throttling is told apart from whatever else
     /// the node is doing against storage.
     retry_stats: Arc<RetryStats>,
-    removed: AtomicUsize,
+    /// Running total of files removed and the callback it is published through, under one lock
+    /// so concurrent tasks publish totals in increasing order.
+    progress: Mutex<Progress>,
+}
+
+struct Progress {
+    removed: usize,
     report: Option<VacuumReport>,
 }
 
@@ -134,8 +138,7 @@ impl SpillDeleter {
             operator,
             request_size,
             retry_stats,
-            removed: AtomicUsize::new(0),
-            report,
+            progress: Mutex::new(Progress { removed: 0, report }),
         }
     }
 
@@ -158,10 +161,10 @@ impl SpillDeleter {
                 deleter.close().await?;
                 in_flight = 0;
                 removed += request.len();
-                let total =
-                    self.removed.fetch_add(request.len(), Ordering::Relaxed) + request.len();
-                if let Some(report) = &self.report {
-                    report(total);
+                let mut progress = self.progress.lock();
+                progress.removed += request.len();
+                if let Some(report) = &progress.report {
+                    report(progress.removed);
                 }
             }
             Ok(())

@@ -19,6 +19,8 @@ mod unit {
 
     use std::collections::HashMap;
     use std::future::Future;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
 
     use chrono::Duration as ChronoDuration;
     use chrono::Utc;
@@ -1213,6 +1215,23 @@ mod unit {
         let by_list = delete_by_list(&deleter, "spill/dir/", usize::MAX, &scheduled()).await?;
         assert_eq!(by_list.outcome.removed, 2501);
         assert_eq!(*reported.lock(), vec![1000, 2000, 2501]);
+
+        // Concurrent tasks publish totals in increasing order: the counter and the callback
+        // sit under one lock.
+        reported.lock().clear();
+        let deleter = Arc::new(deleter);
+        let tasks = (0..8).map(|i| {
+            let deleter = deleter.clone();
+            async move {
+                let paths = (0..300).map(|j| format!("spill/dir{i}/file{j}")).collect();
+                deleter.delete(paths, "spill/").await
+            }
+        });
+        futures::future::join_all(tasks).await;
+        let seen = reported.lock().clone();
+        assert_eq!(seen.len(), 8);
+        assert!(seen.windows(2).all(|w| w[0] < w[1]), "{seen:?}");
+        assert_eq!(seen.last(), Some(&(2501 + 8 * 300)));
         Ok(())
     }
 
