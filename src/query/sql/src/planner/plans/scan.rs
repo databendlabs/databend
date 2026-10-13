@@ -65,15 +65,38 @@ pub struct Prewhere {
     pub predicates: Vec<ScalarExpr>,
 }
 
+#[derive(Clone, Debug)]
+pub struct ScanColumnStatistics {
+    pub basic: BasicColumnStatistics,
+    /// Domain unit for lazy synthesis; Datum no longer carries the logical type.
+    /// Sampled histograms do not use this construction input.
+    pub histogram_spacing_unit: f64,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Statistics {
     // statistics will be ignored in comparison and hashing
     pub table_stats: Option<TableStatistics>,
     // statistics will be ignored in comparison and hashing
-    pub column_stats: HashMap<Symbol, Option<BasicColumnStatistics>>,
+    pub column_stats: HashMap<Symbol, Option<ScanColumnStatistics>>,
     pub histograms: HashMap<Symbol, Option<Histogram>>,
     pub top_n: HashMap<Symbol, ColumnTopN>,
     pub count_min_sketch: HashMap<Symbol, ColumnCountMinSketch>,
+}
+
+impl Statistics {
+    /// Date uses days and Timestamp uses microseconds. Both temporal types use
+    /// the same reference interval; other domains use their native numeric unit.
+    /// Decimal Datum values have already been normalized by their declared scale.
+    pub fn histogram_spacing_unit(data_type: &databend_common_expression::types::DataType) -> f64 {
+        use databend_common_expression::types::DataType;
+        use databend_common_expression::types::timestamp::MICROS_PER_SEC;
+
+        match data_type.remove_nullable() {
+            DataType::Timestamp | DataType::TimestampTz => (86_400 * MICROS_PER_SEC) as f64,
+            _ => 1.0,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -323,7 +346,8 @@ impl Operator for Scan {
             if !used_columns.contains(k) {
                 continue;
             }
-            if let Some(col_stat) = v {
+            if let Some(scan_col_stat) = v {
+                let col_stat = &scan_col_stat.basic;
                 let null_count = StatCount::exact(col_stat.null_count);
                 if num_rows.is_some_and(|num_rows| num_rows > 0 && col_stat.null_count == num_rows)
                 {
@@ -351,6 +375,7 @@ impl Operator for Scan {
                             num_rows,
                             Some((min.clone(), max.clone())),
                             DEFAULT_HISTOGRAM_BUCKETS,
+                            scan_col_stat.histogram_spacing_unit,
                         )
                         .ok()
                     })
@@ -474,6 +499,33 @@ mod tests {
             columns: [Symbol::new(1), Symbol::new(2), Symbol::new(3)]
                 .into_iter()
                 .collect(),
+            statistics: Arc::new(Statistics {
+                column_stats: [
+                    (
+                        Symbol::new(1),
+                        Some(ScanColumnStatistics {
+                            basic: BasicColumnStatistics::default(),
+                            histogram_spacing_unit: Statistics::histogram_spacing_unit(
+                                &databend_common_expression::types::DataType::Timestamp,
+                            ),
+                        }),
+                    ),
+                    (
+                        Symbol::new(2),
+                        Some(ScanColumnStatistics {
+                            basic: BasicColumnStatistics::default(),
+                            histogram_spacing_unit: Statistics::histogram_spacing_unit(
+                                &databend_common_expression::types::DataType::TimestampTz
+                                    .wrap_nullable(),
+                            ),
+                        }),
+                    ),
+                    (Symbol::new(3), None),
+                ]
+                .into_iter()
+                .collect(),
+                ..Default::default()
+            }),
             scan_id: 10,
             sample: Some(SampleConfig {
                 row_level: None,
@@ -520,6 +572,22 @@ mod tests {
         assert!(derived.limit.is_none());
         assert!(derived.order_by.is_none());
         assert!(derived.prewhere.is_none());
+        assert!(derived.statistics.column_stats.is_empty());
+        let pruned =
+            original.prune_columns([Symbol::new(1), Symbol::new(3)].into_iter().collect(), None);
+        assert_eq!(pruned.statistics.column_stats.len(), 2);
+        assert_eq!(
+            pruned.statistics.column_stats[&Symbol::new(1)]
+                .as_ref()
+                .unwrap()
+                .histogram_spacing_unit,
+            86_400.0 * 1_000_000.0
+        );
+        assert!(pruned.statistics.column_stats[&Symbol::new(3)].is_none());
+        assert_eq!(
+            Statistics::histogram_spacing_unit(&databend_common_expression::types::DataType::Date),
+            1.0
+        );
     }
 
     #[test]

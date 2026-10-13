@@ -189,22 +189,23 @@ mod tests {
                 1,
                 Histogram::Float(TypedHistogram {
                     row_scale: 1.0,
+                    distinct_retention: 0.25,
                     buckets: vec![TypedHistogramBucket::new(
                         F64::from(1.0),
                         F64::from(2.0),
                         3.0,
                         2.0,
                     )],
-                    avg_spacing: Some(0.5),
                 }),
             )]),
         };
 
         let value = serde_json::to_value(stats).unwrap();
-        // The synthetic spacing is planning-only and is not persisted; the legacy
-        // fields are written with their fixed values.
+        // Retention is planning-only and is not persisted; legacy fields keep
+        // their fixed values independently of the internal histogram model.
         assert_eq!(value["histograms"]["1"]["accuracy"], true);
         assert!(value["histograms"]["1"]["avg_spacing"].is_null());
+        assert!(value["histograms"]["1"].get("distinct_retention").is_none());
         assert!(value["histograms"]["1"]["buckets"].is_array());
         assert!(value["histograms"]["1"].get("Float").is_none());
     }

@@ -119,12 +119,19 @@ impl FilterAndStrategy {
     }
 }
 
-/// A synthetic histogram that has lost more than this fraction of its distinct
-/// values to filters on other columns is not used to estimate range predicates
-/// on that column. Range estimation reads bucket positions directly; once most
-/// of the synthesised values are gone, the positions are the pre-filter uniform
-/// assumption rather than information about the survivors.
-const RANGE_SYNTHETIC_MIN_DISTINCT_RETENTION: f64 = 0.5;
+/// Discard histograms once fewer than this fraction of their distinct values
+/// survive. Neither synthetic nor sampled bucket positions describe the survivors
+/// of independent thinning. Keep the separate coarse column stats.
+const MIN_DISTINCT_RETENTION: f64 = 0.5;
+
+fn discard_sparse_histogram(column_stat: &mut ColumnStat) {
+    if column_stat
+        .histogram()
+        .is_some_and(|histogram| histogram.is_range_sparse(MIN_DISTINCT_RETENTION))
+    {
+        column_stat.clear_histogram();
+    }
+}
 
 /// Some constants for like predicate selectivity estimation.
 const FIXED_CHAR_SEL: f64 = 0.5;
@@ -187,6 +194,25 @@ impl SelectivityEstimator {
     }
 
     pub fn apply(&mut self, predicates: &[ScalarExpr], func_ctx: &FunctionContext) -> Result<f64> {
+        let cardinality = self.apply_predicates(predicates, func_ctx)?;
+        // Keep the input histogram until range comparisons have selected their
+        // sparse fallback, but never export its untrusted positional model. This
+        // also covers constant predicates and columns thinned by this filter.
+        for column_stat in self
+            .column_stats
+            .values_mut()
+            .chain(self.overrides.values_mut())
+        {
+            discard_sparse_histogram(column_stat);
+        }
+        Ok(cardinality)
+    }
+
+    fn apply_predicates(
+        &mut self,
+        predicates: &[ScalarExpr],
+        func_ctx: &FunctionContext,
+    ) -> Result<f64> {
         if self.cardinality == StatCardinality::Exact(0) {
             self.clear_column_stats_for_empty_result();
             return Ok(0.0);
@@ -535,6 +561,9 @@ fn non_null_values(cardinality: f64, null_count: StatCount) -> f64 {
 // it aligns row mass but does not prove which values survived, so NDV is derived
 // from histogram row scaling while preserving the previous upper cap.
 fn align_histogram_with_cardinality(column_stat: &mut ColumnStat, cardinality: f64) -> Option<f64> {
+    // An untrusted positional model must not cap a fallback estimate by its
+    // modeled row mass, even when it is already smaller than the target.
+    discard_sparse_histogram(column_stat);
     if !cardinality.is_finite() || cardinality < 0.0 {
         return None;
     }
@@ -542,7 +571,7 @@ fn align_histogram_with_cardinality(column_stat: &mut ColumnStat, cardinality: f
     let null_count = null_count.expected().min(cardinality).max(0.0);
     let target_num_values = cardinality - null_count;
 
-    match column_stat {
+    let aligned_cardinality = match column_stat {
         ColumnStat::Int { ndv, histogram, .. } => {
             align_typed_histogram(ndv, histogram, target_num_values, null_count, cardinality)
         }
@@ -556,7 +585,9 @@ fn align_histogram_with_cardinality(column_stat: &mut ColumnStat, cardinality: f
             align_typed_histogram(ndv, histogram, target_num_values, null_count, cardinality)
         }
         ColumnStat::Boolean { .. } | ColumnStat::AllNull { .. } => None,
-    }
+    };
+    discard_sparse_histogram(column_stat);
+    aligned_cardinality
 }
 
 fn align_typed_histogram<T>(
@@ -676,8 +707,12 @@ impl ValueConstraintState {
     }
 
     fn apply_to_column_stat(&self, index: Symbol, column_stat: &ColumnStat) -> Result<ColumnStat> {
+        let mut column_stat = column_stat.clone();
+        // Coarse bounds remain useful, but clipping sparse buckets would turn
+        // the discarded positional assumption into NDV and cardinality caps.
+        discard_sparse_histogram(&mut column_stat);
         let Some(constraints) = self.pending.get(&index) else {
-            return Ok(column_stat.clone());
+            return Ok(column_stat);
         };
         ValueConstraint::apply_all(column_stat, constraints)
     }
@@ -818,6 +853,7 @@ impl SelectivityVisitor<'_> {
         // Normalize a side-local distribution to the visitor's input population. For Join
         // residuals the scale is the peer cardinality; ordinary filters leave it at one.
         stat.scale_row_mass(self.column_row_scale(index));
+        discard_sparse_histogram(&mut stat);
         stat
     }
 
@@ -966,10 +1002,9 @@ impl SelectivityVisitor<'_> {
                     return self.derive_function_selectivity(func);
                 };
 
-                let histogram_is_range_distorted =
-                    column_stat.histogram().is_some_and(|histogram| {
-                        histogram.is_range_sparse(RANGE_SYNTHETIC_MIN_DISTINCT_RETENTION)
-                    });
+                let histogram_is_range_distorted = column_stat
+                    .histogram()
+                    .is_some_and(|histogram| histogram.is_range_sparse(MIN_DISTINCT_RETENTION));
                 let distorted_range = matches!(
                     op,
                     ComparisonOp::GT | ComparisonOp::GTE | ComparisonOp::LT | ComparisonOp::LTE

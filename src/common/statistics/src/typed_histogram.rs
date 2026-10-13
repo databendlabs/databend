@@ -25,9 +25,9 @@ use crate::Histogram;
 use crate::NdvEstimate;
 use crate::estimate_distinct_count_after_row_scale;
 
-/// Synthetic bucket width (at the requested bucket count) above which the
-/// histogram bounds are treated as distorted by outliers at synthesis.
-const DISTORTED_SYNTHETIC_BUCKET_WIDTH: f64 = 1e12;
+/// Reference spacing in normalized domain units for uniform synthesis. The
+/// caller supplies the size of one unit in the histogram's value representation.
+const SYNTHETIC_REFERENCE_SPACING: f64 = 64.0;
 
 #[derive(Clone, PartialEq)]
 pub struct TypedHistogram<T> {
@@ -37,21 +37,15 @@ pub struct TypedHistogram<T> {
     /// `collapse_counts_to_distinct` fold it into both `num_values` and
     /// `num_distinct` and reset it to 1.
     pub row_scale: f64,
+    /// Dimensionless range-support retention. Uniform synthesis folds the
+    /// initial spacing into this score once; sampled histograms start at 1.
+    /// Pending `row_scale` contributes distinct-value survival through
+    /// [`Self::distinct_retention`]. Restriction and aggregation carry the score
+    /// when materializing counts. Planning-only metadata; it is not persisted.
+    pub distinct_retention: f64,
     /// Buckets are ordered ranges. `num_values` is the row count in the bucket
     /// and `num_distinct` is the distinct-value count represented by it.
     pub buckets: Vec<TypedHistogramBucket<T>>,
-    /// Set only on synthetic histograms built by
-    /// [`TypedHistogramBuilder::from_ndv`]; `None` means the buckets were
-    /// sampled (or the domain has no distance, such as bytes). Synthetic
-    /// histograms exist only during planning and are never persisted, so this
-    /// field has no compatibility constraints.
-    ///
-    /// The value is the average spacing between distinct values at synthesis,
-    /// `(max - min) / ndv`. It is the baseline against which later thinning is
-    /// measured (see [`TypedHistogram::is_range_sparse`]). `f64::INFINITY`
-    /// marks bounds that were already distorted by outliers at synthesis; such
-    /// a histogram's positions are never trusted.
-    pub avg_spacing: Option<f64>,
 }
 
 impl<T: fmt::Debug> fmt::Debug for TypedHistogram<T> {
@@ -60,10 +54,10 @@ impl<T: fmt::Debug> fmt::Debug for TypedHistogram<T> {
         if self.row_scale != 1.0 {
             debug.field("row_scale", &self.row_scale);
         }
-        debug
-            .field("buckets", &self.buckets)
-            .field("avg_spacing", &self.avg_spacing)
-            .finish()
+        if self.distinct_retention != 1.0 {
+            debug.field("distinct_retention", &self.distinct_retention);
+        }
+        debug.field("buckets", &self.buckets).finish()
     }
 }
 
@@ -71,8 +65,8 @@ impl<T> TypedHistogram<T> {
     pub fn new(buckets: Vec<TypedHistogramBucket<T>>) -> Self {
         Self {
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets,
-            avg_spacing: None,
         }
     }
 
@@ -106,6 +100,29 @@ impl<T> TypedHistogram<T> {
         )
     }
 
+    /// Initial range support multiplied by cumulative distinct-value survival.
+    /// Restricting the column's own range is not independent thinning. Row
+    /// retention alone is not enough: heavily duplicated values can survive
+    /// even a large reduction in rows.
+    pub fn distinct_retention(&self) -> f64 {
+        if self.row_scale == 1.0 {
+            return self.distinct_retention;
+        }
+        let (original, surviving) =
+            self.buckets
+                .iter()
+                .fold((0.0, 0.0), |(original, surviving), bucket| {
+                    (
+                        original + bucket.num_distinct,
+                        surviving + bucket.expected_distinct_after_row_scale(self.row_scale),
+                    )
+                });
+        if original <= 0.0 {
+            return self.distinct_retention;
+        }
+        self.distinct_retention * (surviving / original).min(1.0)
+    }
+
     pub fn scale_counts(&mut self, selectivity: f64) {
         self.row_scale *= selectivity;
     }
@@ -114,6 +131,7 @@ impl<T> TypedHistogram<T> {
     /// output). The pending `row_scale` is folded into the distinct counts
     /// first, so `ndv()` is the same before and after the call.
     pub fn collapse_counts_to_distinct(&mut self) {
+        self.distinct_retention = self.distinct_retention();
         for bucket in &mut self.buckets {
             let num_distinct = bucket.expected_distinct_after_row_scale(self.row_scale);
             bucket.num_distinct = num_distinct;
@@ -124,59 +142,16 @@ impl<T> TypedHistogram<T> {
 }
 
 impl<T: Value> TypedHistogram<T> {
-    /// Whether a synthetic histogram's bucket positions have stopped carrying
-    /// information, so callers should not use them for positional arithmetic
-    /// (bucket overlap in joins, bounds in range predicates). Sampled
-    /// histograms (`avg_spacing == None`) always return `false`: their bounds
-    /// were observed.
+    /// Whether bucket positions have stopped carrying information, so callers
+    /// should not use them for positional arithmetic (bucket overlap in joins,
+    /// bounds in range predicates). Sampled bounds describe the original data,
+    /// not necessarily the survivors of filters on other columns, so sampled
+    /// histograms are subject to the same distinct-retention threshold.
     ///
-    /// A synthetic histogram spreads `ndv` values uniformly over `[min, max]`.
-    /// That placement stops being meaningful in two ways:
-    /// - At synthesis, the bounds were distorted by outliers, for example a
-    ///   sentinel near `i64::MAX`. `from_ndv` records this as an infinite
-    ///   `avg_spacing`, and this check always reports it, whatever
-    ///   `min_retention` is.
-    /// - Later, filters on other columns thinned the values. Only a fraction
-    ///   of the synthesised values survive, and nothing says where in the
-    ///   range they sit. This is reported when
-    ///   [`Self::synthetic_distinct_retention`] falls below `min_retention`,
-    ///   a threshold the caller chooses.
+    /// The threshold applies to the combined score, not just NDV survival:
+    /// initially sparse uniform models can become unusable sooner after scaling.
     pub fn is_range_sparse(&self, min_retention: f64) -> bool {
-        match self.avg_spacing {
-            None => false,
-            Some(spacing) if spacing.is_infinite() => true,
-            Some(_) => self
-                .synthetic_distinct_retention()
-                .is_some_and(|retention| retention < min_retention),
-        }
-    }
-
-    /// How much of the synthesised value density is left: the spacing between
-    /// distinct values at synthesis divided by the current spacing,
-    /// `avg_spacing * ndv_now / (max_now - min_now)`, capped at 1.
-    ///
-    /// - Right after `from_ndv` it is 1, however sparse the domain itself is:
-    ///   a key with 1.5M values over a range of 6M is not thinned.
-    /// - `scale_counts` lowers `ndv_now` with the bounds unchanged, so
-    ///   retention drops.
-    /// - `restrict_*` cuts the bounds and folds `row_scale` into bucket
-    ///   distinct counts by the same range fraction, so retention is unchanged.
-    /// - A join output keeps the larger spacing of its two inputs (the lower
-    ///   density), with its own bounds and matched NDV.
-    ///
-    /// `None` for sampled histograms, histograms with distorted bounds, and
-    /// ranges of zero width.
-    pub fn synthetic_distinct_retention(&self) -> Option<f64> {
-        let synthetic_spacing = self.avg_spacing.filter(|spacing| spacing.is_finite())?;
-        let (first, last) = (self.buckets.first()?, self.buckets.last()?);
-        // `avg_spacing` over a single slot is the width of the range.
-        let width = T::avg_spacing(first.lower_bound(), last.upper_bound(), 1)?;
-        let ndv = self.ndv();
-        let ndv = ndv.expected.unwrap_or(ndv.upper);
-        if width <= 0.0 || ndv <= 0.0 {
-            return None;
-        }
-        Some((synthetic_spacing * ndv / width).min(1.0))
+        self.distinct_retention() < min_retention
     }
 }
 
@@ -220,7 +195,7 @@ where T: Copy + Ord + Into<i128>
         (!buckets.is_empty()).then_some(Self {
             row_scale: 1.0,
             buckets,
-            avg_spacing: self.avg_spacing,
+            distinct_retention: self.distinct_retention(),
         })
     }
 }
@@ -261,7 +236,7 @@ impl TypedHistogram<OrderedFloat<f64>> {
         (!buckets.is_empty()).then_some(Self {
             row_scale: 1.0,
             buckets,
-            avg_spacing: self.avg_spacing,
+            distinct_retention: self.distinct_retention(),
         })
     }
 }
@@ -298,7 +273,7 @@ impl TypedHistogram<Vec<u8>> {
         (!buckets.is_empty()).then_some(Self {
             row_scale: 1.0,
             buckets,
-            avg_spacing: self.avg_spacing,
+            distinct_retention: self.distinct_retention(),
         })
     }
 }
@@ -516,7 +491,11 @@ impl TypedHistogramBuilder {
         num_rows: u64,
         bounds: Option<(T, T)>,
         num_buckets: usize,
+        spacing_unit: f64,
     ) -> Result<TypedHistogram<T>, String> {
+        if !spacing_unit.is_finite() || spacing_unit <= 0.0 {
+            return Err("Histogram spacing unit must be positive and finite".to_string());
+        }
         if ndv == 0 {
             return if num_rows != 0 {
                 Err(format!(
@@ -525,8 +504,8 @@ impl TypedHistogramBuilder {
             } else {
                 Ok(TypedHistogram {
                     row_scale: 1.0,
+                    distinct_retention: 1.0,
                     buckets: vec![],
-                    avg_spacing: None,
                 })
             };
         }
@@ -553,16 +532,13 @@ impl TypedHistogramBuilder {
             return Err("histogram min bound must not be greater than max bound".to_string());
         }
 
-        // Bucket width at the requested bucket count above this threshold means
-        // the bounds come from outliers (sentinels) rather than from the
-        // values; mark the histogram as distorted.
-        let avg_spacing = match T::avg_spacing(&min, &max, num_buckets) {
-            Some(bucket_width) if bucket_width > DISTORTED_SYNTHETIC_BUCKET_WIDTH => {
-                Some(f64::INFINITY)
-            }
-            Some(_) => T::avg_spacing(&min, &max, ndv as usize),
-            None => None,
-        };
+        // Consume spacing once, before any filtering or materialization. Using
+        // a domain unit makes an equivalent change of value representation leave
+        // the score unchanged. Very wide/outlier bounds naturally get low support
+        // without a second, bucket-count-dependent distortion threshold.
+        let distinct_retention = T::avg_spacing(&min, &max, ndv as usize)
+            .map(|spacing| (SYNTHETIC_REFERENCE_SPACING / (spacing / spacing_unit)).min(1.0))
+            .unwrap_or(1.0);
         let adjusted_num_buckets = T::synthetic_bucket_count_limit(&min, &max)
             .map(|bucket_count_limit| num_buckets.min(ndv as usize).min(bucket_count_limit))
             .unwrap_or_else(|| num_buckets.min(ndv as usize));
@@ -599,8 +575,8 @@ impl TypedHistogramBuilder {
 
         Ok(TypedHistogram {
             row_scale: 1.0,
+            distinct_retention,
             buckets,
-            avg_spacing,
         })
     }
 }
@@ -827,11 +803,7 @@ impl Value for i64 {
 
     fn avg_spacing(min: &Self, max: &Self, num_buckets: usize) -> Option<f64> {
         (max > min && num_buckets > 0)
-            .then(|| {
-                max.checked_sub(*min)
-                    .map(|range| range as f64 / num_buckets as f64)
-            })
-            .flatten()
+            .then(|| (*max as i128 - *min as i128) as f64 / num_buckets as f64)
     }
 
     fn synthetic_bucket_count_limit(min: &Self, max: &Self) -> Option<usize> {
@@ -911,9 +883,14 @@ impl Value for OrderedFloat<f64> {
     }
 
     fn avg_spacing(min: &Self, max: &Self, num_buckets: usize) -> Option<f64> {
-        (max > min && num_buckets > 0)
-            .then(|| Self::distance(min, max).map(|width| width / num_buckets as f64))
-            .flatten()
+        (max > min && num_buckets > 0).then(|| {
+            let width = max.into_inner() - min.into_inner();
+            if width.is_finite() {
+                width / num_buckets as f64
+            } else {
+                f64::INFINITY
+            }
+        })
     }
 
     fn estimate_overlap_coverages(
@@ -1004,6 +981,7 @@ impl Value for String {
     fn into_histogram(histogram: TypedHistogram<Self>) -> Histogram {
         Histogram::Bytes(TypedHistogram {
             row_scale: histogram.row_scale,
+            distinct_retention: histogram.distinct_retention,
             buckets: histogram
                 .buckets
                 .into_iter()
@@ -1016,7 +994,6 @@ impl Value for String {
                     )
                 })
                 .collect(),
-            avg_spacing: histogram.avg_spacing,
         })
     }
 }
@@ -1132,15 +1109,16 @@ mod tests {
 
     #[test]
     fn test_typed_histogram_builder_and_intersection() {
-        let histogram = TypedHistogramBuilder::from_ndv(8, 16, Some((0_u64, 80_u64)), 4).unwrap();
+        let histogram =
+            TypedHistogramBuilder::from_ndv(8, 16, Some((0_u64, 80_u64)), 4, 1.0).unwrap();
         let left = TypedHistogramBounds::new(0_u64, 10_u64);
         let right = TypedHistogramBounds::new(5_u64, 15_u64);
 
         assert_eq!(histogram.num_buckets(), 4);
         assert_eq!(histogram.num_values(), 16.0);
         assert_eq!(histogram.ndv().expected, Some(8.0));
-        // (80 - 0) / ndv 8
-        assert_eq!(histogram.avg_spacing, Some(10.0));
+        // Spacing 10 is below the reference, so the initial support is full.
+        assert_eq!(histogram.distinct_retention(), 1.0);
         assert!(left.has_intersection(&right));
         assert_eq!(
             left.intersection(&right),
@@ -1151,7 +1129,7 @@ mod tests {
     #[test]
     fn test_typed_histogram_builder_preserves_max_bound_when_range_not_divisible() {
         let histogram =
-            TypedHistogramBuilder::from_ndv(738, 738, Some((0_u64, 737_u64)), 100).unwrap();
+            TypedHistogramBuilder::from_ndv(738, 738, Some((0_u64, 737_u64)), 100, 1.0).unwrap();
         let buckets = histogram.buckets.iter().collect::<Vec<_>>();
 
         assert_eq!(buckets.last().unwrap().upper_bound(), &737);
@@ -1159,7 +1137,8 @@ mod tests {
 
     #[test]
     fn test_typed_histogram_builder_partitions_discrete_synthetic_bounds() {
-        let histogram = TypedHistogramBuilder::from_ndv(10, 10, Some((0_u64, 9_u64)), 10).unwrap();
+        let histogram =
+            TypedHistogramBuilder::from_ndv(10, 10, Some((0_u64, 9_u64)), 10, 1.0).unwrap();
         let bounds = histogram
             .buckets
             .iter()
@@ -1182,7 +1161,7 @@ mod tests {
 
     #[test]
     fn test_typed_histogram_builder_limits_discrete_synthetic_bucket_count() {
-        let histogram = TypedHistogramBuilder::from_ndv(100, 100, Some((0_i64, 9_i64)), 100)
+        let histogram = TypedHistogramBuilder::from_ndv(100, 100, Some((0_i64, 9_i64)), 100, 1.0)
             .expect("bucket count should be capped to the discrete value count");
 
         assert_eq!(histogram.num_buckets(), 10);
@@ -1193,7 +1172,8 @@ mod tests {
 
     #[test]
     fn test_typed_histogram_synthetic_integer_self_join_does_not_overlap_bucket_edges() {
-        let histogram = TypedHistogramBuilder::from_ndv(10, 10, Some((0_u64, 9_u64)), 10).unwrap();
+        let histogram =
+            TypedHistogramBuilder::from_ndv(10, 10, Some((0_u64, 9_u64)), 10, 1.0).unwrap();
 
         let estimation = histogram.estimate_join(&histogram);
         assert_eq!(estimation.cardinality, StatEstimate::exact(10.0));

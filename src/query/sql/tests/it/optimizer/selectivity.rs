@@ -31,6 +31,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression_test_support::parse_raw_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -49,11 +50,14 @@ use databend_common_sql::plans::CastExpr;
 use databend_common_sql::plans::ComparisonOp;
 use databend_common_sql::plans::ConstantExpr;
 use databend_common_sql::plans::FunctionCall;
+use databend_common_statistics::Datum;
 use databend_common_statistics::F64;
 use databend_common_statistics::Histogram;
+use databend_common_statistics::HistogramBuilder;
 use databend_common_statistics::StatBounds;
 use databend_common_statistics::TypedHistogram;
 use databend_common_statistics::TypedHistogramBucket;
+use databend_common_statistics::TypedHistogramBuilder;
 use databend_storages_common_table_meta::meta::ColumnCountMinSketch;
 use databend_storages_common_table_meta::meta::ColumnTopN;
 use databend_storages_common_table_meta::meta::ColumnTopNEntry;
@@ -907,6 +911,108 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
 #[test]
 fn test_selectivity_histogram_outcomes() -> Result<()> {
     let mut file = open_golden_file("optimizer", "selectivity_histogram.txt")?;
+    for (origin, sampled) in [("synthetic", false), ("sampled", true)] {
+        // Two buckets reproduce the positional cap while keeping the golden compact.
+        let mut histogram = TypedHistogramBuilder::from_ndv::<u64>(
+            1_000_000,
+            1_000_000,
+            Some((0, 999_999)),
+            2,
+            1.0,
+        )
+        .unwrap();
+        if sampled {
+            histogram = TypedHistogram::new(histogram.buckets);
+        }
+        histogram.scale_counts(0.001);
+        assert!(histogram.is_range_sparse(0.5));
+        for materialized in [false, true] {
+            write_case_title(
+                &mut file,
+                &format!("sparse_{origin}_histogram_materialized_{materialized}"),
+                "Sparse histograms must not cap range fallbacks, even after materializing counts; coarse bounds still refine.",
+            )?;
+            let histogram = if materialized {
+                histogram.restrict_discrete_buckets(0, 999_999).unwrap()
+            } else {
+                histogram.clone()
+            };
+            let stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat::UInt {
+                min: 0,
+                max: 999_999,
+                ndv: histogram.ndv(),
+                null_count: StatCount::exact(0),
+                histogram: Some(histogram),
+            })]);
+            let columns = [("a", UInt64Type::data_type())];
+            for expr in [
+                "a < 1000",
+                "a >= 999000",
+                "and_filters(a >= 100, a < 1000)",
+                // Even an unfiltered column must discard an untrusted histogram.
+                "true",
+            ] {
+                run_case_with_predicates(
+                    &mut file,
+                    &[expr],
+                    &columns,
+                    stats.clone(),
+                    StatCardinality::estimate(1000.0),
+                    CaseOptions::default(),
+                )?;
+            }
+        }
+    }
+    let columns = [
+        ("a", UInt64Type::data_type()),
+        ("b", UInt64Type::data_type()),
+    ];
+    for (origin, sampled) in [("synthetic", false), ("sampled", true)] {
+        write_case_title(
+            &mut file,
+            &format!("{origin}_histogram_retention_threshold"),
+            "Filtering another column should discard the histogram below 50% distinct retention, but preserve it at or above the threshold.",
+        )?;
+        let mut histogram = TypedHistogramBuilder::from_ndv::<u64>(
+            1_000_000,
+            1_000_000,
+            Some((0, 999_999)),
+            2,
+            1.0,
+        )
+        .unwrap();
+        if sampled {
+            histogram = TypedHistogram::new(histogram.buckets);
+        }
+        let stats = ColumnStatSet::from_iter([
+            (Symbol::new(0), ColumnStat::UInt {
+                min: 0,
+                max: 999_999,
+                ndv: histogram.ndv(),
+                null_count: StatCount::exact(0),
+                histogram: Some(histogram),
+            }),
+            (Symbol::new(1), ColumnStat::UInt {
+                min: 0,
+                max: 999,
+                ndv: NdvEstimate::exact(1000.0),
+                null_count: StatCount::exact(0),
+                histogram: None,
+            }),
+        ]);
+        // The predicate only touches b. It must still discard a's histogram
+        // when scaling crosses the threshold, whether synthetic or sampled.
+        for expr in ["true", "b < 500", "b < 499", "b = 0"] {
+            run_case_with_predicates(
+                &mut file,
+                &[expr],
+                &columns,
+                stats.clone(),
+                StatCardinality::estimate(1_000_000.0),
+                CaseOptions::default(),
+            )?;
+        }
+    }
     write_case_title(
         &mut file,
         "histogram_comparison_predicates",
@@ -919,8 +1025,8 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         null_count: StatCount::exact(0),
         histogram: Some(TypedHistogram {
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(1, 10, 100.0, 10.0)],
-            avg_spacing: None,
         }),
     })]);
     for expr in ["h >= 10", "h < 10", "h != 5"] {
@@ -938,8 +1044,8 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         null_count: StatCount::exact(0),
         histogram: Some(TypedHistogram {
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
-            avg_spacing: None,
         }),
     })]);
     run_case(
@@ -956,11 +1062,11 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
             null_count: StatCount::exact(0),
             histogram: Some(TypedHistogram {
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: vec![
                     TypedHistogramBucket::new(0, 9, 50.0, 10.0),
                     TypedHistogramBucket::new(10, 19, 50.0, 10.0),
                 ],
-                avg_spacing: None,
             }),
         })]);
     for expr in ["m >= 5", "m < 15"] {
@@ -978,11 +1084,11 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         null_count: StatCount::exact(0),
         histogram: Some(TypedHistogram {
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![
                 TypedHistogramBucket::new(0, 4, 50.0, 5.0),
                 TypedHistogramBucket::new(5, 9, 5.0, 5.0),
             ],
-            avg_spacing: None,
         }),
     })]);
     run_case_with_predicates(
@@ -1000,8 +1106,8 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         null_count: StatCount::exact(30),
         histogram: Some(TypedHistogram {
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 9, 70.0, 10.0)],
-            avg_spacing: None,
         }),
     })]);
     run_case_with_predicates(
@@ -1019,8 +1125,8 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         null_count: StatCount::exact(0),
         histogram: Some(TypedHistogram {
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 737, 738.0, 738.0)],
-            avg_spacing: None,
         }),
     })]);
     for expr in ["tail > 731", "tail > 700", "tail > 737"] {
@@ -1046,11 +1152,11 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         null_count: StatCount::exact(0),
         histogram: Some(TypedHistogram {
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![
                 TypedHistogramBucket::new(F64::from(0.0), F64::from(10.0), 100.0, 10.0),
                 TypedHistogramBucket::new(F64::from(10.0), F64::from(20.0), 100.0, 10.0),
             ],
-            avg_spacing: None,
         }),
     })]);
     let float_column = || {
@@ -1114,8 +1220,8 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         null_count: StatCount::exact(50),
         histogram: Some(TypedHistogram {
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
-            avg_spacing: None,
         }),
     })]);
     run_case_with_predicates(
@@ -1140,8 +1246,8 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
             StatCount::exact(0),
             Some(Histogram::UInt(TypedHistogram {
                 row_scale: 1.0,
+                distinct_retention: 0.0,
                 buckets: vec![TypedHistogramBucket::new(0, 1000, 100.0, 100.0)],
-                avg_spacing: Some(f64::INFINITY),
             })),
         )
         .unwrap(),
@@ -1157,6 +1263,104 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
 
     write_case_title(
         &mut file,
+        "synthetic_spacing_units_and_threshold",
+        "Equivalent domain units use one dimensionless score; initial support and later NDV survival share the 50% threshold.",
+    )?;
+    for data_type in [
+        Int64Type::data_type(),
+        DataType::Date,
+        DataType::Timestamp,
+        DataType::Number(NumberDataType::Float64),
+        DataType::Decimal(DecimalSize::new(28, 2).unwrap()),
+        DataType::Decimal(DecimalSize::new(28, 4).unwrap()),
+    ] {
+        let unit = databend_common_sql::plans::Statistics::histogram_spacing_unit(&data_type);
+        let max = 100_000.0 * unit;
+        let limit = 10_000.0 * unit;
+        let (min, max_bound, constant) = match &data_type {
+            DataType::Date => (
+                Datum::Int(0),
+                Datum::Int(max as i64),
+                Scalar::Date(limit as i32),
+            ),
+            DataType::Timestamp => (
+                Datum::Int(0),
+                Datum::Int(max as i64),
+                Scalar::Timestamp(limit as i64),
+            ),
+            DataType::Decimal(size) => (
+                Datum::Float(F64::from(0.0)),
+                Datum::Float(F64::from(max)),
+                Scalar::Decimal(DecimalScalar::Decimal128(
+                    (limit * 10_f64.powi(size.scale() as i32)) as i128,
+                    *size,
+                )),
+            ),
+            DataType::Number(NumberDataType::Float64) => (
+                Datum::Float(F64::from(0.0)),
+                Datum::Float(F64::from(max)),
+                Scalar::Number(NumberScalar::Float64(F64::from(limit))),
+            ),
+            _ => (
+                Datum::Int(0),
+                Datum::Int(max as i64),
+                Scalar::Number(NumberScalar::Int64(limit as i64)),
+            ),
+        };
+        let histogram =
+            HistogramBuilder::from_ndv(1000, 1000, Some((min.clone(), max_bound.clone())), 2, unit)
+                .unwrap();
+        let bounds = StatBounds::new(min, max_bound).unwrap();
+        let column = ScalarExpr::BoundColumnRef(BoundColumnRef {
+            span: None,
+            column: ColumnBindingBuilder::new(
+                "a".to_string(),
+                Symbol::new(0),
+                Box::new(data_type.clone()),
+                Visibility::Visible,
+            )
+            .build(),
+        });
+        let predicate = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: ComparisonOp::LT.to_func_name().to_string(),
+            params: vec![],
+            arguments: vec![
+                column,
+                ScalarExpr::TypedConstantExpr(
+                    ConstantExpr {
+                        span: None,
+                        value: constant,
+                    },
+                    data_type.clone(),
+                ),
+            ],
+            return_type: Box::new(DataType::Boolean),
+        });
+        for survival in [1.0, 0.9, 0.75] {
+            writeln!(file, "type: {data_type:?}; NDV survival: {survival}")?;
+            let mut histogram = histogram.clone();
+            histogram.scale_counts(survival);
+            let stat = ColumnStat::new(
+                bounds.clone(),
+                histogram.ndv(),
+                StatCount::exact(0),
+                Some(histogram),
+            )
+            .unwrap();
+            run_scalar_case_with_predicates(
+                &mut file,
+                &["a < normalized limit"],
+                std::slice::from_ref(&predicate),
+                ColumnStatSet::from_iter([(Symbol::new(0), stat)]),
+                StatCardinality::estimate(1000.0 * survival),
+                CaseOptions::default(),
+            )?;
+        }
+    }
+
+    write_case_title(
+        &mut file,
         "histogram_distinct_counts_after_restrict",
         "Whole-bucket range pruning keeps the surviving buckets' distinct counts; after an earlier independent filter those counts are only estimates.",
     )?;
@@ -1168,11 +1372,11 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
             null_count: StatCount::exact(0),
             histogram: Some(TypedHistogram {
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: vec![
                     TypedHistogramBucket::new(b"a".to_vec(), b"f".to_vec(), 60.0, 6.0),
                     TypedHistogramBucket::new(b"m".to_vec(), b"z".to_vec(), 40.0, 20.0),
                 ],
-                avg_spacing: None,
             }),
         })]);
     run_case_with_predicates(
@@ -1194,11 +1398,11 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
             null_count: StatCount::exact(0),
             histogram: Some(TypedHistogram {
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: vec![
                     TypedHistogramBucket::new(b"a".to_vec(), b"f".to_vec(), 30.0, 3.0),
                     TypedHistogramBucket::new(b"m".to_vec(), b"z".to_vec(), 20.0, 10.0),
                 ],
-                avg_spacing: None,
             }),
         })]);
     run_case_with_predicates(
@@ -1347,8 +1551,8 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         null_count: StatCount::exact(0),
         histogram: Some(TypedHistogram {
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
-            avg_spacing: None,
         }),
     })]);
     run_case_with_predicates(
@@ -1402,8 +1606,8 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
             null_count: StatCount::exact(0),
             histogram: Some(TypedHistogram {
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
-                avg_spacing: None,
             }),
         }),
         (Symbol::new(1), ColumnStat::UInt {
@@ -1413,8 +1617,8 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
             null_count: StatCount::exact(0),
             histogram: Some(TypedHistogram {
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
-                avg_spacing: None,
             }),
         }),
     ]);
@@ -1443,8 +1647,8 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
             null_count: StatCount::exact(0),
             histogram: Some(TypedHistogram {
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
-                avg_spacing: None,
             }),
         }),
         (Symbol::new(1), ColumnStat::UInt {
@@ -1454,8 +1658,8 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
             null_count: StatCount::exact(0),
             histogram: Some(TypedHistogram {
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 4, 50.0, 5.0)],
-                avg_spacing: None,
             }),
         }),
     ]);
@@ -1714,8 +1918,8 @@ fn test_selectivity_null_outcomes() -> Result<()> {
         null_count: StatCount::estimate(8.0, 8.0),
         histogram: Some(TypedHistogram {
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
-            avg_spacing: None,
         }),
     })]);
     run_case_with_predicates(
@@ -1734,8 +1938,8 @@ fn test_selectivity_null_outcomes() -> Result<()> {
             null_count: StatCount::exact(2),
             histogram: Some(TypedHistogram {
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
-                avg_spacing: None,
             }),
         })]);
     run_case_with_predicates(
@@ -1754,8 +1958,8 @@ fn test_selectivity_null_outcomes() -> Result<()> {
             null_count: StatCount::exact(2),
             histogram: Some(TypedHistogram {
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
-                avg_spacing: None,
             }),
         })]);
     run_case_with_predicates(
@@ -1774,8 +1978,8 @@ fn test_selectivity_null_outcomes() -> Result<()> {
             null_count: StatCount::exact(2),
             histogram: Some(TypedHistogram {
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
-                avg_spacing: None,
             }),
         })]);
     run_case_with_predicates(
@@ -1810,8 +2014,8 @@ fn test_selectivity_null_outcomes() -> Result<()> {
         null_count: StatCount::exact(2),
         histogram: Some(TypedHistogram {
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
-            avg_spacing: None,
         }),
     })]);
     run_case_with_predicates(

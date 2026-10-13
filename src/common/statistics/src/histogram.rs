@@ -47,11 +47,12 @@ pub const DEFAULT_HISTOGRAM_BUCKETS: usize = 100;
 /// cross tile boundaries.
 ///
 /// Histograms synthesized from column NDV plus min/max bounds by
-/// [`crate::HistogramBuilder::from_ndv`] also record their value spacing at
-/// synthesis in `avg_spacing`, so consumers can tell when bucket positions stop
-/// carrying information (see [`Histogram::is_range_sparse`]). The type variants
-/// preserve the bucket value type for serialization, function selectivity, and
-/// type-specific join estimation.
+/// [`crate::HistogramBuilder::from_ndv`] fold their normalized initial spacing
+/// into `distinct_retention`. Both synthetic and sampled histograms retain
+/// independent thinning history in the same dimensionless score: observed
+/// bounds are not a guarantee about values surviving later filters on other
+/// columns. The type variants preserve bucket value types for serialization,
+/// function selectivity, and type-specific join estimation.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Histogram {
     Int(TypedHistogram<i64>),
@@ -406,7 +407,7 @@ fn last_integer_satisfying(
 
 impl Histogram {
     /// Build a histogram from ANALYZE buckets or persisted snapshot buckets.
-    /// These are never synthetic, so `avg_spacing` is `None`.
+    /// These are observed histograms, so their initial retention is 1.
     pub fn try_from_buckets(buckets: Vec<HistogramBucket>) -> Result<Self, &'static str> {
         let Some(first_bucket) = buckets.first() else {
             return Err("histogram must contain at least one bucket");
@@ -415,6 +416,7 @@ impl Histogram {
         match first_bucket {
             HistogramBucket::Int(_) => Ok(Self::Int(TypedHistogram {
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: buckets
                     .into_iter()
                     .map(|bucket| match bucket {
@@ -422,10 +424,10 @@ impl Histogram {
                         _ => Err("histogram bucket types must be consistent"),
                     })
                     .collect::<Result<Vec<_>, _>>()?,
-                avg_spacing: None,
             })),
             HistogramBucket::UInt(_) => Ok(Self::UInt(TypedHistogram {
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: buckets
                     .into_iter()
                     .map(|bucket| match bucket {
@@ -433,10 +435,10 @@ impl Histogram {
                         _ => Err("histogram bucket types must be consistent"),
                     })
                     .collect::<Result<Vec<_>, _>>()?,
-                avg_spacing: None,
             })),
             HistogramBucket::Float(_) => Ok(Self::Float(TypedHistogram {
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: buckets
                     .into_iter()
                     .map(|bucket| match bucket {
@@ -444,10 +446,10 @@ impl Histogram {
                         _ => Err("histogram bucket types must be consistent"),
                     })
                     .collect::<Result<Vec<_>, _>>()?,
-                avg_spacing: None,
             })),
             HistogramBucket::Bytes(_) => Ok(Self::Bytes(TypedHistogram {
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets: buckets
                     .into_iter()
                     .map(|bucket| match bucket {
@@ -455,7 +457,6 @@ impl Histogram {
                         _ => Err("histogram bucket types must be consistent"),
                     })
                     .collect::<Result<Vec<_>, _>>()?,
-                avg_spacing: None,
             })),
         }
     }
@@ -833,13 +834,13 @@ mod tests {
     fn test_mixed_numeric_join_calculates_existing_buckets_directly() -> ExceptionResult<()> {
         let left = Histogram::Int(TypedHistogram {
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(1, 1, 3.0, 1.0)],
-            avg_spacing: None,
         });
         let right = Histogram::UInt(TypedHistogram {
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(1, 1, 2.0, 1.0)],
-            avg_spacing: None,
         });
 
         let estimation = left
@@ -856,30 +857,30 @@ mod tests {
     {
         let left_int = Histogram::Int(TypedHistogram {
             row_scale: 0.5,
+            distinct_retention: 1.0,
             buckets: vec![
                 TypedHistogramBucket::new(0, 10, 40.0, 10.0),
                 TypedHistogramBucket::new(20, 20, 8.0, 1.0),
                 TypedHistogramBucket::new(40, 50, 20.0, 8.0),
             ],
-            avg_spacing: None,
         });
         let left_float = Histogram::Float(TypedHistogram {
             row_scale: 0.5,
+            distinct_retention: 1.0,
             buckets: vec![
                 TypedHistogramBucket::new(F64::from(0.0), F64::from(10.0), 40.0, 10.0),
                 TypedHistogramBucket::new(F64::from(20.0), F64::from(20.0), 8.0, 1.0),
                 TypedHistogramBucket::new(F64::from(40.0), F64::from(50.0), 20.0, 8.0),
             ],
-            avg_spacing: None,
         });
         let right_float = Histogram::Float(TypedHistogram {
             row_scale: 0.25,
+            distinct_retention: 1.0,
             buckets: vec![
                 TypedHistogramBucket::new(F64::from(5.0), F64::from(15.0), 32.0, 9.0),
                 TypedHistogramBucket::new(F64::from(20.0), F64::from(20.0), 12.0, 1.0),
                 TypedHistogramBucket::new(F64::from(60.0), F64::from(70.0), 16.0, 7.0),
             ],
-            avg_spacing: None,
         });
 
         let native = left_float.estimate_join(&right_float)?;
@@ -901,8 +902,8 @@ mod tests {
         let histogram = |buckets: Vec<TypedHistogramBucket<F64>>| {
             Histogram::Float(TypedHistogram {
                 row_scale: 1.0,
+                distinct_retention: 1.0,
                 buckets,
-                avg_spacing: None,
             })
         };
         let left = histogram(vec![TypedHistogramBucket::new(
@@ -952,18 +953,18 @@ mod tests {
     fn test_direct_mixed_integer_join_matches_typed_join() -> ExceptionResult<()> {
         let left = Histogram::Int(TypedHistogram {
             row_scale: 0.5,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(-10, 20, 80.0, 24.0)],
-            avg_spacing: None,
         });
         let right_int = Histogram::Int(TypedHistogram {
             row_scale: 0.25,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(5, 30, 60.0, 20.0)],
-            avg_spacing: None,
         });
         let right_uint = Histogram::UInt(TypedHistogram {
             row_scale: 0.25,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(5, 30, 60.0, 20.0)],
-            avg_spacing: None,
         });
 
         let native = left.estimate_join(&right_int)?;
@@ -981,23 +982,23 @@ mod tests {
     fn test_mixed_integer_join_preserves_large_integer_boundaries() -> ExceptionResult<()> {
         let left = Histogram::Int(TypedHistogram {
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(
                 9_007_199_254_740_992,
                 9_007_199_254_740_992,
                 3.0,
                 1.0,
             )],
-            avg_spacing: None,
         });
         let right = Histogram::UInt(TypedHistogram {
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(
                 9_007_199_254_740_993,
                 9_007_199_254_740_993,
                 2.0,
                 1.0,
             )],
-            avg_spacing: None,
         });
 
         let estimation = left
@@ -1013,23 +1014,23 @@ mod tests {
     fn test_numeric_join_uses_requested_return_type() -> ExceptionResult<()> {
         let left = Histogram::Int(TypedHistogram {
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(
                 9_007_199_254_740_992,
                 9_007_199_254_740_992,
                 3.0,
                 1.0,
             )],
-            avg_spacing: None,
         });
         let right = Histogram::Int(TypedHistogram {
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(
                 9_007_199_254_740_993,
                 9_007_199_254_740_993,
                 2.0,
                 1.0,
             )],
-            avg_spacing: None,
         });
 
         let integer = left
@@ -1048,13 +1049,13 @@ mod tests {
     fn test_integer_join_compares_values_outside_return_type_range() -> ExceptionResult<()> {
         let left = Histogram::UInt(TypedHistogram {
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(u64::MAX, u64::MAX, 1.0, 1.0)],
-            avg_spacing: None,
         });
         let right = Histogram::Int(TypedHistogram {
             row_scale: 1.0,
+            distinct_retention: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 0, 1.0, 1.0)],
-            avg_spacing: None,
         });
 
         let estimation = left

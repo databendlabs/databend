@@ -153,6 +153,30 @@ async fn write_case(file: &mut impl Write, case: &StatsCase) -> Result<()> {
         HashMap::new(),
     )
     .await?;
+    // Equal temporal distributions represented as days and microseconds. The
+    // collector must preserve the logical type until lazy histogram synthesis.
+    ctx.register_table_sql_with_stats(
+        "CREATE TABLE temporal(d DATE NOT NULL, ts TIMESTAMP NOT NULL)",
+        Some(table_statistics(1000)),
+        HashMap::from([
+            ("d".to_string(), BasicColumnStatistics {
+                min: Some(Datum::Int(0)),
+                max: Some(Datum::Int(80_000)),
+                ndv: Some(1000),
+                null_count: 0,
+                in_memory_size: 4000,
+            }),
+            ("ts".to_string(), BasicColumnStatistics {
+                min: Some(Datum::Int(0)),
+                max: Some(Datum::Int(80_000 * 86_400 * 1_000_000)),
+                ndv: Some(1000),
+                null_count: 0,
+                in_memory_size: 8000,
+            }),
+        ]),
+        HashMap::new(),
+    )
+    .await?;
 
     let raw_plan = ctx.bind_sql(case.sql).await?;
     let (s_expr, metadata) = if case.operator == RelOp::Sort {
@@ -195,6 +219,18 @@ async fn write_case(file: &mut impl Write, case: &StatsCase) -> Result<()> {
 async fn test_sort_and_window_statistics_golden() -> Result<()> {
     let mut file = open_golden_file("optimizer", "stat_derivation.txt")?;
     let cases = [
+        StatsCase {
+            name: "date_synthetic_spacing_unit",
+            description: "Date synthesis uses the same temporal reference as Timestamp, in days.",
+            sql: "SELECT d FROM temporal WHERE d < to_date('1991-11-27')",
+            operator: RelOp::Scan,
+        },
+        StatsCase {
+            name: "timestamp_synthetic_spacing_unit",
+            description: "Microsecond bounds must not cause an equivalent Timestamp distribution to lose its histogram.",
+            sql: "SELECT ts FROM temporal WHERE ts < to_timestamp('1991-11-27 00:00:00')",
+            operator: RelOp::Scan,
+        },
         StatsCase {
             name: "sort_top_n_caps_statistics",
             description: "Top-N sort caps row-count statistics without discarding value bounds.",
