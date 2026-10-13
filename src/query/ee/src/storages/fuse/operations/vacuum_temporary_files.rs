@@ -15,11 +15,11 @@
 // `VACUUM TEMPORARY FILES`: remove expired spill files from the tenant's spill prefix.
 //
 // Layout:
-// - [`SpillDeleter`]: the only piece that talks to the object store for deletes and knows how
-//   throttling shows up (`RateLimited` errors, hidden retries).
+// - [`SpillDeleter`]: the only piece that talks to the object store for deletes, knows how
+//   throttling shows up (`RateLimited` errors, hidden retries) and reports progress per request.
 // - [`AdaptiveConcurrency`]: pure policy deciding how many spill directories may be vacuumed at
 //   once, driven by the delete outcomes.
-// - [`RunBudget`]: `LIMIT` accounting and progress reporting.
+// - [`RunBudget`]: `LIMIT` accounting.
 // - [`Pacing`]: decides after each delete batch whether a task issues the next one.
 // - Directory strategies (`delete_by_meta`, `delete_by_list`, `delete_by_probe`) are plain
 //   functions over a [`SpillDeleter`]: they return a [`DeleteOutcome`] and keep no shared state.
@@ -28,6 +28,8 @@
 
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
@@ -67,9 +69,10 @@ const DELETE_BATCH_FILES: usize = 1000;
 /// Result of one delete batch.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct DeleteOutcome {
-    /// Files actually removed. A batch that fails counts as `0` and is left for the next run.
+    /// Files actually removed: a prefix of the batch, all of it unless `failed`.
     removed: usize,
-    /// The batch was rejected, for whatever reason, and nothing in it was removed.
+    /// A request was rejected, for whatever reason; the paths from `removed` on are left for
+    /// the next run.
     failed: bool,
     /// The batch itself was rejected as rate limited.
     rate_limited: bool,
@@ -88,14 +91,36 @@ impl DeleteOutcome {
     }
 }
 
-/// Deletes spill files and observes how the object store responds.
+/// Deletes spill files, observes how the object store responds, and reports the running total
+/// after every request so progress is visible while a large directory is still being vacuumed.
 struct SpillDeleter {
     operator: Operator,
+    /// Paths per request the backend accepts (S3 1000, GCS 100, fs 1). A batch is sent one
+    /// request at a time so a failure mid-batch still accounts for the requests that went
+    /// through.
+    request_size: usize,
+    removed: AtomicUsize,
+    report: Option<VacuumReport>,
 }
 
 impl SpillDeleter {
     fn new(operator: Operator) -> Self {
-        Self { operator }
+        Self::with_report(operator, None)
+    }
+
+    fn with_report(operator: Operator, report: Option<VacuumReport>) -> Self {
+        let request_size = operator
+            .info()
+            .full_capability()
+            .delete_max_size
+            .unwrap_or(1)
+            .clamp(1, DELETE_BATCH_FILES);
+        Self {
+            operator,
+            request_size,
+            removed: AtomicUsize::new(0),
+            report,
+        }
     }
 
     fn operator(&self) -> &Operator {
@@ -105,22 +130,42 @@ impl SpillDeleter {
     async fn delete(&self, paths: Vec<String>, from: &str) -> DeleteOutcome {
         let n = paths.len();
         let retries_before = opendal_rate_limited_retries();
-        let result = self.operator.delete_iter(paths).await;
+        let mut removed = 0;
+        let result: opendal::Result<()> = async {
+            let mut deleter = self.operator.deleter().await?;
+            for request in paths.chunks(self.request_size) {
+                deleter
+                    .delete_iter(request.iter().map(String::as_str))
+                    .await?;
+                deleter.close().await?;
+                removed += request.len();
+                let total =
+                    self.removed.fetch_add(request.len(), Ordering::Relaxed) + request.len();
+                if let Some(report) = &self.report {
+                    report(total);
+                }
+            }
+            Ok(())
+        }
+        .await;
         let retried = opendal_rate_limited_retries().saturating_sub(retries_before) as usize;
         match result {
             Ok(()) => DeleteOutcome {
-                removed: n,
+                removed,
                 failed: false,
                 rate_limited: false,
                 retried,
             },
             Err(e) => {
                 warn!(
-                    "Vacuum temporary files: failed to delete {} files from '{}', will retry in the next run: {}",
-                    n, from, e
+                    "Vacuum temporary files: failed to delete {} of {} files from '{}', will retry in the next run: {}",
+                    n - removed,
+                    n,
+                    from,
+                    e
                 );
                 DeleteOutcome {
-                    removed: 0,
+                    removed,
                     failed: true,
                     rate_limited: e.kind() == ErrorKind::RateLimited,
                     retried,
@@ -229,16 +274,11 @@ impl AdaptiveConcurrency {
 struct RunBudget {
     limit: usize,
     removed: usize,
-    report: Option<VacuumReport>,
 }
 
 impl RunBudget {
-    fn new(limit: usize, report: Option<VacuumReport>) -> Self {
-        Self {
-            limit,
-            removed: 0,
-            report,
-        }
+    fn new(limit: usize) -> Self {
+        Self { limit, removed: 0 }
     }
 
     fn removed(&self) -> usize {
@@ -255,9 +295,6 @@ impl RunBudget {
 
     fn record(&mut self, removed: usize) {
         self.removed += removed;
-        if let Some(report) = &self.report {
-            report(self.removed);
-        }
     }
 }
 
@@ -387,10 +424,10 @@ struct Run {
 impl Run {
     const PROGRESS_LOG_INTERVAL: Duration = Duration::from_secs(10);
 
-    fn new(limit: usize, report: VacuumReport) -> Self {
+    fn new(limit: usize) -> Self {
         let now = Instant::now();
         Self {
-            budget: RunBudget::new(limit, Some(report)),
+            budget: RunBudget::new(limit),
             concurrency: AdaptiveConcurrency::new(),
             gc_metas: HashSet::new(),
             started: now,
@@ -461,10 +498,13 @@ async fn vacuum_by_duration(
     retain: Duration,
     report: VacuumReport,
 ) -> Result<usize> {
-    let deleter = Arc::new(SpillDeleter::new(DataOperator::instance().spill_operator()));
+    let deleter = Arc::new(SpillDeleter::with_report(
+        DataOperator::instance().spill_operator(),
+        Some(report),
+    ));
     let expiry = Expiry::new(retain);
     let pacing = Pacing::Scheduled(abort_checker.clone());
-    let mut run = Run::new(limit, report);
+    let mut run = Run::new(limit);
 
     let temporary_dir: Arc<str> = format!("{}/", temporary_dir.trim_end_matches('/')).into();
     let mut ds = deleter.operator().lister_with(&temporary_dir).await?;
@@ -789,8 +829,11 @@ async fn delete_by_meta_buffer(
     let mut budget = max;
     while budget > 0 {
         let mut batch = Vec::new();
+        // Where each path's line ends, so a batch that failed part-way advances exactly past
+        // the paths that were removed.
+        let mut line_ends = Vec::new();
         let mut batch_end = consumed;
-        let mut names_itself = false;
+        let mut meta_index = None;
         let cap = budget.min(DELETE_BATCH_FILES);
         for line in text[consumed..].split_inclusive('\n') {
             if batch.len() >= cap {
@@ -809,11 +852,12 @@ async fn delete_by_meta_buffer(
                 if batch.len() + 1 + after > cap {
                     break;
                 }
-                names_itself = true;
+                meta_index = Some(batch.len());
             }
             batch_end += line.len();
             if path.starts_with(temporary_dir) {
                 batch.push(path.to_owned());
+                line_ends.push(batch_end);
             }
         }
         if batch.is_empty() {
@@ -823,13 +867,16 @@ async fn delete_by_meta_buffer(
         budget -= batch.len();
         let outcome = deleter.delete(batch, meta_path).await;
         total.absorb(outcome);
+        manifest_deleted |= meta_index.is_some_and(|i| i < outcome.removed);
         if outcome.failed {
-            // Failed batch: keep it in the manifest for the next run.
+            // Keep what was not removed in the manifest for the next run.
+            if outcome.removed > 0 {
+                consumed = line_ends[outcome.removed - 1];
+            }
             stopped_early = true;
             break;
         }
         consumed = batch_end;
-        manifest_deleted |= names_itself;
         if !pacing.continues_after(&outcome) {
             // The store pushed back or the query is being aborted: the rest stays in the
             // manifest and the task ends here.
@@ -1021,7 +1068,7 @@ async fn vacuum_query_hook(
     limit: usize,
 ) -> Result<usize> {
     let deleter = SpillDeleter::new(DataOperator::instance().spill_operator());
-    let mut budget = RunBudget::new(limit, None);
+    let mut budget = RunBudget::new(limit);
 
     let metas_f = nodes
         .iter()

@@ -19,8 +19,6 @@ mod unit {
 
     use std::collections::HashMap;
     use std::future::Future;
-    use std::sync::atomic::AtomicUsize;
-    use std::sync::atomic::Ordering;
 
     use chrono::Duration as ChronoDuration;
     use chrono::Utc;
@@ -71,6 +69,8 @@ mod unit {
     struct RecordingDeleter {
         deleted: Arc<Mutex<Vec<String>>>,
         pending: Vec<String>,
+        /// Flushes that still succeed before `failing_batches` kicks in.
+        passing_batches: Arc<AtomicUsize>,
         failing_batches: Arc<AtomicUsize>,
         failure_kind: opendal::ErrorKind,
     }
@@ -82,10 +82,15 @@ mod unit {
         }
 
         async fn flush(&mut self) -> opendal::Result<usize> {
-            let failing = self
-                .failing_batches
+            let passing = self
+                .passing_batches
                 .try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
                 .is_ok();
+            let failing = !passing
+                && self
+                    .failing_batches
+                    .try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+                    .is_ok();
             if failing {
                 self.pending.clear();
                 return Err(opendal::Error::new(self.failure_kind, "mock batch failure"));
@@ -132,11 +137,14 @@ mod unit {
         read_results: HashMap<String, ReadResult>,
         deleted: Arc<Mutex<Vec<String>>>,
         written: Writes,
+        passing_batches: Arc<AtomicUsize>,
         failing_batches: Arc<AtomicUsize>,
         failure_kind: Mutex<opendal::ErrorKind>,
         list_calls: AtomicUsize,
         read_calls: AtomicUsize,
         delete_calls: AtomicUsize,
+        /// Paths per delete request the mock backend "accepts".
+        delete_max_size: AtomicUsize,
     }
 
     impl MockVacuumAccessor {
@@ -151,12 +159,19 @@ mod unit {
                 read_results,
                 deleted: Arc::new(Mutex::new(Vec::new())),
                 written: Arc::new(Mutex::new(Vec::new())),
+                passing_batches: Arc::new(AtomicUsize::new(0)),
                 failing_batches: Arc::new(AtomicUsize::new(0)),
                 failure_kind: Mutex::new(opendal::ErrorKind::RateLimited),
                 list_calls: AtomicUsize::new(0),
                 read_calls: AtomicUsize::new(0),
                 delete_calls: AtomicUsize::new(0),
+                delete_max_size: AtomicUsize::new(1000),
             })
+        }
+
+        /// Set before building the `SpillDeleter`, which reads the capability once.
+        fn set_delete_max_size(&self, n: usize) {
+            self.delete_max_size.store(n, Ordering::Release);
         }
 
         fn throttle_next_batches(&self, n: usize) {
@@ -164,7 +179,13 @@ mod unit {
         }
 
         fn fail_next_batches(&self, n: usize, kind: opendal::ErrorKind) {
+            self.fail_batches_after(0, n, kind);
+        }
+
+        /// Let `ok` delete requests through, then fail the next `n` with `kind`.
+        fn fail_batches_after(&self, ok: usize, n: usize, kind: opendal::ErrorKind) {
             *self.failure_kind.lock() = kind;
+            self.passing_batches.store(ok, Ordering::Release);
             self.failing_batches.store(n, Ordering::Release);
         }
 
@@ -189,7 +210,8 @@ mod unit {
             self.read_calls.load(Ordering::Acquire)
         }
 
-        /// One per `SpillDeleter::delete`, i.e. per batch issued by the vacuum code.
+        /// One per delete request sent to the backend, i.e. per `SpillDeleter::delete` while
+        /// the mock accepts at least as many paths per request as the vacuum batches.
         fn delete_call_count(&self) -> usize {
             self.delete_calls.load(Ordering::Acquire)
         }
@@ -209,7 +231,7 @@ mod unit {
                 write: true,
                 list: true,
                 delete: true,
-                delete_max_size: Some(1000),
+                delete_max_size: Some(self.delete_max_size.load(Ordering::Acquire)),
                 ..Default::default()
             });
             info.into()
@@ -263,6 +285,7 @@ mod unit {
             Ok((RpDelete::default(), RecordingDeleter {
                 deleted: self.deleted.clone(),
                 pending: Vec::new(),
+                passing_batches: self.passing_batches.clone(),
                 failing_batches: self.failing_batches.clone(),
                 failure_kind: *self.failure_kind.lock(),
             }))
@@ -521,10 +544,8 @@ mod unit {
     }
 
     #[test]
-    fn test_run_budget_reports_running_total() {
-        let reported = Arc::new(Mutex::new(Vec::new()));
-        let sink = reported.clone();
-        let mut budget = RunBudget::new(10, Some(Arc::new(move |total| sink.lock().push(total))));
+    fn test_run_budget_tracks_remaining() {
+        let mut budget = RunBudget::new(10);
         budget.record(3);
         budget.record(4);
         assert_eq!(budget.removed(), 7);
@@ -533,7 +554,6 @@ mod unit {
         budget.record(3);
         assert!(budget.exhausted());
         assert_eq!(budget.remaining(), 0);
-        assert_eq!(*reported.lock(), vec![3, 7, 10]);
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1010,6 +1030,67 @@ mod unit {
         assert!(matches!(outcome, MetaVacuum::Partial(o) if o.removed == DELETE_BATCH_FILES + 1));
         assert_eq!(accessor.delete_call_count(), 2);
         assert_eq!(accessor.deleted_paths(), lines);
+        Ok(())
+    }
+
+    /// Backends accept fewer paths per request than a vacuum batch holds (GCS: 100). A batch is
+    /// sent request by request so that a failure part-way still accounts for what went through,
+    /// and the manifest is advanced exactly past those paths.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_partially_failed_batch_accounts_for_completed_requests() -> anyhow::Result<()> {
+        let lines: Vec<String> = (0..5).map(|i| format!("spill/dir/file{i}")).collect();
+        let accessor = MockVacuumAccessor::new(
+            HashMap::new(),
+            HashMap::new(),
+            HashMap::from([(
+                "spill/dir.list".to_string(),
+                ReadResult::Buffer(Buffer::from(lines.join("\n"))),
+            )]),
+        );
+        accessor.set_delete_max_size(2);
+        let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
+
+        // Requests of 2, 2, 1; the second one fails.
+        accessor.fail_batches_after(1, 1, opendal::ErrorKind::Unexpected);
+        let outcome =
+            delete_by_meta(&deleter, "spill/", "spill/dir.list", 100, &scheduled()).await?;
+        let MetaVacuum::Partial(o) = outcome else {
+            panic!("a failed request stops the task");
+        };
+        assert_eq!(o.removed, 2);
+        assert!(o.failed);
+        assert_eq!(accessor.deleted_paths(), lines[..2].to_vec());
+        // The manifest is rewritten without the two paths that are gone.
+        assert_eq!(accessor.written(), vec![(
+            "spill/dir.list".to_string(),
+            lines[2..].join("\n")
+        )]);
+        Ok(())
+    }
+
+    /// Progress is reported after every request, not once per directory task, so a single
+    /// large directory still shows movement in `system.processes`.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_progress_is_reported_per_request() -> anyhow::Result<()> {
+        let old_ts = (Utc::now() - ChronoDuration::hours(2)).timestamp_millis();
+        let files: Vec<_> = (0..2500)
+            .map(|i| (format!("spill/dir/file{i:04}"), file_meta(Some(old_ts))))
+            .collect();
+        let accessor = MockVacuumAccessor::new(
+            HashMap::from([("spill/dir/".to_string(), files)]),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        let reported = Arc::new(Mutex::new(Vec::new()));
+        let sink = reported.clone();
+        let deleter = SpillDeleter::with_report(
+            OperatorBuilder::new(accessor.clone()).finish(),
+            Some(Arc::new(move |n| sink.lock().push(n))),
+        );
+
+        let by_list = delete_by_list(&deleter, "spill/dir/", usize::MAX, &scheduled()).await?;
+        assert_eq!(by_list.outcome.removed, 2501);
+        assert_eq!(*reported.lock(), vec![1000, 2000, 2501]);
         Ok(())
     }
 
