@@ -64,6 +64,20 @@ pub struct BlockScanStats {
     pub bytes: usize,
 }
 
+impl BlockScanStats {
+    /// Account for columns that were materialized after `deserialize_and_filter`
+    /// (e.g. virtual columns). `decoded_bytes` is the size of those columns as
+    /// decoded for `decoded_rows` rows; when row selection pushdown left fewer
+    /// rows than the block holds, the size is extrapolated to the whole block.
+    pub fn add_decoded_bytes(&mut self, decoded_bytes: usize, decoded_rows: usize) {
+        if decoded_bytes == 0 {
+            return;
+        }
+        self.bytes +=
+            extrapolate_remain_bytes(decoded_bytes, decoded_rows, self.rows, decoded_bytes);
+    }
+}
+
 pub struct DeserializedBlock {
     pub block: DataBlock,
     pub row_selection: Option<RowSelection>,
@@ -451,6 +465,23 @@ mod tests {
         assert_eq!(extrapolate_remain_bytes(40, 12, 10, 7), 40);
         // Nothing decoded: fall back to the raw chunk sizes that were read.
         assert_eq!(extrapolate_remain_bytes(0, 0, 10, 7), 7);
+    }
+
+    #[test]
+    fn test_add_decoded_bytes() {
+        let mut stats = BlockScanStats {
+            rows: 10,
+            bytes: 100,
+        };
+        // Fully decoded columns are added as is.
+        stats.add_decoded_bytes(50, 10);
+        assert_eq!(stats.bytes, 150);
+        // Columns decoded for a subset of rows are scaled to the block.
+        stats.add_decoded_bytes(10, 2);
+        assert_eq!(stats.bytes, 200);
+        // Nothing decoded leaves the stats untouched.
+        stats.add_decoded_bytes(0, 0);
+        assert_eq!(stats.bytes, 200);
     }
 
     #[test]

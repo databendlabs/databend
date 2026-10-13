@@ -208,14 +208,17 @@ impl Processor for DeserializeDataTransform {
                 block: mut data_block,
                 row_selection,
                 bitmap_selection,
-                scan_stats,
+                mut scan_stats,
             } = self
                 .read_state
                 .as_ref()
                 .unwrap()
                 .deserialize_and_filter(columns_chunks, part)?;
 
+            // Virtual columns are read in addition to the columns `ReadState`
+            // accounted for, so add them to the scan statistics.
             if let Some(virtual_reader) = self.virtual_reader.as_ref() {
+                let bytes_before = data_block.memory_size();
                 let virtual_block_location = read_res
                     .virtual_data
                     .as_ref()
@@ -234,6 +237,10 @@ impl Processor for DeserializeDataTransform {
                             error
                         );
                     })?;
+                scan_stats.add_decoded_bytes(
+                    data_block.memory_size().saturating_sub(bytes_before),
+                    data_block.num_rows(),
+                );
             }
 
             // Perf.
