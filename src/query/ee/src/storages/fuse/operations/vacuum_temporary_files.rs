@@ -20,6 +20,7 @@
 // - [`AdaptiveConcurrency`]: pure policy deciding how many spill directories may be vacuumed at
 //   once, driven by the delete outcomes.
 // - [`RunBudget`]: `LIMIT` accounting and progress reporting.
+// - [`Pacing`]: decides after each delete batch whether a task issues the next one.
 // - Directory strategies (`delete_by_meta`, `delete_by_list`, `delete_by_probe`) are plain
 //   functions over a [`SpillDeleter`]: they return a [`DeleteOutcome`] and keep no shared state.
 // - [`vacuum_by_duration`] schedules directory tasks and is the single place where outcomes are
@@ -55,8 +56,9 @@ use parking_lot::Mutex;
 // Default retention duration for temporary files: 3 days.
 const DEFAULT_RETAIN_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 3);
 const SPILL_META_SUFFIX: &str = ".list";
-/// Paths materialized from a manifest per delete batch; also the S3 multi-delete maximum.
-const META_BATCH_FILES: usize = 1000;
+/// Paths materialized per delete batch, from a manifest or a listing; also the S3 multi-delete
+/// maximum. Bounds a task's memory independently of `LIMIT`.
+const DELETE_BATCH_FILES: usize = 1000;
 
 // ---------------------------------------------------------------------------------------------
 // Delete I/O
@@ -247,6 +249,46 @@ impl RunBudget {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Pacing
+// ---------------------------------------------------------------------------------------------
+
+/// Decides, after each delete batch, whether a task issues the next one. Shared by the manifest
+/// and the listing loops so both stop for the same reasons.
+#[derive(Clone)]
+struct Pacing {
+    abort_checker: AbortChecker,
+    /// Under the command scheduler a batch the store pushed back on ends the task, so
+    /// [`AdaptiveConcurrency`] observes the signal before more requests go out; the remainder is
+    /// picked up next run. The query hook has no scheduler and no later pass for its query, so
+    /// it keeps going while batches succeed.
+    yield_on_throttle: bool,
+}
+
+impl Pacing {
+    fn scheduled(abort_checker: AbortChecker) -> Self {
+        Self {
+            abort_checker,
+            yield_on_throttle: true,
+        }
+    }
+
+    fn drain(abort_checker: AbortChecker) -> Self {
+        Self {
+            abort_checker,
+            yield_on_throttle: false,
+        }
+    }
+
+    /// `false` once the task must stop issuing batches: the last one failed, the store pushed
+    /// back while yielding is required, or the query is being aborted.
+    fn continues_after(&self, outcome: &DeleteOutcome) -> bool {
+        outcome.removed > 0
+            && !(self.yield_on_throttle && (outcome.rate_limited || outcome.retried > 0))
+            && self.abort_checker.try_check_aborting().is_ok()
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Expiry
 // ---------------------------------------------------------------------------------------------
 
@@ -400,6 +442,9 @@ impl Run {
 /// - A directory's sibling `.list` meta file is claimed when the directory task is scheduled, so
 ///   the top-level listing never vacuums the same meta file concurrently, whatever order the
 ///   store lists the two entries in.
+/// - Cancellation is checked on every top-level entry and every settled task, and tasks stop
+///   issuing batches themselves once the query is aborted, so a no-`LIMIT` run does not keep
+///   deleting after the client gave up.
 async fn vacuum_by_duration(
     abort_checker: AbortChecker,
     temporary_dir: &str,
@@ -409,6 +454,7 @@ async fn vacuum_by_duration(
 ) -> Result<usize> {
     let deleter = Arc::new(SpillDeleter::new(DataOperator::instance().spill_operator()));
     let expiry = Expiry::new(retain);
+    let pacing = Pacing::scheduled(abort_checker.clone());
     let mut run = Run::new(limit, report);
 
     let temporary_dir: Arc<str> = format!("{}/", temporary_dir.trim_end_matches('/')).into();
@@ -428,6 +474,7 @@ async fn vacuum_by_duration(
         while in_flight.len() >= run.concurrency.current() {
             if let Some(res) = in_flight.next().await {
                 run.settle(res?);
+                abort_checker.try_check_aborting()?;
             }
         }
 
@@ -463,6 +510,7 @@ async fn vacuum_by_duration(
                         temporary_dir.clone(),
                         de.path().to_owned(),
                         run.budget.remaining(),
+                        pacing.clone(),
                     )
                     .boxed(),
                 );
@@ -488,15 +536,20 @@ async fn vacuum_by_duration(
                     metadata,
                     expiry,
                     run.budget.remaining(),
+                    pacing.clone(),
                 )
                 .boxed(),
             );
         }
     }
 
+    // Draining may outlive the listing by a lot (up to `MAX` no-`LIMIT` manifests), so keep
+    // honouring cancellation; returning drops the in-flight tasks.
     while let Some(res) = in_flight.next().await {
         run.settle(res?);
+        abort_checker.try_check_aborting()?;
     }
+    abort_checker.try_check_aborting()?;
 
     if !temp_files.is_empty() && temp_files.len() <= run.budget.remaining() {
         let delete = deleter.delete(temp_files, &temporary_dir).await;
@@ -516,6 +569,7 @@ async fn vacuum_meta_entry(
     temporary_dir: Arc<str>,
     meta_path: String,
     max: usize,
+    pacing: Pacing,
 ) -> Result<DirOutcome> {
     if max == 0 {
         return Ok(DirOutcome {
@@ -525,7 +579,7 @@ async fn vacuum_meta_entry(
     }
     let mut delete = DeleteOutcome::default();
     let mut remaining = max;
-    match delete_by_meta(&deleter, &temporary_dir, &meta_path, max).await? {
+    match delete_by_meta(&deleter, &temporary_dir, &meta_path, max, &pacing).await? {
         MetaVacuum::Partial(outcome) => {
             return Ok(DirOutcome {
                 dir_path: meta_path,
@@ -544,7 +598,15 @@ async fn vacuum_meta_entry(
     // The claim on the manifest keeps the directory task away, so vacuum the directory here and
     // drop the manifest with it.
     let dir_path = format!("{}/", meta_path.trim_end_matches(SPILL_META_SUFFIX));
-    finish_directory_and_meta(&deleter, &dir_path, &meta_path, remaining, &mut delete).await?;
+    finish_directory_and_meta(
+        &deleter,
+        &dir_path,
+        &meta_path,
+        remaining,
+        &pacing,
+        &mut delete,
+    )
+    .await?;
     Ok(DirOutcome {
         dir_path: meta_path,
         delete: Some(delete),
@@ -559,15 +621,16 @@ async fn finish_directory_and_meta(
     dir_path: &str,
     meta_path: &str,
     max: usize,
+    pacing: &Pacing,
     delete: &mut DeleteOutcome,
 ) -> Result<()> {
-    if max > 0
-        && let Some(by_list) = delete_by_list(deleter, dir_path, max).await?
-    {
-        delete.absorb(by_list);
-        // A failed listing batch, throttled or not, leaves files behind: keep the manifest
-        // so the directory is claimed and finished next run.
-        if by_list.removed == 0 {
+    if max > 0 {
+        let by_list = delete_by_list(deleter, dir_path, max, pacing).await?;
+        delete.absorb(by_list.outcome);
+        // Anything short of an emptied directory (a failed or throttled batch, the budget, an
+        // abort) leaves files behind: keep the manifest so the directory is claimed and
+        // finished next run.
+        if !by_list.finished {
             return Ok(());
         }
     }
@@ -585,8 +648,8 @@ enum MetaVacuum {
     /// Whatever is left is written back and picked up next run. When the manifest listed
     /// itself it is gone by now.
     Partial(DeleteOutcome),
-    /// Every line was processed without throttling but the manifest never named itself, so
-    /// neither it nor its directory marker were removed.
+    /// Every line was processed, with nothing making the task stop early, but the manifest
+    /// never named itself, so neither it nor its directory marker were removed.
     Exhausted(DeleteOutcome),
 }
 
@@ -608,6 +671,7 @@ async fn vacuum_dir_entry(
     metadata: opendal::Metadata,
     expiry: Expiry,
     max: usize,
+    pacing: Pacing,
 ) -> Result<DirOutcome> {
     let meta_path = format!("{}{}", dir_path.trim_end_matches('/'), SPILL_META_SUFFIX);
     let outcome = |delete| DirOutcome {
@@ -621,7 +685,7 @@ async fn vacuum_dir_entry(
     let Some(last_modified) =
         resolve_dir_last_modified(deleter.operator(), &metadata, &dir_path, &meta_path).await
     else {
-        let delete = delete_by_probe(&deleter, &dir_path, expiry, max).await?;
+        let delete = delete_by_probe(&deleter, &dir_path, expiry, max, &pacing).await?;
         return Ok(outcome(delete));
     };
     if !expiry.expired(last_modified) {
@@ -630,13 +694,24 @@ async fn vacuum_dir_entry(
     // A partial meta batch is final for this run, whether it succeeded or was throttled. Only a
     // directory without a usable meta file, or one whose truncated meta never named the
     // directory, falls back to listing.
-    let delete = match delete_by_meta(&deleter, &temporary_dir, &meta_path, max).await? {
+    let delete = match delete_by_meta(&deleter, &temporary_dir, &meta_path, max, &pacing).await? {
         MetaVacuum::Partial(by_meta) => Some(by_meta),
-        MetaVacuum::Nothing => delete_by_list(&deleter, &dir_path, max).await?,
+        MetaVacuum::Nothing => Some(
+            delete_by_list(&deleter, &dir_path, max, &pacing)
+                .await?
+                .outcome,
+        ),
         MetaVacuum::Exhausted(mut by_meta) => {
             let remaining = max.saturating_sub(by_meta.removed);
-            finish_directory_and_meta(&deleter, &dir_path, &meta_path, remaining, &mut by_meta)
-                .await?;
+            finish_directory_and_meta(
+                &deleter,
+                &dir_path,
+                &meta_path,
+                remaining,
+                &pacing,
+                &mut by_meta,
+            )
+            .await?;
             Some(by_meta)
         }
     };
@@ -654,13 +729,14 @@ async fn delete_by_meta(
     temporary_dir: &str,
     meta_path: &str,
     max: usize,
+    pacing: &Pacing,
 ) -> Result<MetaVacuum> {
     let meta = match deleter.operator().read(meta_path).await {
         Ok(meta) => meta,
         Err(e) if e.kind() == ErrorKind::NotFound => return Ok(MetaVacuum::Nothing),
         Err(e) => return Err(e.into()),
     };
-    delete_by_meta_buffer(deleter, temporary_dir, meta_path, meta, max).await
+    delete_by_meta_buffer(deleter, temporary_dir, meta_path, meta, max, pacing).await
 }
 
 /// Delete up to `max` files recorded in `meta` (one full path per line, must live under
@@ -673,8 +749,9 @@ async fn delete_by_meta_buffer(
     meta_path: &str,
     meta: Buffer,
     max: usize,
+    pacing: &Pacing,
 ) -> Result<MetaVacuum> {
-    // The manifest is walked in place: at most `META_BATCH_FILES` paths are materialized per
+    // The manifest is walked in place: at most `DELETE_BATCH_FILES` paths are materialized per
     // batch, whatever `max` is, so a large manifest never becomes a second full copy. What was
     // not deleted is written back as a slice of the buffer already held.
     let bytes = meta.to_bytes();
@@ -684,6 +761,7 @@ async fn delete_by_meta_buffer(
 
     let mut total = DeleteOutcome::default();
     let mut attempted = false;
+    let mut stopped_early = false;
     let mut names_itself = false;
     let mut consumed = 0;
     let mut budget = max;
@@ -691,7 +769,7 @@ async fn delete_by_meta_buffer(
         let mut batch = Vec::new();
         let mut batch_end = consumed;
         for line in text[consumed..].split_inclusive('\n') {
-            if batch.len() >= budget.min(META_BATCH_FILES) {
+            if batch.len() >= budget.min(DELETE_BATCH_FILES) {
                 break;
             }
             batch_end += line.len();
@@ -710,12 +788,14 @@ async fn delete_by_meta_buffer(
         total.absorb(outcome);
         if outcome.removed == 0 {
             // Failed batch: keep it in the manifest for the next run.
+            stopped_early = true;
             break;
         }
         consumed = batch_end;
-        if outcome.retried > 0 {
-            // The store pushed back. Hand the signal to the scheduler now instead of issuing
-            // more batches at the current concurrency; the rest stays in the manifest.
+        if !pacing.continues_after(&outcome) {
+            // The store pushed back or the query is being aborted: the rest stays in the
+            // manifest and the task ends here.
+            stopped_early = true;
             break;
         }
     }
@@ -726,9 +806,9 @@ async fn delete_by_meta_buffer(
     let exhausted = text[consumed..]
         .lines()
         .all(|l| !l.trim_end_matches('\r').starts_with(temporary_dir));
-    // Under throttling the task ends here either way; a truncated manifest is finished next
+    // A task that stopped early ends here either way; a truncated manifest is finished next
     // run rather than followed by a listing while the store is pushing back.
-    if exhausted && !names_itself && total.retried == 0 {
+    if exhausted && !names_itself && !stopped_early {
         return Ok(MetaVacuum::Exhausted(total));
     }
     if total.removed > 0 && consumed < bytes.len() {
@@ -742,46 +822,90 @@ async fn delete_by_meta_buffer(
 
 /// Collect paths from a recursive listing of `dir_path` until `max` are buffered or the listing
 /// ends, skipping the directory entry itself. When the listing was exhausted the directory
-/// marker is appended if there is capacity left, so a directory with more files than `max` is
-/// never fully buffered and is only removed once it is empty.
+/// marker is appended if there is capacity left and `true` is returned, so a directory with
+/// more files than `max` is never fully buffered and is only removed once it is empty.
 async fn collect_dir_paths(
     lister: &mut opendal::Lister,
     dir_path: &str,
     paths: &mut Vec<String>,
     max: usize,
-) -> Result<()> {
+) -> Result<bool> {
     while paths.len() < max {
         match lister.try_next().await {
             Ok(Some(entry)) if entry.path() == dir_path => continue,
             Ok(Some(entry)) => paths.push(entry.path().to_string()),
             Ok(None) => {
                 paths.push(dir_path.to_owned());
-                return Ok(());
+                return Ok(true);
             }
             Err(e) if e.kind() == ErrorKind::NotFound => continue,
             Err(e) => return Err(e.into()),
         }
     }
-    Ok(())
+    Ok(false)
+}
+
+/// Result of a listing-driven vacuum of one directory.
+struct ListVacuum {
+    outcome: DeleteOutcome,
+    /// The listing was drained and every batch, the directory marker included, succeeded.
+    finished: bool,
+}
+
+/// Delete what `lister` yields under `dir_path` in batches of at most `DELETE_BATCH_FILES`,
+/// `max` paths in total, so a large directory is never fully buffered whatever `LIMIT` is.
+/// `paths` may carry entries already pulled from the lister. Stops when the listing ends or
+/// `pacing` says so.
+async fn delete_listed(
+    deleter: &SpillDeleter,
+    lister: &mut opendal::Lister,
+    dir_path: &str,
+    mut paths: Vec<String>,
+    max: usize,
+    pacing: &Pacing,
+) -> Result<ListVacuum> {
+    let mut total = DeleteOutcome::default();
+    let mut budget = max;
+    let mut finished = false;
+    while budget > 0 {
+        let exhausted =
+            collect_dir_paths(lister, dir_path, &mut paths, budget.min(DELETE_BATCH_FILES)).await?;
+        if paths.is_empty() {
+            break;
+        }
+        budget -= paths.len();
+        let outcome = deleter.delete(std::mem::take(&mut paths), dir_path).await;
+        total.absorb(outcome);
+        if exhausted {
+            // The marker was in this batch: the directory is gone iff the batch went through.
+            finished = outcome.removed > 0;
+            break;
+        }
+        if !pacing.continues_after(&outcome) {
+            break;
+        }
+    }
+    Ok(ListVacuum {
+        outcome: total,
+        finished,
+    })
 }
 
 /// Delete everything under `dir_path` found by a recursive listing, then the directory itself.
+/// `max` must be positive; at least one batch is always issued, if only for the directory
+/// marker of an empty directory.
 async fn delete_by_list(
     deleter: &SpillDeleter,
     dir_path: &str,
     max: usize,
-) -> Result<Option<DeleteOutcome>> {
+    pacing: &Pacing,
+) -> Result<ListVacuum> {
     let mut lister = deleter
         .operator()
         .lister_with(dir_path)
         .recursive(true)
         .await?;
-    let mut paths = Vec::new();
-    collect_dir_paths(&mut lister, dir_path, &mut paths, max).await?;
-    if paths.is_empty() {
-        return Ok(None);
-    }
-    Ok(Some(deleter.delete(paths, dir_path).await))
+    delete_listed(deleter, &mut lister, dir_path, Vec::new(), max, pacing).await
 }
 
 /// For a directory without a usable `last_modified`: probe the first file and use its
@@ -792,6 +916,7 @@ async fn delete_by_probe(
     dir_path: &str,
     expiry: Expiry,
     max: usize,
+    pacing: &Pacing,
 ) -> Result<Option<DeleteOutcome>> {
     let operator = deleter.operator();
     let mut lister = match operator.lister_with(dir_path).recursive(true).await {
@@ -819,9 +944,9 @@ async fn delete_by_probe(
         return Ok(None);
     }
 
-    let mut paths = vec![first.path().to_string()];
-    collect_dir_paths(&mut lister, dir_path, &mut paths, max).await?;
-    Ok(Some(deleter.delete(paths, dir_path).await))
+    let paths = vec![first.path().to_string()];
+    let by_list = delete_listed(deleter, &mut lister, dir_path, paths, max, pacing).await?;
+    Ok(Some(by_list.outcome))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -829,13 +954,14 @@ async fn delete_by_probe(
 // ---------------------------------------------------------------------------------------------
 
 async fn vacuum_query_hook(
-    _abort_checker: AbortChecker,
+    abort_checker: AbortChecker,
     temporary_dir: &str,
     nodes: &[usize],
     query_id: &str,
     limit: usize,
 ) -> Result<usize> {
     let deleter = SpillDeleter::new(DataOperator::instance().spill_operator());
+    let pacing = Pacing::drain(abort_checker);
     let mut budget = RunBudget::new(limit, None);
 
     let metas_f = nodes
@@ -861,6 +987,7 @@ async fn vacuum_query_hook(
             &meta_path,
             buffer,
             budget.remaining(),
+            &pacing,
         )
         .await?;
         budget.record(outcome.removed());

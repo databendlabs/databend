@@ -24,6 +24,7 @@ mod unit {
 
     use chrono::Duration as ChronoDuration;
     use chrono::Utc;
+    use databend_common_catalog::table_context::CheckAbort;
     use opendal::EntryMode;
     use opendal::Metadata;
     use opendal::OperatorBuilder;
@@ -103,6 +104,7 @@ mod unit {
         failure_kind: Mutex<opendal::ErrorKind>,
         list_calls: AtomicUsize,
         read_calls: AtomicUsize,
+        delete_calls: AtomicUsize,
     }
 
     impl MockVacuumAccessor {
@@ -120,6 +122,7 @@ mod unit {
                 failure_kind: Mutex::new(opendal::ErrorKind::RateLimited),
                 list_calls: AtomicUsize::new(0),
                 read_calls: AtomicUsize::new(0),
+                delete_calls: AtomicUsize::new(0),
             })
         }
 
@@ -142,6 +145,11 @@ mod unit {
 
         fn read_call_count(&self) -> usize {
             self.read_calls.load(Ordering::Acquire)
+        }
+
+        /// One per `SpillDeleter::delete`, i.e. per batch issued by the vacuum code.
+        fn delete_call_count(&self) -> usize {
+            self.delete_calls.load(Ordering::Acquire)
         }
     }
 
@@ -196,6 +204,7 @@ mod unit {
         }
 
         async fn delete(&self) -> opendal::Result<(RpDelete, Self::Deleter)> {
+            self.delete_calls.fetch_add(1, Ordering::AcqRel);
             Ok((RpDelete::default(), RecordingDeleter {
                 deleted: self.deleted.clone(),
                 pending: Vec::new(),
@@ -237,6 +246,41 @@ mod unit {
         }
     }
 
+    struct NoAbort;
+
+    impl CheckAbort for NoAbort {
+        fn try_check_aborting(&self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    /// Aborts from the `n`-th check on.
+    struct AbortAfter(AtomicUsize);
+
+    impl AbortAfter {
+        fn checks(n: usize) -> Arc<Self> {
+            Arc::new(Self(AtomicUsize::new(n)))
+        }
+    }
+
+    impl CheckAbort for AbortAfter {
+        fn try_check_aborting(&self) -> Result<()> {
+            if self
+                .0
+                .try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+                .is_ok()
+            {
+                Ok(())
+            } else {
+                Err(ErrorCode::AbortedQuery("aborted by test"))
+            }
+        }
+    }
+
+    fn scheduled() -> Pacing {
+        Pacing::scheduled(Arc::new(NoAbort))
+    }
+
     /// Drive the real per-directory unit of work and return its outcome.
     async fn run_dir_vacuum_for_test(
         operator: &Operator,
@@ -253,6 +297,7 @@ mod unit {
             metadata.clone(),
             expiry,
             max,
+            scheduled(),
         )
         .await
     }
@@ -357,6 +402,28 @@ mod unit {
         assert_eq!(c.current(), AdaptiveConcurrency::MAX);
         assert!(!c.is_throttled(&retried(AdaptiveConcurrency::MAX / 2 - 1)));
         assert!(c.is_throttled(&retried(AdaptiveConcurrency::MAX / 2)));
+    }
+
+    #[test]
+    fn test_pacing_yields_only_under_the_scheduler() {
+        let scheduled = scheduled();
+        assert!(scheduled.continues_after(&clear()));
+        assert!(!scheduled.continues_after(&retried(1)));
+        assert!(!scheduled.continues_after(&rate_limited()));
+
+        // The query hook has no scheduler to hand the signal to and no later pass for its
+        // query: absorbed retries must not strand the rest of the manifest.
+        let drain = Pacing::drain(Arc::new(NoAbort));
+        assert!(drain.continues_after(&clear()));
+        assert!(drain.continues_after(&retried(1)));
+        assert!(
+            !drain.continues_after(&rate_limited()),
+            "a failed batch still stops"
+        );
+
+        // Either way a task stops issuing batches once the query is aborted.
+        let aborted = Pacing::drain(AbortAfter::checks(0));
+        assert!(!aborted.continues_after(&clear()));
     }
 
     #[test]
@@ -607,10 +674,106 @@ mod unit {
         );
         let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
 
-        // No LIMIT: every path goes, but never more than META_BATCH_FILES per batch.
-        let outcome = delete_by_meta(&deleter, "spill/", "spill/dir.list", usize::MAX).await?;
+        // No LIMIT: every path goes, but never more than DELETE_BATCH_FILES per batch.
+        let outcome = delete_by_meta(
+            &deleter,
+            "spill/",
+            "spill/dir.list",
+            usize::MAX,
+            &scheduled(),
+        )
+        .await?;
         assert!(matches!(outcome, MetaVacuum::Exhausted(o) if o.removed == 2500));
         assert_eq!(accessor.deleted_paths(), paths);
+        assert_eq!(accessor.delete_call_count(), 3);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_large_directory_is_listed_and_deleted_in_bounded_batches() -> anyhow::Result<()> {
+        let old_ts = (Utc::now() - ChronoDuration::hours(2)).timestamp_millis();
+        let files: Vec<_> = (0..2500)
+            .map(|i| (format!("spill/dir/file{i:04}"), file_meta(Some(old_ts))))
+            .collect();
+        let mut expected: Vec<String> = files.iter().map(|(p, _)| p.clone()).collect();
+        expected.push("spill/dir/".to_string());
+        let accessor = MockVacuumAccessor::new(
+            HashMap::from([("spill/dir/".to_string(), files)]),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
+
+        // No LIMIT: the directory is drained in batches rather than buffered whole.
+        let by_list = delete_by_list(&deleter, "spill/dir/", usize::MAX, &scheduled()).await?;
+        assert_eq!(by_list.outcome.removed, 2501);
+        assert!(by_list.finished);
+        assert_eq!(accessor.deleted_paths(), expected);
+        assert_eq!(accessor.delete_call_count(), 3);
+        assert_eq!(
+            accessor.list_call_count(),
+            1,
+            "one listing, consumed incrementally"
+        );
+
+        // The probe path shares the loop.
+        let probed = delete_by_probe(
+            &deleter,
+            "spill/dir/",
+            expiry(Utc::now().timestamp_millis(), Duration::from_secs(60)),
+            usize::MAX,
+            &scheduled(),
+        )
+        .await?;
+        assert_eq!(probed.map(|o| o.removed), Some(2501));
+        assert_eq!(accessor.delete_call_count(), 6);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_aborted_task_stops_between_batches() -> anyhow::Result<()> {
+        let old_ts = (Utc::now() - ChronoDuration::hours(2)).timestamp_millis();
+        let files: Vec<_> = (0..2500)
+            .map(|i| (format!("spill/dir/file{i:04}"), file_meta(Some(old_ts))))
+            .collect();
+        let accessor = MockVacuumAccessor::new(
+            HashMap::from([("spill/dir/".to_string(), files)]),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
+
+        // The query is cancelled right after the first batch.
+        let pacing = Pacing::scheduled(AbortAfter::checks(0));
+        let by_list = delete_by_list(&deleter, "spill/dir/", usize::MAX, &pacing).await?;
+        assert_eq!(by_list.outcome.removed, DELETE_BATCH_FILES);
+        assert!(!by_list.finished);
+        assert_eq!(accessor.delete_call_count(), 1);
+        Ok(())
+    }
+
+    /// A throttled listing batch ends the task even without `LIMIT`, so the scheduler sees the
+    /// signal before the directory issues its next batch.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_throttled_listing_batch_ends_the_task() -> anyhow::Result<()> {
+        let old_ts = (Utc::now() - ChronoDuration::hours(2)).timestamp_millis();
+        let files: Vec<_> = (0..2500)
+            .map(|i| (format!("spill/dir/file{i:04}"), file_meta(Some(old_ts))))
+            .collect();
+        let accessor = MockVacuumAccessor::new(
+            HashMap::from([("spill/dir/".to_string(), files)]),
+            HashMap::new(),
+            HashMap::new(),
+        );
+        accessor.throttle_next_batches(1);
+        let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
+
+        let by_list = delete_by_list(&deleter, "spill/dir/", usize::MAX, &scheduled()).await?;
+        assert_eq!(by_list.outcome.removed, 0);
+        assert!(by_list.outcome.rate_limited);
+        assert!(!by_list.finished);
+        assert_eq!(accessor.delete_call_count(), 1);
+        assert_eq!(accessor.deleted_paths(), Vec::<String>::new());
         Ok(())
     }
 
@@ -640,6 +803,7 @@ mod unit {
             Arc::from("spill/"),
             "spill/dir.list".to_string(),
             100,
+            scheduled(),
         )
         .await?;
 
@@ -678,6 +842,7 @@ mod unit {
             Arc::from("spill/"),
             "spill/dir.list".to_string(),
             100,
+            scheduled(),
         )
         .await?;
 
@@ -714,6 +879,7 @@ mod unit {
             Arc::from("spill/"),
             "spill/dir.list".to_string(),
             100,
+            scheduled(),
         )
         .await?;
 
@@ -749,6 +915,7 @@ mod unit {
             Arc::from("spill/"),
             "spill/dir.list".to_string(),
             100,
+            scheduled(),
         )
         .await?;
 
@@ -778,6 +945,7 @@ mod unit {
             "spill/dir/",
             expiry(now, Duration::from_secs(60)),
             100,
+            &scheduled(),
         )
         .await?;
 
@@ -805,14 +973,16 @@ mod unit {
         let deleter = SpillDeleter::new(OperatorBuilder::new(accessor.clone()).finish());
 
         // One unit of budget still makes progress.
-        let outcome = delete_by_list(&deleter, "spill/dir/", 1).await?;
-        assert_eq!(outcome.map(|o| o.removed), Some(1));
+        let by_list = delete_by_list(&deleter, "spill/dir/", 1, &scheduled()).await?;
+        assert_eq!(by_list.outcome.removed, 1);
+        assert!(!by_list.finished);
         assert_eq!(accessor.deleted_paths(), vec![
             "spill/dir/file0".to_string()
         ]);
 
-        let outcome = delete_by_list(&deleter, "spill/dir/", 2).await?;
-        assert_eq!(outcome.map(|o| o.removed), Some(2));
+        let by_list = delete_by_list(&deleter, "spill/dir/", 2, &scheduled()).await?;
+        assert_eq!(by_list.outcome.removed, 2);
+        assert!(!by_list.finished);
         // Budget hit before the listing ended: no directory marker.
         assert_eq!(accessor.deleted_paths()[1..], [
             "spill/dir/file0".to_string(),
@@ -824,6 +994,7 @@ mod unit {
             "spill/dir/",
             expiry(Utc::now().timestamp_millis(), Duration::from_secs(60)),
             3,
+            &scheduled(),
         )
         .await?;
         assert_eq!(outcome.map(|o| o.removed), Some(3));
@@ -853,6 +1024,7 @@ mod unit {
             "spill/dir/",
             expiry(Utc::now().timestamp_millis(), Duration::from_secs(60)),
             100,
+            &scheduled(),
         )
         .await?;
 
