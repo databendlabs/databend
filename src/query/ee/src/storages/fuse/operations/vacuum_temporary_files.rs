@@ -560,11 +560,12 @@ async fn vacuum_meta_entry(
 enum MetaVacuum {
     /// No manifest, or it names nothing under the spill prefix.
     Nothing,
-    /// Batches were issued and lines remain (budget, failure or throttling); the rest was
-    /// written back for the next run. When the manifest listed itself it is gone by now.
+    /// The task stops here: lines remain (budget or failure) or the store was throttling.
+    /// Whatever is left is written back and picked up next run. When the manifest listed
+    /// itself it is gone by now.
     Partial(DeleteOutcome),
-    /// Every line was processed but the manifest never named itself, so neither it nor its
-    /// directory marker were removed.
+    /// Every line was processed without throttling but the manifest never named itself, so
+    /// neither it nor its directory marker were removed.
     Exhausted(DeleteOutcome),
 }
 
@@ -708,7 +709,9 @@ async fn delete_by_meta_buffer(
     let exhausted = text[consumed..]
         .lines()
         .all(|l| !l.trim_end_matches('\r').starts_with(temporary_dir));
-    if exhausted && !names_itself {
+    // Under throttling the task ends here either way; a truncated manifest is finished next
+    // run rather than followed by a listing while the store is pushing back.
+    if exhausted && !names_itself && total.retried == 0 {
         return Ok(MetaVacuum::Exhausted(total));
     }
     if total.removed > 0 && consumed < bytes.len() {
