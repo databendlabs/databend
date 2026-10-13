@@ -95,7 +95,7 @@ impl Binder {
             };
             // If the CTE is materialized, we'll construct a temp table for it.
             if cte.user_specified_materialized {
-                self.m_cte_to_temp_table(cte, idx, with.clone())?;
+                self.m_cte_to_temp_table(cte, idx, with.clone(), bind_context)?;
             }
             bind_context.cte_context.cte_map.insert(cte_name, cte_info);
         }
@@ -210,6 +210,7 @@ impl Binder {
             prev_cte_map.insert(name.clone(), cte_info.clone());
         }
         let mut cte_bind_context = BindContext {
+            binding_depth: bind_context.next_depth()?,
             cte_context: CteContext {
                 cte_name: Some(cte_name.to_string()),
                 cte_map: prev_cte_map,

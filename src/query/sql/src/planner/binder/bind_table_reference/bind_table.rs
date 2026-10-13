@@ -237,7 +237,6 @@ impl Binder {
                         false,
                         cte_suffix_name,
                     );
-                    metadata.set_table_view_scope(table_index, &bind_context.binding_views);
                     if let Some(stream_lineage_source) = stream_lineage_source {
                         metadata.set_stream_lineage_source(table_index, stream_lineage_source);
                     }
@@ -299,6 +298,7 @@ impl Binder {
                 }
             }
 
+            new_bind_context.binding_depth = bind_context.next_depth()?;
             new_bind_context.parent = Some(Box::new(bind_context.clone()));
             return Ok((s_expr, new_bind_context));
         }
@@ -320,18 +320,24 @@ impl Binder {
                 // A view definition is an independent name scope: it must not
                 // see the caller's CTEs or columns, otherwise an outer CTE can
                 // capture a table referenced by the view.
-                let mut new_bind_context = bind_context.new_view_scope(view_ident);
+                let mut new_bind_context = bind_context.new_view_scope(view_ident)?;
                 if let Statement::Query(query) = &stmt {
-                    self.metadata.write().add_table(
-                        catalog.clone(),
-                        database.clone(),
-                        table_meta.clone(),
-                        branch_name.clone(),
-                        table_name_alias.clone(),
-                        false,
-                        false,
-                        None,
-                    );
+                    {
+                        let mut metadata = self.metadata.write();
+                        let table_index = metadata.add_table(
+                            catalog.clone(),
+                            database.clone(),
+                            table_meta.clone(),
+                            branch_name.clone(),
+                            table_name_alias.clone(),
+                            false,
+                            false,
+                            None,
+                        );
+                        // The view reference belongs to the caller's name scope,
+                        // not the independent scope used to bind its definition.
+                        metadata.set_table_view_scope(table_index, &bind_context.binding_views);
+                    }
                     let (s_expr, mut new_bind_context) =
                         self.bind_query(&mut new_bind_context, query)?;
                     if lineage_enabled() {
@@ -359,6 +365,7 @@ impl Binder {
                     // CTEs do not leak into sibling/parent contexts.
                     new_bind_context.binding_views = bind_context.binding_views.clone();
                     new_bind_context.cte_context = bind_context.cte_context.clone();
+                    new_bind_context.binding_depth = bind_context.next_depth()?;
                     new_bind_context.parent = Some(Box::new(bind_context.clone()));
                     Ok((s_expr, new_bind_context))
                 } else {
@@ -383,21 +390,16 @@ impl Binder {
             // result materialized by the last refresh, however stale that is. It therefore needs
             // no arm of its own and falls through to the ordinary base-table path below.
             _ => {
-                let table_index = {
-                    let mut metadata = self.metadata.write();
-                    let table_index = metadata.add_table(
-                        catalog.clone(),
-                        database.clone(),
-                        table_meta.clone(),
-                        branch_name,
-                        table_name_alias,
-                        !bind_context.binding_views.is_empty(),
-                        false,
-                        cte_suffix_name,
-                    );
-                    metadata.set_table_view_scope(table_index, &bind_context.binding_views);
-                    table_index
-                };
+                let table_index = self.metadata.write().add_table(
+                    catalog.clone(),
+                    database.clone(),
+                    table_meta.clone(),
+                    branch_name,
+                    table_name_alias,
+                    !bind_context.binding_views.is_empty(),
+                    false,
+                    cte_suffix_name,
+                );
 
                 let (s_expr, mut bind_context) = self.bind_base_table(
                     bind_context,
