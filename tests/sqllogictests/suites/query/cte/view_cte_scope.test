@@ -103,8 +103,82 @@ select (select count(*) from v) from v
 ----
 1
 
+# Nested view entries belong to the scope that references them, not the outer
+# query. CTE resolution must not depend on which JOIN branch is bound first.
+statement ok
+create view child_view as select * from foo
+
+statement ok
+create view parent_view as select * from child_view
+
+statement ok
+create view grandparent_view as select * from parent_view
+
+query II
+with child_view as (select 99 as x) select p.x, c.x from parent_view p, child_view c
+----
+1 99
+
+query II
+with child_view as (select 99 as x) select p.x, c.x from child_view c, parent_view p
+----
+1 99
+
+query II
+with child_view as (select 99 as x) select p.x, c.x from grandparent_view p, child_view c
+----
+1 99
+
+query II
+with parent_view as (select 99 as x) select p.x, c.x from grandparent_view p, parent_view c
+----
+1 99
+
+# Table-function names and aliases inside a view also stay in its scope.
+statement ok
+create view function_view as select number as x from numbers(1) foo
+
+query II
+with foo as (select 99 as x) select p.x, c.x from function_view p, foo c
+----
+0 99
+
+query II
+with foo as (select 99 as x) select p.x, c.x from foo c, function_view p
+----
+0 99
+
+query II
+with numbers as (select 99 as x) select p.x, c.x from function_view p, numbers c
+----
+0 99
+
+# A second reference starts from the caller's scope, not the first expansion.
+statement ok
+set enable_auto_materialize_cte = 0
+
+query II
+with child_view as (select * from parent_view) select a.x, b.x from child_view a, child_view b
+----
+1 1
+
+query II
+with foo as (select * from function_view) select a.x, b.x from foo a, foo b
+----
+0 0
+
 statement ok
 set enable_auto_materialize_cte = 1
+
+query II
+with child_view as (select * from parent_view) select a.x, b.x from child_view a, child_view b
+----
+1 1
+
+query II
+with foo as (select * from function_view) select a.x, b.x from foo a, foo b
+----
+0 0
 
 query I
 with foo as (select * from v) select * from foo union all select * from foo
