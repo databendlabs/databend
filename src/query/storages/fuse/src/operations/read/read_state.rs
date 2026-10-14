@@ -77,7 +77,10 @@ impl BlockScanStats {
     }
 }
 
-pub struct DeserializedBlock {
+/// Result of [`ReadState::deserialize_and_filter`]: the block after prewhere
+/// and runtime filters, the selections still to be applied by the caller, and
+/// the scan statistics measured before any row was filtered out.
+pub struct ReadStateOutput {
     pub block: DataBlock,
     pub row_selection: Option<RowSelection>,
     pub bitmap_selection: Option<Bitmap>,
@@ -247,7 +250,7 @@ impl ReadState {
         &self,
         columns_chunks: HashMap<ColumnId, DataItem>,
         part: &FuseBlockPartInfo,
-    ) -> Result<DeserializedBlock> {
+    ) -> Result<ReadStateOutput> {
         let pre_columns_chunks = Self::filter_column_chunks(&columns_chunks, &self.pre_column_ids)?;
         let mut preread_block = self
             .pre_reader
@@ -291,7 +294,7 @@ impl ReadState {
         }
 
         if self.use_single_prewhere_reader {
-            return Ok(DeserializedBlock {
+            return Ok(ReadStateOutput {
                 block: preread_block,
                 row_selection,
                 bitmap_selection,
@@ -339,7 +342,7 @@ impl ReadState {
 
         let data_block = preread_block.resort(&merged_schema, &self.output_schema)?;
 
-        Ok(DeserializedBlock {
+        Ok(ReadStateOutput {
             block: data_block,
             row_selection,
             bitmap_selection,

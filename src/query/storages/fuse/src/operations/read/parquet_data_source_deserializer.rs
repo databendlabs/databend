@@ -41,8 +41,8 @@ use databend_common_pipeline::core::ProcessorPtr;
 use roaring::RoaringTreemap;
 
 use super::parquet_data_source::ParquetDataSource;
-use super::read_state::DeserializedBlock;
 use super::read_state::ReadState;
+use super::read_state::ReadStateOutput;
 use super::util::add_data_block_meta;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
@@ -204,7 +204,7 @@ impl Processor for DeserializeDataTransform {
                 )?);
             }
 
-            let DeserializedBlock {
+            let ReadStateOutput {
                 block: mut data_block,
                 row_selection,
                 bitmap_selection,

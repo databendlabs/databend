@@ -51,8 +51,8 @@ use databend_common_storages_fuse::io::DataItem;
 use databend_common_storages_fuse::io::WriteSettings;
 use databend_common_storages_fuse::io::serialize_block;
 use databend_common_storages_fuse::operations::BlockScanStats;
-use databend_common_storages_fuse::operations::DeserializedBlock;
 use databend_common_storages_fuse::operations::ReadState;
+use databend_common_storages_fuse::operations::ReadStateOutput;
 use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextRuntimeFilter;
 use databend_query::test_kits::TestFixture;
@@ -107,7 +107,7 @@ async fn run_prewhere_test_with_threshold(
     assert_eq!(read_state.use_single_prewhere_reader, expect_single_reader);
 
     // Use the new unified API that handles all states internally
-    let DeserializedBlock {
+    let ReadStateOutput {
         block: data_block,
         row_selection,
         bitmap_selection,
