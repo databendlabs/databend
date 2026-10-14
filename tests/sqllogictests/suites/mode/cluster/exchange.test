@@ -497,52 +497,84 @@ AggregateFinal
         │           ├── push downs: [filters: [], limit: NONE]
         │           ├── apply join filters: [#0]
         │           └── estimated rows: 1000.00
-        └── AggregateFinal
+        └── EvalScalar
             ├── output columns: [sum(t1.a) (#4)]
-            ├── group by: []
-            ├── aggregate functions: [sum(number)]
+            ├── expressions: [sum(t1.a) (#18)]
             ├── estimated rows: 1.00
-            └── Exchange
-                ├── output columns: [sum(t1.a) (#4)]
-                ├── exchange type: Merge
-                └── AggregatePartial
-                    ├── group by: []
-                    ├── aggregate functions: [sum(number)]
-                    ├── estimated rows: 1.00
-                    └── HashJoin
-                        ├── output columns: [numbers.number (#2)]
-                        ├── join type: INNER
-                        ├── build keys: [t3.a (#3)]
-                        ├── probe keys: [t1.a (#2)]
-                        ├── keys is null equal: [false]
-                        ├── filters: []
-                        ├── build join filters:
-                        │   └── filter id:1, build key:t3.a (#3), probe targets:[t1.a (#2)@scan2], filter type:bloom,inlist,min_max
-                        ├── estimated rows: 100.00
-                        ├── Exchange(Build)
-                        │   ├── output columns: [numbers.number (#3)]
-                        │   ├── exchange type: Broadcast
-                        │   └── TableScan
-                        │       ├── table: default.system.numbers
-                        │       ├── scan id: 3
-                        │       ├── output columns: [number (#3)]
-                        │       ├── read rows: 10
-                        │       ├── read size: < 1 KiB
-                        │       ├── partitions total: 1
-                        │       ├── partitions scanned: 1
-                        │       ├── push downs: [filters: [], limit: NONE]
-                        │       └── estimated rows: 10.00
-                        └── TableScan(Probe)
-                            ├── table: default.system.numbers
-                            ├── scan id: 2
-                            ├── output columns: [number (#2)]
-                            ├── read rows: 10
-                            ├── read size: < 1 KiB
-                            ├── partitions total: 1
-                            ├── partitions scanned: 1
-                            ├── push downs: [filters: [], limit: NONE]
-                            ├── apply join filters: [#1]
-                            └── estimated rows: 10.00
+            └── AggregateFinal
+                ├── output columns: [_eager_final_sum (#18)]
+                ├── group by: []
+                ├── aggregate functions: [sum(sum(t1.a) * _eager_count)]
+                ├── estimated rows: 1.00
+                └── Exchange
+                    ├── output columns: [_eager_final_sum (#18)]
+                    ├── exchange type: Merge
+                    └── AggregatePartial
+                        ├── group by: []
+                        ├── aggregate functions: [sum(sum(t1.a) * _eager_count)]
+                        ├── estimated rows: 1.00
+                        └── EvalScalar
+                            ├── output columns: [sum(t1.a) * _eager_count (#20)]
+                            ├── expressions: [_eager (#4) * CAST(_eager_count (#19) AS UInt64 NULL)]
+                            ├── estimated rows: 11.11
+                            └── HashJoin
+                                ├── output columns: [sum(t1.a) (#4), count(*) (#19)]
+                                ├── join type: INNER
+                                ├── build keys: [t3.a (#3)]
+                                ├── probe keys: [t1.a (#2)]
+                                ├── keys is null equal: [false]
+                                ├── filters: []
+                                ├── build join filters:
+                                │   └── filter id:1, build key:t3.a (#3), probe targets:[t1.a (#2)@scan2], filter type:bloom,inlist,min_max
+                                ├── estimated rows: 11.11
+                                ├── Exchange(Build)
+                                │   ├── output columns: [count(*) (#19), numbers.number (#3)]
+                                │   ├── exchange type: Broadcast
+                                │   └── AggregateFinal
+                                │       ├── output columns: [count(*) (#19), numbers.number (#3)]
+                                │       ├── group by: [number]
+                                │       ├── aggregate functions: [count()]
+                                │       ├── estimated rows: 3.33
+                                │       └── Exchange
+                                │           ├── output columns: [count(*) (#19), numbers.number (#3)]
+                                │           ├── exchange type: Hash(0)
+                                │           └── AggregatePartial
+                                │               ├── group by: [number]
+                                │               ├── aggregate functions: [count()]
+                                │               ├── estimated rows: 3.33
+                                │               └── TableScan
+                                │                   ├── table: default.system.numbers
+                                │                   ├── scan id: 3
+                                │                   ├── output columns: [number (#3)]
+                                │                   ├── read rows: 10
+                                │                   ├── read size: < 1 KiB
+                                │                   ├── partitions total: 1
+                                │                   ├── partitions scanned: 1
+                                │                   ├── push downs: [filters: [], limit: NONE]
+                                │                   └── estimated rows: 10.00
+                                └── AggregateFinal(Probe)
+                                    ├── output columns: [sum(t1.a) (#4), numbers.number (#2)]
+                                    ├── group by: [number]
+                                    ├── aggregate functions: [sum(number)]
+                                    ├── estimated rows: 3.33
+                                    └── Exchange
+                                        ├── output columns: [sum(t1.a) (#4), numbers.number (#2)]
+                                        ├── exchange type: Hash(0)
+                                        └── AggregatePartial
+                                            ├── group by: [number]
+                                            ├── aggregate functions: [sum(number)]
+                                            ├── estimated rows: 3.33
+                                            └── TableScan
+                                                ├── table: default.system.numbers
+                                                ├── scan id: 2
+                                                ├── output columns: [number (#2)]
+                                                ├── read rows: 10
+                                                ├── read size: < 1 KiB
+                                                ├── partitions total: 1
+                                                ├── partitions scanned: 1
+                                                ├── push downs: [filters: [], limit: NONE]
+                                                ├── apply join filters: [#1]
+                                                └── estimated rows: 10.00
 
 query T
 explain

@@ -545,7 +545,7 @@ EvalScalar
 
 apply_plan_0:
 EvalScalar
-├── scalars: [orders.o_orderkey (#16) AS (#16), CAST(_eager_final_count (#27) AS UInt64) AS (#25)]
+├── scalars: [orders.o_orderkey (#16) AS (#16), CAST(if(is_not_null(_eager_final_count (#27)), _eager_final_count (#27), 0) AS UInt64) AS (#25)]
 └── Aggregate(Initial)
     ├── group items: [orders.o_orderkey (#16) AS (#16)]
     ├── aggregate functions: [sum(COUNT(*) (#25)) AS (#27)]
@@ -571,7 +571,7 @@ EvalScalar
 
 apply_plan_1:
 EvalScalar
-├── scalars: [orders.o_orderkey (#16) AS (#16), CAST(_eager_final_count (#28) AS UInt64) AS (#25)]
+├── scalars: [orders.o_orderkey (#16) AS (#16), CAST(if(is_not_null(_eager_final_count (#28)), _eager_final_count (#28), 0) AS UInt64) AS (#25)]
 └── Aggregate(Initial)
     ├── group items: [orders.o_orderkey (#16) AS (#16)]
     ├── aggregate functions: [sum(COUNT(*) * _eager_count (#30)) AS (#28)]
@@ -602,7 +602,7 @@ EvalScalar
 
 apply_plan_2:
 EvalScalar
-├── scalars: [orders.o_orderkey (#16) AS (#16), CAST(_eager_final_count (#31) AS UInt64) AS (#25)]
+├── scalars: [orders.o_orderkey (#16) AS (#16), CAST(if(is_not_null(_eager_final_count (#31)), _eager_final_count (#31), 0) AS UInt64) AS (#25)]
 └── Aggregate(Initial)
     ├── group items: [orders.o_orderkey (#16) AS (#16)]
     ├── aggregate functions: [sum(COUNT(*) (#25)) AS (#31)]
@@ -625,6 +625,91 @@ EvalScalar
             ├── filters: []
             ├── order by: []
             └── limit: NONE
+
+
+=== scalar_counts_preserve_empty_input_semantics ===
+description: Eager COUNT outputs must map an empty join's NULL SUM to a non-nullable zero, including counts inside scalar expressions.
+sql: SELECT count(*), count(l.v), count(l.v) + 1
+FROM eager_count_l l JOIN eager_count_r r ON l.k = r.k
+before_plan:
+EvalScalar
+├── scalars: [COUNT(*) (#3) AS (#3), count(l.v) (#4) AS (#4), plus(count(l.v) (#4), 1) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#3), count(eager_count_l.v (#1)) AS (#4)]
+    └── EvalScalar
+        ├── scalars: [eager_count_l.v (#1) AS (#1), eager_count_l.k (#0) AS (#6), eager_count_r.k (#2) AS (#7)]
+        └── Join(Inner)
+            ├── build keys: [eager_count_r.k (#2)]
+            ├── probe keys: [eager_count_l.k (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.eager_count_r (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.eager_count_l (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+apply_plan_0:
+EvalScalar
+├── scalars: [CAST(if(is_not_null(_eager_final_count (#9)), _eager_final_count (#9), 0) AS UInt64) AS (#3), CAST(if(is_not_null(_eager_final_count (#8)), _eager_final_count (#8), 0) AS UInt64) AS (#4), plus(CAST(if(is_not_null(_eager_final_count (#8)), _eager_final_count (#8), 0) AS UInt64), 1) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [sum(COUNT(*) (#3)) AS (#9), sum(count(l.v) (#4)) AS (#8)]
+    └── Join(Inner)
+        ├── build keys: [eager_count_r.k (#2)]
+        ├── probe keys: [eager_count_l.k (#0)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.eager_count_r (#1)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Aggregate(Initial)
+            ├── group items: [eager_count_l.k (#0) AS (#0)]
+            ├── aggregate functions: [count() AS (#3), count(eager_count_l.v (#1)) AS (#4)]
+            └── EvalScalar
+                ├── scalars: [eager_count_l.v (#1) AS (#1), eager_count_l.k (#0) AS (#6)]
+                └── Scan
+                    ├── table: default.eager_count_l (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+apply_plan_1:
+EvalScalar
+├── scalars: [CAST(if(is_not_null(_eager_final_count (#11)), _eager_final_count (#11), 0) AS UInt64) AS (#3), CAST(if(is_not_null(_eager_final_count (#10)), _eager_final_count (#10), 0) AS UInt64) AS (#4), plus(CAST(if(is_not_null(_eager_final_count (#10)), _eager_final_count (#10), 0) AS UInt64), 1) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [sum(COUNT(*) * _eager_count (#13)) AS (#11), sum(count(l.v) * _eager_count (#14)) AS (#10)]
+    └── EvalScalar
+        ├── scalars: [multiply(COUNT(*) (#3), CAST(count(*) (#12) AS UInt64)) AS (#13), multiply(count(l.v) (#4), CAST(count(*) (#12) AS UInt64)) AS (#14)]
+        └── Join(Inner)
+            ├── build keys: [eager_count_r.k (#2)]
+            ├── probe keys: [eager_count_l.k (#0)]
+            ├── other filters: []
+            ├── Aggregate(Initial)
+            │   ├── group items: [eager_count_r.k (#2) AS (#2)]
+            │   ├── aggregate functions: [count() AS (#12)]
+            │   └── Scan
+            │       ├── table: default.eager_count_r (#1)
+            │       ├── filters: []
+            │       ├── order by: []
+            │       └── limit: NONE
+            └── Aggregate(Initial)
+                ├── group items: [eager_count_l.k (#0) AS (#0)]
+                ├── aggregate functions: [count() AS (#3), count(eager_count_l.v (#1)) AS (#4)]
+                └── EvalScalar
+                    ├── scalars: [eager_count_l.v (#1) AS (#1), eager_count_l.k (#0) AS (#6)]
+                    └── Scan
+                        ├── table: default.eager_count_l (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
 
 
 === q5_sum_plus_constant ===
@@ -771,7 +856,7 @@ EvalScalar
 
 apply_plan_0:
 EvalScalar
-├── scalars: [orders.o_orderkey (#16) AS (#16), plus(CAST(_eager_final_count (#28) AS UInt64), 1) AS (#26)]
+├── scalars: [orders.o_orderkey (#16) AS (#16), plus(CAST(if(is_not_null(_eager_final_count (#28)), _eager_final_count (#28), 0) AS UInt64), 1) AS (#26)]
 └── Aggregate(Initial)
     ├── group items: [orders.o_orderkey (#16) AS (#16)]
     ├── aggregate functions: [sum(COUNT(*) (#25)) AS (#28)]
@@ -797,7 +882,7 @@ EvalScalar
 
 apply_plan_1:
 EvalScalar
-├── scalars: [orders.o_orderkey (#16) AS (#16), plus(CAST(_eager_final_count (#29) AS UInt64), 1) AS (#26)]
+├── scalars: [orders.o_orderkey (#16) AS (#16), plus(CAST(if(is_not_null(_eager_final_count (#29)), _eager_final_count (#29), 0) AS UInt64), 1) AS (#26)]
 └── Aggregate(Initial)
     ├── group items: [orders.o_orderkey (#16) AS (#16)]
     ├── aggregate functions: [sum(COUNT(*) * _eager_count (#31)) AS (#29)]
@@ -828,7 +913,7 @@ EvalScalar
 
 apply_plan_2:
 EvalScalar
-├── scalars: [orders.o_orderkey (#16) AS (#16), plus(CAST(_eager_final_count (#32) AS UInt64), 1) AS (#26)]
+├── scalars: [orders.o_orderkey (#16) AS (#16), plus(CAST(if(is_not_null(_eager_final_count (#32)), _eager_final_count (#32), 0) AS UInt64), 1) AS (#26)]
 └── Aggregate(Initial)
     ├── group items: [orders.o_orderkey (#16) AS (#16)]
     ├── aggregate functions: [sum(COUNT(*) (#25)) AS (#32)]

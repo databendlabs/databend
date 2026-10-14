@@ -195,6 +195,16 @@ async fn test_eager_aggregation_rule_results() -> Result<()> {
             sql: Q4,
         },
         SqlTestCase {
+            name: "scalar_counts_preserve_empty_input_semantics",
+            description: "Eager COUNT outputs must map an empty join's NULL SUM to a non-nullable zero, including counts inside scalar expressions.",
+            setup_sqls: &[
+                "CREATE TABLE eager_count_l (k INT NOT NULL, v INT NULL)",
+                "CREATE TABLE eager_count_r (k INT NOT NULL)",
+            ],
+            sql: "SELECT count(*), count(l.v), count(l.v) + 1
+FROM eager_count_l l JOIN eager_count_r r ON l.k = r.k",
+        },
+        SqlTestCase {
             name: "q5_sum_plus_constant",
             description: "Original pre-#19579 SUM output used by a scalar expression.",
             setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],

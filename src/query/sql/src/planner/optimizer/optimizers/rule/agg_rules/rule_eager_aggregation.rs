@@ -45,6 +45,7 @@ use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
+use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::JoinType;
@@ -1165,16 +1166,38 @@ impl EagerAnalysis {
     }
 
     fn rewritten_count_output(new_index: Symbol) -> ScalarExpr {
+        let count = ScalarExpr::BoundColumnRef(BoundColumnRef {
+            span: None,
+            column: ColumnBindingBuilder::new(
+                "_eager_final_count".to_string(),
+                new_index,
+                Box::new(UInt64Type::data_type().wrap_nullable()),
+                Visibility::Visible,
+            )
+            .build(),
+        });
+        // COUNT returns zero for an empty input, but the SUM combining eager
+        // counts returns NULL. Restore that value before the non-nullable cast.
         wrap_cast(
-            &ScalarExpr::BoundColumnRef(BoundColumnRef {
+            &ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
-                column: ColumnBindingBuilder::new(
-                    "_eager_final_count".to_string(),
-                    new_index,
-                    Box::new(UInt64Type::data_type().wrap_nullable()),
-                    Visibility::Visible,
-                )
-                .build(),
+                func_name: "if".to_string(),
+                params: vec![],
+                arguments: vec![
+                    ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "is_not_null".to_string(),
+                        params: vec![],
+                        arguments: vec![count.clone()],
+                        return_type: Box::new(DataType::Boolean),
+                    }),
+                    count,
+                    ScalarExpr::ConstantExpr(ConstantExpr {
+                        span: None,
+                        value: 0u64.into(),
+                    }),
+                ],
+                return_type: Box::new(UInt64Type::data_type().wrap_nullable()),
             }),
             &UInt64Type::data_type(),
         )

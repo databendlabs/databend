@@ -1,5 +1,5 @@
 EvalScalar
-├── scalars: [CAST(_eager_final_count (#18) AS UInt64) AS (#8)]
+├── scalars: [CAST(if(is_not_null(_eager_final_count (#18)), _eager_final_count (#18), 0) AS UInt64) AS (#8)]
 └── Aggregate(Final)
     ├── group items: []
     ├── aggregate functions: [sum(COUNT(*) (#8)) AS (#18)]
