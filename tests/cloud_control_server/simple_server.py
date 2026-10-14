@@ -825,6 +825,13 @@ class NotificationService(notification_pb2_grpc.NotificationServiceServicer):
             created_time=timestamp,
             processed_time=timestamp,
         )
+        # Every attempt is recorded before a deterministic failure. Do not deduplicate:
+        # the SQL regression must observe multiple histories if the client retries.
+        if request.name == "send_lost_response":
+            context.abort(
+                grpc.StatusCode.UNAVAILABLE,
+                "simulated response loss after acceptance",
+            )
         return notification_pb2.EnqueueNotificationResponse(delivery_id=delivery_id)
 
     def ListNotificationHistory(self, request, context):

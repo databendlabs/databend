@@ -128,6 +128,27 @@ CALL system$send_databend_notification('send_rejected', 'alert');
 statement error Cloud Control does not support active notifications
 CALL system$send_databend_notification('send_unimplemented', 'alert');
 
+# The mock records each attempt, then always returns UNAVAILABLE without timing
+# or randomness. An automatic retry creates duplicate histories and fails count=1.
+statement ok
+DROP NOTIFICATION INTEGRATION IF EXISTS send_lost_response;
+
+statement ok
+CREATE NOTIFICATION INTEGRATION send_lost_response TYPE = WEBHOOK ENABLED = TRUE
+  WEBHOOK = (URL = 'http://localhost:8080/notify', METHOD = 'POST');
+
+statement error simulated response loss after acceptance
+CALL system$send_databend_notification('send_lost_response', 'accepted_before_error');
+
+query ITT
+SELECT count(*), max(message), max(message_source) FROM system.notification_history
+WHERE integration_name = 'send_lost_response';
+----
+1 accepted_before_error USER
+
+statement ok
+DROP NOTIFICATION INTEGRATION send_lost_response;
+
 statement ok
 ALTER NOTIFICATION INTEGRATION send_notify SET ENABLED = FALSE;
 
