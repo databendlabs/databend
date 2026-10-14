@@ -86,6 +86,8 @@ impl SyncSystemTable for CachesTable {
         let inverted_index_meta_cache = cache_manager.get_inverted_index_meta_cache();
         let inverted_index_lookup_cache = cache_manager.get_inverted_index_lookup_cache();
         let inverted_index_payload_cache = cache_manager.get_inverted_index_payload_cache();
+        let inverted_index_full_payload_cache =
+            cache_manager.get_inverted_index_full_payload_cache();
         let vector_index_meta_cache = cache_manager.get_vector_index_meta_cache();
         let vector_index_file_cache = cache_manager.get_vector_index_file_cache();
         let spatial_index_meta_cache = cache_manager.get_spatial_index_meta_cache();
@@ -161,6 +163,14 @@ impl SyncSystemTable for CachesTable {
         if let Some(inverted_index_payload_cache) = inverted_index_payload_cache {
             Self::append_rows_of_hybrid_cache(
                 &inverted_index_payload_cache,
+                &local_node,
+                &mut columns,
+            );
+        }
+
+        if let Some(inverted_index_full_payload_cache) = inverted_index_full_payload_cache {
+            Self::append_row(
+                &inverted_index_full_payload_cache,
                 &local_node,
                 &mut columns,
             );
