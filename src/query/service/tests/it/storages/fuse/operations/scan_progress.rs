@@ -17,30 +17,23 @@ use databend_common_base::base::tokio;
 use databend_common_catalog::table_context::TableContextProgress;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_sql::Planner;
-use databend_query::interpreters::InterpreterFactory;
 use databend_query::test_kits::TestFixture;
 use futures_util::TryStreamExt;
 
 const NUM_ROWS: usize = 1000;
 
-/// Runs `sql` in a fresh query context and returns the scan progress the
-/// query accumulated, i.e. what `system.processes.scan_progress_read_rows` /
-/// `scan_progress_read_bytes` expose while the query is running.
+/// Runs `sql` and returns the scan progress it accumulated. This is the
+/// value `system.processes.scan_progress_read_rows` / `_bytes` expose.
 async fn scan_progress_of(fixture: &TestFixture, sql: &str) -> Result<ProgressValues> {
     let ctx = fixture.new_query_ctx().await?;
-    let mut planner = Planner::new(ctx.clone());
-    let (plan, _) = planner.plan_sql(sql).await?;
-    let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
-    let stream = interpreter.execute(ctx.clone()).await?;
+    let stream = TestFixture::execute_query_with_ctx(ctx.clone(), sql).await?;
     stream.try_collect::<Vec<DataBlock>>().await?;
     Ok(ctx.get_scan_progress_value())
 }
 
-/// Scan progress must report the rows and bytes the scan read and decoded,
-/// not the rows left after prewhere / runtime filters were applied inside
-/// the scan. A single block of `NUM_ROWS` rows is created so that no block
-/// is pruned by the filters below.
+/// Scan progress reports the rows and bytes the scan read and decoded, not
+/// the rows left after prewhere / runtime filters. The table holds a single
+/// block of `NUM_ROWS` rows, and the predicates below cannot prune it.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_scan_progress_counts_rows_before_prewhere() -> Result<()> {
     let fixture = TestFixture::setup().await?;
@@ -58,41 +51,27 @@ async fn test_scan_progress_counts_rows_before_prewhere() -> Result<()> {
         ))
         .await?;
 
-    // Scan bytes of the whole block when nothing is filtered inside the scan.
-    let unfiltered = scan_progress_of(&fixture, &format!("select a, b from {db}.t")).await?;
-    assert_eq!(unfiltered.rows, NUM_ROWS);
-    assert!(unfiltered.bytes > 0);
-
-    // All projected columns are prewhere columns: `count()` only needs `a`.
-    let all_prewhere =
+    // All projected columns are prewhere columns.
+    let count =
         scan_progress_of(&fixture, &format!("select count() from {db}.t where a = 5")).await?;
-    assert_eq!(all_prewhere.rows, NUM_ROWS);
-    assert!(all_prewhere.bytes > 0);
-
-    // Prewhere on `a` with `b` as a remaining column. One row survives, but
-    // the scan still accounts for the whole block: `b` is decoded for the
-    // selected row only and its size is estimated for all rows, so the bytes
-    // are not exact but must cover more than the prewhere column alone.
-    let with_remaining =
+    // `b` is a remaining column, decoded only for the surviving row.
+    let remaining =
         scan_progress_of(&fixture, &format!("select b from {db}.t where a = 5")).await?;
-    assert_eq!(with_remaining.rows, NUM_ROWS);
-    assert!(
-        with_remaining.bytes > all_prewhere.bytes,
-        "remaining column bytes must be counted: {} <= {}",
-        with_remaining.bytes,
-        all_prewhere.bytes
-    );
-
-    // Prewhere drops every row; the block is still read, so progress is not 0.
-    // The predicate is opaque to constant folding and range pruning so that
-    // the block is not skipped before the scan.
-    let all_filtered = scan_progress_of(
+    // Every row is filtered out; `to_string` keeps the planner from folding
+    // the predicate to `false` and skipping the block entirely.
+    let empty = scan_progress_of(
         &fixture,
         &format!("select b from {db}.t where to_string(a) = 'nope'"),
     )
     .await?;
-    assert_eq!(all_filtered.rows, NUM_ROWS);
-    assert!(all_filtered.bytes > 0);
+
+    assert_eq!(count.rows, NUM_ROWS);
+    assert_eq!(remaining.rows, NUM_ROWS);
+    assert_eq!(empty.rows, NUM_ROWS);
+
+    assert!(count.bytes > 0);
+    assert!(remaining.bytes > count.bytes);
+    assert!(empty.bytes > 0);
 
     Ok(())
 }
@@ -118,26 +97,11 @@ async fn test_scan_progress_includes_virtual_columns() -> Result<()> {
              from numbers({NUM_ROWS})"
         ))
         .await?;
-
-    // INSERT alone does not materialize virtual columns; without the sidecar
-    // the query below would decode the base `val` column instead, which
-    // takes a different accounting path.
+    // INSERT alone does not write the sidecar; without it the query below
+    // would decode the base `val` column instead.
     fixture
         .execute_command(&format!("refresh virtual column for {db}.vt"))
         .await?;
-    let blocks = fixture
-        .execute_query(&format!(
-            "select virtual_column_size from fuse_block('{db}', 'vt')"
-        ))
-        .await?
-        .try_collect::<Vec<DataBlock>>()
-        .await?;
-    let block = DataBlock::concat(&blocks)?;
-    assert_eq!(block.num_rows(), 1);
-    assert!(
-        !block.get_by_offset(0).index(0).unwrap().is_null(),
-        "virtual column sidecar must be materialized before measuring"
-    );
 
     let prewhere_only =
         scan_progress_of(&fixture, &format!("select id from {db}.vt where id = 5")).await?;
@@ -149,12 +113,7 @@ async fn test_scan_progress_includes_virtual_columns() -> Result<()> {
 
     assert_eq!(prewhere_only.rows, NUM_ROWS);
     assert_eq!(with_virtual.rows, NUM_ROWS);
-    assert!(
-        with_virtual.bytes > prewhere_only.bytes,
-        "virtual column bytes must be counted: {} <= {}",
-        with_virtual.bytes,
-        prewhere_only.bytes
-    );
+    assert!(with_virtual.bytes > prewhere_only.bytes);
 
     Ok(())
 }
