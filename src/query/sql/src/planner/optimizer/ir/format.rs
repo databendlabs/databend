@@ -48,16 +48,21 @@ impl Memo {
 
 fn display_rel_op(op: &MemoOperator) -> String {
     // Memo stores both stages, but formatting dispatches without a payload union.
+    // Logical expressions only serve exploration, so they carry a `~` prefix;
+    // physical expressions are the ones costed and referenced by best properties.
     match op {
         MemoOperator::Logical(op) => match op.as_ref() {
-            RelOperator::ConstantTableScan(scan) => scan.name().to_string(),
-            RelOperator::Window(_) => "WindowFunc".to_string(),
+            RelOperator::ConstantTableScan(scan) => format!("~{}", scan.name()),
+            RelOperator::Window(_) => "~WindowFunc".to_string(),
             _ => {
-                format!("{:?}", op.rel_op())
+                format!("~{:?}", op.rel_op())
             }
         },
         MemoOperator::Physical(op) => match op.as_ref() {
             PhysicalRelOperator::Exchange(exchange) => display_exchange(exchange),
+            PhysicalRelOperator::Aggregate(aggregate) => {
+                format!("Aggregate({:?})", aggregate.mode)
+            }
             PhysicalRelOperator::ConstantTableScan(scan) => scan.name().to_string(),
             PhysicalRelOperator::Window(_) => "WindowFunc".to_string(),
             _ => {

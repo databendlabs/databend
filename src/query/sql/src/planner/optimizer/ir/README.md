@@ -99,6 +99,12 @@ The `Memo` is a central data structure that efficiently stores and manages equiv
 - Provides methods for inserting, retrieving, and manipulating expressions
 - Tracks the best implementation for each required property
 
+In `EXPLAIN MEMO` output, logical expressions are prefixed with `~` (for example
+`#0 ~Join [#1, #2]`). Unprefixed expressions are physical; only they are costed
+and referenced by best properties. Physical aggregates show their phase, as in
+`Aggregate(Final)`. A group holding only `Aggregate(Partial)` is the intermediate
+input of a two-phase aggregate rather than a logical equivalence group.
+
 ### Group System (`group.rs`)
 
 The `Group` represents a set of logically equivalent relational expressions:
