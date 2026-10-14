@@ -19,8 +19,6 @@
 //! `INSERT ... SELECT`, `REPLACE INTO` and `COPY INTO`, not just the snapshot
 //! and segment metadata touched through the attached table instance.
 
-use std::sync::Arc;
-
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::ThreadTracker;
@@ -29,7 +27,6 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_storage::StorageMetrics;
 use databend_query::interpreters::InterpreterFactory;
-use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextProgress;
 use databend_query::sessions::TableContextQueryIdentity;
 use databend_query::sql::Planner;
@@ -43,28 +40,22 @@ struct Observed {
     write_bytes: usize,
 }
 
-/// Run `sql` on a fresh `QueryContext` inside a tracking scope that shares the
-/// context's per-query `IoStats`, mirroring what the HTTP / MySQL handlers
-/// install, and return everything a `system.processes` row is built from.
+/// Run `sql` on a fresh `QueryContext` created and executed *without* any
+/// tracking payload carrying `io_stats`, the way `FlightSQL` and other
+/// handlers that do not install one call the interpreter. The interpreter
+/// itself must bind the query's counter so the IO is attributed.
 async fn run_and_observe(fixture: &TestFixture, sql: &str) -> Result<Observed> {
     let ctx = fixture.new_query_ctx().await?;
+    assert!(
+        ThreadTracker::io_stats().is_none(),
+        "test must run outside any io_stats tracking scope to exercise the unbound path"
+    );
 
-    let mut payload = ThreadTracker::new_tracking_payload();
-    payload.query_id = Some(ctx.get_id());
-    payload.io_stats = Some(ctx.get_local_io_stats());
-
-    let ctx_for_exec: Arc<QueryContext> = ctx.clone();
-    let sql_owned = sql.to_string();
-    payload
-        .tracking(async move {
-            let mut planner = Planner::new(ctx_for_exec.clone());
-            let (plan, _) = planner.plan_sql(&sql_owned).await?;
-            let interpreter = InterpreterFactory::get(ctx_for_exec.clone(), &plan).await?;
-            let stream = interpreter.execute(ctx_for_exec).await?;
-            stream.try_collect::<Vec<DataBlock>>().await?;
-            Result::Ok(())
-        })
-        .await?;
+    let mut planner = Planner::new(ctx.clone());
+    let (plan, _) = planner.plan_sql(sql).await?;
+    let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
+    let stream = interpreter.execute(ctx.clone()).await?;
+    stream.try_collect::<Vec<DataBlock>>().await?;
 
     let observed = Observed {
         data_metrics: ctx.get_data_metrics(),
@@ -222,5 +213,41 @@ async fn copy_into_table_counts_block_writes() -> Result<()> {
     );
     // Reading the staged parquet file goes through the same operator layer.
     assert!(observed.data_metrics.get_read_bytes() > META_ONLY_BYTES);
+    Ok(())
+}
+
+/// Handlers such as HTTP and MySQL install the query's `IoStats` in their
+/// tracking payload before calling the interpreter. The interpreter must reuse
+/// that counter rather than start a second one, so both views agree.
+#[tokio::test(flavor = "multi_thread")]
+async fn handler_installed_io_stats_is_reused() -> Result<()> {
+    let (fixture, src, _) = setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+
+    let mut payload = ThreadTracker::new_tracking_payload();
+    payload.query_id = Some(ctx.get_id());
+    payload.io_stats = Some(ctx.get_local_io_stats());
+    let handler_counter = payload.io_stats.clone().unwrap();
+
+    let sql = format!("select count() from {src} where b like '%99%'");
+    let exec_ctx = ctx.clone();
+    payload
+        .tracking(async move {
+            let mut planner = Planner::new(exec_ctx.clone());
+            let (plan, _) = planner.plan_sql(&sql).await?;
+            let interpreter = InterpreterFactory::get(exec_ctx.clone(), &plan).await?;
+            let stream = interpreter.execute(exec_ctx).await?;
+            stream.try_collect::<Vec<DataBlock>>().await?;
+            Result::Ok(())
+        })
+        .await?;
+
+    let handler_view = handler_counter.snapshot();
+    assert!(handler_view.read_bytes as usize > META_ONLY_BYTES);
+    assert_eq!(ctx.get_io_stats(), handler_view);
+    assert_eq!(
+        ctx.get_data_metrics().get_read_bytes() as u64,
+        handler_view.read_bytes
+    );
     Ok(())
 }
