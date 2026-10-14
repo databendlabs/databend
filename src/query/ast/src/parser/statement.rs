@@ -4316,6 +4316,7 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
     let delete = value(UserPrivilegeType::Delete, rule! { DELETE });
     let alter = value(UserPrivilegeType::Alter, rule! { ALTER });
     let super_priv = value(UserPrivilegeType::Super, rule! { SUPER });
+    let attach_table = value(UserPrivilegeType::AttachTable, rule! { ATTACH ~ TABLE });
     let create_user = value(UserPrivilegeType::CreateUser, rule! { CREATE ~ USER });
     let create_database = value(
         UserPrivilegeType::CreateDatabase,
@@ -4383,6 +4384,7 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
             | #delete
             | #alter
             | #super_priv
+            | #attach_table
             | #create_user
             | #create_database
             | #create_warehouse

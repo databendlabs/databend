@@ -15,8 +15,56 @@
 use databend_common_meta_app::principal::GrantEntry;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::UserGrantSet;
+use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use enumflags2::make_bitflags;
+
+#[test]
+fn test_attach_table_privilege_scope() {
+    let attach = UserPrivilegeType::AttachTable;
+    assert_eq!(attach as u64, 1u64 << 32);
+    assert_eq!(attach.to_string(), "ATTACH TABLE");
+    assert_eq!(
+        UserPrivilegeType::from(databend_common_ast::ast::UserPrivilegeType::AttachTable),
+        attach
+    );
+    assert!(UserPrivilegeSet::available_privileges_on_global().has_privilege(attach));
+    for ownership in [false, true] {
+        assert!(
+            UserPrivilegeSet::available_privileges_on_database(ownership).has_privilege(attach)
+        );
+        assert!(!UserPrivilegeSet::available_privileges_on_table(ownership).has_privilege(attach));
+        assert!(!UserPrivilegeSet::available_privileges_on_stage(ownership).has_privilege(attach));
+        assert!(
+            !UserPrivilegeSet::available_privileges_on_connection(ownership).has_privilege(attach)
+        );
+    }
+}
+
+#[test]
+fn test_attach_table_privilege_json() -> anyhow::Result<()> {
+    let flags = enumflags2::BitFlags::<UserPrivilegeType>::from(UserPrivilegeType::AttachTable);
+    let json = serde_json::to_string(&flags)?;
+    assert_eq!(json, "4294967296");
+    assert_eq!(
+        serde_json::from_str::<enumflags2::BitFlags<UserPrivilegeType>>(&json)?,
+        flags
+    );
+    Ok(())
+}
+
+#[test]
+fn test_attach_table_grant_revoke() {
+    let object = GrantObject::DatabaseById("default".to_string(), 42);
+    let mut grants = UserGrantSet::default();
+    grants.grant_privileges(&object, UserPrivilegeType::Create.into());
+    assert!(!grants.verify_privilege(&object, UserPrivilegeType::AttachTable));
+    grants.grant_privileges(&object, UserPrivilegeType::AttachTable.into());
+    assert!(grants.verify_privilege(&object, UserPrivilegeType::AttachTable));
+    grants.revoke_privileges(&object, UserPrivilegeType::AttachTable.into());
+    assert!(!grants.verify_privilege(&object, UserPrivilegeType::AttachTable));
+    assert!(grants.verify_privilege(&object, UserPrivilegeType::Create));
+}
 
 #[test]
 fn test_grant_object_contains() -> anyhow::Result<()> {
