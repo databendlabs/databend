@@ -40,5 +40,4 @@ echo "select count(*) from numbers(3)" | bendsql_connect_user notification_sende
 echo "drop database notification_privilege_check" | bendsql_connect_root
 echo "drop user notification_sender" | bendsql_connect_root
 
-# The expected function permission errors must occur before attempting any RPC.
 exit 0

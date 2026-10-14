@@ -955,12 +955,8 @@ class WorkerService(resource_pb2_grpc.WorkerServiceServicer):
             for key in request.unset_options:
                 options.pop(key, None)
             worker["options"] = options
-        suspend_action = resource_pb2.AlterWorkerRequest.WorkerStateAction.Value(
-            "Suspend"
-        )
-        resume_action = resource_pb2.AlterWorkerRequest.WorkerStateAction.Value(
-            "Resume"
-        )
+        suspend_action = resource_pb2.AlterWorkerRequest.WorkerStateAction.Value("Suspend")
+        resume_action = resource_pb2.AlterWorkerRequest.WorkerStateAction.Value("Resume")
         if request.state_action == suspend_action:
             worker.setdefault("options", {})["suspended"] = "true"
         elif request.state_action == resume_action:

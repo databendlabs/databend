@@ -109,7 +109,7 @@ impl NotificationClient {
             })?
             .into_inner();
         if let Some(error) = &resp.error {
-            return Err(ErrorCode::Internal(format!(
+            return Err(ErrorCode::CloudControlNotificationRejected(format!(
                 "Cloud Control rejected notification: {} ({}: {})",
                 error.message, error.kind, error.code,
             )));

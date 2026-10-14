@@ -108,7 +108,7 @@ CALL system$send_notification('send_notify', 'alert', 'extra');
 statement error
 CALL system$send_notification('missing_send_notify', 'alert');
 
-statement error
+statement error 1704
 CALL system$send_notification('send_rejected', 'alert');
 
 statement error Cloud Control does not support active notifications

@@ -84,7 +84,8 @@ impl SimpleTableFunc for SendNotification {
             query_id: Some(query_id),
         };
         // The local, single-source template invokes apply once, and only when
-        // the pipeline is executed. CALL hides the internal placeholder column.
+        // the pipeline is executed. It produces no rows, so CALL and SELECT
+        // return the placeholder `result` column with zero rows.
         cloud_api
             .get_notification_client()
             .enqueue_notification(make_request(request, config))
