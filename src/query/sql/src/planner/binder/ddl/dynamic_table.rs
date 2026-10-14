@@ -29,6 +29,8 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_storages_common_table_meta::table::OPT_KEY_AS_QUERY;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_QUERY_CATALOG;
+use databend_storages_common_table_meta::table::OPT_KEY_QUERY_DATABASE;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_IDS;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
@@ -138,9 +140,10 @@ impl Binder {
         // Resolve unqualified sources in the session database, even when the target is
         // created in a different database. Bind exactly the definition we persist.
         let mut canonical_query: Query = as_query.as_ref().clone();
-        canonical_query.walk_mut(&mut ViewRewriter {
-            current_database: self.ctx.get_current_database(),
-        })?;
+        canonical_query.walk_mut(&mut ViewRewriter::new(
+            self.ctx.get_current_database(),
+            self.name_resolution_ctx.clone(),
+        ))?;
         let select_plan = self.as_query_plan(&canonical_query).await?;
         let bind_context = select_plan.bind_context().unwrap();
         for source_entry in self.metadata.read().tables() {
@@ -221,6 +224,14 @@ impl Binder {
         }
 
         options.insert(OPT_KEY_AS_QUERY.to_owned(), canonical_query.to_string());
+        options.insert(
+            OPT_KEY_QUERY_CATALOG.to_owned(),
+            self.ctx.get_current_catalog(),
+        );
+        options.insert(
+            OPT_KEY_QUERY_DATABASE.to_owned(),
+            self.ctx.get_current_database(),
+        );
         let source_table_ids = self.metadata.read().source_table_ids();
         if source_table_ids.is_empty() {
             return Err(ErrorCode::BadArguments(

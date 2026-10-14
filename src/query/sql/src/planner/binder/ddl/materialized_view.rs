@@ -610,9 +610,10 @@ impl Binder {
         // Qualify the logical definition once so stale fallback is independent of the session's
         // current database. The physical definition starts from that same canonical source SQL.
         let mut original_query = query.as_ref().clone();
-        original_query.walk_mut(&mut ViewRewriter {
-            current_database: source_database.clone(),
-        })?;
+        original_query.walk_mut(&mut ViewRewriter::new(
+            source_database.clone(),
+            self.name_resolution_ctx.clone(),
+        ))?;
 
         // 2. Rewrite the qualified definition into storage form, recording logical-to-physical
         // output mapping in the same pass.

@@ -31,8 +31,11 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
+use databend_common_storages_basic::view_table::CURRENT_QUERY_VERSION;
 use databend_common_storages_basic::view_table::QUERY;
+use databend_common_storages_basic::view_table::QUERY_VERSION;
 use databend_storages_common_table_meta::table::get_change_type;
+use databend_storages_common_table_meta::table::stored_query_namespace;
 
 use crate::BindContext;
 use crate::ColumnEntry;
@@ -68,9 +71,11 @@ impl Binder {
             table,
             branch,
         } = table_ref;
+        // Only an unqualified name can refer to a CTE; `db.t` always names a table.
+        let may_reference_cte = database.is_none();
         let table_identifier = TableIdentifier::new(self, catalog, database, table, branch, alias);
-        let catalog = table_identifier.catalog_name();
-        let database = table_identifier.database_name();
+        let mut catalog = table_identifier.catalog_name();
+        let mut database = table_identifier.database_name();
         let table_name = table_identifier.table_name();
         let branch_name = table_identifier.branch_name();
         let table_name_alias = table_identifier.table_name_alias();
@@ -85,7 +90,7 @@ impl Binder {
         }
 
         if let Some(cte_name) = &bind_context.cte_context.cte_name {
-            if cte_name == &table_name {
+            if may_reference_cte && cte_name == &table_name {
                 return Err(ErrorCode::SemanticError(format!(
                     "The cte {table_name} is not recursive, but it references itself.",
                 ))
@@ -108,7 +113,10 @@ impl Binder {
         let mut materialized_cte_lineage = None;
         // Only clone the matching entry: cloning the whole `cte_map` on every table
         // reference is expensive for queries with many CTEs.
-        if let Some(cte_info) = bind_context.cte_context.cte_map.get(&table_name).cloned() {
+        let cte_info = may_reference_cte
+            .then(|| bind_context.cte_context.cte_map.get(&table_name).cloned())
+            .flatten();
+        if let Some(cte_info) = cte_info {
             let cte_info = &cte_info;
             if let Some(materialized_cte_info) = &cte_info.materialized_cte_info {
                 return self.bind_cte_consumer(
@@ -130,22 +138,6 @@ impl Binder {
                 }
                 cte_suffix_name = Some(self.ctx.get_id().replace("-", ""));
             } else {
-                if self
-                    .metadata
-                    .read()
-                    .get_table_index_in_view_scope(
-                        Some(&database),
-                        &table_name,
-                        &bind_context.binding_views,
-                    )
-                    .is_some()
-                {
-                    return Err(ErrorCode::SyntaxException(format!(
-                        "Table name `{}` is misleading, please distinguish it.",
-                        table_name
-                    ))
-                    .set_span(*span));
-                }
                 return if cte_info.recursive {
                     if self
                         .bind_recursive_cte
@@ -161,6 +153,13 @@ impl Binder {
                     self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
                 };
             }
+        }
+
+        // User-materialized CTEs scan temporary tables in the session namespace,
+        // even when their producer is bound in a view's namespace.
+        if cte_suffix_name.is_some() {
+            catalog = self.ctx.get_current_catalog();
+            database = self.ctx.get_current_database();
         }
 
         let navigation = self.resolve_temporal_clause(bind_context, temporal)?;
@@ -188,7 +187,9 @@ impl Binder {
             ) {
                 Ok(table) => table,
                 Err(e) => {
-                    let mut parent = bind_context.parent.as_mut();
+                    let mut parent = may_reference_cte
+                        .then_some(bind_context.parent.as_mut())
+                        .flatten();
                     loop {
                         if parent.is_none() {
                             break;
@@ -322,24 +323,28 @@ impl Binder {
                 // capture a table referenced by the view.
                 let mut new_bind_context = bind_context.new_view_scope(view_ident)?;
                 if let Statement::Query(query) = &stmt {
+                    self.metadata.write().add_table(
+                        catalog.clone(),
+                        database.clone(),
+                        table_meta.clone(),
+                        branch_name.clone(),
+                        table_name_alias.clone(),
+                        false,
+                        false,
+                        None,
+                    );
+                    let namespace = if table_meta.options().get(QUERY_VERSION).map(String::as_str)
+                        == Some(CURRENT_QUERY_VERSION)
                     {
-                        let mut metadata = self.metadata.write();
-                        let table_index = metadata.add_table(
-                            catalog.clone(),
-                            database.clone(),
-                            table_meta.clone(),
-                            branch_name.clone(),
-                            table_name_alias.clone(),
-                            false,
-                            false,
-                            None,
-                        );
-                        // The view reference belongs to the caller's name scope,
-                        // not the independent scope used to bind its definition.
-                        metadata.set_table_view_scope(table_index, &bind_context.binding_views);
-                    }
-                    let (s_expr, mut new_bind_context) =
-                        self.bind_query(&mut new_bind_context, query)?;
+                        stored_query_namespace(table_meta.options())
+                    } else {
+                        None
+                    };
+                    let previous_namespace =
+                        std::mem::replace(&mut self.default_table_namespace, namespace);
+                    let result = self.bind_query(&mut new_bind_context, query);
+                    self.default_table_namespace = previous_namespace;
+                    let (s_expr, mut new_bind_context) = result?;
                     if lineage_enabled() {
                         // Record the view's output identity before an outer table alias can
                         // rename those columns in the current query scope.
@@ -365,6 +370,8 @@ impl Binder {
                     // CTEs do not leak into sibling/parent contexts.
                     new_bind_context.binding_views = bind_context.binding_views.clone();
                     new_bind_context.cte_context = bind_context.cte_context.clone();
+                    new_bind_context.default_table_namespace =
+                        bind_context.default_table_namespace.clone();
                     new_bind_context.binding_depth = bind_context.next_depth()?;
                     new_bind_context.parent = Some(Box::new(bind_context.clone()));
                     Ok((s_expr, new_bind_context))

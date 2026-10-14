@@ -189,6 +189,7 @@ impl Binder {
         order_by: &[OrderByExpr],
     ) -> Result<SelectPreparation<'a>> {
         let (s_expr, mut from_context) = self.bind_select_source(bind_context, stmt)?;
+        from_context.default_table_namespace = self.default_table_namespace.clone();
 
         // Try put window definitions into bind context.
         // This operation should be before `normalize_select_list` because window functions can be used in select list.
@@ -495,6 +496,7 @@ impl Binder {
 
         let mut output_context = BindContext::new();
         output_context.binding_depth = from_context.depth();
+        output_context.default_table_namespace = from_context.default_table_namespace;
         output_context.binding_views = from_context.binding_views;
         output_context.parent = from_context.parent;
         output_context

@@ -72,6 +72,8 @@ use databend_storages_common_table_meta::table::OPT_KEY_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_DATABASE_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MATERIALIZED_VIEW_SOURCE_TABLE_NAME;
+use databend_storages_common_table_meta::table::OPT_KEY_QUERY_CATALOG;
+use databend_storages_common_table_meta::table::OPT_KEY_QUERY_DATABASE;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_ARRAY_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_STRING_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MIN_STRING_LEN;
@@ -273,6 +275,8 @@ pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S, engine: &Engine) -> bool {
             CREATE_FUSE_OPTIONS.contains(opt_key)
                 || opt_key == OPT_KEY_AS_QUERY
                 || opt_key == OPT_KEY_SOURCE_TABLE_IDS
+                || opt_key == OPT_KEY_QUERY_CATALOG
+                || opt_key == OPT_KEY_QUERY_DATABASE
         }
     }
 }

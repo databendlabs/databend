@@ -99,6 +99,10 @@ pub struct Binder {
     /// Binder-local table instances that take precedence over catalog resolution.
     pub pre_resolved_tables: HashMap<(String, String, String), Arc<dyn Table>>,
 
+    /// Default catalog/database for unqualified tables in a stored query definition.
+    /// CTE lookup still happens first and only for unqualified names.
+    pub(crate) default_table_namespace: Option<(String, String)>,
+
     pub enable_result_cache: bool,
 
     pub enable_materialized_view_rewrite: bool,
@@ -132,10 +136,16 @@ impl Binder {
             bind_recursive_cte: None,
             m_cte_table_name: HashMap::new(),
             pre_resolved_tables: HashMap::new(),
+            default_table_namespace: None,
             enable_result_cache,
             enable_materialized_view_rewrite,
             subquery_executor: None,
         }
+    }
+
+    pub fn with_default_table_namespace(mut self, namespace: Option<(String, String)>) -> Self {
+        self.default_table_namespace = namespace;
+        self
     }
 
     pub fn with_materialized_view_rewrite(mut self, enable: bool) -> Self {

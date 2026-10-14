@@ -2470,7 +2470,8 @@ impl Binder {
 
                 if table.engine() == VIEW_ENGINE {
                     if let Some(query) = table.get_table_info().options().get(QUERY) {
-                        let mut planner = Planner::new(self.ctx.clone());
+                        let mut planner = Planner::new(self.ctx.clone())
+                            .with_stored_query_namespace(table.get_table_info().options());
                         let (plan, _) = planner.plan_sql(query).await?;
                         Ok(AnalyzeCreateTableResult {
                             schema: infer_table_schema(&plan.schema())?,

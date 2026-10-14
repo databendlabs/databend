@@ -538,7 +538,8 @@ impl Visitor for MaterializedCteAliasCollector<'_> {
             TableReference::Table { table, alias, .. } => {
                 self.source_count += 1;
                 let table_name = normalize_identifier(&table.table, &self.name_resolution_ctx).name;
-                if self.cte_names.contains(&table_name) {
+                // Only an unqualified name can refer to a CTE.
+                if table.database.is_none() && self.cte_names.contains(&table_name) {
                     let alias_name = alias
                         .as_ref()
                         .map(|alias| {
