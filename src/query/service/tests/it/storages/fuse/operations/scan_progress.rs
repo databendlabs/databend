@@ -97,8 +97,8 @@ async fn test_scan_progress_counts_rows_before_prewhere() -> Result<()> {
     Ok(())
 }
 
-/// Virtual columns are materialized after the prewhere pass and must be
-/// included in the scan bytes.
+/// Virtual columns read from their sidecar are decoded after the prewhere
+/// pass and must be included in the scan bytes.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_scan_progress_includes_virtual_columns() -> Result<()> {
     let fixture = TestFixture::setup().await?;
@@ -118,6 +118,26 @@ async fn test_scan_progress_includes_virtual_columns() -> Result<()> {
              from numbers({NUM_ROWS})"
         ))
         .await?;
+
+    // INSERT alone does not materialize virtual columns; without the sidecar
+    // the query below would decode the base `val` column instead, which
+    // takes a different accounting path.
+    fixture
+        .execute_command(&format!("refresh virtual column for {db}.vt"))
+        .await?;
+    let blocks = fixture
+        .execute_query(&format!(
+            "select virtual_column_size from fuse_block('{db}', 'vt')"
+        ))
+        .await?
+        .try_collect::<Vec<DataBlock>>()
+        .await?;
+    let block = DataBlock::concat(&blocks)?;
+    assert_eq!(block.num_rows(), 1);
+    assert!(
+        !block.get_by_offset(0).index(0).unwrap().is_null(),
+        "virtual column sidecar must be materialized before measuring"
+    );
 
     let prewhere_only =
         scan_progress_of(&fixture, &format!("select id from {db}.vt where id = 5")).await?;
