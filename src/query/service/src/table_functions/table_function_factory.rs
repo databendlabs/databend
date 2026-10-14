@@ -501,7 +501,7 @@ impl TableFunctionFactory {
         );
 
         creators.insert(
-            "send_databend_notification".to_string(),
+            "send_notification".to_string(),
             (
                 next_id(),
                 Arc::new(TableFunctionTemplate::<SendNotification>::create),

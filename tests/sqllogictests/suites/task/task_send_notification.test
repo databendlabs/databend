@@ -1,19 +1,6 @@
 # Requires tests/cloud_control_server/simple_server.py.
 # The mock records accepted deliveries in history; it does not send HTTP.
 
-# Renaming the built-in must leave an existing old-name tenant UDTF usable.
-statement ok
-DROP FUNCTION IF EXISTS send_notification;
-
-statement ok
-CREATE FUNCTION send_notification(target STRING, payload STRING)
-RETURNS TABLE (marker INT) AS $$ SELECT 42 AS marker $$;
-
-query I
-SELECT * FROM send_notification('send_notify', 'tenant function');
-----
-42
-
 statement ok
 DROP NOTIFICATION INTEGRATION IF EXISTS send_notify;
 
@@ -22,10 +9,10 @@ CREATE NOTIFICATION INTEGRATION send_notify TYPE = WEBHOOK ENABLED = TRUE
   WEBHOOK = (URL = 'http://localhost:8080/notify', METHOD = 'POST');
 
 statement ok
-EXPLAIN SELECT * FROM send_databend_notification('send_notify', 'must not send');
+EXPLAIN SELECT * FROM send_notification('send_notify', 'must not send');
 
 statement ok
-EXPLAIN PIPELINE SELECT * FROM send_databend_notification('send_notify', 'must not send');
+EXPLAIN PIPELINE SELECT * FROM send_notification('send_notify', 'must not send');
 
 query I
 SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_notify';
@@ -34,13 +21,8 @@ SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_
 
 # CALL uses the normal table-function result shape: one string column, zero rows.
 query T
-CALL system$send_databend_notification('send_notify', 'accepted');
+CALL system$send_notification('send_notify', 'accepted');
 ----
-
-query I
-SELECT * FROM send_notification('send_notify', 'tenant function');
-----
-42
 
 query I
 SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_notify';
@@ -51,11 +33,11 @@ statement ok
 SET enable_query_result_cache = 1;
 
 query T
-SELECT * FROM send_databend_notification('send_notify', 'repeat');
+SELECT * FROM send_notification('send_notify', 'repeat');
 ----
 
 query T
-SELECT * FROM send_databend_notification('send_notify', 'repeat');
+SELECT * FROM send_notification('send_notify', 'repeat');
 ----
 
 statement ok
@@ -70,11 +52,11 @@ statement ok
 EXECUTE IMMEDIATE $$
 BEGIN
     IF FALSE THEN
-        SELECT * FROM send_databend_notification('send_notify', 'must not send');
+        SELECT * FROM send_notification('send_notify', 'must not send');
     END IF;
     IF TRUE THEN
         LET message := 'conditional';
-        SELECT * FROM send_databend_notification('send_notify', :message);
+        SELECT * FROM send_notification('send_notify', :message);
     END IF;
 END;
 $$;
@@ -91,46 +73,46 @@ SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_
 4
 
 statement error 1006
-SELECT * FROM send_databend_notification('', 'alert');
+SELECT * FROM send_notification('', 'alert');
 
 statement error 1006
-SELECT * FROM send_databend_notification(NULL, 'alert');
+SELECT * FROM send_notification(NULL, 'alert');
 
 statement error 1006
-SELECT * FROM send_databend_notification(1, 'alert');
+SELECT * FROM send_notification(1, 'alert');
 
 statement error 1006
-SELECT * FROM send_databend_notification('send_notify', 1);
+SELECT * FROM send_notification('send_notify', 1);
 
 statement error 1006
-SELECT * FROM send_databend_notification('send_notify', '');
+SELECT * FROM send_notification('send_notify', '');
 
 statement error 1006
-SELECT * FROM send_databend_notification('send_notify', repeat('x', 262145));
+SELECT * FROM send_notification('send_notify', repeat('x', 262145));
 
 statement error 1006
-SELECT * FROM send_databend_notification('send_notify', repeat('é', 131073));
+SELECT * FROM send_notification('send_notify', repeat('é', 131073));
 
 statement error 1006
-SELECT * FROM send_databend_notification('send_notify', NULL);
+SELECT * FROM send_notification('send_notify', NULL);
 
 statement error
-CALL system$send_databend_notification();
+CALL system$send_notification();
 
 statement error
-CALL system$send_databend_notification('send_notify');
+CALL system$send_notification('send_notify');
 
 statement error
-CALL system$send_databend_notification('send_notify', 'alert', 'extra');
+CALL system$send_notification('send_notify', 'alert', 'extra');
 
 statement error
-CALL system$send_databend_notification('missing_send_notify', 'alert');
+CALL system$send_notification('missing_send_notify', 'alert');
 
 statement error
-CALL system$send_databend_notification('send_rejected', 'alert');
+CALL system$send_notification('send_rejected', 'alert');
 
 statement error Cloud Control does not support active notifications
-CALL system$send_databend_notification('send_unimplemented', 'alert');
+CALL system$send_notification('send_unimplemented', 'alert');
 
 # The mock records each attempt, then always returns UNAVAILABLE without timing
 # or randomness. An automatic retry creates duplicate histories and fails count=1.
@@ -142,7 +124,7 @@ CREATE NOTIFICATION INTEGRATION send_lost_response TYPE = WEBHOOK ENABLED = TRUE
   WEBHOOK = (URL = 'http://localhost:8080/notify', METHOD = 'POST');
 
 statement error simulated response loss after acceptance
-CALL system$send_databend_notification('send_lost_response', 'accepted_before_error');
+CALL system$send_notification('send_lost_response', 'accepted_before_error');
 
 query ITT
 SELECT count(*), max(message), max(message_source) FROM system.notification_history
@@ -157,7 +139,7 @@ statement ok
 ALTER NOTIFICATION INTEGRATION send_notify SET ENABLED = FALSE;
 
 statement error
-CALL system$send_databend_notification('send_notify', 'disabled');
+CALL system$send_notification('send_notify', 'disabled');
 
 query I
 SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_notify';
@@ -172,9 +154,6 @@ SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_
 ----
 0
 
-statement ok
-DROP FUNCTION send_notification;
-
 # The limit is 262144 UTF-8 bytes, not characters.
 statement ok
 DROP NOTIFICATION INTEGRATION IF EXISTS send_boundary;
@@ -184,7 +163,7 @@ CREATE NOTIFICATION INTEGRATION send_boundary TYPE = WEBHOOK ENABLED = TRUE
   WEBHOOK = (URL = 'http://localhost:8080/notify', METHOD = 'POST');
 
 statement ok
-SELECT * FROM send_databend_notification('send_boundary', repeat('é', 131072));
+SELECT * FROM send_notification('send_boundary', repeat('é', 131072));
 
 query II
 SELECT count(*), max(octet_length(message)) FROM system.notification_history
