@@ -20,6 +20,7 @@ jobs:
     outputs:
       any_src_changed: ${{ steps.src.outputs.any_changed }}
       bendpy_changed: ${{ steps.bendpy.outputs.any_changed }}
+      platform_changed: ${{ steps.platform.outputs.any_changed }}
       hold_ci: ${{ steps.hold.outputs.hold_ci }}
     steps:
       - uses: actions/checkout@v6
@@ -57,6 +58,24 @@ jobs:
         with:
           files: |
             src/bendpy/**
+      # Paths where a Linux-green build can still break on macOS: crates with
+      # cfg(target_os/unix) code, binaries, build scripts and dependency sets.
+      - name: Check Platform-Sensitive File Changes
+        uses: tj-actions/changed-files@v47
+        id: platform
+        with:
+          files: |
+            Cargo.toml
+            Cargo.lock
+            rust-toolchain.toml
+            .cargo/**
+            **/build.rs
+            src/binaries/**
+            src/common/base/**
+            src/common/exception/**
+            src/common/tracing/**
+            src/query/storages/common/cache/**
+            .github/actions/check_macos/**
       - name: Output Source File Changes
         run: |
           if [[ "${{ steps.src.outputs.any_changed }}" == "true" ]]; then
@@ -79,9 +98,11 @@ jobs:
       runner_arch: ARM64
       license_type: trial
 
+  # Advisory: not part of the ready gate. Runs only for platform-sensitive
+  # changes; the Main workflow covers every merge on main.
   mac_check:
     needs: changes
-    if: needs.changes.outputs.any_src_changed == 'true' && needs.changes.outputs.hold_ci != 'true'
+    if: needs.changes.outputs.platform_changed == 'true' && needs.changes.outputs.hold_ci != 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
@@ -122,7 +143,6 @@ jobs:
       - ai_assistance_test
       - changes
       - linux
-      - mac_check
       - test_bendpy
     steps:
       - name: Check Ready to Merge
@@ -133,7 +153,6 @@ jobs:
           SRC_CHANGED: ${{ needs.changes.outputs.any_src_changed }}
           BENDPY_CHANGED: ${{ needs.changes.outputs.bendpy_changed }}
           LINUX_BUILD_RESULT: ${{ needs.linux.result }}
-          MAC_CHECK_RESULT: ${{ needs.mac_check.result }}
           BENDPY_RESULT: ${{ needs.test_bendpy.result }}
         with:
           script: |
@@ -157,12 +176,8 @@ jobs:
               core.info('Required bendpy checks succeeded, ready to merge');
               return;
             }
-            if (process.env.MAC_CHECK_RESULT != 'success') {
-              core.setFailed(`macOS check did not complete successfully (${process.env.MAC_CHECK_RESULT}), not ready to merge`);
-              return;
-            }
             if (process.env.LINUX_BUILD_RESULT == 'success') {
-              core.info('Linux build and macOS check succeeded, ready to merge');
+              core.info('Linux build succeeded, ready to merge');
               return;
             }
             core.setFailed('Build failed, not ready to merge');
