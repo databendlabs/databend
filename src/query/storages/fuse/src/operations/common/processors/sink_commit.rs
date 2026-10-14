@@ -35,6 +35,7 @@ use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TruncateTableReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_metrics::storage::*;
@@ -422,6 +423,42 @@ where F: SnapshotGenerator + Send + Sync + 'static
 
         Ok(())
     }
+
+    /// Commits pending stream meta updates without creating a new snapshot for the target table.
+    ///
+    /// Used when the mutation produced no table changes but still consumed streams. The update
+    /// goes through the catalog, so it is buffered in an active explicit transaction and follows
+    /// the transaction's commit / rollback semantics, or is committed directly in autocommit mode.
+    ///
+    /// The deduplication label is committed together with the stream offsets: the statement has
+    /// observable effects (the stream is consumed), so a retry with the same label must be
+    /// recognized as a duplicate instead of consuming the next batch.
+    async fn commit_stream_meta_only(&self) -> Result<()> {
+        if self.update_stream_meta.is_empty() {
+            return Ok(());
+        }
+
+        let table_info = self.table.get_table_info();
+        let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
+        catalog
+            .update_multi_table_meta(UpdateMultiTableMetaReq {
+                update_stream_metas: self.update_stream_meta.clone(),
+                deduplicated_labels: self.deduplicated_label.clone().into_iter().collect(),
+                ..Default::default()
+            })
+            .await?;
+
+        let stream_descriptions = self
+            .update_stream_meta
+            .iter()
+            .map(|s| (s.stream_id, s.seq))
+            .collect::<Vec<_>>();
+        info!(
+            "No table changes detected for table {} ({}), stream metas committed: {:?}",
+            table_info.desc, table_info.ident, stream_descriptions
+        );
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -570,6 +607,10 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 // Reset the flag so subsequent mutations (or retries) re-evaluate their own no-op status.
                 self.pending_noop_commit = false;
                 if skip_commit {
+                    // The target table is unchanged, but consumed streams must still advance.
+                    // Otherwise the stream keeps pointing at an old snapshot, which may later be
+                    // purged and make the stream unreadable.
+                    self.commit_stream_meta_only().await?;
                     self.ctx
                         .set_status_info("No table changes detected, skip commit");
                     self.state = State::Finish;
