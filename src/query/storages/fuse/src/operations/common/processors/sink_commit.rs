@@ -35,6 +35,7 @@ use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TruncateTableReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_metrics::storage::*;
@@ -434,6 +435,10 @@ where F: SnapshotGenerator + Send + Sync + 'static
     /// Used when the mutation produced no table changes but still consumed streams. The update
     /// goes through the catalog, so it is buffered in an active explicit transaction and follows
     /// the transaction's commit / rollback semantics, or is committed directly in autocommit mode.
+    ///
+    /// The deduplication label is committed together with the stream offsets: the statement has
+    /// observable effects (the stream is consumed), so a retry with the same label must be
+    /// recognized as a duplicate instead of consuming the next batch.
     async fn commit_stream_meta_only(&self) -> Result<()> {
         if self.update_stream_meta.is_empty() {
             return Ok(());
@@ -442,7 +447,11 @@ where F: SnapshotGenerator + Send + Sync + 'static
         let table_info = self.table.get_table_info();
         let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
         catalog
-            .update_stream_metas(&self.ctx.get_tenant(), self.update_stream_meta.clone())
+            .update_multi_table_meta(&self.ctx.get_tenant(), UpdateMultiTableMetaReq {
+                update_stream_metas: self.update_stream_meta.clone(),
+                deduplicated_labels: self.deduplicated_label.clone().into_iter().collect(),
+                ..Default::default()
+            })
             .await?;
 
         let stream_descriptions = self
