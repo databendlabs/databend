@@ -844,6 +844,7 @@ impl DataExchangeManager {
             retry_times: settings.get_flight_max_retry_times()?,
             retry_interval: settings.get_flight_retry_interval()?,
             keep_alive: settings.get_flight_keep_alive_params()?,
+            reuse_control_channel: settings.get_enable_flight_control_channel_reuse()?,
         };
         let mut root_fragment_ids = actions.get_root_fragment_ids()?;
         let conf = GlobalConfig::instance();
