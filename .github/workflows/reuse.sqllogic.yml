@@ -328,31 +328,25 @@ jobs:
       - "${{ inputs.runner_provider }}"
     strategy:
       fail-fast: false
+      # dedup/size variants are GLOBAL settings applied by the stage hook, so
+      # they run sequentially inside one job per storage backend.
       matrix:
         storage:
           - "s3"
           - "fs"
-        dedup:
-          - "full_path"
-          - "sub_path"
-        size:
-          - "small"
-          - "large"
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/test_sqllogic_stage
-        timeout-minutes: 15
+        timeout-minutes: 20
         with:
           storage: ${{ matrix.storage }}
           dirs: stage
           handlers: http,hybrid
-          dedup: ${{ matrix.dedup }}
-          size: ${{ matrix.size }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-stage-${{ matrix.storage }}-${{ matrix.dedup }}-${{ matrix.size }}
+          name: test-sqllogic-stage-${{ matrix.storage }}
 
   standalone_no_table_meta_cache:
     runs-on:

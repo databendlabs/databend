@@ -1,5 +1,5 @@
 name: "Test sqllogic Stage"
-description: "Running sqllogic tests in standalone mode"
+description: "Run the stage sqllogic suite for every dedup/size variant on one standalone deployment"
 inputs:
   dirs:
     description: "logic test suites dirs"
@@ -13,14 +13,6 @@ inputs:
     description: "storage backend for stage, choices: s3,fs"
     required: true
     default: ""
-  dedup:
-    description: "path type for dedup when copy, choices: full_path,sub_path"
-    required: true
-    default: ""
-  size:
-    description: "stage parquet read size mode, choices: small,large"
-    required: true
-    default: ""
 runs:
   using: "composite"
   steps:
@@ -32,11 +24,10 @@ runs:
       with:
         data: true
 
-    - name: Run sqllogic Tests with Standalone mode parquet_rs lib
+    # All (dedup, size) variants run against this one deployment.
+    - name: Run sqllogic Stage Tests
       shell: bash
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
         TEST_STAGE_STORAGE: ${{ inputs.storage }}
-        TEST_STAGE_DEDUP: ${{ inputs.dedup}}
-        TEST_STAGE_SIZE: ${{ inputs.size }}
-      run: bash ./scripts/ci/ci-run-sqllogic-tests-without-sandbox.sh ${{ inputs.dirs }}
+      run: bash ./scripts/ci/ci-run-sqllogic-tests-stage.sh
