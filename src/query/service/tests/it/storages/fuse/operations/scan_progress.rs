@@ -32,24 +32,20 @@ async fn scan_progress_of(fixture: &TestFixture, sql: &str) -> Result<ProgressVa
 }
 
 /// Scan progress reports the rows and bytes the scan read and decoded, not
-/// the rows left after prewhere / runtime filters. The table holds a single
-/// block of `NUM_ROWS` rows, and the predicates below cannot prune it.
+/// the rows left after prewhere / runtime filters. `NUM_ROWS` rows inserted
+/// at once form a single block, and the predicates below cannot prune it.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_scan_progress_counts_rows_before_prewhere() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
     let db = fixture.default_db_name();
 
-    fixture
-        .execute_command(&format!(
-            "create table {db}.t(a int, b string) block_size_threshold = 1073741824"
-        ))
-        .await?;
-    fixture
-        .execute_command(&format!(
-            "insert into {db}.t select number, repeat('x', 10) from numbers({NUM_ROWS})"
-        ))
-        .await?;
+    // t(a int, b string): a = 0..NUM_ROWS, b = 'xxxxxxxxxx' (10 chars)
+    let create = format!("create table {db}.t(a int, b string)");
+    let insert =
+        format!("insert into {db}.t select number, repeat('x', 10) from numbers({NUM_ROWS})");
+    fixture.execute_command(&create).await?;
+    fixture.execute_command(&insert).await?;
 
     // All projected columns are prewhere columns.
     let count =
@@ -84,24 +80,24 @@ async fn test_scan_progress_includes_virtual_columns() -> Result<()> {
     fixture.create_default_database().await?;
     let db = fixture.default_db_name();
 
-    fixture
-        .execute_command(&format!(
-            "create table {db}.vt(id int, val json) storage_format = 'parquet' \
-             enable_virtual_column = true block_size_threshold = 1073741824"
-        ))
-        .await?;
-    fixture
-        .execute_command(&format!(
-            "insert into {db}.vt select number, \
-             parse_json('{{\"a\":' || number || ',\"c\":\"' || repeat('y', 20) || '\"}}') \
-             from numbers({NUM_ROWS})"
-        ))
-        .await?;
+    // vt(id int, val json): id = 0..NUM_ROWS, val = {"a": id, "c": "yyyy..." (20 chars)}
+    // Parquet with virtual columns enabled, so `val['c']` is served from the
+    // virtual column sidecar once it is refreshed.
+    let create = format!(
+        "create table {db}.vt(id int, val json) \
+         storage_format = 'parquet' enable_virtual_column = true"
+    );
+    let insert = format!(
+        "insert into {db}.vt select number, \
+         parse_json('{{\"a\":' || number || ',\"c\":\"' || repeat('y', 20) || '\"}}') \
+         from numbers({NUM_ROWS})"
+    );
     // INSERT alone does not write the sidecar; without it the query below
     // would decode the base `val` column instead.
-    fixture
-        .execute_command(&format!("refresh virtual column for {db}.vt"))
-        .await?;
+    let refresh = format!("refresh virtual column for {db}.vt");
+    fixture.execute_command(&create).await?;
+    fixture.execute_command(&insert).await?;
+    fixture.execute_command(&refresh).await?;
 
     let prewhere_only =
         scan_progress_of(&fixture, &format!("select id from {db}.vt where id = 5")).await?;
