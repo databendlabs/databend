@@ -1,13 +1,15 @@
 # 主动通知 SQL 入口
 
-`send_notification` table function 通过 Cloud Control 的 `EnqueueNotification` RPC 受理通知。Query 不访问 webhook、不渲染模板，也不等待 webhook 投递。成功仅表示 Cloud Control 已持久化受理；网络超时或响应丢失时可能已受理，重新执行可能重复发送。
+`send_databend_notification` table function 通过 Cloud Control 的 `EnqueueNotification` RPC 受理通知。Query 不访问 webhook、不渲染模板，也不等待 webhook 投递。成功仅表示 Cloud Control 已持久化受理；网络超时或响应丢失时可能已受理，重新执行可能重复发送。
 
 ## 接口
 
 ```sql
-CALL system$send_notification('oncall', 'Query errors detected');
-SELECT * FROM send_notification('oncall', 'Query errors detected');
+CALL system$send_databend_notification('oncall', 'Query errors detected');
+SELECT * FROM send_databend_notification('oncall', 'Query errors detected');
 ```
+
+仅提供新的 `send_databend_notification` SQL 入口，不保留 `send_notification` 内置别名。沿用现有 UDF/UDTF 解析规则，不增加同名冲突检测、名称保留或自动迁移逻辑；如果用户函数与该入口同名，由使用者自行重命名解决。此次改名仅影响 Query SQL 入口，`EnqueueNotification` RPC、proto 和 Cloud Control 实现不变。
 
 要求全局 `SUPER` 权限，与 notification integration DDL 一致。两个位置参数必须为字符串；integration 名称非空，message 为 1–262,144 UTF-8 字节。integration 是否存在、是否 enabled 由 Cloud Control 受理时验证。
 
@@ -20,7 +22,7 @@ EXECUTE IMMEDIATE $$
 BEGIN
     LET message := 'Query errors detected';
     IF TRUE THEN
-        SELECT * FROM send_notification('oncall', :message);
+        SELECT * FROM send_databend_notification('oncall', :message);
     END IF;
 END;
 $$;

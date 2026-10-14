@@ -1,6 +1,19 @@
 # Requires tests/cloud_control_server/simple_server.py.
 # The mock records accepted deliveries in history; it does not send HTTP.
 
+# Renaming the built-in must leave an existing old-name tenant UDTF usable.
+statement ok
+DROP FUNCTION IF EXISTS send_notification;
+
+statement ok
+CREATE FUNCTION send_notification(target STRING, payload STRING)
+RETURNS TABLE (marker INT) AS $$ SELECT 42 AS marker $$;
+
+query I
+SELECT * FROM send_notification('send_notify', 'tenant function');
+----
+42
+
 statement ok
 DROP NOTIFICATION INTEGRATION IF EXISTS send_notify;
 
@@ -9,10 +22,10 @@ CREATE NOTIFICATION INTEGRATION send_notify TYPE = WEBHOOK ENABLED = TRUE
   WEBHOOK = (URL = 'http://localhost:8080/notify', METHOD = 'POST');
 
 statement ok
-EXPLAIN SELECT * FROM send_notification('send_notify', 'must not send');
+EXPLAIN SELECT * FROM send_databend_notification('send_notify', 'must not send');
 
 statement ok
-EXPLAIN PIPELINE SELECT * FROM send_notification('send_notify', 'must not send');
+EXPLAIN PIPELINE SELECT * FROM send_databend_notification('send_notify', 'must not send');
 
 query I
 SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_notify';
@@ -20,7 +33,12 @@ SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_
 0
 
 statement ok
-CALL system$send_notification('send_notify', 'accepted');
+CALL system$send_databend_notification('send_notify', 'accepted');
+
+query I
+SELECT * FROM send_notification('send_notify', 'tenant function');
+----
+42
 
 query I
 SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_notify';
@@ -31,10 +49,10 @@ statement ok
 SET enable_query_result_cache = 1;
 
 statement ok
-SELECT * FROM send_notification('send_notify', 'repeat');
+SELECT * FROM send_databend_notification('send_notify', 'repeat');
 
 statement ok
-SELECT * FROM send_notification('send_notify', 'repeat');
+SELECT * FROM send_databend_notification('send_notify', 'repeat');
 
 statement ok
 SET enable_query_result_cache = 0;
@@ -48,11 +66,11 @@ statement ok
 EXECUTE IMMEDIATE $$
 BEGIN
     IF FALSE THEN
-        SELECT * FROM send_notification('send_notify', 'must not send');
+        SELECT * FROM send_databend_notification('send_notify', 'must not send');
     END IF;
     IF TRUE THEN
         LET message := 'conditional';
-        SELECT * FROM send_notification('send_notify', :message);
+        SELECT * FROM send_databend_notification('send_notify', :message);
     END IF;
 END;
 $$;
@@ -69,31 +87,31 @@ SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_
 4
 
 statement error 1006
-SELECT * FROM send_notification('send_notify', '');
+SELECT * FROM send_databend_notification('send_notify', '');
 
 statement error 1006
-SELECT * FROM send_notification('send_notify', repeat('x', 262145));
+SELECT * FROM send_databend_notification('send_notify', repeat('x', 262145));
 
 statement error 1006
-SELECT * FROM send_notification('send_notify', NULL);
+SELECT * FROM send_databend_notification('send_notify', NULL);
 
 statement error
-CALL system$send_notification('send_notify');
+CALL system$send_databend_notification('send_notify');
 
 statement error
-CALL system$send_notification('missing_send_notify', 'alert');
+CALL system$send_databend_notification('missing_send_notify', 'alert');
 
 statement error
-CALL system$send_notification('send_rejected', 'alert');
+CALL system$send_databend_notification('send_rejected', 'alert');
 
 statement error Cloud Control does not support active notifications
-CALL system$send_notification('send_unimplemented', 'alert');
+CALL system$send_databend_notification('send_unimplemented', 'alert');
 
 statement ok
 ALTER NOTIFICATION INTEGRATION send_notify SET ENABLED = FALSE;
 
 statement error
-CALL system$send_notification('send_notify', 'disabled');
+CALL system$send_databend_notification('send_notify', 'disabled');
 
 query I
 SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_notify';
@@ -107,3 +125,6 @@ query I
 SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_notify';
 ----
 0
+
+statement ok
+DROP FUNCTION send_notification;

@@ -120,8 +120,12 @@ mod tests {
 
     #[test]
     fn validates_arguments_without_sending() {
-        let create =
-            |args| SendNotification::create("send_notification", TableArgs::new_positioned(args));
+        let create = |args| {
+            SendNotification::create(
+                "send_databend_notification",
+                TableArgs::new_positioned(args),
+            )
+        };
         assert!(create(vec![]).is_err());
         assert!(create(vec![Scalar::String("oncall".into())]).is_err());
         assert!(create(vec![Scalar::Null, Scalar::String("alert".into())]).is_err());

@@ -58,7 +58,7 @@ impl Binder {
         let mut plan = self
             .bind_rewrite_to_query(bind_context, &query, crate::plans::RewriteKind::Call)
             .await?;
-        if table_function_name.eq_ignore_ascii_case("send_notification") {
+        if table_function_name.eq_ignore_ascii_case("send_databend_notification") {
             if let Plan::Query {
                 bind_context,
                 ignore_result,

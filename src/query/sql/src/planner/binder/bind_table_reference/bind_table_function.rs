@@ -279,7 +279,10 @@ impl Binder {
             return Ok(result);
         }
 
-        if func_name.name.eq_ignore_ascii_case("send_notification") {
+        if func_name
+            .name
+            .eq_ignore_ascii_case("send_databend_notification")
+        {
             // A cached result must never suppress a notification's side effect.
             self.ctx.result_cache_state().set_cacheable(false);
         }

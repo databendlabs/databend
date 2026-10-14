@@ -32,7 +32,7 @@ async fn test_send_notification_planning_is_result_free_and_uncacheable() -> any
     let ctx = fixture.new_query_ctx().await?;
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner
-        .plan_sql("CALL system$send_notification('oncall', 'alert')")
+        .plan_sql("CALL system$send_databend_notification('oncall', 'alert')")
         .await?;
     assert!(!plan.has_result_set());
     assert!(matches!(plan, Plan::Query {
@@ -44,7 +44,7 @@ async fn test_send_notification_planning_is_result_free_and_uncacheable() -> any
     let ctx = fixture.new_query_ctx().await?;
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner
-        .plan_sql("SELECT * FROM send_notification('oncall', 'alert')")
+        .plan_sql("SELECT * FROM send_databend_notification('oncall', 'alert')")
         .await?;
     assert!(plan.has_result_set());
     assert!(!ctx.result_cache_state().cacheable());
@@ -73,7 +73,7 @@ async fn test_send_notification_name_collision_preserves_table_privileges() -> a
         .execute_command(&format!("CREATE DATABASE {database}"))
         .await?;
     for table in [
-        "send_notification",
+        "send_databend_notification",
         "fuse_amend",
         "set_cache_capacity",
         "numbers",
@@ -137,14 +137,14 @@ async fn test_send_notification_function_requires_global_super_privilege() -> an
         &GrantObject::Table(
             "default".to_string(),
             "system".to_string(),
-            "send_notification".to_string(),
+            "send_databend_notification".to_string(),
         ),
         UserPrivilegeType::Select.into(),
     );
     session.set_authed_user(user, None).await?;
     for sql in [
-        "CALL system$send_notification('oncall', 'alert')",
-        "SELECT * FROM send_notification('oncall', 'alert')",
+        "CALL system$send_databend_notification('oncall', 'alert')",
+        "SELECT * FROM send_databend_notification('oncall', 'alert')",
         "SELECT * FROM set_cache_capacity('ALL', '0')",
     ] {
         let ctx = session.create_query_context(&BUILD_INFO).await?;

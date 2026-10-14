@@ -7,7 +7,7 @@ echo "create user if not exists notification_sender identified by 'test'" | bend
 echo "create database if not exists notification_privilege_check" | bendsql_connect_root
 
 # Function names must not override the grants of ordinary permanent tables.
-for table in send_notification fuse_amend set_cache_capacity numbers; do
+for table in send_databend_notification fuse_amend set_cache_capacity numbers; do
 	echo "=== ordinary table ${table} ==="
 	echo "create table notification_privilege_check.${table}(v int)" | bendsql_connect_root
 	echo "insert into notification_privilege_check.${table} values (42)" | bendsql_connect_root_null
@@ -21,9 +21,9 @@ for table in send_notification fuse_amend set_cache_capacity numbers; do
 	echo "alter table notification_privilege_check.${table} add column extra int" | bendsql_connect_user notification_sender test -A
 
 	# Grants on an ordinary same-named table must not authorize the real function.
-	if [ "$table" = "send_notification" ]; then
-		echo "call system\$send_notification('oncall', 'alert')" | bendsql_connect_user notification_sender test -A
-		echo "select * from send_notification('oncall', 'alert')" | bendsql_connect_user notification_sender test -A
+	if [ "$table" = "send_databend_notification" ]; then
+		echo "call system\$send_databend_notification('oncall', 'alert')" | bendsql_connect_user notification_sender test -A
+		echo "select * from send_databend_notification('oncall', 'alert')" | bendsql_connect_user notification_sender test -A
 	fi
 
 	echo "drop table notification_privilege_check.${table}" | bendsql_connect_user notification_sender test -A
