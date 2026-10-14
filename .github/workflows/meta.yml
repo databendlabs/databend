@@ -18,9 +18,8 @@ env:
 
 jobs:
   info:
-    # Start only when ci-meta-chaos is the label being added and the PR is
-    # not held by hold-ci.
-    if: github.event.label.name == 'ci-meta-chaos' && !contains(github.event.pull_request.labels.*.name, 'hold-ci')
+    # Start only when ci-meta-chaos is the label being added.
+    if: github.event.label.name == 'ci-meta-chaos'
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.sha.outputs.sha }}

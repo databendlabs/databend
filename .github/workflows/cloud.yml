@@ -20,12 +20,9 @@ env:
 
 jobs:
   info:
-    # Start only when a CI label is the one being added, and never while the
-    # PR is held: unrelated label changes must not relaunch release builds or
-    # benchmarks, and hold-ci pauses heavy CI regardless of label order.
-    if: >-
-      contains(fromJSON('["ci-cloud", "ci-benchmark", "ci-benchmark-cloud", "ci-benchmark-load", "ci-benchmark-local"]'), github.event.label.name) &&
-      !contains(github.event.pull_request.labels.*.name, 'hold-ci')
+    # Start only when a CI label is the one being added; other label changes
+    # (e.g. hold-ci) must not relaunch release builds or benchmarks.
+    if: contains(fromJSON('["ci-cloud", "ci-benchmark", "ci-benchmark-cloud", "ci-benchmark-load", "ci-benchmark-local"]'), github.event.label.name)
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.sha.outputs.sha }}
