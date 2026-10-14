@@ -57,9 +57,8 @@ jobs:
         tests:
           - { dirs: "query", runner: "4c" }
           - { dirs: "duckdb", runner: "4c" }
-          - { dirs: "crdb", runner: "2c" }
-          - { dirs: "base", runner: "2c" }
-          - { dirs: "ydb", runner: "2c" }
+          # base+crdb+ydb share a job (~5 min); each alone paid ~1 min of setup.
+          - { dirs: "base_crdb_ydb", runner: "2c" }
           - { dirs: "tpcds", runner: "4c" }
           - { dirs: "tpch", runner: "2c" }
           - { dirs: "standalone", runner: "2c" }
@@ -295,8 +294,8 @@ jobs:
         tests:
           - { dirs: "query", runner: "4c" }
           - { dirs: "duckdb", runner: "4c" }
-          - { dirs: "crdb", runner: "2c", parallel: "2" }
-          - { dirs: "base", runner: "2c", parallel: "2" }
+          # base+crdb share a job: both run with parallel 2; ydb keeps the default.
+          - { dirs: "base_crdb", runner: "2c", parallel: "2" }
           - { dirs: "ydb", runner: "2c" }
           - { dirs: "tpcds", runner: "4c" }
           - { dirs: "tpch", runner: "2c" }

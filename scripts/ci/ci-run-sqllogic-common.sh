@@ -10,6 +10,9 @@ sqllogic_filter() {
 	skip-management-all) SQLLOGIC_FILTER=(--skip_dir management,ee) ;;
 
 	base) SQLLOGIC_FILTER=(--run_suite base) ;;
+	# Merged CI buckets: short suites share one job/deployment to cut runner fan-out.
+	base_crdb) SQLLOGIC_FILTER=(--run_suite base,crdb) ;;
+	base_crdb_ydb) SQLLOGIC_FILTER=(--run_suite base,crdb,ydb) ;;
 	crdb) SQLLOGIC_FILTER=(--run_suite crdb) ;;
 	duckdb) SQLLOGIC_FILTER=(--run_suite duckdb) ;;
 	ee) SQLLOGIC_FILTER=(--run_suite ee) ;;
