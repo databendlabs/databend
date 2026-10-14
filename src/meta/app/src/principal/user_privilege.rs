@@ -97,7 +97,7 @@ pub enum UserPrivilegeType {
     // Privilege to Create Row Access Policy.
     CreateRowAccessPolicy = 1 << 31,
     // Privilege to attach existing storage data as a table. CREATE is also required.
-    AttachTable = 1u64 << 32,
+    AttachTable = 1 << 32,
     // Discard Privilege Type
     Set = 1 << 4,
     CreateDataMask = 1 << 16,
