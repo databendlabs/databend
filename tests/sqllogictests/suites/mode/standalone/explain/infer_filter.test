@@ -888,6 +888,44 @@ SELECT count(*) FROM infer_filter_constraints AS l LEFT JOIN infer_filter_constr
 ----
 6
 
+# IS NULL accepts null-extended rows; it is not interchangeable with = NULL.
+query I
+SELECT count(*) FROM infer_filter_constraints AS l LEFT JOIN infer_filter_constraints AS r ON l.x = r.x WHERE r.x IS NULL;
+----
+1
+
+query I
+SELECT count(*) FROM infer_filter_constraints AS l RIGHT JOIN infer_filter_constraints AS r ON l.x = r.x WHERE l.x IS NULL;
+----
+1
+
+query I
+SELECT count(*) FROM infer_filter_constraints AS l FULL JOIN infer_filter_constraints AS r ON l.x = r.x WHERE l.x IS NULL;
+----
+2
+
+query I
+SELECT count(*) FROM infer_filter_constraints AS l LEFT JOIN infer_filter_constraints AS r ON l.x = r.x WHERE r.x IS NOT NULL;
+----
+5
+
+query I
+SELECT count(*) FROM infer_filter_constraints AS l LEFT JOIN infer_filter_constraints AS r ON l.x = r.x WHERE r.x = NULL;
+----
+0
+
+# Stored Float32 0.1 is greater than Float64 0.1, but equal to Float32 0.1.
+# Keeping the original threshold type must preserve this distinction.
+query I
+SELECT count(*) FROM infer_filter_constraints WHERE f > 0.1::FLOAT64;
+----
+4
+
+query I
+SELECT count(*) FROM infer_filter_constraints WHERE f > 0.1::FLOAT32;
+----
+3
+
 # Float32 0.1 is strictly inside this Float64 interval; rounding either endpoint is unsafe.
 query I
 SELECT x FROM infer_filter_constraints WHERE CAST(f AS FLOAT64) > 0.1::FLOAT64 AND CAST(f AS FLOAT64) < 0.100000002::FLOAT64;
