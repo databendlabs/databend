@@ -254,6 +254,10 @@ pub struct ViewIdent {
 pub struct BindContext {
     pub parent: Option<Box<BindContext>>,
 
+    /// Depth of the binding path, independent of the name-resolution parent.
+    /// View definitions hide the caller's names but still count toward the limit.
+    pub binding_depth: usize,
+
     pub columns: Vec<ColumnBinding>,
 
     // map internal column: (table_index, column_id) -> column_index
@@ -380,6 +384,7 @@ impl BindContext {
     pub fn new() -> Self {
         Self {
             parent: None,
+            binding_depth: 1,
             columns: Vec::new(),
             bound_internal_columns: BTreeMap::new(),
             bound_virtual_columns: BTreeMap::new(),
@@ -402,11 +407,19 @@ impl BindContext {
         }
     }
 
+    const MAX_DEPTH: usize = 4096;
+
     pub fn depth(&self) -> usize {
-        if let Some(ref p) = self.parent {
-            return p.depth() + 1;
+        self.binding_depth
+    }
+
+    pub fn next_depth(&self) -> Result<usize> {
+        if self.depth() >= Self::MAX_DEPTH {
+            return Err(ErrorCode::Internal(
+                "Query binder exceeds the maximum iterations",
+            ));
         }
-        1
+        Ok(self.depth() + 1)
     }
 
     pub fn with_opt_parent(parent: Option<&BindContext>) -> Result<Self> {
@@ -418,15 +431,10 @@ impl BindContext {
     }
 
     pub fn with_parent(parent: BindContext) -> Result<Self> {
-        const MAX_DEPTH: usize = 4096;
-        if parent.depth() >= MAX_DEPTH {
-            return Err(ErrorCode::Internal(
-                "Query binder exceeds the maximum iterations",
-            ));
-        }
-
+        let binding_depth = parent.next_depth()?;
         Ok(BindContext {
             parent: Some(Box::new(parent.clone())),
+            binding_depth,
             columns: vec![],
             bound_internal_columns: BTreeMap::new(),
             bound_virtual_columns: BTreeMap::new(),
@@ -453,10 +461,27 @@ impl BindContext {
     pub fn replace(&self) -> Self {
         let mut bind_context = BindContext::new();
         bind_context.parent = self.parent.clone();
+        bind_context.binding_depth = self.depth();
         bind_context.cte_context = self.cte_context.clone();
         bind_context.udf_cache = self.udf_cache.clone();
         bind_context.binding_views = self.binding_views.clone();
         bind_context
+    }
+
+    /// Create the root context for binding the definition of `view`.
+    ///
+    /// A view definition is an independent name scope: it must not resolve the
+    /// caller's CTEs or columns, so the new context has no parent and an empty
+    /// CTE context. Carry over the binding depth to limit acyclic expansion,
+    /// and the view expansion path to detect cycles.
+    pub fn new_view_scope(&self, view: ViewIdent) -> Result<Self> {
+        let mut bind_context = BindContext::new();
+        bind_context.binding_depth = self.next_depth()?;
+        bind_context.binding_views = self.binding_views.clone();
+        bind_context.binding_views.insert(view);
+        bind_context.udf_cache = self.udf_cache.clone();
+        bind_context.planning_materialized_view_rewrite = self.planning_materialized_view_rewrite;
+        Ok(bind_context)
     }
 
     pub fn check_view_loop(&self, ident: &ViewIdent) -> Result<()> {
