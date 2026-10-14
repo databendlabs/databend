@@ -294,8 +294,12 @@ async function findPR(github, context, core, run) {
                 state: 'open',
                 head: `${headOwner}:${run.head_branch}`,
             });
-            const match = data.find((p) => p.head && p.head.sha === run.head_sha);
-            if (match) return match.number;
+            const matches = data.filter((p) => p.head && p.head.sha === run.head_sha);
+            if (matches.length === 1) return matches[0].number;
+            if (matches.length > 1) {
+                core.warning(`PR lookup by head: ${matches.length} open PRs share ${headOwner}:${run.head_branch}@${run.head_sha}; skipping ambiguous match`);
+                return null;
+            }
         } catch (e) {
             core.warning(`PR lookup by head: ${e.message}`);
         }
@@ -307,7 +311,11 @@ async function findPR(github, context, core, run) {
             commit_sha: run.head_sha,
         });
         const open = data.filter((p) => p.state === 'open');
-        if (open.length) return open[0].number;
+        if (open.length === 1) return open[0].number;
+        if (open.length > 1) {
+            core.warning(`PR lookup: ${open.length} open PRs share commit ${run.head_sha}; skipping ambiguous match`);
+            return null;
+        }
     } catch (e) {
         core.warning(`PR lookup: ${e.message}`);
     }
