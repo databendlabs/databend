@@ -27,6 +27,8 @@ use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_grpc::Http2KeepAliveConfig;
 use databend_common_settings::FlightKeepAliveParams;
+use log::info;
+use log::warn;
 use tonic::transport::Channel;
 
 use super::cluster::rpc_client_options;
@@ -102,8 +104,16 @@ fn drop_idle_channels<C>(
     entries: &mut HashMap<ControlChannelKey, CachedControlChannel<C>>,
     now: Instant,
 ) {
-    entries.retain(|_, entry| {
-        now.saturating_duration_since(entry.last_success) <= CONTROL_CHANNEL_MAX_IDLE
+    entries.retain(|key, entry| {
+        let idle = now.saturating_duration_since(entry.last_success);
+        if idle <= CONTROL_CHANNEL_MAX_IDLE {
+            return true;
+        }
+        info!(
+            "Dropped idle flight control channel to node {} at {}, no successful request for {:?}",
+            key.node_id, key.address, idle
+        );
+        false
     });
 }
 
@@ -133,6 +143,12 @@ impl<C: Clone> ControlChannelCache<C> {
                 }
             }
             None => {
+                if entries.contains_key(&key) {
+                    info!(
+                        "Replaced cached flight control channel to node {} at {} with a newly created one",
+                        key.node_id, key.address
+                    );
+                }
                 let id = self.next_id.fetch_add(1, Ordering::Relaxed);
                 entries.insert(key, CachedControlChannel {
                     id,
@@ -165,14 +181,14 @@ async fn create_control_channel(
 ) -> Result<Channel> {
     let (timeout, rpc_tls_config) = rpc_client_options(config);
     let keep_alive_config = build_keep_alive_config(keep_alive);
-    let address = address.to_string();
+    let target = address.to_string();
 
     // tonic spawns the channel's background tasks on the current runtime. The
     // channel outlives this query, so create it on the global runtime.
     let channel = GlobalIORuntime::instance()
         .spawn(async move {
             ConnectionFactory::create_rpc_channel_with_http2_keep_alive(
-                address,
+                target,
                 timeout,
                 rpc_tls_config,
                 keep_alive_config,
@@ -185,14 +201,20 @@ async fn create_control_channel(
             ErrorCode::TokioError(format!("Failed to create flight channel: {}", cause))
         })?;
 
-    channel.map_err(|error| {
+    let channel = channel.map_err(|error| {
         add_flight_error_context(
             ErrorCode::from(error),
             FlightOperation::Connect,
             &config.query.node_id,
             remote_node_id,
         )
-    })
+    })?;
+
+    info!(
+        "Created flight control channel to node {} at {}",
+        remote_node_id, address
+    );
+    Ok(channel)
 }
 
 /// The channel used for one control-plane request: the cached channel for the
@@ -235,16 +257,22 @@ impl ControlChannel {
 
     /// Caches the channel after a successful request, or drops the cached
     /// channel after a failed one.
-    pub(super) fn finish(self, success: bool) {
-        match (success, self.cached_id) {
-            (true, _) => CONTROL_CHANNELS.record_success(
+    pub(super) fn finish<T>(self, result: &Result<T>) {
+        match (result, self.cached_id) {
+            (Ok(_), _) => CONTROL_CHANNELS.record_success(
                 self.key,
                 self.cached_id,
                 self.channel,
                 Instant::now(),
             ),
-            (false, Some(id)) => CONTROL_CHANNELS.evict(&self.key, id, Instant::now()),
-            (false, None) => {}
+            (Err(cause), Some(id)) => {
+                warn!(
+                    "Dropped cached flight control channel to node {} at {} after a failed request: {}",
+                    self.key.node_id, self.key.address, cause
+                );
+                CONTROL_CHANNELS.evict(&self.key, id, Instant::now());
+            }
+            (Err(_), None) => {}
         }
     }
 }

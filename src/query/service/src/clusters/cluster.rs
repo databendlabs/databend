@@ -213,7 +213,7 @@ impl ClusterHelper for Cluster {
                                     flight_params.timeout,
                                 )
                                 .await;
-                            channel.finish(result.is_ok());
+                            channel.finish(&result);
                             result
                         } else {
                             let mut conn = create_client(
