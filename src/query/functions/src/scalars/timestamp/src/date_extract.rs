@@ -42,6 +42,8 @@ use databend_common_timezone::DateTimeComponents;
 use databend_common_timezone::components_from_timestamp;
 use databend_common_timezone::wall_clock_is_monotonic;
 
+use crate::fixed_offset::local_dates;
+
 /// Projection of a timestamp onto a calendar number, such as `to_year`.
 pub(super) trait ToNumber {
     type Output;
@@ -495,10 +497,23 @@ pub(super) fn register(registry: &mut FunctionRegistry) {
         timestamp_to_u32_domain::<ToYYYYMM>,
         |val, ctx| ToNumberImpl::eval_timestamp::<ToYYYYMM>(val, &ctx.func_ctx.tz),
     );
-    registry.register_1_arg::<TimestampType, UInt32Type, _>(
+    registry.register_passthrough_nullable_1_arg::<TimestampType, UInt32Type, _>(
         "to_yyyymmdd",
         timestamp_to_u32_domain::<ToYYYYMMDD>,
-        |val, ctx| ToNumberImpl::eval_timestamp::<ToYYYYMMDD>(val, &ctx.func_ctx.tz),
+        |val, ctx| {
+            if let Value::Column(col) = &val
+                && let Some(days) = local_dates(col, ctx.validity.as_ref(), &ctx.func_ctx.tz)
+            {
+                return Value::Column(
+                    days.iter()
+                        .map(|&day| ToNumberImpl::eval_date::<ToYYYYMMDD>(day))
+                        .collect(),
+                );
+            }
+            vectorize_1_arg::<TimestampType, UInt32Type>(|val, ctx| {
+                ToNumberImpl::eval_timestamp::<ToYYYYMMDD>(val, &ctx.func_ctx.tz)
+            })(val, ctx)
+        },
     );
     registry.register_1_arg::<TimestampType, UInt64Type, _>(
         "to_yyyymmddhh",

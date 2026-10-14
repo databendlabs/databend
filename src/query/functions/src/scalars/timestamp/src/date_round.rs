@@ -16,11 +16,14 @@ use chrono::Datelike;
 use chrono::NaiveDate as Date;
 use chrono::Weekday;
 use chrono_tz::Tz;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::buffer::Buffer;
 use databend_common_expression::Domain;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
+use databend_common_expression::Value;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::date::DATE_MAX;
@@ -29,6 +32,7 @@ use databend_common_expression::types::date::check_date;
 use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::date::date_from_days;
 use databend_common_expression::types::number::Int64Type;
+use databend_common_expression::types::timestamp::MICROS_PER_SEC;
 use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
 use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
 use databend_common_expression::types::timestamp::check_timestamp;
@@ -39,6 +43,7 @@ use databend_common_timezone::fast_utc_from_local;
 
 use crate::date_arithmetic::last_day_of_year_month;
 use crate::date_extract::calendar_monotonicity;
+use crate::fixed_offset::FixedOffset;
 
 #[derive(Clone, Copy)]
 enum Round {
@@ -50,6 +55,40 @@ enum Round {
     TimeSlot,
     Hour,
     Day,
+}
+
+impl Round {
+    /// The rounding unit, in microseconds of local wall-clock time.
+    fn micros(self) -> i64 {
+        let seconds = match self {
+            Round::Second => 1,
+            Round::Minute => 60,
+            Round::FiveMinutes => 5 * 60,
+            Round::TenMinutes => 10 * 60,
+            Round::FifteenMinutes => 15 * 60,
+            Round::TimeSlot => 30 * 60,
+            Round::Hour => 60 * 60,
+            Round::Day => 24 * 60 * 60,
+        };
+        seconds * MICROS_PER_SEC
+    }
+}
+
+/// `round` by integer arithmetic over a column with a fixed UTC offset, from
+/// its timestamps back to the start of the unit holding the earliest one. None
+/// leaves the column to the per-row path, which also reports range errors.
+fn round_at_fixed_offset(
+    col: &Buffer<i64>,
+    active: Option<&Bitmap>,
+    tz: &Tz,
+    round: Round,
+) -> Option<Buffer<i64>> {
+    let unit = round.micros();
+    let offset = FixedOffset::of(col, active, tz, unit)?;
+    // Truncation is monotonic and never moves forward, so the earliest
+    // result bounds every row.
+    check_timestamp(offset.truncate(offset.min, unit)).ok()?;
+    Some(col.iter().map(|&ts| offset.truncate(ts, unit)).collect())
 }
 
 fn round_timestamp(ts: i64, tz: &Tz, round: Round) -> Result<i64, String> {
@@ -376,15 +415,23 @@ fn register_timestamp_round(registry: &mut FunctionRegistry, name: &'static str,
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampType, _>(
         name,
         |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<TimestampType, TimestampType>(move |value, output, ctx| {
-            match round_timestamp(value, &ctx.func_ctx.tz, round) {
-                Ok(value) => output.push(value),
-                Err(error) => {
-                    ctx.set_error(output.len(), error);
-                    output.push(0);
-                }
+        move |val, ctx| {
+            if let Value::Column(col) = &val
+                && let Some(rounded) =
+                    round_at_fixed_offset(col, ctx.validity.as_ref(), &ctx.func_ctx.tz, round)
+            {
+                return Value::Column(rounded);
             }
-        }),
+            vectorize_with_builder_1_arg::<TimestampType, TimestampType>(
+                move |value, output, ctx| match round_timestamp(value, &ctx.func_ctx.tz, round) {
+                    Ok(value) => output.push(value),
+                    Err(error) => {
+                        ctx.set_error(output.len(), error);
+                        output.push(0);
+                    }
+                },
+            )(val, ctx)
+        },
     );
 }
 
@@ -416,4 +463,61 @@ where T: RoundDate {
             }
         }),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono_tz::Tz;
+    use databend_common_column::buffer::Buffer;
+
+    use super::Round;
+    use super::round_at_fixed_offset;
+    use super::round_timestamp;
+
+    // Wherever the arithmetic path answers, it answers what the per-row path
+    // does, including next to a DST change where it must decline some units.
+    #[test]
+    fn test_round_at_fixed_offset_agrees_with_per_row() {
+        let columns: [Buffer<i64>; 3] = [
+            // 2024-09-01, ~20 days of rows.
+            (0..4000)
+                .map(|i| 1_725_148_800_000_000 + i * 433_000_017)
+                .collect(),
+            // 2024-10-27 03:00-04:00 UTC, just after the Paris DST change.
+            (0..60)
+                .map(|i| 1_729_998_000_000_000 + i * 60_000_000)
+                .collect(),
+            // Across that change.
+            (0..100)
+                .map(|i| 1_729_900_800_000_000 + i * 3_600_000_000)
+                .collect(),
+        ];
+        let rounds = [
+            Round::Second,
+            Round::Minute,
+            Round::FiveMinutes,
+            Round::TenMinutes,
+            Round::FifteenMinutes,
+            Round::TimeSlot,
+            Round::Hour,
+            Round::Day,
+        ];
+        let mut answered = 0;
+        for col in &columns {
+            for tz in [Tz::UTC, Tz::Europe__Paris, Tz::Asia__Kathmandu] {
+                for round in rounds {
+                    let Some(fast) = round_at_fixed_offset(col, None, &tz, round) else {
+                        continue;
+                    };
+                    answered += 1;
+                    for (&ts, &got) in col.iter().zip(fast.iter()) {
+                        assert_eq!(got, round_timestamp(ts, &tz, round).unwrap(), "{tz} {ts}");
+                    }
+                }
+            }
+        }
+        // Everything but Paris across the change, and Paris's day
+        // truncation just after it.
+        assert_eq!(answered, 3 * 3 * 8 - 8 - 1);
+    }
 }
