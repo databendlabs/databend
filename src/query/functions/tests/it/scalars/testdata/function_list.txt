@@ -2737,6 +2737,8 @@ Functions overloads:
 1 millennium(Date NULL) :: UInt16 NULL
 2 millennium(Timestamp) :: UInt16
 3 millennium(Timestamp NULL) :: UInt16 NULL
+0 min_scale FACTORY
+1 min_scale(NULL) :: NULL
 0 minus(Variant, Int32) :: Variant
 1 minus(Variant NULL, Int32 NULL) :: Variant NULL
 2 minus(Variant, String) :: Variant

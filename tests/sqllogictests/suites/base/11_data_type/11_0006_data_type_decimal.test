@@ -1418,5 +1418,31 @@ select number::decimal(15,2) > 2.45 from numbers(5);
 1
 1      
 
+## min_scale: the fewest fractional digits that represent the value exactly
+query IIII
+SELECT min_scale(1.2300::decimal(10, 4)), min_scale(-0.0010::decimal(10, 4)), min_scale(0::decimal(10, 4)), min_scale(1.0000000000000000001::decimal(38, 19));
+----
+2 3 0 19
+
+statement ok
+create or replace table min_scale_t (k int, q decimal(38, 19) null);
+
+statement ok
+insert into min_scale_t values (1, 0.01), (1, 0.1234), (1, NULL), (2, 100), (2, 2.5);
+
+query II
+select k, max(min_scale(q)) from min_scale_t group by k order by k;
+----
+1 4
+2 1
+
+query B
+select min_scale(q) is null from min_scale_t where q is null;
+----
+1
+
+statement ok
+drop table min_scale_t;
+
 statement ok
 drop database decimal_t;
