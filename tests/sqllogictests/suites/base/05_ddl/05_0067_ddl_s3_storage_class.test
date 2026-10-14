@@ -1,0 +1,259 @@
+# S3 storage class controls new objects only. Database defaults are copied when
+# persistent FUSE-backed tables are created; changing the database is not retroactive.
+# Keep INTELLIGENT_TIERING tests metadata-only: CI may use MinIO, which does not
+# support that class. Real S3 request headers are covered by FUSE unit tests.
+# SQL writes below use STANDARD or temporary tables; filesystem cases only check compatibility.
+
+statement ok
+CREATE OR REPLACE DATABASE test_storage_class
+
+statement ok
+CREATE TABLE test_storage_class.before_default(id INT)
+
+# The database option is independent of the connection/path options.
+statement ok
+ALTER DATABASE test_storage_class SET OPTIONS(default_s3_storage_class = 'intelligent_tiering')
+
+query TT
+SHOW CREATE DATABASE test_storage_class
+----
+test_storage_class CREATE DATABASE `test_storage_class` ENGINE=DEFAULT OPTIONS (DEFAULT_S3_STORAGE_CLASS='intelligent_tiering')
+
+statement ok
+CREATE TABLE test_storage_class.inherited(id INT)
+
+statement ok
+CREATE TABLE test_storage_class.explicit(id INT) S3_STORAGE_CLASS = 'StAnDaRd'
+
+query TBB rowsort
+SELECT name, upper(table_option) LIKE '%S3_STORAGE_CLASS=''INTELLIGENT_TIERING''%', upper(table_option) LIKE '%S3_STORAGE_CLASS=''STANDARD''%'
+FROM system.tables WHERE database = 'test_storage_class'
+----
+before_default 0 0
+explicit 0 1
+inherited 1 0
+
+# Changing the database default affects only newly created tables.
+statement ok
+ALTER DATABASE test_storage_class SET OPTIONS(DEFAULT_S3_STORAGE_CLASS = 'STANDARD')
+
+statement ok
+CREATE TABLE test_storage_class.after_alter(id INT)
+
+query TBB rowsort
+SELECT name, upper(table_option) LIKE '%S3_STORAGE_CLASS=''INTELLIGENT_TIERING''%', upper(table_option) LIKE '%S3_STORAGE_CLASS=''STANDARD''%'
+FROM system.tables WHERE database = 'test_storage_class'
+----
+after_alter 0 1
+before_default 0 0
+explicit 0 1
+inherited 1 0
+
+# SET overrides the persisted default; UNSET falls back to session/config, not the database.
+statement ok
+ALTER TABLE test_storage_class.inherited SET OPTIONS(S3_STORAGE_CLASS = 'standard')
+
+query B
+SELECT upper(table_option) LIKE '%S3_STORAGE_CLASS=''STANDARD''%'
+FROM system.tables WHERE database = 'test_storage_class' AND name = 'inherited'
+----
+1
+
+statement ok
+ALTER TABLE test_storage_class.inherited UNSET OPTIONS(S3_STORAGE_CLASS)
+
+query B
+SELECT table_option LIKE '%S3_STORAGE_CLASS=%'
+FROM system.tables WHERE database = 'test_storage_class' AND name = 'inherited'
+----
+0
+
+# A table-level STANDARD must override an INTELLIGENT_TIERING session setting,
+# including the initial CTAS write and subsequent mutations/compaction.
+statement ok
+SET s3_storage_class = 'intelligent_tiering'
+
+statement ok
+CREATE TABLE test_storage_class.ctas S3_STORAGE_CLASS = 'STANDARD' AS SELECT 1 AS id
+
+statement ok
+INSERT INTO test_storage_class.ctas VALUES (2)
+
+statement ok
+UPDATE test_storage_class.ctas SET id = 3 WHERE id = 2
+
+statement ok
+OPTIMIZE TABLE test_storage_class.ctas COMPACT
+
+query I rowsort
+SELECT id FROM test_storage_class.ctas
+----
+1
+3
+
+# Dynamic tables are FUSE-backed and also inherit the database default.
+statement ok
+CREATE DYNAMIC TABLE test_storage_class.dynamic AS SELECT id FROM test_storage_class.ctas
+
+query B
+SELECT table_option LIKE '%S3_STORAGE_CLASS=''STANDARD''%'
+FROM system.tables WHERE database = 'test_storage_class' AND name = 'dynamic'
+----
+1
+
+query I rowsort
+SELECT id FROM test_storage_class.dynamic
+----
+1
+3
+
+# With no database default, the session setting stays a runtime fallback and is
+# not frozen into the table options when the table is created.
+statement ok
+CREATE OR REPLACE DATABASE test_storage_class_no_default
+
+statement ok
+CREATE TABLE test_storage_class_no_default.no_default(id INT)
+
+query B
+SELECT table_option LIKE '%S3_STORAGE_CLASS=%'
+FROM system.tables WHERE database = 'test_storage_class_no_default' AND name = 'no_default'
+----
+0
+
+statement ok
+DROP DATABASE test_storage_class_no_default
+
+# Temporary tables always write STANDARD, even with an explicit table override.
+statement ok
+CREATE TEMPORARY TABLE test_storage_class.temp(id INT) S3_STORAGE_CLASS = 'INTELLIGENT_TIERING'
+
+statement ok
+INSERT INTO test_storage_class.temp VALUES (42)
+
+query I
+SELECT id FROM test_storage_class.temp
+----
+42
+
+statement ok
+DROP TABLE test_storage_class.temp
+
+statement ok
+UNSET s3_storage_class
+
+# Invalid values must fail before they can be persisted.
+statement error 1301
+CREATE TABLE test_storage_class.invalid(id INT) S3_STORAGE_CLASS = 'glacier'
+
+statement error 1301
+ALTER TABLE test_storage_class.explicit SET OPTIONS(S3_STORAGE_CLASS = '')
+
+statement error 2004
+ALTER DATABASE test_storage_class SET OPTIONS(DEFAULT_S3_STORAGE_CLASS = 'glacier')
+
+statement error 2004
+CREATE DATABASE invalid_storage_class OPTIONS(DEFAULT_S3_STORAGE_CLASS = '')
+
+statement error 2004
+CREATE DATABASE duplicate_storage_class OPTIONS(DEFAULT_S3_STORAGE_CLASS = 'standard', default_s3_storage_class = 'intelligent_tiering')
+
+query TT
+SHOW CREATE DATABASE test_storage_class
+----
+test_storage_class CREATE DATABASE `test_storage_class` ENGINE=DEFAULT OPTIONS (DEFAULT_S3_STORAGE_CLASS='STANDARD')
+
+query B
+SELECT upper(table_option) LIKE '%S3_STORAGE_CLASS=''STANDARD''%'
+FROM system.tables WHERE database = 'test_storage_class' AND name = 'explicit'
+----
+1
+
+# Non-FUSE engines do not accept this table option or inherit the database default.
+statement error 1301
+CREATE TABLE test_storage_class.invalid_memory(id INT) ENGINE = MEMORY S3_STORAGE_CLASS = 'standard'
+
+statement ok
+CREATE TABLE test_storage_class.memory(id INT) ENGINE = MEMORY
+
+query B
+SELECT table_option LIKE '%S3_STORAGE_CLASS=%'
+FROM system.tables WHERE database = 'test_storage_class' AND name = 'memory'
+----
+0
+
+statement error 1301
+ALTER TABLE test_storage_class.memory SET OPTIONS(S3_STORAGE_CLASS = 'standard')
+
+# CREATE DATABASE also accepts mixed-case names and values without a connection.
+statement ok
+CREATE OR REPLACE DATABASE test_storage_class_create OPTIONS(default_s3_storage_class = 'InTeLlIgEnT_TiErInG')
+
+statement ok
+CREATE TABLE test_storage_class_create.inherited(id INT)
+
+query B
+SELECT upper(table_option) LIKE '%S3_STORAGE_CLASS=''INTELLIGENT_TIERING''%'
+FROM system.tables WHERE database = 'test_storage_class_create' AND name = 'inherited'
+----
+1
+
+statement ok
+DROP DATABASE test_storage_class_create
+
+# External tables inherit the default even with an explicit location.
+# Filesystem storage here only checks option inheritance, NOT S3 tiering behavior.
+statement ok
+CREATE OR REPLACE CONNECTION storage_class_fs STORAGE_TYPE = 'fs'
+
+statement ok
+CREATE OR REPLACE DATABASE test_storage_class_external OPTIONS(
+    DEFAULT_STORAGE_CONNECTION = 'storage_class_fs',
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/05_0067_storage_class/',
+    DEFAULT_S3_STORAGE_CLASS = 'STANDARD'
+)
+
+statement ok
+CREATE TABLE test_storage_class_external.inherited(id INT)
+
+query B
+SELECT table_option LIKE '%S3_STORAGE_CLASS=''STANDARD''%'
+FROM system.tables WHERE database = 'test_storage_class_external' AND name = 'inherited'
+----
+1
+
+statement ok
+INSERT INTO test_storage_class_external.inherited VALUES (7)
+
+query I
+SELECT id FROM test_storage_class_external.inherited
+----
+7
+
+# An explicit external location does not suppress storage-class inheritance.
+statement ok
+CREATE TABLE test_storage_class_external.explicit_location(id INT)
+    ENGINE = FUSE 'fs:///tmp/05_0067_storage_class_explicit/' CONNECTION = (connection_name = 'storage_class_fs')
+
+query B
+SELECT table_option LIKE '%S3_STORAGE_CLASS=''STANDARD''%'
+FROM system.tables WHERE database = 'test_storage_class_external' AND name = 'explicit_location'
+----
+1
+
+statement ok
+INSERT INTO test_storage_class_external.explicit_location VALUES (8)
+
+query I
+SELECT id FROM test_storage_class_external.explicit_location
+----
+8
+
+statement ok
+DROP DATABASE test_storage_class_external
+
+statement ok
+DROP CONNECTION storage_class_fs
+
+statement ok
+DROP DATABASE test_storage_class

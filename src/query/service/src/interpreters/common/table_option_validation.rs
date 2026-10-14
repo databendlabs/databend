@@ -77,6 +77,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_STRING_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MIN_STRING_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_SEED;
 use databend_storages_common_table_meta::table::OPT_KEY_RECURSIVE_CTE;
+use databend_storages_common_table_meta::table::OPT_KEY_S3_STORAGE_CLASS;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_IDS;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
@@ -110,6 +111,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(OPT_KEY_BLOOM_INDEX_TYPE);
     r.insert(OPT_KEY_APPROX_DISTINCT_COLUMNS);
     r.insert(OPT_KEY_TABLE_COMPRESSION);
+    r.insert(OPT_KEY_S3_STORAGE_CLASS);
     r.insert(OPT_KEY_STORAGE_FORMAT);
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_COMMENT);
@@ -160,6 +162,7 @@ pub static CREATE_MATERIALIZED_VIEW_OPTIONS: LazyLock<HashSet<&'static str>> =
         r.insert(OPT_KEY_BLOOM_INDEX_TYPE);
         r.insert(OPT_KEY_APPROX_DISTINCT_COLUMNS);
         r.insert(OPT_KEY_TABLE_COMPRESSION);
+        r.insert(OPT_KEY_S3_STORAGE_CLASS);
         r.insert(OPT_KEY_STORAGE_FORMAT);
         r.insert(OPT_KEY_WRITE_DISTRIBUTION_MODE);
         r.insert(OPT_KEY_SEGMENT_FORMAT);
@@ -222,6 +225,7 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
     r.insert(FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD);
+    r.insert(OPT_KEY_S3_STORAGE_CLASS);
     r.insert(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN);
     r.insert(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS);
     r.insert(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS);
