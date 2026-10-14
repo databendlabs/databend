@@ -495,6 +495,7 @@ impl Binder {
 
         let mut output_context = BindContext::new();
         output_context.binding_depth = from_context.depth();
+        output_context.binding_views = from_context.binding_views;
         output_context.parent = from_context.parent;
         output_context
             .cte_context

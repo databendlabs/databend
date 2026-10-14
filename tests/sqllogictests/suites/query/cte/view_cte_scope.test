@@ -91,6 +91,13 @@ with foo as (select 99 as x) select v.x, foo.x from function_view v, foo
 ----
 0 99
 
+# Derived SELECT outputs must preserve the view path for later subqueries.
+statement ok
+create view v_scalar_derived as select (select max(x) from view_cte_scope.foo) as x from (select 1 as d) a
+
+statement ok
+create view v_lateral_derived as select p.x from (select 1 as d) a, lateral (select x from view_cte_scope.foo) p
+
 # Repeated consumers exercise inline and auto-materialized binding separately.
 statement ok
 set enable_auto_materialize_cte = 0
@@ -101,6 +108,16 @@ with foo as (select * from v) select * from foo union all select * from foo
 1
 1
 
+query II
+with foo as (select 99 as x) select v.x, foo.x from v_scalar_derived v, foo
+----
+1 99
+
+query II
+with foo as (select 99 as x) select v.x, foo.x from v_lateral_derived v, foo
+----
+1 99
+
 statement ok
 set enable_auto_materialize_cte = 1
 
@@ -109,6 +126,16 @@ with foo as (select * from v) select * from foo union all select * from foo
 ----
 1
 1
+
+query II
+with foo as (select 99 as x) select v.x, foo.x from v_scalar_derived v, foo
+----
+1 99
+
+query II
+with foo as (select 99 as x) select v.x, foo.x from v_lateral_derived v, foo
+----
+1 99
 
 # DuckDB: multiple CTEs in a view definition.
 statement ok
