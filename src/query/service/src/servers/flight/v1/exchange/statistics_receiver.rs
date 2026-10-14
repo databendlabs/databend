@@ -201,7 +201,7 @@ impl StatisticsReceiver {
                 Ok(false)
             }
             Ok(Some(DataPacket::IoStats(stats))) => {
-                ctx.set_node_io_stats(source_target.to_string(), stats);
+                ctx.merge_remote_io_stats(&stats);
                 Ok(false)
             }
         }

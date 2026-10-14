@@ -179,9 +179,9 @@ pub struct QueryContextShared {
     /// global storage metrics layer records into it regardless of which
     /// table instance performed the IO.
     pub(super) local_io_stats: Arc<IoStats>,
-    /// Latest IO snapshot reported by each remote node, keyed by node id.
-    /// Snapshots are cumulative, so a newer one replaces the older one.
-    pub(super) nodes_io_stats: Arc<RwLock<HashMap<String, IoStatsSnapshot>>>,
+    /// IO reported by remote nodes for this query. Remote nodes send deltas
+    /// (see `StatisticsSender::send_io_stats`), so they are accumulated here.
+    pub(super) remote_io_stats: Arc<IoStats>,
 
     pub(super) broadcast_registry: BroadcastRegistry,
 
@@ -274,7 +274,7 @@ impl QueryContextShared {
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
             pruned_partitions_stats: Arc::new(RwLock::new(HashMap::new())),
             local_io_stats: ThreadTracker::io_stats().cloned().unwrap_or_default(),
-            nodes_io_stats: Arc::new(RwLock::new(HashMap::new())),
+            remote_io_stats: Default::default(),
             broadcast_registry: Default::default(),
             perf_config: Mutex::new(PerfConfig::default()),
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
@@ -436,17 +436,15 @@ impl QueryContextShared {
         self.local_io_stats.clone()
     }
 
-    /// Record the latest cumulative IO snapshot reported by a remote node.
-    pub fn set_node_io_stats(&self, node: String, stats: IoStatsSnapshot) {
-        self.nodes_io_stats.write().insert(node, stats);
+    /// Add an IO delta reported by a remote node.
+    pub fn merge_remote_io_stats(&self, delta: &IoStatsSnapshot) {
+        self.remote_io_stats.merge_snapshot(delta);
     }
 
-    /// IO of the whole query: this node plus the latest snapshot of each remote node.
+    /// IO of the whole query: this node plus everything reported by remote nodes.
     pub fn get_io_stats(&self) -> IoStatsSnapshot {
         let mut stats = self.local_io_stats.snapshot();
-        for node_stats in self.nodes_io_stats.read().values() {
-            stats.merge(node_stats);
-        }
+        stats.merge(&self.remote_io_stats.snapshot());
         stats
     }
 

@@ -522,8 +522,8 @@ impl QueryContext {
         self.shared.get_local_io_stats()
     }
 
-    pub fn set_node_io_stats(&self, node: String, stats: IoStatsSnapshot) {
-        self.shared.set_node_io_stats(node, stats);
+    pub fn merge_remote_io_stats(&self, delta: &IoStatsSnapshot) {
+        self.shared.merge_remote_io_stats(delta);
     }
 
     pub fn get_io_stats(&self) -> IoStatsSnapshot {
@@ -1115,27 +1115,26 @@ mod tests {
             write_bytes: 5,
             write_duration_ms: 6,
         });
-        // A remote node reports cumulative snapshots: a newer snapshot from the
-        // same node replaces the older one instead of being added to it.
-        ctx.set_node_io_stats("node-1".to_string(), IoStatsSnapshot {
-            list_count: 5,
-            list_duration_ms: 10,
-            read_count: 10,
-            read_bytes: 15,
-            read_duration_ms: 20,
-            write_count: 20,
-            write_bytes: 25,
-            write_duration_ms: 30,
+        // Remote nodes report deltas, which accumulate.
+        ctx.merge_remote_io_stats(&IoStatsSnapshot {
+            list_count: 4,
+            list_duration_ms: 8,
+            read_count: 8,
+            read_bytes: 12,
+            read_duration_ms: 16,
+            write_count: 16,
+            write_bytes: 20,
+            write_duration_ms: 24,
         });
-        ctx.set_node_io_stats("node-1".to_string(), IoStatsSnapshot {
-            list_count: 10,
-            list_duration_ms: 20,
-            read_count: 20,
-            read_bytes: 30,
-            read_duration_ms: 40,
-            write_count: 40,
-            write_bytes: 50,
-            write_duration_ms: 60,
+        ctx.merge_remote_io_stats(&IoStatsSnapshot {
+            list_count: 6,
+            list_duration_ms: 12,
+            read_count: 12,
+            read_bytes: 18,
+            read_duration_ms: 24,
+            write_count: 24,
+            write_bytes: 30,
+            write_duration_ms: 36,
         });
 
         assert_eq!(ctx.get_io_stats(), IoStatsSnapshot {
