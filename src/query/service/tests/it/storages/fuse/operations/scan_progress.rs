@@ -47,7 +47,8 @@ async fn test_scan_progress_counts_rows_before_prewhere() -> Result<()> {
     fixture.execute_command(&create).await?;
     fixture.execute_command(&insert).await?;
 
-    // All projected columns are prewhere columns.
+    // Only `a` is read, and it is the prewhere column: there are no remaining
+    // columns to decode after the filter.
     let count =
         scan_progress_of(&fixture, &format!("select count() from {db}.t where a = 5")).await?;
     // `b` is a remaining column, decoded only for the surviving row.
