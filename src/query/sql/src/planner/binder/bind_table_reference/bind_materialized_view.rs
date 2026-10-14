@@ -283,6 +283,7 @@ impl Binder {
         let s_expr = SExpr::create_unary(Arc::new(aggregate.into()), Arc::new(child));
         let mut output_context = BindContext::new();
         output_context.binding_depth = physical_context.depth();
+        output_context.binding_views = physical_context.binding_views.clone();
         output_context.parent = physical_context.parent.clone();
         output_context
             .cte_context
@@ -366,6 +367,7 @@ impl Binder {
             SExpr::create_unary(Arc::new(EvalScalar { items }.into()), Arc::new(child));
         let mut output_context = BindContext::new();
         output_context.binding_depth = physical_context.depth();
+        output_context.binding_views = physical_context.binding_views.clone();
         output_context.parent = physical_context.parent.clone();
         output_context
             .cte_context
