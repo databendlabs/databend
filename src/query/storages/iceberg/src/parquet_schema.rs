@@ -285,6 +285,29 @@ mod tests {
         assert_eq!(column.max_def_level(), original.column(0).max_def_level());
     }
     #[test]
+    fn historical_aliases_resolve_to_the_same_reader_schema() {
+        let resolver = IcebergParquetSchemaResolver::new(
+            Schema::new(vec![field("amount", DataType::Decimal128(15, 2), 2)]),
+            Some(r#"[{"field-id":2,"names":["old_d","legacy_amount","amount"]}]"#),
+        )
+        .unwrap();
+        let first = resolver
+            .resolve(&file(
+                "message first { OPTIONAL FIXED_LEN_BYTE_ARRAY(7) old_d (DECIMAL(15,2)); }",
+            ))
+            .unwrap();
+        let second = resolver.resolve(&file("message second { OPTIONAL FIXED_LEN_BYTE_ARRAY(7) legacy_amount (DECIMAL(15,2)); }")).unwrap();
+        // Source reader reuse compares resolved fields, ignoring the message
+        // name. Raw aliases therefore do not cause policies to be rebuilt.
+        assert_eq!(
+            first.root_schema().get_fields(),
+            second.root_schema().get_fields()
+        );
+        assert_eq!(first.column(0).type_length(), 7);
+        assert_eq!(second.column(0).type_length(), 7);
+    }
+
+    #[test]
     fn explicit_ids_override_names_and_positions() {
         let target = Schema::new(vec![
             field("a", DataType::Int64, 1),

@@ -173,6 +173,12 @@ pub(crate) fn project_schema(
     }
 }
 
+/// Message/root names are not column identity and do not affect decoding. All
+/// field attributes (IDs, order, physical encodings and nesting) must still match.
+pub(crate) fn same_read_schema(left: &SchemaDescriptor, right: &SchemaDescriptor) -> bool {
+    left.root_schema().get_fields() == right.root_schema().get_fields()
+}
+
 pub(crate) fn parquet_field_id(field: &Field) -> Result<Option<i32>> {
     field
         .metadata()
@@ -223,6 +229,32 @@ mod tests {
             PARQUET_FIELD_ID_META_KEY.to_string(),
             id.to_string(),
         )]))
+    }
+
+    #[test]
+    fn reader_reuse_ignores_only_message_names_not_file_encodings_or_ids() {
+        use parquet::schema::parser::parse_message_type;
+        let descriptor =
+            |message: &str| SchemaDescriptor::new(Arc::new(parse_message_type(message).unwrap()));
+        let expected = descriptor(
+            "message expected { OPTIONAL INT64 k = 1; OPTIONAL FIXED_LEN_BYTE_ARRAY(7) d (DECIMAL(15,2)) = 2; }",
+        );
+        let same = descriptor(
+            "message file { OPTIONAL INT64 k = 1; OPTIONAL FIXED_LEN_BYTE_ARRAY(7) d (DECIMAL(15,2)) = 2; }",
+        );
+        assert!(same_read_schema(&expected, &same));
+        let other_encoding = descriptor(
+            "message file { OPTIONAL INT64 k = 1; OPTIONAL INT64 d (DECIMAL(15,2)) = 2; }",
+        );
+        assert!(!same_read_schema(&expected, &other_encoding));
+        let other_id = descriptor(
+            "message file { OPTIONAL INT64 k = 3; OPTIONAL FIXED_LEN_BYTE_ARRAY(7) d (DECIMAL(15,2)) = 2; }",
+        );
+        assert!(!same_read_schema(&expected, &other_id));
+        let other_order = descriptor(
+            "message file { OPTIONAL FIXED_LEN_BYTE_ARRAY(7) d (DECIMAL(15,2)) = 2; OPTIONAL INT64 k = 1; }",
+        );
+        assert!(!same_read_schema(&expected, &other_order));
     }
 
     #[test]

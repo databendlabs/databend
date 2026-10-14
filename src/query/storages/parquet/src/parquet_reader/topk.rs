@@ -113,8 +113,14 @@ pub fn build_topk(
         projection.clone(),
         arrow_schema.map(|s| &s.fields),
     )?;
-    let read_plan =
-        compute_output_read_plan(schema_desc, &projection, &schema, read_schema, arrow_schema)?;
+    let read_plan = compute_output_read_plan(
+        schema_desc,
+        &projection,
+        &schema,
+        topk.field.name.contains(':'),
+        read_schema,
+        arrow_schema,
+    )?;
 
     Ok(BuiltTopK {
         topk: Arc::new(ParquetTopK::new(

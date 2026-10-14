@@ -133,6 +133,7 @@ impl PredicateAndTopkPolicyBuilder {
             schema_desc,
             &remain_projection,
             &remain_schema,
+            inner_projection,
             read_schema,
             arrow_schema,
         )?);

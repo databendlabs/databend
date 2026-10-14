@@ -117,8 +117,14 @@ pub fn build_predicate(
         schema_desc,
         read_schema,
     )?;
-    let read_plan =
-        compute_output_read_plan(schema_desc, &projection, &schema, read_schema, arrow_schema)?;
+    let read_plan = compute_output_read_plan(
+        schema_desc,
+        &projection,
+        &schema,
+        matches!(prewhere.prewhere_columns, Projection::InnerColumns(_)),
+        read_schema,
+        arrow_schema,
+    )?;
     let field_levels = parquet_to_arrow_field_levels(
         schema_desc,
         projection.clone(),

@@ -67,6 +67,7 @@ impl TopkOnlyPolicyBuilder {
         topk: &BuiltTopK,
         output_schema: &TableSchema,
         output_leaves: &[usize],
+        inner_projection: bool,
         read_schema: Option<&ParquetReadSchema>,
     ) -> Result<Box<dyn ReadPolicyBuilder>> {
         let BuiltTopK {
@@ -102,6 +103,7 @@ impl TopkOnlyPolicyBuilder {
             schema_desc,
             &remain_projection,
             &remain_schema,
+            inner_projection,
             read_schema,
             arrow_schema,
         )?);

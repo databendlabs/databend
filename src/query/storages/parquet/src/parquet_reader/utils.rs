@@ -73,9 +73,17 @@ pub fn compute_output_read_plan(
     schema_desc: &SchemaDescriptor,
     projection: &ProjectionMask,
     expected_schema: &TableSchema,
+    inner_projection: bool,
     read_schema: Option<&ParquetReadSchema>,
     arrow_schema: Option<&Schema>,
 ) -> Result<Option<BatchReadPlan>> {
+    // Ordinary top-level reads already convert directly to the runtime types.
+    // Preserve that fast path, including Arrow representations such as binary
+    // views and fixed-size lists. Only nested extraction or explicit identities
+    // need a compiled alignment plan.
+    if read_schema.is_none() && !inner_projection {
+        return Ok(None);
+    }
     // Use the same Arrow hints as the decoder, while keeping the file's
     // physical descriptor authoritative. This is performed once per read stage.
     let metadata = arrow_schema.map(|schema| {
@@ -165,9 +173,16 @@ mod tests {
         for (target_index, leaf) in [(0, 2), (1, 1), (2, 0)] {
             let projection = ProjectionMask::leaves(&file, [leaf]);
             let stage = table.project(&[target_index]);
-            let plan =
-                compute_output_read_plan(&file, &projection, &stage, Some(&read_schema), None)
-                    .unwrap();
+            let plan = compute_output_read_plan(
+                &file,
+                &projection,
+                &stage,
+                false,
+                Some(&read_schema),
+                None,
+            )
+            .unwrap();
+            assert!(plan.is_some());
             let schema =
                 Arc::new(parquet_to_arrow_schema_by_columns(&file, projection, None).unwrap());
             let array: arrow_array::ArrayRef = if target_index == 1 {
@@ -185,6 +200,7 @@ mod tests {
             &file,
             &ProjectionMask::none(3),
             &empty,
+            false,
             Some(&read_schema),
             None,
         )
@@ -198,6 +214,104 @@ mod tests {
         let block = transform_record_batch(&DataSchema::from(&table), &batch, &plan).unwrap();
         assert_eq!(block.num_columns(), 0);
         assert_eq!(block.num_rows(), 3);
+    }
+
+    #[test]
+    fn binary_view_fixture_keeps_fixed_size_list_compatibility() {
+        use bytes::Bytes;
+        use databend_common_expression::DataSchema;
+        use databend_common_expression::Scalar;
+        use databend_common_expression::TableSchema;
+        use databend_common_expression::types::number::NumberScalar;
+        use parquet::arrow::ProjectionMask;
+        use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
+
+        use super::compute_output_read_plan;
+        use super::transform_record_batch;
+
+        let data = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../../tests/data/parquet/binary_view.parquet"
+        ));
+        let builder = ParquetRecordBatchReaderBuilder::try_new(Bytes::from_static(data)).unwrap();
+        let arrow = builder.schema().clone();
+        let table = TableSchema::try_from(arrow.as_ref()).unwrap();
+        let schema = builder.parquet_schema();
+        let plan = compute_output_read_plan(
+            schema,
+            &ProjectionMask::all(),
+            &table,
+            true,
+            None,
+            Some(&arrow),
+        )
+        .unwrap();
+        // Force compiled-plan coverage separately from the flat-read fast path.
+        // Nested/identity reads still need to align these Arrow representations.
+        assert!(plan.is_some());
+        let reader = builder.with_batch_size(1).build().unwrap();
+        let expected_binary = [
+            b"ab".as_slice(),
+            b"hello".as_slice(),
+            b"large payload over 12 bytes".as_slice(),
+        ];
+        let mut count = 0;
+        for (index, batch) in reader.enumerate() {
+            let block =
+                transform_record_batch(&DataSchema::from(&table), &batch.unwrap(), &plan).unwrap();
+            assert_eq!(block.num_rows(), 1);
+            assert_eq!(
+                block.get_by_offset(0).value().index(0).unwrap().to_owned(),
+                Scalar::Binary(expected_binary[index].to_vec())
+            );
+            let Scalar::Array(values) = block.get_by_offset(1).value().index(0).unwrap().to_owned()
+            else {
+                panic!()
+            };
+            for child in 0..2 {
+                assert_eq!(
+                    values.index(child).unwrap().to_owned(),
+                    Scalar::Number(NumberScalar::Int32((index * 2 + child + 1) as i32))
+                );
+            }
+            count += 1;
+        }
+        assert_eq!(count, 3);
+    }
+
+    #[test]
+    fn ordinary_flat_reads_do_not_build_an_alignment_plan() {
+        use bytes::Bytes;
+        use databend_common_expression::DataSchema;
+        use databend_common_expression::TableSchema;
+        use parquet::arrow::ProjectionMask;
+        use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
+
+        use super::compute_output_read_plan;
+        use super::transform_record_batch;
+
+        let data = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../../tests/data/parquet/binary_view.parquet"
+        ));
+        let builder = ParquetRecordBatchReaderBuilder::try_new(Bytes::from_static(data)).unwrap();
+        let table = TableSchema::try_from(builder.schema().as_ref()).unwrap();
+        let plan = compute_output_read_plan(
+            builder.parquet_schema(),
+            &ProjectionMask::all(),
+            &table,
+            false,
+            None,
+            Some(builder.schema()),
+        )
+        .unwrap();
+        assert!(plan.is_none());
+        let schema = DataSchema::from(&table);
+        for batch in builder.with_batch_size(1).build().unwrap() {
+            let block = transform_record_batch(&schema, &batch.unwrap(), &plan).unwrap();
+            assert_eq!(block.num_rows(), 1);
+            assert_eq!(block.num_columns(), 2);
+        }
     }
 
     #[test]

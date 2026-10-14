@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -56,6 +55,7 @@ use crate::parquet_reader::RowGroupReader;
 use crate::parquet_reader::cached_range_full_read;
 use crate::parquet_reader::policy::ReadPolicyImpl;
 use crate::partition::ParquetRowGroupPart;
+use crate::read_schema::same_read_schema;
 use crate::read_settings::ReadSettings;
 
 enum State {
@@ -142,6 +142,9 @@ pub struct ParquetSource {
 
     // Used to read parquet.
     row_group_reader: Arc<RowGroupReader>,
+    // Bounded per-source cache: reuse policies for consecutive files with the
+    // same resolved physical schema, even when it differs from the catalog.
+    last_file_reader: Option<Arc<RowGroupReader>>,
     whole_file_reader: Option<Arc<ParquetWholeFileReader>>,
 
     state: State,
@@ -190,6 +193,7 @@ impl ParquetSource {
             scan_progress,
             ctx,
             row_group_reader,
+            last_file_reader: None,
             whole_file_reader: full_reader,
             generated_data: None,
             is_finished: false,
@@ -449,21 +453,27 @@ impl ParquetSource {
                 self.row_group_reader.schema_desc_from_arrow_fallback(),
             )?;
         }
-        // Table engines may resolve file identities before projection. Ordinary
-        // readers preserve the existing schema comparison and stage validation.
+        // Resolve identities before comparing schemas. Having a resolver is not
+        // itself a reason to rebuild predicate, TopK and read policies.
         let resolver = self.row_group_reader.schema_resolver();
-        let schema_differs = resolver.is_some()
-            || (!from_stage_table && expected_schema.root_schema() != file_schema.root_schema());
-        let reader = if schema_differs {
+        let schema_desc = if let Some(resolver) = resolver {
+            Arc::new(resolver.resolve(file_schema)?)
+        } else {
+            meta.file_metadata().schema_descr_ptr()
+        };
+        let reader = if from_stage_table || same_read_schema(expected_schema, &schema_desc) {
+            self.row_group_reader.clone()
+        } else if let Some(cached) = self
+            .last_file_reader
+            .as_ref()
+            .filter(|reader| same_read_schema(reader.schema_desc(), &schema_desc))
+        {
+            cached.clone()
+        } else {
             let read_options = ParquetReadOptions::default()
                 .with_prune_row_groups(true)
                 .with_prune_pages(false);
 
-            let schema_desc = if let Some(resolver) = resolver {
-                Arc::new(resolver.resolve(file_schema)?)
-            } else {
-                meta.file_metadata().schema_descr_ptr()
-            };
             let arrow_schema = parquet_to_arrow_schema(&schema_desc, None)?;
             let need_row_number = self
                 .internal_columns
@@ -490,11 +500,10 @@ impl ParquetSource {
                 builder = builder.with_topk(self.topk.as_ref().as_ref());
             }
 
-            Cow::Owned(Arc::new(
-                builder.build_row_group_reader(self.source_type, need_row_number)?,
-            ))
-        } else {
-            Cow::Borrowed(&self.row_group_reader)
+            let reader =
+                Arc::new(builder.build_row_group_reader(self.source_type, need_row_number)?);
+            self.last_file_reader = Some(reader.clone());
+            reader
         };
 
         let should_read = |rowgroup_idx: usize, bucket_option: Option<(usize, usize)>| -> bool {

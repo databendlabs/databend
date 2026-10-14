@@ -285,9 +285,9 @@ fn align_array(array: ArrayRef, target: &DataType, matching: FieldMatching) -> R
         }
         DataType::LargeList(element) => {
             let source_type = match array.data_type() {
-                DataType::List(field) | DataType::LargeList(field) => {
-                    DataType::LargeList(field.clone())
-                }
+                DataType::List(field)
+                | DataType::LargeList(field)
+                | DataType::FixedSizeList(field, _) => DataType::LargeList(field.clone()),
                 _ => return Err(ErrorCode::TableSchemaMismatch("Expected list array")),
             };
             let array = cast(array.as_ref(), &source_type)?;
@@ -684,6 +684,39 @@ mod tests {
                 .value(0),
             5
         );
+    }
+
+    #[test]
+    fn fixed_size_lists_preserve_sliced_offsets_nulls_and_child_promotions() {
+        use arrow_array::FixedSizeListArray;
+
+        let source = FixedSizeListArray::try_new(
+            Arc::new(Field::new("item", DataType::Int32, true)),
+            2,
+            Arc::new(Int32Array::from(vec![
+                Some(1),
+                Some(2),
+                Some(3),
+                Some(4),
+                Some(5),
+                None,
+            ])),
+            Some(NullBuffer::from(vec![true, false, true])),
+        )
+        .unwrap();
+        let target = DataType::LargeList(Arc::new(Field::new("element", DataType::Int64, true)));
+        for matching in [FieldMatching::Path, FieldMatching::FieldId] {
+            let array = align_array(Arc::new(source.slice(1, 2)), &target, matching).unwrap();
+            let list = array.as_any().downcast_ref::<LargeListArray>().unwrap();
+            assert_eq!(list.len(), 2);
+            assert!(list.is_null(0));
+            assert!(!list.is_null(1));
+            let second = list.value(1);
+            let values = second.as_any().downcast_ref::<Int64Array>().unwrap();
+            assert_eq!(values.len(), 2);
+            assert_eq!(values.value(0), 5);
+            assert!(values.is_null(1));
+        }
     }
 
     #[test]

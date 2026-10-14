@@ -239,6 +239,7 @@ impl<'a> ParquetReaderBuilder<'a> {
             &self.schema_desc,
             &projection,
             &output_table_schema,
+            inner_projection,
             self.read_schema.as_deref(),
             self.arrow_schema.as_ref(),
         )?);
@@ -380,6 +381,10 @@ impl<'a> ParquetReaderBuilder<'a> {
             self.built_topk.as_ref().unwrap(),
             output_schema,
             output_leaves,
+            matches!(
+                PushDownInfo::projection_of_push_downs(&self.table_schema, self.push_downs),
+                Projection::InnerColumns(_)
+            ),
             self.read_schema.as_deref(),
         )
     }

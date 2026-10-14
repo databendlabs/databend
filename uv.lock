@@ -912,8 +912,8 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "pyarrow", specifier = ">=21,<24" },
-    { name = "pyiceberg", extras = ["pyarrow"], specifier = ">=0.10,<1" },
+    { name = "pyarrow", specifier = "==22.0.0" },
+    { name = "pyiceberg", extras = ["pyarrow"], specifier = "==0.12.0" },
     { name = "pyspark", specifier = "===4.0.0" },
 ]
 
