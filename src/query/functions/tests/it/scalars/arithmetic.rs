@@ -451,6 +451,8 @@ fn test_decimal() {
     run_ast(file, "7.5 % -2", &columns);
     run_ast(file, "7 % 2.5", &columns);
     run_ast(file, "0.001::decimal(38, 19) % 0.1", &columns);
+    run_ast(file, "0.1::decimal(38, 38) % 1", &columns);
+    run_ast(file, "1 % 0.3::decimal(38, 38)", &columns);
     run_ast(
         file,
         "1234567890123456789012345678901234567890::decimal(76, 0) % 7",
