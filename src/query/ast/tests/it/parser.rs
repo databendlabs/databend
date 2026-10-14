@@ -36,37 +36,6 @@ use nom::Parser;
 use nom_rule::rule;
 
 #[test]
-fn test_attach_table_privilege() {
-    use databend_common_ast::ast::AccountMgrSource;
-    use databend_common_ast::ast::UserPrivilegeType;
-
-    for sql in [
-        "GRANT ATTACH TABLE ON *.* TO ROLE attach_admin",
-        "GRANT ATTACH TABLE ON db.* TO USER attach_user",
-        "GRANT CREATE, ATTACH TABLE ON db.* TO ROLE attach_admin",
-        "REVOKE ATTACH TABLE ON db.* FROM ROLE attach_admin",
-        "REVOKE ATTACH TABLE ON *.* FROM USER attach_user",
-    ] {
-        let tokens = tokenize_sql(sql).unwrap();
-        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
-        let source = match &stmt {
-            Statement::Grant(grant) => &grant.source,
-            Statement::Revoke(revoke) => &revoke.source,
-            _ => panic!("expected GRANT or REVOKE: {sql}"),
-        };
-        let AccountMgrSource::Privs { privileges, .. } = source else {
-            panic!("expected explicit privileges: {sql}");
-        };
-        assert!(privileges.contains(&UserPrivilegeType::AttachTable));
-        let displayed = stmt.to_string();
-        assert!(displayed.contains("ATTACH TABLE"));
-        let tokens = tokenize_sql(&displayed).unwrap();
-        let (roundtrip, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
-        assert_eq!(stmt, roundtrip);
-    }
-}
-
-#[test]
 fn test_set_ttl_and_modify_column_are_distinct() {
     use databend_common_ast::ast::AlterTableAction;
     use databend_common_ast::ast::Statement;

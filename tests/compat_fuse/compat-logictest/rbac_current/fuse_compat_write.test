@@ -56,6 +56,7 @@ GRANT create sequence on *.* to role 'role1';
 statement ok
 GRANT create procedure on *.* to role 'role1';
 
+# test_cases.yaml runs rbac_current as 1.2.833 -> current and current -> 1.2.833.
 # GRANT ALL includes ATTACH TABLE on current writers, while remaining valid on
 # old writers. Remove SELECT so SHOW GRANTS expands names instead of printing ALL.
 statement ok

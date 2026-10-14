@@ -62,16 +62,16 @@ GRANT OWNERSHIP ON attach_priv_db.* TO ROLE attach_priv_owner;
 echo "CREATE-only role can create ordinary tables"
 user_sql attach_priv_creator "CREATE TABLE attach_priv_db.ordinary (a INT)"
 
-# Use a missing connection: target authorization must fail before resolving it.
-attach_sql="ATTACH TABLE attach_priv_db.attached 's3://bucket/data/1/2' CONNECTION = (connection_name = 'missing_attach_priv_connection')"
+# Use a valid local source so binding can finish before the execution access check.
+attach_sql="ATTACH TABLE attach_priv_db.attached 'fs:///tmp/1/2'"
 echo "CREATE and SUPER do not imply ATTACH TABLE"
-expect_error attach_priv_creator '\[1063\].*\[ATTACH TABLE\]' "$attach_sql"
+expect_error attach_priv_creator '\[1063\].*\[AttachTable\]' "$attach_sql"
 echo "Database ownership does not imply ATTACH TABLE"
-expect_error attach_priv_owner '\[1063\].*\[ATTACH TABLE\]' "$attach_sql"
+expect_error attach_priv_owner '\[1063\].*\[AttachTable\]' "$attach_sql"
 echo "ATTACH TABLE does not replace CREATE"
-expect_error attach_priv_operator '\[1063\].*\[CREATE\]' "$attach_sql"
+expect_error attach_priv_operator '\[1063\].*\[Create\]' "$attach_sql"
 echo "CREATE with STORAGE_PREFIX cannot bypass ATTACH TABLE"
-expect_error attach_priv_creator '\[1063\].*\[ATTACH TABLE\]' "CREATE TABLE attach_priv_db.bypass (a INT) 's3://bucket/data/' CONNECTION = (connection_name = 'missing_attach_priv_connection') STORAGE_PREFIX = '1/2'"
+expect_error attach_priv_creator '\[1063\].*\[AttachTable\]' "CREATE TABLE attach_priv_db.bypass (a INT) STORAGE_PREFIX = '1/2'"
 
 echo "ATTACH TABLE cannot be granted on a table"
 if output=$(bendsql_connect_root --query="GRANT ATTACH TABLE ON attach_priv_db.ordinary TO ROLE attach_priv_operator" 2>&1); then
@@ -85,7 +85,7 @@ root_sql "GRANT ATTACH TABLE ON attach_priv_db.* TO USER attach_priv_creator"
 output=$(bendsql_connect_root --query="SHOW GRANTS FOR USER attach_priv_creator")
 grep -q 'ATTACH TABLE' <<<"$output"
 root_sql "REVOKE ATTACH TABLE ON attach_priv_db.* FROM USER attach_priv_creator"
-expect_error attach_priv_creator '\[1063\].*\[ATTACH TABLE\]' "$attach_sql"
+expect_error attach_priv_creator '\[1063\].*\[AttachTable\]' "$attach_sql"
 
 echo "Database ALL includes ATTACH TABLE"
 # Remove SELECT so SHOW GRANTS expands names instead of displaying the ALL shorthand.

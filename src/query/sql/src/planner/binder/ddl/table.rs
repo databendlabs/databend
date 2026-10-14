@@ -71,7 +71,6 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::CompactionLimits;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -91,9 +90,6 @@ use databend_common_expression::infer_table_schema;
 use databend_common_expression::resolve_type_name;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::principal::GrantObject;
-use databend_common_meta_app::principal::OwnershipObject;
-use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::Constraint;
 use databend_common_meta_app::schema::CreateOption;
@@ -626,15 +622,6 @@ impl Binder {
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
 
-        // The executor also treats CREATE with storage_prefix as an attachment.
-        // Check before resolving connections or probing the external location.
-        if table_options
-            .keys()
-            .any(|key| key.eq_ignore_ascii_case(OPT_KEY_STORAGE_PREFIX))
-        {
-            validate_attach_table_privileges(self.ctx.as_ref(), &catalog, &database).await?;
-        }
-
         let catalog = self.ctx.get_catalog(&catalog).await?;
 
         if catalog.info().meta.catalog_option.catalog_type() == CatalogType::Paimon {
@@ -1083,8 +1070,6 @@ impl Binder {
     ) -> Result<Plan> {
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(&stmt.catalog, &stmt.database, &stmt.table);
-
-        validate_attach_table_privileges(self.ctx.as_ref(), &catalog, &database).await?;
 
         let mut path = stmt.uri_location.path.clone();
         // First, to make it easy for users to use, path = "/testbucket/data/1/2" and path = "/testbucket/data/1/2/" are both legal
@@ -2754,65 +2739,6 @@ impl Binder {
             .get_ddl_column_type_nullable()
             .unwrap_or(true)
     }
-}
-
-/// ATTACH requires CREATE on the current role and an explicit ATTACH TABLE grant
-/// on the database or globally. Database ownership satisfies CREATE, but must not
-/// bypass ATTACH TABLE. Run this before any external storage access.
-pub async fn validate_attach_table_privileges(
-    ctx: &dyn TableContext,
-    catalog_name: &str,
-    database_name: &str,
-) -> Result<()> {
-    let catalog = ctx.get_catalog(catalog_name).await?;
-    let db_id = catalog
-        .get_database(&ctx.get_tenant(), database_name)
-        .await?
-        .get_db_info()
-        .database_id
-        .db_id;
-    let object = GrantObject::Database(catalog_name.to_string(), database_name.to_string());
-    let object_by_id = GrantObject::DatabaseById(catalog_name.to_string(), db_id);
-
-    for privilege in [UserPrivilegeType::Create, UserPrivilegeType::AttachTable] {
-        let check_current_role_only = privilege == UserPrivilegeType::Create;
-        if check_current_role_only
-            && ctx
-                .has_ownership(
-                    &OwnershipObject::Database {
-                        catalog_name: catalog_name.to_string(),
-                        db_id,
-                    },
-                    true,
-                )
-                .await?
-        {
-            continue;
-        }
-
-        // Legacy grants use names; current grants use database IDs.
-        match ctx
-            .validate_privilege(&object, privilege, check_current_role_only)
-            .await
-        {
-            Ok(()) => continue,
-            Err(err) if err.code() != ErrorCode::PERMISSION_DENIED => return Err(err),
-            Err(_) => {}
-        }
-        if let Err(err) = ctx
-            .validate_privilege(&object_by_id, privilege, check_current_role_only)
-            .await
-        {
-            if err.code() != ErrorCode::PERMISSION_DENIED {
-                return Err(err);
-            }
-            return Err(ErrorCode::PermissionDenied(format!(
-                "Permission denied: privilege [{privilege}] is required on {object} for user {}.",
-                ctx.get_current_user()?.identity().display(),
-            )));
-        }
-    }
-    Ok(())
 }
 
 const VERIFICATION_KEY: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d";

@@ -37,6 +37,7 @@ drop role role2;
 statement ok
 show roles;
 
+# test_cases.yaml runs rbac_current as 1.2.833 -> current and current -> 1.2.833.
 # Verify the known permissions in both directions. An old reader does not know
 # ATTACH TABLE; a current reader sees it only when written by a current writer.
 # Normalize comma spacing and check readable/updatable grants, not preservation

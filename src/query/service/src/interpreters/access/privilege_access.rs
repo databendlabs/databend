@@ -45,7 +45,6 @@ use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::Planner;
 use databend_common_sql::binder::MutationType;
-use databend_common_sql::binder::ddl::table::validate_attach_table_privileges;
 use databend_common_sql::plans::AlterSharePlanAction;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::MaintenanceTarget;
@@ -1126,7 +1125,9 @@ impl PrivilegeAccess {
             GrantObject::Global => false,
         };
 
-        if verify_ownership
+        // Attaching storage data requires an explicit grant, even for database owners.
+        if privilege != UserPrivilegeType::AttachTable
+            && verify_ownership
             && self
                 .has_ownership(
                     &session,
@@ -1963,7 +1964,7 @@ impl AccessChecker for PrivilegeAccess {
                     self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Create, false).await?;
                 }
                 if is_attach {
-                    validate_attach_table_privileges(self.ctx.as_ref(), &plan.catalog, &plan.database).await?;
+                    self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::AttachTable, false).await?;
                 }
                 if let Some(query) = &plan.as_select {
                     self.check(ctx, query).await?;

@@ -218,7 +218,6 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (186, "2026-09-04: Add: table.proto/TableMeta.ttl row-level TTL expression"),
     (187, "2026-09-08: Add: datatype.proto/AggregateState.state_version"),
     (188, "2026-10-09: Add: table.proto/TableMeta partition key sequence and identity"),
-    (189, "2026-10-14: Add: ATTACH TABLE privilege at bit 32 in GrantEntry.privileges"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
