@@ -1,0 +1,193 @@
+# CTE identity is determined by the binder, not by an AST qualification pass.
+# New stored definitions retain their creation namespace without changing the session.
+
+statement ok
+create or replace database cte_view_a
+
+statement ok
+create or replace database cte_view_b
+
+statement ok
+create table cte_view_a.b(n int)
+
+statement ok
+insert into cte_view_a.b values (11)
+
+statement ok
+create table cte_view_b.b(n int)
+
+statement ok
+insert into cte_view_b.b values (22)
+
+statement ok
+use cte_view_a
+
+statement ok
+set enable_auto_materialize_cte = 1
+
+# a is materialized before the later CTE b is registered, so its b is a real table.
+query II
+with a as (select * from b), b as (select 99 as n) select x.n, y.n from a x, a y
+----
+11 11
+
+statement ok
+create view v_forward as with a as (select * from b), b as (select 99 as n) select x.n as x, y.n as y from a x, a y
+
+query II
+select * from v_forward
+----
+11 11
+
+statement ok
+create view v_scalar as select n from b where n in (select n from b) and exists (with b as (select 99 as n) select * from b)
+
+statement ok
+use cte_view_b
+
+query I
+select * from cte_view_a.v_scalar
+----
+11
+
+query II
+select * from cte_view_a.v_forward
+----
+11 11
+
+# CREATE VIEW uses the target view's database, not the session's database.
+statement ok
+create view cte_view_a.v_target as with a as (select * from b), b as (select 99 as n) select x.n as x, y.n as y from a x, a y
+
+query II
+select * from cte_view_a.v_target
+----
+11 11
+
+# The default namespace must be restored after binding a view.
+query III
+select v.x, v.y, b.n from cte_view_a.v_forward v, b
+----
+11 11 22
+
+statement ok
+create table copied like cte_view_a.v_forward
+
+query T
+select name from system.columns where database = 'cte_view_a' and table = 'v_forward' order by name
+----
+x
+y
+
+# Non-materialized CTE definitions are bound in the referencing context.
+statement ok
+set enable_auto_materialize_cte = 0
+
+statement ok
+create table cte_view_a.z(n int)
+
+statement ok
+insert into cte_view_a.z values (33)
+
+statement ok
+use cte_view_a
+
+query I
+with a as (select * from z) select * from (with z as (select 77 as n) select * from a)
+----
+77
+
+statement ok
+create view v_nested as with a as (select * from z) select * from (with z as (select 77 as n) select * from a)
+
+statement ok
+use cte_view_b
+
+query I
+select * from cte_view_a.v_nested
+----
+77
+
+# No read-time heuristic may turn an explicitly qualified real table into a CTE,
+# even when identifier settings differ from those used at CREATE time.
+statement ok
+use cte_view_a
+
+statement ok
+create table t(n int)
+
+statement ok
+insert into t values (17)
+
+statement ok
+set unquoted_ident_case_sensitive = 1
+
+statement ok
+create view v_case as with T as (select 99 as n) select * from t
+
+query I
+select * from v_case
+----
+17
+
+statement ok
+set unquoted_ident_case_sensitive = 0
+
+query I
+select * from v_case
+----
+17
+
+# Internal format metadata is not included in SHOW CREATE.
+query TT
+show create table v_case
+----
+v_case CREATE VIEW `cte_view_a`.`v_case` AS WITH T AS (SELECT 99 AS n) SELECT * FROM cte_view_a.t
+
+statement ok
+unset unquoted_ident_case_sensitive
+
+statement ok
+unset enable_auto_materialize_cte
+
+# Replacing a view records the new format too.
+statement ok
+create or replace view v_case as with t as (select 88 as n) select * from t
+
+statement ok
+use cte_view_b
+
+query I
+select * from cte_view_a.v_case
+----
+88
+
+# A dynamic table's source namespace is the creation session's database, not its target.
+statement ok
+set enable_auto_materialize_cte = 1
+
+statement ok
+create dynamic table cte_view_a.dt as with a as (select * from b), b as (select 99 as n) select x.n as x, y.n as y from a x, a y
+
+statement ok
+use cte_view_a
+
+statement ok
+refresh dynamic table dt
+
+query II
+select * from dt
+----
+22 22
+
+statement ok
+unset enable_auto_materialize_cte
+
+statement ok
+use default
+
+statement ok
+drop database cte_view_b
+
+statement ok
+drop database cte_view_a

@@ -275,6 +275,9 @@ pub struct BindContext {
 
     pub cte_context: CteContext,
 
+    /// Inherited by scalar-subquery binders created from this context.
+    pub default_table_namespace: Option<(String, String)>,
+
     /// True if there is aggregation in current context, which means
     /// non-grouping columns cannot be referenced outside aggregation
     /// functions, otherwise a grouping error will be raised.
@@ -392,6 +395,7 @@ impl BindContext {
             windows: WindowInfo::default(),
             srf_info: SetReturningInfo::default(),
             cte_context: CteContext::default(),
+            default_table_namespace: None,
             in_grouping: false,
             binding_views: HashSet::new(),
             have_async_func: false,
@@ -442,6 +446,7 @@ impl BindContext {
             windows: Default::default(),
             srf_info: Default::default(),
             cte_context: parent.cte_context.clone(),
+            default_table_namespace: parent.default_table_namespace.clone(),
             in_grouping: false,
             binding_views: parent.binding_views.clone(),
             have_async_func: false,

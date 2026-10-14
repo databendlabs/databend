@@ -1159,6 +1159,7 @@ impl LiteTableContext {
                 database: database.to_string(),
                 view: view_name.to_string(),
                 query: query.to_string(),
+                query_namespace: Some((self.current_catalog.clone(), database.to_string())),
             },
             // Production View TableMeta stores the query but no schema. Keep the harness aligned
             // so lineage tests cannot accidentally depend on persisted view fields.
@@ -1204,6 +1205,15 @@ impl LiteTableContext {
     fn register_view(&self, view: &ReplayView, schema: Arc<TableSchema>) -> Result<()> {
         let mut options = BTreeMap::new();
         options.insert(LITE_VIEW_QUERY_KEY.to_string(), view.query.clone());
+        if let Some((catalog, database)) = &view.query_namespace {
+            use databend_storages_common_table_meta::table::OPT_KEY_QUERY_CATALOG;
+            use databend_storages_common_table_meta::table::OPT_KEY_QUERY_DATABASE;
+            use databend_storages_common_table_meta::table::OPT_KEY_VIEW_QUERY_VERSION;
+
+            options.insert(OPT_KEY_VIEW_QUERY_VERSION.to_string(), "2".to_string());
+            options.insert(OPT_KEY_QUERY_CATALOG.to_string(), catalog.clone());
+            options.insert(OPT_KEY_QUERY_DATABASE.to_string(), database.clone());
+        }
 
         let table_id = self.next_table_id.fetch_add(1, Ordering::Relaxed);
         let table = Arc::new(FakeTable {
@@ -2352,6 +2362,7 @@ $$
                 database: "default".to_string(),
                 view: "v".to_string(),
                 query: "SELECT a FROM default.t".to_string(),
+                query_namespace: None,
             }],
             udfs: vec![],
             table_stats: HashMap::from([(0, crate::ReplayTable {

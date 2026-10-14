@@ -17,11 +17,11 @@ SELECT * FROM (
         SELECT id, k FROM auto_m_cte_unique.t
     ),
     d AS (
-        SELECT id, k FROM auto_m_cte_unique.c
+        SELECT id, k FROM c
         UNION ALL
-        SELECT id, k FROM auto_m_cte_unique.c
+        SELECT id, k FROM c
     )
-    SELECT id, k FROM auto_m_cte_unique.d
+    SELECT id, k FROM d
 ) v(id, k)
 
 statement ok

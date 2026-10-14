@@ -1,6 +1,8 @@
+# Only an unqualified table name can refer to a CTE. Issues #15755, #20686.
+# Expected results follow DuckDB ("CTE name should never be qualified").
+
 statement ok
 drop database if exists poc;
-
 
 statement ok
 create database poc;
@@ -17,7 +19,7 @@ insert into poc.t1 (n) values (1);
 statement ok
 insert into poc.t1 (n) values (2);
 
-query error
+query I
 with t1 as (
   select * from poc.t1 where n = 1 limit 1
 ),
@@ -28,7 +30,181 @@ union_all_t as (
   select * from t1 union all
   select * from t2
 )
-select * from union_all_t;
+select * from union_all_t order by n;
+----
+1
+2
+
+# A qualified name is never captured by a same-named CTE.
+query I
+with t1 as (select 99 as n) select * from poc.t1 order by n
+----
+1
+2
+
+query I
+with t1 as (select 99 as n) select * from default.poc.t1 order by n
+----
+1
+2
+
+query I
+with t1 as (select 99 as n), t2 as (select * from poc.t1) select * from t2 order by n
+----
+1
+2
+
+query II
+with t2 as (select * from poc.t1), t1 as (select 99 as n) select * from t2, t1 order by t2.n
+----
+1 99
+2 99
+
+# Same-named tables and CTEs in different scopes.
+query I
+select * from poc.t1 a where n in (with t1 as (select 1 as n) select n from poc.t1) order by n
+----
+1
+2
+
+query II
+select a.n, b.n from t1 a, (with t1 as (select 99 as n) select * from t1) b order by a.n
+----
+1 99
+2 99
+
+query II
+select b.n, a.n from (with t1 as (select 99 as n) select * from t1) b, t1 a order by a.n
+----
+99 1
+99 2
+
+# An unqualified name still refers to the CTE.
+query I
+with t1 as (select 99 as n) select * from t1
+----
+99
+
+query I
+with recursive t1(n) as (select 1 union all select n + 1 from t1 where n < 3) select * from t1 order by n
+----
+1
+2
+3
+
+statement ok
+set enable_auto_materialize_cte = 0
+
+query II
+with t1 as (select 99 as n) select a.n, b.n from t1 a, poc.t1 b order by b.n
+----
+99 1
+99 2
+
+statement ok
+set enable_auto_materialize_cte = 1
+
+query II
+with t1 as (select 99 as n) select a.n, b.n from t1 a, t1 c, poc.t1 b order by b.n
+----
+99 1
+99 2
+
+statement ok
+unset enable_auto_materialize_cte
+
+query II
+with t1 as materialized (select 99 as n) select a.n, b.n from t1 a, poc.t1 b order by b.n
+----
+99 1
+99 2
+
+# A qualified name does not fall back to a CTE when the table is missing.
+statement error 1025
+with t2 as (select 99 as n) select * from poc.t2
+
+# Views keep CTE references unqualified and resolve qualified names to tables,
+# also when the session is in another database.
+statement ok
+create view v_cte as with t1 as (select 99 as n) select * from t1
+
+statement ok
+create view v_qualified as with t1 as (select 99 as n) select a.n as c, b.n as t from t1 a, poc.t1 b
+
+statement ok
+create view v_cols(x) as with t2 as (select 7 as n) select n from t2
+
+statement ok
+create or replace database poc_other
+
+statement ok
+use poc_other
+
+query I
+select * from poc.v_cte
+----
+99
+
+query II
+select * from poc.v_qualified order by t
+----
+99 1
+99 2
+
+query I
+select * from poc.v_cols
+----
+7
+
+query TTTTT
+desc poc.v_cte
+----
+n TINYINT UNSIGNED NO NULL (empty)
+
+query T
+select name from system.columns where database = 'poc' and table = 'v_qualified' order by name
+----
+c
+t
+
+query TT
+show create table poc.v_cte
+----
+v_cte CREATE VIEW `poc`.`v_cte` AS WITH t1 AS (SELECT 99 AS n) SELECT * FROM t1
+
+query TT
+show create table poc.v_qualified
+----
+v_qualified CREATE VIEW `poc`.`v_qualified` AS WITH t1 AS (SELECT 99 AS n) SELECT a.n AS c, b.n AS t FROM t1 AS a, poc.t1 AS b
+
+# Dynamic table definitions follow the same rule.
+statement ok
+create dynamic table poc.dt_cte as with t1 as (select n + 10 as n from poc.t1) select a.n as c, b.n as t from t1 a, poc.t1 b
+
+statement ok
+insert into poc.t1 values (3)
+
+statement ok
+refresh dynamic table poc.dt_cte
+
+query II
+select * from poc.dt_cte order by c, t
+----
+11 1
+11 2
+11 3
+12 1
+12 2
+12 3
+13 1
+13 2
+13 3
+
+statement ok
+use poc
+
+statement ok
+drop database poc_other
 
 statement ok
 drop database poc;

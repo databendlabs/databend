@@ -13,10 +13,25 @@
 // limitations under the License.
 
 use async_trait::async_trait;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
 #[async_trait]
 pub trait QueryExecutor: Send + Sync {
     async fn execute_query_with_sql_string(&self, sql: &str) -> Result<Vec<DataBlock>>;
+
+    /// Execute a materialized CTE producer in its stored definition's namespace.
+    async fn execute_query_in_namespace(
+        &self,
+        sql: &str,
+        namespace: Option<(String, String)>,
+    ) -> Result<Vec<DataBlock>> {
+        if namespace.is_some() {
+            return Err(ErrorCode::Unimplemented(
+                "Query executor does not support a stored query namespace",
+            ));
+        }
+        self.execute_query_with_sql_string(sql).await
+    }
 }

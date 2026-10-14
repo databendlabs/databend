@@ -191,6 +191,7 @@ impl Binder {
             windows: Default::default(),
             srf_info: Default::default(),
             cte_context: bind_context.cte_context.clone(),
+            default_table_namespace: bind_context.default_table_namespace.clone(),
             in_grouping: false,
             binding_views: bind_context.binding_views.clone(),
             have_async_func: false,
@@ -395,11 +396,6 @@ impl Binder {
         apply_row_access_policy: bool,
     ) -> Result<(SExpr, BindContext)> {
         let mut bind_context = BindContext::with_parent(bind_context.clone())?;
-        // All physical tables (including stages, table functions, result scans
-        // and MVs) pass through here. Tag them centrally to keep scopes separate.
-        self.metadata
-            .write()
-            .set_table_view_scope(table_index, &bind_context.binding_views);
 
         let table = self.metadata.read().table(table_index).clone();
         let table_name = table.name();

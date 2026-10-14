@@ -61,7 +61,10 @@ impl Visitor for CTERefCounter {
         &mut self,
         table_ref: &TableReference,
     ) -> std::result::Result<VisitControl, !> {
-        if let TableReference::Table { table, .. } = table_ref {
+        // Only an unqualified name can refer to a CTE.
+        if let TableReference::Table { table, .. } = table_ref
+            && table.database.is_none()
+        {
             let table_name = normalize_identifier(&table.table, &self.name_resolution_ctx).name;
             if let Some(count) = self.cte_ref_count.get_mut(&table_name) {
                 *count += 1;
@@ -78,6 +81,7 @@ impl Binder {
         bind_context: &mut BindContext,
         query: &Query,
     ) -> Result<(SExpr, BindContext)> {
+        bind_context.default_table_namespace = self.default_table_namespace.clone();
         let mut with = query.with.clone();
         bind_context.allow_virtual_column = self.is_virtual_column_rewrite_enabled();
         if self.ctx.get_settings().get_enable_auto_materialize_cte()? {
@@ -277,6 +281,7 @@ impl Binder {
         }
 
         let mut expr_replacer = TableNameReplacer::new(
+            self.ctx.get_current_catalog(),
             database.clone(),
             self.m_cte_table_name.clone(),
             self.name_resolution_ctx.clone(),
@@ -345,9 +350,10 @@ impl Binder {
         let create_table_sql = create_table_stmt.to_string();
         log::info!("[CTE]create_table_sql: {create_table_sql}");
         if let Some(subquery_executor) = &self.subquery_executor {
+            let namespace = self.default_table_namespace.clone();
             let _ = databend_common_base::runtime::block_on(async move {
                 subquery_executor
-                    .execute_query_with_sql_string(&create_table_sql)
+                    .execute_query_in_namespace(&create_table_sql, namespace)
                     .await
             })?;
         } else {
@@ -361,7 +367,9 @@ impl Binder {
     }
 }
 
+/// Replaces references to user-specified materialized CTEs with their temporary tables.
 pub struct TableNameReplacer {
+    catalog: String,
     database: String,
     new_name: HashMap<String, String>,
     name_resolution_ctx: NameResolutionContext,
@@ -372,22 +380,24 @@ impl VisitorMut for TableNameReplacer {
         &mut self,
         table_reference: &mut TableReference,
     ) -> std::result::Result<VisitControl, !> {
-        if let TableReference::Table { table, .. } = table_reference {
-            if table.database.is_none() || table.database.as_ref().unwrap().name == self.database {
-                self.replace_identifier(&mut table.table);
-            }
+        // Only an unqualified name can refer to a CTE.
+        if let TableReference::Table { span, table, .. } = table_reference
+            && table.database.is_none()
+            && self.replace_identifier(&mut table.table)
+        {
+            // Temporary CTE tables live in the session namespace, not in the view.
+            table.catalog = Some(Identifier::from_name(*span, self.catalog.clone()));
+            table.database = Some(Identifier::from_name(*span, self.database.clone()));
         }
         Ok(VisitControl::Continue)
     }
 
     fn visit_expr(&mut self, expr: &mut Expr) -> std::result::Result<VisitControl, !> {
-        if let Expr::ColumnRef { column, .. } = expr {
-            if column.database.is_none() || column.database.as_ref().unwrap().name == self.database
-            {
-                if let Some(table_identifier) = &mut column.table {
-                    self.replace_identifier(table_identifier);
-                }
-            }
+        if let Expr::ColumnRef { column, .. } = expr
+            && column.database.is_none()
+            && let Some(table_identifier) = &mut column.table
+        {
+            self.replace_identifier(table_identifier);
         }
         Ok(VisitControl::Continue)
     }
@@ -395,21 +405,26 @@ impl VisitorMut for TableNameReplacer {
 
 impl TableNameReplacer {
     pub fn new(
+        catalog: String,
         database: String,
         new_name: HashMap<String, String>,
         name_resolution_ctx: NameResolutionContext,
     ) -> Self {
         Self {
+            catalog,
             database,
             new_name,
             name_resolution_ctx,
         }
     }
 
-    fn replace_identifier(&mut self, identifier: &mut Identifier) {
+    fn replace_identifier(&mut self, identifier: &mut Identifier) -> bool {
         let name = normalize_identifier(identifier, &self.name_resolution_ctx).name;
         if let Some(new_name) = self.new_name.get(&name) {
             identifier.name = new_name.clone();
+            true
+        } else {
+            false
         }
     }
 }
