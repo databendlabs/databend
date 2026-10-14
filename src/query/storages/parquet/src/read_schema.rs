@@ -60,36 +60,39 @@ impl ParquetReadSchema {
     }
 
     fn field(&self, path: &str) -> Result<&Field> {
-        if let Some(field) = self
-            .schema
-            .fields()
-            .iter()
-            .find(|field| field.name() == path)
-        {
-            return Ok(field);
-        }
-        let mut fields = self.schema.fields();
-        let mut segments = path.split(':').peekable();
-        while let Some(segment) = segments.next() {
-            let field = fields
-                .iter()
-                .find(|field| field.name() == segment)
-                .ok_or_else(|| {
-                    ErrorCode::TableSchemaMismatch(format!("Unknown field path {path}"))
-                })?;
-            if segments.peek().is_none() {
-                return Ok(field);
-            }
-            fields = match field.data_type() {
-                arrow_schema::DataType::Struct(fields) => fields,
-                _ => {
+        fn visit<'a>(
+            field: &'a Field,
+            prefix: &str,
+            path: &str,
+            found: &mut Option<&'a Field>,
+        ) -> Result<()> {
+            if prefix == path {
+                if found.is_some() {
                     return Err(ErrorCode::TableSchemaMismatch(format!(
-                        "Invalid field path {path}"
+                        "Ambiguous field path {path}"
                     )));
                 }
-            };
+                *found = Some(field);
+                return Ok(());
+            }
+            if !path
+                .strip_prefix(prefix)
+                .is_some_and(|rest| rest.starts_with(':'))
+            {
+                return Ok(());
+            }
+            if let DataType::Struct(fields) = field.data_type() {
+                for child in fields {
+                    visit(child, &format!("{prefix}:{}", child.name()), path, found)?;
+                }
+            }
+            Ok(())
         }
-        Err(ErrorCode::TableSchemaMismatch("Empty field path"))
+        let mut found = None;
+        for field in self.schema.fields() {
+            visit(field, field.name(), path, &mut found)?;
+        }
+        found.ok_or_else(|| ErrorCode::TableSchemaMismatch(format!("Unknown field path {path}")))
     }
 
     pub fn project(
@@ -229,6 +232,35 @@ mod tests {
             PARQUET_FIELD_ID_META_KEY.to_string(),
             id.to_string(),
         )]))
+    }
+
+    #[test]
+    fn identity_paths_respect_literal_colons_at_each_schema_boundary() {
+        let schema = ParquetReadSchema::new(Schema::new(vec![
+            field("a:b", DataType::Int64, 1),
+            field(
+                "parent:x",
+                DataType::Struct(vec![field("child:y", DataType::Int64, 3)].into()),
+                2,
+            ),
+        ]));
+        assert_eq!(schema.field_id("a:b").unwrap(), 1);
+        assert_eq!(schema.field_id("parent:x:child:y").unwrap(), 3);
+        let ambiguous = ParquetReadSchema::new(Schema::new(vec![
+            field("a:b", DataType::Int64, 1),
+            field(
+                "a",
+                DataType::Struct(vec![field("b", DataType::Int64, 3)].into()),
+                2,
+            ),
+        ]));
+        assert!(
+            ambiguous
+                .field_id("a:b")
+                .unwrap_err()
+                .message()
+                .contains("Ambiguous")
+        );
     }
 
     #[test]

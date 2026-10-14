@@ -6,14 +6,17 @@ DECIMAL(15,2); PyIceberg writes the second one as INT64.
 """
 
 from decimal import Decimal
+from pathlib import Path
 from urllib.parse import urlparse
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 from pyarrow.fs import S3FileSystem
 from pyiceberg.catalog import load_catalog
+from pyiceberg.manifest import DataFile, DataFileContent, FileFormat
 from pyiceberg.schema import Schema
-from pyiceberg.types import DecimalType, LongType, NestedField, StructType
+from pyiceberg.typedef import Record
+from pyiceberg.types import DecimalType, ListType, LongType, NestedField, StructType
 
 
 catalog = load_catalog(
@@ -145,6 +148,65 @@ table.append(
     )
 )
 assert "schema.name-mapping.default" in table.properties
+
+# Two tiny checked-in legacy two-level LIST files, written with the low-level
+# Parquet writer (PyArrow writes three-level lists). Both contain k=[1,2,3] and
+# old_items=[[{x:10},{x:20}],[{x:30}],NULL], with no IDs. Only the repeated group's
+# physical name differs: `array` versus `old_items_tuple`.
+for encoding in ["array", "tuple"]:
+    name = f"test.t_legacy_list_{encoding}"
+    if catalog.table_exists(name):
+        catalog.drop_table(name)
+    legacy = catalog.create_table(
+        name,
+        schema=Schema(
+            NestedField(1, "k", LongType()),
+            NestedField(2, "old_items", ListType(3, StructType(NestedField(4, "x", LongType())))),
+        ),
+    )
+    source = Path(__file__).resolve().parents[2] / "data" / "parquet" / f"legacy_list_{encoding}.parquet"
+    location = f"{legacy.location().rstrip('/')}/data/legacy.parquet"
+    parsed = urlparse(location)
+    with filesystem.open_output_stream(f"{parsed.netloc}{parsed.path}") as output:
+        output.write(source.read_bytes())
+    # PyIceberg add_files computes statistics assuming the three-level
+    # `.list.element` path and rejects these legacy `.array`/`_tuple` paths.
+    # Register the unchanged ID-less file through its manifest append API,
+    # omitting optional column statistics and supplying the name mapping.
+    data_file = DataFile.from_args(
+        content=DataFileContent.DATA,
+        file_path=location,
+        file_format=FileFormat.PARQUET,
+        partition=Record(),
+        record_count=3,
+        file_size_in_bytes=source.stat().st_size,
+    )
+    data_file.spec_id = legacy.spec().spec_id
+    with legacy.transaction() as transaction:
+        transaction.set_properties({
+            "schema.name-mapping.default": legacy.schema().name_mapping.model_dump_json()
+        })
+        with transaction.update_snapshot().fast_append() as append:
+            append.append_data_file(data_file)
+    with legacy.update_schema() as update:
+        update.rename_column("old_items.element.x", "y")
+        update.rename_column("old_items", "items")
+
+# A literal ':' in a column name is not an Iceberg path separator.
+name = "test.t_colon_name"
+if catalog.table_exists(name):
+    catalog.drop_table(name)
+colon = catalog.create_table(name, schema=Schema(NestedField(1, "a:b", LongType())))
+colon.append(pa.table({"a:b": pa.array([1, 2, None], pa.int64())}))
+
+# An unused malformed name mapping must not block files that already have IDs.
+name = "test.t_unused_name_mapping"
+if catalog.table_exists(name):
+    catalog.drop_table(name)
+identified = catalog.create_table(name, schema=Schema(NestedField(1, "k", LongType())))
+identified.append(pa.table({"k": pa.array([1, 2], pa.int64())}))
+with identified.transaction() as transaction:
+    transaction.set_properties({"schema.name-mapping.default": "not json"})
 
 # An ordinary stage file: no catalog properties, no field IDs and no Iceberg
 # registration. It exercises the same prewhere/TopK policies in path mode.

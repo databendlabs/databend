@@ -305,16 +305,50 @@ fn align_array(array: ArrayRef, target: &DataType, matching: FieldMatching) -> R
                 .as_any()
                 .downcast_ref::<MapArray>()
                 .ok_or_else(|| ErrorCode::TableSchemaMismatch("Expected map array"))?;
-            let values = align_array(
-                Arc::new(source.entries().clone()),
-                entries.data_type(),
-                matching,
-            )?;
-            let values = values
-                .as_any()
-                .downcast_ref::<StructArray>()
-                .unwrap()
-                .clone();
+            let values = match matching {
+                FieldMatching::Path => {
+                    // MAP entries have structural roles (key, value), not table
+                    // column names. Metastore labels may differ from file labels.
+                    // Positional matching applies only to these two entry fields;
+                    // named structs nested inside their values still match by path.
+                    let DataType::Struct(fields) = entries.data_type() else {
+                        return Err(ErrorCode::TableSchemaMismatch("Expected MAP entry struct"));
+                    };
+                    if fields.len() != 2 || source.entries().num_columns() != 2 {
+                        return Err(ErrorCode::TableSchemaMismatch(
+                            "MAP entries require key and value",
+                        ));
+                    }
+                    let columns = fields
+                        .iter()
+                        .enumerate()
+                        .map(|(index, field)| {
+                            align_array(
+                                source.entries().column(index).clone(),
+                                field.data_type(),
+                                matching,
+                            )
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+                    StructArray::try_new(
+                        fields.clone(),
+                        columns,
+                        source.entries().nulls().cloned(),
+                    )?
+                }
+                FieldMatching::FieldId => {
+                    let values = align_array(
+                        Arc::new(source.entries().clone()),
+                        entries.data_type(),
+                        matching,
+                    )?;
+                    values
+                        .as_any()
+                        .downcast_ref::<StructArray>()
+                        .unwrap()
+                        .clone()
+                }
+            };
             Ok(Arc::new(MapArray::try_new(
                 entries.clone(),
                 source.offsets().clone(),
@@ -683,6 +717,166 @@ mod tests {
                 .unwrap()
                 .value(0),
             5
+        );
+    }
+
+    #[test]
+    fn map_entry_roles_are_positional_but_value_structs_keep_named_or_id_matching() {
+        use arrow_buffer::OffsetBuffer;
+        let values = StructArray::new(
+            vec![
+                field("a", DataType::Int32, 30),
+                field("b", DataType::Int32, 40),
+            ]
+            .into(),
+            vec![
+                Arc::new(Int32Array::from(vec![20])),
+                Arc::new(Int32Array::from(vec![30])),
+            ],
+            None,
+        );
+        let entries = StructArray::new(
+            vec![
+                field("file_key", DataType::Int32, 11).with_nullable(false),
+                field("file_value", values.data_type().clone(), 12),
+            ]
+            .into(),
+            vec![Arc::new(Int32Array::from(vec![10])), Arc::new(values)],
+            None,
+        );
+        let source = MapArray::try_new(
+            Arc::new(Field::new(
+                "file_entries",
+                entries.data_type().clone(),
+                false,
+            )),
+            OffsetBuffer::new(vec![0_i32, 1, 1].into()),
+            entries,
+            Some(NullBuffer::from(vec![true, false])),
+            false,
+        )
+        .unwrap();
+        let target = DataType::Map(
+            Arc::new(Field::new(
+                "metastore_entries",
+                DataType::Struct(
+                    vec![
+                        field("metastore_key", DataType::Int64, 11).with_nullable(false),
+                        field(
+                            "metastore_value",
+                            DataType::Struct(
+                                vec![
+                                    field("b", DataType::Int64, 40),
+                                    field("a", DataType::Int64, 30),
+                                ]
+                                .into(),
+                            ),
+                            12,
+                        ),
+                    ]
+                    .into(),
+                ),
+                false,
+            )),
+            false,
+        );
+        for matching in [FieldMatching::Path, FieldMatching::FieldId] {
+            let array = align_array(Arc::new(source.clone()), &target, matching).unwrap();
+            let map = array.as_any().downcast_ref::<MapArray>().unwrap();
+            assert_eq!(map.offsets().as_ref(), &[0, 1, 1]);
+            assert!(map.is_null(1));
+            assert_eq!(
+                map.entries()
+                    .column(0)
+                    .as_any()
+                    .downcast_ref::<Int64Array>()
+                    .unwrap()
+                    .value(0),
+                10
+            );
+            let values = map
+                .entries()
+                .column(1)
+                .as_any()
+                .downcast_ref::<StructArray>()
+                .unwrap();
+            assert_eq!(
+                values
+                    .column(0)
+                    .as_any()
+                    .downcast_ref::<Int64Array>()
+                    .unwrap()
+                    .value(0),
+                30
+            );
+            assert_eq!(
+                values
+                    .column(1)
+                    .as_any()
+                    .downcast_ref::<Int64Array>()
+                    .unwrap()
+                    .value(0),
+                20
+            );
+        }
+    }
+
+    #[test]
+    fn map_path_matching_does_not_swap_keys_and_values_when_labels_cross() {
+        use arrow_buffer::OffsetBuffer;
+        let entries = StructArray::new(
+            vec![
+                Field::new("key", DataType::Int32, false),
+                Field::new("value", DataType::Int32, true),
+            ]
+            .into(),
+            vec![
+                Arc::new(Int32Array::from(vec![10])),
+                Arc::new(Int32Array::from(vec![20])),
+            ],
+            None,
+        );
+        let source = MapArray::try_new(
+            Arc::new(Field::new("entries", entries.data_type().clone(), false)),
+            OffsetBuffer::new(vec![0_i32, 1].into()),
+            entries,
+            None,
+            false,
+        )
+        .unwrap();
+        let target = DataType::Map(
+            Arc::new(Field::new(
+                "entries",
+                DataType::Struct(
+                    vec![
+                        Field::new("value", DataType::Int64, false),
+                        Field::new("key", DataType::Int64, true),
+                    ]
+                    .into(),
+                ),
+                false,
+            )),
+            false,
+        );
+        let array = align_array(Arc::new(source), &target, FieldMatching::Path).unwrap();
+        let map = array.as_any().downcast_ref::<MapArray>().unwrap();
+        assert_eq!(
+            map.entries()
+                .column(0)
+                .as_any()
+                .downcast_ref::<Int64Array>()
+                .unwrap()
+                .value(0),
+            10
+        );
+        assert_eq!(
+            map.entries()
+                .column(1)
+                .as_any()
+                .downcast_ref::<Int64Array>()
+                .unwrap()
+                .value(0),
+            20
         );
     }
 

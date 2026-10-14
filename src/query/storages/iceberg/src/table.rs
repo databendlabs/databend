@@ -460,14 +460,35 @@ impl IcebergTable {
             self.table.scan()
         };
 
-        if let Some(push_downs) = &push_downs {
+        // iceberg-rust binds select/filter against the snapshot's schema, which
+        // can lag behind the current schema after a rename-only transaction.
+        // Keep Databend's identity-based reader and runtime filtering, but do
+        // not bind current names against a different historical schema.
+        let metadata = self.table.metadata();
+        let snapshot = if let Some(id) = self.snapshot_id {
+            metadata.snapshot_by_id(id)
+        } else {
+            metadata.current_snapshot()
+        };
+        let can_push_current_schema = snapshot
+            .map(|snapshot| {
+                snapshot
+                    .schema(metadata)
+                    .map(|schema| schema.as_struct() == metadata.current_schema().as_struct())
+            })
+            .transpose()
+            .map_err(|error| {
+                ErrorCode::TableSchemaMismatch(format!("Iceberg snapshot schema: {error}"))
+            })?
+            .unwrap_or(true);
+        if let Some(push_downs) = push_downs.as_ref().filter(|_| can_push_current_schema) {
             if let Some(projection) = &push_downs.projection {
                 let select_fields =
                     Self::projection_to_iceberg_select_fields(projection, &self.schema())?;
                 scan = scan.select(select_fields);
             }
             if let Some(filter) = &push_downs.filters {
-                let (_, predicate) = PredicateBuilder::build(&filter.filter);
+                let (_, predicate) = PredicateBuilder::new(&self.schema()).build(&filter.filter);
                 scan = scan.with_filter(predicate)
             }
         }
