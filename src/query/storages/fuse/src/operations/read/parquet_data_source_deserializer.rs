@@ -250,8 +250,9 @@ impl Processor for DeserializeDataTransform {
 
             // Report the rows and bytes the scan actually processed, not what
             // survived prewhere / runtime filters: scan progress drives
-            // `system.processes`, `system.query_log` and the `ScanBytes` profile,
-            // which measure scan workload rather than filter output.
+            // `system.processes`, `system_history.query_history` and the
+            // `ScanBytes` profile, which measure scan workload rather than
+            // filter output.
             let progress_values = ProgressValues {
                 rows: scan_stats.rows,
                 bytes: scan_stats.bytes,
