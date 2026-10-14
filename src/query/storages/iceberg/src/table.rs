@@ -54,9 +54,8 @@ use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_storage::IcebergFileIO;
 use databend_common_storages_orc::ORCSource;
 use databend_common_storages_orc::StripeDecoder;
-use databend_common_storages_parquet::ICEBERG_ARROW_SCHEMA;
-use databend_common_storages_parquet::ICEBERG_NAME_MAPPING;
 use databend_common_storages_parquet::ParquetReaderBuilder;
+use databend_common_storages_parquet::ParquetSchemaResolver;
 use databend_common_storages_parquet::ParquetSource;
 use databend_common_storages_parquet::ParquetSourceType;
 use databend_storages_common_table_meta::meta::SnapshotId;
@@ -70,6 +69,8 @@ use crate::IcebergMutableCatalog;
 use crate::append::IcebergCommitSink;
 use crate::append::IcebergDataFileWriter;
 use crate::credential::with_refreshing_credentials;
+use crate::parquet_schema::IcebergParquetSchemaResolver;
+use crate::parquet_schema::NAME_MAPPING_PROPERTY;
 use crate::partition::convert_file_scan_task;
 use crate::predicate::PredicateBuilder;
 use crate::statistics;
@@ -171,15 +172,8 @@ impl IcebergTable {
             field.column_id = field_id;
             fields.push(field);
         }
-        let mut metadata: BTreeMap<String, String> =
+        let metadata: BTreeMap<String, String> =
             arrow_schema.metadata().clone().into_iter().collect();
-        metadata.insert(
-            ICEBERG_ARROW_SCHEMA.to_string(),
-            serde_json::to_string(&arrow_schema)?,
-        );
-        if let Some(mapping) = meta.properties().get(ICEBERG_NAME_MAPPING) {
-            metadata.insert(ICEBERG_NAME_MAPPING.to_string(), mapping.clone());
-        }
         Ok(TableSchema {
             fields,
             metadata,
@@ -393,6 +387,15 @@ impl IcebergTable {
             .map_err(|e| {
                 ErrorCode::ReadTableDataError(format!("Cannot convert Iceberg schema: {e}"))
             })?;
+            let schema_resolver: Arc<dyn ParquetSchemaResolver> =
+                Arc::new(IcebergParquetSchemaResolver::new(
+                    arrow_schema.clone(),
+                    self.table
+                        .metadata()
+                        .properties()
+                        .get(NAME_MAPPING_PROPERTY)
+                        .map(String::as_str),
+                )?);
             let need_row_number = internal_columns.contains(&InternalColumnType::FileRowNumber);
             let topk = plan
                 .push_downs
@@ -408,6 +411,7 @@ impl IcebergTable {
                 arrow_schema.clone(),
             )?
             .with_options(read_options)
+            .with_schema_resolver(schema_resolver)
             .with_push_downs(plan.push_downs.as_ref());
 
             if !need_row_number {

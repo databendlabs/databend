@@ -47,7 +47,6 @@ use crate::ParquetFileMeta;
 use crate::ParquetFilePart;
 use crate::ParquetPart;
 use crate::ParquetReaderBuilder;
-use crate::iceberg_schema::resolve_iceberg_schema;
 use crate::meta::check_parquet_schema;
 use crate::meta::read_metadata_async_cached;
 use crate::parquet_part::DeleteTask;
@@ -128,15 +127,6 @@ pub enum ParquetSourceType {
     Iceberg,
     Hive,
     StreamingLoad,
-}
-
-impl ParquetSourceType {
-    pub fn need_transformer(&self) -> bool {
-        !matches!(
-            self,
-            ParquetSourceType::StageTable | ParquetSourceType::StreamingLoad
-        )
-    }
 }
 
 pub struct ParquetSource {
@@ -459,17 +449,18 @@ impl ParquetSource {
                 self.row_group_reader.schema_desc_from_arrow_fallback(),
             )?;
         }
-        // The schema of the table in iceberg may be inconsistent with the schema in parquet
-        // Stage schema mismatches returned above, so only non-stage readers may need rebuilding.
-        let schema_differs = self.source_type == ParquetSourceType::Iceberg
+        // Table engines may resolve file identities before projection. Ordinary
+        // readers preserve the existing schema comparison and stage validation.
+        let resolver = self.row_group_reader.schema_resolver();
+        let schema_differs = resolver.is_some()
             || (!from_stage_table && expected_schema.root_schema() != file_schema.root_schema());
         let reader = if schema_differs {
             let read_options = ParquetReadOptions::default()
                 .with_prune_row_groups(true)
                 .with_prune_pages(false);
 
-            let schema_desc = if self.source_type == ParquetSourceType::Iceberg {
-                Arc::new(resolve_iceberg_schema(file_schema, &self.table_schema)?)
+            let schema_desc = if let Some(resolver) = resolver {
+                Arc::new(resolver.resolve(file_schema)?)
             } else {
                 meta.file_metadata().schema_descr_ptr()
             };
@@ -492,6 +483,9 @@ impl ParquetSource {
             .with_options(read_options)
             .with_push_downs(self.push_downs.as_ref());
 
+            if let Some(resolver) = resolver {
+                builder = builder.with_schema_resolver(resolver.clone());
+            }
             if !need_row_number {
                 builder = builder.with_topk(self.topk.as_ref().as_ref());
             }

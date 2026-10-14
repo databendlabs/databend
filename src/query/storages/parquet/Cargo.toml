@@ -37,7 +37,6 @@ log = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
 typetag = { workspace = true }
 
 [dev-dependencies]

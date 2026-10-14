@@ -145,3 +145,31 @@ table.append(
     )
 )
 assert "schema.name-mapping.default" in table.properties
+
+# An ordinary stage file: no catalog properties, no field IDs and no Iceberg
+# registration. It exercises the same prewhere/TopK policies in path mode.
+filesystem.create_dir("iceberg-tpch/raw-parquet")
+with filesystem.open_output_stream("iceberg-tpch/raw-parquet/data.parquet") as output:
+    pq.write_table(
+        pa.table({
+            "v": pa.array([10, 20, 30], pa.int64()),
+            "p": pa.array([False, True, True], pa.bool_()),
+            "k": pa.array([1, 2, 3], pa.int64()),
+        }),
+        output,
+        row_group_size=3,
+    )
+
+filesystem.create_dir("iceberg-tpch/raw-parquet-rich")
+with filesystem.open_output_stream("iceberg-tpch/raw-parquet-rich/data.parquet") as output:
+    pq.write_table(
+        pa.table({
+            "k": pa.array([1, 2, 3], pa.int64()),
+            "obj": pa.array([{"value": 5}, None, {"value": 8}], pa.struct([pa.field("value", pa.int32())])),
+            "arr": pa.array([[1, 2], None, []], pa.list_(pa.int32())),
+            "m": pa.array([[('x', 10)], None, [('x', 30)]], pa.map_(pa.string(), pa.int32())),
+            "d": pa.array([Decimal("123.45"), None, Decimal("-7.01")], pa.decimal128(15, 2)),
+        }),
+        output,
+        row_group_size=3,
+    )

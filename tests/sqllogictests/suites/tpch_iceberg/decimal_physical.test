@@ -28,3 +28,9 @@ SELECT k FROM ctl.test.t_decimal_physical ORDER BY k;
 2
 3
 4
+
+query IT
+SELECT k, d FROM ctl.test.t_decimal_physical WHERE d > 0 ORDER BY k DESC LIMIT 2;
+----
+4 42.00
+3 99999.99

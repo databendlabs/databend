@@ -71,3 +71,170 @@ query IIIT rowsort
 SELECT count(*), sum(left_item:value), sum(right_item:value), sum(d) FROM ctl.test.t_name_mapping;
 ----
 3 60 600 158.44
+
+# Combined prewhere + TopK: each read stage must use its own projected schema.
+query IT
+SELECT k, d FROM ctl.test.t_name_mapping WHERE d > 0 ORDER BY k DESC LIMIT 2;
+----
+3 42.00
+1 123.45
+
+# Sort key not in output; predicate and output use different fields.
+query T
+SELECT d FROM ctl.test.t_name_mapping WHERE left_item:value >= 20 ORDER BY k LIMIT 1;
+----
+-7.01
+
+# Sort key is also a predicate/output column; it must not be duplicated on merge.
+query IT
+SELECT k, d FROM ctl.test.t_name_mapping WHERE k > 1 ORDER BY k LIMIT 1;
+----
+2 -7.01
+
+# All output is prefetched, so the remaining batch has zero columns.
+query I
+SELECT k FROM ctl.test.t_name_mapping WHERE d > 0 ORDER BY k LIMIT 1;
+----
+1
+
+query I
+SELECT count(*) FROM ctl.test.t_name_mapping;
+----
+3
+
+query I
+SELECT count(*) FROM ctl.test.t_name_mapping WHERE d > 0;
+----
+2
+
+# Ordinary ID-less Parquet uses the same converters without any Iceberg metadata.
+statement ok
+DROP STAGE IF EXISTS raw_parquet_mapping;
+
+statement ok
+CREATE STAGE raw_parquet_mapping URL='s3://iceberg-tpch/raw-parquet/' CONNECTION=(
+    ENDPOINT_URL='http://127.0.0.1:9002'
+    ACCESS_KEY_ID='admin'
+    SECRET_ACCESS_KEY='password'
+    REGION='us-east-1'
+) FILE_FORMAT=(TYPE=PARQUET);
+
+# Force the row-group reader so combined policies cannot be bypassed by the
+# small-file optimization.
+statement ok
+SET parquet_fast_read_bytes=0;
+
+# Split the filtered/prefetched row group across output batches.
+statement ok
+SET max_block_size=1;
+
+query II rowsort
+SELECT k, v FROM @raw_parquet_mapping;
+----
+1 10
+2 20
+3 30
+
+query II
+SELECT k, v FROM @raw_parquet_mapping WHERE p ORDER BY k DESC LIMIT 2;
+----
+3 30
+2 20
+
+query I
+SELECT v FROM @raw_parquet_mapping WHERE p ORDER BY k LIMIT 1;
+----
+20
+
+query I
+SELECT k FROM @raw_parquet_mapping WHERE p ORDER BY k LIMIT 1;
+----
+2
+
+query I
+SELECT count(*) FROM @raw_parquet_mapping;
+----
+3
+
+query I
+SELECT count(*) FROM @raw_parquet_mapping WHERE p;
+----
+2
+
+# Also exercise the whole-file conversion with the same ID-less fixture.
+statement ok
+SET parquet_fast_read_bytes=1048576;
+
+query II rowsort
+SELECT k, v FROM @raw_parquet_mapping WHERE p;
+----
+2 20
+3 30
+
+statement ok
+DROP STAGE IF EXISTS raw_parquet_rich;
+
+statement ok
+CREATE STAGE raw_parquet_rich URL='s3://iceberg-tpch/raw-parquet-rich/' CONNECTION=(
+    ENDPOINT_URL='http://127.0.0.1:9002'
+    ACCESS_KEY_ID='admin'
+    SECRET_ACCESS_KEY='password'
+    REGION='us-east-1'
+) FILE_FORMAT=(TYPE=PARQUET);
+
+# Complex ordinary Parquet types must retain the generic conversion behavior.
+query IIIIT rowsort
+SELECT k, obj:value, arr[1], m['x'], d FROM @raw_parquet_rich;
+----
+1 5 1 10 123.45
+2 NULL NULL NULL NULL
+3 8 NULL 30 -7.01
+
+statement ok
+SET parquet_fast_read_bytes=0;
+
+query IIIIT rowsort
+SELECT k, obj:value, arr[1], m['x'], d FROM @raw_parquet_rich;
+----
+1 5 1 10 123.45
+2 NULL NULL NULL NULL
+3 8 NULL 30 -7.01
+
+query IT
+SELECT k, d FROM @raw_parquet_rich WHERE obj:value > 0 ORDER BY k DESC LIMIT 2;
+----
+3 -7.01
+1 123.45
+
+# COPY also uses the shared no-prefetch policy, with a projection over a richer
+# file schema and an ID-less FIXED_LEN_BYTE_ARRAY decimal.
+statement ok
+DROP TABLE IF EXISTS raw_parquet_copy;
+
+statement ok
+CREATE TABLE raw_parquet_copy (k BIGINT, d DECIMAL(15,2) NULL);
+
+statement ok
+COPY INTO raw_parquet_copy FROM @raw_parquet_rich FORCE=TRUE;
+
+query IT rowsort
+SELECT k, d FROM raw_parquet_copy;
+----
+1 123.45
+2 NULL
+3 -7.01
+
+statement ok
+DROP TABLE raw_parquet_copy;
+
+statement ok
+DROP STAGE raw_parquet_rich;
+
+statement ok
+UNSET parquet_fast_read_bytes;
+
+statement ok
+UNSET max_block_size;
+
+statement ok
+DROP STAGE raw_parquet_mapping;
