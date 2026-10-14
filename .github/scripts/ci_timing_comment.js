@@ -283,6 +283,23 @@ async function baseline(github, context, core, workflowFile, metricsFn, excludeR
 
 async function findPR(github, context, core, run) {
     if (run.pull_requests && run.pull_requests.length) return run.pull_requests[0].number;
+    // For fork PRs, workflow_run.pull_requests is [] and commits/{sha}/pulls
+    // does not index fork commits, so match open PRs by <head_owner>:<head_branch>.
+    const headOwner = run.head_repository && run.head_repository.owner && run.head_repository.owner.login;
+    if (headOwner && run.head_branch) {
+        try {
+            const { data } = await github.rest.pulls.list({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                head: `${headOwner}:${run.head_branch}`,
+            });
+            const match = data.find((p) => p.head && p.head.sha === run.head_sha) || data[0];
+            if (match) return match.number;
+        } catch (e) {
+            core.warning(`PR lookup by head: ${e.message}`);
+        }
+    }
     try {
         const { data } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
             owner: context.repo.owner,
