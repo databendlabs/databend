@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use tonic::Request;
 use tonic::transport::Channel;
 
@@ -99,7 +100,7 @@ impl NotificationClient {
             .await
             .map_err(|status| {
                 if status.code() == tonic::Code::Unimplemented {
-                    databend_common_exception::ErrorCode::Unimplemented(
+                    ErrorCode::Unimplemented(
                         "Cloud Control does not support active notifications (EnqueueNotification)",
                     )
                 } else {
@@ -108,7 +109,7 @@ impl NotificationClient {
             })?
             .into_inner();
         if let Some(error) = &resp.error {
-            return Err(databend_common_exception::ErrorCode::Internal(format!(
+            return Err(ErrorCode::Internal(format!(
                 "Cloud Control rejected notification: {} ({}: {})",
                 error.message, error.kind, error.code,
             )));

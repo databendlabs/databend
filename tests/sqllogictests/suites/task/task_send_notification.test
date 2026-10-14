@@ -87,16 +87,37 @@ SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_
 4
 
 statement error 1006
+SELECT * FROM send_databend_notification('', 'alert');
+
+statement error 1006
+SELECT * FROM send_databend_notification(NULL, 'alert');
+
+statement error 1006
+SELECT * FROM send_databend_notification(1, 'alert');
+
+statement error 1006
+SELECT * FROM send_databend_notification('send_notify', 1);
+
+statement error 1006
 SELECT * FROM send_databend_notification('send_notify', '');
 
 statement error 1006
 SELECT * FROM send_databend_notification('send_notify', repeat('x', 262145));
 
 statement error 1006
+SELECT * FROM send_databend_notification('send_notify', repeat('é', 131073));
+
+statement error 1006
 SELECT * FROM send_databend_notification('send_notify', NULL);
 
 statement error
+CALL system$send_databend_notification();
+
+statement error
 CALL system$send_databend_notification('send_notify');
+
+statement error
+CALL system$send_databend_notification('send_notify', 'alert', 'extra');
 
 statement error
 CALL system$send_databend_notification('missing_send_notify', 'alert');
@@ -128,3 +149,23 @@ SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_
 
 statement ok
 DROP FUNCTION send_notification;
+
+# The limit is 262144 UTF-8 bytes, not characters.
+statement ok
+DROP NOTIFICATION INTEGRATION IF EXISTS send_boundary;
+
+statement ok
+CREATE NOTIFICATION INTEGRATION send_boundary TYPE = WEBHOOK ENABLED = TRUE
+  WEBHOOK = (URL = 'http://localhost:8080/notify', METHOD = 'POST');
+
+statement ok
+SELECT * FROM send_databend_notification('send_boundary', repeat('é', 131072));
+
+query II
+SELECT count(*), max(octet_length(message)) FROM system.notification_history
+WHERE integration_name = 'send_boundary';
+----
+1 262144
+
+statement ok
+DROP NOTIFICATION INTEGRATION send_boundary;
