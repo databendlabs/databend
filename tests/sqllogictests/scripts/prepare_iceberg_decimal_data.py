@@ -16,7 +16,7 @@ from pyiceberg.catalog import load_catalog
 from pyiceberg.manifest import DataFile, DataFileContent, FileFormat
 from pyiceberg.schema import Schema
 from pyiceberg.typedef import Record
-from pyiceberg.types import DecimalType, ListType, LongType, NestedField, StructType
+from pyiceberg.types import DecimalType, ListType, LongType, NestedField, StringType, StructType
 
 
 catalog = load_catalog(
@@ -207,6 +207,34 @@ identified = catalog.create_table(name, schema=Schema(NestedField(1, "k", LongTy
 identified.append(pa.table({"k": pa.array([1, 2], pa.int64())}))
 with identified.transaction() as transaction:
     transaction.set_properties({"schema.name-mapping.default": "not json"})
+
+# Rename after the last write: the current snapshot still references the old
+# schema, so pushed-down select/filter must be translated by field ID. Two
+# appends give two data files, letting the translated filter prune one.
+name = "test.t_rename_after_write"
+if catalog.table_exists(name):
+    catalog.drop_table(name)
+renamed = catalog.create_table(
+    name,
+    schema=Schema(
+        NestedField(1, "k", LongType()),
+        NestedField(2, "s", StructType(NestedField(3, "v", StringType()))),
+    ),
+)
+renamed_child = pa.struct([pa.field("v", pa.string())])
+for key, value in [(1, "a"), (2, "b")]:
+    renamed.append(
+        pa.table(
+            {
+                "k": pa.array([key], pa.int64()),
+                "s": pa.array([{"v": value}], renamed_child),
+            }
+        )
+    )
+with renamed.update_schema() as update:
+    update.rename_column("s.v", "w")
+    update.rename_column("k", "id")
+assert renamed.metadata.current_snapshot().schema_id != renamed.metadata.current_schema_id
 
 # An ordinary stage file: no catalog properties, no field IDs and no Iceberg
 # registration. It exercises the same prewhere/TopK policies in path mode.

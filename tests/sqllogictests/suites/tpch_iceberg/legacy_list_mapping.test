@@ -63,3 +63,21 @@ SELECT k FROM ctl.test.t_unused_name_mapping;
 ----
 1
 2
+
+# Renamed after the last write, so the scanned snapshot still binds old names.
+# Pushed-down projection and filters must be translated through field IDs.
+query IT
+SELECT id, s:w FROM ctl.test.t_rename_after_write WHERE id = 2;
+----
+2 b
+
+query I
+SELECT id FROM ctl.test.t_rename_after_write WHERE s:w = 'a';
+----
+1
+
+query IT rowsort
+SELECT id, s:w FROM ctl.test.t_rename_after_write WHERE id > 0 AND s:w IS NOT NULL;
+----
+1 a
+2 b

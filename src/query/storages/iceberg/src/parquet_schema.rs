@@ -274,8 +274,16 @@ fn resolve_field(
                                 Some("element"),
                                 None,
                             )?;
+                            // Wrapper status may depend on the old list name. A
+                            // wrapper named `<new_list>_tuple` would turn into a
+                            // legacy struct element once the outer list is renamed.
+                            let wrapper_name = if element.name() == format!("{name}_tuple") {
+                                "list"
+                            } else {
+                                element.name()
+                            };
                             Ok(Arc::new(
-                                Type::group_type_builder(element.name())
+                                Type::group_type_builder(wrapper_name)
                                     .with_repetition(element.get_basic_info().repetition())
                                     .with_converted_type(element.get_basic_info().converted_type())
                                     .with_logical_type(
@@ -504,6 +512,43 @@ mod tests {
         assert!(error.message().contains(NAME_MAPPING_PROPERTY));
         // A failed ID-less file must not poison later fully identified files.
         assert!(resolver.resolve(&explicit).is_ok());
+    }
+
+    #[test]
+    fn wrapper_named_after_the_new_list_stays_a_wrapper() {
+        use parquet::arrow::parquet_to_arrow_schema;
+        // `items_tuple` is a three-level wrapper under `old_items`, but would
+        // become a legacy struct element under the renamed `items` list.
+        let target = Schema::new(vec![field(
+            "items",
+            DataType::List(Arc::new(field("element", DataType::Int64, 2))),
+            1,
+        )]);
+        let resolver = IcebergParquetSchemaResolver::new(
+            target,
+            Some(r#"[{"field-id":1,"names":["old_items","items"],"fields":[{"field-id":2,"names":["element"]}]}]"#),
+        )
+        .unwrap();
+        let original = file(
+            "message test { OPTIONAL group old_items (LIST) { REPEATED group items_tuple { OPTIONAL INT64 element; } } }",
+        );
+        let original_arrow = parquet_to_arrow_schema(&original, None).unwrap();
+        let resolved = resolver.resolve(&original).unwrap();
+        let resolved_arrow = parquet_to_arrow_schema(&resolved, None).unwrap();
+        let (DataType::List(before), DataType::List(after)) = (
+            original_arrow.field(0).data_type(),
+            resolved_arrow.field(0).data_type(),
+        ) else {
+            panic!()
+        };
+        assert_eq!(before.data_type(), &DataType::Int64);
+        assert_eq!(after.data_type(), &DataType::Int64);
+        assert_eq!(resolved_arrow.field(0).name(), "items");
+        assert_eq!(after.metadata()[PARQUET_FIELD_ID_META_KEY], "2");
+        assert_eq!(
+            resolved.column(0).max_rep_level(),
+            original.column(0).max_rep_level()
+        );
     }
 
     #[test]

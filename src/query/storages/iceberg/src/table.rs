@@ -461,34 +461,41 @@ impl IcebergTable {
         };
 
         // iceberg-rust binds select/filter against the snapshot's schema, which
-        // can lag behind the current schema after a rename-only transaction.
-        // Keep Databend's identity-based reader and runtime filtering, but do
-        // not bind current names against a different historical schema.
+        // can lag behind the current schema (rename-only transactions, time
+        // travel). Databend plans with current names, so translate them through
+        // field IDs; anything the snapshot cannot bind stays unpushed.
         let metadata = self.table.metadata();
         let snapshot = if let Some(id) = self.snapshot_id {
             metadata.snapshot_by_id(id)
         } else {
             metadata.current_snapshot()
         };
-        let can_push_current_schema = snapshot
-            .map(|snapshot| {
-                snapshot
-                    .schema(metadata)
-                    .map(|schema| schema.as_struct() == metadata.current_schema().as_struct())
-            })
+        let current_schema = metadata.current_schema();
+        let snapshot_schema = snapshot
+            .map(|snapshot| snapshot.schema(metadata))
             .transpose()
             .map_err(|error| {
                 ErrorCode::TableSchemaMismatch(format!("Iceberg snapshot schema: {error}"))
             })?
-            .unwrap_or(true);
-        if let Some(push_downs) = push_downs.as_ref().filter(|_| can_push_current_schema) {
+            .unwrap_or_else(|| current_schema.clone());
+        if let Some(push_downs) = &push_downs {
             if let Some(projection) = &push_downs.projection {
+                // Columns added after the snapshot are not selectable there.
+                // Databend's reader still resolves every projected field itself.
                 let select_fields =
-                    Self::projection_to_iceberg_select_fields(projection, &self.schema())?;
+                    Self::projection_to_iceberg_select_fields(projection, &self.schema())?
+                        .into_iter()
+                        .filter_map(|name| {
+                            let id = current_schema.field_id_by_name(&name)?;
+                            snapshot_schema.name_by_field_id(id).map(str::to_owned)
+                        })
+                        .collect::<Vec<_>>();
                 scan = scan.select(select_fields);
             }
             if let Some(filter) = &push_downs.filters {
-                let (_, predicate) = PredicateBuilder::new(&self.schema()).build(&filter.filter);
+                let (_, predicate) = PredicateBuilder::new(&self.schema())
+                    .bind_to_snapshot(current_schema, &snapshot_schema)
+                    .build(&filter.filter);
                 scan = scan.with_filter(predicate)
             }
         }

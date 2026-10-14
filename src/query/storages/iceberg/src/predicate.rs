@@ -23,6 +23,7 @@ use databend_common_expression::types::NumberScalar;
 use iceberg::expr::Predicate;
 use iceberg::expr::Reference;
 use iceberg::spec::Datum;
+use iceberg::spec::Schema as IcebergSchema;
 use log::debug;
 
 pub struct PredicateBuilder {
@@ -45,6 +46,25 @@ impl PredicateBuilder {
 
     fn reference(&self, name: &str) -> Option<Reference> {
         self.references.get(name)?.as_ref().map(Reference::new)
+    }
+
+    /// iceberg-rust binds predicates against the scanned snapshot's schema,
+    /// which can differ from the current schema after renames, added columns or
+    /// type promotion. Translate each current reference through its field ID.
+    /// Fields absent from the snapshot, or whose type changed, are left
+    /// unpushed so binding can never fail or compare against a different type.
+    pub fn bind_to_snapshot(mut self, current: &IcebergSchema, snapshot: &IcebergSchema) -> Self {
+        for reference in self.references.values_mut() {
+            *reference = reference.take().and_then(|name| {
+                let id = current.field_id_by_name(&name)?;
+                let current_field = current.field_by_id(id)?;
+                let snapshot_field = snapshot.field_by_id(id)?;
+                (current_field.field_type == snapshot_field.field_type)
+                    .then(|| snapshot.name_by_field_id(id).map(str::to_owned))
+                    .flatten()
+            });
+        }
+        self
     }
 
     pub fn build(&self, expr: &RemoteExpr<String>) -> (bool, Predicate) {
@@ -309,7 +329,11 @@ fn scalar_to_datatum(scalar: &Scalar) -> Option<Datum> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use databend_common_expression::FunctionID;
+    use databend_common_expression::types::NumberDataType;
+    use iceberg::expr::Bind;
 
     use super::*;
 
@@ -437,6 +461,85 @@ mod tests {
             PredicateBuilder::new(&schema).build(&string_eq("item:value", "test"));
         assert!(uncertain);
         assert_eq!(predicate, Predicate::AlwaysTrue);
+    }
+
+    #[test]
+    fn snapshot_binding_follows_field_ids_and_skips_unbindable_fields() {
+        use databend_common_expression::TableField;
+        use iceberg::spec::NestedField;
+        use iceberg::spec::PrimitiveType;
+        use iceberg::spec::StructType;
+        use iceberg::spec::Type;
+
+        let iceberg_schema = |fields: Vec<NestedField>| {
+            IcebergSchema::builder()
+                .with_fields(fields.into_iter().map(Arc::new))
+                .build()
+                .unwrap()
+        };
+        let long = || Type::Primitive(PrimitiveType::Long);
+        let string = || Type::Primitive(PrimitiveType::String);
+        let nested = |child: &str| {
+            Type::Struct(StructType::new(vec![Arc::new(NestedField::optional(
+                5,
+                child,
+                string(),
+            ))]))
+        };
+        // Snapshot: old_k long, s {old_v string}, p int. Current schema renamed
+        // old_k -> k and old_v -> v, promoted p to long and added new_c.
+        let snapshot = iceberg_schema(vec![
+            NestedField::optional(1, "old_k", long()),
+            NestedField::optional(2, "p", Type::Primitive(PrimitiveType::Int)),
+            NestedField::optional(4, "s", nested("old_v")),
+        ]);
+        let current = iceberg_schema(vec![
+            NestedField::optional(1, "k", long()),
+            NestedField::optional(2, "p", long()),
+            NestedField::optional(3, "new_c", long()),
+            NestedField::optional(4, "s", nested("v")),
+        ]);
+        let table = TableSchema::new(vec![
+            TableField::new("k", TableDataType::Number(NumberDataType::Int64)),
+            TableField::new("p", TableDataType::Number(NumberDataType::Int64)),
+            TableField::new("new_c", TableDataType::Number(NumberDataType::Int64)),
+            TableField::new("s", TableDataType::Tuple {
+                fields_name: vec!["v".to_owned()],
+                fields_type: vec![TableDataType::String],
+            }),
+        ]);
+        let builder = PredicateBuilder::new(&table).bind_to_snapshot(&current, &snapshot);
+        let int_eq = |name: &str| {
+            function("eq", vec![
+                column(name, DataType::Number(NumberDataType::Int64)),
+                constant(
+                    Scalar::Number(NumberScalar::Int64(1)),
+                    DataType::Number(NumberDataType::Int64),
+                ),
+            ])
+        };
+
+        let (uncertain, predicate) = builder.build(&int_eq("k"));
+        assert!(!uncertain);
+        assert_eq!(predicate, Reference::new("old_k").equal_to(Datum::long(1)));
+        let (uncertain, predicate) = builder.build(&string_eq("s:v", "x"));
+        assert!(!uncertain);
+        assert_eq!(
+            predicate,
+            Reference::new("s.old_v").equal_to(Datum::string("x"))
+        );
+        // Added after the snapshot, or promoted since: never bound.
+        for name in ["new_c", "p"] {
+            let (uncertain, predicate) = builder.build(&int_eq(name));
+            assert!(uncertain, "{name}");
+            assert_eq!(predicate, Predicate::AlwaysTrue);
+        }
+        // Unbindable conjuncts drop out of AND without losing the others.
+        let (uncertain, predicate) =
+            builder.build(&function("and_filters", vec![int_eq("new_c"), int_eq("k")]));
+        assert!(uncertain);
+        assert_eq!(predicate, Reference::new("old_k").equal_to(Datum::long(1)));
+        assert!(predicate.bind(Arc::new(snapshot), true).is_ok());
     }
 
     #[test]
