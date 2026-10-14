@@ -21,6 +21,10 @@ export TEST_STAGE_STORAGE
 
 sqllogic_filter stage
 
+# Run every variant even if one fails (the former matrix used fail-fast: false),
+# then report all failures at once.
+failed=()
+
 for dedup in full_path sub_path; do
 	for size in small large; do
 		echo "Starting standalone DatabendQuery and DatabendMeta (clean state)"
@@ -31,7 +35,15 @@ for dedup in full_path sub_path; do
 		./scripts/ci/deploy/databend-query-standalone.sh
 
 		echo "Starting databend-sqllogic stage tests: storage=${TEST_STAGE_STORAGE} dedup=${dedup} size=${size}"
-		TEST_STAGE_DEDUP=${dedup} TEST_STAGE_SIZE=${size} \
-			target/"${BUILD_PROFILE}"/databend-sqllogictests "${SQLLOGIC_FILTER[@]}" --handlers "${TEST_HANDLERS}" --parallel 1
+		if ! TEST_STAGE_DEDUP=${dedup} TEST_STAGE_SIZE=${size} \
+			target/"${BUILD_PROFILE}"/databend-sqllogictests "${SQLLOGIC_FILTER[@]}" --handlers "${TEST_HANDLERS}" --parallel 1; then
+			echo "::error::stage variant failed: storage=${TEST_STAGE_STORAGE} dedup=${dedup} size=${size}"
+			failed+=("${dedup}/${size}")
+		fi
 	done
 done
+
+if ((${#failed[@]} > 0)); then
+	echo "Failed stage variants: ${failed[*]}"
+	exit 1
+fi
