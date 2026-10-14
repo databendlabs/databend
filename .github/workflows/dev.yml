@@ -6,20 +6,26 @@ on:
       - opened
       - synchronize
       - reopened
+      - labeled
+      - unlabeled
     branches:
       - main
       - backport/*
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ (github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'hold-ci' && github.run_id || 'main' }}
   cancel-in-progress: true
 
 jobs:
   changes:
+    if: >-
+      (github.event.action != 'labeled' && github.event.action != 'unlabeled') ||
+      github.event.label.name == 'hold-ci'
     runs-on: ubuntu-latest
     outputs:
       any_src_changed: ${{ steps.src.outputs.any_changed }}
       bendpy_changed: ${{ steps.bendpy.outputs.any_changed }}
+      hold_ci: ${{ contains(github.event.pull_request.labels.*.name, 'hold-ci') }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -55,7 +61,7 @@ jobs:
 
   linux:
     needs: changes
-    if: needs.changes.outputs.any_src_changed == 'true'
+    if: needs.changes.outputs.any_src_changed == 'true' && needs.changes.outputs.hold_ci != 'true'
     uses: ./.github/workflows/reuse.linux.yml
     secrets: inherit
     with:
@@ -66,7 +72,7 @@ jobs:
 
   mac_check:
     needs: changes
-    if: needs.changes.outputs.any_src_changed == 'true'
+    if: needs.changes.outputs.any_src_changed == 'true' && needs.changes.outputs.hold_ci != 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
@@ -77,7 +83,7 @@ jobs:
 
   test_bendpy:
     needs: changes
-    if: needs.changes.outputs.bendpy_changed == 'true'
+    if: needs.changes.outputs.bendpy_changed == 'true' && needs.changes.outputs.hold_ci != 'true'
     runs-on:
       - self-hosted
       - ARM64
@@ -94,6 +100,9 @@ jobs:
           target: aarch64-unknown-linux-gnu
 
   ai_assistance_test:
+    if: >-
+      (github.event.action != 'labeled' && github.event.action != 'unlabeled') ||
+      github.event.label.name == 'hold-ci'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -101,7 +110,10 @@ jobs:
         run: python3 .github/scripts/test_check_pr_ai_assistance.py
 
   ready:
-    if: always()
+    if: >-
+      always() &&
+      ((github.event.action != 'labeled' && github.event.action != 'unlabeled') ||
+       github.event.label.name == 'hold-ci')
     runs-on: ubuntu-latest
     needs:
       - ai_assistance_test
@@ -114,6 +126,7 @@ jobs:
         uses: actions/github-script@v9
         env:
           AI_ASSISTANCE_TEST_RESULT: ${{ needs.ai_assistance_test.result }}
+          HOLD_CI: ${{ needs.changes.outputs.hold_ci }}
           SRC_CHANGED: ${{ needs.changes.outputs.any_src_changed }}
           BENDPY_CHANGED: ${{ needs.changes.outputs.bendpy_changed }}
           LINUX_BUILD_RESULT: ${{ needs.linux.result }}
@@ -121,6 +134,10 @@ jobs:
           BENDPY_RESULT: ${{ needs.test_bendpy.result }}
         with:
           script: |
+            if (process.env.HOLD_CI == 'true') {
+              core.setFailed('Heavy CI is paused by the hold-ci label; remove hold-ci to run full CI before merging');
+              return;
+            }
             if (process.env.AI_ASSISTANCE_TEST_RESULT != 'success') {
               core.setFailed(`AI assistance validator tests did not complete successfully (${process.env.AI_ASSISTANCE_TEST_RESULT}), not ready to merge`);
               return;
