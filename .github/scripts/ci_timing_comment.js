@@ -283,6 +283,27 @@ async function baseline(github, context, core, workflowFile, metricsFn, excludeR
 
 async function findPR(github, context, core, run) {
     if (run.pull_requests && run.pull_requests.length) return run.pull_requests[0].number;
+    // For fork PRs, workflow_run.pull_requests is [] and commits/{sha}/pulls
+    // does not index fork commits, so match open PRs by <head_owner>:<head_branch>.
+    const headOwner = run.head_repository && run.head_repository.owner && run.head_repository.owner.login;
+    if (headOwner && run.head_branch) {
+        try {
+            const { data } = await github.rest.pulls.list({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                head: `${headOwner}:${run.head_branch}`,
+            });
+            const matches = data.filter((p) => p.head && p.head.sha === run.head_sha);
+            if (matches.length === 1) return matches[0].number;
+            if (matches.length > 1) {
+                core.warning(`PR lookup by head: ${matches.length} open PRs share ${headOwner}:${run.head_branch}@${run.head_sha}; skipping ambiguous match`);
+                return null;
+            }
+        } catch (e) {
+            core.warning(`PR lookup by head: ${e.message}`);
+        }
+    }
     try {
         const { data } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
             owner: context.repo.owner,
@@ -290,7 +311,11 @@ async function findPR(github, context, core, run) {
             commit_sha: run.head_sha,
         });
         const open = data.filter((p) => p.state === 'open');
-        if (open.length) return open[0].number;
+        if (open.length === 1) return open[0].number;
+        if (open.length > 1) {
+            core.warning(`PR lookup: ${open.length} open PRs share commit ${run.head_sha}; skipping ambiguous match`);
+            return null;
+        }
     } catch (e) {
         core.warning(`PR lookup: ${e.message}`);
     }
