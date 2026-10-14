@@ -21,6 +21,7 @@ mod fault_injection;
 mod logical_change_retry;
 
 mod create_or_replace_ownership_object;
+mod data_metrics;
 mod internal_column;
 mod mutation;
 mod navigate;

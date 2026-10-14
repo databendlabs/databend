@@ -46,6 +46,7 @@ use databend_common_base::base::SpillProgress;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::IoStats;
 use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::PerfConfig;
@@ -517,8 +518,12 @@ impl QueryContext {
         self.shared.get_data_metrics()
     }
 
-    pub fn merge_io_stats(&self, stats: &IoStatsSnapshot) {
-        self.shared.merge_io_stats(stats);
+    pub fn get_local_io_stats(&self) -> Arc<IoStats> {
+        self.shared.get_local_io_stats()
+    }
+
+    pub fn set_node_io_stats(&self, node: String, stats: IoStatsSnapshot) {
+        self.shared.set_node_io_stats(node, stats);
     }
 
     pub fn get_io_stats(&self) -> IoStatsSnapshot {
@@ -1099,7 +1104,8 @@ mod tests {
         let fixture = TestFixture::setup().await?;
         let ctx = fixture.new_query_ctx().await?;
 
-        ctx.merge_io_stats(&IoStatsSnapshot {
+        // Local IO recorded through the shared counter.
+        ctx.get_local_io_stats().merge_snapshot(&IoStatsSnapshot {
             list_count: 1,
             list_duration_ms: 2,
             read_count: 2,
@@ -1109,7 +1115,19 @@ mod tests {
             write_bytes: 5,
             write_duration_ms: 6,
         });
-        ctx.merge_io_stats(&IoStatsSnapshot {
+        // A remote node reports cumulative snapshots: a newer snapshot from the
+        // same node replaces the older one instead of being added to it.
+        ctx.set_node_io_stats("node-1".to_string(), IoStatsSnapshot {
+            list_count: 5,
+            list_duration_ms: 10,
+            read_count: 10,
+            read_bytes: 15,
+            read_duration_ms: 20,
+            write_count: 20,
+            write_bytes: 25,
+            write_duration_ms: 30,
+        });
+        ctx.set_node_io_stats("node-1".to_string(), IoStatsSnapshot {
             list_count: 10,
             list_duration_ms: 20,
             read_count: 20,
@@ -1130,6 +1148,12 @@ mod tests {
             write_bytes: 55,
             write_duration_ms: 66,
         });
+
+        let data_metrics = ctx.get_data_metrics();
+        assert_eq!(data_metrics.get_read_bytes(), 33);
+        assert_eq!(data_metrics.get_read_bytes_cost(), 44);
+        assert_eq!(data_metrics.get_write_bytes(), 55);
+        assert_eq!(data_metrics.get_write_bytes_cost(), 66);
 
         Ok(())
     }

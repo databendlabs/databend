@@ -36,6 +36,7 @@ use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::PerfConfig;
 use databend_common_base::runtime::PerfEvent;
 use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::drop_guard;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
@@ -173,7 +174,14 @@ pub struct QueryContextShared {
 
     pub(super) pruned_partitions_stats: Arc<RwLock<HashMap<u32, PartStatistics>>>,
 
-    pub(super) io_stats: Arc<IoStats>,
+    /// Object storage IO of this query on this node. Shared with the
+    /// `TrackingPayload.io_stats` of the threads executing the query, so the
+    /// global storage metrics layer records into it regardless of which
+    /// table instance performed the IO.
+    pub(super) local_io_stats: Arc<IoStats>,
+    /// Latest IO snapshot reported by each remote node, keyed by node id.
+    /// Snapshots are cumulative, so a newer one replaces the older one.
+    pub(super) nodes_io_stats: Arc<RwLock<HashMap<String, IoStatsSnapshot>>>,
 
     pub(super) broadcast_registry: BroadcastRegistry,
 
@@ -265,7 +273,8 @@ impl QueryContextShared {
             mem_stat: Arc::new(RwLock::new(None)),
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
             pruned_partitions_stats: Arc::new(RwLock::new(HashMap::new())),
-            io_stats: Default::default(),
+            local_io_stats: ThreadTracker::io_stats().cloned().unwrap_or_default(),
+            nodes_io_stats: Arc::new(RwLock::new(HashMap::new())),
             broadcast_registry: Default::default(),
             perf_config: Mutex::new(PerfConfig::default()),
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
@@ -399,19 +408,46 @@ impl QueryContextShared {
         tables.values().cloned().collect()
     }
 
+    /// Data metrics of the whole query.
+    ///
+    /// Byte and cost counters come from the per-query `IoStats` (local node plus
+    /// the latest snapshot of every remote node). Partition counters come from
+    /// the tables attached to this query, which is where pruning records them.
     pub fn get_data_metrics(&self) -> StorageMetrics {
         let tables = self.get_tables_refs();
-        let metrics: Vec<Arc<StorageMetrics>> =
+        let table_metrics: Vec<Arc<StorageMetrics>> =
             tables.iter().filter_map(|v| v.get_data_metrics()).collect();
-        StorageMetrics::merge(&metrics)
+        let table_metrics = StorageMetrics::merge(&table_metrics);
+
+        let io_stats = self.get_io_stats();
+        let metrics = StorageMetrics::default();
+        metrics.inc_read_bytes(io_stats.read_bytes as usize);
+        metrics.inc_read_bytes_cost(io_stats.read_duration_ms);
+        metrics.inc_write_bytes(io_stats.write_bytes as usize);
+        metrics.inc_write_bytes_cost(io_stats.write_duration_ms);
+        metrics.inc_partitions_scanned(table_metrics.get_partitions_scanned());
+        metrics.inc_partitions_total(table_metrics.get_partitions_total());
+        metrics
     }
 
-    pub fn merge_io_stats(&self, stats: &IoStatsSnapshot) {
-        self.io_stats.merge_snapshot(stats);
+    /// The IO counter of this query on this node. Threads executing the query
+    /// must carry it in their `TrackingPayload.io_stats`.
+    pub fn get_local_io_stats(&self) -> Arc<IoStats> {
+        self.local_io_stats.clone()
     }
 
+    /// Record the latest cumulative IO snapshot reported by a remote node.
+    pub fn set_node_io_stats(&self, node: String, stats: IoStatsSnapshot) {
+        self.nodes_io_stats.write().insert(node, stats);
+    }
+
+    /// IO of the whole query: this node plus the latest snapshot of each remote node.
     pub fn get_io_stats(&self) -> IoStatsSnapshot {
-        self.io_stats.snapshot()
+        let mut stats = self.local_io_stats.snapshot();
+        for node_stats in self.nodes_io_stats.read().values() {
+            stats.merge(node_stats);
+        }
+        stats
     }
 
     pub fn get_tenant(&self) -> Tenant {

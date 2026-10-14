@@ -18,7 +18,6 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use databend_common_base::runtime::IoStatsSnapshot;
-use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::PruningStatistics;
@@ -401,11 +400,7 @@ impl InterpreterQueryLog {
 
         let peek_memory_usage = ctx.get_node_peek_memory_usage();
         let extra = pruning_stats_query_log_extra(&ctx.get_pruned_partitions_stats())?;
-        let mut io_stats = ctx.get_io_stats();
-        if let Some(stats) = ThreadTracker::io_stats() {
-            io_stats.merge(&stats.snapshot());
-        }
-        let resource_usage = resource_usage_query_log(io_stats, query_profiles);
+        let resource_usage = resource_usage_query_log(ctx.get_io_stats(), query_profiles);
 
         Self::write_log(QueryLogElement {
             log_type,

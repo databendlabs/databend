@@ -18,6 +18,7 @@ use std::time::Duration;
 
 use async_channel::Sender;
 use databend_common_base::JoinHandle;
+use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::QueryPerfGuard;
@@ -82,7 +83,7 @@ impl StatisticsSender {
                                 break;
                             }
                             Either::Right((Ok(Some(error_code)), _recv)) => {
-                                if let Err(error) = Self::send_io_stats(&tx).await {
+                                if let Err(error) = Self::send_io_stats(&ctx, &tx).await {
                                     warn!("IoStats send has error, cause: {:?}.", error);
                                 }
 
@@ -105,6 +106,10 @@ impl StatisticsSender {
                                     ctx.get_exchange_manager()
                                         .shutdown_query(&query_id, Some(cause));
                                     return;
+                                }
+
+                                if let Err(error) = Self::send_io_stats(&ctx, &tx).await {
+                                    warn!("IoStats send has error, cause: {:?}.", error);
                                 }
 
                                 cnt += 1;
@@ -149,7 +154,7 @@ impl StatisticsSender {
                         warn!("PartStatistics send has error, cause: {:?}.", error);
                     }
 
-                    if let Err(error) = Self::send_io_stats(&tx).await {
+                    if let Err(error) = Self::send_io_stats(&ctx, &tx).await {
                         warn!("IoStats send has error, cause: {:?}.", error);
                     }
                 }
@@ -314,13 +319,15 @@ impl StatisticsSender {
         Ok(())
     }
 
-    async fn send_io_stats(flight_sender: &FlightSender) -> Result<()> {
-        let Some(stats) = ThreadTracker::io_stats() else {
+    /// Send the cumulative IO of this node for the query. The coordinator keeps
+    /// the latest snapshot per node, so this is safe to call repeatedly.
+    async fn send_io_stats(ctx: &Arc<QueryContext>, flight_sender: &FlightSender) -> Result<()> {
+        let snapshot = ctx.get_local_io_stats().snapshot();
+        if snapshot == IoStatsSnapshot::default() {
             return Ok(());
-        };
+        }
 
-        let data_packet = DataPacket::IoStats(stats.snapshot());
-        flight_sender.send(data_packet).await
+        flight_sender.send(DataPacket::IoStats(snapshot)).await
     }
 
     fn fetch_progress(ctx: &Arc<QueryContext>) -> Vec<ProgressInfo> {
