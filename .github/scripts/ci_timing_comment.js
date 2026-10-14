@@ -335,6 +335,12 @@ module.exports = async ({ github, context, core }) => {
 
     let body;
     if (run.name === 'Dev') {
+        const changes = jobs.find((j) => j.name === 'changes');
+        const held = (changes?.steps || []).some((s) => s.name === 'Heavy CI Paused' && s.conclusion === 'success');
+        if (held) {
+            core.info('Dev run held by hold-ci, leaving timing comment unchanged');
+            return;
+        }
         const cur = await devMetrics(github, context, core, run, jobs, true);
         if (!Number.isFinite(cur.build)) {
             body = `### [run ${run.id}](${run.html_url}) · ${fmt(cur.total)}\n\nbuild skipped (no source changes).`;

@@ -28,6 +28,7 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline_transforms::MemorySettings;
+use databend_common_pipeline_transforms::sorts::SortedBlockIterator;
 use databend_common_settings::Settings;
 
 use super::WindowPartitionMeta;
@@ -37,7 +38,8 @@ use crate::sessions::QueryContext;
 
 /// Two-phase state machine:
 /// - Collect: pull input data into buffer, spill when memory pressure is high.
-/// - Output: restore partitions one by one, process (sort), and push downstream.
+/// - Output: restore partitions one by one, process (sort), and push downstream
+///   one block at a time.
 #[derive(Debug, Clone, Copy)]
 enum Step {
     Collect,
@@ -52,6 +54,8 @@ pub struct TransformWindowPartitionCollect<S: DataProcessorStrategy> {
     index_map: Vec<usize>,
     buffer: WindowPartitionBuffer,
     strategy: S,
+    // Merged output of the partition being emitted; it owns the open runs.
+    current: Option<SortedBlockIterator>,
     step: Step,
 }
 
@@ -98,6 +102,7 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
             index_map,
             buffer,
             strategy,
+            current: None,
             step: Step::Collect,
         })
     }
@@ -157,7 +162,7 @@ impl<S: DataProcessorStrategy> Processor for TransformWindowPartitionCollect<S> 
                     return Ok(Event::NeedConsume);
                 }
 
-                if self.buffer.is_empty() {
+                if self.current.is_none() && self.buffer.is_empty() {
                     self.output.finish();
                     return Ok(Event::Finished);
                 }
@@ -175,22 +180,26 @@ impl<S: DataProcessorStrategy> Processor for TransformWindowPartitionCollect<S> 
 
                 // Spill if memory pressure is high.
                 while self.buffer.need_spill() {
-                    self.buffer.spill()?;
+                    self.buffer.spill(&self.strategy)?;
                 }
                 Ok(())
             }
             Step::Output => {
                 if self.buffer.need_spill() {
-                    self.buffer.spill()?;
+                    self.buffer.spill(&self.strategy)?;
                     return Ok(());
                 }
 
-                // Restore next non-empty partition and process it.
-                let restored = self.buffer.restore()?;
-                if !restored.is_empty() {
-                    let processed = self.strategy.process_data_blocks(restored)?;
-                    self.output_data_blocks.extend(processed);
+                if let Some(current) = self.current.as_mut() {
+                    match current.next().transpose()? {
+                        Some(block) => self.output_data_blocks.push_back(block),
+                        None => self.current = None,
+                    }
+                    return Ok(());
                 }
+
+                // Restore and merge the next non-empty partition.
+                self.current = self.buffer.restore(&self.strategy)?;
                 Ok(())
             }
         }

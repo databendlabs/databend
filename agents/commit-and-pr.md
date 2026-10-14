@@ -18,6 +18,10 @@
 - You can use `gh` tooling for the PR flow.
 - Agent-opened PRs must fill in the "AI assistance" section of the PR template, including the responsible human (`@github-id`) — the author-side owner who has read the diff and can explain the changes during review. See [`AI_POLICY.md`](../AI_POLICY.md).
 - Before opening or updating a PR, present the full diff to the responsible human for reading. Do not request review on code no human has read.
+- Hold the automatic Dev CI while iterating on review feedback (e.g., Codex): `gh pr edit <PR> --add-label hold-ci` (applies from the next push; fast checks and review triggers still run; opt-in label workflows such as `ci-cloud` are unaffected).
+- Whenever you add or remove `hold-ci`, say so in your reply to the responsible human: which PR, that heavy CI is paused (so skipped jobs and a failing `ready` check are expected), and that you will remove it once review converges.
+- Resume full CI once review converges, without a new commit: `gh pr edit <PR> --remove-label hold-ci`, then re-run the Dev run for the PR head: `gh run rerun $(gh run list -w Dev -c $(gh pr view <PR> --json headRefOid -q .headRefOid) -L1 --json databaseId -q '.[0].databaseId')`.
+- Mark the PR ready for human review (`gh pr ready <PR>`) only after review converges and full CI passes.
 
 ## Example PR Description
 
