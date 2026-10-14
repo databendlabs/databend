@@ -94,7 +94,9 @@ jobs:
           target: ${{ needs.info.outputs.target }}
           features: python-udf,storage-hdfs
           category: full
-          artifacts: all
+          # Only the bins PR jobs consume; metabench/metaverifier are built by
+          # the Meta (ci-meta-chaos) and Release workflows.
+          artifacts: meta,metactl,query,sqllogictests,bendsave
       - name: upload sccache log
         if: always()
         uses: actions/upload-artifact@v7

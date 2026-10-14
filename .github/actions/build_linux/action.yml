@@ -69,25 +69,19 @@ runs:
         echo "BUILD_ARCH=${target/-unknown-linux-*}" >> $GITHUB_ENV
 
     - name: Build Release
-      if: inputs.artifacts == 'all'
       shell: bash
       run: |
-        artifacts="meta,metactl,metabench,metaverifier,query,sqllogictests,bendsave"
+        artifacts="${{ inputs.artifacts }}"
+        if [[ "${artifacts}" == "all" ]]; then
+          artifacts="meta,metactl,metabench,metaverifier,query,sqllogictests,bendsave"
+        fi
         binaries=""
         for artifact in ${artifacts//,/ }; do
           binaries="${binaries} --bin databend-$artifact"
         done
+        # One cargo invocation so the bins link in parallel.
         cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} ${binaries}
-        ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
-
-    - name: Build Release for specific artifacts
-      if: inputs.artifacts != 'all'
-      shell: bash
-      run: |
-        artifacts="${{ inputs.artifacts }}"
         for artifact in ${artifacts//,/ }; do
-          echo "==> building databend-$artifact ..."
-          cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} --bin databend-$artifact
           ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
         done
 
