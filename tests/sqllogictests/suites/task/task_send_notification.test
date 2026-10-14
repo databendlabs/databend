@@ -32,8 +32,10 @@ SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_
 ----
 0
 
-statement ok
+# CALL uses the normal table-function result shape: one string column, zero rows.
+query T
 CALL system$send_databend_notification('send_notify', 'accepted');
+----
 
 query I
 SELECT * FROM send_notification('send_notify', 'tenant function');
@@ -48,11 +50,13 @@ SELECT count(*) FROM system.notification_history WHERE integration_name = 'send_
 statement ok
 SET enable_query_result_cache = 1;
 
-statement ok
+query T
 SELECT * FROM send_databend_notification('send_notify', 'repeat');
+----
 
-statement ok
+query T
 SELECT * FROM send_databend_notification('send_notify', 'repeat');
+----
 
 statement ok
 SET enable_query_result_cache = 0;
