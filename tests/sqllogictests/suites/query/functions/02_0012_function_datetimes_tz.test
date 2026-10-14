@@ -1225,3 +1225,27 @@ settings (timezone='America/New_York') select try_to_timestamp('2024-11-03 05:30
 ----
 2024-11-03 05:30:00.000000 2024-11-03 05:30:00.000000 -0500
 
+## Rounding a column inside the repeated hour of a DST fallback resolves the
+## ambiguous local time to its earlier instant, as for a single value: in Paris
+## 2024-10-27 01:30:30 UTC is the second 02:30:30, and its minute 02:30 is
+## taken as 00:30 UTC.
+statement ok
+create or replace table fold_t (ts timestamp);
+
+statement ok
+settings (timezone='UTC') insert into fold_t values ('2024-10-27 01:30:30'), ('2024-10-27 01:31:30');
+
+query II
+settings (timezone='Europe/Paris') select to_int64(ts), to_int64(to_start_of_minute(ts)) from fold_t order by ts;
+----
+1729992630000000 1729989000000000
+1729992690000000 1729989060000000
+
+query I
+settings (timezone='Europe/Paris') select to_int64(to_start_of_minute(to_timestamp(1729992630000000)));
+----
+1729989000000000
+
+statement ok
+drop table fold_t;
+

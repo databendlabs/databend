@@ -44,6 +44,7 @@ use databend_common_timezone::fast_utc_from_local;
 use crate::date_arithmetic::last_day_of_year_month;
 use crate::date_extract::calendar_monotonicity;
 use crate::fixed_offset::FixedOffset;
+use crate::fixed_offset::MICROS_PER_DAY;
 
 #[derive(Clone, Copy)]
 enum Round {
@@ -74,9 +75,15 @@ impl Round {
     }
 }
 
-/// `round` by integer arithmetic over a column with a fixed UTC offset, from
-/// its timestamps back to the start of the unit holding the earliest one. None
+/// `round` by integer arithmetic over a column with a fixed UTC offset. None
 /// leaves the column to the per-row path, which also reports range errors.
+///
+/// The offset must hold from a day plus one unit before the column. The unit
+/// covers truncating back to the start of the unit holding the earliest row.
+/// The day covers a repeated hour: just after a DST fallback, a truncated
+/// local time may have occurred before the change too, and the per-row path
+/// resolves such a time to its earlier instant, under the old offset. Every
+/// fallback is shorter than a day.
 fn round_at_fixed_offset(
     col: &Buffer<i64>,
     active: Option<&Bitmap>,
@@ -84,7 +91,7 @@ fn round_at_fixed_offset(
     round: Round,
 ) -> Option<Buffer<i64>> {
     let unit = round.micros();
-    let offset = FixedOffset::of(col, active, tz, unit)?;
+    let offset = FixedOffset::of(col, active, tz, unit + MICROS_PER_DAY)?;
     // Truncation is monotonic and never moves forward, so the earliest
     // result bounds every row.
     check_timestamp(offset.truncate(offset.min, unit)).ok()?;
@@ -478,7 +485,7 @@ mod tests {
     // does, including next to a DST change where it must decline some units.
     #[test]
     fn test_round_at_fixed_offset_agrees_with_per_row() {
-        let columns: [Buffer<i64>; 3] = [
+        let columns: [Buffer<i64>; 4] = [
             // 2024-09-01, ~20 days of rows.
             (0..4000)
                 .map(|i| 1_725_148_800_000_000 + i * 433_000_017)
@@ -490,6 +497,11 @@ mod tests {
             // Across that change.
             (0..100)
                 .map(|i| 1_729_900_800_000_000 + i * 3_600_000_000)
+                .collect(),
+            // 01:30:30-01:49:30 UTC that day: local 02:30:30 onwards a second
+            // time, after the clock fell back from 03:00 to 02:00.
+            (0..20)
+                .map(|i| 1_729_992_630_000_000 + i * 60_000_000)
                 .collect(),
         ];
         let rounds = [
@@ -516,8 +528,8 @@ mod tests {
                 }
             }
         }
-        // Everything but Paris across the change, and Paris's day
-        // truncation just after it.
-        assert_eq!(answered, 3 * 3 * 8 - 8 - 1);
+        // Paris declines every unit within a day of its change: the last
+        // three columns.
+        assert_eq!(answered, 4 * 3 * 8 - 3 * 8);
     }
 }
