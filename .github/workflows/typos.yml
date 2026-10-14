@@ -36,3 +36,5 @@ jobs:
         env:
           CLICOLOR: 1
         uses: crate-ci/typos@v1.47.2
+        with:
+          config: .config/typos.toml
