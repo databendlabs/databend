@@ -277,14 +277,77 @@ impl VectorColumnStatistics {
     }
 }
 
+/// The role of a segment-local virtual column for its logical path.
+///
+/// A logical path may own several physical columns, one per kind. `Value` is the
+/// only kind produced by the legacy scalar layout; the other kinds describe the
+/// structure of the Variant value and are never query-visible by themselves.
+///
+/// Per-source structure columns (the root validity bitmap and the overflow map
+/// buckets) are not paths and are described by `VirtualSourceBlockMeta`.
+///
+/// Persisted as a `u8`. Assigned codes must never be renumbered, and unknown
+/// codes fail deserialization instead of being reinterpreted.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+    FrozenAPI
+)]
+#[serde(into = "u8", try_from = "u8")]
+#[repr(u8)]
+pub enum VirtualPathKind {
+    /// The value stored at the path: a scalar, or an unsplit Jsonb value.
+    #[default]
+    Value = 0,
+}
+
+impl From<VirtualPathKind> for u8 {
+    fn from(kind: VirtualPathKind) -> Self {
+        kind as u8
+    }
+}
+
+impl TryFrom<u8> for VirtualPathKind {
+    type Error = String;
+
+    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
+        match value {
+            0 => Ok(VirtualPathKind::Value),
+            _ => Err(format!("unsupported virtual path kind {value}")),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize, FrozenAPI)]
 pub struct VirtualSegmentPath {
-    /// Canonical JSON path, e.g. `user.name`, `users[0].id`, `user.'a.b'`.
+    /// Canonical JSON path, e.g. `user.name`, `user.'a.b'`. The root path is the
+    /// empty string, and `[]` denotes the element space of an array, e.g.
+    /// `items[].id`. Paths never contain array indexes.
     pub path: String,
     /// Segment-local identity assigned to every retained path, regardless of
     /// whether a particular block stores it directly, in shared data, or only
     /// contributes path statistics.
     pub column_id: ColumnId,
+    /// The role of this column for `path`. Segments written before structural
+    /// columns existed only contain `Value` entries.
+    #[serde(default)]
+    pub kind: VirtualPathKind,
+}
+
+impl VirtualSegmentPath {
+    /// Sort and lookup key of a path entry within one source column.
+    pub fn sort_key(&self) -> (&str, VirtualPathKind) {
+        (self.path.as_str(), self.kind)
+    }
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize, FrozenAPI)]
@@ -295,7 +358,8 @@ pub struct VirtualSegmentColumnPath {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize, FrozenAPI)]
 pub struct VirtualSegmentSchema {
-    /// Grouped by `source_column_id` and sorted by canonical path.
+    /// Grouped by `source_column_id`; within a source, sorted by
+    /// `(canonical path, kind)`. Column ids are assigned in the same order.
     pub column_paths: Vec<VirtualSegmentColumnPath>,
 }
 
@@ -313,10 +377,21 @@ impl VirtualSegmentSchema {
             .sum()
     }
 
+    /// Finds the `Value` entry of `path`.
     pub fn find_path_ref(
         &self,
         source_column_id: ColumnId,
         path: &str,
+    ) -> Option<&VirtualSegmentPath> {
+        self.find_path_kind_ref(source_column_id, path, VirtualPathKind::Value)
+    }
+
+    /// Finds the entry of `path` with the given `kind`.
+    pub fn find_path_kind_ref(
+        &self,
+        source_column_id: ColumnId,
+        path: &str,
+        kind: VirtualPathKind,
     ) -> Option<&VirtualSegmentPath> {
         let paths = &self
             .column_paths
@@ -324,7 +399,7 @@ impl VirtualSegmentSchema {
             .find(|column| column.source_column_id == source_column_id)?
             .paths;
         let index = paths
-            .binary_search_by(|item| item.path.as_str().cmp(path))
+            .binary_search_by(|item| item.sort_key().cmp(&(path, kind)))
             .ok()?;
         paths.get(index)
     }

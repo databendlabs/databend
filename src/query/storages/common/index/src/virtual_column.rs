@@ -98,12 +98,16 @@ pub type VirtualColumnSharedColumnMetas =
     HashMap<VirtualColumnSharedDataType, (VirtualColumnIdWithMeta, VirtualColumnIdWithMeta)>;
 pub type VirtualColumnSharedColumnMetaMap = HashMap<u32, VirtualColumnSharedColumnMetas>;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct VirtualColumnNode {
     // children: segment_id -> child node, where segment_id references string_table.
     pub children: HashMap<u32, VirtualColumnNode>,
     // leaf: terminal node that maps to a virtual column or shared map entry.
     pub leaf: Option<VirtualColumnNameIndex>,
+    /// One-level array element space. Its leaves are Nullable(Array(T)) columns
+    /// in the source row space, with identical offsets and outer validity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub element: Option<Box<VirtualColumnNode>>,
 }
 
 // Compact metadata encoding for virtual column trie nodes:
@@ -124,6 +128,7 @@ pub struct VirtualColumnNode {
 struct CompactVirtualColumnNode {
     children: HashMap<u32, CompactVirtualColumnNode>,
     leaf: Option<CompactVirtualColumnLeaf>,
+    element: Option<Box<CompactVirtualColumnNode>>,
 }
 
 #[derive(Clone, Debug)]
@@ -180,13 +185,18 @@ impl serde::Serialize for CompactVirtualColumnNode {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where S: serde::Serializer {
         let len =
-            if self.children.is_empty() { 0 } else { 1 } + if self.leaf.is_some() { 1 } else { 0 };
+            if self.children.is_empty() { 0 } else { 1 }
+                + if self.leaf.is_some() { 1 } else { 0 }
+                + if self.element.is_some() { 1 } else { 0 };
         let mut map = serializer.serialize_map(Some(len))?;
         if !self.children.is_empty() {
             map.serialize_entry("c", &self.children)?;
         }
         if let Some(leaf) = &self.leaf {
             map.serialize_entry(leaf.key(), &leaf.index())?;
+        }
+        if let Some(element) = &self.element {
+            map.serialize_entry("e", element)?;
         }
         map.end()
     }
@@ -201,6 +211,10 @@ impl<'de> serde::Deserialize<'de> for CompactVirtualColumnNode {
             None => HashMap::new(),
         };
 
+        let element = fields.remove("e")
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(serde::de::Error::custom)?;
         let mut leaf = None;
         for key in ["l", "j", "b", "u", "i", "f", "s"] {
             let Some(value) = fields.remove(key) else {
@@ -221,7 +235,7 @@ impl<'de> serde::Deserialize<'de> for CompactVirtualColumnNode {
             )));
         }
 
-        Ok(Self { children, leaf })
+        Ok(Self { children, leaf, element })
     }
 }
 
@@ -265,7 +279,11 @@ impl From<&VirtualColumnNode> for CompactVirtualColumnNode {
             }) => Some(CompactVirtualColumnLeaf::JsonbShared(*index)),
             None => None,
         };
-        CompactVirtualColumnNode { children, leaf }
+        CompactVirtualColumnNode {
+            children,
+            leaf,
+            element: node.element.as_deref().map(|node| Box::new(Self::from(node))),
+        }
     }
 }
 
@@ -301,7 +319,10 @@ impl CompactVirtualColumnNode {
                 index,
             },
         });
-        Ok(VirtualColumnNode { children, leaf })
+        let element = self.element
+            .map(|node| node.into_virtual_column_node().map(Box::new))
+            .transpose()?;
+        Ok(VirtualColumnNode { children, leaf, element })
     }
 }
 
@@ -509,6 +530,7 @@ impl VirtualColumnIdWithMeta {
             data_type,
             extended_physical_type,
             column_stat: None,
+            value_state_mask: 0,
         })
     }
 }
@@ -815,7 +837,9 @@ fn data_type_from_path(schema: &DataSchema, path: &[String]) -> Result<DataType>
 
     let field = schema.field_with_name(&path[0])?;
     let data_type = field.data_type().clone();
-    if path.len() == 1 {
+    // An ArrayGroup leaf is a complete list column, not the scalar nested
+    // leaf type. Keep its nullable element type for Parquet decoding.
+    if path.len() == 1 || matches!(data_type.remove_nullable(), DataType::Array(_)) {
         return Ok(data_type);
     }
 
@@ -958,10 +982,12 @@ mod tests {
         let mut child = VirtualColumnNode {
             children: HashMap::new(),
             leaf: Some(VirtualColumnNameIndex::Column(4)),
+            element: None,
         };
         child.children.insert(8, VirtualColumnNode {
             children: HashMap::new(),
             leaf: Some(VirtualColumnNameIndex::Shared(25)),
+            element: None,
         });
         child.children.insert(9, VirtualColumnNode {
             children: HashMap::new(),
@@ -969,11 +995,13 @@ mod tests {
                 data_type: VirtualColumnSharedDataType::Jsonb,
                 index: 26,
             }),
+            element: None,
         });
 
         let mut root = VirtualColumnNode {
             children: HashMap::new(),
             leaf: None,
+            element: None,
         };
         root.children.insert(4, child);
 

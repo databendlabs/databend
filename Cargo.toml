@@ -607,7 +607,7 @@ databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "
 databend-meta = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.7.0" }
 databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260205.13.5" }
 databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.7.0" }
-jsonb = { git = "https://github.com/databendlabs/jsonb.git", rev = "fba895c" }
+jsonb = { git = "https://github.com/b41sh/jsonb.git", rev = "76858545ff75108333ae7be75f60cf57d4a9aae2" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.5.0" }
 # Keep ORC on a patch while the upstream crate has not caught up with Arrow 58 yet.
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "fc17101f1c96e1ea7c7a19e931110471a4bd7e21" }

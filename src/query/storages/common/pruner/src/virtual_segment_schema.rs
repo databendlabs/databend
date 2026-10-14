@@ -16,7 +16,9 @@ use std::collections::HashMap;
 
 use databend_common_expression::ColumnId;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
+use databend_storages_common_table_meta::meta::VirtualPathKind;
 use databend_storages_common_table_meta::meta::VirtualSegmentSchema;
+use databend_storages_common_table_meta::meta::VirtualValueState;
 use jsonb::keypath::OwnedKeyPaths;
 
 /// Query-level canonical path and its precomputed segment-lookup prefixes.
@@ -94,8 +96,24 @@ impl ProjectedVirtualSegmentField {
     /// Whether this direct field's statistics represent every logical value in
     /// the block. Incomplete sidecars may contain unrepresented shared related
     /// paths, so absence from the projection alone is not sufficient evidence.
+    ///
+    /// JSON null values stored in the overflow map are NULL in the value
+    /// column, so its statistics count them as NULL, which matches typed reads.
+    /// Other overflow values (`{}`, `[]`, outliers) are not described by the
+    /// statistics.
     pub fn can_use_direct_virtual_stats(&self, virtual_block_meta: &VirtualBlockMeta) -> bool {
-        virtual_block_meta.virtual_columns_complete && !self.has_related_paths()
+        virtual_block_meta.virtual_columns_complete
+            && !self.has_related_paths()
+            && self.value_state_mask(virtual_block_meta) & !VirtualValueState::JsonNull.mask_bit()
+                == 0
+    }
+
+    /// The `VirtualValueState` bits of the exact path's values that a block
+    /// stores in the overflow map; 0 when the block has no value column for it.
+    pub fn value_state_mask(&self, virtual_block_meta: &VirtualBlockMeta) -> u32 {
+        self.column_id
+            .and_then(|column_id| virtual_block_meta.virtual_column_metas.get(&column_id))
+            .map_or(0, |meta| meta.value_state_mask)
     }
 }
 
@@ -116,13 +134,19 @@ impl ProjectedVirtualSegmentSchema {
                 .binary_search_by_key(source_column_id, |source| source.source_column_id)
             {
                 let source = &schema.column_paths[source_index];
-                // Persisted segment paths are strictly sorted by canonical path. Keep exact
-                // lookup and descendant extraction logarithmic by relying on that invariant.
-                if let Ok(index) = source
-                    .paths
-                    .binary_search_by(|path| path.path.as_str().cmp(requested_path.path.as_str()))
-                {
-                    requested_field.column_id = Some(source.paths[index].column_id);
+                // Persisted segment paths are strictly sorted by `(canonical path, kind)`.
+                // Keep exact lookup and descendant extraction logarithmic by relying on
+                // that invariant. Only `Value` entries are query-visible paths; structural
+                // entries of the same path are skipped here.
+                let find_value = |path: &str| {
+                    source
+                        .paths
+                        .binary_search_by(|item| item.sort_key().cmp(&(path, VirtualPathKind::Value)))
+                        .ok()
+                        .map(|index| &source.paths[index])
+                };
+                if let Some(path) = find_value(requested_path.path.as_str()) {
+                    requested_field.column_id = Some(path.column_id);
                 }
 
                 let descendant_range = |prefix: &str| {
@@ -143,6 +167,7 @@ impl ProjectedVirtualSegmentSchema {
                     requested_field.descendants.extend(
                         source.paths[range]
                             .iter()
+                            .filter(|path| path.kind == VirtualPathKind::Value)
                             .map(|path| (path.column_id, path.path.clone())),
                     );
                 }
@@ -156,11 +181,7 @@ impl ProjectedVirtualSegmentSchema {
                 requested_field
                     .ancestors
                     .extend(requested_path.parent_prefixes.iter().filter_map(|prefix| {
-                        let index = source
-                            .paths
-                            .binary_search_by(|path| path.path.as_str().cmp(prefix.as_str()))
-                            .ok()?;
-                        let path = &source.paths[index];
+                        let path = find_value(prefix.as_str())?;
                         Some((path.column_id, path.path.clone()))
                     }));
             }
@@ -222,14 +243,17 @@ mod tests {
                     VirtualSegmentPath {
                         path: "'a\\'b.c'".to_string(),
                         column_id: 10,
+                        kind: VirtualPathKind::Value,
                     },
                     VirtualSegmentPath {
                         path: "[0]".to_string(),
                         column_id: 11,
+                        kind: VirtualPathKind::Value,
                     },
                     VirtualSegmentPath {
                         path: "[0][1]".to_string(),
                         column_id: 12,
+                        kind: VirtualPathKind::Value,
                     },
                 ],
             }],
@@ -260,6 +284,7 @@ mod tests {
                     paths: vec![VirtualSegmentPath {
                         path: "a.b".to_string(),
                         column_id: 10,
+                        kind: VirtualPathKind::Value,
                     }],
                 },
                 VirtualSegmentColumnPath {
@@ -267,6 +292,7 @@ mod tests {
                     paths: vec![VirtualSegmentPath {
                         path: "a".to_string(),
                         column_id: 11,
+                        kind: VirtualPathKind::Value,
                     }],
                 },
             ],
@@ -295,22 +321,27 @@ mod tests {
                     VirtualSegmentPath {
                         path: "'a.b'".to_string(),
                         column_id: 10,
+                        kind: VirtualPathKind::Value,
                     },
                     VirtualSegmentPath {
                         path: "'a.b'.c".to_string(),
                         column_id: 11,
+                        kind: VirtualPathKind::Value,
                     },
                     VirtualSegmentPath {
                         path: "[0]".to_string(),
                         column_id: 12,
+                        kind: VirtualPathKind::Value,
                     },
                     VirtualSegmentPath {
                         path: "[0].a".to_string(),
                         column_id: 13,
+                        kind: VirtualPathKind::Value,
                     },
                     VirtualSegmentPath {
                         path: "[0][1]".to_string(),
                         column_id: 14,
+                        kind: VirtualPathKind::Value,
                     },
                 ],
             }],
@@ -342,22 +373,27 @@ mod tests {
                     VirtualSegmentPath {
                         path: "geo".to_string(),
                         column_id: 10,
+                        kind: VirtualPathKind::Value,
                     },
                     VirtualSegmentPath {
                         path: "geo.lat".to_string(),
                         column_id: 11,
+                        kind: VirtualPathKind::Value,
                     },
                     VirtualSegmentPath {
                         path: "geo[0]".to_string(),
                         column_id: 12,
+                        kind: VirtualPathKind::Value,
                     },
                     VirtualSegmentPath {
                         path: "geox".to_string(),
                         column_id: 13,
+                        kind: VirtualPathKind::Value,
                     },
                     VirtualSegmentPath {
                         path: "other.value".to_string(),
                         column_id: 14,
+                        kind: VirtualPathKind::Value,
                     },
                 ],
             }],
@@ -407,14 +443,17 @@ mod tests {
                     VirtualSegmentPath {
                         path: "a".to_string(),
                         column_id: 20,
+                        kind: VirtualPathKind::Value,
                     },
                     VirtualSegmentPath {
                         path: "a.b".to_string(),
                         column_id: 21,
+                        kind: VirtualPathKind::Value,
                     },
                     VirtualSegmentPath {
                         path: "a.x".to_string(),
                         column_id: 22,
+                        kind: VirtualPathKind::Value,
                     },
                 ],
             }],
@@ -446,18 +485,22 @@ mod tests {
                     VirtualSegmentPath {
                         path: "a".to_string(),
                         column_id: 20,
+                        kind: VirtualPathKind::Value,
                     },
                     VirtualSegmentPath {
                         path: "a.b".to_string(),
                         column_id: 21,
+                        kind: VirtualPathKind::Value,
                     },
                     VirtualSegmentPath {
                         path: "a.b.c".to_string(),
                         column_id: 22,
+                        kind: VirtualPathKind::Value,
                     },
                     VirtualSegmentPath {
                         path: "a.x".to_string(),
                         column_id: 23,
+                        kind: VirtualPathKind::Value,
                     },
                 ],
             }],
