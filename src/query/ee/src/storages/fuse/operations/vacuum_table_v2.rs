@@ -96,10 +96,11 @@ struct BlockGcContext<'a> {
 
 /// GC root context derived from the owner table before ref-aware cleanup starts.
 ///
-/// It captures the owner table id, the selected gc-root timestamps, the snapshot
-/// files currently eligible for cleanup, and the segments that must remain
-/// protected while processing branch/tag references.
+/// It carries the refreshed owner used to select the GC root, so subsequent
+/// cleanup observes the same schema and index references, together with the
+/// selected timestamps, eligible snapshots, and protected segments.
 struct GcRootSnapshotCtx {
+    owner: Arc<dyn Table>,
     gc_root_timestamp: DateTime<Utc>,
     gc_root_meta_ts: DateTime<Utc>,
     protected_segments: HashSet<Location>,
@@ -125,6 +126,7 @@ pub async fn do_vacuum2(
 
     let fuse_table = FuseTable::try_from_table(table)?;
     let Some(GcRootSnapshotCtx {
+        owner,
         gc_root_timestamp,
         gc_root_meta_ts,
         protected_segments,
@@ -134,6 +136,8 @@ pub async fn do_vacuum2(
         info!("Table {} has no snapshot, stopping vacuum", table_info.desc);
         return Ok(());
     };
+    let fuse_table = FuseTable::try_from_table(owner.as_ref())?;
+    let table_info = fuse_table.get_table_info();
 
     let start = std::time::Instant::now();
     let segments_before_gc_root = fuse_table
@@ -819,6 +823,7 @@ async fn vacuum_base_snapshot_phase(
         .await?;
 
     Ok(Some(GcRootSnapshotCtx {
+        owner: refreshed,
         gc_root_timestamp: selection.gc_root_lvt.time,
         gc_root_meta_ts: selection.gc_root_meta_ts,
         protected_segments,

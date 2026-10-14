@@ -597,7 +597,7 @@ impl CreateTableInterpreter {
                 UpdateTableMetaReq {
                     table_id,
                     seq: MatchSeq::Exact(table_id_seq),
-                    new_table_meta: staged_table_meta,
+                    new_table_meta: staged_table_meta.clone(),
                     base_snapshot_location: None,
                     lvt_check: None,
                 },
@@ -617,6 +617,18 @@ impl CreateTableInterpreter {
             orphan_table_name: reply.orphan_table_name.clone(),
         };
         catalog.commit_table_meta(commit_req).await?;
+        if let Some(anchor_location) = staged_table_meta.options.get(OPT_KEY_SNAPSHOT_LOCATION) {
+            // The target was built before dictionary paths were replaced. Use the
+            // published metadata, not its stale TableInfo or the source's hint.
+            FuseTable::write_last_snapshot_hint(
+                self.ctx.as_ref(),
+                target.get_operator_ref(),
+                target.meta_location_generator(),
+                anchor_location,
+                &staged_table_meta,
+            )
+            .await;
+        }
         self.process_ownership(&tenant, reply).await?;
 
         Ok(PipelineBuildResult::create())

@@ -22,8 +22,11 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::LeastVisibleTime;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_sql::plans::VacuumTablesPlan;
@@ -32,10 +35,12 @@ use databend_common_storage::FaultKind;
 use databend_common_storage::FaultOp;
 use databend_common_storage::FaultRule;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::InvertedIndexUserDictionary;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::SnapshotHistoryReader;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_enterprise_query::storages::fuse::operations::vacuum_table_v2::do_vacuum2;
 use databend_enterprise_query::table_ref::RealTableRefHandler;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_meta_client::types::MatchSeq;
@@ -52,6 +57,8 @@ use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::dedup_file_locations;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::try_extract_uuid_v7_timestamp_from_path;
+use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION;
 use futures::TryStreamExt;
 
 async fn table_storage_files(
@@ -131,6 +138,81 @@ async fn test_vacuum_table_command() -> anyhow::Result<()> {
         .await?;
     assert_only_current_snapshot_files(&ctx, storage_root, database, table).await?;
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum2_protects_dictionaries_from_refreshed_owner() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture.enable_experimental_clone_table()?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    for sql in [
+        format!("CREATE TABLE {db}.dict_source(c STRING)"),
+        format!("INSERT INTO {db}.dict_source VALUES ('old')"),
+        format!("CREATE TABLE {db}.dict_clone CLONE {db}.dict_source"),
+    ] {
+        fixture.execute_command(&sql).await?;
+    }
+
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_catalog("default").await?;
+    for name in ["dict_source", "dict_clone"] {
+        // Keep the pre-DDL object: VACUUM must refresh both its GC root and the
+        // dictionary references, for an ordinary owner as well as a clone.
+        let stale = catalog.get_table(&ctx.get_tenant(), &db, name).await?;
+        let fuse = FuseTable::try_from_table(stale.as_ref())?;
+        let location = InvertedIndexUserDictionary::try_new(b"AI,noun,AI\n".to_vec())?
+            .upload(fuse)
+            .await?;
+        catalog
+            .create_table_index(CreateTableIndexReq {
+                create_option: CreateOption::Create,
+                table_id: stale.get_id(),
+                tenant: ctx.get_tenant(),
+                name: "japanese_idx".into(),
+                column_ids: vec![0],
+                sync_creation: false,
+                options: [
+                    ("tokenizer".to_string(), "japanese".to_string()),
+                    (
+                        INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION.to_string(),
+                        location.clone(),
+                    ),
+                ]
+                .into(),
+                index_type: TableIndexType::Inverted,
+            })
+            .await?;
+        fixture
+            .execute_command(&format!("INSERT INTO {db}.{name} VALUES ('new')"))
+            .await?;
+        let latest = catalog.get_table(&ctx.get_tenant(), &db, name).await?;
+        let snapshot = FuseTable::try_from_table(latest.as_ref())?
+            .read_table_snapshot()
+            .await?
+            .unwrap();
+        assert!(
+            snapshot.timestamp.unwrap()
+                > try_extract_uuid_v7_timestamp_from_path(&location)?.unwrap()
+        );
+
+        do_vacuum2(stale.as_ref(), ctx.clone(), true).await?;
+        let latest = catalog.get_table(&ctx.get_tenant(), &db, name).await?;
+        assert_eq!(
+            latest.get_table_info().meta.indexes["japanese_idx"].options
+                [INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION],
+            location
+        );
+        assert!(
+            fuse.get_operator_ref().exists(&location).await?,
+            "VACUUM removed the active dictionary of {name}: {location}"
+        );
+    }
     Ok(())
 }
 
