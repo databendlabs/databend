@@ -1,0 +1,127 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+# DML that consumes a stream but leaves the target table unchanged skips the
+# target snapshot commit. The stream offset must still be advanced, otherwise
+# the stream keeps referencing an old snapshot that may be purged later.
+
+statement ok
+create or replace database test_stream_noop_consume;
+
+statement ok
+use test_stream_noop_consume;
+
+statement ok
+create table src(a int, b string);
+
+statement ok
+create stream s on table src;
+
+statement ok
+create table target(a int, b string);
+
+statement ok
+insert into target values(0, 'init');
+
+statement ok
+insert into src values(1, 'x'), (2, 'y');
+
+# autocommit MERGE: the filter removes all stream rows
+
+statement ok
+merge into target using (select a, b from s where b = 'none') as t on target.a = t.a when matched then update * when not matched then insert *;
+
+query I
+select count(*) from fuse_snapshot('test_stream_noop_consume', 'target');
+----
+1
+
+query I
+select count(*) from s;
+----
+0
+
+statement ok
+insert into src values(3, 'z');
+
+query IT
+select a, b from s;
+----
+3 z
+
+# autocommit INSERT ... SELECT: the filter removes all stream rows
+
+statement ok
+insert into target select a, b from s where b = 'none';
+
+query I
+select count(*) from fuse_snapshot('test_stream_noop_consume', 'target');
+----
+1
+
+query I
+select count(*) from s;
+----
+0
+
+# explicit transaction: stream update must follow rollback
+
+statement ok
+insert into src values(4, 'w');
+
+statement ok
+begin;
+
+statement ok
+merge into target using (select a, b from s where b = 'none') as t on target.a = t.a when matched then update * when not matched then insert *;
+
+statement ok
+rollback;
+
+query IT
+select a, b from s;
+----
+4 w
+
+# explicit transaction: stream update must follow commit
+
+statement ok
+begin;
+
+statement ok
+merge into target using (select a, b from s where b = 'none') as t on target.a = t.a when matched then update * when not matched then insert *;
+
+statement ok
+commit;
+
+query I
+select count(*) from s;
+----
+0
+
+query I
+select count(*) from fuse_snapshot('test_stream_noop_consume', 'target');
+----
+1
+
+query IT
+select a, b from target;
+----
+0 init
+
+statement ok
+drop stream s;
+
+statement ok
+drop database test_stream_noop_consume;
