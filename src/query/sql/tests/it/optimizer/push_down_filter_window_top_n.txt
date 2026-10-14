@@ -1,0 +1,96 @@
+=== single_ranking_window_pushes_top ===
+description: A lone ranking window filtered by QUALIFY should get the top-n.
+sql: SELECT k, row_number() OVER (PARTITION BY k ORDER BY v DESC) AS r FROM t QUALIFY r = 1
+optimized_plan:
+Filter
+├── filters: [eq(row_number() OVER (PARTITION BY k ORDER BY v DESC) (#3), 1)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: [t.k (#0) AS (#0)]
+    ├── order by items: [t.v (#1) AS (#1) DESC]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [t.k (#0) ASC NULLS LAST, t.v (#1) DESC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: 1
+        ├── window function: RowNumber
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: [t.k (#0) ASC, t.v (#1) DESC]
+            └── limit: NONE
+
+
+=== aggregate_after_top_window_blocks_top ===
+description: An aggregate window evaluated after the top-n window in the same group needs every row, so the top-n must not be pushed.
+sql: SELECT k, count(*) OVER (PARTITION BY k) AS c, row_number() OVER (PARTITION BY k ORDER BY v DESC) AS r FROM t QUALIFY r = 1
+optimized_plan:
+Filter
+├── filters: [eq(row_number() OVER (PARTITION BY k ORDER BY v DESC) (#4), 1)]
+└── WindowGroup
+    ├── Window
+    │   ├── aggregate function: row_number
+    │   ├── partition items: [t.k (#0) AS (#0)]
+    │   ├── order by items: [t.v (#1) AS (#1) DESC]
+    │   └── frame: [Range: Preceding(None) ~ CurrentRow]
+    ├── Window
+    │   ├── aggregate function: count
+    │   ├── partition items: [t.k (#0) AS (#0)]
+    │   ├── order by items: []
+    │   └── frame: [Range: Preceding(None) ~ Following(None)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== aggregate_before_top_window_pushes_top ===
+description: An aggregate window evaluated before the top-n window has already seen every row, so the top-n can be pushed.
+sql: SELECT k, sum(w) OVER (PARTITION BY k ORDER BY v, w) AS s, row_number() OVER (PARTITION BY k ORDER BY v DESC) AS r FROM t QUALIFY r = 1
+optimized_plan:
+Filter
+├── filters: [eq(row_number() OVER (PARTITION BY k ORDER BY v DESC) (#4), 1)]
+└── WindowGroup
+    ├── Window
+    │   ├── aggregate function: sum
+    │   ├── partition items: [t.k (#0) AS (#0)]
+    │   ├── order by items: [t.v (#1) AS (#1), t.w (#2) AS (#2)]
+    │   └── frame: [Range: Preceding(None) ~ CurrentRow]
+    ├── Window
+    │   ├── aggregate function: row_number
+    │   ├── partition items: [t.k (#0) AS (#0)]
+    │   ├── order by items: [t.v (#1) AS (#1) DESC]
+    │   ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    │   └── top: 1
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== ranking_different_order_blocks_top ===
+description: A ranking window with a different order needs rows outside the top-n, so the top-n must not be pushed.
+sql: SELECT k, row_number() OVER (PARTITION BY k ORDER BY v DESC) AS r, rank() OVER (PARTITION BY k ORDER BY w) AS rk FROM t QUALIFY r = 1
+optimized_plan:
+Filter
+├── filters: [eq(row_number() OVER (PARTITION BY k ORDER BY v DESC) (#3), 1)]
+└── WindowGroup
+    ├── Window
+    │   ├── aggregate function: row_number
+    │   ├── partition items: [t.k (#0) AS (#0)]
+    │   ├── order by items: [t.v (#1) AS (#1) DESC]
+    │   └── frame: [Range: Preceding(None) ~ CurrentRow]
+    ├── Window
+    │   ├── aggregate function: rank
+    │   ├── partition items: [t.k (#0) AS (#0)]
+    │   ├── order by items: [t.w (#2) AS (#2)]
+    │   └── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+

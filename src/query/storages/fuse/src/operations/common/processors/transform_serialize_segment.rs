@@ -95,6 +95,7 @@ pub struct TransformSerializeSegment<B: SegmentBuilder> {
     thresholds: BlockThresholds,
     cluster_key_info: Option<ClusterKeyInfo>,
     partition_key_count: usize,
+    partition_key_id: Option<u32>,
     table_meta_timestamps: TableMetaTimestamps,
     is_column_oriented: bool,
 }
@@ -138,6 +139,7 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
             thresholds,
             cluster_key_info,
             partition_key_count: table.partition_key_count(),
+            partition_key_id: table.partition_key_id(),
             table_meta_timestamps,
             is_column_oriented: table.is_column_oriented(),
         })
@@ -242,6 +244,7 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
             let next_partition = partition_values(
                 extended_block_meta.block_meta.partition_stats.as_ref(),
                 self.partition_key_count,
+                self.partition_key_id,
             );
             if self.partition_key_count != 0 && next_partition.is_none() {
                 return Err(ErrorCode::Internal(
@@ -273,9 +276,8 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
             self.segment_builder
                 .add_block(extended_block_meta.block_meta, virtual_input)?;
 
-            if let Some(hll) = extended_block_meta.column_hlls {
-                self.hll_accumulator.add_hll(hll)?;
-            }
+            self.hll_accumulator
+                .add_hll(extended_block_meta.column_hlls)?;
             let mut block_top_n = self.block_top_n_template.clone().unwrap_or_default();
             if let Some(top_n) = extended_block_meta.column_top_n {
                 merge_column_top_n_mut(&mut block_top_n, top_n)?;
@@ -326,6 +328,8 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                     });
                     stats = Some((segment_stats_location, stats_data, stats_summary));
                 }
+                // Also discard placeholders when this segment has no statistics file.
+                self.hll_accumulator = ColumnHLLAccumulator::default();
                 let mut top_n = std::mem::take(&mut self.top_n);
                 top_n.retain(|_, column_top_n| !column_top_n.values.is_empty());
 

@@ -128,6 +128,7 @@ impl Plan {
             Plan::DropTableConstraint(_) => Ok("DropTableConstraint".to_string()),
             Plan::AlterTableClusterKey(_) => Ok("AlterTableClusterKey".to_string()),
             Plan::AlterTablePartitionBy(_) => Ok("AlterTablePartitionBy".to_string()),
+            Plan::DropTablePartitionKey(_) => Ok("DropTablePartitionKey".to_string()),
             Plan::DropTableClusterKey(_) => Ok("DropTableClusterKey".to_string()),
             Plan::AlterTableTtl(_) => Ok("AlterTableTtl".to_string()),
             Plan::RefreshTableCache(_) => Ok("RefreshTableCache".to_string()),
@@ -174,9 +175,6 @@ impl Plan {
             Plan::RefreshDynamicTable(_) => Ok("RefreshDynamicTable".to_string()),
 
             // Indexes
-            Plan::CreateIndex(_) => Ok("CreateIndex".to_string()),
-            Plan::DropIndex(_) => Ok("DropIndex".to_string()),
-            Plan::RefreshIndex(_) => Ok("RefreshIndex".to_string()),
             Plan::CreateTableIndex(_) => Ok("CreateTableIndex".to_string()),
             Plan::DropTableIndex(_) => Ok("DropTableIndex".to_string()),
             Plan::RefreshTableIndex(_) => Ok("RefreshTableIndex".to_string()),

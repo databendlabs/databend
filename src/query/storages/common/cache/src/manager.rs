@@ -41,6 +41,7 @@ use crate::caches::ColumnDataCache;
 use crate::caches::ColumnOrientedSegmentInfoCache;
 use crate::caches::CompactSegmentInfoCache;
 use crate::caches::IcebergTableCache;
+use crate::caches::InvertedIndexFullPayloadCache;
 use crate::caches::InvertedIndexLookupCache;
 use crate::caches::InvertedIndexMetaCache;
 use crate::caches::InvertedIndexPayloadCache;
@@ -58,6 +59,12 @@ use crate::providers::HybridCache;
 use crate::providers::HybridCacheExt;
 
 static DEFAULT_PARQUET_META_DATA_CACHE_ITEMS: usize = 3000;
+
+// The existing payload size is the total memory budget for page and full-component caches.
+fn inverted_index_payload_capacities(total: usize) -> (usize, usize) {
+    let full = total / 4;
+    (total - full, full)
+}
 
 // Minimum threshold for table data disk cache size (in bytes).
 // Any configuration value less than this threshold will be ignored,
@@ -113,6 +120,7 @@ pub struct CacheManager {
     inverted_index_meta_cache: CacheSlot<InvertedIndexMetaCache>,
     inverted_index_lookup_cache: CacheSlot<InvertedIndexLookupCache>,
     inverted_index_payload_cache: CacheSlot<InvertedIndexPayloadCache>,
+    inverted_index_full_payload_cache: CacheSlot<InvertedIndexFullPayloadCache>,
     vector_index_meta_cache: CacheSlot<VectorIndexMetaCache>,
     vector_index_file_cache: CacheSlot<VectorIndexFileCache>,
     spatial_index_meta_cache: CacheSlot<SpatialIndexMetaCache>,
@@ -238,6 +246,7 @@ impl CacheManager {
                 inverted_index_meta_cache: CacheSlot::new(None),
                 inverted_index_lookup_cache: CacheSlot::new(None),
                 inverted_index_payload_cache: CacheSlot::new(None),
+                inverted_index_full_payload_cache: CacheSlot::new(None),
                 vector_index_meta_cache: CacheSlot::new(None),
                 vector_index_file_cache: CacheSlot::new(None),
                 spatial_index_meta_cache: CacheSlot::new(None),
@@ -355,17 +364,23 @@ impl CacheManager {
                     ee_mode,
                 )?
             };
+            let payload_total = usize::try_from(config.inverted_index_payload_size).map_err(|_| {
+                ErrorCode::BadArguments(
+                    "inverted-index payload cache size exceeds this platform".to_string(),
+                )
+            })?;
+            let (page_capacity, full_capacity) = inverted_index_payload_capacities(payload_total);
+            let inverted_index_full_payload_cache = Self::new_bytes_cache_slot(
+                "memory_cache_inverted_index_full_payload",
+                full_capacity,
+            );
             let inverted_index_payload_cache = {
                 let cache_path = PathBuf::from(&config.disk_cache_config.path)
                     .join(tenant_id.clone())
                     .join("inverted_index_payload_v1");
                 Self::new_hybrid_cache_slot(
                     HYBRID_CACHE_INVERTED_INDEX_PAYLOAD,
-                    usize::try_from(config.inverted_index_payload_size).map_err(|_| {
-                        ErrorCode::BadArguments(
-                            "inverted-index payload cache size exceeds this platform".to_string(),
-                        )
-                    })?,
+                    page_capacity,
                     Unit::Bytes,
                     &cache_path,
                     on_disk_cache_queue_size,
@@ -523,6 +538,7 @@ impl CacheManager {
                 inverted_index_meta_cache,
                 inverted_index_lookup_cache,
                 inverted_index_payload_cache,
+                inverted_index_full_payload_cache,
                 vector_index_meta_cache,
                 vector_index_file_cache,
                 spatial_index_meta_cache,
@@ -569,8 +585,9 @@ impl CacheManager {
             // Only the in-memory part of column_data_cache will be cleared
             CacheManager::clear_cache(&me.column_data_cache);
             CacheManager::clear_cache(&me.block_meta_cache);
-            // Payload pages are large and cheap to repopulate relative to the high-priority
-            // footer and lookup-component caches.
+            // Clear both payload pools under basic memory pressure; footer and lookup caches
+            // are retained until deep clearance.
+            CacheManager::clear_cache(&me.inverted_index_full_payload_cache);
             CacheManager::clear_cache(&me.inverted_index_payload_cache);
         }
 
@@ -638,10 +655,21 @@ impl CacheManager {
                 );
             }
             HYBRID_CACHE_INVERTED_INDEX_PAYLOAD | IN_MEMORY_HYBRID_CACHE_INVERTED_INDEX_PAYLOAD => {
+                let total = usize::try_from(new_capacity).map_err(|_| {
+                    ErrorCode::BadArguments(
+                        "inverted-index payload cache size exceeds this platform".to_string(),
+                    )
+                })?;
+                let (page_capacity, full_capacity) = inverted_index_payload_capacities(total);
                 Self::set_hybrid_cache_bytes_capacity(
                     &self.inverted_index_payload_cache,
-                    new_capacity,
+                    page_capacity as u64,
                     HYBRID_CACHE_INVERTED_INDEX_PAYLOAD,
+                );
+                Self::set_bytes_capacity(
+                    &self.inverted_index_full_payload_cache,
+                    full_capacity as u64,
+                    "memory_cache_inverted_index_full_payload",
                 );
             }
             HYBRID_CACHE_VECTOR_INDEX_FILE_META_DATA
@@ -849,6 +877,10 @@ impl CacheManager {
 
     pub fn get_inverted_index_payload_cache(&self) -> Option<InvertedIndexPayloadCache> {
         self.get_hybrid_cache(self.inverted_index_payload_cache.get())
+    }
+
+    pub fn get_inverted_index_full_payload_cache(&self) -> Option<InvertedIndexFullPayloadCache> {
+        self.inverted_index_full_payload_cache.get()
     }
 
     pub fn get_vector_index_meta_cache(&self) -> Option<VectorIndexMetaCache> {
@@ -1502,7 +1534,14 @@ mod tests {
         let lookup_cache = cache_manager.get_inverted_index_lookup_cache().unwrap();
         let payload_cache = cache_manager.get_inverted_index_payload_cache().unwrap();
         assert_eq!(lookup_cache.bytes_capacity(), 128 * 1024);
-        assert_eq!(payload_cache.bytes_capacity(), 512 * 1024);
+        assert_eq!(payload_cache.bytes_capacity(), 384 * 1024);
+        assert_eq!(
+            cache_manager
+                .get_inverted_index_full_payload_cache()
+                .unwrap()
+                .bytes_capacity(),
+            128 * 1024
+        );
         assert_eq!(meta_cache.name(), HYBRID_CACHE_INVERTED_INDEX_META);
         assert_eq!(lookup_cache.name(), HYBRID_CACHE_INVERTED_INDEX_LOOKUP);
         assert_eq!(payload_cache.name(), HYBRID_CACHE_INVERTED_INDEX_PAYLOAD);
@@ -1529,7 +1568,7 @@ mod tests {
                 .get_inverted_index_payload_cache()
                 .unwrap()
                 .bytes_capacity(),
-            512 * 1024
+            384 * 1024
         );
 
         cache_manager
@@ -1546,7 +1585,14 @@ mod tests {
                 .get_inverted_index_payload_cache()
                 .unwrap()
                 .bytes_capacity(),
-            768 * 1024
+            576 * 1024
+        );
+        assert_eq!(
+            cache_manager
+                .get_inverted_index_full_payload_cache()
+                .unwrap()
+                .bytes_capacity(),
+            192 * 1024
         );
         Ok(())
     }

@@ -77,6 +77,7 @@ impl FuseTable {
             table_meta_timestamps,
         )?;
         segment_compactor.partition_key_count = self.partition_key_count();
+        segment_compactor.partition_key_id = self.partition_key_id();
 
         if !segment_compactor.target_select().await? {
             return Ok(());
@@ -166,6 +167,7 @@ impl FuseTable {
             self.cluster_key_info(),
         );
         mutator.partition_key_count = self.partition_key_count();
+        mutator.partition_key_id = self.partition_key_id();
         mutator.virtual_column_layout_policy = self.virtual_column_layout_policy();
 
         let partitions = mutator.target_select().await?;

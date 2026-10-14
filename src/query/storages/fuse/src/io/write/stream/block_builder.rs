@@ -213,6 +213,7 @@ impl StreamBlockBuilder {
                 &builder.options,
                 properties.operator.clone(),
                 location.clone(),
+                builder.user_dictionary.clone(),
             )?;
             inverted_index_writers.push((location, writer));
         }
@@ -565,7 +566,7 @@ impl StreamBlockProperties {
             .map(|v| v.column_id())
             .collect::<HashSet<_>>();
 
-        let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
+        let inverted_index_builders = create_inverted_index_builders(table)?;
 
         // Recluster/compact/refresh materialize virtual columns and reuse the
         // path frequencies collected by VirtualColumnBuilder. Other mutations

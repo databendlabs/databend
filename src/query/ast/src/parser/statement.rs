@@ -5260,6 +5260,13 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, _, partition_by, _)| AlterTableAction::AlterTablePartitionBy { partition_by },
     );
 
+    let drop_table_partition_key = map(
+        rule! {
+            DROP ~ PARTITION ~ KEY
+        },
+        |(_, _, _)| AlterTableAction::DropTablePartitionKey,
+    );
+
     let drop_table_cluster_key = map(
         rule! {
             DROP ~ CLUSTER ~ KEY
@@ -5376,6 +5383,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
             | #drop_table_branch
             | #drop_table_tag
             | #alter_table_partition_by
+            | #drop_table_partition_key
             | #alter_table_cluster_key
             | #drop_table_cluster_key
             | #drop_constraint
@@ -5546,15 +5554,10 @@ pub fn literal_duration(i: Input) -> IResult<Duration> {
 }
 
 pub fn task_sql_block(i: Input) -> IResult<TaskSql> {
-    let single_statement = map(
-        rule! {
-            #statement
-        },
-        |stmt| {
-            let sql = format!("{}", stmt.stmt);
-            TaskSql::SingleStatement(sql)
-        },
-    );
+    // Leave the semicolon and end-of-input check to the enclosing statement parser.
+    let single_statement = map(statement_body, |stmt| {
+        TaskSql::SingleStatement(stmt.to_string())
+    });
     let task_block = map(
         rule! {
             BEGIN
@@ -5569,7 +5572,8 @@ pub fn task_sql_block(i: Input) -> IResult<TaskSql> {
             TaskSql::ScriptBlock(sql)
         },
     );
-    alt((single_statement, task_block)).parse(i)
+    // Try the block first because BEGIN also parses as a transaction statement.
+    alt((task_block, single_statement)).parse(i)
 }
 
 pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {

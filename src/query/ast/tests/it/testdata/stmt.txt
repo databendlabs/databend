@@ -16751,6 +16751,89 @@ AlterTable(
 
 
 ---------- Input ----------
+ALTER TABLE t DROP PARTITION KEY;
+---------- Output ---------
+ALTER TABLE t DROP PARTITION KEY
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        12..13,
+                    ),
+                    name: "t",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: DropTablePartitionKey,
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE IF EXISTS db.t DROP PARTITION KEY;
+---------- Output ---------
+ALTER TABLE IF EXISTS db.t DROP PARTITION KEY
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: true,
+        table_reference: Table {
+            span: Some(
+                22..26,
+            ),
+            table: TableRef {
+                catalog: None,
+                database: Some(
+                    Identifier {
+                        span: Some(
+                            22..24,
+                        ),
+                        name: "db",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ),
+                table: Identifier {
+                    span: Some(
+                        25..26,
+                    ),
+                    name: "t",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: DropTablePartitionKey,
+    },
+)
+
+
+---------- Input ----------
 ALTER TABLE t DROP CLUSTER KEY;
 ---------- Output ---------
 ALTER TABLE t DROP CLUSTER KEY
