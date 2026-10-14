@@ -18,7 +18,8 @@ env:
 
 jobs:
   info:
-    if: contains(github.event.pull_request.labels.*.name, 'ci-meta-chaos')
+    # Only the label being added may start this workflow.
+    if: github.event.label.name == 'ci-meta-chaos'
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.sha.outputs.sha }}
