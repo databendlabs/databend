@@ -64,6 +64,7 @@ tempfile = { workspace = true }
 anyhow = { workspace = true }
 databend-common-settings = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
+http = { workspace = true }
 jsonb = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

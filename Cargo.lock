@@ -4908,6 +4908,7 @@ dependencies = [
  "fastrace",
  "futures",
  "futures-util",
+ "http 1.3.1",
  "jsonb",
  "jsonwebtoken",
  "jwt-simple",

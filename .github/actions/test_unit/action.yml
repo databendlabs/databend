@@ -25,7 +25,7 @@ runs:
         RUST_MIN_STACK: 33554432
         # RUST_BACKTRACE: 1
 
-    - name: Test vacuum2 streaming GC against AWS S3
+    - name: Test storage behavior against AWS S3
       if: env.RUNNER_PROVIDER == 'aws'
       shell: bash
       run: |
@@ -34,7 +34,7 @@ runs:
           --hide-progress-bar \
           --run-ignored only \
           --workspace \
-          real_s3::streaming_block_gc_across_list_pages
+          real_s3::
       env:
         DATABEND_TEST_S3_BUCKET: databend-ci
         DATABEND_TEST_S3_REGION: us-east-2
