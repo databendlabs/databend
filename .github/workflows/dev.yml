@@ -20,10 +20,25 @@ jobs:
     outputs:
       any_src_changed: ${{ steps.src.outputs.any_changed }}
       bendpy_changed: ${{ steps.bendpy.outputs.any_changed }}
+      hold_ci: ${{ steps.hold.outputs.hold_ci }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      # Read labels live (not from the event payload) so a re-run after
+      # removing hold-ci sees the current state.
+      - name: Check hold-ci Label
+        id: hold
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          hold_ci=$(gh pr view ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --json labels -q 'any(.labels[]; .name == "hold-ci")')
+          echo "hold_ci=${hold_ci}" >> $GITHUB_OUTPUT
+      # Marker step: ci_timing_comment.js keys off its conclusion to leave
+      # the timing report untouched for held runs.
+      - name: Heavy CI Paused
+        if: steps.hold.outputs.hold_ci == 'true'
+        run: echo "heavy CI paused by the hold-ci label" >> $GITHUB_STEP_SUMMARY
       - name: Check Source File Changes
         uses: tj-actions/changed-files@v47
         id: src
@@ -55,7 +70,7 @@ jobs:
 
   linux:
     needs: changes
-    if: needs.changes.outputs.any_src_changed == 'true'
+    if: needs.changes.outputs.any_src_changed == 'true' && needs.changes.outputs.hold_ci != 'true'
     uses: ./.github/workflows/reuse.linux.yml
     secrets: inherit
     with:
@@ -66,7 +81,7 @@ jobs:
 
   mac_check:
     needs: changes
-    if: needs.changes.outputs.any_src_changed == 'true'
+    if: needs.changes.outputs.any_src_changed == 'true' && needs.changes.outputs.hold_ci != 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
@@ -77,7 +92,7 @@ jobs:
 
   test_bendpy:
     needs: changes
-    if: needs.changes.outputs.bendpy_changed == 'true'
+    if: needs.changes.outputs.bendpy_changed == 'true' && needs.changes.outputs.hold_ci != 'true'
     runs-on:
       - self-hosted
       - ARM64
@@ -114,6 +129,7 @@ jobs:
         uses: actions/github-script@v9
         env:
           AI_ASSISTANCE_TEST_RESULT: ${{ needs.ai_assistance_test.result }}
+          HOLD_CI: ${{ needs.changes.outputs.hold_ci }}
           SRC_CHANGED: ${{ needs.changes.outputs.any_src_changed }}
           BENDPY_CHANGED: ${{ needs.changes.outputs.bendpy_changed }}
           LINUX_BUILD_RESULT: ${{ needs.linux.result }}
@@ -121,6 +137,10 @@ jobs:
           BENDPY_RESULT: ${{ needs.test_bendpy.result }}
         with:
           script: |
+            if (process.env.HOLD_CI == 'true') {
+              core.setFailed('Heavy CI is paused by the hold-ci label; remove hold-ci to run full CI before merging');
+              return;
+            }
             if (process.env.AI_ASSISTANCE_TEST_RESULT != 'success') {
               core.setFailed(`AI assistance validator tests did not complete successfully (${process.env.AI_ASSISTANCE_TEST_RESULT}), not ready to merge`);
               return;
