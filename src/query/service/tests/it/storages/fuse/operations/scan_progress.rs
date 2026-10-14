@@ -93,8 +93,11 @@ async fn test_scan_progress_includes_virtual_columns() -> Result<()> {
          parse_json('{{\"a\":' || number || ',\"c\":\"' || repeat('y', 20) || '\"}}') \
          from numbers({NUM_ROWS})"
     );
-    // INSERT alone does not write the sidecar; without it the query below
-    // would decode the base `val` column instead.
+    // INSERT alone does not write the virtual column sidecar; it is produced
+    // by `refresh virtual column`. Without the sidecar, `val['c']` is served
+    // by decoding the whole `val` column as a remaining column, which is
+    // accounted for elsewhere and would make this test pass regardless of
+    // whether sidecar bytes are counted.
     let refresh = format!("refresh virtual column for {db}.vt");
     fixture.execute_command(&create).await?;
     fixture.execute_command(&insert).await?;
