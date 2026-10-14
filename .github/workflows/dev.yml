@@ -6,30 +6,37 @@ on:
       - opened
       - synchronize
       - reopened
-      - labeled
-      - unlabeled
     branches:
       - main
       - backport/*
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ (github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'hold-ci' && github.run_id || 'main' }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
   changes:
-    if: >-
-      (github.event.action != 'labeled' && github.event.action != 'unlabeled') ||
-      github.event.label.name == 'hold-ci'
     runs-on: ubuntu-latest
     outputs:
       any_src_changed: ${{ steps.src.outputs.any_changed }}
       bendpy_changed: ${{ steps.bendpy.outputs.any_changed }}
-      hold_ci: ${{ contains(github.event.pull_request.labels.*.name, 'hold-ci') }}
+      hold_ci: ${{ steps.hold.outputs.hold_ci }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      # Read labels live (not from the event payload) so a re-run after
+      # removing hold-ci sees the current state.
+      - name: Check hold-ci Label
+        id: hold
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          hold_ci=$(gh pr view ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --json labels -q 'any(.labels[]; .name == "hold-ci")')
+          echo "hold_ci=${hold_ci}" >> $GITHUB_OUTPUT
+          if [[ "${hold_ci}" == "true" ]]; then
+            echo "heavy CI paused by the hold-ci label" >> $GITHUB_STEP_SUMMARY
+          fi
       - name: Check Source File Changes
         uses: tj-actions/changed-files@v47
         id: src
@@ -100,9 +107,6 @@ jobs:
           target: aarch64-unknown-linux-gnu
 
   ai_assistance_test:
-    if: >-
-      (github.event.action != 'labeled' && github.event.action != 'unlabeled') ||
-      github.event.label.name == 'hold-ci'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -110,10 +114,7 @@ jobs:
         run: python3 .github/scripts/test_check_pr_ai_assistance.py
 
   ready:
-    if: >-
-      always() &&
-      ((github.event.action != 'labeled' && github.event.action != 'unlabeled') ||
-       github.event.label.name == 'hold-ci')
+    if: always()
     runs-on: ubuntu-latest
     needs:
       - ai_assistance_test
