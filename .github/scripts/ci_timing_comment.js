@@ -294,7 +294,7 @@ async function findPR(github, context, core, run) {
                 state: 'open',
                 head: `${headOwner}:${run.head_branch}`,
             });
-            const match = data.find((p) => p.head && p.head.sha === run.head_sha) || data[0];
+            const match = data.find((p) => p.head && p.head.sha === run.head_sha);
             if (match) return match.number;
         } catch (e) {
             core.warning(`PR lookup by head: ${e.message}`);
