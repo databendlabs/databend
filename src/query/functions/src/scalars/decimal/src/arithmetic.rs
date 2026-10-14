@@ -46,6 +46,7 @@ enum ArithmeticOp {
     Minus,
     Multiply,
     Divide,
+    Modulo,
 }
 
 impl ArithmeticOp {
@@ -69,8 +70,8 @@ impl ArithmeticOp {
             ArithmeticOp::Plus => domain_plus(lhs, rhs, precision),
             ArithmeticOp::Minus => domain_minus(lhs, rhs, precision),
             ArithmeticOp::Multiply => domain_mul(lhs, rhs, precision),
-            ArithmeticOp::Divide => {
-                // For div, we cannot determine the domain.
+            ArithmeticOp::Divide | ArithmeticOp::Modulo => {
+                // For div and mod, we cannot determine the domain.
                 None
             }
         }
@@ -102,6 +103,14 @@ impl ArithmeticOp {
                 let plus_min_precision = a.leading_digits().max(b.leading_digits()) + scale + 1;
                 (plus_min_precision, scale)
             }
+
+            // Both operands are aligned to the larger scale, so the remainder is exact.
+            // Its magnitude is below both operands', so it needs no extra width.
+            ArithmeticOp::Modulo => {
+                let scale = a.scale().max(b.scale());
+                let leading = a.leading_digits().max(b.leading_digits());
+                (leading + scale, scale)
+            }
         };
 
         // if the args both are Decimal128, we need to clamp the precision to 38
@@ -129,7 +138,7 @@ impl ArithmeticOp {
                 ))
             }
 
-            ArithmeticOp::Plus | ArithmeticOp::Minus => {
+            ArithmeticOp::Plus | ArithmeticOp::Minus | ArithmeticOp::Modulo => {
                 Some((result_type, result_type, result_type))
             }
         }
@@ -271,6 +280,24 @@ where
             }
         }
 
+        ArithmeticOp::Modulo => {
+            // The operands share the result's scale, so the remainder of their
+            // unscaled values is the remainder of the decimals. Like `%` on
+            // integers, it takes the sign of the dividend.
+            let func = |a: T, b: T, result: &mut Vec<U>, ctx: &mut EvalContext| {
+                if std::hint::unlikely(b == zero) {
+                    ctx.set_error(result.len(), "divided by zero");
+                    result.push(C::compute(zero));
+                } else {
+                    // checked_rem fails only on T::MIN % -1, which no decimal
+                    // within its precision can reach.
+                    result.push(C::compute(a.checked_rem(b).unwrap_or(zero)));
+                }
+            };
+
+            vectorize_with_builder_2_arg::<L, R, DecimalType<U>>(func)(a, b, ctx)
+        }
+
         ArithmeticOp::Plus | ArithmeticOp::Minus => {
             if overflow {
                 let min_for_precision = T::min_for_precision(return_size.precision());
@@ -398,7 +425,10 @@ impl ScalarFunctionDomain for DecimalBinaryCalcDomain {
 
         let size = self.return_size;
 
-        let default_domain = if self.arithmetic_op == ArithmeticOp::Divide {
+        let default_domain = if matches!(
+            self.arithmetic_op,
+            ArithmeticOp::Divide | ArithmeticOp::Modulo
+        ) {
             FunctionDomain::MayThrow
         } else {
             FunctionDomain::Full
@@ -603,4 +633,5 @@ pub fn register_decimal_arithmetic(registry: &mut FunctionRegistry) {
     register_decimal_binary_op(registry, ArithmeticOp::Minus);
     register_decimal_binary_op(registry, ArithmeticOp::Divide);
     register_decimal_binary_op(registry, ArithmeticOp::Multiply);
+    register_decimal_binary_op(registry, ArithmeticOp::Modulo);
 }
