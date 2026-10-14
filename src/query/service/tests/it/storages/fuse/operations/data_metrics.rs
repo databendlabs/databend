@@ -13,7 +13,8 @@
 //  limitations under the License.
 
 //! `QueryContext::get_data_metrics` backs `system.processes.data_read_bytes /
-//! data_write_bytes` and `system.query_log.scan_io_bytes / written_io_bytes`.
+//! data_write_bytes` and `system_history.query_history.scan_io_bytes /
+//! written_io_bytes`.
 //! These tests check that it reports the block IO of `SELECT`,
 //! `INSERT ... SELECT`, `REPLACE INTO` and `COPY INTO`, not just the snapshot
 //! and segment metadata touched through the attached table instance.
