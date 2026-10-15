@@ -558,6 +558,7 @@ debug-assertions = true
 [profile.release.package]
 databend-query = { codegen-units = 4 }
 databend-binaries = { codegen-units = 4 }
+databend-bendsave = { codegen-units = 4 }
 
 [profile.dev]
 split-debuginfo = "unpacked"

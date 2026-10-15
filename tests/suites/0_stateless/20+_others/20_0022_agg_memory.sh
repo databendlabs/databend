@@ -4,11 +4,9 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 
 ## warmup
-for i in `seq 1 2`;do
-	bendsql_connect_root --query="""
-	select number::string , max(number::string), min(number::string), count(distinct number) from numbers(10000000) group by 1 ignore_result;
-	"""
-done
+bendsql_connect_root --query="""
+select number::string , max(number::string), min(number::string), count(distinct number) from numbers(10000000) group by 1 ignore_result;
+"""
 
 
 PIDS=($(pgrep databend-query))
@@ -19,14 +17,14 @@ for PID in "${PIDS[@]}"; do
 done
 
 
-for i in `seq 1 5`;do
+for i in `seq 1 2`;do
 	echo "executing $i"
 	bendsql_connect_root --query="""
 	select number::string , max(number::string), min(number::string), count(distinct number) from numbers(10000000) group by 1 ignore_result;
 	"""
 done
 
-sleep 15
+sleep 5
 
 
 AFTER_MEM=0

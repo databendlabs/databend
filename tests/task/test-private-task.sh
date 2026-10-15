@@ -156,13 +156,17 @@ check_response_error "$response"
 execute_script_task_query_id=$(echo $response | jq -r '.id')
 echo "Execute Script Task Query ID: $execute_script_task_query_id"
 
-sleep 5
-
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t_script ORDER BY c1\"}")
-check_response_error "$response"
-
-actual=$(echo "$response" | jq -c '.data')
 expected='[["10"],["20"]]'
+actual='[]'
+for _ in {1..20}; do
+    response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t_script ORDER BY c1\"}")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -c '.data')
+    if [ "$actual" = "$expected" ]; then
+        break
+    fi
+    sleep 1
+done
 
 if [ "$actual" = "$expected" ]; then
     echo "✅ Private task executes multiple statements"
@@ -183,13 +187,17 @@ check_response_error "$response"
 execute_db_session_task_query_id=$(echo $response | jq -r '.id')
 echo "Execute DB Session Task Query ID: $execute_db_session_task_query_id"
 
-sleep 5
-
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM task_session_db.session_target ORDER BY c1\"}")
-check_response_error "$response"
-
-actual=$(echo "$response" | jq -c '.data')
 expected='[["42"]]'
+actual='[]'
+for _ in {1..20}; do
+    response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM task_session_db.session_target ORDER BY c1\"}")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -c '.data')
+    if [ "$actual" = "$expected" ]; then
+        break
+    fi
+    sleep 1
+done
 
 if [ "$actual" = "$expected" ]; then
     echo "✅ Private task applies DATABASE session parameter"
@@ -213,13 +221,17 @@ check_response_error "$response"
 execute_ms_schedule_task_query_id=$(echo $response | jq -r '.id')
 echo "Execute Millisecond Schedule Task Query ID: $execute_ms_schedule_task_query_id"
 
-sleep 5
-
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t_ms ORDER BY c1\"}")
-check_response_error "$response"
-
-actual=$(echo "$response" | jq -c '.data')
 expected='[["1"]]'
+actual='[]'
+for _ in {1..20}; do
+    response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t_ms ORDER BY c1\"}")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -c '.data')
+    if [ "$actual" = "$expected" ]; then
+        break
+    fi
+    sleep 1
+done
 
 if [ "$actual" = "$expected" ]; then
     echo "✅ Private task executes millisecond schedule task"
@@ -756,7 +768,7 @@ check_response_error "$response"
 create_task_1_query_id=$(echo $response | jq -r '.id')
 echo "Create Task 1 Query ID: $create_task_1_query_id"
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_2 SCHEDULE = 25 SECOND AS insert into t1 values(1)\"}")
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_2 SCHEDULE = 5 SECOND AS insert into t1 values(1)\"}")
 check_response_error "$response"
 create_task_2_query_id=$(echo $response | jq -r '.id')
 echo "Create Task 2 ID: $create_task_2_query_id"
@@ -781,14 +793,21 @@ else
     exit 1
 fi
 
-sleep 5
-
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_3 RESUME\"}")
 check_response_error "$response"
 alter_task_3_query_id=$(echo $response | jq -r '.id')
 echo "Resume Task 3 ID: $alter_task_3_query_id"
 
-sleep 5
+actual_after_count=0
+for _ in {1..20}; do
+    response=$(query_sql_with_auth "root:" "SELECT count(*) FROM system_task.task_after WHERE next_task = 'my_task_3' AND task_name IN ('my_task_1', 'my_task_2')")
+    check_response_error "$response"
+    actual_after_count=$(echo "$response" | jq -r '.data[0][0]')
+    if [ "$actual_after_count" = "2" ]; then
+        break
+    fi
+    sleep 1
+done
 
 # Check Task Afters 1
 
@@ -802,13 +821,17 @@ check_response_error "$response"
 execute_task_2_query_id=$(echo $response | jq -r '.id')
 echo "Execute Task 2 ID: $execute_task_2_query_id"
 
-sleep 25
-
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
-check_response_error "$response"
-
-actual=$(echo "$response" | jq -c '.data')
 expected='[["0"],["1"],["2"]]'
+actual='[]'
+for _ in {1..25}; do
+    response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -c '.data')
+    if [ "$actual" = "$expected" ]; then
+        break
+    fi
+    sleep 1
+done
 
 if [ "$actual" = "$expected" ]; then
     echo "✅ Query result matches expected"
@@ -819,6 +842,17 @@ else
     exit 1
 fi
 
+# Task history stores completion times in whole seconds. Wait for my_task_3
+# to finish and for a later second before triggering another parent run.
+for _ in {1..10}; do
+    response=$(query_sql_with_auth "root:" "SELECT count_if(state = 'SUCCEEDED' AND completed_at IS NOT NULL) = 1 AND max(completed_at) < date_trunc('second', now()) FROM system_task.task_run WHERE task_name = 'my_task_3'")
+    check_response_error "$response"
+    if [ "$(echo "$response" | jq -r '.data[0][0]')" = "1" ]; then
+        break
+    fi
+    sleep 1
+done
+
 # Check Task Afters With Schedule Root
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"EXECUTE TASK my_task_1\"}")
@@ -826,13 +860,17 @@ check_response_error "$response"
 execute_task_1_query_id=$(echo $response | jq -r '.id')
 echo "Execute Task 1 ID: $execute_task_1_query_id"
 
-sleep 25
-
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
-check_response_error "$response"
-
-actual=$(echo "$response" | jq -c '.data')
 expected='[["0"],["0"],["1"],["2"]]'
+actual='[]'
+for _ in {1..20}; do
+    response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -c '.data')
+    if [ "$actual" = "$expected" ]; then
+        break
+    fi
+    sleep 1
+done
 
 if [ "$actual" = "$expected" ]; then
     echo "✅ Query result matches expected"
@@ -848,13 +886,17 @@ check_response_error "$response"
 alter_task_2_query_id=$(echo $response | jq -r '.id')
 echo "Resume Task 2 ID: $alter_task_2_query_id"
 
-sleep 40
-
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
-check_response_error "$response"
-
-actual=$(echo "$response" | jq -c '.data')
 expected='[["0"],["0"],["1"],["1"],["2"],["2"]]'
+actual='[]'
+for _ in {1..20}; do
+    response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -c '.data')
+    if [ "$actual" = "$expected" ]; then
+        break
+    fi
+    sleep 1
+done
 
 if [ "$actual" = "$expected" ]; then
     echo "✅ Query result matches expected"
@@ -883,13 +925,20 @@ python3 scripts/ci/wait_tcp.py --timeout 30 --port 9092
 
 echo "Started 2-node cluster with private task enabled..."
 
-sleep 45
-
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
-check_response_error "$response"
-
-actual=$(echo "$response" | jq -c '.data')
 expected='[["0"],["0"],["1"],["1"],["1"],["2"],["2"]]'
+actual='[]'
+for _ in {1..20}; do
+    response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -c '.data')
+    if [ "$actual" = "$expected" ]; then
+        break
+    fi
+    sleep 1
+done
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_2 SUSPEND\"}")
+check_response_error "$response"
 
 if [ "$actual" = "$expected" ]; then
     echo "✅ Query result matches expected"
@@ -1060,7 +1109,14 @@ check_response_error "$response"
 response=$(query_sql_with_auth "task_history_user_b:task_history_pwd" "EXECUTE TASK role_b_history_task")
 check_response_error "$response"
 
-sleep 5
+for _ in {1..20}; do
+    response=$(query_sql_with_auth "root:" "SELECT count_if(state = 'SUCCEEDED') FROM system_task.task_run WHERE task_name IN ('role_a_history_task', 'role_b_history_task')")
+    check_response_error "$response"
+    if [ "$(echo "$response" | jq -r '.data[0][0]')" = "2" ]; then
+        break
+    fi
+    sleep 1
+done
 
 response=$(query_sql_with_auth "task_history_user_a:task_history_pwd" "SELECT * FROM TASK_HISTORY(TASK_NAME => 'role_a_history_task', RESULT_LIMIT => 1)")
 check_response_error "$response"
@@ -1153,24 +1209,29 @@ check_response_error "$response"
 create_table_query_id_1=$(echo $response | jq -r '.id')
 echo "Create Table Query ID: $create_table_query_id_1"
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_4 SCHEDULE = USING CRON '*/25 * * * * *' 'UTC' AS insert into t2 values(0)\"}")
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_4 SCHEDULE = USING CRON '*/2 * * * * *' 'UTC' AS insert into t2 values(0)\"}")
 check_response_error "$response"
 create_task_4_query_id=$(echo $response | jq -r '.id')
 echo "Create Task 4 Query ID: $create_task_4_query_id"
-
-sleep 5
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_4 RESUME\"}")
 check_response_error "$response"
 alter_task_4_query_id=$(echo $response | jq -r '.id')
 echo "Resume Task 4 ID: $alter_task_4_query_id"
 
-sleep 80
+actual=0
+for _ in {1..30}; do
+    response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT count(*) FROM t2\"}")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -r '.data[0][0]')
+    if [ "$actual" -ge 3 ]; then
+        break
+    fi
+    sleep 1
+done
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT count(*) FROM t2\"}")
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_4 SUSPEND\"}")
 check_response_error "$response"
-
-actual=$(echo "$response" | jq -r '.data[0][0]')
 
 if [ "$actual" -ge 3 ]; then
     echo "✅ Query result matches expected"
@@ -1193,7 +1254,7 @@ actual=$(echo "$response" | jq -c '.data')
 name=$(echo "$response" | jq -r '.data[0][0]')
 schedule=$(echo "$response" | jq -r '.data[0][4]')
 if [ "$name" = "my_task_4" ] &&
-    [ "$schedule" = "CRON */25 * * * * * TIMEZONE UTC" ]; then
+    [ "$schedule" = "CRON */2 * * * * * TIMEZONE UTC" ]; then
     echo "✅ TASK_HISTORY preserves cron timezone schedule"
 else
     echo "❌ Expected TASK_HISTORY to preserve cron timezone schedule"
@@ -1219,12 +1280,12 @@ check_response_error "$response"
 create_table_query_id_2=$(echo $response | jq -r '.id')
 echo "Create Table Query ID: $create_table_query_id_2"
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_5 SCHEDULE = 25 SECOND WHEN EXISTS (SELECT 1 FROM t3 WHERE c2 = 1) AS insert into t3 values(1, 0)\"}")
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_5 SCHEDULE = 5 SECOND WHEN EXISTS (SELECT 1 FROM t3 WHERE c2 = 1) AS insert into t3 values(1, 0)\"}")
 check_response_error "$response"
 create_task_5_query_id=$(echo $response | jq -r '.id')
 echo "Create Task 5 Query ID: $create_task_5_query_id"
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_6 SCHEDULE = 25 SECOND WHEN EXISTS (SELECT 1 FROM t3 WHERE c2 = 1) AS insert into t3 values(2, 0)\"}")
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_6 SCHEDULE = 5 SECOND WHEN EXISTS (SELECT 1 FROM t3 WHERE c2 = 1) AS insert into t3 values(2, 0)\"}")
 check_response_error "$response"
 create_task_6_query_id=$(echo $response | jq -r '.id')
 echo "Create Task 6 Query ID: $create_task_6_query_id"
@@ -1233,8 +1294,6 @@ response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-
 check_response_error "$response"
 create_task_7_query_id=$(echo $response | jq -r '.id')
 echo "Create Task 7 Query ID: $create_task_7_query_id"
-
-sleep 5
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_5 RESUME\"}")
 check_response_error "$response"
@@ -1251,7 +1310,14 @@ check_response_error "$response"
 alter_task_7_query_id=$(echo $response | jq -r '.id')
 echo "Resume Task 7 ID: $alter_task_7_query_id"
 
-sleep 30
+for _ in {1..20}; do
+    response=$(query_sql_with_auth "root:" "SELECT count_if(task_name = 'my_task_5' AND state = 'SKIPPED') >= 1 AND count_if(task_name = 'my_task_6' AND state = 'SKIPPED') >= 1 FROM system_task.task_run")
+    check_response_error "$response"
+    if [ "$(echo "$response" | jq -r '.data[0][0]')" = "1" ]; then
+        break
+    fi
+    sleep 1
+done
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t3 ORDER BY c1\"}")
 check_response_error "$response"
@@ -1273,13 +1339,17 @@ check_response_error "$response"
 insert_t3_query_id=$(echo $response | jq -r '.id')
 echo "INSERT T3 (1, 1) ID: $insert_t3_query_id"
 
-sleep 25
-
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1, c2 FROM t3 ORDER BY c1, c2\"}")
-check_response_error "$response"
-
-actual=$(echo "$response" | jq -c '.data')
 expected='[["1","0"],["1","1"],["2","0"]]'
+actual='[]'
+for _ in {1..20}; do
+    response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1, c2 FROM t3 ORDER BY c1, c2\"}")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -c '.data')
+    if [ "$actual" = "$expected" ]; then
+        break
+    fi
+    sleep 1
+done
 
 if [ "$actual" = "$expected" ]; then
     echo "✅ Query result matches expected"
@@ -1289,19 +1359,28 @@ else
     echo "Actual  : $actual"
     exit 1
 fi
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_5 SUSPEND\"}")
+check_response_error "$response"
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_6 SUSPEND\"}")
+check_response_error "$response"
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"EXECUTE TASK my_task_7\"}")
 check_response_error "$response"
 execute_task_7_query_id=$(echo $response | jq -r '.id')
 echo "Execute Task 7 ID: $execute_task_7_query_id"
 
-sleep 5
-
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1, c2 FROM t3 ORDER BY c1, c2\"}")
-check_response_error "$response"
-
-actual=$(echo "$response" | jq -c '.data')
 expected='[["1","0"],["1","1"],["2","0"],["3","0"]]'
+actual='[]'
+for _ in {1..20}; do
+    response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1, c2 FROM t3 ORDER BY c1, c2\"}")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -c '.data')
+    if [ "$actual" = "$expected" ]; then
+        break
+    fi
+    sleep 1
+done
 
 if [ "$actual" = "$expected" ]; then
     echo "✅ Query result matches expected"
@@ -1312,18 +1391,38 @@ else
     exit 1
 fi
 
+# Wait for my_task_7's completion timestamp to be in a strictly earlier second
+# before the next scheduled parent runs trigger it via AFTER.
+for _ in {1..10}; do
+    response=$(query_sql_with_auth "root:" "SELECT count_if(state = 'SUCCEEDED' AND completed_at IS NOT NULL) = 1 AND max(completed_at) < date_trunc('second', now()) FROM system_task.task_run WHERE task_name = 'my_task_7'")
+    check_response_error "$response"
+    if [ "$(echo "$response" | jq -r '.data[0][0]')" = "1" ]; then
+        break
+    fi
+    sleep 1
+done
+
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"INSERT INTO t3 VALUES (2, 2)\"}")
 check_response_error "$response"
 insert_t3_query_id_1=$(echo $response | jq -r '.id')
 echo "INSERT T3 (2, 2) ID: $insert_t3_query_id_1"
 
-sleep 30
-
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1, c2 FROM t3 ORDER BY c1, c2\"}")
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_5 RESUME\"}")
+check_response_error "$response"
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_6 RESUME\"}")
 check_response_error "$response"
 
-actual=$(echo "$response" | jq -c '.data')
 expected='[["1","0"],["1","0"],["1","1"],["2","0"],["2","0"],["2","2"],["3","0"],["3","0"]]'
+actual='[]'
+for _ in {1..20}; do
+    response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1, c2 FROM t3 ORDER BY c1, c2\"}")
+    check_response_error "$response"
+    actual=$(echo "$response" | jq -c '.data')
+    if [ "$actual" = "$expected" ]; then
+        break
+    fi
+    sleep 1
+done
 
 if [ "$actual" = "$expected" ]; then
     echo "✅ Query result matches expected"

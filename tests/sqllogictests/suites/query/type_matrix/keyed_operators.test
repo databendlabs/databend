@@ -6,9 +6,8 @@
 # from the data construction (row count, distinct keys, per-key counts) and are
 # therefore identical for every type.
 #
-# The same file is rerun on the legacy sort and join paths.
-# run-with-settings: enable_fixed_rows_sort=0
-# run-with-settings: enable_experimental_new_join=0
+# The same file is rerun on the legacy sort and join paths in one pass.
+# run-with-settings: enable_fixed_rows_sort=0, enable_experimental_new_join=0
 
 ## BOOLEAN NOT NULL, shape dense_nn
 statement ok

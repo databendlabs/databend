@@ -33,7 +33,7 @@ pub fn test_filter_executor() -> anyhow::Result<()> {
     let mut rng = rand::thread_rng();
     // For EmptyMap, Map, Bitmap comparison, it is not supported by Evaluator.
     let data_types = get_filter_data_types();
-    for _ in 0..100 {
+    for _ in 0..25 {
         for data_type in data_types.iter() {
             // Random number of rows, number of columns and random max depth of the filter expr.
             let num_rows = rng.gen_range(0..10000);

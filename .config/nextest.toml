@@ -1,0 +1,3 @@
+[[profile.default.overrides]]
+filter = "test(test_query_overflow) | test(test_filter_executor) | test(test_schema_api_single_node) | test(test_jwk_store_with_random_keys) | test(test_optimizer)"
+priority = 100

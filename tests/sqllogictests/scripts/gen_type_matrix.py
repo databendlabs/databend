@@ -336,9 +336,12 @@ def main():
     )
     out.append("# therefore identical for every type.")
     out.append("#")
-    out.append("# The same file is rerun on the legacy sort and join paths.")
-    out.append("# run-with-settings: enable_fixed_rows_sort=0")
-    out.append("# run-with-settings: enable_experimental_new_join=0")
+    out.append(
+        "# The same file is rerun on the legacy sort and join paths in one pass."
+    )
+    out.append(
+        "# run-with-settings: enable_fixed_rows_sort=0, enable_experimental_new_join=0"
+    )
     out.append("")
     for ty in TYPES:
         for shape in SHAPES:
