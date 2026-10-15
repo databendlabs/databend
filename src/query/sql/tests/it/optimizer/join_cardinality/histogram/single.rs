@@ -17,18 +17,15 @@ use std::io::Write;
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_sql::optimizer::CollectStatisticsOptimizer;
-use databend_common_sql::optimizer::Optimizer;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
-use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
-use databend_common_sql::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
 use databend_common_sql::optimizer::optimizers::rule::Rule;
 use databend_common_sql::optimizer::optimizers::rule::RuleCommuteJoin;
 use databend_common_sql::optimizer::optimizers::rule::TransformResult;
+use databend_common_sql::optimizer::pipeline::OptimizerPipeline;
+use databend_common_sql::optimizer::pipeline::OptimizerStrategy;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
@@ -119,18 +116,25 @@ async fn write_optimizer_commuted_right_single(
         None => {
             // CommuteJoin is a logical rule. Derive its input from bound SQL before
             // physical selection rather than converting an execution tree backwards.
-            let Plan::Query { s_expr, .. } = raw else {
+            let Plan::Query {
+                s_expr,
+                bind_context,
+                ..
+            } = raw
+            else {
                 unreachable!()
             };
             let context =
-                OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?);
-            let logical = SubqueryDecorrelatorOptimizer::new(context.clone(), None)
-                .optimize_sync((*s_expr).into_logical()?)?;
-            let logical = CollectStatisticsOptimizer::new(context.clone())
-                .optimize(logical)
-                .await?;
-            let logical = RecursiveRuleOptimizer::new(context, &DEFAULT_REWRITE_RULES)
-                .optimize_sync(logical)?;
+                OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?)
+                    .with_settings(&ctx.get_settings())?;
+            let mut pipeline = OptimizerPipeline::query(
+                context,
+                (*s_expr).into_logical()?,
+                Some(bind_context.column_set().into_iter().collect()),
+                OptimizerStrategy::BeforeDPhyp,
+            )
+            .await?;
+            let logical = pipeline.execute().await?;
             let left_single =
                 find_logical_join(&logical, JoinType::LeftSingle).ok_or_else(|| {
                     ErrorCode::Internal("logical optimizer did not derive SINGLE from SQL")

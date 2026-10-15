@@ -17,6 +17,7 @@ mod common;
 mod pipeline;
 mod trace;
 
+pub use common::OptimizerStrategy;
 pub use pipeline::OptimizerPipeline;
 pub(crate) use pipeline::configure_distributed_optimization;
 pub use trace::OptimizerTrace;

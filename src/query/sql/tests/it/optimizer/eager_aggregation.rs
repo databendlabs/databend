@@ -12,21 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+use std::sync::Arc;
+
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::SExprVisitor;
 use databend_common_sql::optimizer::ir::VisitAction;
-use databend_common_sql::optimizer::optimizers::operator::PullUpFilterOptimizer;
-use databend_common_sql::optimizer::optimizers::operator::RuleNormalizeAggregateOptimizer;
-use databend_common_sql::optimizer::optimizers::operator::RuleStatsAggregateOptimizer;
 use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
-use databend_common_sql::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
 use databend_common_sql::optimizer::optimizers::rule::Rule;
 use databend_common_sql::optimizer::optimizers::rule::RuleEagerAggregation;
 use databend_common_sql::optimizer::optimizers::rule::RuleID;
 use databend_common_sql::optimizer::optimizers::rule::TransformResult;
+use databend_common_sql::optimizer::pipeline::OptimizerPipeline;
+use databend_common_sql::optimizer::pipeline::OptimizerStrategy;
 use databend_common_sql::plans::AggregateMode;
 use databend_common_sql::plans::Plan;
 
@@ -40,7 +41,10 @@ async fn write_rule_results(file: &mut impl std::io::Write, case: &SqlTestCase) 
     let ctx = setup_context(case).await?;
     let plan = ctx.bind_sql(case.sql).await?;
     let Plan::Query {
-        s_expr, metadata, ..
+        s_expr,
+        metadata,
+        bind_context,
+        ..
     } = &plan
     else {
         unreachable!("test query should bind to Plan::Query")
@@ -49,7 +53,12 @@ async fn write_rule_results(file: &mut impl std::io::Write, case: &SqlTestCase) 
     let settings = ctx.get_settings();
     let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?)
         .with_settings(&settings)?;
-    let before_expr = optimize_before(opt_ctx.clone(), s_expr.logical()?).await?;
+    let before_expr = optimize_before(
+        opt_ctx.clone(),
+        s_expr.logical()?,
+        Some(bind_context.column_set().into_iter().collect()),
+    )
+    .await?;
     let before_plan = plan.replace_query_s_expr(before_expr.clone());
 
     write_case_header(file, case)?;
@@ -161,20 +170,19 @@ fn assert_no_initial_aggregate(expr: &SExpr) -> Result<()> {
     Ok(())
 }
 
-/// Mirrors the production pipeline up to the point where `RuleEagerAggregation` runs,
-/// without the cost-based join reordering in between.
 async fn optimize_before(
-    opt_ctx: std::sync::Arc<OptimizerContext>,
+    opt_ctx: Arc<OptimizerContext>,
     s_expr: &SExpr,
+    output_columns: Option<HashSet<databend_common_sql::Symbol>>,
 ) -> Result<SExpr> {
-    let expr = RuleStatsAggregateOptimizer::new(opt_ctx.clone())
-        .optimize_async(s_expr.clone())
-        .await?;
-    let expr = RuleNormalizeAggregateOptimizer::new().optimize_sync(expr)?;
-    let expr = PullUpFilterOptimizer::new(opt_ctx.clone()).optimize_sync(expr)?;
-    let expr =
-        RecursiveRuleOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES).optimize_sync(expr)?;
-    RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::SplitAggregate]).optimize_sync(expr)
+    let mut pipeline = OptimizerPipeline::query(
+        opt_ctx,
+        s_expr.clone(),
+        output_columns,
+        OptimizerStrategy::BeforeEagerAggregation,
+    )
+    .await?;
+    pipeline.execute().await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -423,15 +431,25 @@ GROUP BY o_orderkey ORDER BY s DESC LIMIT 5",
             sql,
         };
         let ctx = setup_context(&case).await?;
+        let settings = ctx.get_settings();
         let Plan::Query {
-            s_expr, metadata, ..
+            s_expr,
+            metadata,
+            bind_context,
+            ..
         } = ctx.bind_sql(sql).await?
         else {
             unreachable!("test query should bind to Plan::Query")
         };
         let opt_ctx =
-            OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?);
-        let before = optimize_before(opt_ctx, s_expr.logical()?).await?;
+            OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?)
+                .with_settings(&settings)?;
+        let before = optimize_before(
+            opt_ctx,
+            s_expr.logical()?,
+            Some(bind_context.column_set().into_iter().collect()),
+        )
+        .await?;
         let mut extractor = Extractor {
             rule: RuleEagerAggregation::new(metadata.clone()),
             results: TransformResult::new(),

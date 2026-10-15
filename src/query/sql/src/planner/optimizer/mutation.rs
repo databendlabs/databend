@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 
-use super::optimizer::query_logical_pipeline;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
 use crate::optimizer::OptimizerContext;
@@ -28,6 +27,8 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::distributed::BroadcastToShuffleOptimizer;
 use crate::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
 use crate::optimizer::optimizers::rule::RuleID;
+use crate::optimizer::pipeline::OptimizerPipeline;
+use crate::optimizer::pipeline::OptimizerStrategy;
 use crate::optimizer::pipeline::configure_distributed_optimization;
 use crate::plans::Join;
 use crate::plans::JoinType;
@@ -51,8 +52,13 @@ impl PreparedMutation {
         let mut mutation: Mutation = s_expr.plan().clone().try_into()?;
         // Logical simplification must not change the statement's result columns.
         let schema = mutation.schema();
-        let mut pipeline =
-            query_logical_pipeline(opt_ctx.clone(), s_expr.child(0)?.clone(), None).await?;
+        let mut pipeline = OptimizerPipeline::query(
+            opt_ctx.clone(),
+            s_expr.child(0)?.clone(),
+            None,
+            OptimizerStrategy::Query,
+        )
+        .await?;
         let input = pipeline.execute().await?;
         // Mutation preparation is required even when optional recursive rewrites are
         // disabled. Keep this outside the pipeline's optimizer skip-list mechanism.

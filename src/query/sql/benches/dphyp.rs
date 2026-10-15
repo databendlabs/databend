@@ -17,7 +17,7 @@
 //! among candidates (including replacing/freeing candidate state).
 //! These are observation lenses, not orthogonal workload parameters. Each case
 //! owns its SQL; graph shape alone does not establish its candidate count.
-//! See README.md for the implementation mapping and interpretation limits.
+//! Confirm the intended hot path from the prepared plan, not raw SQL shape.
 //! Only fixture preparation, cache isolation and timing are shared.
 //!
 //! Run: cargo bench -p databend-common-sql --bench dphyp
@@ -25,7 +25,12 @@
 //! List/filter cases using the usual divan CLI (--help).
 //! Compare the same named case across revisions, with the same toolchain,
 //! machine and build profile. Absolute timings are not pass/fail assertions.
-//! No service, table data, binding or statistics collection is measured.
+//! No service, table data or production pre-DPhyp preparation is measured.
+//! Preparation uses the same pipeline as production: rewrite may simplify
+//! predicates, change graph shape or retain projection boundaries. Raw SQL
+//! shape/counts are not assertions about the resulting search input.
+//! Results from the older test-only projection cleanup are not a comparable
+//! production baseline; collect a fresh baseline after this preparation change.
 //! max_time limits sampling, not a single optimizer invocation; expensive
 //! cases can exceed it. Use the optimized bench profile for comparisons.
 
@@ -37,13 +42,12 @@ use std::sync::OnceLock;
 use databend_common_catalog::BasicColumnStatistics;
 use databend_common_catalog::TableStatistics;
 use databend_common_catalog::table_context::TableContextSettings;
-use databend_common_sql::optimizer::CollectStatisticsOptimizer;
 use databend_common_sql::optimizer::Optimizer;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::optimizers::DPhpyOptimizer;
-use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
-use databend_common_sql::optimizer::optimizers::rule::RuleID;
+use databend_common_sql::optimizer::pipeline::OptimizerPipeline;
+use databend_common_sql::optimizer::pipeline::OptimizerStrategy;
 use databend_common_sql::plans::Plan;
 use databend_common_sql_test_support::LiteTableContext;
 use databend_common_statistics::Datum;
@@ -118,7 +122,10 @@ impl Case {
             }
             let bound = ctx.bind_sql(sql).await.unwrap();
             let Plan::Query {
-                s_expr, metadata, ..
+                s_expr,
+                metadata,
+                bind_context,
+                ..
             } = bound
             else {
                 unreachable!("benchmark input must bind to a query")
@@ -127,15 +134,18 @@ impl Case {
                 OptimizerContext::new(ctx.clone(), metadata, ctx.get_function_context().unwrap())
                     .with_settings(ctx.get_settings().as_ref())
                     .unwrap();
-            let plan = CollectStatisticsOptimizer::new(opt_ctx.clone())
-                .optimize(*s_expr)
-                .await
-                .unwrap();
-            // Only remove identity projections. Full rewrite would change the
-            // graph and merge predicates before the phase we want to measure.
-            let plan = RecursiveRuleOptimizer::new(opt_ctx.clone(), &[RuleID::EliminateEvalScalar])
-                .optimize_sync(plan)
-                .unwrap();
+            // Run the same preparation as production, outside the timed phase.
+            // Projection boundaries and predicate simplification are part of
+            // the actual DPhyp input, not something a benchmark should bypass.
+            let mut pipeline = OptimizerPipeline::query(
+                opt_ctx.clone(),
+                (*s_expr).into_logical().unwrap(),
+                Some(bind_context.column_set().into_iter().collect()),
+                OptimizerStrategy::BeforeDPhyp,
+            )
+            .await
+            .unwrap();
+            let plan = pipeline.execute().await.unwrap();
             Case { plan, opt_ctx }
         })
     }
@@ -190,8 +200,8 @@ fn bench_case(bencher: Bencher, case: Case) {
 mod search {
     use super::*;
 
-    /// Long, sparse input: detect excessive per-node work even when each relation
-    /// has few edges. Keep the workload fixed rather than extrapolating small cases.
+    /// A long chain in SQL. Production equality inference can densify its search
+    /// graph; measure that real transformation, not an assumed sparse graph.
     #[divan::bench(max_time = 1)]
     fn long_equality_chain(bencher: Bencher) {
         let mut sql = String::from("SELECT t0.k FROM t0");
@@ -285,8 +295,8 @@ mod candidate {
     use super::*;
 
     /// Filters originate at many different input scopes but share the hub column.
-    /// Reordering must scan/place them for candidate subtrees. Identity projections
-    /// are removed during preparation; filters and OR expressions are not rewritten.
+    /// Measure the input left by production preparation: projections and OR
+    /// rewrites must not be bypassed to force a larger search region.
     #[divan::bench(max_time = 1)]
     fn residuals_from_nested_filter_scopes(bencher: Bencher) {
         let mut sql = String::from("SELECT t0.k, t0.v FROM t0");
@@ -302,8 +312,10 @@ mod candidate {
         bench_sql(bencher, &sql);
     }
 
-    /// Many predicates need all eight inputs. Most candidate subtrees cannot
-    /// consume any of them, but placement still checks the collected list.
+    /// A bank of conditions referencing eight SQL inputs. Varying coefficients
+    /// avoids trivially nested bounds, but production preparation still decides
+    /// which conditions reach DPhyp and where. The raw bank size is not a count
+    /// of pending predicates scanned by every candidate.
     #[divan::bench(max_time = 1)]
     fn pending_multi_relation_predicates(bencher: Bencher) {
         let mut sql = String::from("SELECT t0.k FROM t0");
@@ -313,18 +325,22 @@ mod candidate {
         sql.push_str(" WHERE ");
         let predicates = (0..128)
             .map(|threshold| {
-                format!("t0.v + t1.v + t2.v + t3.v + t4.v + t5.v + t6.v + t7.v > {threshold}")
+                format!(
+                    "t0.v * {} + t1.v + t2.v + t3.v + t4.v + t5.v + t6.v + t7.v > {threshold}",
+                    threshold + 1
+                )
             })
             .collect::<Vec<_>>();
         sql.push_str(&conjunction(&predicates));
-        // Root Filters are not collected into the reorder region. Put this
-        // one below an additional join so placement actually sees the bank.
+        // Include an enclosing join in the SQL. Whether the bank remains below
+        // it is determined by production pull-up and projection elimination.
         sql = format!("SELECT s.k FROM ({sql}) s JOIN t8 ON s.k = t8.k");
         bench_sql(bencher, &sql);
     }
 
-    /// Many distinct expressions can be installed together at the same join.
-    /// Exercise condition copying, linear uniqueness checks and estimation.
+    /// A bank of different constraints on one pair of SQL inputs. Measure only
+    /// the residuals left by production preparation; neither their final count
+    /// nor their placement follows from the SQL bank alone.
     #[divan::bench(max_time = 1)]
     fn many_residuals_on_one_join(bencher: Bencher) {
         let mut sql = String::from("SELECT t0.k FROM t0 JOIN t1 ON t0.k = t1.k");
@@ -333,15 +349,16 @@ mod candidate {
         }
         sql.push_str(" WHERE ");
         let predicates = (0..192)
-            .map(|threshold| format!("t0.v + t1.v > {threshold}"))
+            .map(|threshold| format!("t0.v + t1.v * {} > {threshold}", threshold + 1))
             .collect::<Vec<_>>();
         sql.push_str(&conjunction(&predicates));
         sql = format!("SELECT s.k FROM ({sql}) s JOIN t7 ON s.k = t7.k");
         bench_sql(bencher, &sql);
     }
 
-    /// A single large predicate is a different cost from many small predicates:
-    /// each branch crosses several inputs and the complete tree stays intact.
+    /// A wide cross-side OR in SQL. Production extraction and simplification
+    /// decide the expressions reaching DPhyp; do not assume the original tree
+    /// remains intact or that all derived predicates remain useful.
     #[divan::bench(max_time = 1)]
     fn wide_cross_side_or(bencher: Bencher) {
         let mut sql = String::from("SELECT t0.k FROM t0");
@@ -362,8 +379,9 @@ mod candidate {
         bench_sql(bencher, &sql);
     }
 
-    /// Q13-shaped input, including an already extracted necessary OR at a lower
-    /// position. Exercise relocation of complex predicates rather than graph size.
+    /// Q13-shaped SQL with a necessary OR also written in the subquery. Record
+    /// the positions left by production preparation before attributing any work
+    /// to DPhyp relocation; the SQL nesting does not establish that hot path.
     #[divan::bench(max_time = 1)]
     fn q13_derived_or_relocation(bencher: Bencher) {
         bench_sql(

@@ -16,18 +16,11 @@ use std::collections::HashMap;
 
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
-use databend_common_sql::optimizer::CollectStatisticsOptimizer;
-use databend_common_sql::optimizer::Optimizer;
 use databend_common_sql::optimizer::OptimizerContext;
-use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::optimizers::DPhpyOptimizer;
-use databend_common_sql::optimizer::optimizers::operator::PullUpFilterOptimizer;
-use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
-use databend_common_sql::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
-use databend_common_sql::optimizer::optimizers::rule::RuleID;
+use databend_common_sql::optimizer::pipeline::OptimizerPipeline;
+use databend_common_sql::optimizer::pipeline::OptimizerStrategy;
 use databend_common_sql::plans::Plan;
-use databend_common_sql::plans::RelOperator;
 
 use super::column_stat;
 use super::table_statistics;
@@ -35,11 +28,6 @@ use crate::framework::LiteTableContext;
 use crate::framework::golden::SqlTestCase;
 use crate::framework::golden::open_golden_file;
 use crate::framework::golden::write_case_header;
-
-fn has_null_safe_key(expr: &SExpr) -> bool {
-    matches!(expr.plan(), RelOperator::Join(join) if join.has_null_equi_condition())
-        || expr.children().any(has_null_safe_key)
-}
 
 // These are characterization snapshots, not assertions that every retained
 // predicate is necessary. In particular, a derived OR can become redundant
@@ -53,7 +41,8 @@ fn has_null_safe_key(expr: &SExpr) -> bool {
 //   inference, and writes the existing ordinary key a second time;
 // - ordinary inner-join controls do not change: pull-up first collects their
 //   ON/WHERE predicates into one Filter, and rewrite removes exact duplicates.
-// The position-only test below separately exercises DPhyp without pull-up.
+// Both suites use the production pre-DPhyp pipeline; do not attribute work
+// already done by preceding rules to DPhyp.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_predicate_reorder_plans() -> Result<()> {
     let mut file = open_golden_file("optimizer", "dphyp_reorder.txt")?;
@@ -222,40 +211,39 @@ WHERE c.v IS NULL OR a.v = 1",
     ];
 
     for case in &cases {
-        write_case(&mut file, case, true).await?;
+        write_case(&mut file, case).await?;
     }
     Ok(())
 }
 
-// Only remove identity projections before DPhyp, so it sees the original
-// scopes and places existing predicates without a second inference pass.
-// residual_collision_without_pull_up produces two identical join residuals
-// with unconditional writes, unlike the full-pipeline control above.
+// Position cases must also reach DPhyp through production preparation. Do not
+// bypass pull-up, simplification or projection elimination to preserve a shape
+// that preceding passes no longer produce.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_dphyp_filter_positions() -> Result<()> {
     let mut file = open_golden_file("optimizer", "dphyp_filter_position.txt")?;
     let cases = [
         SqlTestCase {
-            name: "filter_scope_exceeds_used_columns",
-            description: "Use the original a/b scope to find the single-table provider and place the predicate directly on a.",
+            name: "subquery_single_table_filter",
+            description: "Use the single-table filter and projection positions produced by the real preceding rules.",
             setup_sqls: &[],
             sql: "SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k WHERE a.v > 10) t JOIN c ON t.k = c.k",
         },
         SqlTestCase {
-            name: "selective_filter_keeps_covered_subtree",
-            description: "Place the single-table filter before evaluating candidates so its selectivity participates in join-order choice.",
+            name: "subquery_selective_filter",
+            description: "Production preparation decides which selective base input and join region DPhyp sees.",
             setup_sqls: &[],
             sql: "SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k WHERE a.v = 1) t JOIN c ON t.k = c.k",
         },
         SqlTestCase {
-            name: "same_scalar_different_scopes",
-            description: "A collected filter and an unchanged root filter can have the same scalar; preserve both placement contexts.",
+            name: "repeated_filter_across_subquery",
+            description: "Control: preceding rules may merge equal filters from inside and outside the subquery.",
             setup_sqls: &[],
             sql: "SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k WHERE a.k > 10) t JOIN c ON t.k = c.k WHERE t.k > 10",
         },
         SqlTestCase {
-            name: "two_scoped_filters",
-            description: "Place the two-table residual where both inputs are available and preserve the unchanged root filter.",
+            name: "subquery_residual_and_outer_filter",
+            description: "Retain both conditions at the positions made available by production preparation.",
             setup_sqls: &[],
             sql: "SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k WHERE a.v + b.v > 10) t JOIN c ON t.k = c.k WHERE c.v > 1",
         },
@@ -266,44 +254,38 @@ async fn test_dphyp_filter_positions() -> Result<()> {
             sql: "SELECT a.k FROM a JOIN b ON a.k = b.k AND a.v > b.v JOIN c ON b.k = c.k",
         },
         SqlTestCase {
-            name: "complex_other_without_rewrite",
-            description: "DPhyp directly places an existing complex Other filter as a residual at the first join providing both inputs.",
+            name: "subquery_complex_residual",
+            description: "Use the residual and projection shape left by production rewrites rather than forcing a raw filter boundary.",
             setup_sqls: &[],
             sql: "SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k WHERE a.v + b.v > 50) t JOIN c ON t.k = c.k",
         },
         SqlTestCase {
-            name: "cross_side_or_without_rewrite",
-            description: "DPhyp places an existing OR as one intact residual, without OR extraction or expression splitting.",
+            name: "subquery_cross_side_or",
+            description: "Include production OR extraction and projection elimination before evaluating predicate positions.",
             setup_sqls: &[],
             sql: "SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k WHERE (a.v = 1 AND b.v > 10) OR (a.v = 2 AND b.v < 20)) t JOIN c ON t.k = c.k",
         },
         SqlTestCase {
-            name: "split_filter_by_required_relations",
-            description: "One original Filter contains predicates needing different inputs; place them independently without generating new predicates.",
+            name: "subquery_multi_input_filters",
+            description: "Single-table and cross-side conditions enter DPhyp only after production splitting and pushdown.",
             setup_sqls: &[],
             sql: "SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k WHERE a.v = 1 AND b.v > 10 AND a.v + b.v > 20) t JOIN c ON t.k = c.k",
         },
         SqlTestCase {
-            name: "residual_collision_without_pull_up",
-            description: "Bypass pull-up to verify that identical ON residuals from different scopes collide during DPhyp candidate placement.",
-            setup_sqls: &[],
-            sql: "SELECT a.k FROM a JOIN b ON a.k = b.k AND a.v > b.v JOIN c ON b.k = c.k AND a.v > b.v",
-        },
-        SqlTestCase {
             name: "single_side_on_residual",
-            description: "A deterministic single-side inner ON residual becomes a base filter instead of staying on a larger join.",
+            description: "Control: production pushdown can already place a single-side ON predicate on its base before DPhyp.",
             setup_sqls: &[],
             sql: "SELECT a.k FROM a JOIN b ON a.k = b.k AND a.v > 10 JOIN c ON b.k = c.k",
         },
         SqlTestCase {
-            name: "constant_keeps_original_scope",
-            description: "A no-column predicate retains the collected a/b scope and is neither copied to both inputs nor inferred.",
+            name: "constant_false_preparation",
+            description: "Control: production simplification produces EmptyResultScan, so no constant-filter placement is needed in DPhyp.",
             setup_sqls: &[],
             sql: "SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k WHERE false) t JOIN c ON t.k = c.k",
         },
         SqlTestCase {
-            name: "volatile_keeps_original_scope",
-            description: "A volatile filter with a referenced column must not be narrowed to that column's base relation.",
+            name: "volatile_filter_after_preparation",
+            description: "Control: preceding passes place this volatile condition on a scan; it does not exercise DPhyp scoped-filter relocation.",
             setup_sqls: &[],
             sql: "SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k WHERE rand() + a.v > 10) t JOIN c ON t.k = c.k",
         },
@@ -327,16 +309,12 @@ async fn test_dphyp_filter_positions() -> Result<()> {
         },
     ];
     for case in &cases {
-        write_case(&mut file, case, false).await?;
+        write_case(&mut file, case).await?;
     }
     Ok(())
 }
 
-async fn write_case(
-    file: &mut impl std::io::Write,
-    case: &SqlTestCase,
-    rewrite: bool,
-) -> Result<()> {
+async fn write_case(file: &mut impl std::io::Write, case: &SqlTestCase) -> Result<()> {
     let ctx = LiteTableContext::create().await?;
     // Explicit statistics avoid empty-table plans and make the choice between
     // different cuts observable without a service or a TPC-DS data load.
@@ -358,7 +336,10 @@ async fn write_case(
 
     let plan = ctx.bind_sql(case.sql).await?;
     let Plan::Query {
-        s_expr, metadata, ..
+        s_expr,
+        metadata,
+        bind_context,
+        ..
     } = &plan
     else {
         unreachable!("test query should bind to Plan::Query")
@@ -367,40 +348,24 @@ async fn write_case(
     let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?)
         .with_settings(&settings)?;
 
-    // Mirror the predicate-relevant stages preceding DPhyp. The lateral case
-    // is flattened by binding; this harness does not run the full optimizer.
-    let raw = CollectStatisticsOptimizer::new(opt_ctx.clone())
-        .optimize(*s_expr.clone())
-        .await?;
-    if case.name == "nullable_lateral_correlation" {
-        assert!(
-            has_null_safe_key(&raw),
-            "binding must produce a NULL-safe correlation key"
-        );
-    }
-    let before = if rewrite {
-        let expr = PullUpFilterOptimizer::new(opt_ctx.clone()).optimize_sync(raw)?;
-        RecursiveRuleOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES).optimize_sync(expr)?
-    } else {
-        RecursiveRuleOptimizer::new(opt_ctx.clone(), &[RuleID::EliminateEvalScalar])
-            .optimize_sync(raw)?
-    };
-    if case.name == "nullable_lateral_correlation" {
-        assert!(
-            has_null_safe_key(&before),
-            "heuristic rewriting must preserve the NULL-safe key"
-        );
-    }
+    let raw = s_expr.logical()?.clone();
+    // The input must already satisfy the binder contract; preparation must
+    // not accidentally repair stale types before this regression can see them.
+    raw.validate_types(metadata)?;
+    raw.validate_column_scope(metadata)?;
+    let mut pipeline = OptimizerPipeline::query(
+        opt_ctx.clone(),
+        raw,
+        Some(bind_context.column_set().into_iter().collect()),
+        OptimizerStrategy::BeforeDPhyp,
+    )
+    .await?;
+    let before = pipeline.execute().await?;
+    before.validate_types(metadata)?;
+    before.validate_column_scope(metadata)?;
     let after = DPhpyOptimizer::new(opt_ctx.clone())
         .optimize_async(&before)
         .await?;
-
-    if case.name == "nullable_lateral_correlation" {
-        assert!(
-            has_null_safe_key(&after),
-            "reordering must preserve the NULL-safe key"
-        );
-    }
     write_case_header(file, case)?;
     writeln!(file, "settings: enable_dphyp=1, disable_join_reorder=0")?;
     after.validate_types(metadata)?;
@@ -410,7 +375,7 @@ async fn write_case(
         file,
         "{}",
         plan.replace_query_s_expr(after)
-            .format_indent(Default::default(), &StatContext::default())?
+            .format_indent(Default::default(), &ctx.stat_context()?)?
     )?;
     writeln!(file)?;
     Ok(())
