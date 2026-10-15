@@ -164,6 +164,8 @@ fn sexpr_to_string(s_expr: &SExpr) -> String {
                     JoinType::FullAsof => "FullAsof",
                 };
 
+                // Include residuals so moving a Filter into the join cannot hide
+                // predicate loss from the before/after assertions.
                 let conditions: Vec<String> = join
                     .equi_conditions
                     .iter()
@@ -174,6 +176,7 @@ fn sexpr_to_string(s_expr: &SExpr) -> String {
                             format_scalar_expr(&cond.right)
                         )
                     })
+                    .chain(join.non_equi_conditions.iter().map(format_scalar_expr))
                     .collect();
 
                 format!("{} Join [{}]", join_type, conditions.join(", "))
@@ -1277,12 +1280,11 @@ fn test_push_down_complex_or_expressions() -> anyhow::Result<()> {
     "#;
 
     let after_pattern = r#"
-    Filter [or(and(t1.a = 1, t2.b = 2), and(t1.a = 2, t2.b = 1))]
-      Inner Join [t1.id = t2.id]
-        Filter [or_filters(t1.a = 1, t1.a = 2)]
-          Table 0
-        Filter [or_filters(t2.b = 2, t2.b = 1)]
-          Table 1
+    Inner Join [t1.id = t2.id, or(and(t1.a = 1, t2.b = 2), and(t1.a = 2, t2.b = 1))]
+      Filter [or_filters(t1.a = 1, t1.a = 2)]
+        Table 0
+      Filter [or_filters(t2.b = 2, t2.b = 1)]
+        Table 1
     "#;
 
     // Apply rule

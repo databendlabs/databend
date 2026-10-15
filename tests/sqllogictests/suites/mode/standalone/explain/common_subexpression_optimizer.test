@@ -96,51 +96,47 @@ FROM
 ----
 Sequence
 ├── MaterializedCTE: cte_cse_0
-│   └── Filter
+│   └── HashJoin
 │       ├── output columns: [cse_left.a (#0), cse_right.b (#1)]
+│       ├── join type: INNER
+│       ├── build keys: [cse_right.b (#1)]
+│       ├── probe keys: [cse_left.a (#0)]
+│       ├── keys is null equal: [false]
 │       ├── filters: [cse_left.a (#0) < 1 and cse_right.b (#1) < 1 or cse_left.a (#0) < 2 and cse_right.b (#1) < 2]
-│       ├── estimated rows: 0.92
-│       └── HashJoin
-│           ├── output columns: [cse_left.a (#0), cse_right.b (#1)]
-│           ├── join type: INNER
-│           ├── build keys: [cse_right.b (#1)]
-│           ├── probe keys: [cse_left.a (#0)]
-│           ├── keys is null equal: [false]
-│           ├── filters: []
-│           ├── build join filters:
-│           │   └── filter id:0, build key:cse_right.b (#1), probe targets:[cse_left.a (#0)@scan0], filter type:bloom,inlist,min_max
-│           ├── estimated rows: 1.81
-│           ├── Filter(Build)
-│           │   ├── output columns: [cse_right.b (#1)]
-│           │   ├── filters: [cse_right.b (#1) < 1 or cse_right.b (#1) < 2]
-│           │   ├── estimated rows: 2.33
-│           │   └── TableScan
-│           │       ├── table: default.default.cse_right
-│           │       ├── scan id: 1
-│           │       ├── output columns: [b (#1)]
-│           │       ├── read rows: 3
-│           │       ├── read size: < 1 KiB
-│           │       ├── partitions total: 1
-│           │       ├── partitions scanned: 1
-│           │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│           │       ├── push downs: [filters: [cse_right.b (#1) < 1 or cse_right.b (#1) < 2], limit: NONE]
-│           │       └── estimated rows: 3.00
-│           └── Filter(Probe)
-│               ├── output columns: [cse_left.a (#0)]
-│               ├── filters: [cse_left.a (#0) < 1 or cse_left.a (#0) < 2]
-│               ├── estimated rows: 2.33
-│               └── TableScan
-│                   ├── table: default.default.cse_left
-│                   ├── scan id: 0
-│                   ├── output columns: [a (#0)]
-│                   ├── read rows: 3
-│                   ├── read size: < 1 KiB
-│                   ├── partitions total: 1
-│                   ├── partitions scanned: 1
-│                   ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
-│                   ├── push downs: [filters: [cse_left.a (#0) < 1 or cse_left.a (#0) < 2], limit: NONE]
-│                   ├── apply join filters: [#0]
-│                   └── estimated rows: 3.00
+│       ├── build join filters:
+│       │   └── filter id:0, build key:cse_right.b (#1), probe targets:[cse_left.a (#0)@scan0], filter type:bloom,inlist,min_max
+│       ├── estimated rows: 1.81
+│       ├── Filter(Build)
+│       │   ├── output columns: [cse_right.b (#1)]
+│       │   ├── filters: [cse_right.b (#1) < 1 or cse_right.b (#1) < 2]
+│       │   ├── estimated rows: 2.33
+│       │   └── TableScan
+│       │       ├── table: default.default.cse_right
+│       │       ├── scan id: 1
+│       │       ├── output columns: [b (#1)]
+│       │       ├── read rows: 3
+│       │       ├── read size: < 1 KiB
+│       │       ├── partitions total: 1
+│       │       ├── partitions scanned: 1
+│       │       ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│       │       ├── push downs: [filters: [cse_right.b (#1) < 1 or cse_right.b (#1) < 2], limit: NONE]
+│       │       └── estimated rows: 3.00
+│       └── Filter(Probe)
+│           ├── output columns: [cse_left.a (#0)]
+│           ├── filters: [cse_left.a (#0) < 1 or cse_left.a (#0) < 2]
+│           ├── estimated rows: 2.33
+│           └── TableScan
+│               ├── table: default.default.cse_left
+│               ├── scan id: 0
+│               ├── output columns: [a (#0)]
+│               ├── read rows: 3
+│               ├── read size: < 1 KiB
+│               ├── partitions total: 1
+│               ├── partitions scanned: 1
+│               ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│               ├── push downs: [filters: [cse_left.a (#0) < 1 or cse_left.a (#0) < 2], limit: NONE]
+│               ├── apply join filters: [#0]
+│               └── estimated rows: 3.00
 └── HashJoin
     ├── output columns: [COUNT(*) (#2), COUNT(*) (#5)]
     ├── join type: CROSS
@@ -161,11 +157,11 @@ Sequence
     │       └── Filter
     │           ├── output columns: []
     │           ├── filters: [is_true(cse_left.a (#3) < 2), is_true(cse_right.b (#4) < 2), is_true(cse_left.a (#3) = cse_right.b (#4))]
-    │           ├── estimated rows: 0.18
+    │           ├── estimated rows: 0.81
     │           └── MaterializeCTERef
     │               ├── cte_name: cte_cse_0
     │               ├── cte_schema: [a (#3), b (#4)]
-    │               └── estimated rows: 0.92
+    │               └── estimated rows: 1.81
     └── AggregateFinal(Probe)
         ├── output columns: [COUNT(*) (#2)]
         ├── group by: []
@@ -178,11 +174,11 @@ Sequence
             └── Filter
                 ├── output columns: []
                 ├── filters: [is_true(cse_left.a (#0) < 1), is_true(cse_right.b (#1) < 1), is_true(cse_left.a (#0) = cse_right.b (#1))]
-                ├── estimated rows: 0.92
+                ├── estimated rows: 0.60
                 └── MaterializeCTERef
                     ├── cte_name: cte_cse_0
                     ├── cte_schema: [a (#0), b (#1)]
-                    └── estimated rows: 0.92
+                    └── estimated rows: 1.81
 
 statement ok
 drop table cse_left;

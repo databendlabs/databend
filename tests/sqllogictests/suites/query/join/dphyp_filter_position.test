@@ -77,6 +77,26 @@ join dphyp_pos_c c on b.k = c.k
 where t.v > 10;
 ----
 
+# Extracted single-side ORs are only necessary conditions. The complete
+# cross-side OR must still reject k=3, whose (30, 100) values do not match a branch.
+query I
+select a.k from dphyp_pos_a a
+join dphyp_pos_c c on a.k = c.k
+where (a.v = 5 and c.v = 100) or (a.v = 30 and c.v = 0)
+order by a.k;
+----
+1
+
+# A complex cross-side predicate turns CROSS into INNER without equi keys.
+# It must still filter candidate pairs even when b.k is not in the output.
+query I
+select a.k from dphyp_pos_a a cross join dphyp_pos_b b
+where a.v + b.v = 30
+order by a.k;
+----
+2
+2
+
 statement ok
 set disable_join_reorder = 1;
 
