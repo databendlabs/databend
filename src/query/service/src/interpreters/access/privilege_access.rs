@@ -2356,7 +2356,10 @@ impl AccessChecker for PrivilegeAccess {
                 }
             }
             Plan::CreateView(plan) => {
-                let mut planner = Planner::new(self.ctx.clone());
+                let mut planner = Planner::new(self.ctx.clone()).with_default_table_namespace(Some((
+                    plan.catalog.clone(),
+                    plan.database.clone(),
+                )));
                 let (plan, _) = planner.plan_sql(&plan.subquery).await?;
                 self.check(ctx, &plan).await?
             }

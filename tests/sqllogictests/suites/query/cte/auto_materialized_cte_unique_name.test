@@ -10,6 +10,9 @@ CREATE DATABASE auto_m_cte_unique
 statement ok
 CREATE TABLE auto_m_cte_unique.t(id INT NULL, k INT NULL) ENGINE = FUSE
 
+# This creates a new view, so CTE references c/d must stay unqualified.
+# Only the real source table auto_m_cte_unique.t carries a database qualifier.
+# Referencing c twice still exercises auto-materialization and unique CTE ids.
 statement ok
 CREATE VIEW auto_m_cte_unique.v_base AS
 SELECT * FROM (

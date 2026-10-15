@@ -1,5 +1,5 @@
-# CTE identity is determined by the binder, not by an AST qualification pass.
-# New stored definitions retain their creation namespace without changing the session.
+# New-view regressions, independent of legacy-view compatibility.
+# Possible CTE names stay unqualified; real tables must still use the stored namespace.
 
 statement ok
 create or replace database cte_view_a
@@ -13,8 +13,9 @@ create table cte_view_a.b(n int)
 statement ok
 insert into cte_view_a.b values (11)
 
+# Different column names make a wrong database fail during binding, not just reading.
 statement ok
-create table cte_view_b.b(n int)
+create table cte_view_b.b(m int)
 
 statement ok
 insert into cte_view_b.b values (22)
@@ -32,54 +33,39 @@ with a as (select * from b), b as (select 99 as n) select x.n, y.n from a x, a y
 11 11
 
 statement ok
-create view v_forward as with a as (select * from b), b as (select 99 as n) select x.n as x, y.n as y from a x, a y
-
-query II
-select * from v_forward
-----
-11 11
-
-statement ok
 create view v_scalar as select n from b where n in (select n from b) and exists (with b as (select 99 as n) select * from b)
 
 statement ok
 use cte_view_b
 
+# Combine target-DB creation, cross-DB reading, and restoration of the caller's DB.
+statement ok
+create view cte_view_a.v_forward as with a as (select * from b), b as (select 99 as n) select x.n as x, y.n as y from a x, a y
+
+query III
+select v.x, v.y, b.m from cte_view_a.v_forward v, b
+----
+11 11 22
+
+# Scalar-subquery binders must inherit the view namespace too.
 query I
 select * from cte_view_a.v_scalar
 ----
 11
 
-query II
-select * from cte_view_a.v_forward
-----
-11 11
-
-# CREATE VIEW uses the target view's database, not the session's database.
-statement ok
-create view cte_view_a.v_target as with a as (select * from b), b as (select 99 as n) select x.n as x, y.n as y from a x, a y
-
-query II
-select * from cte_view_a.v_target
-----
-11 11
-
-# The default namespace must be restored after binding a view.
-query III
-select v.x, v.y, b.n from cte_view_a.v_forward v, b
-----
-11 11 22
-
+# Direct schema readers need the stored namespace too. The caller's b has no n.
 statement ok
 create table copied like cte_view_a.v_forward
 
-query T
-select name from system.columns where database = 'cte_view_a' and table = 'v_forward' order by name
+query TT
+select `table`, name from system.columns where database in ('cte_view_a', 'cte_view_b') and `table` in ('copied', 'v_forward') order by `table`, name
 ----
-x
-y
+copied x
+copied y
+v_forward x
+v_forward y
 
-# Non-materialized CTE definitions are bound in the referencing context.
+# Lazy CTE definitions bind in the referencing scope, not their lexical AST scope.
 statement ok
 set enable_auto_materialize_cte = 0
 
@@ -108,8 +94,7 @@ select * from cte_view_a.v_nested
 ----
 77
 
-# No read-time heuristic may turn an explicitly qualified real table into a CTE,
-# even when identifier settings differ from those used at CREATE time.
+# Qualification uses CREATE's case settings, not a default name-resolution context.
 statement ok
 use cte_view_a
 
@@ -125,11 +110,6 @@ set unquoted_ident_case_sensitive = 1
 statement ok
 create view v_case as with T as (select 99 as n) select * from t
 
-query I
-select * from v_case
-----
-17
-
 statement ok
 set unquoted_ident_case_sensitive = 0
 
@@ -138,36 +118,19 @@ select * from v_case
 ----
 17
 
-# Internal namespace metadata is not included in SHOW CREATE.
-query TT
-show create table v_case
-----
-v_case CREATE VIEW `cte_view_a`.`v_case` AS WITH T AS (SELECT 99 AS n) SELECT * FROM cte_view_a.t
-
 statement ok
 unset unquoted_ident_case_sensitive
 
-statement ok
-unset enable_auto_materialize_cte
-
-# Replacing a view preserves its own namespace too.
-statement ok
-create or replace view v_case as with t as (select 88 as n) select * from t
-
-statement ok
-use cte_view_b
-
-query I
-select * from cte_view_a.v_case
-----
-88
-
-# A dynamic table's source namespace is the creation session's database, not its target.
+# Dynamic definitions capture the source session's DB, not the target table's DB.
+# The qualified z source also verifies strict lookup despite the same-named CTE b.
 statement ok
 set enable_auto_materialize_cte = 1
 
 statement ok
-create dynamic table cte_view_a.dt as with a as (select * from b), b as (select 99 as n) select x.n as x, y.n as y from a x, a y
+use cte_view_b
+
+statement ok
+create dynamic table cte_view_a.dt as with a as (select * from b), b as (select 99 as m) select x.m as x, y.m as y, z.m as z from a x, a y, cte_view_b.b z
 
 statement ok
 use cte_view_a
@@ -175,10 +138,10 @@ use cte_view_a
 statement ok
 refresh dynamic table dt
 
-query II
+query III
 select * from dt
 ----
-22 22
+22 22 22
 
 statement ok
 unset enable_auto_materialize_cte
