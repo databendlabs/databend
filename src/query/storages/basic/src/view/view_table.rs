@@ -28,10 +28,6 @@ pub struct ViewTable {
 
 pub const VIEW_ENGINE: &str = "VIEW";
 pub const QUERY: &str = "query";
-/// Version 2 preserves unqualified CTE references and binds unqualified tables in the
-/// view's own catalog/database. This is internal metadata, not SHOW CREATE syntax.
-pub use databend_storages_common_table_meta::table::OPT_KEY_VIEW_QUERY_VERSION as QUERY_VERSION;
-pub const CURRENT_QUERY_VERSION: &str = "2";
 
 impl ViewTable {
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
