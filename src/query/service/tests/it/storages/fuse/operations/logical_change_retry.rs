@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table::Table;
+use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::FuseTable;
@@ -27,6 +29,7 @@ use databend_query::test_kits::TestFixture;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::decode_column_hll;
 use futures::TryStreamExt;
 
 async fn execute(session: &Arc<Session>, sql: &str) -> anyhow::Result<()> {
@@ -61,6 +64,29 @@ async fn totals(fixture: &TestFixture, name: &str) -> anyhow::Result<(u64, u64)>
     Ok((
         counters["updated_rows_total"].as_u64().unwrap(),
         counters["deleted_rows_total"].as_u64().unwrap(),
+    ))
+}
+
+async fn statistics(
+    fixture: &TestFixture,
+    session: &Arc<Session>,
+    name: &str,
+) -> anyhow::Result<(u64, BTreeMap<ColumnId, usize>)> {
+    // Use the other session during BEGIN: the fixture's session sees its own
+    // buffered snapshot, not the latest committed snapshot used for retry.
+    let ctx = session.create_query_context(&BUILD_INFO).await?;
+    let table = ctx
+        .get_table("default", &fixture.default_db_name(), name)
+        .await?;
+    let snapshot = FuseTable::try_from_table(table.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+    let meta = snapshot.summary.additional_stats_meta.as_ref().unwrap();
+    let hll = decode_column_hll(meta.hll.as_ref().unwrap())?.unwrap();
+    Ok((
+        meta.row_count,
+        hll.into_iter().map(|(id, hll)| (id, hll.count())).collect(),
     ))
 }
 
@@ -160,11 +186,14 @@ async fn test_analyze_and_multi_table_retry_preserve_counters() -> anyhow::Resul
     for session in [fixture.default_session(), writer.clone()] {
         execute(&session, "SET auto_compaction_imperfect_blocks_threshold=0").await?;
         execute(&session, "SET enable_auto_analyze=0").await?;
+        execute(&session, "SET enable_table_snapshot_stats=1").await?;
     }
     for name in names {
         let target = format!("{db}.{name}");
         fixture
-            .execute_command(&format!("CREATE TABLE {target}(id INT, v INT)"))
+            .execute_command(&format!(
+                "CREATE TABLE {target}(id INT, v INT) approx_distinct_columns='id,v'"
+            ))
             .await?;
         fixture
             .execute_command(&format!("INSERT INTO {target} VALUES (1,10),(2,20),(3,30)"))
@@ -183,16 +212,20 @@ async fn test_analyze_and_multi_table_retry_preserve_counters() -> anyhow::Resul
     let b = format!("{db}.{}", names[1]);
     // Start with two rows per table. ANALYZE + concurrent append leaves three;
     // INSERT ALL + concurrent append leaves five, which OVERWRITE removes.
-    for (statements, delta, expected_rows) in [
+    for (statements, delta, expected_rows, stats_rows_delta, new_values) in [
         (
             vec![format!("ANALYZE TABLE {a}"), format!("ANALYZE TABLE {b}")],
             (0, 0),
             3,
+            0,
+            0,
         ),
         (
             vec![format!("INSERT ALL INTO {a} INTO {b} SELECT 9,90")],
             (0, 0),
             5,
+            1,
+            1,
         ),
         (
             vec![format!(
@@ -200,6 +233,8 @@ async fn test_analyze_and_multi_table_retry_preserve_counters() -> anyhow::Resul
             )],
             (0, 5),
             2,
+            1,
+            0,
         ),
     ] {
         let mut before = Vec::new();
@@ -220,8 +255,12 @@ async fn test_analyze_and_multi_table_retry_preserve_counters() -> anyhow::Resul
         for id in &ids {
             assert_eq!(deltas.get(id), Some(&Some(delta)), "{statements:?}");
         }
+        let mut latest_stats = Vec::new();
         for name in names {
             execute(&writer, &format!("INSERT INTO {db}.{name} VALUES (100,0)")).await?;
+            let stats = statistics(&fixture, &writer, name).await?;
+            assert_eq!(stats.1.len(), 2, "both columns must have HLLs: {name}");
+            latest_stats.push(stats);
         }
         fixture.execute_command("COMMIT").await?;
         for (index, name) in names.into_iter().enumerate() {
@@ -239,6 +278,21 @@ async fn test_analyze_and_multi_table_retry_preserve_counters() -> anyhow::Resul
                     .summary
                     .row_count,
                 expected_rows
+            );
+            let (rows, hll) = statistics(&fixture, &writer, name).await?;
+            assert_eq!(
+                rows,
+                latest_stats[index].0 + stats_rows_delta,
+                "statistics after retry: {statements:?}, {name}"
+            );
+            let expected_hll = latest_stats[index]
+                .1
+                .iter()
+                .map(|(&id, &count)| (id, count + new_values))
+                .collect::<BTreeMap<_, _>>();
+            assert_eq!(
+                hll, expected_hll,
+                "HLLs after retry: {statements:?}, {name}"
             );
         }
         assert!(
