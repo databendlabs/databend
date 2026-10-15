@@ -1046,3 +1046,35 @@ DROP TABLE infer_filter_decimal_edges;
 
 statement ok
 DROP TABLE infer_filter_constraints;
+
+# Incremental class merging must preserve filters and transitive join connections.
+statement ok
+CREATE TABLE infer_state(a BIGINT, b BIGINT, c BIGINT, n BIGINT) ENGINE = MEMORY;
+
+statement ok
+INSERT INTO infer_state VALUES (NULL, NULL, NULL, 100), (4, 4, 4, 100), (6, 6, 6, 100), (7, 7, 7, 100), (8, 8, 8, 0), (9, 9, 9, 100), (11, 11, 11, 100);
+
+# Bounds and exclusions merge across the class. The row with a = 8 must still
+# be rejected by the independent n constraint, not absorbed into the class.
+query I rowsort
+SELECT a FROM infer_state WHERE a = b AND b = c AND a > 1 AND b > 5 AND c < 10 AND b != 7 AND n >= 100;
+----
+6
+9
+
+query I rowsort
+SELECT l.a FROM infer_state l JOIN infer_state m ON l.a = m.a JOIN infer_state r ON m.a = r.a WHERE l.a > 1 AND m.a > 5 AND r.a < 10;
+----
+6
+7
+8
+9
+
+# Null-safe join equality must not become ordinary equality and discard NULL matches.
+query I
+SELECT count(*) FROM infer_state l JOIN infer_state r ON l.a IS NOT DISTINCT FROM r.a WHERE l.a IS NULL;
+----
+1
+
+statement ok
+DROP TABLE infer_state;

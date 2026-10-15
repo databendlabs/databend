@@ -39,6 +39,96 @@ use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::plans::VisitorMut;
 
+// Updated as facts arrive: each root owns its class's constraints and members;
+// non-root constraints are empty. `roots` always points directly to a class root.
+// ```sql
+//     a = b AND b = c
+//     AND a > 1 AND b > 5 AND c < 10
+// ```
+// ```
+//     class: {a, b, c}
+//     constraints: > 5, < 10
+// ```
+#[derive(Default)]
+struct InferenceState {
+    roots: Vec<usize>,
+    members: HashMap<usize, HashSet<usize>>,
+    constraints: Vec<ExprConstraints>,
+    domains: Vec<Option<NumericDomain>>,
+}
+
+impl InferenceState {
+    fn add_expr(&mut self, domain: Option<NumericDomain>) {
+        let index = self.roots.len();
+        self.roots.push(index);
+        self.members.insert(index, HashSet::from([index]));
+        self.constraints.push(ExprConstraints::default());
+        self.domains.push(domain);
+    }
+
+    fn constraints_for(&self, index: usize) -> &ExprConstraints {
+        &self.constraints[self.roots[index]]
+    }
+
+    fn add_predicate(&mut self, index: usize, predicate: Predicate) -> Option<bool> {
+        self.constraints[self.roots[index]].try_add(predicate)
+    }
+
+    fn merge(&mut self, left: usize, right: usize) -> Option<bool> {
+        let mut root = self.roots[left];
+        let mut other = self.roots[right];
+        // Check every domain before merging constraints: an unconstrained Float
+        // member must not bridge conflicting Exact constants into a contradiction.
+        let mut domain = None;
+        for candidate in [
+            self.domains[root],
+            self.domains[other],
+            self.constraints[root].domain(),
+            self.constraints[other].domain(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if domain.is_some_and(|existing| existing != candidate) {
+                return None;
+            }
+            domain = Some(candidate);
+        }
+        if root == other {
+            return Some(true);
+        }
+        // Move the smaller class so each member changes roots at most O(log n) times.
+        // On a tie, prefer the earlier expression for deterministic materialization.
+        let root_size = self.members[&root].len();
+        let other_size = self.members[&other].len();
+        if root_size < other_size || root_size == other_size && root > other {
+            std::mem::swap(&mut root, &mut other);
+        }
+        let members = self.members.remove(&other).unwrap();
+        for &index in &members {
+            self.roots[index] = root;
+        }
+        self.members.get_mut(&root).unwrap().extend(members);
+        self.domains[root] = domain;
+
+        let constraints = std::mem::take(&mut self.constraints[other]);
+        for predicate in constraints.into_predicates() {
+            if !self.constraints[root].try_add(predicate)? {
+                return Some(false);
+            }
+        }
+        Some(true)
+    }
+
+    fn prune_exclusions(&mut self) {
+        // Bounds are already normalized. Prune exclusions only once before output,
+        // rather than scanning them again after every bound update.
+        for &root in self.members.keys() {
+            self.constraints[root].prune_exclusions();
+        }
+    }
+}
+
 // The InferFilterOptimizer tries to infer new predicates from existing predicates, for example:
 // 1. [A > 1 and A > 5] => [A > 5], [A > 1 and A <= 1 => false], [A = 1 and A < 10] => [A = 1]
 // 2. [A = 10 and A = B] => [B = 10]
@@ -48,12 +138,15 @@ pub struct InferFilterOptimizer<'a> {
     exprs: Vec<ScalarExpr>,
     // The index of ScalarExpr in `exprs`.
     expr_index: HashMap<ScalarExpr, usize>,
-    // The equal ScalarExprs of each ScalarExpr.
-    expr_equal_to: Vec<Vec<ScalarExpr>>,
-    // The normalized constraints of each ScalarExpr.
-    expr_predicates: Vec<ExprConstraints>,
+    // Preserve the first direct neighbor for the existing general-predicate
+    // replacement policy. Equivalence and constraint inference use `state` only.
+    first_equal_to: Vec<Option<usize>>,
+    // Equivalence classes and their normalized constraints.
+    state: InferenceState,
     // If the whole predicates is false.
     is_falsy: bool,
+    // A domain mismatch disables inference without treating the inputs as false.
+    inference_disabled: bool,
     // The `join_prop` is used for filter push down join.
     join_prop: Option<JoinProperty<'a>>,
 }
@@ -63,14 +156,18 @@ impl<'a> InferFilterOptimizer<'a> {
         Self {
             exprs: vec![],
             expr_index: HashMap::new(),
-            expr_equal_to: vec![],
-            expr_predicates: vec![],
+            first_equal_to: vec![],
+            state: InferenceState::default(),
             is_falsy: false,
+            inference_disabled: false,
             join_prop,
         }
     }
 
     pub fn optimize(&mut self, predicates: Vec<ScalarExpr>) -> Result<Vec<ScalarExpr>> {
+        if self.inference_disabled {
+            return Ok(predicates);
+        }
         let mut predicates = predicates;
         // Remove trivial type cast.
         for predicate in predicates.iter_mut() {
@@ -169,23 +266,17 @@ impl<'a> InferFilterOptimizer<'a> {
             }
         }
 
-        let mut new_predicates = vec![];
-        if !self.is_falsy {
-            // Derive new predicates from existing predicates, `derive_predicates` may change is_falsy to true.
-            let Some(derived) = self.derive_predicates() else {
-                return Ok(predicates);
-            };
-            new_predicates = derived;
+        if self.inference_disabled {
+            return Ok(predicates);
         }
-
-        if self.is_falsy {
-            new_predicates = vec![
+        let new_predicates = if self.is_falsy {
+            vec![
                 ConstantExpr {
                     span: None,
                     value: Scalar::Boolean(false),
                 }
                 .into(),
-            ];
+            ]
         } else {
             // Move only the unabsorbed inputs into the remaining-predicate pass.
             let mut remaining_indexes = remaining_indexes.into_iter().peekable();
@@ -201,23 +292,27 @@ impl<'a> InferFilterOptimizer<'a> {
                     }
                 })
                 .collect();
+            self.state.prune_exclusions();
+            let mut new_predicates = self.derive_predicates();
             new_predicates.extend(self.derive_remaining_predicates(remaining_predicates));
-        }
+            new_predicates
+        };
 
         Ok(new_predicates)
     }
 
     #[recursive::recursive]
-    fn add_expr(
-        &mut self,
-        expr: &ScalarExpr,
-        expr_predicates: ExprConstraints,
-        expr_equal_to: Vec<ScalarExpr>,
-    ) {
-        self.expr_index.insert(expr.clone(), self.exprs.len());
+    fn add_expr(&mut self, expr: &ScalarExpr) -> usize {
+        if let Some(&index) = self.expr_index.get(expr) {
+            return index;
+        }
+        let index = self.exprs.len();
+        self.expr_index.insert(expr.clone(), index);
         self.exprs.push(expr.clone());
-        self.expr_predicates.push(expr_predicates);
-        self.expr_equal_to.push(expr_equal_to);
+        self.state
+            .add_expr(NumericDomain::of_type(expr.data_type().as_ref()));
+        self.first_equal_to.push(None);
+        index
     }
 
     pub fn add_equal_expr(&mut self, left: &ScalarExpr, right: &ScalarExpr) -> bool {
@@ -245,16 +340,14 @@ impl<'a> InferFilterOptimizer<'a> {
         {
             return false;
         }
-        match self.expr_index.get(left) {
-            Some(index) => self.expr_equal_to[*index].push(right.clone()),
-            None => self.add_expr(left, ExprConstraints::default(), vec![right.clone()]),
-        };
-
-        match self.expr_index.get(right) {
-            Some(index) => self.expr_equal_to[*index].push(left.clone()),
-            None => self.add_expr(right, ExprConstraints::default(), vec![left.clone()]),
-        };
-
+        let left = self.add_expr(left);
+        let right = self.add_expr(right);
+        self.first_equal_to[left].get_or_insert(right);
+        self.first_equal_to[right].get_or_insert(left);
+        match self.state.merge(left, right) {
+            Some(satisfiable) => self.is_falsy |= !satisfiable,
+            None => self.inference_disabled = true,
+        }
         true
     }
 
@@ -267,106 +360,20 @@ impl<'a> InferFilterOptimizer<'a> {
         {
             return false;
         }
-        let index = match self.expr_index.get(expr) {
-            Some(index) => *index,
-            None => {
-                let index = self.exprs.len();
-                self.add_expr(expr, ExprConstraints::default(), vec![]);
-                index
-            }
-        };
-        let Some(satisfiable) = self.expr_predicates[index].try_add(predicate) else {
+        let index = self.add_expr(expr);
+        let Some(satisfiable) = self.state.add_predicate(index, predicate) else {
             return false;
         };
         self.is_falsy |= !satisfiable;
         true
     }
 
-    fn find(parent: &mut [usize], x: usize) -> usize {
-        if parent[x] != x {
-            parent[x] = Self::find(parent, parent[x]);
-        }
-        parent[x]
-    }
-
-    fn union(parent: &mut [usize], x: usize, y: usize) {
-        let parent_x = Self::find(parent, x);
-        let parent_y = Self::find(parent, y);
-        if parent_x != parent_y {
-            parent[parent_y] = parent_x;
-        }
-    }
-
-    // None disables this inference pass; the caller retains all original inputs.
-    fn derive_predicates(&mut self) -> Option<Vec<ScalarExpr>> {
+    fn derive_predicates(&self) -> Vec<ScalarExpr> {
         let mut result = vec![];
-        let num_exprs = self.exprs.len();
-
-        // Using the Union-Find algorithm to construct the equal ScalarExpr index sets.
-        let mut equal_index_sets: HashMap<usize, HashSet<usize>> = HashMap::new();
-        let mut parents = vec![0; num_exprs];
-        for (i, parent) in parents.iter_mut().enumerate().take(num_exprs) {
-            *parent = i;
-        }
-        for (left_index, expr_equal_to) in self.expr_equal_to.iter().enumerate() {
-            for expr in expr_equal_to.iter() {
-                let right_index = self.expr_index.get(expr).unwrap();
-                Self::union(&mut parents, left_index, *right_index);
-            }
-        }
-        // Check the entire class before merging any bounds. In particular, a Float
-        // member without predicates can bridge two Exact members: merging their
-        // conflicting constants first could falsely conclude the class is empty.
-        let mut class_domains = vec![None; num_exprs];
-        for index in 0..num_exprs {
-            let parent_index = Self::find(&mut parents, index);
-            for domain in [
-                NumericDomain::of_type(self.exprs[index].data_type().as_ref()),
-                self.expr_predicates[index].domain(),
-            ]
-            .into_iter()
-            .flatten()
-            {
-                if class_domains[parent_index].is_some_and(|existing| existing != domain) {
-                    return None;
-                }
-                class_domains[parent_index] = Some(domain);
-            }
-            match equal_index_sets.get_mut(&parent_index) {
-                Some(equal_index_set) => {
-                    equal_index_set.insert(index);
-                }
-                None => {
-                    equal_index_sets.insert(parent_index, HashSet::from([index]));
-                }
-            }
-        }
-        for index in 0..num_exprs {
-            let parent_index = Self::find(&mut parents, index);
-            if index != parent_index {
-                // Merge each member's normalized constraints into its equivalence class.
-                let constraints = std::mem::take(&mut self.expr_predicates[index]);
-                for predicate in constraints.into_predicates() {
-                    if !self.expr_predicates[parent_index].try_add(predicate)? {
-                        self.is_falsy = true;
-                        return Some(vec![]);
-                    }
-                }
-            }
-        }
-
-        // Discard redundant exclusions once per class, not once per derived expression.
-        for (index, constraints) in self.expr_predicates.iter_mut().enumerate() {
-            if index == Self::find(&mut parents, index) {
-                constraints.prune_exclusions();
-            }
-        }
-
         // Construct predicates for each ScalarExpr. `exprs` is indexed by the same
         // positions recorded in `expr_index`, so the position is the expression index.
         for (index, expr) in self.exprs.iter().enumerate() {
-            let parent_index = Self::find(&mut parents, index);
-            let parent_predicates = &self.expr_predicates[parent_index];
+            let parent_predicates = self.state.constraints_for(index);
             for predicate in parent_predicates.predicates() {
                 // A transitive class can connect types whose pairwise common type
                 // would round or overflow. Keep the constraint on safely comparable
@@ -393,11 +400,12 @@ impl<'a> InferFilterOptimizer<'a> {
             }
         }
 
-        // Construct equal condition predicates for each equal ScalarExpr index set.
-        for index in 0..num_exprs {
-            let parent_index = Self::find(&mut parents, index);
+        // Keep all pairwise equality conditions for DPhyp until it can query the
+        // inference state directly.
+        for index in 0..self.exprs.len() {
+            let parent_index = self.state.roots[index];
             if index == parent_index {
-                if let Some(equal_index_set) = equal_index_sets.get(&parent_index) {
+                if let Some(equal_index_set) = self.state.members.get(&parent_index) {
                     let mut equal_indexes = equal_index_set.iter().copied().collect::<Vec<_>>();
                     equal_indexes.sort();
                     let equal_indexes_len = equal_indexes.len();
@@ -432,7 +440,7 @@ impl<'a> InferFilterOptimizer<'a> {
             }
         }
 
-        Some(result)
+        result
     }
 
     fn derive_remaining_predicates(&self, predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {
@@ -440,8 +448,8 @@ impl<'a> InferFilterOptimizer<'a> {
         struct ReplaceScalarExpr<'a> {
             // The index of ScalarExpr in `exprs`.
             expr_index: &'a HashMap<ScalarExpr, usize>,
-            // The equal ScalarExprs of each ScalarExpr.
-            expr_equal_to: &'a Vec<Vec<ScalarExpr>>,
+            exprs: &'a [ScalarExpr],
+            first_equal_to: &'a [Option<usize>],
             // The columns used by the predicate.
             column_set: HashSet<Symbol>,
             // If the predicate can be replaced to generate a new predicate.
@@ -459,13 +467,12 @@ impl<'a> InferFilterOptimizer<'a> {
             #[recursive::recursive]
             fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
                 if let Some(index) = self.expr_index.get(expr) {
-                    let equal_to = &self.expr_equal_to[*index];
-                    if !equal_to.is_empty() {
+                    if let Some(target) = self.first_equal_to[*index] {
                         let used_columns = expr.used_columns();
                         for column in used_columns {
                             self.column_set.insert(column);
                         }
-                        *expr = equal_to[0].clone();
+                        *expr = self.exprs[target].clone();
                         return Ok(());
                     }
                 }
@@ -499,7 +506,8 @@ impl<'a> InferFilterOptimizer<'a> {
 
         let mut replace = ReplaceScalarExpr {
             expr_index: &self.expr_index,
-            expr_equal_to: &self.expr_equal_to,
+            exprs: &self.exprs,
+            first_equal_to: &self.first_equal_to,
             column_set: HashSet::new(),
             can_replace: true,
         };
@@ -1158,7 +1166,8 @@ mod tests {
         )));
         let mut optimizer = InferFilterOptimizer::new(None);
         // Fault injection: a future adjustment change admitted the wrong domain.
-        optimizer.add_expr(&col, incompatible, vec![]);
+        let index = optimizer.add_expr(&col);
+        optimizer.state.constraints[index] = incompatible;
         assert_eq!(optimizer.optimize(original.clone())?, original);
         assert!(!optimizer.is_falsy);
         Ok(())
@@ -1186,9 +1195,14 @@ mod tests {
         let mut optimizer = InferFilterOptimizer::new(None);
         // Simulate a future equality-inference edge connecting integers through an
         // unconstrained Float member. Do not relax conversion.rs just for this test.
-        optimizer.add_expr(&a, ExprConstraints::default(), vec![f.clone()]);
-        optimizer.add_expr(&b, ExprConstraints::default(), vec![f.clone()]);
-        optimizer.add_expr(&f, ExprConstraints::default(), vec![a, b]);
+        let a = optimizer.add_expr(&a);
+        let b = optimizer.add_expr(&b);
+        let f = optimizer.add_expr(&f);
+        for index in [a, b] {
+            if optimizer.state.merge(index, f).is_none() {
+                optimizer.inference_disabled = true;
+            }
+        }
         assert_eq!(optimizer.optimize(original.clone())?, original);
         assert!(!optimizer.is_falsy);
         Ok(())
@@ -1356,6 +1370,237 @@ mod tests {
         constraints.prune_exclusions();
         assert_eq!(constraints.predicates().count(), 1);
         assert!(!constraints.add(predicate(ComparisonOp::LTE, int(9_999))));
+    }
+
+    #[test]
+    fn test_normalized_inference_state() {
+        let columns: Vec<_> = (0..4)
+            .map(|index| column(index, DataType::Number(NumberDataType::Int64)))
+            .collect();
+        let mut optimizer = InferFilterOptimizer::new(None);
+        for (index, op, value) in [
+            (0, ComparisonOp::GT, 1),
+            (1, ComparisonOp::GT, 5),
+            (2, ComparisonOp::LT, 10),
+            (3, ComparisonOp::Equal, 42),
+        ] {
+            optimizer.add_expr_predicate(&columns[index], predicate(op, int(value)));
+        }
+        // Equality immediately merges the existing bounds, without a rebuild pass.
+        assert!(optimizer.add_equal_expr(&columns[1], &columns[2]));
+        assert!(std::ptr::eq(
+            optimizer.state.constraints_for(1),
+            optimizer.state.constraints_for(2)
+        ));
+        assert_eq!(
+            optimizer
+                .state
+                .constraints_for(1)
+                .predicates()
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec![
+                predicate(ComparisonOp::GT, int(5)),
+                predicate(ComparisonOp::LT, int(10))
+            ]
+        );
+        // Merge the smaller singleton into the larger class, whose root is not
+        // the first member. No normalization call is needed before reading it.
+        assert!(optimizer.add_equal_expr(&columns[0], &columns[2]));
+        assert!(!optimizer.is_falsy);
+        let state = &optimizer.state;
+        let root = state.roots[0];
+        assert_ne!(root, 0);
+        assert_eq!(state.members[&root], HashSet::from([0, 1, 2]));
+        assert_eq!(state.members[&state.roots[3]], HashSet::from([3]));
+        let expected = vec![
+            predicate(ComparisonOp::GT, int(5)),
+            predicate(ComparisonOp::LT, int(10)),
+        ];
+        for index in 0..3 {
+            assert!(std::ptr::eq(
+                state.constraints_for(index),
+                &state.constraints[root]
+            ));
+            if index != root {
+                assert!(matches!(state.constraints[index], ExprConstraints::Empty));
+            }
+            assert_eq!(
+                state
+                    .constraints_for(index)
+                    .predicates()
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                expected
+            );
+        }
+        assert_eq!(
+            state
+                .constraints_for(3)
+                .predicates()
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec![predicate(ComparisonOp::Equal, int(42))]
+        );
+
+        // Only redundant exclusion cleanup is deferred until materialization.
+        optimizer.add_expr_predicate(&columns[2], predicate(ComparisonOp::NotEqual, int(20)));
+        optimizer.state.prune_exclusions();
+        // Materialization only reads the state and preserves the full equality
+        // closure expected by existing consumers.
+        let emitted = optimizer.derive_predicates();
+        assert_eq!(emitted.len(), 10);
+        for (left, right) in [(0, 1), (0, 2), (1, 2)] {
+            assert!(emitted.contains(&comparison(
+                columns[left].clone(),
+                ComparisonOp::Equal,
+                columns[right].clone()
+            )));
+        }
+        assert_eq!(optimizer.derive_predicates(), emitted);
+        optimizer.state.prune_exclusions();
+        assert_eq!(optimizer.derive_predicates(), emitted);
+        // Repeated equality is a no-op, including for class membership.
+        assert!(optimizer.add_equal_expr(&columns[2], &columns[0]));
+        assert_eq!(optimizer.derive_predicates(), emitted);
+        assert_eq!(optimizer.state.members.len(), 2);
+
+        // A predicate on a non-root updates the class immediately, without
+        // losing its previous constraints or waiting for a normalization pass.
+        optimizer.add_expr_predicate(&columns[2], predicate(ComparisonOp::LT, int(8)));
+        assert_eq!(
+            optimizer
+                .state
+                .constraints_for(0)
+                .predicates()
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec![
+                predicate(ComparisonOp::GT, int(5)),
+                predicate(ComparisonOp::LT, int(8))
+            ]
+        );
+    }
+
+    #[test]
+    fn test_redundant_equalities_do_not_accumulate() {
+        let columns: Vec<_> = (0..100)
+            .map(|index| column(index, DataType::Number(NumberDataType::Int64)))
+            .collect();
+        let mut optimizer = InferFilterOptimizer::new(None);
+        // Dense input and duplicate edges update one class, not a stored adjacency
+        // graph. No pairwise ScalarExpr output is constructed while collecting it.
+        for left in 0..columns.len() {
+            for right in left + 1..columns.len() {
+                assert!(optimizer.add_equal_expr(&columns[left], &columns[right]));
+                assert!(optimizer.add_equal_expr(&columns[right], &columns[left]));
+            }
+        }
+        assert_eq!(optimizer.exprs.len(), 100);
+        assert_eq!(optimizer.state.roots, vec![0; 100]);
+        assert_eq!(optimizer.state.members.len(), 1);
+        assert_eq!(optimizer.state.members[&0].len(), 100);
+        assert_eq!(optimizer.first_equal_to.len(), 100);
+        assert_eq!(optimizer.first_equal_to[0], Some(1));
+        assert!(
+            optimizer.first_equal_to[1..]
+                .iter()
+                .all(|index| *index == Some(0))
+        );
+    }
+
+    #[test]
+    fn test_direct_neighbor_replacement_is_preserved() {
+        let columns: Vec<_> = (0..3)
+            .map(|index| column(index, DataType::String))
+            .collect();
+        let mut optimizer = InferFilterOptimizer::new(None);
+        for (left, right) in [(0, 1), (0, 2), (1, 2)] {
+            assert!(optimizer.add_equal_expr(&columns[left], &columns[right]));
+        }
+        let like = |column: &ScalarExpr| -> ScalarExpr {
+            FunctionCall {
+                span: None,
+                func_name: "like".to_string(),
+                params: vec![],
+                arguments: vec![
+                    column.clone(),
+                    ConstantExpr {
+                        span: None,
+                        value: Scalar::String("%foo%".to_string()),
+                    }
+                    .into(),
+                ],
+                return_type: Box::new(DataType::Boolean),
+            }
+            .into()
+        };
+        // The compatibility policy uses the original first edge, not the class
+        // root or all members. Broader propagation is a separate change.
+        for (source, target) in [(0, 1), (1, 0), (2, 0)] {
+            assert_eq!(
+                optimizer.derive_remaining_predicates(vec![like(&columns[source])]),
+                vec![like(&columns[target]), like(&columns[source])]
+            );
+        }
+    }
+
+    #[test]
+    fn test_incremental_class_contradictions() {
+        let left = column(0, DataType::Number(NumberDataType::Int64));
+        let right = column(1, DataType::Number(NumberDataType::Int64));
+        // Detect both conflicting class merges and predicates added after a merge.
+        for equality_first in [false, true] {
+            let mut optimizer = InferFilterOptimizer::new(None);
+            if equality_first {
+                assert!(optimizer.add_equal_expr(&left, &right));
+            }
+            optimizer.add_expr_predicate(&left, predicate(ComparisonOp::GTE, int(5)));
+            assert!(!optimizer.is_falsy);
+            optimizer.add_expr_predicate(&right, predicate(ComparisonOp::LT, int(5)));
+            if !equality_first {
+                assert!(!optimizer.is_falsy);
+                assert!(optimizer.add_equal_expr(&left, &right));
+            }
+            assert!(optimizer.is_falsy);
+        }
+    }
+
+    #[test]
+    fn test_incremental_class_permutations() {
+        let columns: Vec<_> = (0..3)
+            .map(|index| column(index, DataType::Number(NumberDataType::Int64)))
+            .collect();
+        let predicates = [
+            comparison(columns[0].clone(), ComparisonOp::Equal, columns[1].clone()),
+            comparison(columns[1].clone(), ComparisonOp::Equal, columns[2].clone()),
+            filter(&columns[0], ComparisonOp::GT, int(1)),
+            filter(&columns[1], ComparisonOp::GT, int(5)),
+            filter(&columns[2], ComparisonOp::LT, int(10)),
+        ];
+        for permutation in predicates.iter().permutations(predicates.len()) {
+            let result = InferFilterOptimizer::new(None)
+                .optimize(permutation.into_iter().cloned().collect())
+                .unwrap();
+            assert_eq!(result.len(), 9);
+            for column in &columns {
+                assert!(result.contains(&filter(column, ComparisonOp::GT, int(5))));
+                assert!(result.contains(&filter(column, ComparisonOp::LT, int(10))));
+            }
+            for (left, right) in [(0, 1), (0, 2), (1, 2)] {
+                assert!(
+                    result.contains(&comparison(
+                        columns[left].clone(),
+                        ComparisonOp::Equal,
+                        columns[right].clone()
+                    )) || result.contains(&comparison(
+                        columns[right].clone(),
+                        ComparisonOp::Equal,
+                        columns[left].clone()
+                    ))
+                );
+            }
+        }
     }
 
     #[test]
