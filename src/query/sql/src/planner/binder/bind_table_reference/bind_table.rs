@@ -31,9 +31,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_meta_app::schema::MATERIALIZED_VIEW_ENGINE;
-use databend_common_storages_basic::view_table::CURRENT_QUERY_VERSION;
 use databend_common_storages_basic::view_table::QUERY;
-use databend_common_storages_basic::view_table::QUERY_VERSION;
 use databend_storages_common_table_meta::table::get_change_type;
 use databend_storages_common_table_meta::table::stored_query_namespace;
 
@@ -333,13 +331,7 @@ impl Binder {
                         false,
                         None,
                     );
-                    let namespace = if table_meta.options().get(QUERY_VERSION).map(String::as_str)
-                        == Some(CURRENT_QUERY_VERSION)
-                    {
-                        stored_query_namespace(table_meta.options())
-                    } else {
-                        None
-                    };
+                    let namespace = stored_query_namespace(table_meta.options());
                     let previous_namespace =
                         std::mem::replace(&mut self.default_table_namespace, namespace);
                     let result = self.bind_query(&mut new_bind_context, query);

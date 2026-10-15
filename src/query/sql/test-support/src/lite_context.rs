@@ -1208,9 +1208,7 @@ impl LiteTableContext {
         if let Some((catalog, database)) = &view.query_namespace {
             use databend_storages_common_table_meta::table::OPT_KEY_QUERY_CATALOG;
             use databend_storages_common_table_meta::table::OPT_KEY_QUERY_DATABASE;
-            use databend_storages_common_table_meta::table::OPT_KEY_VIEW_QUERY_VERSION;
 
-            options.insert(OPT_KEY_VIEW_QUERY_VERSION.to_string(), "2".to_string());
             options.insert(OPT_KEY_QUERY_CATALOG.to_string(), catalog.clone());
             options.insert(OPT_KEY_QUERY_DATABASE.to_string(), database.clone());
         }

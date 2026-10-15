@@ -35,7 +35,6 @@ pub const OPT_KEY_RECURSIVE_CTE: &str = "recursive_cte";
 /// Default namespace for unqualified table references in a stored query definition.
 pub const OPT_KEY_QUERY_CATALOG: &str = "query_catalog";
 pub const OPT_KEY_QUERY_DATABASE: &str = "query_database";
-pub const OPT_KEY_VIEW_QUERY_VERSION: &str = "view_query_version";
 
 pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
 pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION: &str =
@@ -168,7 +167,6 @@ pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_RECURSIVE_CTE);
     r.insert(OPT_KEY_QUERY_CATALOG);
     r.insert(OPT_KEY_QUERY_DATABASE);
-    r.insert(OPT_KEY_VIEW_QUERY_VERSION);
     r.insert(OPT_KEY_PARTITION_BY);
     r.insert(OPT_KEY_CLUSTER_TYPE);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION);
@@ -192,7 +190,6 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_TEMP_PREFIX);
     r.insert(OPT_KEY_QUERY_CATALOG);
     r.insert(OPT_KEY_QUERY_DATABASE);
-    r.insert(OPT_KEY_VIEW_QUERY_VERSION);
     r.insert(OPT_KEY_RECURSIVE_CTE);
     r.insert(OPT_KEY_PARTITION_BY);
     r.insert(OPT_KEY_CLUSTER_TYPE);
@@ -310,11 +307,7 @@ mod tests {
 
     #[test]
     fn test_stored_query_metadata_is_reserved_and_internal() {
-        for key in [
-            OPT_KEY_QUERY_CATALOG,
-            OPT_KEY_QUERY_DATABASE,
-            OPT_KEY_VIEW_QUERY_VERSION,
-        ] {
+        for key in [OPT_KEY_QUERY_CATALOG, OPT_KEY_QUERY_DATABASE] {
             assert!(is_reserved_opt_key(key));
             assert!(is_internal_opt_key(key));
         }

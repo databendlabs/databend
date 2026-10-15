@@ -23,9 +23,7 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::CreateViewPlan;
 use databend_common_sql::plans::Plan;
-use databend_common_storages_basic::view_table::CURRENT_QUERY_VERSION;
 use databend_common_storages_basic::view_table::QUERY;
-use databend_common_storages_basic::view_table::QUERY_VERSION;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_QUERY_CATALOG;
 use databend_storages_common_table_meta::table::OPT_KEY_QUERY_DATABASE;
@@ -124,7 +122,6 @@ impl Interpreter for CreateViewInterpreter {
                 )
             };
             options.insert(QUERY.to_string(), subquery);
-            options.insert(QUERY_VERSION.to_string(), CURRENT_QUERY_VERSION.to_string());
             options.insert(OPT_KEY_QUERY_CATALOG.to_string(), self.plan.catalog.clone());
             options.insert(
                 OPT_KEY_QUERY_DATABASE.to_string(),

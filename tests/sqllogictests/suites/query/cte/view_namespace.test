@@ -138,7 +138,7 @@ select * from v_case
 ----
 17
 
-# Internal format metadata is not included in SHOW CREATE.
+# Internal namespace metadata is not included in SHOW CREATE.
 query TT
 show create table v_case
 ----
@@ -150,7 +150,7 @@ unset unquoted_ident_case_sensitive
 statement ok
 unset enable_auto_materialize_cte
 
-# Replacing a view records the new format too.
+# Replacing a view preserves its own namespace too.
 statement ok
 create or replace view v_case as with t as (select 88 as n) select * from t
 
