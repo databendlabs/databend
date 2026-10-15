@@ -183,6 +183,7 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         let mut new_bind_context = BindContext {
             parent: Some(Box::new(bind_context.clone())),
+            binding_depth: bind_context.next_depth()?,
             bound_internal_columns: BTreeMap::new(),
             bound_virtual_columns: BTreeMap::new(),
             columns: vec![],
@@ -373,6 +374,11 @@ impl Binder {
         case_sensitive: bool,
     ) -> Result<(SExpr, BindContext)> {
         let mut bind_context = BindContext::with_parent(bind_context.clone())?;
+        // All physical tables (including stages, table functions, result scans
+        // and MVs) pass through here. Tag them centrally to keep scopes separate.
+        self.metadata
+            .write()
+            .set_table_view_scope(table_index, &bind_context.binding_views);
 
         let table = self.metadata.read().table(table_index).clone();
         let table_name = table.name();

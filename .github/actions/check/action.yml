@@ -14,11 +14,13 @@ runs:
 
     - name: Check Apache License Header
       uses: korandoru/hawkeye@v2
+      with:
+        config: .config/licenserc.toml
 
     - name: Check Elastic License Header
       uses: korandoru/hawkeye@v2
       with:
-        config: licenserc-ee.toml
+        config: .config/licenserc-ee.toml
 
     - name: YAML Lint
       shell: bash
@@ -26,7 +28,7 @@ runs:
 
     - name: Check typos
       shell: bash
-      run: typos
+      run: typos --config .config/typos.toml
 
     - name: Format
       shell: bash
@@ -35,8 +37,8 @@ runs:
     - name: Check toml format
       shell: bash
       run: |
-        taplo check
-        taplo fmt --check
+        taplo check --config .config/taplo.toml
+        taplo fmt --config .config/taplo.toml --check
 
     - name: Clippy
       shell: bash

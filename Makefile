@@ -16,20 +16,20 @@ lint:
 	# Check unused deps(make setup to install)
 	cargo machete
 	# Check typos(make setup to install)
-	typos
+	typos --config .config/typos.toml
 	# Cargo.toml file formatter(make setup to install)
-	taplo fmt
+	taplo fmt --config .config/taplo.toml
 	# Python file formatter(make setup to install)
 	# ruff format tests/
 	# Bash file formatter(make setup to install)
 	shfmt -l -w scripts/*
 
 lint-yaml:
-	yamllint -f auto .
+	yamllint -c .config/yamllint.yml -f auto .
 
 check-license:
-	docker run -it --rm -v $(CURDIR):/github/workspace ghcr.io/korandoru/hawkeye-native:v2 check --config licenserc.toml && \
-	docker run -it --rm -v $(CURDIR):/github/workspace ghcr.io/korandoru/hawkeye-native:v2 check --config licenserc-ee.toml
+	docker run -it --rm -v $(CURDIR):/github/workspace ghcr.io/korandoru/hawkeye-native:v2 check --config .config/licenserc.toml && \
+	docker run -it --rm -v $(CURDIR):/github/workspace ghcr.io/korandoru/hawkeye-native:v2 check --config .config/licenserc-ee.toml
 
 run: build-release
 	BUILD_PROFILE=release bash ./scripts/ci/deploy/databend-query-standalone.sh

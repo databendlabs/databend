@@ -8071,6 +8071,28 @@ impl SchemaApiTestSuite {
             assert_eq!(tb_ids[1], res[1].1.table_id);
         }
 
+        // A table with an unknown index type must not hide its healthy neighbors.
+        let mut bad = DbTableHarness::new(mt, tenant_name, db_name, "tb1_future", "JSON");
+        let (bad_id, meta) = bad.create_table().await?;
+        let mut table_pb = meta.to_pb();
+        table_pb
+            .indexes
+            .insert("future_index".to_string(), pb::TableIndex {
+                ver: VER,
+                min_reader_ver: MIN_READER_VER,
+                index_type: i32::MAX,
+                ..Default::default()
+            });
+        upsert_test_data(mt, &TableId::new(bad_id), table_pb.encode_to_vec()).await?;
+        let tables = mt.list_tables(ListTableReq::new(&tenant, db_id)).await?;
+        assert_eq!(
+            vec![("tb1", tb_ids[0]), ("tb2", tb_ids[1])],
+            tables
+                .iter()
+                .map(|(name, id, _)| (name.as_str(), id.table_id))
+                .collect::<Vec<_>>()
+        );
+
         Ok(())
     }
 

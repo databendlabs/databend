@@ -123,6 +123,7 @@ use databend_meta_client::types::protobuf as pb;
 use databend_meta_client::types::txn_op::Request;
 use databend_meta_client::types::txn_op_response::Response;
 use fastrace::func_name;
+use futures::StreamExt;
 use log::debug;
 use log::error;
 use log::info;
@@ -149,6 +150,7 @@ use crate::kv_app_error::KVAppError;
 use crate::kv_fetch_util::deserialize_struct_get_response;
 use crate::kv_fetch_util::mget_pb_values;
 use crate::kv_pb_api::KVPbApi;
+use crate::kv_pb_api::errors::PbApiReadError;
 use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
@@ -1848,6 +1850,8 @@ where
         Ok(Some(TableNIV::new(name_ident.clone(), tbid, seq_meta)))
     }
 
+    /// List tables, skipping missing or undecodable table metadata.
+    /// KV and stream errors still fail the request; skipped metadata is not modified.
     #[logcall::logcall]
     #[fastrace::trace]
     async fn list_tables(
@@ -1865,19 +1869,34 @@ where
         let names_and_ids = self
             .list_pb_vec(ListOptions::unlimited(&DirName::new(dbid_tbname)))
             .await?;
-        let ids = names_and_ids
-            .iter()
-            .map(|(_, seq_id)| seq_id.data.clone())
-            .collect::<Vec<_>>();
-
-        let seq_metas = self.get_pb_values_vec(ids.clone()).await?;
-
-        let res = names_and_ids
-            .into_iter()
-            .zip(ids)
-            .zip(seq_metas)
-            .filter_map(|(((n, _), id), seq_meta)| seq_meta.map(|x| (n.table_name, id, x)))
-            .collect::<Vec<_>>();
+        let mut res = Vec::with_capacity(names_and_ids.len());
+        let mut names_and_ids = names_and_ids.into_iter();
+        loop {
+            let chunk = names_and_ids
+                .by_ref()
+                .take(Self::CHUNK_SIZE)
+                .collect::<Vec<_>>();
+            if chunk.is_empty() {
+                break;
+            }
+            let ids = chunk.iter().map(|(_, seq_id)| seq_id.data.clone());
+            let strm = self.get_pb_stream_low(ids).await?;
+            let seq_metas = strm.collect::<Vec<_>>().await;
+            for (result, (name, id)) in seq_metas.into_iter().zip(chunk) {
+                let meta = match result {
+                    Ok((_, meta)) => meta,
+                    Err(PbApiReadError::PbDecodeError(err)) => {
+                        warn!(req :? = (&req); "list_tables: skip table {}: cannot decode table meta: {}", name.table_name, err);
+                        continue;
+                    }
+                    Err(err) => return Err(MetaError::from(err).into()),
+                };
+                let Some(meta) = meta else {
+                    continue;
+                };
+                res.push((name.table_name, id.data, meta));
+            }
+        }
         Ok(res)
     }
 

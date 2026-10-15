@@ -173,6 +173,13 @@ impl SortedStream for BlockStream {
     }
 }
 
+/// Sorted blocks pulled one at a time: a merge output, or a sorted run.
+pub type SortedBlockIterator = Box<dyn Iterator<Item = Result<DataBlock>> + Send>;
+
+/// Merge sorted blocks into blocks of at most `block_size` rows, pulled one at
+/// a time by the caller. The merger owns the input blocks and drops each one
+/// after its last row is emitted, so the merged output does not have to be
+/// held next to the whole input.
 pub fn sort_merge(
     schema: DataSchemaRef,
     block_size: usize,
@@ -180,27 +187,95 @@ pub fn sort_merge(
     data_blocks: Vec<DataBlock>,
     enable_fixed_rows: bool,
     enable_loser_tree: bool,
-) -> Result<Vec<DataBlock>> {
+) -> Result<SortedBlockIterator> {
+    let block_size = block_size.max(1);
+    let sources = data_blocks
+        .into_iter()
+        .filter(|block| !block.is_empty())
+        .map(|block| {
+            let rows = block.num_rows();
+            Box::new(
+                (0..rows)
+                    .step_by(block_size)
+                    .map(move |start| Ok(block.slice(start..(start + block_size).min(rows)))),
+            ) as SortedBlockIterator
+        })
+        .collect();
+    sort_merge_sources(
+        schema,
+        block_size,
+        sort_desc,
+        sources,
+        enable_fixed_rows,
+        enable_loser_tree,
+    )
+}
+
+/// Merges sources that each emit sorted blocks in order, such as runs read
+/// back from spill. Only the current block of every source is held.
+pub fn sort_merge_sources(
+    schema: DataSchemaRef,
+    block_size: usize,
+    sort_desc: Vec<SortColumnDescription>,
+    mut sources: Vec<SortedBlockIterator>,
+    enable_fixed_rows: bool,
+    enable_loser_tree: bool,
+) -> Result<SortedBlockIterator> {
+    match sources.len() {
+        0 => return Ok(Box::new(std::iter::empty())),
+        1 => return Ok(sources.pop().unwrap()),
+        _ => {}
+    }
     let sort_desc: Arc<[_]> = sort_desc.into();
     let key_desc = SortKeyDescription::new(sort_desc, schema, enable_fixed_rows)?;
-    let mut visitor = SortMergeVisitor {
+    let mut visitor = IncrementalMergeVisitor {
         key_desc,
         block_size,
         enable_loser_tree,
-        data_blocks,
+        sources,
     };
     select_row_type(&mut visitor, enable_fixed_rows)
 }
 
-struct SortMergeVisitor {
+fn merged_blocks<A, S>(mut merger: Merger<A, S>) -> SortedBlockIterator
+where
+    A: SortAlgorithm + 'static,
+    S: SortedStream + Send + 'static,
+{
+    Box::new(std::iter::from_fn(move || {
+        check_interrupt()
+            .and_then(|_| merger.next_block())
+            .transpose()
+    }))
+}
+
+/// Encodes the sort keys of each block as it is pulled from its source.
+struct SourceStream<R: Rows> {
+    source: SortedBlockIterator,
+    converter: R::Converter,
+}
+
+impl<R: Rows> SortedStream for SourceStream<R> {
+    fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
+        while let Some(block) = self.source.next().transpose()? {
+            if !block.is_empty() {
+                let rows = self.converter.convert(&block)?;
+                return Ok((Some((block, rows.to_column())), false));
+            }
+        }
+        Ok((None, false))
+    }
+}
+
+struct IncrementalMergeVisitor {
     key_desc: SortKeyDescription,
     block_size: usize,
     enable_loser_tree: bool,
-    data_blocks: Vec<DataBlock>,
+    sources: Vec<SortedBlockIterator>,
 }
 
-impl RowsTypeVisitor for SortMergeVisitor {
-    type Result = Result<Vec<DataBlock>>;
+impl RowsTypeVisitor for IncrementalMergeVisitor {
+    type Result = Result<SortedBlockIterator>;
 
     fn sort_key_desc(&self) -> SortKeyDescription {
         self.key_desc.clone()
@@ -211,15 +286,27 @@ impl RowsTypeVisitor for SortMergeVisitor {
         R: Rows + 'static,
         R::Converter: Send + 'static,
     {
-        let row_converter = <R as Rows>::Converter::new(self.key_desc.clone())?;
-        let mut merger =
-            TransformSortMerge::<R>::create(self.block_size, self.enable_loser_tree, None);
-
-        for block in &self.data_blocks {
-            let rows = row_converter.convert(block)?;
-            merger.add_block(block.clone(), rows)?;
-        }
-
-        merger.on_finish(false)
+        let streams = std::mem::take(&mut self.sources)
+            .into_iter()
+            .map(|source| {
+                Ok(SourceStream::<R> {
+                    source,
+                    converter: <R as Rows>::Converter::new(self.key_desc.clone())?,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(if self.enable_loser_tree {
+            merged_blocks(Merger::<LoserTreeSort<R>, _>::new(
+                streams,
+                self.block_size,
+                None,
+            ))
+        } else {
+            merged_blocks(Merger::<HeapSort<R>, _>::new(
+                streams,
+                self.block_size,
+                None,
+            ))
+        })
     }
 }

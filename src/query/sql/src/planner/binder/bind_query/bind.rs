@@ -249,7 +249,9 @@ impl Binder {
         cte: &CTE,
         cte_index: usize,
         mut with: With,
+        bind_context: &BindContext,
     ) -> Result<()> {
+        let binding_depth = bind_context.next_depth()?;
         let engine = if self.ctx.get_settings().get_persist_materialized_cte()? {
             Engine::Fuse
         } else {
@@ -292,9 +294,11 @@ impl Binder {
         let source = if cte.alias.columns.is_empty() {
             None
         } else {
-            let mut bind_context = BindContext::new();
-            let (_, bind_context) = self.bind_query(&mut bind_context, &as_query)?;
-            let columns = &bind_context.columns;
+            let mut definition_context = BindContext::new();
+            definition_context.binding_depth = binding_depth;
+            definition_context.binding_views = bind_context.binding_views.clone();
+            let (_, definition_context) = self.bind_query(&mut definition_context, &as_query)?;
+            let columns = &definition_context.columns;
             if columns.len() != cte.alias.columns.len() {
                 return Err(ErrorCode::Internal("Number of columns does not match"));
             }

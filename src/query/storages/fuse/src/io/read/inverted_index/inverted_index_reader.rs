@@ -82,7 +82,7 @@ impl InvertedIndexReader {
         row_count: u64,
     ) -> Result<InvertedIndexFilterResult> {
         let bundle = load_bundle_search_directory(&self.dal, index_path, object_size).await?;
-        let mut index = Index::open(bundle.directory)?;
+        let mut index = Index::open(bundle.directory.clone())?;
         index.set_tokenizers(self.tokenizer_manager.clone());
 
         let reader = index.reader()?;
@@ -94,7 +94,9 @@ impl InvertedIndexReader {
             )));
         }
 
-        self.warmup.warm_searcher(&searcher, self.has_score).await?;
+        self.warmup
+            .warm_searcher(&searcher, &bundle.directory, self.has_score)
+            .await?;
         self.search(&searcher, query, row_count)
     }
 

@@ -555,6 +555,7 @@ impl Binder {
         s_expr = self.add_bound_columns_into_expr(&mut from_context, s_expr)?;
 
         let mut output_context = BindContext::new();
+        output_context.binding_depth = from_context.depth();
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
 

@@ -20,7 +20,9 @@ env:
 
 jobs:
   info:
-    if: contains(github.event.pull_request.labels.*.name, 'ci-cloud') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark-cloud') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark-load') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark-local')
+    # Start only when a CI label is the one being added; other label changes
+    # (e.g. hold-ci) must not relaunch release builds or benchmarks.
+    if: contains(fromJSON('["ci-cloud", "ci-benchmark", "ci-benchmark-cloud", "ci-benchmark-load", "ci-benchmark-local"]'), github.event.label.name)
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.sha.outputs.sha }}

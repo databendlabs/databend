@@ -47,7 +47,9 @@ use roaring::RoaringTreemap;
 
 use super::parquet_data_source::ParquetDataSource;
 use super::read_block_context::ReadBlockContext;
+use super::read_state::BlockScanStats;
 use super::read_state::ReadState;
+use super::read_state::ReadStateOutput;
 use super::util::add_data_block_meta;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReadResult;
@@ -68,6 +70,9 @@ struct DecodedRange {
     block: DataBlock,
     offsets: Option<RoaringTreemap>,
     start_row: usize,
+    /// Scan workload of this range, measured before prewhere and runtime
+    /// filters dropped rows.
+    scan_stats: BlockScanStats,
 }
 
 #[derive(Default)]
@@ -199,14 +204,20 @@ impl DeserializeDataTransform {
         Ok(())
     }
 
-    fn record_block_progress(&mut self, block: &DataBlock) {
-        let rows = block.num_rows();
-        let bytes = block.memory_size();
-        self.scan_progress.incr(&ProgressValues { rows, bytes });
-        Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, bytes);
+    /// Report the rows and bytes the scan actually processed, not what
+    /// survived prewhere / runtime filters: scan progress drives
+    /// `system.processes`, `system_history.query_history` and the
+    /// `ScanBytes` profile, which measure scan workload rather than
+    /// filter output. The diagnostics keep tracking the emitted block.
+    fn record_block_progress(&mut self, block: &DataBlock, scan_stats: BlockScanStats) {
+        self.scan_progress.incr(&ProgressValues {
+            rows: scan_stats.rows,
+            bytes: scan_stats.bytes,
+        });
+        Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, scan_stats.bytes);
         self.diagnostics.output_blocks += 1;
-        self.diagnostics.output_rows += rows;
-        self.diagnostics.output_bytes += bytes;
+        self.diagnostics.output_rows += block.num_rows();
+        self.diagnostics.output_bytes += block.memory_size();
     }
 
     fn offsets_for_range(
@@ -254,13 +265,21 @@ impl DeserializeDataTransform {
         self.diagnostics.input_rows += num_rows;
         let start_row = row_range.map(|range| range.start).unwrap_or(0);
         let columns_chunks = data.columns_chunks()?;
-        let (mut block, row_selection, bitmap_selection) = self
+        let ReadStateOutput {
+            mut block,
+            row_selection,
+            bitmap_selection,
+            mut scan_stats,
+        } = self
             .read_state
             .as_ref()
             .unwrap()
             .deserialize_and_filter_with_num_rows(columns_chunks, part, num_rows)?;
 
+        // Virtual columns are read in addition to the columns `ReadState`
+        // accounted for, so add them to the scan statistics.
         if let Some(virtual_reader) = self.virtual_reader.as_ref() {
+            let bytes_before = block.memory_size();
             let virtual_block_location = virtual_data
                 .as_ref()
                 .map(|data| data.virtual_block_location.clone());
@@ -280,6 +299,10 @@ impl DeserializeDataTransform {
                         error
                     );
                 })?;
+            scan_stats.add_decoded_bytes(
+                block.memory_size().saturating_sub(bytes_before),
+                block.num_rows(),
+            );
         }
 
         block = block.resort(&self.src_schema, &self.output_schema)?;
@@ -298,6 +321,7 @@ impl DeserializeDataTransform {
             block,
             offsets,
             start_row,
+            scan_stats,
         })
     }
 
@@ -334,10 +358,11 @@ impl DeserializeDataTransform {
         let mut virtual_data = virtual_data;
         for data in results {
             let decoded = self.decode_normal_range(fuse_part, data, virtual_data.take())?;
+            let scan_stats = decoded.scan_stats;
             let finalize_start = Instant::now();
             let block = self.finalize_normal_range(fuse_part, decoded)?;
             self.diagnostics.finalize_concat += finalize_start.elapsed();
-            self.record_block_progress(&block);
+            self.record_block_progress(&block, scan_stats);
             self.output_data.push_back(block);
         }
         let elapsed = start.elapsed();
@@ -451,8 +476,9 @@ impl DeserializeDataTransform {
         let finalize_start = Instant::now();
         if self.block_meta_options.update_stream_columns {
             for decoded in decoded_ranges {
+                let scan_stats = decoded.scan_stats;
                 let block = self.finalize_normal_range(fuse_part, decoded)?;
-                self.record_block_progress(&block);
+                self.record_block_progress(&block, scan_stats);
                 self.output_data.push_back(block);
             }
         } else {
@@ -460,12 +486,15 @@ impl DeserializeDataTransform {
                 .block_meta_options
                 .query_internal_columns
                 .then(RoaringTreemap::new);
+            let mut scan_stats = BlockScanStats::default();
             let blocks = decoded_ranges
                 .into_iter()
                 .map(|decoded| {
                     if let (Some(offsets), Some(range_offsets)) = (&mut offsets, decoded.offsets) {
                         *offsets |= range_offsets;
                     }
+                    scan_stats.rows += decoded.scan_stats.rows;
+                    scan_stats.bytes += decoded.scan_stats.bytes;
                     decoded.block
                 })
                 .collect::<Vec<_>>();
@@ -478,7 +507,7 @@ impl DeserializeDataTransform {
                 &self.block_meta_options,
                 0,
             )?;
-            self.record_block_progress(&block);
+            self.record_block_progress(&block, scan_stats);
             self.output_data.push_back(block);
         }
         self.diagnostics.finalize_concat += finalize_start.elapsed();
