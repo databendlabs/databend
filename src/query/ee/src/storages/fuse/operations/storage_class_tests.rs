@@ -19,6 +19,7 @@ mod real_s3 {
 
     use anyhow::Context;
     use chrono::Utc;
+    use databend_common_catalog::session_type::SessionType;
     use databend_common_catalog::table::Table;
     use databend_common_catalog::table_context::TableContextTableAccess;
     use databend_common_meta_app::storage::StorageParams;
@@ -287,6 +288,39 @@ mod real_s3 {
         Ok(())
     }
 
+    async fn setup_sql_fixture(setup: EESetup) -> anyhow::Result<TestFixture> {
+        // The default Dummy session cannot create temporary tables. Use the same
+        // MySQL session for all statements so settings and temporary tables persist.
+        Ok(TestFixture::setup_with_custom_and_session_type(setup, SessionType::MySQL).await?)
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn sql_fixture_supports_temporary_tables() -> anyhow::Result<()> {
+        // No AWS access: exercise the same session setup and temporary-table SQL
+        // as the real S3 test using EESetup's filesystem backend.
+        let fixture = setup_sql_fixture(EESetup::new()).await?;
+        fixture
+            .execute_command("CREATE DATABASE storage_class")
+            .await?;
+        fixture
+            .execute_command("SET s3_storage_class = 'intelligent_tiering'")
+            .await?;
+        fixture.execute_command("CREATE TEMPORARY TABLE storage_class.temp(id INT) S3_STORAGE_CLASS = 'intelligent_tiering'").await?;
+        fixture
+            .execute_command("INSERT INTO storage_class.temp VALUES (13)")
+            .await?;
+        check_data(&fixture, "temp", &[13]).await?;
+        let objects = table_objects(&fixture, "temp").await?;
+        new_objects(&objects, &TableObjects::new())?;
+        fixture
+            .execute_command("DROP TABLE storage_class.temp")
+            .await?;
+        fixture
+            .execute_command("DROP DATABASE storage_class")
+            .await?;
+        Ok(())
+    }
+
     async fn sql_roundtrip(
         storage: StorageParams,
         operator: &Operator,
@@ -295,7 +329,7 @@ mod real_s3 {
         let mut setup = EESetup::new();
         setup.config_mut().storage.params = storage;
         setup.config_mut().storage.allow_insecure = false;
-        let fixture = TestFixture::setup_with_custom(setup).await?;
+        let fixture = setup_sql_fixture(setup).await?;
         // Keep old blocks/segments intact so a second write cannot compact away
         // the objects whose original storage class we recheck.
         fixture
