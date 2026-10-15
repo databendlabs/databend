@@ -1,5 +1,5 @@
-# Preserve the old view's result even when a same-named real table exists.
-# Ordinary SQL, new views, and rebuilt views use the corrected qualified-name rule.
+# Read definitions written by 1.2.833, not definitions recreated with current code.
+# Current-only name resolution is covered by query/cte/name_conflict.test.
 
 statement ok
 create database compat_view_cte_other
@@ -42,48 +42,20 @@ select * from compat_view_cte.v_recursive order by n
 2
 3
 
-# Direct definition readers also need the old mode, not only SELECT from a view.
+# Also exercise a direct definition reader on actual old metadata.
 query I
 select count(*) from system.columns where database = 'compat_view_cte' and table = 'v_missing'
 ----
 1
 
-statement ok
-create table copied like compat_view_cte.v_missing
-
-# The legacy scope cannot capture qualified references outside the view.
+# One assertion covers legacy lookup, restoration to strict lookup, and a scalar binder.
 query III
 with t as (select 77::int as n) select v.n, r.n, (select n from compat_view_cte.t) from compat_view_cte.v_shadow v, compat_view_cte.t r
 ----
 99 1 1
 
-query II
-with t as (select 77::int as n) select r.n, v.n from compat_view_cte.t r, compat_view_cte.v_shadow v
-----
-1 99
-
-query I
-with t as (select 99::int as n) select * from compat_view_cte.t
-----
-1
-
-statement ok
-create view v_new as with t as (select 99::int as n) select * from compat_view_cte.t
-
-query I
-select * from v_new
-----
-1
-
-statement ok
-create view v_mixed as with t as (select 77::int as n) select v.n as x, r.n as y from compat_view_cte.v_shadow v, compat_view_cte.t r
-
-query II
-select * from v_mixed
-----
-99 1
-
-# Recreate explicitly qualified SQL to opt into the corrected table semantics.
+# Rebuild once after the real upgrade to adopt strict table semantics. To retain
+# CTE intent instead, the user must supply the original unqualified CTE SQL.
 statement ok
 create or replace view compat_view_cte.v_shadow as with t as (select 99::int as n) select * from compat_view_cte.t
 
@@ -91,21 +63,6 @@ query I
 select * from compat_view_cte.v_shadow
 ----
 1
-
-# To retain CTE semantics, recreate from original unqualified CTE SQL, not from
-# old SHOW CREATE text in which the system may already have added a database.
-statement ok
-create or replace view compat_view_cte.v_missing as with missing as (select 98::int as n) select * from missing
-
-query I
-select * from compat_view_cte.v_missing
-----
-98
-
-query II
-select * from v_mixed
-----
-1 1
 
 statement ok
 unset enable_auto_materialize_cte

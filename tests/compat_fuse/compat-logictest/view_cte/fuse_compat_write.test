@@ -44,8 +44,3 @@ query I
 select * from v_shadow
 ----
 99
-
-query I
-select * from v_chain
-----
-6

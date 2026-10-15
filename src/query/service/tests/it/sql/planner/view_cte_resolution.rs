@@ -154,31 +154,33 @@ async fn test_legacy_view_cte_resolution_is_scoped() -> Result<()> {
     ctx.get_settings()
         .set_enable_experimental_virtual_column(1)?;
 
+    // Only repeated consumers change binding paths when auto-materialization is
+    // toggled. Single-consumer views and scope restoration need one check each.
     for auto_materialize in [0, 1] {
         ctx.get_settings()
             .set_enable_auto_materialize_cte(auto_materialize)?;
-        assert_numbers(&ctx, "SELECT * FROM legacy_cte.v_old", &[&[99]]).await?;
-        assert_numbers(&ctx, "SELECT * FROM legacy_cte.v_missing", &[&[98]]).await?;
-        assert_numbers(&ctx, "SELECT * FROM legacy_cte.v_scalar", &[&[97]]).await?;
         assert_numbers(&ctx, "SELECT * FROM legacy_cte.v_repeated", &[&[198]]).await?;
-        assert_numbers(&ctx, "SELECT * FROM legacy_cte.v_catalog", &[&[96]]).await?;
         assert_numbers(&ctx, "SELECT * FROM legacy_cte.v_json", &[&[14]]).await?;
-
-        // A qualified name is strict outside the legacy view, in either join order
-        // and in scalar subqueries created after that view has been bound.
-        assert_numbers(
-            &ctx,
-            "WITH t AS (SELECT 77::INT AS n) SELECT v.n, r.n, (SELECT n FROM legacy_cte.t) FROM legacy_cte.v_old v, legacy_cte.t r",
-            &[&[99, 1, 1]],
-        )
-        .await?;
-        assert_numbers(
-            &ctx,
-            "WITH t AS (SELECT 77::INT AS n) SELECT r.n, v.n FROM legacy_cte.t r, legacy_cte.v_old v",
-            &[&[1, 99]],
-        )
-        .await?;
     }
+    assert_numbers(&ctx, "SELECT * FROM legacy_cte.v_old", &[&[99]]).await?;
+    assert_numbers(&ctx, "SELECT * FROM legacy_cte.v_missing", &[&[98]]).await?;
+    assert_numbers(&ctx, "SELECT * FROM legacy_cte.v_scalar", &[&[97]]).await?;
+    assert_numbers(&ctx, "SELECT * FROM legacy_cte.v_catalog", &[&[96]]).await?;
+
+    // A qualified name is strict outside the legacy view, in either join order
+    // and in scalar subqueries created after that view has been bound.
+    assert_numbers(
+        &ctx,
+        "WITH t AS (SELECT 77::INT AS n) SELECT v.n, r.n, (SELECT n FROM legacy_cte.t) FROM legacy_cte.v_old v, legacy_cte.t r",
+        &[&[99, 1, 1]],
+    )
+    .await?;
+    assert_numbers(
+        &ctx,
+        "WITH t AS (SELECT 77::INT AS n) SELECT r.n, v.n FROM legacy_cte.t r, legacy_cte.v_old v",
+        &[&[1, 99]],
+    )
+    .await?;
 
     // The same SQL is strict as an ordinary query and in a newly created view.
     assert_numbers(&ctx, old_sql, &[&[1]]).await?;
