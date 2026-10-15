@@ -167,17 +167,20 @@ impl ServiceQueryExecutor {
 #[async_trait]
 impl QueryExecutor for ServiceQueryExecutor {
     async fn execute_query_with_sql_string(&self, query_sql: &str) -> Result<Vec<DataBlock>> {
-        self.execute_query_in_namespace(query_sql, None).await
+        self.execute_query_in_namespace(query_sql, None, false)
+            .await
     }
 
     async fn execute_query_in_namespace(
         &self,
         query_sql: &str,
         namespace: Option<(String, String)>,
+        legacy_cte_resolution: bool,
     ) -> Result<Vec<DataBlock>> {
         let result = async {
-            let mut planner =
-                Planner::new(self.ctx.clone()).with_default_table_namespace(namespace);
+            let mut planner = Planner::new(self.ctx.clone())
+                .with_default_table_namespace(namespace)
+                .with_legacy_cte_resolution(legacy_cte_resolution);
             let (plan, _) = planner.plan_sql(query_sql).await?;
             let interpreter = InterpreterFactory::get(self.ctx.clone(), &plan).await?;
             let stream = interpreter

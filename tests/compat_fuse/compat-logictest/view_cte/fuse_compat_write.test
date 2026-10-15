@@ -1,0 +1,51 @@
+# Old ViewRewriter stores these CTE references as `compat_view_cte.cte_name`.
+# Keep the old writer: creating these definitions with current code is not equivalent.
+
+statement ok
+drop database if exists compat_view_cte
+
+statement ok
+create database compat_view_cte
+
+statement ok
+use compat_view_cte
+
+statement ok
+create table t(n int)
+
+statement ok
+insert into t values (1)
+
+statement ok
+create table src(n int)
+
+statement ok
+insert into src values (5)
+
+statement ok
+create view v_shadow as with t as (select 99::int as n) select * from t
+
+statement ok
+create view v_missing as with missing as (select 98::int as n) select * from missing
+
+statement ok
+create view v_chain as with a as (select * from src), b as (select n + 1 as n from a) select * from b
+
+statement ok
+create view v_scalar as with t as (select 97::int as n) select (select n from t) as n
+
+statement ok
+create view v_repeated as with t as (select 99::int as n) select a.n as x, b.n as y from t a, t b
+
+statement ok
+create view v_recursive as with recursive r(n) as (select 1 union all select n + 1 from r where n < 3) select * from r
+
+query I
+select * from v_shadow
+----
+99
+
+query I
+select * from v_chain
+----
+6

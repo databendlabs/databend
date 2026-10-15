@@ -159,7 +159,8 @@ impl FullTypeCheckAdapter {
             name_resolution_ctx.clone(),
             metadata,
         )
-        .with_default_table_namespace(parent_context.default_table_namespace.clone());
+        .with_default_table_namespace(parent_context.default_table_namespace.clone())
+        .with_legacy_cte_resolution(parent_context.legacy_cte_resolution);
 
         // Use the current bind context as the parent so the subquery can resolve outer columns.
         let mut bind_context = BindContext::with_parent(parent_context.clone())?;

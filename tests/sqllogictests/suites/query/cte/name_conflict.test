@@ -119,6 +119,19 @@ with t1 as materialized (select 99 as n) select a.n, b.n from t1 a, poc.t1 b ord
 99 1
 99 2
 
+# Materialized CTE producer columns must not be renamed when their source is
+# an explicitly qualified same-named real table.
+query I
+with t1 as materialized (select 99 as n), t2 as materialized (select t1.n from poc.t1) select * from t2 order by n
+----
+1
+2
+
+query I
+with t1 as materialized (select 99 as n), t2 as materialized (select t1.n from t1) select * from t2
+----
+99
+
 # A qualified name does not fall back to a CTE when the table is missing.
 statement error 1025
 with t2 as (select 99 as n) select * from poc.t2

@@ -26,6 +26,7 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SetExpr;
+use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::With;
@@ -54,6 +55,7 @@ use crate::plans::SortItem;
 struct CTERefCounter {
     cte_ref_count: HashMap<String, usize>,
     name_resolution_ctx: NameResolutionContext,
+    legacy_cte_resolution: bool,
 }
 
 impl Visitor for CTERefCounter {
@@ -61,9 +63,9 @@ impl Visitor for CTERefCounter {
         &mut self,
         table_ref: &TableReference,
     ) -> std::result::Result<VisitControl, !> {
-        // Only an unqualified name can refer to a CTE.
+        // Legacy stored definitions qualified their CTE references too.
         if let TableReference::Table { table, .. } = table_ref
-            && table.database.is_none()
+            && (table.database.is_none() || self.legacy_cte_resolution)
         {
             let table_name = normalize_identifier(&table.table, &self.name_resolution_ctx).name;
             if let Some(count) = self.cte_ref_count.get_mut(&table_name) {
@@ -82,6 +84,7 @@ impl Binder {
         query: &Query,
     ) -> Result<(SExpr, BindContext)> {
         bind_context.default_table_namespace = self.default_table_namespace.clone();
+        bind_context.legacy_cte_resolution = self.legacy_cte_resolution;
         let mut with = query.with.clone();
         bind_context.allow_virtual_column = self.is_virtual_column_rewrite_enabled();
         if self.ctx.get_settings().get_enable_auto_materialize_cte()? {
@@ -172,6 +175,7 @@ impl Binder {
         let mut visitor = CTERefCounter {
             cte_ref_count,
             name_resolution_ctx: self.name_resolution_ctx.clone(),
+            legacy_cte_resolution: self.legacy_cte_resolution,
         };
         query.walk(&mut visitor)?;
 
@@ -285,6 +289,7 @@ impl Binder {
             database.clone(),
             self.m_cte_table_name.clone(),
             self.name_resolution_ctx.clone(),
+            self.legacy_cte_resolution,
         );
         let mut as_query = cte.query.clone();
         with.ctes.truncate(cte_index);
@@ -351,9 +356,10 @@ impl Binder {
         log::info!("[CTE]create_table_sql: {create_table_sql}");
         if let Some(subquery_executor) = &self.subquery_executor {
             let namespace = self.default_table_namespace.clone();
+            let legacy_cte_resolution = self.legacy_cte_resolution;
             let _ = databend_common_base::runtime::block_on(async move {
                 subquery_executor
-                    .execute_query_in_namespace(&create_table_sql, namespace)
+                    .execute_query_in_namespace(&create_table_sql, namespace, legacy_cte_resolution)
                     .await
             })?;
         } else {
@@ -373,6 +379,7 @@ pub struct TableNameReplacer {
     database: String,
     new_name: HashMap<String, String>,
     name_resolution_ctx: NameResolutionContext,
+    legacy_cte_resolution: bool,
 }
 
 impl VisitorMut for TableNameReplacer {
@@ -380,21 +387,36 @@ impl VisitorMut for TableNameReplacer {
         &mut self,
         table_reference: &mut TableReference,
     ) -> std::result::Result<VisitControl, !> {
-        // Only an unqualified name can refer to a CTE.
-        if let TableReference::Table { span, table, .. } = table_reference
-            && table.database.is_none()
-            && self.replace_identifier(&mut table.table)
+        if let TableReference::Table {
+            span, table, alias, ..
+        } = table_reference
+            && self.may_replace(table.database.as_ref())
         {
-            // Temporary CTE tables live in the session namespace, not in the view.
-            table.catalog = Some(Identifier::from_name(*span, self.catalog.clone()));
-            table.database = Some(Identifier::from_name(*span, self.database.clone()));
+            let name = normalize_identifier(&table.table, &self.name_resolution_ctx).name;
+            if let Some(new_name) = self.new_name.get(&name) {
+                // In strict mode, retain the CTE name as a source alias instead of
+                // rewriting column qualifiers by name. A `t.n` elsewhere may refer
+                // to a real `db.t` and must not become `temporary_t.n`.
+                if !self.legacy_cte_resolution && alias.is_none() {
+                    *alias = Some(TableAlias {
+                        name: table.table.clone(),
+                        columns: vec![],
+                        keep_database_name: false,
+                    });
+                }
+                table.table.name.clone_from(new_name);
+                // Temporary CTE tables live in the session namespace, not in the view.
+                table.catalog = Some(Identifier::from_name(*span, self.catalog.clone()));
+                table.database = Some(Identifier::from_name(*span, self.database.clone()));
+            }
         }
         Ok(VisitControl::Continue)
     }
 
     fn visit_expr(&mut self, expr: &mut Expr) -> std::result::Result<VisitControl, !> {
         if let Expr::ColumnRef { column, .. } = expr
-            && column.database.is_none()
+            && self.legacy_cte_resolution
+            && self.may_replace(column.database.as_ref())
             && let Some(table_identifier) = &mut column.table
         {
             self.replace_identifier(table_identifier);
@@ -409,22 +431,83 @@ impl TableNameReplacer {
         database: String,
         new_name: HashMap<String, String>,
         name_resolution_ctx: NameResolutionContext,
+        legacy_cte_resolution: bool,
     ) -> Self {
         Self {
             catalog,
             database,
             new_name,
             name_resolution_ctx,
+            legacy_cte_resolution,
         }
     }
 
-    fn replace_identifier(&mut self, identifier: &mut Identifier) -> bool {
+    fn may_replace(&self, database: Option<&Identifier>) -> bool {
+        database.is_none()
+            || (self.legacy_cte_resolution && database.is_some_and(|db| db.name == self.database))
+    }
+
+    fn replace_identifier(&mut self, identifier: &mut Identifier) {
         let name = normalize_identifier(identifier, &self.name_resolution_ctx).name;
         if let Some(new_name) = self.new_name.get(&name) {
-            identifier.name = new_name.clone();
-            true
-        } else {
-            false
+            identifier.name.clone_from(new_name);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_ast::ast::Statement;
+    use databend_common_ast::parser::Dialect;
+    use databend_common_ast::parser::parse_sql;
+    use databend_common_ast::parser::tokenize_sql;
+
+    use super::*;
+
+    fn parse_query(sql: &str) -> Box<Query> {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (Statement::Query(query), _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap() else {
+            panic!("expected a query");
+        };
+        query
+    }
+
+    #[test]
+    fn test_cte_ref_counter_legacy_mode() {
+        let query = parse_query("WITH t AS (SELECT 1) SELECT * FROM db.t a, db.t b, t c");
+        for (legacy, expected) in [(false, 1), (true, 3)] {
+            let mut counter = CTERefCounter {
+                cte_ref_count: [("t".to_string(), 0)].into(),
+                legacy_cte_resolution: legacy,
+                ..Default::default()
+            };
+            let Ok(_) = query.walk(&mut counter);
+            assert_eq!(counter.cte_ref_count["t"], expected);
+        }
+    }
+
+    #[test]
+    fn test_materialized_cte_replacer_legacy_mode() {
+        for (legacy, expected) in [
+            (
+                false,
+                "SELECT t.n, db.t.n, other.t.n FROM default.db.t_temp AS t, db.t, other.t",
+            ),
+            (
+                true,
+                "SELECT t_temp.n, db.t_temp.n, other.t.n FROM default.db.t_temp, default.db.t_temp, other.t",
+            ),
+        ] {
+            let mut query = parse_query("SELECT t.n, db.t.n, other.t.n FROM t, db.t, other.t");
+            let mut replacer = TableNameReplacer::new(
+                "default".to_string(),
+                "db".to_string(),
+                [("t".to_string(), "t_temp".to_string())].into(),
+                NameResolutionContext::default(),
+                legacy,
+            );
+            let Ok(_) = query.walk_mut(&mut replacer);
+            assert_eq!(query.to_string(), expected);
         }
     }
 }

@@ -262,8 +262,12 @@ impl Binder {
         let previous_namespace = self
             .default_table_namespace
             .replace((catalog.to_string(), database.to_string()));
+        // A newly created definition always uses strict CTE resolution, even when
+        // it is planned from a legacy-definition reader.
+        let previous_legacy = std::mem::replace(&mut self.legacy_cte_resolution, false);
         let result = self.bind_statement(&mut bind_context, &stmt).await;
         self.default_table_namespace = previous_namespace;
+        self.legacy_cte_resolution = previous_legacy;
         result
     }
 }
