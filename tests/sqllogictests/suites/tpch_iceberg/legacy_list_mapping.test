@@ -81,3 +81,69 @@ SELECT id, s:w FROM ctl.test.t_rename_after_write WHERE id > 0 AND s:w IS NOT NU
 ----
 1 a
 2 b
+
+# Results alone would still pass if nothing were pushed down, so also assert
+# pruning. The table has three data files, and Iceberg reports partitions
+# total after iceberg-rust's file pruning: a total below 3 means the filter
+# was bound to the snapshot schema through field IDs.
+## note: the tests only cover standalone mode
+query T
+EXPLAIN SELECT id, s:w FROM ctl.test.t_rename_after_write WHERE id = 2;
+----
+Filter
+├── output columns: [t_rename_after_write.id (#0), t_rename_after_write.s:w (#2)]
+├── filters: [is_true(t_rename_after_write.id (#0) = 2)]
+├── estimated rows: 3.00
+└── TableScan
+    ├── table: ctl.test.t_rename_after_write
+    ├── scan id: 0
+    ├── output columns: [id (#0), s:w (#2)]
+    ├── read rows: 1
+    ├── read size: 1.02 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── push downs: [filters: [is_true(t_rename_after_write.id (#0) = 2)], limit: NONE]
+    └── estimated rows: 3.00
+
+# PyIceberg writes no bounds for nested columns, only counts, so the renamed
+# nested path `s.v` -> `s.w` is covered through null-count pruning.
+query T
+EXPLAIN SELECT id, s:w FROM ctl.test.t_rename_after_write WHERE s:w IS NULL;
+----
+Filter
+├── output columns: [t_rename_after_write.id (#0), t_rename_after_write.s:w (#2)]
+├── filters: [NOT is_not_null(t_rename_after_write.s:w (#2))]
+├── estimated rows: 0.60
+└── TableScan
+    ├── table: ctl.test.t_rename_after_write
+    ├── scan id: 0
+    ├── output columns: [id (#0), s:w (#2)]
+    ├── read rows: 1
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── push downs: [filters: [NOT is_not_null(t_rename_after_write.s:w (#2))], limit: NONE]
+    └── estimated rows: 3.00
+
+query T
+EXPLAIN SELECT id, s:w FROM ctl.test.t_rename_after_write WHERE s:w IS NOT NULL;
+----
+Filter
+├── output columns: [t_rename_after_write.id (#0), t_rename_after_write.s:w (#2)]
+├── filters: [is_not_null(t_rename_after_write.s:w (#2))]
+├── estimated rows: 0.60
+└── TableScan
+    ├── table: ctl.test.t_rename_after_write
+    ├── scan id: 0
+    ├── output columns: [id (#0), s:w (#2)]
+    ├── read rows: 2
+    ├── read size: 2.03 KiB
+    ├── partitions total: 2
+    ├── partitions scanned: 2
+    ├── push downs: [filters: [is_not_null(t_rename_after_write.s:w (#2))], limit: NONE]
+    └── estimated rows: 3.00
+
+query IT
+SELECT id, s:w FROM ctl.test.t_rename_after_write WHERE s:w IS NULL;
+----
+3 NULL

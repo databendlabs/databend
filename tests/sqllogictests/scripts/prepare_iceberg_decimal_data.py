@@ -209,8 +209,10 @@ with identified.transaction() as transaction:
     transaction.set_properties({"schema.name-mapping.default": "not json"})
 
 # Rename after the last write: the current snapshot still references the old
-# schema, so pushed-down select/filter must be translated by field ID. Two
-# appends give two data files, letting the translated filter prune one.
+# schema, so pushed-down select/filter must be translated by field ID. Each
+# append is its own data file, letting a translated filter prune files.
+# PyIceberg writes only counts (no bounds) for nested columns, so the third
+# file's NULL `s.v` lets null counts prune on the renamed nested path.
 name = "test.t_rename_after_write"
 if catalog.table_exists(name):
     catalog.drop_table(name)
@@ -222,7 +224,7 @@ renamed = catalog.create_table(
     ),
 )
 renamed_child = pa.struct([pa.field("v", pa.string())])
-for key, value in [(1, "a"), (2, "b")]:
+for key, value in [(1, "a"), (2, "b"), (3, None)]:
     renamed.append(
         pa.table(
             {
