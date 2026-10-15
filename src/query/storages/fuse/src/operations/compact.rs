@@ -139,6 +139,7 @@ impl FuseTable {
                 None,
                 table_meta_timestamps,
                 false,
+                None,
             )
         })
     }

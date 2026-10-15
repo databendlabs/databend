@@ -44,7 +44,11 @@ runs:
         if [[ -z "${{ inputs.version }}" ]]; then
           echo "BUILD_ARGS=--strip --out dist" >> $GITHUB_OUTPUT
         else
-          echo "BUILD_ARGS=--release --strip --out dist" >> $GITHUB_OUTPUT
+          # Cargo.toml pins databend-query to codegen-units = 4 for shipped binaries.
+          # Package-level profile settings beat the profile-wide
+          # CARGO_PROFILE_RELEASE_CODEGEN_UNITS env below, so override the package
+          # entry explicitly to keep the wheel's 16-unit build for that crate.
+          echo "BUILD_ARGS=--release --strip --out dist --config profile.release.package.databend-query.codegen-units=16" >> $GITHUB_OUTPUT
         fi
 
     - name: Normalize cargo config for release wheel builds

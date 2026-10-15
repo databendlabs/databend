@@ -213,7 +213,7 @@ pub fn create_block_index_specs(
     let ngram_args = FuseTable::create_ngram_index_args(indexes, &table.schema(), true)?;
     let mut specs: Vec<Arc<dyn BlockIndexSpec>> =
         vec![Arc::new(BloomIndexWriteSpec::new(columns, ngram_args))];
-    for builder in create_inverted_index_builders(&table.table_info.meta) {
+    for builder in create_inverted_index_builders(table)? {
         specs.push(Arc::new(builder.into_write_spec()));
     }
     if let Some(builder) = VectorIndexBuilder::try_create(indexes, schema.clone(), true) {

@@ -24,6 +24,7 @@ use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
+use databend_common_expression::PartialEvalPolicy;
 use databend_common_expression::PassthroughNullable;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
@@ -708,6 +709,17 @@ fn concat_fn(args: &[Value<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
     }
 }
 
+// Scalar calls run once for the whole block, not just for row zero. Project the
+// block's active rows to that single invocation while retaining column row indices.
+fn regexp_active_rows(len: Option<usize>, ctx: &EvalContext) -> Option<Bitmap> {
+    let active_rows = PartialEvalPolicy::SkipInactiveRows.active_rows(ctx)?;
+    Some(if len.is_some() {
+        active_rows
+    } else {
+        Bitmap::from_iter([active_rows.null_count() < active_rows.len()])
+    })
+}
+
 fn regexp_instr_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
     let len = args.iter().find_map(|arg| match arg {
         Value::Column(col) => Some(col.len()),
@@ -740,7 +752,14 @@ fn regexp_instr_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyT
     let size = len.unwrap_or(1);
     let mut builder = Vec::with_capacity(size);
 
+    let active_rows = regexp_active_rows(len, ctx);
     let cached_reg = match (&pat_arg, &mt_arg) {
+        _ if active_rows
+            .as_ref()
+            .is_some_and(|rows| rows.null_count() == rows.len()) =>
+        {
+            None
+        }
         (Value::Scalar(pat), Some(Value::Scalar(mt))) => {
             regexp::build_regexp_from_pattern("regexp_instr", pat, Some(mt)).ok()
         }
@@ -751,6 +770,10 @@ fn regexp_instr_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyT
     };
 
     for idx in 0..size {
+        if active_rows.as_ref().is_some_and(|rows| !rows.get_bit(idx)) {
+            builder.push(0);
+            continue;
+        }
         let mut source = unsafe { source_arg.index_unchecked(idx) };
         let pat = unsafe { pat_arg.index_unchecked(idx) };
         let pos = pos_arg
@@ -830,7 +853,14 @@ fn regexp_like_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyTy
         None
     };
 
+    let active_rows = regexp_active_rows(len, ctx);
     let cached_reg = match (&pat_arg, &mt_arg) {
+        _ if active_rows
+            .as_ref()
+            .is_some_and(|rows| rows.null_count() == rows.len()) =>
+        {
+            None
+        }
         (Value::Scalar(pat), Some(Value::Scalar(mt))) => {
             regexp::build_regexp_from_pattern("regexp_like", pat, Some(mt)).ok()
         }
@@ -843,6 +873,10 @@ fn regexp_like_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyTy
     let size = len.unwrap_or(1);
     let mut builder = MutableBitmap::with_capacity(size);
     for idx in 0..size {
+        if active_rows.as_ref().is_some_and(|rows| !rows.get_bit(idx)) {
+            builder.push(false);
+            continue;
+        }
         let source = unsafe { source_arg.index_unchecked(idx) };
         let pat = unsafe { pat_arg.index_unchecked(idx) };
         let mt = mt_arg
@@ -901,7 +935,14 @@ fn regexp_replace_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<An
     let size = len.unwrap_or(1);
     let mut builder = StringColumnBuilder::with_capacity(size);
 
+    let active_rows = regexp_active_rows(len, ctx);
     let cached_reg = match (&pat_arg, &mt_arg) {
+        _ if active_rows
+            .as_ref()
+            .is_some_and(|rows| rows.null_count() == rows.len()) =>
+        {
+            None
+        }
         (Value::Scalar(pat), Some(Value::Scalar(mt))) => {
             regexp::build_regexp_from_pattern("regexp_replace", pat, Some(mt)).ok()
         }
@@ -912,6 +953,10 @@ fn regexp_replace_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<An
     };
 
     for idx in 0..size {
+        if active_rows.as_ref().is_some_and(|rows| !rows.get_bit(idx)) {
+            StringType::push_default(&mut builder);
+            continue;
+        }
         let source = unsafe { source_arg.index_unchecked(idx) };
         let pat = unsafe { pat_arg.index_unchecked(idx) };
         let repl = unsafe { repl_arg.index_unchecked(idx) };
@@ -1000,7 +1045,14 @@ fn regexp_substr_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<Any
         None
     };
 
+    let active_rows = regexp_active_rows(len, ctx);
     let cached_reg = match (&pat_arg, &mt_arg) {
+        _ if active_rows
+            .as_ref()
+            .is_some_and(|rows| rows.null_count() == rows.len()) =>
+        {
+            None
+        }
         (Value::Scalar(pat), Some(Value::Scalar(mt))) => {
             regexp::build_regexp_from_pattern("regexp_replace", pat, Some(mt)).ok()
         }
@@ -1014,6 +1066,11 @@ fn regexp_substr_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<Any
     let mut builder = StringColumnBuilder::with_capacity(size);
     let mut validity = MutableBitmap::with_capacity(size);
     for idx in 0..size {
+        if active_rows.as_ref().is_some_and(|rows| !rows.get_bit(idx)) {
+            StringType::push_default(&mut builder);
+            validity.push(false);
+            continue;
+        }
         let source = unsafe { source_arg.index_unchecked(idx) };
         let pat = unsafe { pat_arg.index_unchecked(idx) };
         let pos = pos_arg
@@ -1129,6 +1186,103 @@ fn char_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
     match len {
         Some(_) => Value::Column(Column::String(builder.build())),
         _ => Value::Scalar(Scalar::String(builder.build_scalar())),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::FromData;
+
+    use super::*;
+
+    type RegexpFn = fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType>;
+
+    #[test]
+    fn test_regexp_functions_skip_inactive_rows() {
+        let string = |value: &str| Value::Scalar(Scalar::String(value.to_string()));
+        let int = |value| Value::Scalar(Scalar::Number(NumberScalar::Int64(value)));
+        let cases: [(RegexpFn, Vec<Value<AnyType>>, Scalar, Scalar); 4] = [
+            (
+                regexp_instr_fn,
+                vec![int(1), int(1), int(0), string("c")],
+                Scalar::Number(NumberScalar::UInt64(1)),
+                Scalar::Number(NumberScalar::UInt64(0)),
+            ),
+            (
+                regexp_like_fn,
+                vec![string("c")],
+                Scalar::Boolean(true),
+                Scalar::Boolean(false),
+            ),
+            (
+                regexp_replace_fn,
+                vec![string("cat"), int(1), int(0), string("c")],
+                Scalar::String("cat".to_string()),
+                Scalar::String(String::new()),
+            ),
+            (
+                regexp_substr_fn,
+                vec![int(1), int(1), string("c")],
+                Scalar::String("dog".to_string()),
+                Scalar::Null,
+            ),
+        ];
+        let func_ctx = FunctionContext::default();
+        for (eval, extra_args, active_result, inactive_result) in cases {
+            for num_rows in [0, 4] {
+                for validity in [
+                    None,
+                    Some(Bitmap::new_constant(true, num_rows)),
+                    Some(Bitmap::new_constant(false, num_rows)),
+                    Some(Bitmap::from_iter((0..num_rows).map(|row| row % 2 == 1))),
+                ] {
+                    for shape in 0..8 {
+                        let mut args = vec![string("dog"), string("dog")];
+                        args.extend(extra_args.clone());
+                        let last_arg = args.len() - 1;
+                        for (bit, arg) in [0, 1, last_arg].into_iter().enumerate() {
+                            if shape & (1 << bit) != 0 {
+                                let value = args[arg].as_scalar().unwrap().as_string().unwrap();
+                                let values = vec![value.as_str(); num_rows];
+                                args[arg] = Value::Column(StringType::from_data(values));
+                            }
+                        }
+                        let mut ctx = EvalContext {
+                            generics: &[],
+                            num_rows,
+                            func_ctx: &func_ctx,
+                            validity: validity.clone(),
+                            errors: None,
+                            suppress_error: false,
+                            strict_eval: false,
+                        };
+                        let result = eval(&args, &mut ctx);
+                        let all_scalar = shape == 0;
+                        assert_eq!(result.as_scalar().is_some(), all_scalar);
+                        if let Value::Column(column) = &result {
+                            assert_eq!(column.len(), num_rows);
+                        }
+                        for row in 0..if all_scalar { 1 } else { num_rows } {
+                            let active = if all_scalar {
+                                num_rows > 0
+                                    && validity
+                                        .as_ref()
+                                        .is_none_or(|rows| rows.null_count() < rows.len())
+                            } else {
+                                validity.as_ref().is_none_or(|rows| rows.get_bit(row))
+                            };
+                            let expected = if active {
+                                &active_result
+                            } else {
+                                &inactive_result
+                            };
+                            assert_eq!(result.index(row).unwrap(), expected.as_ref());
+                        }
+                        assert!(ctx.errors.is_none());
+                    }
+                }
+            }
+        }
     }
 }
 

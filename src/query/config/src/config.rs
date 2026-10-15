@@ -3232,12 +3232,12 @@ pub struct CacheConfig {
     )]
     pub disk_cache_inverted_index_lookup_size: u64,
 
-    /// Max bytes of cached inverted-index postings, positions, store, large fieldnorm/fast, and other
-    /// payload pages in memory.
+    /// Total memory budget for inverted-index payload caches: 75% for pages and 25% for
+    /// complete postings/positions components.
     #[clap(
         long = "cache-inverted-index-payload-size",
         value_name = "VALUE",
-        default_value = "8589934592"
+        default_value = "17179869184"
     )]
     pub inverted_index_payload_size: u64,
 
@@ -3465,7 +3465,7 @@ impl Default for CacheConfig {
             disk_cache_inverted_index_meta_size: 0,
             inverted_index_lookup_size: 8589934592,
             disk_cache_inverted_index_lookup_size: 0,
-            inverted_index_payload_size: 8589934592,
+            inverted_index_payload_size: 17179869184,
             disk_cache_inverted_index_payload_size: 0,
             vector_index_meta_count: 30000,
             disk_cache_vector_index_meta_size: 0,

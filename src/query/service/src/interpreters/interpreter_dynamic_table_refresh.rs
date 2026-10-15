@@ -117,12 +117,7 @@ impl Interpreter for RefreshDynamicTableInterpreter {
                     "dynamic table definition must be a query",
                 ));
             };
-            let current_source_table_ids = metadata
-                .read()
-                .tables()
-                .iter()
-                .map(|entry| entry.table().get_id())
-                .collect::<BTreeSet<_>>();
+            let current_source_table_ids = metadata.read().source_table_ids();
             let expected_source_table_ids = table
                 .get_table_info()
                 .meta
