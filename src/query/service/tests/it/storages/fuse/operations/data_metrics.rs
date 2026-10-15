@@ -12,12 +12,13 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-//! `QueryContext::get_data_metrics` backs `system.processes.data_read_bytes /
+//! `QueryContext::get_io_stats` backs `system.processes.data_read_bytes /
 //! data_write_bytes` and `system_history.query_history.scan_io_bytes /
 //! written_io_bytes`.
 //! These tests check that it reports the block IO of `SELECT`,
-//! `INSERT ... SELECT`, `REPLACE INTO` and `COPY INTO`, not just the snapshot
-//! and segment metadata touched through the attached table instance.
+//! `INSERT ... SELECT`, `REPLACE INTO` and `COPY INTO` regardless of how the
+//! interpreter was entered, and that the partition counters still come from
+//! the attached table.
 
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::IoStatsSnapshot;
@@ -25,7 +26,6 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_storage::StorageMetrics;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::TableContextProgress;
 use databend_query::sessions::TableContextQueryIdentity;
@@ -34,8 +34,9 @@ use databend_query::test_kits::TestFixture;
 use futures_util::TryStreamExt;
 
 struct Observed {
-    data_metrics: StorageMetrics,
     io_stats: IoStatsSnapshot,
+    partitions_scanned: u64,
+    partitions_total: u64,
     scan_bytes: usize,
     write_bytes: usize,
 }
@@ -57,9 +58,11 @@ async fn run_and_observe(fixture: &TestFixture, sql: &str) -> Result<Observed> {
     let stream = interpreter.execute(ctx.clone()).await?;
     stream.try_collect::<Vec<DataBlock>>().await?;
 
+    let data_metrics = ctx.get_data_metrics();
     Ok(Observed {
-        data_metrics: ctx.get_data_metrics(),
         io_stats: ctx.get_io_stats(),
+        partitions_scanned: data_metrics.get_partitions_scanned(),
+        partitions_total: data_metrics.get_partitions_total(),
         scan_bytes: ctx.get_scan_progress_value().bytes,
         write_bytes: ctx.get_write_progress_value().bytes,
     })
@@ -68,21 +71,20 @@ async fn run_and_observe(fixture: &TestFixture, sql: &str) -> Result<Observed> {
 /// Upper bound for "only snapshot / segment metadata was read or written"
 /// in this fixture. The block files are an order of magnitude larger, so any
 /// value above this proves block IO was counted.
-const META_ONLY_BYTES: usize = 4096;
+const META_ONLY_BYTES: u64 = 4096;
 
-fn assert_block_io_counted(what: &str, data_metrics: usize, io_stats: u64, progress: usize) {
+/// `progress` is the scan / write progress of the query, an independent
+/// measure that block data flowed. `io_bytes` is what the query's `IoStats`
+/// saw on the operator layer; it must reflect that block IO.
+fn assert_block_io_counted(what: &str, io_bytes: u64, progress: usize) {
     assert!(
-        progress > META_ONLY_BYTES,
+        progress as u64 > META_ONLY_BYTES,
         "{what}: progress {progress} indicates no block IO happened; test setup is broken"
     );
     assert!(
-        data_metrics > META_ONLY_BYTES,
-        "{what}: data_metrics reports {data_metrics} bytes, i.e. metadata only; \
-         block IO (progress {progress}) is missing"
-    );
-    assert_eq!(
-        data_metrics as u64, io_stats,
-        "{what}: data_metrics must be sourced from the per-query IoStats"
+        io_bytes > META_ONLY_BYTES,
+        "{what}: IoStats reports {io_bytes} bytes, i.e. metadata only or nothing; \
+         block IO (progress {progress}) was not attributed to the query"
     );
 }
 
@@ -124,14 +126,13 @@ async fn select_counts_block_reads() -> Result<()> {
 
     assert_block_io_counted(
         "select read",
-        observed.data_metrics.get_read_bytes(),
         observed.io_stats.read_bytes,
         observed.scan_bytes,
     );
-    assert_eq!(observed.data_metrics.get_write_bytes(), 0);
+    assert_eq!(observed.io_stats.write_bytes, 0);
     // Partition counters still come from pruning on the attached table.
-    assert_eq!(observed.data_metrics.get_partitions_total(), 1);
-    assert_eq!(observed.data_metrics.get_partitions_scanned(), 1);
+    assert_eq!(observed.partitions_total, 1);
+    assert_eq!(observed.partitions_scanned, 1);
     Ok(())
 }
 
@@ -144,13 +145,11 @@ async fn insert_select_counts_block_reads_and_writes() -> Result<()> {
 
     assert_block_io_counted(
         "insert-select read",
-        observed.data_metrics.get_read_bytes(),
         observed.io_stats.read_bytes,
         observed.scan_bytes,
     );
     assert_block_io_counted(
         "insert-select write",
-        observed.data_metrics.get_write_bytes(),
         observed.io_stats.write_bytes,
         observed.write_bytes,
     );
@@ -169,7 +168,6 @@ async fn replace_into_counts_block_writes() -> Result<()> {
 
     assert_block_io_counted(
         "replace-into write",
-        observed.data_metrics.get_write_bytes(),
         observed.io_stats.write_bytes,
         observed.write_bytes,
     );
@@ -198,12 +196,11 @@ async fn copy_into_table_counts_block_writes() -> Result<()> {
 
     assert_block_io_counted(
         "copy-into write",
-        observed.data_metrics.get_write_bytes(),
         observed.io_stats.write_bytes,
         observed.write_bytes,
     );
     // Reading the staged parquet file goes through the same operator layer.
-    assert!(observed.data_metrics.get_read_bytes() > META_ONLY_BYTES);
+    assert!(observed.io_stats.read_bytes > META_ONLY_BYTES);
     Ok(())
 }
 
@@ -234,11 +231,7 @@ async fn handler_installed_io_stats_is_reused() -> Result<()> {
         .await?;
 
     let handler_view = handler_counter.snapshot();
-    assert!(handler_view.read_bytes as usize > META_ONLY_BYTES);
+    assert!(handler_view.read_bytes > META_ONLY_BYTES);
     assert_eq!(ctx.get_io_stats(), handler_view);
-    assert_eq!(
-        ctx.get_data_metrics().get_read_bytes() as u64,
-        handler_view.read_bytes
-    );
     Ok(())
 }

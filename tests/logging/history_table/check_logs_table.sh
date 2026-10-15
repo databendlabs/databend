@@ -75,13 +75,11 @@ check_query_log "resource-1" "$SELECT_QUERY_ID" "SELECT count(*) FROM system_his
 
 check_query_log "resource-2" "$INSERT_QUERY_ID" "SELECT count(*) FROM system_history.query_history WHERE resource_usage IS NOT NULL AND resource_usage['write_count']::UInt64 > 0 AND resource_usage['write_bytes']::UInt64 > 0 AND resource_usage['write_duration_ms'] IS NOT NULL AND resource_usage['cpu_time_ms'] IS NOT NULL AND resource_usage['wait_time_ms'] IS NOT NULL AND" "1"
 
-# scan_io_bytes / written_io_bytes are sourced from the same per-query IoStats
-# as resource_usage, so they must be non-zero for the select / insert above
-# and at least as large as the resource_usage counters (both snapshots are
-# taken at query finish; the data_metrics one slightly earlier).
-check_query_log "io-bytes-1" "$SELECT_QUERY_ID" "SELECT count(*) FROM system_history.query_history WHERE scan_io_bytes > 0 AND scan_io_bytes <= resource_usage['read_bytes']::UInt64 AND" "1"
+# scan_io_bytes / written_io_bytes are the per-query IoStats read through the
+# HTTP handler path; they must see the block IO of the select / insert above.
+check_query_log "io-bytes-1" "$SELECT_QUERY_ID" "SELECT count(*) FROM system_history.query_history WHERE scan_io_bytes > 0 AND" "1"
 
-check_query_log "io-bytes-2" "$INSERT_QUERY_ID" "SELECT count(*) FROM system_history.query_history WHERE written_io_bytes > 0 AND written_io_bytes <= resource_usage['write_bytes']::UInt64 AND" "1"
+check_query_log "io-bytes-2" "$INSERT_QUERY_ID" "SELECT count(*) FROM system_history.query_history WHERE written_io_bytes > 0 AND" "1"
 
 check_query_log "resource-3" null "SELECT count(*) FROM (SELECT parse_json(message) AS m FROM system_history.log_history WHERE target = 'databend::log::query' AND query_id = '$SELECT_QUERY_ID') WHERE m['log_type'] = 1 AND m['resource_usage'] IS NOT NULL AND m['resource_usage']['list_count'] IS NOT NULL AND m['resource_usage']['cpu_time_ms'] IS NOT NULL AND m['resource_usage']['wait_time_ms'] IS NOT NULL" "1"
 

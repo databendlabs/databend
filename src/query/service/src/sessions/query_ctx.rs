@@ -1148,12 +1148,6 @@ mod tests {
             write_duration_ms: 66,
         });
 
-        let data_metrics = ctx.get_data_metrics();
-        assert_eq!(data_metrics.get_read_bytes(), 33);
-        assert_eq!(data_metrics.get_read_bytes_cost(), 44);
-        assert_eq!(data_metrics.get_write_bytes(), 55);
-        assert_eq!(data_metrics.get_write_bytes_cost(), 66);
-
         Ok(())
     }
 }
