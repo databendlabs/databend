@@ -157,7 +157,7 @@ async fn test_do_vacuum_temporary_files() -> anyhow::Result<()> {
     let r = do_vacuum_temporary_files(
         Arc::new(AbortRightNow),
         "test_dir/".to_string(),
-        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2))),
+        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2)), Arc::new(|_| {})),
         1,
     )
     .await;
@@ -169,7 +169,7 @@ async fn test_do_vacuum_temporary_files() -> anyhow::Result<()> {
     do_vacuum_temporary_files(
         no_abort.clone(),
         "test_dir/".to_string(),
-        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2))),
+        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2)), Arc::new(|_| {})),
         1,
     )
     .await?;
@@ -186,7 +186,7 @@ async fn test_do_vacuum_temporary_files() -> anyhow::Result<()> {
     do_vacuum_temporary_files(
         no_abort.clone(),
         "test_dir/".to_string(),
-        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2))),
+        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2)), Arc::new(|_| {})),
         2,
     )
     .await?;
@@ -197,7 +197,7 @@ async fn test_do_vacuum_temporary_files() -> anyhow::Result<()> {
     do_vacuum_temporary_files(
         no_abort.clone(),
         "test_dir/".to_string(),
-        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(3))),
+        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(3)), Arc::new(|_| {})),
         1000,
     )
     .await?;
