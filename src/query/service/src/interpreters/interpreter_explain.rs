@@ -120,11 +120,17 @@ impl Interpreter for ExplainInterpreter {
                             .await?
                     }
                     Plan::Insert(insert_plan) => {
-                        let stat_context = StatContext::new(self.ctx.get_function_context()?);
+                        let stat_context = StatContext::new(
+                            self.ctx.get_function_context()?,
+                            &self.ctx.get_settings(),
+                        );
                         insert_plan.explain(options, &stat_context).await?
                     }
                     Plan::Replace(replace_plan) => {
-                        let stat_context = StatContext::new(self.ctx.get_function_context()?);
+                        let stat_context = StatContext::new(
+                            self.ctx.get_function_context()?,
+                            &self.ctx.get_settings(),
+                        );
                         replace_plan.explain(options, &stat_context).await?
                     }
                     Plan::CreateTable(plan) => match &plan.as_select {
@@ -372,7 +378,8 @@ impl ExplainInterpreter {
         let options = FormatOptions {
             verbose: self.config.verbose,
         };
-        let stat_context = StatContext::new(self.ctx.get_function_context()?);
+        let stat_context =
+            StatContext::new(self.ctx.get_function_context()?, &self.ctx.get_settings());
         let result = plan.format_indent(options, &stat_context)?;
         let line_split_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);

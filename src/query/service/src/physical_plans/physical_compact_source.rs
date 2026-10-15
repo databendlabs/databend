@@ -296,6 +296,7 @@ impl PhysicalPlanBuilder {
             recluster_info: None,
             table_meta_timestamps,
             meta: PhysicalPlanMeta::new("CommitSink"),
+            expected_ttl: None,
         });
 
         root.adjust_plan_id(&mut 0);
