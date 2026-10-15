@@ -23,7 +23,6 @@ use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
 use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
 use databend_common_sql::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
@@ -112,6 +111,7 @@ async fn write_optimizer_commuted_right_single(
         return Err(ErrorCode::Internal("SELECT should bind to a query plan"));
     };
     let mut state = TransformResult::new();
+    let stat_context = ctx.stat_context()?;
     let physical_commuted;
     let (right_single, optimizer) = match find_join(s_expr.planned()?.expr(), JoinType::RightSingle)
     {
@@ -135,12 +135,12 @@ async fn write_optimizer_commuted_right_single(
                 find_logical_join(&logical, JoinType::LeftSingle).ok_or_else(|| {
                     ErrorCode::Internal("logical optimizer did not derive SINGLE from SQL")
                 })?;
-            RuleCommuteJoin::new(StatContext::default()).apply(left_single, &mut state)?;
+            RuleCommuteJoin::new(stat_context.clone()).apply(left_single, &mut state)?;
             let left_cardinality = RelExpr::with_s_expr(left_single.child(0)?)
-                .derive_cardinality(&StatContext::default())?
+                .derive_cardinality(&stat_context)?
                 .cardinality;
             let right_cardinality = RelExpr::with_s_expr(left_single.child(1)?)
-                .derive_cardinality(&StatContext::default())?
+                .derive_cardinality(&stat_context)?
                 .cardinality;
             let right_single = state
                 .results()
@@ -165,6 +165,7 @@ async fn write_optimizer_commuted_right_single(
         right_single,
         JoinType::RightSingle,
         case.name,
+        &stat_context,
     )?;
     assert_eq!(joins, 1);
     Ok(())

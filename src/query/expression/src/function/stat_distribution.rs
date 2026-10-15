@@ -303,10 +303,7 @@ mod tests {
             }),
             ndv: NdvEstimate::exact(0.0),
             null_count: StatCount::exact(10),
-            distribution: OwnedDistribution::Histogram(Histogram::Int(TypedHistogram::new(
-                vec![],
-                true,
-            ))),
+            distribution: OwnedDistribution::Histogram(Histogram::Int(TypedHistogram::new(vec![]))),
         };
 
         let err = stat.check_consistency().unwrap_err();

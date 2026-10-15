@@ -31,12 +31,19 @@ use databend_common_statistics::NumericHistogramType;
 use databend_common_statistics::StatBounds;
 
 use super::ColumnStat;
+use super::FilterAndStrategy;
 use super::Selectivity;
 use super::SelectivityVisitor;
 use crate::Symbol;
 use crate::optimizer::ir::Statistics;
 use crate::plans::EvalScalar;
 use crate::plans::ScalarExpr;
+
+/// A histogram that retains fewer than this fraction of its distinct values
+/// after filters on other columns is not trusted for join overlap, whether its
+/// original bounds were synthetic or sampled. Use the NDV containment estimate
+/// instead; unfiltered or lightly filtered inputs stay on the histogram path.
+const JOIN_MIN_DISTINCT_RETENTION: f64 = 0.5;
 
 #[derive(Clone, Debug)]
 pub(super) struct EquiCondition<'expr, 'stats> {
@@ -146,6 +153,7 @@ impl NonEquiCondition {
         input_cardinality: StatCardinality,
         column_row_scales: &HashMap<Symbol, StatCardinality>,
         func_ctx: &FunctionContext,
+        and_strategy: FilterAndStrategy,
     ) -> Result<Self> {
         let selectivity = SelectivityVisitor::estimate(
             predicate,
@@ -155,6 +163,7 @@ impl NonEquiCondition {
             &input.count_min_sketch,
             column_row_scales,
             func_ctx,
+            and_strategy,
         )?;
         Ok(Self { selectivity })
     }
@@ -346,8 +355,13 @@ impl JoinEstimate {
     ) -> Result<Self> {
         let histogram_estimation = match (left.histogram(), right.histogram()) {
             (Some(left_hist), Some(right_hist))
-                if left_hist.is_range_distorted() || right_hist.is_range_distorted() =>
+                if left_hist.is_range_sparse(JOIN_MIN_DISTINCT_RETENTION)
+                    || right_hist.is_range_sparse(JOIN_MIN_DISTINCT_RETENTION) =>
             {
+                // A histogram whose surviving values no longer fill its buckets
+                // has lost positional information: bucket overlap would
+                // treat those values as spread over the pre-filter range. Fall
+                // back to the NDV formula, which only assumes containment.
                 None
             }
             (Some(left_hist), Some(right_hist)) => match numeric_return_type {
@@ -561,6 +575,49 @@ mod tests {
         };
         assert!((selectivity - 1.0 / 50.0).abs() < 1e-12);
         assert_eq!(stats.estimate.cardinality(), 400.0);
+        Ok(())
+    }
+
+    #[test]
+    fn sampled_sparse_join_uses_ndv_fallback() -> Result<()> {
+        use databend_common_statistics::TypedHistogram;
+        use databend_common_statistics::TypedHistogramBucket;
+
+        let dense =
+            TypedHistogram::new(vec![TypedHistogramBucket::new(0_i64, 999, 1000.0, 1000.0)]);
+        let mut thinned = dense.clone();
+        thinned.scale_counts(0.25);
+        let stat = |histogram: TypedHistogram<i64>| ColumnStat::Int {
+            min: 0,
+            max: 999,
+            ndv: histogram.ndv(),
+            null_count: StatCount::exact(0),
+            histogram: Some(histogram),
+        };
+        let dense = stat(dense);
+        assert!(
+            JoinEstimate::from_inputs(&dense, &dense, 1000.0, 1000.0, None)?
+                .histogram
+                .is_some()
+        );
+        for materialized in [false, true] {
+            let thinned = stat(if materialized {
+                thinned.restrict_discrete_buckets(0, 999).unwrap()
+            } else {
+                thinned.clone()
+            });
+            for (left, right, left_rows, right_rows) in [
+                (&thinned, &dense, 250.0, 1000.0),
+                (&dense, &thinned, 1000.0, 250.0),
+            ] {
+                let estimate = JoinEstimate::from_inputs(left, right, left_rows, right_rows, None)?;
+                let fallback = JoinEstimate::from_ndv_inputs(left, right, left_rows, right_rows);
+                assert_eq!(estimate.card, fallback.card);
+                assert!(estimate.histogram.is_none());
+                assert!(estimate.left_matched_histogram.is_none());
+                assert!(estimate.right_matched_histogram.is_none());
+            }
+        }
         Ok(())
     }
 
