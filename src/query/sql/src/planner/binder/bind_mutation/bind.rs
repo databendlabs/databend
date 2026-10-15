@@ -85,6 +85,8 @@ pub struct Mutation {
     pub strategy: MutationStrategy,
     pub matched_clauses: Vec<MatchedClause>,
     pub unmatched_clauses: Vec<UnmatchedClause>,
+    /// TTL deletions bind raw values and recheck this definition on commit conflicts.
+    pub expected_ttl: Option<String>,
 }
 
 impl Mutation {
@@ -128,16 +130,6 @@ impl Binder {
         bind_context: &mut BindContext,
         mutation: Mutation,
     ) -> Result<Plan> {
-        self.bind_mutation_with_ttl(bind_context, mutation, None)
-            .await
-    }
-
-    pub(in crate::planner::binder) async fn bind_mutation_with_ttl(
-        &mut self,
-        bind_context: &mut BindContext,
-        mutation: Mutation,
-        expected_ttl: Option<String>,
-    ) -> Result<Plan> {
         mutation.check_semantic()?;
 
         let Mutation {
@@ -146,6 +138,7 @@ impl Binder {
             strategy,
             matched_clauses,
             unmatched_clauses,
+            expected_ttl,
         } = mutation;
 
         let (catalog_name, database_name, table_name, table_name_alias) = (

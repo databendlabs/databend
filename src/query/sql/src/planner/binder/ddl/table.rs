@@ -1688,8 +1688,7 @@ impl Binder {
                     selection: Some(selection),
                     with: None,
                 };
-                self.bind_delete_with_ttl(bind_context, &stmt, Some(ttl))
-                    .await
+                self.bind_delete(bind_context, &stmt, Some(ttl)).await
             }
             AlterTableAction::ReclusterTable {
                 is_final,
