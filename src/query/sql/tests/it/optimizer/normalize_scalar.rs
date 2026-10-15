@@ -14,10 +14,10 @@
 
 use std::io::Write;
 
+use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnRef as ExprColumnRef;
 use databend_common_expression::Expr;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Symbol;
 use databend_common_expression::type_check;
@@ -30,8 +30,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::ColumnBindingBuilder;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Visibility;
+use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::optimizers::rule::Rule;
 use databend_common_sql::optimizer::optimizers::rule::RuleNormalizeScalarFilter;
 use databend_common_sql::optimizer::optimizers::rule::TransformResult;
@@ -491,9 +491,6 @@ async fn write_infer_filter_cases(file: &mut impl Write) -> Result<()> {
             "SELECT d FROM infer_bounds WHERE CAST(d AS DECIMAL(18,1)) = 1.0::DECIMAL(18,1) AND d > 1.0::DECIMAL(18,2)",
         ),
     ];
-    let stat_ctx = StatContext {
-        function_context: FunctionContext::default(),
-    };
     for (name, description, sql) in cases {
         let case = SqlTestCase {
             name,
@@ -504,18 +501,21 @@ async fn write_infer_filter_cases(file: &mut impl Write) -> Result<()> {
         let ctx = setup_context(&case).await?;
         let raw_plan = ctx.bind_sql(sql).await?;
         let optimized_plan = ctx.optimize_plan(raw_plan.clone()).await?;
+        let opt_ctx =
+            OptimizerContext::new(ctx.clone(), Default::default(), ctx.get_function_context()?);
+        let stat_ctx = opt_ctx.get_stat_context();
         write_case_header(file, &case)?;
         writeln!(file, "raw_plan:")?;
         writeln!(
             file,
             "{}",
-            raw_plan.format_indent(Default::default(), &stat_ctx)?
+            raw_plan.format_indent(Default::default(), stat_ctx)?
         )?;
         writeln!(file, "optimized_plan:")?;
         writeln!(
             file,
             "{}",
-            optimized_plan.format_indent(Default::default(), &stat_ctx)?
+            optimized_plan.format_indent(Default::default(), stat_ctx)?
         )?;
         writeln!(file)?;
     }
