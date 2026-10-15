@@ -134,9 +134,9 @@ for _ in {1..20}; do
     sleep 1
 done
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_1 SUSPEND\"}")
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'X-DATABEND-WAREHOUSE: wh1' -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_1 SUSPEND\"}")
 check_response_error "$response"
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_2 SUSPEND\"}")
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'X-DATABEND-WAREHOUSE: wh1' -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_2 SUSPEND\"}")
 check_response_error "$response"
 
 if [ "$actual" = "$expected" ]; then
