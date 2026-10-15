@@ -1071,7 +1071,7 @@ mod tests {
             join_relations: &[],
             join_conditions: &[],
             filters: &filters,
-            stat_context: &StatContext::default(),
+            stat_context: &StatContext::without_settings(Default::default()),
         };
         let expr = SExpr::create_leaf(DummyTableScan::new());
         let a = HashSet::from([0]);

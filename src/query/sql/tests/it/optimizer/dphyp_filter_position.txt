@@ -478,6 +478,49 @@ EvalScalar
             └── limit: NONE
 
 
+=== outer_join_residual_in_inner_region ===
+description: An outer join survives production preparation as an opaque input of an inner reorder region; its ON residual must not leak out.
+sql: SELECT a.k, b.k FROM a LEFT JOIN b ON a.k = b.k AND b.v > a.v JOIN c ON a.k = c.k JOIN c d ON c.k = d.k
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+EvalScalar
+├── scalars: [a.k (#0) AS (#0), k (#4) AS (#4), c.k (#6) AS (#10), c.k (#8) AS (#11)]
+└── Join(Inner)
+    ├── build keys: [c.k (#8), c.k (#6)]
+    ├── probe keys: [a.k (#0), a.k (#0)]
+    ├── other filters: []
+    ├── Join(Inner)
+    │   ├── build keys: [c.k (#8)]
+    │   ├── probe keys: [c.k (#6)]
+    │   ├── other filters: []
+    │   ├── Scan
+    │   │   ├── table: default.c (#3)
+    │   │   ├── filters: []
+    │   │   ├── order by: []
+    │   │   └── limit: NONE
+    │   └── Scan
+    │       ├── table: default.c (#2)
+    │       ├── filters: []
+    │       ├── order by: []
+    │       └── limit: NONE
+    └── Join(Left)
+        ├── build keys: [k (#4)]
+        ├── probe keys: [a.k (#0)]
+        ├── other filters: [gt(v (#5), a.v (#1))]
+        ├── EvalScalar
+        │   ├── scalars: [CAST(b.k (#2) AS Int64 NULL) AS (#4), CAST(b.v (#3) AS Int64 NULL) AS (#5)]
+        │   └── Scan
+        │       ├── table: default.b (#1)
+        │       ├── filters: []
+        │       ├── order by: []
+        │       └── limit: NONE
+        └── Scan
+            ├── table: default.a (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
 === filter_above_outer_join ===
 description: Retain a filter above an opaque outer-join relation when surrounding inner joins reorder.
 sql: SELECT t.k FROM (SELECT a.k FROM a LEFT JOIN b ON a.k = b.k AND b.v > 10 WHERE b.v IS NULL) t JOIN c ON t.k = c.k

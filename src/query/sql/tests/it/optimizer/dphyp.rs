@@ -314,6 +314,12 @@ async fn test_dphyp_filter_positions() -> Result<()> {
             sql: "SELECT a.k FROM a JOIN b ON a.k = b.k LEFT JOIN c ON b.k = c.k AND c.v > a.v",
         },
         SqlTestCase {
+            name: "outer_join_residual_in_inner_region",
+            description: "An outer join survives production preparation as an opaque input of an inner reorder region; its ON residual must not leak out.",
+            setup_sqls: &[],
+            sql: "SELECT a.k, b.k FROM a LEFT JOIN b ON a.k = b.k AND b.v > a.v JOIN c ON a.k = c.k JOIN c d ON c.k = d.k",
+        },
+        SqlTestCase {
             name: "filter_above_outer_join",
             description: "Retain a filter above an opaque outer-join relation when surrounding inner joins reorder.",
             setup_sqls: &[],

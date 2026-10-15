@@ -43,6 +43,19 @@ order by a.k;
 1 1
 2 NULL
 
+# An outer join is an opaque input of a surrounding three-input reorder region.
+# Its ON residual must not become a filter that drops unmatched left rows.
+query II
+select a.k, b.k from dphyp_pos_a a
+left join dphyp_pos_b b on a.k = b.k and b.v > a.v
+join dphyp_pos_c c on a.k = c.k
+join dphyp_pos_c d on c.k = d.k
+order by a.k;
+----
+1 1
+2 NULL
+3 NULL
+
 # Keep the residual inside an opaque outer join and its WHERE above that join.
 query I
 select t.k from (
@@ -75,6 +88,17 @@ order by a.k;
 ----
 1 1
 2 NULL
+
+query II
+select a.k, b.k from dphyp_pos_a a
+left join dphyp_pos_b b on a.k = b.k and b.v > a.v
+join dphyp_pos_c c on a.k = c.k
+join dphyp_pos_c d on c.k = d.k
+order by a.k;
+----
+1 1
+2 NULL
+3 NULL
 
 statement ok
 set disable_join_reorder = 0;
