@@ -11,6 +11,7 @@ sqllogic_filter() {
 
 	base) SQLLOGIC_FILTER=(--run_suite base) ;;
 	crdb) SQLLOGIC_FILTER=(--run_suite crdb) ;;
+	crdb,ydb,tpch) SQLLOGIC_FILTER=(--run_suite crdb,ydb,tpch) ;;
 	duckdb) SQLLOGIC_FILTER=(--run_suite duckdb) ;;
 	ee) SQLLOGIC_FILTER=(--run_suite ee) ;;
 	http_handler) SQLLOGIC_FILTER=(--run_suite http_handler) ;;
