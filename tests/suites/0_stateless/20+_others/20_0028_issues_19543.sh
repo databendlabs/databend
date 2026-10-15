@@ -29,7 +29,9 @@ IGNORE_RESULT;
 """
 
 # Warm up the aggregate path to reduce noise from one-time allocations.
-bendsql_connect_root --query="$QUERY"
+for i in `seq 1 2`; do
+    bendsql_connect_root --query="$QUERY"
+done
 
 PIDS=($(pgrep databend-query))
 BEFORE_MEM=0
@@ -38,12 +40,12 @@ for PID in "${PIDS[@]}"; do
     BEFORE_MEM=$((BEFORE_MEM + MEM))
 done
 
-for i in `seq 1 2`; do
+for i in `seq 1 3`; do
     echo "executing $i"
     bendsql_connect_root --query="$QUERY"
 done
 
-sleep 5
+sleep 15
 
 AFTER_MEM=0
 for PID in "${PIDS[@]}"; do

@@ -59,12 +59,12 @@ response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-
 check_response_error "$response"
 echo "✅ ALTER TASK IF EXISTS ignores unknown warehouse for missing task"
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_1 WAREHOUSE = 'wh1' SCHEDULE = 5 SECOND AS insert into t1 values(1)\"}")
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_1 WAREHOUSE = 'wh1' SCHEDULE = 15 SECOND AS insert into t1 values(1)\"}")
 check_response_error "$response"
 create_task_1_query_id=$(echo $response | jq -r '.id')
 echo "Create Task 1 Query ID: $create_task_1_query_id"
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_2 WAREHOUSE = 'wh2' SCHEDULE = 5 SECOND AS insert into t1 values(2)\"}")
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_2 WAREHOUSE = 'wh2' SCHEDULE = 15 SECOND AS insert into t1 values(2)\"}")
 check_response_error "$response"
 create_task_2_query_id=$(echo $response | jq -r '.id')
 echo "Create Task 2 ID: $create_task_2_query_id"
@@ -84,7 +84,7 @@ else
     exit 1
 fi
 
-sleep 2
+sleep 10
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_1 RESUME\"}")
 check_response_error "$response"
@@ -96,17 +96,13 @@ check_response_error "$response"
 resume_task_2_query_id=$(echo $response | jq -r '.id')
 echo "RESUME Task 2 ID: $resume_task_2_query_id"
 
+sleep 25
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
+check_response_error "$response"
+
+actual=$(echo "$response" | jq -c '.data')
 expected='[["1"],["2"]]'
-actual='[]'
-for _ in {1..20}; do
-    response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
-    check_response_error "$response"
-    actual=$(echo "$response" | jq -c '.data')
-    if [ "$actual" = "$expected" ]; then
-        break
-    fi
-    sleep 1
-done
 
 if [ "$actual" = "$expected" ]; then
     echo "✅ Query result matches expected"
@@ -122,22 +118,13 @@ check_response_error "$response"
 suspend_warehouse_2_query_id=$(echo $response | jq -r '.id')
 echo "Suspend WareHouse 2 Query ID: $suspend_warehouse_2_query_id"
 
-expected='[["1"],["1"],["1"],["2"]]'
-actual='[]'
-for _ in {1..20}; do
-    response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'X-DATABEND-WAREHOUSE: wh1' -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
-    check_response_error "$response"
-    actual=$(echo "$response" | jq -c '.data')
-    if [ "$actual" = "$expected" ]; then
-        break
-    fi
-    sleep 1
-done
+sleep 25
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'X-DATABEND-WAREHOUSE: wh1' -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_1 SUSPEND\"}")
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'X-DATABEND-WAREHOUSE: wh1' -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
 check_response_error "$response"
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'X-DATABEND-WAREHOUSE: wh1' -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_2 SUSPEND\"}")
-check_response_error "$response"
+
+actual=$(echo "$response" | jq -c '.data')
+expected='[["1"],["1"],["1"],["2"]]'
 
 if [ "$actual" = "$expected" ]; then
     echo "✅ Query result matches expected"
