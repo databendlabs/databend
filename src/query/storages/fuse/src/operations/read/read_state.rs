@@ -51,6 +51,42 @@ pub struct BloomRuntimeFilterRef {
     pub stats: Arc<RuntimeFilterStats>,
 }
 
+/// Scan workload of one block, measured before prewhere and runtime filters
+/// drop rows. This is what `scan_progress` and the `ScanBytes` profile report,
+/// so filtering inside the scan must not shrink it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct BlockScanStats {
+    /// Number of rows in the block, regardless of how many survive the filters.
+    pub rows: usize,
+    /// Uncompressed size of all projected columns for the whole block. When
+    /// row selection pushdown skips rows of the remaining columns, their
+    /// contribution is estimated from the rows that were decoded.
+    pub bytes: usize,
+}
+
+impl BlockScanStats {
+    /// Account for columns that were materialized after `deserialize_and_filter`
+    /// (e.g. virtual columns). `decoded_bytes` is the size of those columns as
+    /// decoded for `decoded_rows` rows; when row selection pushdown left fewer
+    /// rows than the block holds, the size is estimated for the whole block.
+    pub fn add_decoded_bytes(&mut self, decoded_bytes: usize, decoded_rows: usize) {
+        if decoded_bytes == 0 {
+            return;
+        }
+        self.bytes += estimate_block_bytes(decoded_bytes, decoded_rows, self.rows, decoded_bytes);
+    }
+}
+
+/// Result of [`ReadState::deserialize_and_filter`]: the block after prewhere
+/// and runtime filters, the selections still to be applied by the caller, and
+/// the scan statistics measured before any row was filtered out.
+pub struct ReadStateOutput {
+    pub block: DataBlock,
+    pub row_selection: Option<RowSelection>,
+    pub bitmap_selection: Option<Bitmap>,
+    pub scan_stats: BlockScanStats,
+}
+
 pub struct ReadState {
     pub pre_reader: Arc<BlockReader>,
     pub remain_reader: Arc<BlockReader>,
@@ -214,11 +250,15 @@ impl ReadState {
         &self,
         columns_chunks: HashMap<ColumnId, DataItem>,
         part: &FuseBlockPartInfo,
-    ) -> Result<(DataBlock, Option<RowSelection>, Option<Bitmap>)> {
+    ) -> Result<ReadStateOutput> {
         let pre_columns_chunks = Self::filter_column_chunks(&columns_chunks, &self.pre_column_ids)?;
         let mut preread_block = self
             .pre_reader
             .deserialize_part(part, pre_columns_chunks, None)?;
+        let mut scan_stats = BlockScanStats {
+            rows: part.nums_rows,
+            bytes: preread_block.memory_size(),
+        };
 
         let filter_bitmap = self.filter(&preread_block, part.nums_rows)?;
         // Expensive probe expressions are evaluated only for rows surviving
@@ -254,7 +294,12 @@ impl ReadState {
         }
 
         if self.use_single_prewhere_reader {
-            return Ok((preread_block, row_selection, bitmap_selection));
+            return Ok(ReadStateOutput {
+                block: preread_block,
+                row_selection,
+                bitmap_selection,
+                scan_stats,
+            });
         }
 
         let remain_columns_chunks =
@@ -262,6 +307,11 @@ impl ReadState {
         let push_down_row_selection = row_selection.as_ref().is_some_and(|row_selection| {
             should_push_down_row_selection(row_selection, self.prewhere_selectivity_threshold)
         });
+        let remain_raw_bytes = if push_down_row_selection {
+            raw_bytes_of_chunks(&remain_columns_chunks)
+        } else {
+            0
+        };
 
         let mut remain_block = self.remain_reader.deserialize_part(
             part,
@@ -270,7 +320,15 @@ impl ReadState {
                 .then_some(row_selection.as_ref())
                 .flatten(),
         )?;
-        if !push_down_row_selection {
+        if push_down_row_selection {
+            scan_stats.bytes += estimate_block_bytes(
+                remain_block.memory_size(),
+                remain_block.num_rows(),
+                part.nums_rows,
+                remain_raw_bytes,
+            );
+        } else {
+            scan_stats.bytes += remain_block.memory_size();
             if let Some(bitmap) = bitmap_selection.as_ref() {
                 remain_block = remain_block.filter_with_bitmap(bitmap)?;
             }
@@ -284,7 +342,12 @@ impl ReadState {
 
         let data_block = preread_block.resort(&merged_schema, &self.output_schema)?;
 
-        Ok((data_block, row_selection, bitmap_selection))
+        Ok(ReadStateOutput {
+            block: data_block,
+            row_selection,
+            bitmap_selection,
+            scan_stats,
+        })
     }
 
     fn filter_column_chunks<'a>(
@@ -326,6 +389,39 @@ fn expand_runtime_filter_bitmap(
     expanded
 }
 
+/// Size of the column chunks as they were read, before decoding.
+fn raw_bytes_of_chunks(columns_chunks: &HashMap<ColumnId, DataItem>) -> usize {
+    columns_chunks
+        .values()
+        .map(|item| match item {
+            DataItem::RawData(buffer) => buffer.len(),
+            DataItem::ColumnArray(array) => array.1,
+        })
+        .sum()
+}
+
+/// Estimate the uncompressed size of some columns for the whole block when
+/// only `decoded_rows` of them were materialized, by scaling `decoded_bytes`
+/// up to `total_rows`.
+///
+/// Falls back to `raw_bytes` (the size of the column chunks that were read)
+/// when nothing was decoded, so blocks whose rows are all filtered out still
+/// account for the data that was read for them.
+fn estimate_block_bytes(
+    decoded_bytes: usize,
+    decoded_rows: usize,
+    total_rows: usize,
+    raw_bytes: usize,
+) -> usize {
+    if decoded_rows == 0 || total_rows == 0 {
+        return raw_bytes;
+    }
+    if decoded_rows >= total_rows {
+        return decoded_bytes;
+    }
+    ((decoded_bytes as u128 * total_rows as u128) / decoded_rows as u128) as usize
+}
+
 fn should_push_down_row_selection(row_selection: &RowSelection, threshold: u64) -> bool {
     let total_rows = row_selection.bitmap.len();
     if threshold == 0 || total_rows == 0 {
@@ -361,6 +457,43 @@ mod tests {
         let dense_bitmap: Bitmap = MutableBitmap::from_len_set(5).into();
         let dense_selection = RowSelection::from(&dense_bitmap);
         assert!(!should_push_down_row_selection(&dense_selection, 100));
+    }
+
+    #[test]
+    fn test_estimate_block_bytes() {
+        // Scales decoded bytes up to the whole block.
+        assert_eq!(estimate_block_bytes(40, 2, 10, 7), 200);
+        // Fully decoded block is reported as is.
+        assert_eq!(estimate_block_bytes(40, 10, 10, 7), 40);
+        assert_eq!(estimate_block_bytes(40, 12, 10, 7), 40);
+        // Nothing decoded: fall back to the raw chunk sizes that were read.
+        assert_eq!(estimate_block_bytes(0, 0, 10, 7), 7);
+    }
+
+    #[test]
+    fn test_add_decoded_bytes() {
+        let mut stats = BlockScanStats {
+            rows: 10,
+            bytes: 100,
+        };
+        // Fully decoded columns are added as is.
+        stats.add_decoded_bytes(50, 10);
+        assert_eq!(stats.bytes, 150);
+        // Columns decoded for a subset of rows are scaled to the block.
+        stats.add_decoded_bytes(10, 2);
+        assert_eq!(stats.bytes, 200);
+        // Nothing decoded leaves the stats untouched.
+        stats.add_decoded_bytes(0, 0);
+        assert_eq!(stats.bytes, 200);
+    }
+
+    #[test]
+    fn test_raw_bytes_of_chunks() {
+        let mut chunks = HashMap::new();
+        chunks.insert(0, DataItem::RawData(opendal::Buffer::from(vec![0u8; 16])));
+        chunks.insert(1, DataItem::RawData(opendal::Buffer::from(vec![0u8; 8])));
+        assert_eq!(raw_bytes_of_chunks(&chunks), 24);
+        assert_eq!(raw_bytes_of_chunks(&HashMap::new()), 0);
     }
 
     #[test]
