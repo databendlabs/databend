@@ -218,7 +218,7 @@ impl FuseTable {
 
         if self.apply_snapshot_metadata_to_meta(&mut table_info.meta, snapshot)? {
             // Read-only Time Travel discards root-specific virtual metadata and applies
-            // best-effort policy projection, unlike persistent CLONE and FLASHBACK.
+            // best-effort policy projection, unlike persistent CLONE.
             table_info.meta.virtual_schema = None;
             table_info.meta.column_mask_policy = None;
             table_info.meta.row_access_policy = None;
@@ -782,7 +782,7 @@ impl FuseTable {
                 .is_some_and(|policies| !policies.is_empty())
         {
             return Err(ErrorCode::InvalidArgument(
-                "Cannot persist historical metadata with legacy security policies; migrate the policies before CLONE or FLASHBACK",
+                "Cannot persist historical metadata with legacy security policies; migrate the policies before CLONE",
             ));
         }
         table_meta.column_mask_policy = None;
@@ -802,7 +802,7 @@ impl FuseTable {
 
     /// Validate current semantic metadata against a projected snapshot structure.
     ///
-    /// Persisting CLONE and FLASHBACK operations use this after projecting field-owned metadata.
+    /// CLONE uses this after projecting field-owned metadata.
     /// Table-level definitions fail closed when any reference or type cannot be resolved.
     pub async fn validate_persistent_navigation_metadata(
         &self,
@@ -941,7 +941,7 @@ mod tests {
 
     #[test]
     fn test_prepare_persistent_navigation_metadata_filters_virtual_schema() {
-        // Legacy policy rejection is covered by the CLONE/FLASHBACK integration test.
+        // Legacy policy rejection is covered by the CLONE integration test.
         let policy = SecurityPolicyColumnMap::new(7, vec![1]);
         let mut table_meta = TableMeta {
             schema: Arc::new(TableSchema::new_from_column_ids(

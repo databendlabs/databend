@@ -524,10 +524,7 @@ impl CreateTableInterpreter {
                 }
                 Err(err)
                     if attempts < CLONE_SOURCE_REFRESH_ATTEMPTS
-                        && matches!(
-                            err.code(),
-                            ErrorCode::TABLE_VERSION_MISMATCHED | ErrorCode::INVALID_TABLE_CLONE
-                        ) =>
+                        && err.code() == ErrorCode::TABLE_VERSION_MISMATCHED =>
                 {
                     attempts += 1;
                     let latest = catalog

@@ -116,6 +116,7 @@ pub struct SnapshotGcSelection {
 pub struct CloneDescendantMark {
     pub descendant_ids: HashSet<u64>,
     pub lvt_updates: Vec<LvtUpdate>,
+    pub protected_snapshots: HashSet<String>,
 }
 
 /// Object storage supported by Databend is expected to return entries sorted in ascending lexicographical
@@ -499,7 +500,7 @@ impl FuseTable {
         observed_lvt: (u64, Option<DateTime<Utc>>),
         scan_time: DateTime<Utc>,
         publish_lvt: bool,
-    ) -> Result<(LvtUpdate, HashSet<Location>)> {
+    ) -> Result<(LvtUpdate, HashSet<Location>, Option<String>)> {
         let table_id = table_info.ident.table_id;
         let (lvt_seq, lvt) = observed_lvt;
         let table = catalog.get_table_by_info(&table_info)?;
@@ -513,6 +514,25 @@ impl FuseTable {
                 .read_table_snapshot()
                 .await?
                 .ok_or_else(|| ErrorCode::StorageNotFound("clone head disappeared during mark"))?;
+            if !location.starts_with(
+                descendant
+                    .meta_location_generator()
+                    .snapshot_location_prefix(),
+            ) {
+                if table_info.meta.drop_on.is_none() {
+                    return Err(ErrorCode::StorageNotFound(format!(
+                        "clone descendant {table_id} has a non-local head outside staged creation"
+                    )));
+                }
+                // Before its anchor is installed, a staged clone points directly to the selected
+                // source snapshot. Pin that snapshot and its segments, not a history under the
+                // target prefix. It has no target-local history whose LVT can be advanced yet.
+                return Ok((
+                    (table_id, lvt_seq, candidate),
+                    head.segments.iter().cloned().collect(),
+                    Some(location),
+                ));
+            }
             let head_time = head
                 .timestamp
                 .ok_or_else(|| ErrorCode::Internal("clone head has no timestamp"))?;
@@ -573,7 +593,7 @@ impl FuseTable {
             }
             HashSet::new()
         };
-        Ok(((table_id, lvt_seq, candidate), segments))
+        Ok(((table_id, lvt_seq, candidate), segments, None))
     }
 
     /// Mark clone descendants. Base-data VACUUM publishes the returned LVT updates atomically;
@@ -593,12 +613,14 @@ impl FuseTable {
         let clone_group_id = self.clone_group_id()?;
         let bindings = catalog.list_clone_group_bindings(clone_group_id).await?;
         let descendant_ids = Self::clone_descendant_ids(clone_group_id, self.get_id(), &bindings)?;
+        let mut protected_snapshots = HashSet::new();
         let lvt_updates = self
             .scan_clone_descendants(
                 ctx,
                 catalog,
                 &descendant_ids,
                 segments,
+                &mut protected_snapshots,
                 publish_lvt,
                 concurrency,
                 &status_callback,
@@ -607,6 +629,7 @@ impl FuseTable {
         Ok(CloneDescendantMark {
             descendant_ids,
             lvt_updates,
+            protected_snapshots,
         })
     }
 
@@ -617,7 +640,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         catalog: &Arc<dyn Catalog>,
-        observed: &mut HashSet<u64>,
+        mark: &mut CloneDescendantMark,
         segments: &mut HashSet<Location>,
         concurrency: usize,
         status_callback: T,
@@ -629,7 +652,7 @@ impl FuseTable {
         let bindings = catalog.list_clone_group_bindings(clone_group_id).await?;
         let current = Self::clone_descendant_ids(clone_group_id, self.get_id(), &bindings)?;
         let new_ids = current
-            .difference(observed)
+            .difference(&mark.descendant_ids)
             .copied()
             .collect::<HashSet<_>>();
         self.scan_clone_descendants(
@@ -637,12 +660,13 @@ impl FuseTable {
             catalog,
             &new_ids,
             segments,
+            &mut mark.protected_snapshots,
             false,
             concurrency,
             &status_callback,
         )
         .await?;
-        observed.extend(new_ids);
+        mark.descendant_ids.extend(new_ids);
         Ok(())
     }
 
@@ -652,6 +676,7 @@ impl FuseTable {
         catalog: &Arc<dyn Catalog>,
         descendant_ids: &HashSet<u64>,
         segments: &mut HashSet<Location>,
+        protected_snapshots: &mut HashSet<String>,
         publish_lvt: bool,
         concurrency: usize,
         status_callback: &T,
@@ -723,13 +748,15 @@ impl FuseTable {
         }))
         .buffer_unordered(concurrency.max(1));
         let mut lvt_updates = Vec::new();
-        while let Some((update, protected)) = scans.try_next().await? {
+        while let Some((update, protected, snapshot)) = scans.try_next().await? {
             status_callback(format!(
                 "gc clone refs: table {}, protected segments: {}",
                 update.0,
                 protected.len()
             ));
-            if publish_lvt {
+            if let Some(snapshot) = snapshot {
+                protected_snapshots.insert(snapshot);
+            } else if publish_lvt {
                 lvt_updates.push(update);
             }
             segments.extend(protected);
@@ -757,11 +784,10 @@ impl FuseTable {
         Ok(())
     }
 
-    /// Get all segments still reachable from this table and its clone descendants.
-    #[async_backtrace::framed]
     /// Collect segments from snapshots in a given prefix
     ///
     /// This is a helper function used by both main branch and branch refs
+    #[async_backtrace::framed]
     async fn collect_snapshots_segments<T>(
         snapshots_io: &SnapshotsIO,
         operator: &Operator,

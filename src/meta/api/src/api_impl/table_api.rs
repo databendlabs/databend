@@ -301,7 +301,8 @@ async fn build_create_table_clone_txn(
             InvalidTableClone::new("inconsistent table clone group").into(),
         ));
     }
-    if !source_meta.options.contains_key(OPT_KEY_CLONE_GROUP_ID) {
+    let first_clone = !source_meta.options.contains_key(OPT_KEY_CLONE_GROUP_ID);
+    if first_clone {
         // First clone of this source: it becomes the group root.
         let mut updated_source_meta = source_meta.data.clone();
         updated_source_meta
@@ -323,9 +324,11 @@ async fn build_create_table_clone_txn(
             .push(txn_cond_seq(&source_binding_ident, Eq, source_binding.seq));
     }
 
-    // 3. Fence: the selected snapshot must not be older than the source LVT. The LVT is only a
-    // condition here. A clone created before a GC publication is protected by the
-    // post-publication descendant rescan, like a tag created in that window.
+    // 3. Fence: the selected snapshot must not be older than the source LVT. First entry into a
+    // clone group also touches the source fence, invalidating pre-group GC marks: a pre-group
+    // FLASHBACK could change the owner's head without touching its fence. Later clones
+    // created before a GC publication are protected by the post-publication descendant rescan,
+    // like a tag created in that window.
     let lvt_ident = LeastVisibleTimeIdent::new(req.tenant(), clone.source_table_id);
     let (lvt_seq, lvt) = kv_api.get_pb_seq_and_value(&lvt_ident).await?;
     if let Some(lvt) = lvt.as_ref()
@@ -342,6 +345,12 @@ async fn build_create_table_clone_txn(
         )));
     }
     txn.condition.push(txn_cond_seq(&lvt_ident, Eq, lvt_seq));
+    if first_clone {
+        txn.if_then.push(txn_put_pb(
+            &lvt_ident,
+            &lvt.clone().unwrap_or_else(LeastVisibleTime::unbounded),
+        ));
+    }
 
     // 4. Target state: lineage binding, inherited fence, policy references and counters.
     txn.if_then.push(txn_put_pb(

@@ -286,5 +286,33 @@ ALTER TABLE retention_clone FLASHBACK TO (SNAPSHOT => $retention_anchor)
 statement ok
 UNSET VARIABLE retention_anchor
 
+# Only clone-group members gain the historical-publication fence. Add the TAG after earlier GC
+# assertions so its pin cannot mask a failure to protect clone references.
+statement ok
+SET enable_experimental_table_ref = 1
+
+statement ok
+ALTER TABLE source CREATE TAG saved
+
+statement ok
+INSERT INTO source VALUES (5)
+
+statement ok
+VACUUM TABLE source
+
+query I
+SELECT count(*) FROM source AT (TAG => saved)
+----
+1
+
+statement error (?s).*Cannot FLASHBACK to TAG 'saved'.*clone group.*below.*LVT.*preserves historical reads.*
+ALTER TABLE source FLASHBACK TO (TAG => saved)
+
+# A rejected FLASHBACK leaves the source head unchanged.
+query I
+SELECT count(*) FROM source
+----
+2
+
 statement ok
 DROP DATABASE db_03_vacuum_clone

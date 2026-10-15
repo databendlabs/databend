@@ -29,6 +29,9 @@ use crate::FuseTable;
 impl FuseTable {
     /// Build metadata for a zero-copy clone before its target-owned snapshot anchor is created.
     ///
+    /// Shared immutable objects remain in their original locations; the clone's independent head
+    /// and newly written objects use its own storage prefix.
+    ///
     /// The source table provides inheritable metadata, while source identity and data-root state
     /// are cleared here. The create interpreter installs the target clone group, temporary source
     /// root protection, target-owned anchor, timestamps, and change-tracking boundary.

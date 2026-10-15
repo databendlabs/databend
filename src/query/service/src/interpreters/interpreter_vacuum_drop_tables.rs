@@ -238,6 +238,11 @@ impl Interpreter for VacuumDropTablesInterpreter {
                         .push(table_info.ident.table_id);
                 }
             }
+            // Bindings track lineage, not actual file references. A descendant binding retains its
+            // dropped ancestor's whole directory even after all shared data has been rewritten.
+            // Directory removal proceeds from lineage leaves, subject to each table's DROP retention.
+            // TODO(zhyass): reclaim ancestor-owned objects once no retained descendant state
+            // references them.
             // Only a verified member that still has a clone child is a normal deferral. Tables
             // outside a valid lineage are abnormal and stay in the user-facing warning.
             let mut deferred_clone_ids = HashSet::new();

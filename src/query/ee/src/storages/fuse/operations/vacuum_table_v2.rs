@@ -756,7 +756,7 @@ async fn vacuum_base_snapshot_phase(
     // Existing bindings always use the retention-bounded clone-aware protocol. This is a storage
     // safety rule, not a user-selectable mode: disabling CREATE TABLE CLONE must not make VACUUM
     // unsafe for clone groups that already exist.
-    let Some(mark) = defer_on_incomplete_history(
+    let Some(mut mark) = defer_on_incomplete_history(
         fuse_table
             .mark_clone_descendants(
                 ctx.clone(),
@@ -773,8 +773,7 @@ async fn vacuum_base_snapshot_phase(
         return Ok(None);
     };
     protected_segments.extend(selection.gc_root.segments.iter().cloned());
-    let mut observed_descendants = mark.descendant_ids;
-    let mut updates = mark.lvt_updates;
+    let mut updates = std::mem::take(&mut mark.lvt_updates);
     // Validate the owner's original fence too: FLASHBACK can change its head while descendants
     // are being marked. Existing clone bindings always use this one LVT publication protocol.
     updates.push((
@@ -793,7 +792,7 @@ async fn vacuum_base_snapshot_phase(
             .mark_new_clone_descendants(
                 ctx.clone(),
                 &catalog,
-                &mut observed_descendants,
+                &mut mark,
                 &mut protected_segments,
                 concurrency,
                 |status| ctx.set_status_info(&status),
@@ -808,7 +807,7 @@ async fn vacuum_base_snapshot_phase(
     fuse_table
         .extend_clone_descendant_tag_segments(
             &catalog,
-            &observed_descendants,
+            &mark.descendant_ids,
             concurrency,
             &mut protected_segments,
         )
@@ -821,6 +820,10 @@ async fn vacuum_base_snapshot_phase(
             &mut protected_segments,
         )
         .await?;
+
+    selection
+        .snapshots_to_gc
+        .retain(|path| !mark.protected_snapshots.contains(path));
 
     Ok(Some(GcRootSnapshotCtx {
         owner: refreshed,

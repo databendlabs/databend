@@ -15,6 +15,8 @@
 use chrono::Duration;
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
+use databend_common_expression::VirtualDataField;
+use databend_common_expression::VirtualDataSchema;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::UserInfo;
@@ -361,7 +363,7 @@ async fn test_clone_rejects_missing_masking_policy_definition() -> anyhow::Resul
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_persistent_navigation_rejects_legacy_policies() -> anyhow::Result<()> {
+async fn test_clone_rejects_legacy_policies_without_changing_flashback() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.enable_experimental_clone_table()?;
     fixture.create_default_database().await?;
@@ -406,20 +408,15 @@ async fn test_persistent_navigation_rejects_legacy_policies() -> anyhow::Result<
             )
             .await?;
 
-        for sql in [
-            format!(
+        let err = fixture
+            .execute_command(&format!(
                 "CREATE TABLE {database}.legacy_clone CLONE {database}.{name} AT (SNAPSHOT => '{}')",
                 snapshot.snapshot_id.simple()
-            ),
-            format!(
-                "ALTER TABLE {database}.{name} FLASHBACK TO (SNAPSHOT => '{}')",
-                snapshot.snapshot_id.simple()
-            ),
-        ] {
-            let err = fixture.execute_command(&sql).await.unwrap_err();
-            assert_eq!(err.code(), ErrorCode::INVALID_ARGUMENT);
-            assert!(err.message().contains("legacy security policies"));
-        }
+            ))
+            .await
+            .unwrap_err();
+        assert_eq!(err.code(), ErrorCode::INVALID_ARGUMENT);
+        assert!(err.message().contains("legacy security policies"));
         assert!(
             !catalog
                 .exists_table(&tenant, &database, "legacy_clone")
@@ -432,6 +429,60 @@ async fn test_persistent_navigation_rejects_legacy_policies() -> anyhow::Result<
             head
         );
     }
+
+    // A rejected CLONE does not change ordinary FLASHBACK policy compatibility or create an LVT.
+    let flashback = format!(
+        "ALTER TABLE {database}.{name} FLASHBACK TO (SNAPSHOT => '{}')",
+        snapshot.snapshot_id.simple()
+    );
+    fixture.execute_command(&flashback).await?;
+    let current = catalog.get_table(&tenant, &database, &name).await?;
+    assert!(current.get_table_info().meta.column_mask_policy.is_some());
+    assert!(
+        catalog
+            .get_table_lvt(&LeastVisibleTimeIdent::new(&tenant, current.get_id()))
+            .await?
+            .is_none()
+    );
+
+    // Unlike same-schema FLASHBACK above, changing the schema must clear unversioned virtual
+    // columns and legacy policies, just as it did before CLONE introduced stricter validation.
+    fixture
+        .execute_command(&format!(
+            "ALTER TABLE {database}.{name} ADD COLUMN extra VARIANT"
+        ))
+        .await?;
+    let current = catalog.get_table(&tenant, &database, &name).await?;
+    let info = current.get_table_info();
+    let mut meta = info.meta.clone();
+    let mut virtual_schema = VirtualDataSchema::empty();
+    virtual_schema.add_field(VirtualDataField {
+        name: "extra['retired']".to_string(),
+        source_column_id: current.schema().field_with_name("extra")?.column_id(),
+        ..Default::default()
+    })?;
+    meta.virtual_schema = Some(virtual_schema);
+    meta.row_access_policy = Some("legacy_row_policy".to_string());
+    assert!(meta.column_mask_policy.is_some());
+    catalog
+        .update_single_table_meta(
+            &tenant,
+            UpdateTableMetaReq {
+                table_id: current.get_id(),
+                seq: MatchSeq::Exact(info.ident.seq),
+                new_table_meta: meta,
+                base_snapshot_location: FuseTable::try_from_table(current.as_ref())?.snapshot_loc(),
+                lvt_check: None,
+            },
+            info,
+        )
+        .await?;
+    fixture.execute_command(&flashback).await?;
+    let restored = catalog.get_table(&tenant, &database, &name).await?;
+    assert!(restored.schema().field_with_name("extra").is_err());
+    assert!(restored.get_table_info().meta.virtual_schema.is_none());
+    assert!(restored.get_table_info().meta.column_mask_policy.is_none());
+    assert!(restored.get_table_info().meta.row_access_policy.is_none());
     Ok(())
 }
 

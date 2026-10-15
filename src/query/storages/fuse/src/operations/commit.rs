@@ -73,6 +73,9 @@ use crate::statistics::TableStatsGenerator;
 impl FuseTable {
     /// Build this table's GC fence for a metadata commit.
     ///
+    /// Group membership, not the clone-creation setting, enables the fence for sources and clones.
+    /// A concurrent zero-retention VACUUM can reject long-running writes with `TableSnapshotExpired`.
+    ///
     /// `gc_safe_time` is the oldest timestamp of an object newly made reachable by the commit.
     /// Snapshot commits use the generated snapshot timestamp (which precedes their segment/block
     /// timestamp); historical restores use the restored snapshot timestamp.
