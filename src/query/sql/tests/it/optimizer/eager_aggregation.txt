@@ -1338,6 +1338,93 @@ EvalScalar
                 └── limit: NONE
 
 
+=== grouping_sets_are_not_eager ===
+description: Grouping-set descriptors must not be copied to pruned join inputs.
+sql: SELECT o_custkey, grouping(o_custkey), sum(l_extendedprice)
+FROM orders JOIN lineitem ON o_orderkey = l_orderkey
+GROUP BY GROUPING SETS ((o_custkey), ())
+before_plan:
+EvalScalar
+├── scalars: [orders.o_custkey (#1) AS (#1), sum(l_extendedprice) (#27) AS (#27), grouping(0)(_grouping_id (#26)) AS (#28)]
+└── Aggregate(Initial)
+    ├── group items: [orders.o_custkey (#1) AS (#1), _grouping_id (#26) AS (#26)]
+    ├── aggregate functions: [sum(lineitem.l_extendedprice (#14)) AS (#27)]
+    └── EvalScalar
+        ├── scalars: [orders.o_custkey (#1) AS (#1), lineitem.l_extendedprice (#14) AS (#14), orders.o_orderkey (#0) AS (#29), lineitem.l_orderkey (#9) AS (#30)]
+        └── Join(Inner)
+            ├── build keys: [lineitem.l_orderkey (#9)]
+            ├── probe keys: [orders.o_orderkey (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.lineitem (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.orders (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== rollup_is_not_eager ===
+description: ROLLUP must retain its grouping-set expansion above the join.
+sql: SELECT o_custkey, grouping(o_custkey), sum(l_extendedprice)
+FROM orders JOIN lineitem ON o_orderkey = l_orderkey
+GROUP BY ROLLUP (o_custkey)
+before_plan:
+EvalScalar
+├── scalars: [orders.o_custkey (#1) AS (#1), sum(l_extendedprice) (#27) AS (#27), grouping(0)(_grouping_id (#26)) AS (#28)]
+└── Aggregate(Initial)
+    ├── group items: [orders.o_custkey (#1) AS (#1), _grouping_id (#26) AS (#26)]
+    ├── aggregate functions: [sum(lineitem.l_extendedprice (#14)) AS (#27)]
+    └── EvalScalar
+        ├── scalars: [orders.o_custkey (#1) AS (#1), lineitem.l_extendedprice (#14) AS (#14), orders.o_orderkey (#0) AS (#29), lineitem.l_orderkey (#9) AS (#30)]
+        └── Join(Inner)
+            ├── build keys: [lineitem.l_orderkey (#9)]
+            ├── probe keys: [orders.o_orderkey (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.lineitem (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.orders (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== cube_is_not_eager ===
+description: CUBE must retain its grouping-set expansion above the join.
+sql: SELECT o_custkey, grouping(o_custkey), sum(l_extendedprice)
+FROM orders JOIN lineitem ON o_orderkey = l_orderkey
+GROUP BY CUBE (o_custkey)
+before_plan:
+EvalScalar
+├── scalars: [orders.o_custkey (#1) AS (#1), sum(l_extendedprice) (#27) AS (#27), grouping(0)(_grouping_id (#26)) AS (#28)]
+└── Aggregate(Initial)
+    ├── group items: [orders.o_custkey (#1) AS (#1), _grouping_id (#26) AS (#26)]
+    ├── aggregate functions: [sum(lineitem.l_extendedprice (#14)) AS (#27)]
+    └── EvalScalar
+        ├── scalars: [orders.o_custkey (#1) AS (#1), lineitem.l_extendedprice (#14) AS (#14), orders.o_orderkey (#0) AS (#29), lineitem.l_orderkey (#9) AS (#30)]
+        └── Join(Inner)
+            ├── build keys: [lineitem.l_orderkey (#9)]
+            ├── probe keys: [orders.o_orderkey (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.lineitem (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.orders (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
 === q12_rank_limit_on_group_key ===
 description: ORDER BY group key LIMIT pushes a rank limit into the final aggregate; it must stay above the join.
 sql: SELECT l_orderkey, sum(l_extendedprice)

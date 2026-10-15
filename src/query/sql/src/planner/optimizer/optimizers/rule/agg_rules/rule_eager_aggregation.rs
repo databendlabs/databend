@@ -149,6 +149,11 @@ impl EagerAggregationRewriter {
         let Some(input) = EagerInput::parse(s_expr) else {
             return Ok(vec![]);
         };
+        // Eager aggregates prune group columns to one join input. The original
+        // grouping-set descriptor (including grouping_id) is not valid there.
+        if input.final_agg.grouping_sets.is_some() {
+            return Ok(vec![]);
+        }
         let join = input.join_expr.plan().as_join().unwrap();
         if !matches!(join.join_type, JoinType::Inner | JoinType::Cross)
             || !join.non_equi_conditions.is_empty()

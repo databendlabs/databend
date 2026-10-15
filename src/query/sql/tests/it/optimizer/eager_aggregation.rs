@@ -247,6 +247,30 @@ FROM eager_count_l l JOIN eager_count_r r ON l.k = r.k",
             sql: Q11,
         },
         SqlTestCase {
+            name: "grouping_sets_are_not_eager",
+            description: "Grouping-set descriptors must not be copied to pruned join inputs.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT o_custkey, grouping(o_custkey), sum(l_extendedprice)
+FROM orders JOIN lineitem ON o_orderkey = l_orderkey
+GROUP BY GROUPING SETS ((o_custkey), ())",
+        },
+        SqlTestCase {
+            name: "rollup_is_not_eager",
+            description: "ROLLUP must retain its grouping-set expansion above the join.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT o_custkey, grouping(o_custkey), sum(l_extendedprice)
+FROM orders JOIN lineitem ON o_orderkey = l_orderkey
+GROUP BY ROLLUP (o_custkey)",
+        },
+        SqlTestCase {
+            name: "cube_is_not_eager",
+            description: "CUBE must retain its grouping-set expansion above the join.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT o_custkey, grouping(o_custkey), sum(l_extendedprice)
+FROM orders JOIN lineitem ON o_orderkey = l_orderkey
+GROUP BY CUBE (o_custkey)",
+        },
+        SqlTestCase {
             name: "q12_rank_limit_on_group_key",
             description: "ORDER BY group key LIMIT pushes a rank limit into the final aggregate; it must stay above the join.",
             setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
