@@ -63,6 +63,7 @@ pub struct Planner {
     pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) query_executor: Option<Arc<dyn QueryExecutor>>,
     default_table_namespace: Option<(String, String)>,
+    legacy_cte_resolution: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -77,6 +78,7 @@ impl Planner {
             ctx,
             query_executor: None,
             default_table_namespace: None,
+            legacy_cte_resolution: false,
         }
     }
 
@@ -88,6 +90,7 @@ impl Planner {
             ctx,
             query_executor: Some(query_executor),
             default_table_namespace: None,
+            legacy_cte_resolution: false,
         }
     }
 
@@ -98,11 +101,24 @@ impl Planner {
         self
     }
 
+    pub fn with_legacy_cte_resolution(mut self, enable: bool) -> Self {
+        self.legacy_cte_resolution = enable;
+        self
+    }
+
+    /// Bind an existing stored definition. Definitions written before namespace metadata
+    /// was introduced retain qualified CTE lookup; ordinary SQL is strict by default.
     pub fn with_stored_query_namespace(
         self,
         options: &std::collections::BTreeMap<String, String>,
     ) -> Self {
-        self.with_default_table_namespace(stored_query_namespace(options))
+        self.with_stored_query_namespace_value(stored_query_namespace(options))
+    }
+
+    pub fn with_stored_query_namespace_value(self, namespace: Option<(String, String)>) -> Self {
+        let legacy = namespace.is_none();
+        self.with_default_table_namespace(namespace)
+            .with_legacy_cte_resolution(legacy)
     }
 
     #[async_backtrace::framed]
@@ -133,7 +149,8 @@ impl Planner {
             Metadata::default_ref(),
         )
         .with_subquery_executor(self.query_executor.clone())
-        .with_default_table_namespace(self.default_table_namespace.clone());
+        .with_default_table_namespace(self.default_table_namespace.clone())
+        .with_legacy_cte_resolution(self.legacy_cte_resolution);
         // Attach before bind for the same reason as `plan_stmt`: table sources such as
         // ParquetRSTable::create read the query string during binding.
         self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
@@ -325,13 +342,17 @@ impl Planner {
         // Step 3: Bind AST with catalog, and generate a pure logical SExpr
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
 
-        // The session-based cache key does not describe a stored definition's namespace.
-        let plan_cache_context =
-            if enable_materialized_view_rewrite && self.default_table_namespace.is_none() {
-                self.build_plan_cache_context(name_resolution_ctx.clone(), stmt)?
-            } else {
-                None
-            };
+        // The session-based cache key describes neither a stored namespace nor legacy
+        // CTE resolution. The same SQL can bind differently in an old definition and
+        // as an ordinary (strict) query.
+        let plan_cache_context = if enable_materialized_view_rewrite
+            && self.default_table_namespace.is_none()
+            && !self.legacy_cte_resolution
+        {
+            self.build_plan_cache_context(name_resolution_ctx.clone(), stmt)?
+        } else {
+            None
+        };
 
         if let Some(cache_ctx) = &plan_cache_context {
             if let Some(plan) = self.get_cache(cache_ctx) {
@@ -354,7 +375,8 @@ impl Planner {
         )
         .with_materialized_view_rewrite(enable_materialized_view_rewrite)
         .with_subquery_executor(self.query_executor.clone())
-        .with_default_table_namespace(self.default_table_namespace.clone());
+        .with_default_table_namespace(self.default_table_namespace.clone())
+        .with_legacy_cte_resolution(self.legacy_cte_resolution);
 
         // must attach before bind, because ParquetRSTable::create used it.
         self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());

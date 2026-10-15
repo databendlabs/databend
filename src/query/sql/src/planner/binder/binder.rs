@@ -101,8 +101,11 @@ pub struct Binder {
     pub pre_resolved_tables: HashMap<(String, String, String), Arc<dyn Table>>,
 
     /// Default catalog/database for unqualified tables in a stored query definition.
-    /// CTE lookup still happens first and only for unqualified names.
+    /// CTE lookup still happens first, subject to the definition's CTE resolution mode.
     pub(crate) default_table_namespace: Option<(String, String)>,
+
+    /// Preserve qualified CTE lookup only while binding a legacy stored definition.
+    pub(crate) legacy_cte_resolution: bool,
 
     pub enable_result_cache: bool,
 
@@ -138,6 +141,7 @@ impl Binder {
             m_cte_table_name: HashMap::new(),
             pre_resolved_tables: HashMap::new(),
             default_table_namespace: None,
+            legacy_cte_resolution: false,
             enable_result_cache,
             enable_materialized_view_rewrite,
             subquery_executor: None,
@@ -146,6 +150,11 @@ impl Binder {
 
     pub fn with_default_table_namespace(mut self, namespace: Option<(String, String)>) -> Self {
         self.default_table_namespace = namespace;
+        self
+    }
+
+    pub fn with_legacy_cte_resolution(mut self, enable: bool) -> Self {
+        self.legacy_cte_resolution = enable;
         self
     }
 
@@ -193,7 +202,12 @@ impl Binder {
 
                 // Remove unused cache columns and join conditions and construct ExpressionScan's child.
                 (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
-                let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {
+                // A stored namespace or legacy CTE resolution can change the meaning
+                // of identical SQL text, so do not share ordinary result-cache keys.
+                let formatted_ast = if !self.legacy_cte_resolution
+                    && self.default_table_namespace.is_none()
+                    && self.ctx.get_settings().get_enable_query_result_cache()?
+                {
                     Some(stmt.to_string())
                 } else {
                     None

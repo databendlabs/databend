@@ -69,8 +69,9 @@ impl Binder {
             table,
             branch,
         } = table_ref;
-        // Only an unqualified name can refer to a CTE; `db.t` always names a table.
-        let may_reference_cte = database.is_none();
+        // Qualified names are tables, except inside a legacy stored definition whose
+        // rewriter qualified CTE references as well. Never enable that mode for ordinary SQL.
+        let may_reference_cte = database.is_none() || self.legacy_cte_resolution;
         let table_identifier = TableIdentifier::new(self, catalog, database, table, branch, alias);
         let mut catalog = table_identifier.catalog_name();
         let mut database = table_identifier.database_name();
@@ -332,10 +333,13 @@ impl Binder {
                         None,
                     );
                     let namespace = stored_query_namespace(table_meta.options());
+                    let previous_legacy =
+                        std::mem::replace(&mut self.legacy_cte_resolution, namespace.is_none());
                     let previous_namespace =
                         std::mem::replace(&mut self.default_table_namespace, namespace);
                     let result = self.bind_query(&mut new_bind_context, query);
                     self.default_table_namespace = previous_namespace;
+                    self.legacy_cte_resolution = previous_legacy;
                     let (s_expr, mut new_bind_context) = result?;
                     if lineage_enabled() {
                         // Record the view's output identity before an outer table alias can
@@ -364,6 +368,7 @@ impl Binder {
                     new_bind_context.cte_context = bind_context.cte_context.clone();
                     new_bind_context.default_table_namespace =
                         bind_context.default_table_namespace.clone();
+                    new_bind_context.legacy_cte_resolution = bind_context.legacy_cte_resolution;
                     new_bind_context.binding_depth = bind_context.next_depth()?;
                     new_bind_context.parent = Some(Box::new(bind_context.clone()));
                     Ok((s_expr, new_bind_context))

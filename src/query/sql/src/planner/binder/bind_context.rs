@@ -277,6 +277,8 @@ pub struct BindContext {
 
     /// Inherited by scalar-subquery binders created from this context.
     pub default_table_namespace: Option<(String, String)>,
+    /// Inherited by scalar subqueries, but restored when returning from a view.
+    pub legacy_cte_resolution: bool,
 
     /// True if there is aggregation in current context, which means
     /// non-grouping columns cannot be referenced outside aggregation
@@ -396,6 +398,7 @@ impl BindContext {
             srf_info: SetReturningInfo::default(),
             cte_context: CteContext::default(),
             default_table_namespace: None,
+            legacy_cte_resolution: false,
             in_grouping: false,
             binding_views: HashSet::new(),
             have_async_func: false,
@@ -447,6 +450,7 @@ impl BindContext {
             srf_info: Default::default(),
             cte_context: parent.cte_context.clone(),
             default_table_namespace: parent.default_table_namespace.clone(),
+            legacy_cte_resolution: parent.legacy_cte_resolution,
             in_grouping: false,
             binding_views: parent.binding_views.clone(),
             have_async_func: false,
@@ -468,6 +472,8 @@ impl BindContext {
         bind_context.parent = self.parent.clone();
         bind_context.binding_depth = self.depth();
         bind_context.cte_context = self.cte_context.clone();
+        bind_context.default_table_namespace = self.default_table_namespace.clone();
+        bind_context.legacy_cte_resolution = self.legacy_cte_resolution;
         bind_context.udf_cache = self.udf_cache.clone();
         bind_context.binding_views = self.binding_views.clone();
         bind_context

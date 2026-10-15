@@ -320,6 +320,7 @@ impl Binder {
             requirements: HashMap::new(),
             next_id: 0,
             name_resolution_ctx: self.name_resolution_ctx.clone(),
+            legacy_cte_resolution: self.legacy_cte_resolution,
         };
 
         for (consumer_index, consumer_cte) in with.ctes.iter_mut().enumerate() {
@@ -500,6 +501,7 @@ impl Binder {
             aliases: HashMap::new(),
             source_count: 0,
             name_resolution_ctx,
+            legacy_cte_resolution: rewriter.legacy_cte_resolution,
         };
         if select.from.walk(&mut alias_collector).is_err() || alias_collector.aliases.is_empty() {
             return false;
@@ -527,6 +529,7 @@ struct MaterializedCteAliasCollector<'a> {
     aliases: HashMap<String, String>,
     source_count: usize,
     name_resolution_ctx: NameResolutionContext,
+    legacy_cte_resolution: bool,
 }
 
 impl Visitor for MaterializedCteAliasCollector<'_> {
@@ -538,8 +541,9 @@ impl Visitor for MaterializedCteAliasCollector<'_> {
             TableReference::Table { table, alias, .. } => {
                 self.source_count += 1;
                 let table_name = normalize_identifier(&table.table, &self.name_resolution_ctx).name;
-                // Only an unqualified name can refer to a CTE.
-                if table.database.is_none() && self.cte_names.contains(&table_name) {
+                if (table.database.is_none() || self.legacy_cte_resolution)
+                    && self.cte_names.contains(&table_name)
+                {
                     let alias_name = alias
                         .as_ref()
                         .map(|alias| {
@@ -616,6 +620,7 @@ struct MaterializedCteVirtualColumnRewriter {
     requirements: HashMap<String, BTreeMap<String, MaterializedCteRequirement>>,
     next_id: usize,
     name_resolution_ctx: NameResolutionContext,
+    legacy_cte_resolution: bool,
 }
 
 impl VisitorMut for MaterializedCteVirtualColumnRewriter {

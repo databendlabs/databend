@@ -192,6 +192,7 @@ impl Binder {
             srf_info: Default::default(),
             cte_context: bind_context.cte_context.clone(),
             default_table_namespace: bind_context.default_table_namespace.clone(),
+            legacy_cte_resolution: bind_context.legacy_cte_resolution,
             in_grouping: false,
             binding_views: bind_context.binding_views.clone(),
             have_async_func: false,

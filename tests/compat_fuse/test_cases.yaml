@@ -24,6 +24,9 @@
 # Requires writer >= 1.2.832 (procedure enabled by default since this version).
 - { writer: "1.2.833", reader: current, meta: [1.2.833], suite: rbac_current }
 
+# Old views store qualified CTE references and no definition namespace.
+- { writer: "1.2.833", reader: current, meta: [1.2.833], suite: view_cte }
+
 # --- Forward compat: current writer -> old reader ---
 - { writer: current, reader: "1.2.311", meta: [1.2.770], suite: rbac_v1_2_311 }
 - { writer: current, reader: "1.2.318", meta: [1.2.770], suite: rbac_v1_2_311 }

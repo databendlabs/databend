@@ -21,15 +21,17 @@ use databend_common_expression::DataBlock;
 pub trait QueryExecutor: Send + Sync {
     async fn execute_query_with_sql_string(&self, sql: &str) -> Result<Vec<DataBlock>>;
 
-    /// Execute a materialized CTE producer in its stored definition's namespace.
+    /// Execute a materialized CTE producer with its definition's namespace and
+    /// CTE resolution policy, without changing the enclosing session.
     async fn execute_query_in_namespace(
         &self,
         sql: &str,
         namespace: Option<(String, String)>,
+        legacy_cte_resolution: bool,
     ) -> Result<Vec<DataBlock>> {
-        if namespace.is_some() {
+        if namespace.is_some() || legacy_cte_resolution {
             return Err(ErrorCode::Unimplemented(
-                "Query executor does not support a stored query namespace",
+                "Query executor does not support a stored query binding context",
             ));
         }
         self.execute_query_with_sql_string(sql).await

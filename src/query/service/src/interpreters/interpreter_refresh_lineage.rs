@@ -284,7 +284,7 @@ impl RefreshLineageInterpreter {
         // Bind only: lineage must describe the stored definition, not an optimized plan
         // that may have been folded or routed through a materialized view.
         let mut planner = Planner::new(self.ctx.clone())
-            .with_default_table_namespace(view.query_namespace.clone());
+            .with_stored_query_namespace_value(view.query_namespace.clone());
         let query_plan = planner.bind_sql(query).await?;
         let target = QueryLineageRelation {
             catalog: DEFAULT_CATALOG.to_string(),
