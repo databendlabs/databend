@@ -57,21 +57,12 @@ async fn run_and_observe(fixture: &TestFixture, sql: &str) -> Result<Observed> {
     let stream = interpreter.execute(ctx.clone()).await?;
     stream.try_collect::<Vec<DataBlock>>().await?;
 
-    let observed = Observed {
+    Ok(Observed {
         data_metrics: ctx.get_data_metrics(),
         io_stats: ctx.get_io_stats(),
         scan_bytes: ctx.get_scan_progress_value().bytes,
         write_bytes: ctx.get_write_progress_value().bytes,
-    };
-    eprintln!(
-        "[{sql}]\n  data_metrics: read={} write={}\n  io_stats: {:?}\n  scan_progress.bytes={} write_progress.bytes={}",
-        observed.data_metrics.get_read_bytes(),
-        observed.data_metrics.get_write_bytes(),
-        observed.io_stats,
-        observed.scan_bytes,
-        observed.write_bytes
-    );
-    Ok(observed)
+    })
 }
 
 /// Upper bound for "only snapshot / segment metadata was read or written"
