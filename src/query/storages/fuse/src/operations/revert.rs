@@ -23,6 +23,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_sql::binder::validate_constraints_by_schema;
@@ -53,6 +54,21 @@ impl FuseTable {
         // shortcut. if reverting to the same point, just return ok
         if current_snapshot_location.as_deref() == Some(&target_snapshot_location) {
             return Ok(());
+        }
+
+        // Legacy snapshots may have no timestamp. Reject them with a user-facing error here;
+        // a missing timestamp on a newly generated commit remains an internal invariant error.
+        if snapshot_timestamp.is_none()
+            && self
+                .table_info
+                .meta
+                .options
+                .contains_key(OPT_KEY_CLONE_GROUP_ID)
+        {
+            return Err(ErrorCode::TableHistoricalDataNotFound(
+                "Cannot FLASHBACK a clone-group member to a snapshot with no timestamp: \
+                 its GC safety cannot be verified",
+            ));
         }
 
         // Only clone-group members check and touch the fence; ordinary FLASHBACK is unchanged.

@@ -509,21 +509,24 @@ impl FuseTable {
             .map(LeastVisibleTime::new)
             .unwrap_or_else(LeastVisibleTime::unbounded);
         let segments = if let Some(location) = descendant.snapshot_loc() {
+            let is_non_local = !location.starts_with(
+                descendant
+                    .meta_location_generator()
+                    .snapshot_location_prefix(),
+            );
+            // Check the metadata invariant before object IO, so even a missing non-local head
+            // on a published clone cannot be mistaken for incomplete history and silently deferred.
+            if is_non_local && table_info.meta.drop_on.is_none() {
+                return Err(ErrorCode::Internal(format!(
+                    "clone descendant {table_id} has a non-local head outside staged creation: {location}"
+                )));
+            }
             let version = TableMetaLocationGenerator::snapshot_version(&location);
             let head = descendant
                 .read_table_snapshot()
                 .await?
                 .ok_or_else(|| ErrorCode::StorageNotFound("clone head disappeared during mark"))?;
-            if !location.starts_with(
-                descendant
-                    .meta_location_generator()
-                    .snapshot_location_prefix(),
-            ) {
-                if table_info.meta.drop_on.is_none() {
-                    return Err(ErrorCode::StorageNotFound(format!(
-                        "clone descendant {table_id} has a non-local head outside staged creation"
-                    )));
-                }
+            if is_non_local {
                 // Before its anchor is installed, a staged clone points directly to the selected
                 // source snapshot. Pin that snapshot and its segments, not a history under the
                 // target prefix. It has no target-local history whose LVT can be advanced yet.

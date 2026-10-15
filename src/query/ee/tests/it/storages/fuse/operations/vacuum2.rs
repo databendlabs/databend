@@ -970,6 +970,11 @@ async fn test_staged_clone_pins_only_selected_root_during_vacuum() -> anyhow::Re
         fixture
             .execute_command(&format!("TRUNCATE TABLE {db}.source"))
             .await?;
+        let truncated = catalog.get_table(&tenant, &db, "source").await?;
+        let obsolete_this_round = FuseTable::try_from_table(truncated.as_ref())?
+            .snapshot_loc()
+            .unwrap();
+        assert_ne!(obsolete_this_round, pinned_location);
         fixture
             .execute_command(&format!("INSERT INTO {db}.source VALUES ({value})"))
             .await?;
@@ -993,7 +998,12 @@ async fn test_staged_clone_pins_only_selected_root_during_vacuum() -> anyhow::Re
                 .iter()
                 .all(|segment| referenced.contains(segment))
         );
+        assert!(fuse.get_operator_ref().exists(&obsolete_this_round).await?);
         do_vacuum2(current, ctx.clone(), true).await?;
+        assert!(
+            !fuse.get_operator_ref().exists(&obsolete_this_round).await?,
+            "VACUUM must reclaim the obsolete snapshot in round {value}"
+        );
         assert!(
             !fuse.get_operator_ref().exists(&obsolete).await?,
             "VACUUM must actually reclaim history"
