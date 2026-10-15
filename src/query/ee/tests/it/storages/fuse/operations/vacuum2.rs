@@ -32,6 +32,7 @@ use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_sql::plans::VacuumTablesPlan;
 use databend_common_storage::FaultInjection;
@@ -1021,6 +1022,94 @@ async fn test_staged_clone_pins_only_selected_root_during_vacuum() -> anyhow::Re
             .await?
             .is_none()
     );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum2_rejects_published_clone_non_local_head() -> anyhow::Result<()> {
+    let fixture = setup_clone_gc_test("source", "owner").await?;
+    let db = fixture.default_db_name();
+    for sql in [
+        format!("CREATE TABLE {db}.leaf CLONE {db}.owner"),
+        format!("TRUNCATE TABLE {db}.owner"),
+        format!("INSERT INTO {db}.owner VALUES (2)"),
+    ] {
+        fixture.execute_command(&sql).await?;
+    }
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let source = catalog.get_table(&tenant, &db, "source").await?;
+    let source_location = FuseTable::try_from_table(source.as_ref())?
+        .snapshot_loc()
+        .unwrap();
+    let (prefix, name) = source_location.rsplit_once('/').unwrap();
+    let missing_location = format!("{prefix}/missing_{name}");
+    let owner = catalog.get_table(&tenant, &db, "owner").await?;
+    let leaf = catalog.get_table(&tenant, &db, "leaf").await?;
+    let expected_prefix = FuseTable::try_from_table(leaf.as_ref())?
+        .meta_location_generator()
+        .snapshot_location_prefix()
+        .to_string();
+    let ids = [source.get_id(), owner.get_id(), leaf.get_id()];
+    let observed_lvts = catalog.mget_table_lvts(&tenant, &ids).await?;
+    let mut files = Vec::new();
+    for name in ["source", "owner", "leaf"] {
+        files.extend(table_storage_files(&ctx, fixture.storage_root(), &db, name).await?);
+    }
+    let operator = FuseTable::try_from_table(source.as_ref())?.get_operator();
+    assert!(operator.exists(&source_location).await?);
+    assert!(!operator.exists(&missing_location).await?);
+
+    // The owner is not the clone-group root. Both IDs must be reported accurately, without
+    // relying on the owner-derived TableInfo.desc used to instantiate each descendant.
+    assert_ne!(source.get_id(), owner.get_id());
+    for location in [source_location, missing_location] {
+        let leaf = catalog.get_table(&tenant, &db, "leaf").await?;
+        let info = leaf.get_table_info();
+        let mut meta = info.meta.clone();
+        assert!(meta.drop_on.is_none());
+        meta.options
+            .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), location.clone());
+        catalog
+            .update_single_table_meta(
+                &tenant,
+                UpdateTableMetaReq {
+                    table_id: leaf.get_id(),
+                    seq: MatchSeq::Exact(info.ident.seq),
+                    new_table_meta: meta,
+                    base_snapshot_location: FuseTable::try_from_table(leaf.as_ref())?
+                        .snapshot_loc(),
+                    lvt_check: None,
+                },
+                info,
+            )
+            .await?;
+        let owner = catalog.get_table(&tenant, &db, "owner").await?;
+        let error = do_vacuum2(
+            FuseTable::try_from_table(owner.as_ref())?,
+            fixture.new_query_ctx().await?,
+            true,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.code(), ErrorCode::INTERNAL);
+        for expected in [
+            format!("clone descendant {}", leaf.get_id()),
+            format!("clone group {}", source.get_id()),
+            format!("VACUUM of table {}", owner.get_id()),
+            format!("head: {location}"),
+            format!("expected snapshot prefix: {expected_prefix}"),
+            "do not manually delete clone bindings or referenced storage objects".to_string(),
+        ] {
+            assert!(error.message().contains(&expected), "{error}");
+        }
+        // Even a missing non-local head must fail before object IO, LVT publication or sweep.
+        assert_eq!(catalog.mget_table_lvts(&tenant, &ids).await?, observed_lvts);
+        for path in &files {
+            assert!(path.exists(), "VACUUM removed {}", path.display());
+        }
+    }
     Ok(())
 }
 

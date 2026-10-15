@@ -494,6 +494,7 @@ impl FuseTable {
     }
 
     async fn mark_one_clone_descendant(
+        &self,
         ctx: Arc<dyn TableContext>,
         catalog: Arc<dyn Catalog>,
         table_info: TableInfo,
@@ -509,16 +510,19 @@ impl FuseTable {
             .map(LeastVisibleTime::new)
             .unwrap_or_else(LeastVisibleTime::unbounded);
         let segments = if let Some(location) = descendant.snapshot_loc() {
-            let is_non_local = !location.starts_with(
-                descendant
-                    .meta_location_generator()
-                    .snapshot_location_prefix(),
-            );
+            let expected_prefix = descendant
+                .meta_location_generator()
+                .snapshot_location_prefix();
+            let is_non_local = !location.starts_with(expected_prefix);
             // Check the metadata invariant before object IO, so even a missing non-local head
             // on a published clone cannot be mistaken for incomplete history and silently deferred.
             if is_non_local && table_info.meta.drop_on.is_none() {
                 return Err(ErrorCode::Internal(format!(
-                    "clone descendant {table_id} has a non-local head outside staged creation: {location}"
+                    "clone descendant {table_id} in clone group {} is published but has a non-local \
+                     head: {location}; expected snapshot prefix: {expected_prefix}. VACUUM of table {} \
+                     stopped; do not manually delete clone bindings or referenced storage objects.",
+                    self.clone_group_id()?,
+                    self.get_id(),
                 )));
             }
             let version = TableMetaLocationGenerator::snapshot_version(&location);
@@ -737,7 +741,7 @@ impl FuseTable {
                 let ctx = ctx.clone();
                 let catalog = catalog.clone();
                 async move {
-                    Self::mark_one_clone_descendant(
+                    self.mark_one_clone_descendant(
                         ctx,
                         catalog,
                         table_info,

@@ -596,6 +596,13 @@ impl FuseTable {
     /// Project snapshot metadata and clear incompatible bloom/HLL options when the schema changes.
     /// Returns whether the schema changed. Constraints, indexes and policies remain untouched;
     /// callers validate them before publication or apply the read-only Time Travel projection.
+    ///
+    /// This does not prepare `virtual_schema` or the legacy name-based `column_mask_policy` and
+    /// `row_access_policy` fields. Time Travel and FLASHBACK clear these fields when the schema
+    /// changes, before their path-specific projection or validation. CLONE must instead call
+    /// `prepare_persistent_navigation_metadata` and `validate_persistent_navigation_metadata`,
+    /// even when the schema is unchanged: reject unsupported legacy policies rather than silently
+    /// dropping protection, and retain compatible virtual-column definitions but reset progress.
     pub(crate) fn apply_snapshot_metadata_to_meta(
         &self,
         table_meta: &mut TableMeta,
