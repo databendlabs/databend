@@ -436,6 +436,11 @@ async fn write_infer_filter_cases(file: &mut impl Write) -> Result<()> {
             "SELECT x FROM infer_bounds WHERE CAST(x AS FLOAT64) = 9007199254740992::FLOAT64 AND x = 9007199254740993",
         ),
         (
+            "mixed_integer_float_equality",
+            "Equal widened Float64 values must not make different exact integer constants contradictory.",
+            "SELECT l.x FROM infer_bounds AS l JOIN infer_right AS r ON CAST(l.x AS FLOAT64) = CAST(r.x AS FLOAT64) WHERE l.x = 9007199254740993 AND r.x = 9007199254740992",
+        ),
+        (
             "float32_narrowing",
             "A Float64 endpoint that is not exactly Float32 must not be rounded while removing a cast.",
             "SELECT f FROM infer_bounds WHERE CAST(f AS FLOAT64) > 0.1::FLOAT64 AND CAST(f AS FLOAT64) < 0.100000002::FLOAT64",

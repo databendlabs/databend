@@ -475,6 +475,48 @@ Scan
 └── limit: NONE
 
 
+=== mixed_integer_float_equality ===
+description: Equal widened Float64 values must not make different exact integer constants contradictory.
+sql: SELECT l.x FROM infer_bounds AS l JOIN infer_right AS r ON CAST(l.x AS FLOAT64) = CAST(r.x AS FLOAT64) WHERE l.x = 9007199254740993 AND r.x = 9007199254740992
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.x (#0) AS (#0)]
+└── Filter
+    ├── filters: [eq(infer_bounds.x (#0), 9007199254740993), eq(infer_right.x (#7), 9007199254740992)]
+    └── Join(Inner)
+        ├── build keys: [CAST(infer_right.x (#7) AS Float64 NULL)]
+        ├── probe keys: [CAST(infer_bounds.x (#0) AS Float64 NULL)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.infer_right (#1)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.infer_bounds (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [infer_bounds.x (#0) AS (#0), infer_right.x (#7) AS (#8)]
+└── Join(Inner)
+    ├── build keys: [CAST(infer_right.x (#7) AS Float64 NULL)]
+    ├── probe keys: [CAST(infer_bounds.x (#0) AS Float64 NULL)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.infer_right (#1)
+    │   ├── filters: [eq(infer_right.x (#7), 9007199254740992)]
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: [eq(infer_bounds.x (#0), 9007199254740993)]
+        ├── order by: []
+        └── limit: NONE
+
+
 === float32_narrowing ===
 description: A Float64 endpoint that is not exactly Float32 must not be rounded while removing a cast.
 sql: SELECT f FROM infer_bounds WHERE CAST(f AS FLOAT64) > 0.1::FLOAT64 AND CAST(f AS FLOAT64) < 0.100000002::FLOAT64

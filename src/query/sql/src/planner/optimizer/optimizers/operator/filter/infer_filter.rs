@@ -94,11 +94,13 @@ impl<'a> InferFilterOptimizer<'a> {
             }
         }
 
-        // Process each predicate, add it to the optimizer if it can be used to infer new predicates,
-        // otherwise, add it to the remaining predicates.
-        let mut remaining_predicates = vec![];
-        for predicate in predicates.into_iter() {
-            if let ScalarExpr::FunctionCall(func) = &predicate {
+        // Borrow the inputs until inference succeeds. An unexpected domain mismatch
+        // must keep every original condition, not become a contradiction or silently
+        // drop a predicate. Record remaining indexes so the normal path moves, rather
+        // than clones, their scalar expressions below.
+        let mut remaining_indexes = vec![];
+        for (index, predicate) in predicates.iter().enumerate() {
+            if let ScalarExpr::FunctionCall(func) = predicate {
                 if let Some(op) = ComparisonOp::try_from_func_name(&func.func_name) {
                     match (
                         func.arguments[0].has_one_column_ref(),
@@ -107,10 +109,10 @@ impl<'a> InferFilterOptimizer<'a> {
                         (true, true) => {
                             if op == ComparisonOp::Equal {
                                 if !self.add_equal_expr(&func.arguments[0], &func.arguments[1]) {
-                                    remaining_predicates.push(predicate);
+                                    remaining_indexes.push(index);
                                 }
                             } else {
-                                remaining_predicates.push(predicate);
+                                remaining_indexes.push(index);
                             }
                         }
                         (true, false)
@@ -125,12 +127,14 @@ impl<'a> InferFilterOptimizer<'a> {
                                 func.arguments[0].data_type().as_ref(),
                             );
                             if is_adjusted {
-                                self.add_expr_predicate(&func.arguments[0], Predicate {
+                                if !self.add_expr_predicate(&func.arguments[0], Predicate {
                                     op,
                                     constant,
-                                });
+                                }) {
+                                    return Ok(predicates);
+                                }
                             } else {
-                                remaining_predicates.push(predicate);
+                                remaining_indexes.push(index);
                             }
                         }
                         (false, true)
@@ -145,28 +149,33 @@ impl<'a> InferFilterOptimizer<'a> {
                                 func.arguments[1].data_type().as_ref(),
                             );
                             if is_adjusted {
-                                self.add_expr_predicate(&func.arguments[1], Predicate {
+                                if !self.add_expr_predicate(&func.arguments[1], Predicate {
                                     op: op.reverse(),
                                     constant,
-                                });
+                                }) {
+                                    return Ok(predicates);
+                                }
                             } else {
-                                remaining_predicates.push(predicate);
+                                remaining_indexes.push(index);
                             }
                         }
-                        _ => remaining_predicates.push(predicate),
+                        _ => remaining_indexes.push(index),
                     }
                 } else {
-                    remaining_predicates.push(predicate);
+                    remaining_indexes.push(index);
                 }
             } else {
-                remaining_predicates.push(predicate);
+                remaining_indexes.push(index);
             }
         }
 
         let mut new_predicates = vec![];
         if !self.is_falsy {
             // Derive new predicates from existing predicates, `derive_predicates` may change is_falsy to true.
-            new_predicates = self.derive_predicates();
+            let Some(derived) = self.derive_predicates() else {
+                return Ok(predicates);
+            };
+            new_predicates = derived;
         }
 
         if self.is_falsy {
@@ -178,7 +187,20 @@ impl<'a> InferFilterOptimizer<'a> {
                 .into(),
             ];
         } else {
-            // Derive new predicates from remaining predicates.
+            // Move only the unabsorbed inputs into the remaining-predicate pass.
+            let mut remaining_indexes = remaining_indexes.into_iter().peekable();
+            let remaining_predicates = predicates
+                .into_iter()
+                .enumerate()
+                .filter_map(|(index, predicate)| {
+                    if remaining_indexes.peek() == Some(&index) {
+                        remaining_indexes.next();
+                        Some(predicate)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
             new_predicates.extend(self.derive_remaining_predicates(remaining_predicates));
         }
 
@@ -236,7 +258,15 @@ impl<'a> InferFilterOptimizer<'a> {
         true
     }
 
-    fn add_expr_predicate(&mut self, expr: &ScalarExpr, predicate: Predicate) {
+    // Whether the predicate was absorbed. A domain mismatch is not a contradiction.
+    fn add_expr_predicate(&mut self, expr: &ScalarExpr, predicate: Predicate) -> bool {
+        let domain = NumericDomain::of_type(expr.data_type().as_ref());
+        if domain.is_none()
+            || domain
+                != NumericDomain::of_type(&predicate.constant.value.as_ref().infer_data_type())
+        {
+            return false;
+        }
         let index = match self.expr_index.get(expr) {
             Some(index) => *index,
             None => {
@@ -245,9 +275,11 @@ impl<'a> InferFilterOptimizer<'a> {
                 index
             }
         };
-        if !self.expr_predicates[index].add(predicate) {
-            self.is_falsy = true;
-        }
+        let Some(satisfiable) = self.expr_predicates[index].try_add(predicate) else {
+            return false;
+        };
+        self.is_falsy |= !satisfiable;
+        true
     }
 
     fn find(parent: &mut [usize], x: usize) -> usize {
@@ -265,7 +297,8 @@ impl<'a> InferFilterOptimizer<'a> {
         }
     }
 
-    fn derive_predicates(&mut self) -> Vec<ScalarExpr> {
+    // None disables this inference pass; the caller retains all original inputs.
+    fn derive_predicates(&mut self) -> Option<Vec<ScalarExpr>> {
         let mut result = vec![];
         let num_exprs = self.exprs.len();
 
@@ -281,8 +314,24 @@ impl<'a> InferFilterOptimizer<'a> {
                 Self::union(&mut parents, left_index, *right_index);
             }
         }
+        // Check the entire class before merging any bounds. In particular, a Float
+        // member without predicates can bridge two Exact members: merging their
+        // conflicting constants first could falsely conclude the class is empty.
+        let mut class_domains = vec![None; num_exprs];
         for index in 0..num_exprs {
             let parent_index = Self::find(&mut parents, index);
+            for domain in [
+                NumericDomain::of_type(self.exprs[index].data_type().as_ref()),
+                self.expr_predicates[index].domain(),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                if class_domains[parent_index].is_some_and(|existing| existing != domain) {
+                    return None;
+                }
+                class_domains[parent_index] = Some(domain);
+            }
             match equal_index_sets.get_mut(&parent_index) {
                 Some(equal_index_set) => {
                     equal_index_set.insert(index);
@@ -291,13 +340,16 @@ impl<'a> InferFilterOptimizer<'a> {
                     equal_index_sets.insert(parent_index, HashSet::from([index]));
                 }
             }
+        }
+        for index in 0..num_exprs {
+            let parent_index = Self::find(&mut parents, index);
             if index != parent_index {
                 // Merge each member's normalized constraints into its equivalence class.
                 let constraints = std::mem::take(&mut self.expr_predicates[index]);
                 for predicate in constraints.into_predicates() {
-                    if !self.expr_predicates[parent_index].add(predicate) {
+                    if !self.expr_predicates[parent_index].try_add(predicate)? {
                         self.is_falsy = true;
-                        return vec![];
+                        return Some(vec![]);
                     }
                 }
             }
@@ -380,7 +432,7 @@ impl<'a> InferFilterOptimizer<'a> {
             }
         }
 
-        result
+        Some(result)
     }
 
     fn derive_remaining_predicates(&self, predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {
@@ -571,6 +623,28 @@ impl PredicateValue {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NumericDomain {
+    Exact,
+    Float,
+}
+
+impl NumericDomain {
+    fn of_type(data_type: &DataType) -> Option<Self> {
+        let mut data_type = data_type;
+        while let DataType::Nullable(inner) = data_type {
+            data_type = inner;
+        }
+        match data_type {
+            DataType::Number(NumberDataType::Float32 | NumberDataType::Float64) => {
+                Some(Self::Float)
+            }
+            DataType::Number(_) | DataType::Decimal(_) => Some(Self::Exact),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Default)]
 enum ExprConstraints {
     #[default]
@@ -580,7 +654,14 @@ enum ExprConstraints {
 }
 
 impl ExprConstraints {
-    fn add(&mut self, predicate: Predicate) -> bool {
+    // None means not absorbed, not false. Preserve the existing state on mismatch.
+    fn try_add(&mut self, predicate: Predicate) -> Option<bool> {
+        if !matches!(
+            predicate.constant.value,
+            Scalar::Number(_) | Scalar::Decimal(_)
+        ) {
+            return None;
+        }
         let value = PredicateValue::new(&predicate.constant.value);
         if matches!(self, Self::Empty) {
             *self = match &value {
@@ -593,9 +674,17 @@ impl ExprConstraints {
         let constraints = match (self, &value) {
             (Self::Exact(constraints), PredicateValue::Exact(_))
             | (Self::Float(constraints), PredicateValue::Float(_)) => constraints,
-            _ => unreachable!("mixed numeric constraint domains"),
+            _ => return None,
         };
-        constraints.add(value, predicate)
+        Some(constraints.add(value, predicate))
+    }
+
+    fn domain(&self) -> Option<NumericDomain> {
+        match self {
+            Self::Empty => None,
+            Self::Exact(_) => Some(NumericDomain::Exact),
+            Self::Float(_) => Some(NumericDomain::Float),
+        }
     }
 
     fn prune_exclusions(&mut self) {
@@ -942,6 +1031,14 @@ mod tests {
         }
     }
 
+    impl ExprConstraints {
+        // Tests of normalization use comparable inputs unless they explicitly test
+        // the non-absorbed path through try_add.
+        fn add(&mut self, predicate: Predicate) -> bool {
+            self.try_add(predicate).expect("comparable test predicates")
+        }
+    }
+
     fn int(value: i64) -> Scalar {
         Scalar::Number(NumberScalar::Int64(value))
     }
@@ -1009,14 +1106,92 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "mixed numeric constraint domains")]
-    fn test_mixed_constraint_domains_are_rejected() {
-        let mut constraints = ExprConstraints::default();
-        assert!(constraints.add(predicate(ComparisonOp::Equal, int(5))));
-        constraints.add(predicate(
+    fn test_mixed_constraint_domains_are_not_absorbed() {
+        let exact = predicate(ComparisonOp::Equal, int(5));
+        let float = predicate(
             ComparisonOp::Equal,
             Scalar::Number(NumberScalar::Float64(1.5.into())),
-        ));
+        );
+        for (initial, incompatible) in [(exact.clone(), float.clone()), (float, exact)] {
+            let mut constraints = ExprConstraints::default();
+            assert_eq!(constraints.try_add(initial.clone()), Some(true));
+            assert_eq!(constraints.try_add(incompatible), None);
+            constraints.prune_exclusions();
+            assert_eq!(constraints.predicates().cloned().collect::<Vec<_>>(), vec![
+                initial.clone()
+            ]);
+            assert_eq!(constraints.into_predicates().collect::<Vec<_>>(), vec![
+                initial
+            ]);
+        }
+    }
+
+    #[test]
+    fn test_wrong_adjusted_domain_is_not_absorbed() {
+        let mut optimizer = InferFilterOptimizer::new(None);
+        let col = column(0, DataType::Number(NumberDataType::Float64));
+        assert!(!optimizer.add_expr_predicate(&col, predicate(ComparisonOp::Equal, int(1))));
+        assert!(!optimizer.is_falsy);
+        assert!(optimizer.exprs.is_empty());
+        let mut constraints = ExprConstraints::default();
+        assert_eq!(
+            constraints.try_add(predicate(ComparisonOp::Equal, Scalar::Boolean(true))),
+            None
+        );
+        assert!(matches!(constraints, ExprConstraints::Empty));
+    }
+
+    #[test]
+    fn test_domain_mismatch_keeps_all_original_filters() -> Result<()> {
+        let col = column(0, DataType::Number(NumberDataType::Int64));
+        let other = column(1, DataType::Number(NumberDataType::Int64));
+        let original = vec![
+            comparison(col.clone(), ComparisonOp::NotEqual, other.clone()),
+            filter(&other, ComparisonOp::GT, int(0)),
+            filter(&col, ComparisonOp::LT, int(10)),
+            filter(&other, ComparisonOp::LT, int(100)),
+        ];
+        let mut incompatible = ExprConstraints::default();
+        assert!(incompatible.add(predicate(
+            ComparisonOp::Equal,
+            Scalar::Number(NumberScalar::Float64(1.5.into()))
+        )));
+        let mut optimizer = InferFilterOptimizer::new(None);
+        // Fault injection: a future adjustment change admitted the wrong domain.
+        optimizer.add_expr(&col, incompatible, vec![]);
+        assert_eq!(optimizer.optimize(original.clone())?, original);
+        assert!(!optimizer.is_falsy);
+        Ok(())
+    }
+
+    #[test]
+    fn test_mixed_class_falls_back_before_merging_exact_constants() -> Result<()> {
+        let a = column(0, DataType::Number(NumberDataType::Int64));
+        let b = column(1, DataType::Number(NumberDataType::Int64));
+        let f = column(2, DataType::Number(NumberDataType::Float64));
+        let cast = |expr| {
+            ScalarExpr::CastExpr(CastExpr {
+                span: None,
+                is_try: false,
+                argument: Box::new(expr),
+                target_type: Box::new(DataType::Number(NumberDataType::Float64)),
+            })
+        };
+        let original = vec![
+            comparison(cast(a.clone()), ComparisonOp::Equal, f.clone()),
+            comparison(cast(b.clone()), ComparisonOp::Equal, f.clone()),
+            filter(&a, ComparisonOp::Equal, int(9_007_199_254_740_993)),
+            filter(&b, ComparisonOp::Equal, int(9_007_199_254_740_992)),
+        ];
+        let mut optimizer = InferFilterOptimizer::new(None);
+        // Simulate a future equality-inference edge connecting integers through an
+        // unconstrained Float member. Do not relax conversion.rs just for this test.
+        optimizer.add_expr(&a, ExprConstraints::default(), vec![f.clone()]);
+        optimizer.add_expr(&b, ExprConstraints::default(), vec![f.clone()]);
+        optimizer.add_expr(&f, ExprConstraints::default(), vec![a, b]);
+        assert_eq!(optimizer.optimize(original.clone())?, original);
+        assert!(!optimizer.is_falsy);
+        Ok(())
     }
 
     #[test]

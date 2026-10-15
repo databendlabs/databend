@@ -962,6 +962,22 @@ SELECT x FROM infer_filter_constraints WHERE CAST(x AS FLOAT64) = 90071992547409
 ----
 9007199254740993
 
+# Different exact integers can become equal after a lossy Float64 conversion.
+# They must not be merged into one exact constraint class or eliminated as FALSE.
+statement ok
+CREATE TABLE infer_filter_float_bridge(x BIGINT);
+
+statement ok
+INSERT INTO infer_filter_float_bridge VALUES (9007199254740992);
+
+query I
+SELECT l.x FROM infer_filter_constraints AS l JOIN infer_filter_float_bridge AS r ON CAST(l.x AS FLOAT64) = CAST(r.x AS FLOAT64) WHERE l.x = 9007199254740993 AND r.x = 9007199254740992;
+----
+9007199254740993
+
+statement ok
+DROP TABLE infer_filter_float_bridge;
+
 # MEMORY isolates exact Decimal limits from Fuse statistics, whose floating-point
 # bounds can round Decimal76::MAX out of range during debug selectivity validation.
 statement ok
