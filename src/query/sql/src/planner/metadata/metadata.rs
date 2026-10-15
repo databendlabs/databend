@@ -14,6 +14,7 @@
 
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::collections::hash_map::Entry;
 use std::fmt::Debug;
@@ -39,6 +40,7 @@ use parking_lot::RwLock;
 
 use crate::BoundQueryLineage;
 use crate::QueryLineageRelationKind;
+use crate::binder::ViewIdent;
 use crate::optimizer::ir::SExpr;
 
 /// Planner use [`usize`] as its index type.
@@ -94,6 +96,10 @@ pub struct Metadata {
     /// one producer definition and its temporary-table output mappings so
     /// lineage extraction can look through that execution detail.
     materialized_cte_lineage_sources: HashMap<IndexType, MaterializedCteLineageSource>,
+    /// View expansion path (`BindContext::binding_views`) of tables bound
+    /// inside view definitions, keyed by table index. It identifies the view
+    /// name scope of the table. Tables bound by the top-level query have no entry.
+    table_view_scopes: HashMap<IndexType, HashSet<ViewIdent>>,
     /// Query lineage captured from the bound plan before optimization. Lineage is a
     /// logical property of what the user wrote, while the optimizer may fold scans into
     /// constants, decorrelate subqueries into marker joins, or route a scan through a
@@ -163,6 +169,44 @@ impl Metadata {
                 None => {
                     table.name == table_name || table.alias_name == Some(table_name.to_string())
                 }
+            })
+            .map(|table| table.index)
+    }
+
+    pub fn set_table_view_scope(
+        &mut self,
+        table_index: IndexType,
+        view_scope: &HashSet<ViewIdent>,
+    ) {
+        if !view_scope.is_empty() {
+            self.table_view_scopes
+                .insert(table_index, view_scope.clone());
+        }
+    }
+
+    /// Like `get_table_index`, but only matches tables bound in `view_scope`.
+    /// Each view definition is an independent name scope, so a table bound in
+    /// one scope cannot be confused with a CTE defined in another.
+    pub fn get_table_index_in_view_scope(
+        &self,
+        database_name: Option<&str>,
+        table_name: &str,
+        view_scope: &HashSet<ViewIdent>,
+    ) -> Option<IndexType> {
+        self.tables
+            .iter()
+            .rev()
+            .filter(|table| {
+                self.table_view_scopes
+                    .get(&table.index)
+                    .map_or(view_scope.is_empty(), |scope| scope == view_scope)
+            })
+            .find(|table| match database_name {
+                Some(database_name) => {
+                    table.database == database_name && table.name == table_name
+                        || table.alias_name.as_deref() == Some(table_name)
+                }
+                None => table.name == table_name || table.alias_name.as_deref() == Some(table_name),
             })
             .map(|table| table.index)
     }
