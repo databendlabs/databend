@@ -224,6 +224,24 @@ async fn test_dphyp_filter_positions() -> Result<()> {
     let mut file = open_golden_file("optimizer", "dphyp_filter_position.txt")?;
     let cases = [
         SqlTestCase {
+            name: "projected_inner_join_with_filter",
+            description: "Control: preparation pushes the key filter to scans and introduces a materializing projection; DPhyp must use that prepared region.",
+            setup_sqls: &[],
+            sql: "SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k) t JOIN c ON t.k = c.k AND t.k > 10",
+        },
+        SqlTestCase {
+            name: "projected_inner_join",
+            description: "Control: preparation adds an alias projection, so the raw identity wrapper is not the input seen by DPhyp.",
+            setup_sqls: &[],
+            sql: "SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k) t JOIN c ON t.k = c.k",
+        },
+        SqlTestCase {
+            name: "projected_literal_with_filter",
+            description: "Preserve the live literal output through production preparation and join reordering.",
+            setup_sqls: &[],
+            sql: "SELECT t.k, t.tag FROM (SELECT a.k, 7 AS tag FROM a JOIN b ON a.k = b.k) t JOIN c ON t.k = c.k AND t.k > 10",
+        },
+        SqlTestCase {
             name: "subquery_single_table_filter",
             description: "Use the single-table filter and projection positions produced by the real preceding rules.",
             setup_sqls: &[],

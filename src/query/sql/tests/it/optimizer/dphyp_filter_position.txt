@@ -1,3 +1,105 @@
+=== projected_inner_join_with_filter ===
+description: Control: preparation pushes the key filter to scans and introduces a materializing projection; DPhyp must use that prepared region.
+sql: SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k) t JOIN c ON t.k = c.k AND t.k > 10
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+EvalScalar
+├── scalars: [a.k (#0) AS (#0), k (#6) AS (#7), c.k (#4) AS (#8)]
+└── Join(Inner)
+    ├── build keys: [c.k (#4), c.k (#4)]
+    ├── probe keys: [a.k (#0), k (#6)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.c (#2)
+    │   ├── filters: [gt(c.k (#4), 10)]
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [a.k (#0) AS (#0), b.k (#2) AS (#6)]
+        └── Join(Inner)
+            ├── build keys: [b.k (#2)]
+            ├── probe keys: [a.k (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.b (#1)
+            │   ├── filters: [gt(b.k (#2), 10)]
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.a (#0)
+                ├── filters: [gt(a.k (#0), 10)]
+                ├── order by: []
+                └── limit: NONE
+
+
+=== projected_inner_join ===
+description: Control: preparation adds an alias projection, so the raw identity wrapper is not the input seen by DPhyp.
+sql: SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k) t JOIN c ON t.k = c.k
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+EvalScalar
+├── scalars: [a.k (#0) AS (#0), k (#6) AS (#7), c.k (#4) AS (#8)]
+└── Join(Inner)
+    ├── build keys: [c.k (#4), c.k (#4)]
+    ├── probe keys: [a.k (#0), k (#6)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.c (#2)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [a.k (#0) AS (#0), b.k (#2) AS (#6)]
+        └── Join(Inner)
+            ├── build keys: [b.k (#2)]
+            ├── probe keys: [a.k (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.b (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.a (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== projected_literal_with_filter ===
+description: Preserve the live literal output through production preparation and join reordering.
+sql: SELECT t.k, t.tag FROM (SELECT a.k, 7 AS tag FROM a JOIN b ON a.k = b.k) t JOIN c ON t.k = c.k AND t.k > 10
+settings: enable_dphyp=1, disable_join_reorder=0
+plan:
+EvalScalar
+├── scalars: [a.k (#0) AS (#0), tag (#4) AS (#4), k (#7) AS (#8), c.k (#5) AS (#9)]
+└── Join(Inner)
+    ├── build keys: [c.k (#5), c.k (#5)]
+    ├── probe keys: [a.k (#0), k (#7)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.c (#2)
+    │   ├── filters: [gt(c.k (#5), 10)]
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [a.k (#0) AS (#0), 7 AS (#4), b.k (#2) AS (#7)]
+        └── Join(Inner)
+            ├── build keys: [b.k (#2)]
+            ├── probe keys: [a.k (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.b (#1)
+            │   ├── filters: [gt(b.k (#2), 10)]
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.a (#0)
+                ├── filters: [gt(a.k (#0), 10)]
+                ├── order by: []
+                └── limit: NONE
+
+
 === subquery_single_table_filter ===
 description: Use the single-table filter and projection positions produced by the real preceding rules.
 sql: SELECT t.k FROM (SELECT a.k FROM a JOIN b ON a.k = b.k WHERE a.v > 10) t JOIN c ON t.k = c.k

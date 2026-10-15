@@ -786,7 +786,28 @@ impl DPhpyOptimizer {
         join_relation: Option<&SExpr>,
         is_subquery: bool,
     ) -> Result<(Arc<SExpr>, bool)> {
-        if is_subquery || (join_child && Self::is_subquery_operator(s_expr.plan())) {
+        // Direct subqueries retain the existing region boundary. The added
+        // check below unary wrappers must not seal an identity EvalScalar:
+        // it creates no columns or values and was safely traversed before.
+        if is_subquery {
+            return self.process_subquery(s_expr).await;
+        }
+        let indirect_boundary = if join_child && Self::is_subquery_operator(s_expr.plan()) {
+            if let RelOperator::EvalScalar(eval) = s_expr.plan()
+                && eval.is_identity()
+            {
+                let input = RelExpr::with_s_expr(s_expr).derive_relational_prop_child(0)?;
+                !eval
+                    .items
+                    .iter()
+                    .all(|item| input.output_columns.contains(&item.index))
+            } else {
+                true
+            }
+        } else {
+            false
+        };
+        if indirect_boundary {
             return self.process_subquery(s_expr).await;
         }
 

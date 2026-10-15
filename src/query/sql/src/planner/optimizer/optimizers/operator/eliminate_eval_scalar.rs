@@ -112,6 +112,9 @@ impl EliminateEvalScalarOptimizer {
             eval_scalar.items.iter().map(|x| x.index).collect();
 
         if eval_scalar_output_cols.is_subset(&child_output_cols) {
+            if eval_scalar.is_identity() {
+                return Ok(Some(child.clone()));
+            }
             // check if there's f(#x) as #x, if so we can't eliminate the eval scalar
             for item in eval_scalar.items {
                 match item.scalar {
