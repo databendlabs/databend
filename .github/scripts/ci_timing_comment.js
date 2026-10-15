@@ -191,7 +191,7 @@ function devTable(cur, base, run) {
     const names = Object.keys(cur.groups);
     names.forEach((g, i) => {
         const pre = i === names.length - 1 ? '└' : '├';
-        const c = cur.groups[g], b = base.groups[g] || {};
+        const c = cur.groups[g], b = base.groups?.[g] || {};
         lines.push(row(`${pre} ${g} (${c.n} jobs, max)`, c.max, b.max));
     });
     return lines.join('\n');
@@ -224,7 +224,7 @@ function cloudTable(cur, base, run) {
         '|---|--:|--:|--:|',
     ];
     for (const arch of Object.keys(cur.builds).sort()) {
-        const c = cur.builds[arch], b = base.builds[arch] || {};
+        const c = cur.builds[arch], b = base.builds?.[arch] || {};
         lines.push(row(`**build ${arch} (release)**`, c.dur, b.dur));
         if (c.breakdown) {
             const bd = c.breakdown, bb = b.breakdown || {};
@@ -256,14 +256,17 @@ async function baseline(github, context, core, workflowFile, metricsFn, excludeR
         if (workflowFile === 'main.yml') params.branch = 'main';
         const { data } = await github.rest.actions.listWorkflowRuns(params);
         runs = data.workflow_runs.filter((r) => r.id !== excludeRunId).slice(0, BASELINE_RUNS);
-        runs = data.workflow_runs;
     } catch (e) {
         core.warning(`baseline ${workflowFile}: ${e.message}`);
     }
     const all = [];
     for (const r of runs) {
-        const jobs = await listJobs(github, context, r.id);
-        all.push(await metricsFn(github, context, core, r, jobs, false));
+        try {
+            const jobs = await listJobs(github, context, r.id);
+            all.push(await metricsFn(github, context, core, r, jobs, false));
+        } catch (e) {
+            core.warning(`baseline ${workflowFile} run ${r.id}: ${e.message}`);
+        }
     }
     // Median of each scalar; groups / builds medianed per key. Breakdown is not
     // computed for baseline (would need 10 log downloads); shown as — .
