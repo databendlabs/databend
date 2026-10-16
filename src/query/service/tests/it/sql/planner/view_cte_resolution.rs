@@ -305,43 +305,56 @@ async fn test_legacy_materialized_cte_producer_context() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     execute_command(ctx.clone(), "CREATE DATABASE legacy_cte").await?;
+    // The producer for b retains the lazy a in its WITH clause and still
+    // references it as legacy_cte.a, so strict producer binding would look for a
+    // nonexistent table.
     register_legacy_view(
         &ctx,
         "v_materialized",
         "WITH a AS (SELECT 99::INT AS n), b AS MATERIALIZED (SELECT n FROM legacy_cte.a) SELECT n FROM legacy_cte.b",
     )
     .await?;
+    // The producer for b drops the user-materialized a from its WITH clause, so
+    // legacy_cte.a must be replaced with a's temporary table even though that
+    // table lives in the session database, not in legacy_cte.
+    register_legacy_view(
+        &ctx,
+        "v_materialized_chain",
+        "WITH a AS MATERIALIZED (SELECT 98::INT AS n), b AS MATERIALIZED (SELECT legacy_cte.a.n FROM legacy_cte.a) SELECT n FROM legacy_cte.b",
+    )
+    .await?;
 
     // Use the production executor to verify that the separately planned CTAS
     // producers inherit the old resolution policy as well as the main query.
-    // The producer for b retains a in its WITH clause and still references it as
-    // legacy_cte.a, so strict producer binding would look for a nonexistent table.
-    let session = fixture.new_session_with_type(SessionType::MySQL).await?;
-    let query_ctx = session
-        .create_query_context(&databend_common_version::BUILD_INFO)
-        .await?;
-    query_ctx
-        .set_current_database("legacy_cte".to_string())
-        .await?;
-    let mut planner = Planner::new_with_query_executor(
-        query_ctx.clone(),
-        Arc::new(ServiceQueryExecutor::new(query_ctx.clone())),
-    );
-    let (plan, _) = planner
-        .plan_sql("SELECT * FROM legacy_cte.v_materialized")
-        .await?;
-    let interpreter = InterpreterFactory::get(query_ctx.clone(), &plan).await?;
-    let blocks = interpreter
-        .execute(query_ctx)
-        .await?
-        .try_collect::<Vec<DataBlock>>()
-        .await?;
-    let block = DataBlock::concat(&blocks)?;
-    assert_eq!(block.num_rows(), 1);
-    assert_eq!(
-        block.get_by_offset(0).index(0),
-        Some(ScalarRef::Number(NumberScalar::Int32(99)))
-    );
+    // Keep the session in `default`: legacy definitions qualify CTE references
+    // with the view's database, which must not have to match the session's.
+    for (view, expected) in [("v_materialized", 99), ("v_materialized_chain", 98)] {
+        let session = fixture.new_session_with_type(SessionType::MySQL).await?;
+        let query_ctx = session
+            .create_query_context(&databend_common_version::BUILD_INFO)
+            .await?;
+        assert_eq!(query_ctx.get_current_database(), "default");
+        let mut planner = Planner::new_with_query_executor(
+            query_ctx.clone(),
+            Arc::new(ServiceQueryExecutor::new(query_ctx.clone())),
+        );
+        let (plan, _) = planner
+            .plan_sql(&format!("SELECT * FROM legacy_cte.{view}"))
+            .await?;
+        let interpreter = InterpreterFactory::get(query_ctx.clone(), &plan).await?;
+        let blocks = interpreter
+            .execute(query_ctx)
+            .await?
+            .try_collect::<Vec<DataBlock>>()
+            .await?;
+        let block = DataBlock::concat(&blocks)?;
+        assert_eq!(block.num_rows(), 1, "{view}");
+        assert_eq!(
+            block.get_by_offset(0).index(0),
+            Some(ScalarRef::Number(NumberScalar::Int32(expected))),
+            "{view}"
+        );
+    }
     Ok(())
 }
 

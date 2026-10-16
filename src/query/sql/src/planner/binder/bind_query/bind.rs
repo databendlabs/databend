@@ -416,10 +416,13 @@ impl VisitorMut for TableNameReplacer {
     fn visit_expr(&mut self, expr: &mut Expr) -> std::result::Result<VisitControl, !> {
         if let Expr::ColumnRef { column, .. } = expr
             && self.legacy_cte_resolution
-            && self.may_replace(column.database.as_ref())
             && let Some(table_identifier) = &mut column.table
+            && self.replace_identifier(table_identifier)
+            && let Some(database) = &mut column.database
         {
-            self.replace_identifier(table_identifier);
+            // The table reference now names the session temporary table, so a
+            // database-qualified column must follow it there.
+            *database = Identifier::from_name(database.span, self.database.clone());
         }
         Ok(VisitControl::Continue)
     }
@@ -443,15 +446,19 @@ impl TableNameReplacer {
     }
 
     fn may_replace(&self, database: Option<&Identifier>) -> bool {
-        database.is_none()
-            || (self.legacy_cte_resolution && database.is_some_and(|db| db.name == self.database))
+        // Must agree with `bind_table`: legacy definitions match CTEs by name under
+        // any qualifier. The old rewriter qualified CTE references with the view's
+        // database, which differs from `self.database` (the session's database).
+        database.is_none() || self.legacy_cte_resolution
     }
 
-    fn replace_identifier(&mut self, identifier: &mut Identifier) {
+    fn replace_identifier(&mut self, identifier: &mut Identifier) -> bool {
         let name = normalize_identifier(identifier, &self.name_resolution_ctx).name;
-        if let Some(new_name) = self.new_name.get(&name) {
-            identifier.name.clone_from(new_name);
-        }
+        let Some(new_name) = self.new_name.get(&name) else {
+            return false;
+        };
+        identifier.name.clone_from(new_name);
+        true
     }
 }
 
@@ -488,20 +495,23 @@ mod tests {
 
     #[test]
     fn test_materialized_cte_replacer_legacy_mode() {
+        // The temporary table lives in the session database, which need not be the
+        // database that a legacy definition used to qualify its CTE references.
         for (legacy, expected) in [
             (
                 false,
-                "SELECT t.n, db.t.n, other.t.n FROM default.db.t_temp AS t, db.t, other.t",
+                "SELECT t.n, view_db.t.n, other.t.n FROM default.session_db.t_temp AS t, view_db.t, other.t",
             ),
             (
                 true,
-                "SELECT t_temp.n, db.t_temp.n, other.t.n FROM default.db.t_temp, default.db.t_temp, other.t",
+                "SELECT t_temp.n, session_db.t_temp.n, session_db.t_temp.n FROM default.session_db.t_temp, default.session_db.t_temp, default.session_db.t_temp",
             ),
         ] {
-            let mut query = parse_query("SELECT t.n, db.t.n, other.t.n FROM t, db.t, other.t");
+            let mut query =
+                parse_query("SELECT t.n, view_db.t.n, other.t.n FROM t, view_db.t, other.t");
             let mut replacer = TableNameReplacer::new(
                 "default".to_string(),
-                "db".to_string(),
+                "session_db".to_string(),
                 [("t".to_string(), "t_temp".to_string())].into(),
                 NameResolutionContext::default(),
                 legacy,
