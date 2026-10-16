@@ -51,6 +51,7 @@ use siphasher::sip128::SipHasher24;
 
 const VACUUM2_BLOCK_DELETE_CHUNK_SIZE: usize = 1000;
 const VACUUM2_SEGMENT_READ_CHUNK_SIZE: usize = 1000;
+const VACUUM2_BLOCK_LOG_BATCH_SIZE: usize = 1000;
 
 /// Block GC progress counters used for status reporting.
 struct BlockGcStats {
@@ -133,7 +134,10 @@ pub async fn do_vacuum2(
         snapshots_to_gc,
     }) = vacuum_base_snapshot_phase(fuse_table, &ctx, respect_flash_back).await?
     else {
-        info!("Table {} has no snapshot, stopping vacuum", table_info.desc);
+        info!(
+            "No GC root ready for table {}, table_id: {}, stopping vacuum; see snapshot selection and protection logs for the reason",
+            table_info.desc, table_info.ident.table_id
+        );
         return Ok(());
     };
     let fuse_table = FuseTable::try_from_table(owner.as_ref())?;
@@ -172,6 +176,7 @@ pub async fn do_vacuum2(
         .map(|(path, _)| path)
         .filter(|path| path.starts_with(target_segment_prefix))
         .collect::<HashSet<_>>();
+    let candidate_segment_count = segments_before_gc_root.len();
     let segments_to_gc: Vec<String> = segments_before_gc_root
         .into_iter()
         .filter(|s| !protected_seg_paths.contains(s))
@@ -181,9 +186,11 @@ pub async fn do_vacuum2(
         .map(|v| TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(v))
         .collect::<Vec<_>>();
     ctx.set_status_info(&format!(
-        "Filtered segments_to_gc for table {}, elapsed: {:?}, segments_to_gc: {:?}, stats_to_gc: {:?}",
+        "Filtered segments_to_gc for table {}, elapsed: {:?}, candidates: {}, kept by protection: {}, segments_to_gc: {:?}, stats_to_gc: {:?}",
         table_info.desc,
         start.elapsed(),
+        candidate_segment_count,
+        candidate_segment_count - segments_to_gc.len(),
         slice_summary(&segments_to_gc),
         slice_summary(&stats_to_gc)
     ));
@@ -320,12 +327,14 @@ pub async fn do_vacuum2(
         gc_root_blocks: &gc_root_blocks,
         start,
     };
+    log_all_block_files(fuse_table.get_id(), &block_gc_ctx).await?;
     let block_gc_stats = purge_blocks_before_gc_root(&block_gc_ctx).await?;
     ctx.set_status_info(&format!(
-        "Filtered and removed blocks for table {}, elapsed: {:?}, blocks scanned: {}, blocks removed: {}, files removed: {}",
+        "Filtered and removed blocks for table {}, elapsed: {:?}, blocks scanned: {}, blocks kept by protection: {}, blocks removed: {}, files removed: {}; blocks scanned counts cutoff/safety-eligible candidates only",
         table_info.desc,
         start.elapsed(),
         block_gc_stats.scanned_blocks,
+        block_gc_stats.scanned_blocks - block_gc_stats.removed_blocks,
         block_gc_stats.removed_blocks,
         block_gc_stats.removed_files,
     ));
@@ -450,6 +459,13 @@ async fn purge_inverted_index_v2_objects(
     let mut lister = operator.lister_with(prefix).recursive(true).await?;
     let mut pending = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
     let mut removed = 0;
+    let mut listed = 0usize;
+    let mut protected = 0usize;
+    let mut unrecognised = 0usize;
+    let mut non_v7 = 0usize;
+    let mut invalid_uuid = 0usize;
+    let mut at_or_after_cutoff = 0usize;
+    let mut safety_skipped = 0usize;
 
     while let Some(entry) = lister.try_next().await? {
         if let Err(err) = ctx.check_aborting() {
@@ -460,9 +476,11 @@ async fn purge_inverted_index_v2_objects(
         if entry.metadata().is_dir() {
             continue;
         }
+        listed += 1;
         // Sibling objects (`<bundle>.idx`, `<bundle>.pos`) share the bundle's protection and the
         // bundle's UUID; unrecognised names are left alone.
         let Some(bundle_location) = ExternalFile::bundle_location(entry.path()) else {
+            unrecognised += 1;
             warn!(
                 "skip object with unrecognised inverted-index naming during vacuum: path={}",
                 entry.path()
@@ -470,12 +488,17 @@ async fn purge_inverted_index_v2_objects(
             continue;
         };
         if protected_locations.contains(bundle_location) {
+            protected += 1;
             continue;
         }
         let object_timestamp = match try_extract_uuid_v7_timestamp_from_path(bundle_location) {
             Ok(Some(timestamp)) => timestamp,
-            Ok(None) => continue,
+            Ok(None) => {
+                non_v7 += 1;
+                continue;
+            }
             Err(error) => {
+                invalid_uuid += 1;
                 warn!(
                     "skip inverted-index V2 object with unparsable UUID during vacuum: path={}, error={}",
                     entry.path(),
@@ -485,9 +508,11 @@ async fn purge_inverted_index_v2_objects(
             }
         };
         if object_timestamp >= gc_root_timestamp {
+            at_or_after_cutoff += 1;
             continue;
         }
         if !is_gc_candidate_segment_block(&entry, operator, gc_root_meta_ts).await? {
+            safety_skipped += 1;
             continue;
         }
         pending.push(entry.path().to_string());
@@ -501,6 +526,20 @@ async fn purge_inverted_index_v2_objects(
         file_remover.remove_file_in_batch(&pending).await?;
         removed += pending.len();
     }
+    info!(
+        "Inverted-index V2 scan: prefix={}, gc_root_timestamp={}, gc_root_meta_ts={}, listed={}, protected={}, unrecognised={}, non_v7={}, invalid_uuid={}, at_or_after_cutoff={}, safety_skipped={}, removed={}",
+        prefix,
+        gc_root_timestamp,
+        gc_root_meta_ts,
+        listed,
+        protected,
+        unrecognised,
+        non_v7,
+        invalid_uuid,
+        at_or_after_cutoff,
+        safety_skipped,
+        removed
+    );
     Ok(removed)
 }
 
@@ -512,6 +551,112 @@ fn block_path_hash(path: &str) -> u128 {
     let mut hasher = SipHasher24::new();
     hasher.write(path.as_bytes());
     hasher.finish128().into()
+}
+
+/// List the entire block prefix for diagnosis without changing the bounded GC scan below.
+/// Only the current log batch is buffered; objects outside the cutoff are never GC candidates.
+async fn log_all_block_files(table_id: u64, block_gc: &BlockGcContext<'_>) -> Result<()> {
+    if !log::log_enabled!(log::Level::Info) {
+        return Ok(());
+    }
+    let abort_checker = block_gc.ctx.clone().get_abort_checker();
+    let start = std::time::Instant::now();
+    let mut batch = Vec::with_capacity(VACUUM2_BLOCK_LOG_BATCH_SIZE);
+    let mut batch_number = 0usize;
+    let mut before_cutoff = 0;
+    let mut protected_before_cutoff = 0;
+    let mut at_or_after_cutoff = 0;
+    let mut protected_at_or_after_cutoff = 0;
+    info!(
+        "Starting full block inventory: table_id={}, prefix={}, until={}, gc_root_timestamp={}, gc_root_meta_ts={}, protected_blocks={}",
+        table_id,
+        block_gc.block_location_prefix,
+        block_gc.until,
+        block_gc.gc_root_timestamp,
+        block_gc.gc_root_meta_ts,
+        block_gc.gc_root_blocks.len()
+    );
+
+    let result: Result<()> = async {
+        let mut lister = block_gc
+            .dal
+            .lister_with(block_gc.block_location_prefix)
+            .recursive(true)
+            .await?;
+        loop {
+            abort_checker.try_check_aborting()?;
+            let Some(entry) = lister.try_next().await? else {
+                break;
+            };
+            if entry.metadata().is_dir() {
+                continue;
+            }
+            let path = entry.path();
+            let is_before_cutoff = path < block_gc.until.as_str();
+            let is_protected = block_gc.gc_root_blocks.contains(&block_path_hash(path));
+            if is_before_cutoff {
+                before_cutoff += 1;
+                protected_before_cutoff += usize::from(is_protected);
+            } else {
+                at_or_after_cutoff += 1;
+                protected_at_or_after_cutoff += usize::from(is_protected);
+            }
+            batch.push(format!(
+                "path={}, uuid_timestamp={:?}, last_modified={:?}, before_cutoff={}, protected={}",
+                path,
+                try_extract_uuid_v7_timestamp_from_path(path).map_err(|error| error.to_string()),
+                entry.metadata().last_modified(),
+                is_before_cutoff,
+                is_protected
+            ));
+            if batch.len() == VACUUM2_BLOCK_LOG_BATCH_SIZE {
+                batch_number += 1;
+                info!(
+                    "Full block inventory batch: table_id={}, batch={}, count={}, blocks={:?}",
+                    table_id,
+                    batch_number,
+                    batch.len(),
+                    batch
+                );
+                batch.clear();
+            }
+        }
+        Ok(())
+    }
+    .await;
+
+    if !batch.is_empty() {
+        batch_number += 1;
+        info!(
+            "Full block inventory batch: table_id={}, batch={}, count={}, blocks={:?}",
+            table_id,
+            batch_number,
+            batch.len(),
+            batch
+        );
+    }
+    info!(
+        "Full block inventory summary: table_id={}, prefix={}, complete={}, elapsed={:?}, batches={}, total={}, before_cutoff_protected={}, before_cutoff_not_in_protected_set={}, at_or_after_cutoff_protected={}, at_or_after_cutoff_not_in_protected_set={}",
+        table_id,
+        block_gc.block_location_prefix,
+        result.is_ok(),
+        start.elapsed(),
+        batch_number,
+        before_cutoff + at_or_after_cutoff,
+        protected_before_cutoff,
+        before_cutoff - protected_before_cutoff,
+        protected_at_or_after_cutoff,
+        at_or_after_cutoff - protected_at_or_after_cutoff
+    );
+    if let Err(error) = result {
+        warn!(
+            "Full block inventory incomplete: table_id={}, error={}",
+            table_id, error
+        );
+        // Cancellation must propagate, but a diagnostic listing failure must not prevent GC.
+        abort_checker.try_check_aborting()?;
+    }
+    Ok(())
 }
 
 async fn purge_blocks_before_gc_root(block_gc: &BlockGcContext<'_>) -> Result<BlockGcStats> {
@@ -580,6 +725,9 @@ async fn purge_blocks_before_gc_root_object_store_streaming(
         removed_blocks: 0,
         removed_files: 0,
     };
+    let mut listed_files = 0usize;
+    let mut safety_skipped = 0usize;
+    let mut stopped_at_cutoff = false;
 
     block_gc.ctx.set_status_info(&format!(
         "Streaming block paths before gc_root for table {}, block_location_prefix: {:?}, gc_root_timestamp: {:?}",
@@ -592,12 +740,22 @@ async fn purge_blocks_before_gc_root_object_store_streaming(
         }
 
         let path = entry.path();
+        listed_files += 1;
         if path >= block_gc.until.as_str() {
-            info!("entry path: {} >= until: {}", path, block_gc.until);
+            stopped_at_cutoff = true;
+            info!(
+                "Block GC cutoff reached: table={}, path={}, until={}, uuid_timestamp={:?}, last_modified={:?}",
+                block_gc.table_desc,
+                path,
+                block_gc.until,
+                try_extract_uuid_v7_timestamp_from_path(path).map_err(|error| error.to_string()),
+                entry.metadata().last_modified()
+            );
             break;
         }
 
         if !is_gc_candidate_segment_block(&entry, block_gc.dal, block_gc.gc_root_meta_ts).await? {
+            safety_skipped += 1;
             continue;
         }
 
@@ -617,6 +775,15 @@ async fn purge_blocks_before_gc_root_object_store_streaming(
         purge_block_chunk(&file_remover, block_gc, &block_chunk, &mut stats).await?;
     }
 
+    info!(
+        "Bounded block scan: table={}, prefix={}, listed_files={}, safety_skipped={}, candidates={}, stopped_at_cutoff={}",
+        block_gc.table_desc,
+        block_gc.block_location_prefix,
+        listed_files,
+        safety_skipped,
+        stats.scanned_blocks,
+        stopped_at_cutoff
+    );
     Ok(stats)
 }
 
@@ -635,16 +802,40 @@ async fn list_gc_candidate_paths_until_prefix_fs(
     }
     entries.sort_by(|l, r| l.path().cmp(r.path()));
 
+    let listed_files = entries.len();
+    let mut examined_files = 0usize;
+    let mut safety_skipped = 0usize;
+    let mut stopped_at_cutoff = false;
     let mut res = Vec::new();
     for entry in entries {
+        examined_files += 1;
         if entry.path() >= until {
-            info!("entry path: {} >= until: {}", entry.path(), until);
+            stopped_at_cutoff = true;
+            info!(
+                "Block GC cutoff reached: path={}, until={}, uuid_timestamp={:?}, last_modified={:?}",
+                entry.path(),
+                until,
+                try_extract_uuid_v7_timestamp_from_path(entry.path())
+                    .map_err(|error| error.to_string()),
+                entry.metadata().last_modified()
+            );
             break;
         }
         if is_gc_candidate_segment_block(&entry, dal, gc_root_meta_ts).await? {
             res.push(entry.path().to_owned());
+        } else {
+            safety_skipped += 1;
         }
     }
+    info!(
+        "Bounded FS block scan: prefix={}, listed_files={}, examined_files={}, safety_skipped={}, candidates={}, stopped_at_cutoff={}",
+        path,
+        listed_files,
+        examined_files,
+        safety_skipped,
+        res.len(),
+        stopped_at_cutoff
+    );
     Ok(res)
 }
 
@@ -735,10 +926,24 @@ async fn vacuum_base_snapshot_phase(
         .await?;
     let owner_seq = owner_lvt.as_ref().map_or(0, |v| v.seq);
     let refreshed = fuse_table.refresh(ctx.as_ref()).await?;
+    info!(
+        "Refreshed vacuum owner: table_id={}, previous_table_seq={}, refreshed_table_seq={}, previous_snapshot={:?}",
+        fuse_table.get_id(),
+        fuse_table.get_table_info().ident.seq,
+        refreshed.get_table_info().ident.seq,
+        fuse_table.snapshot_loc()
+    );
     let fuse_table = FuseTable::try_from_table(refreshed.as_ref())?;
     let owner_bound = owner_lvt
         .map(|v| v.data)
         .unwrap_or_else(LeastVisibleTime::unbounded);
+    info!(
+        "Vacuum owner fence: table_id={}, lvt_seq={}, observed_lvt={:?}, snapshot={:?}",
+        fuse_table.get_id(),
+        owner_seq,
+        owner_bound,
+        fuse_table.snapshot_loc()
+    );
     let concurrency = ctx.get_settings().get_max_threads()? as usize;
     let mut protected_segments = HashSet::new();
     // Select the owner first so a no-op VACUUM does not scan clone descendants. Descendant table
@@ -750,6 +955,10 @@ async fn vacuum_base_snapshot_phase(
         "owner",
     )?
     else {
+        info!(
+            "Skipping vacuum: table_id={}, owner GC selection unavailable",
+            fuse_table.get_id()
+        );
         return Ok(None);
     };
 
@@ -770,8 +979,20 @@ async fn vacuum_base_snapshot_phase(
         "descendant",
     )?
     else {
+        info!(
+            "Skipping vacuum: table_id={}, incomplete descendant mark",
+            fuse_table.get_id()
+        );
         return Ok(None);
     };
+    info!(
+        "Clone descendant protection: table_id={}, descendants={}, protected_snapshots={}, protected_segments={}, lvt_updates={}",
+        fuse_table.get_id(),
+        mark.descendant_ids.len(),
+        mark.protected_snapshots.len(),
+        protected_segments.len(),
+        mark.lvt_updates.len()
+    );
     protected_segments.extend(selection.gc_root.segments.iter().cloned());
     let mut updates = std::mem::take(&mut mark.lvt_updates);
     // Validate the owner's original fence too: FLASHBACK can change its head while descendants
@@ -781,10 +1002,21 @@ async fn vacuum_base_snapshot_phase(
         owner_seq,
         selection.gc_root_lvt.clone(),
     ));
+    info!(
+        "Publishing vacuum LVT: table_id={}, expected_lvt_seq={}, gc_root_lvt={:?}, updates={}",
+        fuse_table.get_id(),
+        owner_seq,
+        selection.gc_root_lvt,
+        updates.len()
+    );
     if !catalog.set_table_lvts(&ctx.get_tenant(), &updates).await? {
-        info!("defer vacuum: LVT fence changed after mark");
+        info!(
+            "defer vacuum: table_id={}, LVT fence changed after mark",
+            fuse_table.get_id()
+        );
         return Ok(None);
     }
+    info!("Vacuum LVT published: table_id={}", fuse_table.get_id());
     // Like tags, clones created between the mark and publication were validated against the
     // previous fence. Protect them now instead of deferring the sweep.
     if defer_on_incomplete_history(
@@ -802,8 +1034,13 @@ async fn vacuum_base_snapshot_phase(
     )?
     .is_none()
     {
+        info!(
+            "Skipping vacuum: table_id={}, incomplete new descendant mark",
+            fuse_table.get_id()
+        );
         return Ok(None);
     }
+    let segments_before_descendant_tags = protected_segments.len();
     fuse_table
         .extend_clone_descendant_tag_segments(
             &catalog,
@@ -812,6 +1049,12 @@ async fn vacuum_base_snapshot_phase(
             &mut protected_segments,
         )
         .await?;
+    info!(
+        "Clone descendant tag protection: table_id={}, descendants={}, segments_added={}",
+        fuse_table.get_id(),
+        mark.descendant_ids.len(),
+        protected_segments.len() - segments_before_descendant_tags
+    );
     fuse_table
         .protect_table_tag_references(
             &catalog,
@@ -821,9 +1064,17 @@ async fn vacuum_base_snapshot_phase(
         )
         .await?;
 
+    let snapshots_before_clone_filter = selection.snapshots_to_gc.len();
     selection
         .snapshots_to_gc
         .retain(|path| !mark.protected_snapshots.contains(path));
+    info!(
+        "Vacuum protection complete: table_id={}, protected_segments={}, clone_snapshots_retained={}, snapshots_to_gc={}",
+        fuse_table.get_id(),
+        protected_segments.len(),
+        snapshots_before_clone_filter - selection.snapshots_to_gc.len(),
+        selection.snapshots_to_gc.len()
+    );
 
     Ok(Some(GcRootSnapshotCtx {
         owner: refreshed,
