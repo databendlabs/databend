@@ -401,7 +401,7 @@ build_exceptions! {
     TagHasUnrecognizedReferences(2754),
 }
 
-// Cloud and Integration Errors [1701-1703]
+// Cloud and Integration Errors [1701-1704]
 build_exceptions! {
     /// Cloud control connect error
     CloudControlConnectError(1701),
@@ -409,6 +409,8 @@ build_exceptions! {
     CloudControlNotEnabled(1702),
     /// Illegal cloud control message format
     IllegalCloudControlMessageFormat(1703),
+    /// Cloud control rejected a notification request
+    CloudControlNotificationRejected(1704),
 }
 
 // UDF and Extension Errors [1810, 2601-2607]

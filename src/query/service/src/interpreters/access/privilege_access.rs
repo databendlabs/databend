@@ -85,7 +85,7 @@ enum ObjectId {
 }
 
 // table functions that need `Super` privilege
-const SYSTEM_TABLE_FUNCTIONS: [&str; 2] = ["fuse_amend", "set_cache_capacity"];
+const SYSTEM_TABLE_FUNCTIONS: [&str; 3] = ["fuse_amend", "set_cache_capacity", "send_notification"];
 
 pub(crate) async fn validate_share_management_for_connection(
     ctx: Arc<QueryContext>,
@@ -473,7 +473,9 @@ impl PrivilegeAccess {
 
         match self.ctx.get_catalog(catalog_name).await {
             Ok(catalog) => {
-                if catalog.exists_table_function(table_name) {
+                // Built-in table functions are bound in the system database. Ordinary
+                // tables with the same name must still be checked against their grants.
+                if db_name == "system" && catalog.exists_table_function(table_name) {
                     return self.validate_table_function_access(table_name).await;
                 }
                 // to keep compatibility with the legacy privileges which granted by table name,
