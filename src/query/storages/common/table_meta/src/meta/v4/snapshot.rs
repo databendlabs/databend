@@ -675,7 +675,9 @@ mod tests {
             .as_object_mut()
             .unwrap()
             .remove("segment_block_counts");
-        let encoded = encode(&MetaEncoding::MessagePack, &value).unwrap();
+        // Encode typed metadata: JSON values do not preserve binary enum encodings.
+        let legacy: TableSnapshot = serde_json::from_value(value).unwrap();
+        let encoded = encode(&MetaEncoding::MessagePack, &legacy).unwrap();
         let legacy: TableSnapshot =
             crate::meta::format::decode(&MetaEncoding::MessagePack, &encoded).unwrap();
         assert!(legacy.segment_block_counts.is_empty());
