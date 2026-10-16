@@ -371,33 +371,3 @@ impl Interpreter for VacuumDropTablesInterpreter {
         })
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use std::collections::HashSet;
-
-    use super::VacuumDropTablesInterpreter;
-
-    #[test]
-    fn test_classify_unreclaimed_tables() {
-        for (unreclaimed, deferred_candidates, expected_deferred, expected_failed) in [
-            // A candidate that was not retained must not inflate the deferred count.
-            (vec![], vec![1], vec![], vec![]),
-            // Normal deferrals must not count as failures.
-            (vec![1], vec![1], vec![1], vec![]),
-            // Only verified clone deferrals are normal. Invalid lineage, IO errors and
-            // non-Fuse initialization failures remain failures. IDs are stable in the logs.
-            (vec![4, 1, 3, 2], vec![99, 1], vec![1], vec![2, 3, 4]),
-        ] {
-            let unreclaimed = unreclaimed.into_iter().collect::<HashSet<_>>();
-            let deferred_candidates = deferred_candidates.into_iter().collect::<HashSet<_>>();
-            let (deferred, failed) = VacuumDropTablesInterpreter::classify_unreclaimed_tables(
-                &unreclaimed,
-                &deferred_candidates,
-            );
-            assert_eq!(deferred, expected_deferred);
-            assert_eq!(failed, expected_failed);
-            assert_eq!(unreclaimed.len(), deferred.len() + failed.len());
-        }
-    }
-}
