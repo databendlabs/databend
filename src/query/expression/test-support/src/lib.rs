@@ -554,11 +554,12 @@ fn transform_expr(
                 span,
                 name: "time_slice".to_string(),
                 params: vec![],
+                // The order the binder lowers to (lower_time_slice_expr).
                 args: vec![
                     transform_expr(*date, columns, builtin_functions),
                     transform_expr(slice_length, columns, builtin_functions),
-                    transform_expr(unit, columns, builtin_functions),
                     transform_expr(start_or_end, columns, builtin_functions),
+                    transform_expr(unit, columns, builtin_functions),
                 ],
             }
         }
