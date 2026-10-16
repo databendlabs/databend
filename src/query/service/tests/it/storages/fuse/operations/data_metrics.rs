@@ -327,6 +327,11 @@ async fn init_query_fragments_counts_preparation_reads() -> Result<()> {
     exchange_manager.set_ctx(&query_id, ctx.clone())?;
 
     let prepared = init_query_fragments(fragments).await;
+    // Undo the registration above. In production this happens when the query
+    // finishes executing, which this test never does; without it the
+    // `QueryCoordinator` (and the `QueryContext` it holds) would stay in the
+    // global `DataExchangeManager` for the rest of the test binary. Done before
+    // `?` so that a failed preparation is cleaned up too.
     exchange_manager.on_finished_query(&query_id, None);
     prepared?;
 
