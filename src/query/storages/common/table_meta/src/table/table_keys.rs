@@ -22,6 +22,7 @@ use std::sync::LazyLock;
 use databend_common_exception::ErrorCode;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_meta_app::schema::DYNAMIC_TABLE_ENGINE;
+use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 
 use super::dynamic_table_keys::OPT_KEY_AS_QUERY;
@@ -137,6 +138,7 @@ pub fn is_fuse_backed_engine(engine: &str) -> bool {
 pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
     r.insert(OPT_KEY_DATABASE_ID);
+    r.insert(OPT_KEY_CLONE_GROUP_ID);
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_RECURSIVE_CTE);
     r.insert(OPT_KEY_PARTITION_BY);
@@ -155,6 +157,7 @@ pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
 /// Table option keys that should not be shown in `show create table` statement.
 pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
+    r.insert(OPT_KEY_CLONE_GROUP_ID);
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER);
@@ -263,6 +266,8 @@ mod tests {
         assert!(is_reserved_opt_key(OPT_KEY_CLUSTER_TYPE));
         assert!(is_reserved_opt_key("CLUSTER_TYPE"));
         assert!(is_internal_opt_key(OPT_KEY_CLUSTER_TYPE));
+        assert!(is_reserved_opt_key(OPT_KEY_CLONE_GROUP_ID));
+        assert!(is_internal_opt_key(OPT_KEY_CLONE_GROUP_ID));
     }
 
     #[test]

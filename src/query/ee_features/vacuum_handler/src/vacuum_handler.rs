@@ -38,6 +38,7 @@ pub trait VacuumHandler: Sync + Send {
         &self,
         threads_nums: usize,
         tables: Vec<TableInfo>,
+        safe_clone_table_ids: HashSet<u64>,
     ) -> VacuumDropTablesResult;
 
     /// Returns the share of `vacuum_limit` used: files known to be removed plus those of failed
@@ -89,9 +90,10 @@ impl VacuumHandlerWrapper {
         &self,
         threads_nums: usize,
         tables: Vec<TableInfo>,
+        safe_clone_table_ids: HashSet<u64>,
     ) -> VacuumDropTablesResult {
         self.handler
-            .do_vacuum_drop_tables(threads_nums, tables)
+            .do_vacuum_drop_tables(threads_nums, tables, safe_clone_table_ids)
             .await
     }
 

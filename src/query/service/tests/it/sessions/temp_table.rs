@@ -51,6 +51,7 @@ fn create_table_req(
         table_meta,
         source_table_option: None,
         as_dropped,
+        clone: None,
         materialized_view: None,
         table_properties: None,
         table_partition: None,
