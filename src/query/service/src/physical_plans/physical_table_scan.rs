@@ -145,6 +145,12 @@ impl IPhysicalPlan for TableScan {
         sources.push((self.get_id(), self.source.clone()));
     }
 
+    fn collect_planned_pruning_stats(&self, stats: &mut Vec<(u32, PartStatistics)>) {
+        if self.source.parts.partitions_type() != PartInfoType::LazyLevel {
+            stats.push((self.get_id(), self.source.statistics.clone()));
+        }
+    }
+
     fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {
         if let Some(stat) = stats.remove(&self.get_id()) {
             self.source.statistics = stat;

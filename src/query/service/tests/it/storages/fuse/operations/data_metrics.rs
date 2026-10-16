@@ -193,6 +193,37 @@ async fn lazy_scan_counts_partitions() -> Result<()> {
     Ok(())
 }
 
+/// `_segment_name` is applied before any segment is read. On an eager scan
+/// that can reject every segment, so the planner has partition counters
+/// but no pruning statistics; they must still reach the query.
+#[tokio::test(flavor = "multi_thread")]
+async fn eager_segment_name_filter_counts_partitions() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    let table = format!("{db}.segment_name_eager");
+
+    fixture
+        .execute_command(&format!(
+            "create table {table} (a int) row_per_block=100 block_per_segment=10"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {table} select number from numbers(300)"
+        ))
+        .await?;
+
+    let observed = run_and_observe(
+        &fixture,
+        &format!("select a from {table} where _segment_name = 'no-such-segment'"),
+    )
+    .await?;
+    assert_eq!(observed.partitions_total, 3);
+    assert_eq!(observed.partitions_scanned, 0);
+    Ok(())
+}
+
 /// `UPDATE` / `DELETE` read through `MutationSource`, not `TableScan`. Their
 /// pruning happens in the planner and the statistics must still reach the
 /// query's partition counters.

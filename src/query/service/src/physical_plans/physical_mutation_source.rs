@@ -97,6 +97,14 @@ impl IPhysicalPlan for MutationSource {
         Ok(self.output_schema.clone())
     }
 
+    fn collect_planned_pruning_stats(&self, stats: &mut Vec<(u32, PartStatistics)>) {
+        // Lazy parts carry an estimate; the deferred pruning in
+        // `build_pipeline2` publishes the real statistics on each node.
+        if self.partitions.partitions_type() != PartInfoType::LazyLevel {
+            stats.push((self.get_id(), self.statistics.clone()));
+        }
+    }
+
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(MutationSourceFormatter::create(self))
     }
@@ -196,11 +204,6 @@ impl IPhysicalPlan for MutationSource {
                     Ok(())
                 })?;
         } else {
-            // Pruning already happened in the planner; MutationSource is not
-            // a data source the plan builder publishes stats for.
-            builder
-                .ctx
-                .set_pruned_partitions_stats(self.get_id(), self.statistics.clone());
             builder.ctx.set_partitions(self.partitions.clone())?;
         }
 

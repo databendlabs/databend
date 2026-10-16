@@ -150,6 +150,17 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
         }
     }
 
+    /// Partition statistics of sources that were pruned while planning, keyed
+    /// by plan id. Sources whose pruning is deferred to the pipeline (lazy
+    /// parts) only carry an estimate and are not reported here; they publish
+    /// their own statistics once pruning has run.
+    #[recursive::recursive]
+    fn collect_planned_pruning_stats(&self, stats: &mut Vec<(u32, PartStatistics)>) {
+        for child in self.children() {
+            child.collect_planned_pruning_stats(stats);
+        }
+    }
+
     #[recursive::recursive]
     fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {
         for child in self.children_mut() {
