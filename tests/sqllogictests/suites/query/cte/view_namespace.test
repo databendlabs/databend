@@ -26,7 +26,9 @@ use cte_view_a
 statement ok
 set enable_auto_materialize_cte = 1
 
-# a is materialized before the later CTE b is registered, so its b is a real table.
+# A non-recursive CTE cannot see later siblings, so a's b is the real table.
+# Keep auto materialization on: the lazy CTE path currently binds a's body in
+# the referencing scope, where b is visible, and would return 99.
 query II
 with a as (select * from b), b as (select 99 as n) select x.n, y.n from a x, a y
 ----
@@ -65,7 +67,11 @@ copied y
 v_forward x
 v_forward y
 
-# Lazy CTE definitions bind in the referencing scope, not their lexical AST scope.
+# The view must bind z exactly as the original query does. z is a CTE name in an
+# inner scope, so CREATE VIEW must leave it unqualified rather than guess its
+# binding from the AST. Compare against the original instead of pinning a value:
+# the lazy CTE path currently binds a's body in the referencing scope (z = 77),
+# while lexical scoping would see the table (z = 33).
 statement ok
 set enable_auto_materialize_cte = 0
 
@@ -78,10 +84,8 @@ insert into cte_view_a.z values (33)
 statement ok
 use cte_view_a
 
-query I
-with a as (select * from z) select * from (with z as (select 77 as n) select * from a)
-----
-77
+statement ok
+create table v_nested_expected as with a as (select * from z) select * from (with z as (select 77 as n) select * from a)
 
 statement ok
 create view v_nested as with a as (select * from z) select * from (with z as (select 77 as n) select * from a)
@@ -89,10 +93,10 @@ create view v_nested as with a as (select * from z) select * from (with z as (se
 statement ok
 use cte_view_b
 
-query I
-select * from cte_view_a.v_nested
+query B
+select (select * from cte_view_a.v_nested) = (select * from cte_view_a.v_nested_expected)
 ----
-77
+1
 
 # Qualification uses CREATE's case settings, not a default name-resolution context.
 statement ok
