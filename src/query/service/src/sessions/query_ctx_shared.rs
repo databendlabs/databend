@@ -179,6 +179,9 @@ pub struct QueryContextShared {
     pub(super) node_memory_usage: Arc<RwLock<HashMap<String, Arc<MemoryUpdater>>>>,
 
     pub(super) pruned_partitions_stats: Arc<RwLock<HashMap<u32, PartStatistics>>>,
+    /// Running sum of every `PartStatistics` published to this query; see
+    /// [`Self::get_partition_stats`].
+    query_partition_stats: Arc<RwLock<PartitionStats>>,
 
     /// Object storage IO of this query on this node. Shared with the
     /// `TrackingPayload.io_stats` of the threads executing the query, so the
@@ -279,6 +282,7 @@ impl QueryContextShared {
             mem_stat: Arc::new(RwLock::new(None)),
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
             pruned_partitions_stats: Arc::new(RwLock::new(HashMap::new())),
+            query_partition_stats: Default::default(),
             local_io_stats: ThreadTracker::io_stats().cloned().unwrap_or_default(),
             remote_io_stats: Default::default(),
             broadcast_registry: Default::default(),
@@ -417,14 +421,14 @@ impl QueryContextShared {
     /// Partitions scanned and total over every fuse pruning of this query,
     /// summed from `pruned_partitions_stats`, which every pruning path
     /// (eager, lazy, remote node) reports into per `plan_id`.
+    ///
+    /// Kept as a running sum rather than derived from `pruned_partitions_stats`:
+    /// that map is per plan id and is cleared by every
+    /// `PhysicalPlanBuilder::build`, which `explain` relies on, but a statement
+    /// such as `ANALYZE TABLE` builds several plans on one context and the
+    /// query-level counters must cover all of them.
     pub fn get_partition_stats(&self) -> PartitionStats {
-        let stats = self.pruned_partitions_stats.read();
-        stats
-            .values()
-            .fold(PartitionStats::default(), |acc, s| PartitionStats {
-                scanned: acc.scanned + s.partitions_scanned as u64,
-                total: acc.total + s.partitions_total as u64,
-            })
+        *self.query_partition_stats.read()
     }
 
     /// The IO counter of this query on this node. Threads executing the query
@@ -886,11 +890,18 @@ impl QueryContextShared {
     }
 
     pub fn set_pruned_partitions_stats(&self, plan_id: u32, stats: PartStatistics) {
+        self.add_query_partition_stats(&stats);
         self.pruned_partitions_stats
             .write()
             .entry(plan_id)
             .and_modify(|s| s.merge(&stats))
             .or_insert(stats);
+    }
+
+    fn add_query_partition_stats(&self, stats: &PartStatistics) {
+        let mut query_stats = self.query_partition_stats.write();
+        query_stats.scanned += stats.partitions_scanned as u64;
+        query_stats.total += stats.partitions_total as u64;
     }
 
     pub fn clear_pruned_partitions_stats(&self) {
@@ -900,6 +911,7 @@ impl QueryContextShared {
     pub fn merge_pruned_partitions_stats(&self, other: &HashMap<u32, PartStatistics>) {
         let mut guard = self.pruned_partitions_stats.write();
         for (plan_id, stats) in other.iter() {
+            self.add_query_partition_stats(stats);
             guard
                 .entry(*plan_id)
                 .and_modify(|s| s.merge(stats))

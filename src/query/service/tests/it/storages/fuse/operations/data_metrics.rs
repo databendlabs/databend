@@ -20,6 +20,8 @@
 //! interpreter was entered, and that the partition counters still come from
 //! the attached table.
 
+use std::sync::Arc;
+
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::ThreadTracker;
@@ -27,8 +29,10 @@ use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_query::interpreters::InterpreterFactory;
+use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextProgress;
 use databend_query::sessions::TableContextQueryIdentity;
+use databend_query::sessions::TableContextSettings;
 use databend_query::sql::Planner;
 use databend_query::test_kits::ClusterDescriptor;
 use databend_query::test_kits::TestFixture;
@@ -47,7 +51,16 @@ struct Observed {
 /// handlers that do not install one call the interpreter. The interpreter
 /// itself must bind the query's counter so the IO is attributed.
 async fn run_and_observe(fixture: &TestFixture, sql: &str) -> Result<Observed> {
+    run_and_observe_with(fixture, sql, |_| Ok(())).await
+}
+
+async fn run_and_observe_with(
+    fixture: &TestFixture,
+    sql: &str,
+    configure: impl FnOnce(&Arc<QueryContext>) -> Result<()>,
+) -> Result<Observed> {
     let ctx = fixture.new_query_ctx().await?;
+    configure(&ctx)?;
     assert!(
         ThreadTracker::io_stats().is_none(),
         "test must run outside any io_stats tracking scope to exercise the unbound path"
@@ -243,6 +256,117 @@ async fn eager_segment_name_filter_counts_partitions() -> Result<()> {
     .await?;
     assert_eq!(observed.partitions_total, 3);
     assert_eq!(observed.partitions_scanned, 0);
+    Ok(())
+}
+
+/// Lazy scans that do not go through the row-oriented prune pipeline must
+/// still publish what they scanned: `enable_prune_pipeline = 0` falls back to
+/// an eager `prune_snapshot_blocks` inside `read_data`, and column-oriented
+/// segments have their own prune pipeline. The planner publishes the total.
+#[tokio::test(flavor = "multi_thread")]
+async fn lazy_scan_without_prune_pipeline_counts_partitions() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    let table = format!("{db}.lazy_no_prune_pipeline");
+
+    fixture
+        .execute_command(&format!(
+            "create table {table} (a int) row_per_block=100 block_per_segment=10"
+        ))
+        .await?;
+    for _ in 0..2 {
+        fixture
+            .execute_command(&format!(
+                "insert into {table} select number from numbers(300)"
+            ))
+            .await?;
+    }
+
+    let observed = run_and_observe_with(&fixture, &format!("select a from {table}"), |ctx| {
+        ctx.get_settings()
+            .set_setting("enable_prune_pipeline".into(), "0".into())
+    })
+    .await?;
+    assert_eq!(observed.partitions_total, 6);
+    assert_eq!(observed.partitions_scanned, 6);
+
+    let observed = run_and_observe_with(
+        &fixture,
+        &format!("select a from {table} where a >= 200"),
+        |ctx| {
+            ctx.get_settings()
+                .set_setting("enable_prune_pipeline".into(), "0".into())
+        },
+    )
+    .await?;
+    assert_eq!(observed.partitions_total, 6);
+    assert_eq!(observed.partitions_scanned, 2);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn lazy_column_oriented_scan_counts_partitions() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    let table = format!("{db}.lazy_column_oriented");
+
+    fixture
+        .execute_command(&format!(
+            "create table {table} (a int) row_per_block=100 block_per_segment=10 \
+             segment_format='column_oriented'"
+        ))
+        .await?;
+    for _ in 0..2 {
+        fixture
+            .execute_command(&format!(
+                "insert into {table} select number from numbers(300)"
+            ))
+            .await?;
+    }
+
+    let observed = run_and_observe(&fixture, &format!("select a from {table}")).await?;
+    assert_eq!(observed.partitions_total, 6);
+    assert_eq!(observed.partitions_scanned, 6);
+
+    let observed =
+        run_and_observe(&fixture, &format!("select a from {table} where a >= 200")).await?;
+    assert_eq!(observed.partitions_total, 6);
+    assert_eq!(observed.partitions_scanned, 2);
+    Ok(())
+}
+
+/// `ANALYZE TABLE` with window histograms builds one physical plan per
+/// eligible column on the same context. Each `PhysicalPlanBuilder::build`
+/// clears the per-plan statistics map; the query-level counters must still
+/// cover every plan.
+#[tokio::test(flavor = "multi_thread")]
+async fn analyze_table_counts_every_histogram_scan() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    let table = format!("{db}.analyze_histograms");
+
+    // Two histogram-eligible columns, one block.
+    fixture
+        .execute_command(&format!("create table {table} (a int, b int)"))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {table} select number, number * 2 from numbers(100)"
+        ))
+        .await?;
+
+    let observed = run_and_observe_with(&fixture, &format!("analyze table {table}"), |ctx| {
+        let settings = ctx.get_settings();
+        settings.set_setting("enable_analyze_histogram".into(), "1".into())?;
+        settings.set_setting("analyze_histogram_algorithm".into(), "window".into())
+    })
+    .await?;
+    // One scan per histogram column (a, b) over the single block.
+    assert_eq!(observed.partitions_total, 2);
+    assert_eq!(observed.partitions_scanned, 2);
     Ok(())
 }
 

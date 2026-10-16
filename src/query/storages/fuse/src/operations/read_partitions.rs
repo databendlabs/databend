@@ -19,6 +19,8 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use async_channel::Receiver;
@@ -932,6 +934,7 @@ impl FuseTable {
         )?;
         // TODO(Sky): deal with sample
         let dry_run = matches!(ctx.get_query_kind(), QueryKind::Explain);
+        let partitions_scanned = Arc::new(AtomicUsize::new(0));
         prune_pipeline.add_sink(|input| {
             ColumnOrientedBlockPruneSink::create(
                 input,
@@ -941,8 +944,20 @@ impl FuseTable {
                 runtime_filter_prune_context.clone(),
                 runtime_scan_filters.clone(),
                 dry_run,
+                partitions_scanned.clone(),
             )
         })?;
+        // Like the row-oriented pipeline: publish what this node scanned.
+        // `partitions_total` was published once by the planner.
+        prune_pipeline.set_on_finished(move |info: &ExecutionInfo| {
+            if info.res.is_ok() {
+                let mut statistics = PartStatistics::default_exact();
+                statistics.partitions_scanned = partitions_scanned.load(Ordering::Relaxed);
+                statistics.pruning_stats = pruner.pruning_stats();
+                ctx.set_pruned_partitions_stats(scan_id as u32, statistics);
+            }
+            Ok(())
+        });
         // TODO(Sky): populate prune cache , deal with topn prune
         Ok(())
     }

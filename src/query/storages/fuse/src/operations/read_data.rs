@@ -189,6 +189,7 @@ impl FuseTable {
             let table_schema = self.schema_with_stream();
             let push_downs = plan.push_downs.clone();
             let ctx = ctx.clone();
+            let plan_id = plan.scan_id as u32;
             let (tx, rx) = async_channel::bounded(max_io_requests);
             pipeline.set_on_init(move || {
                 // We cannot use the runtime associated with the query to avoid increasing its lifetime.
@@ -199,7 +200,7 @@ impl FuseTable {
                     let handler = runtime.spawn(async move {
                         match table
                             .prune_snapshot_blocks(
-                                ctx,
+                                ctx.clone(),
                                 push_downs,
                                 table_schema,
                                 lazy_init_segments,
@@ -209,7 +210,12 @@ impl FuseTable {
                             )
                             .await
                         {
-                            Ok((_, partitions, _)) => {
+                            Ok((mut statistics, partitions, _)) => {
+                                // Lazy parts: the planner published this
+                                // plan's `partitions_total` once; this node
+                                // adds only what it scanned.
+                                statistics.partitions_total = 0;
+                                ctx.set_pruned_partitions_stats(plan_id, statistics);
                                 for part in partitions.partitions {
                                     // the sql may be killed or early stop, ignore the error
                                     if let Err(_e) = tx.send(Ok(part)).await {
