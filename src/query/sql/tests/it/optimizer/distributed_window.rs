@@ -34,11 +34,15 @@ const TABLE_SQL: &str = "CREATE TABLE t(k Int64 NOT NULL, v Int64 NOT NULL)";
 const NARROW_TABLE_SQL: &str = "CREATE TABLE narrow(k Int32 NOT NULL, v Int64 NOT NULL)";
 const UNSIGNED_TABLE_SQL: &str = "CREATE TABLE unsigned(k UInt64 NOT NULL)";
 const VARIANT_TABLE_SQL: &str = "CREATE TABLE variant(raw Variant, v Int64 NOT NULL)";
+const POINT_TABLE_SQL: &str = "CREATE TABLE points(id Int64 NOT NULL, geom Geometry)";
+const AREA_TABLE_SQL: &str = "CREATE TABLE areas(id Int64 NOT NULL, geom Geometry)";
 const SETUP_SQLS: &[&str] = &[
     TABLE_SQL,
     NARROW_TABLE_SQL,
     UNSIGNED_TABLE_SQL,
     VARIANT_TABLE_SQL,
+    POINT_TABLE_SQL,
+    AREA_TABLE_SQL,
 ];
 
 async fn distributed_context() -> Result<Arc<LiteTableContext>> {
@@ -173,6 +177,12 @@ async fn test_distributed_window_cascades() -> Result<()> {
             description: "Join keys without a common type are not shuffled by hash.",
             setup_sqls: SETUP_SQLS,
             sql: "SETTINGS (enforce_shuffle_join = 1) SELECT n.k, s.id FROM narrow AS n JOIN (SELECT raw:id AS id FROM variant QUALIFY row_number() OVER (PARTITION BY id ORDER BY v DESC) = 1) AS s ON n.k = s.id",
+        },
+        SqlTestCase {
+            name: "partition_over_spatial_join",
+            description: "A partitioned window over a spatial join keeps the distributed spatial join and shuffles by the partition key.",
+            setup_sqls: SETUP_SQLS,
+            sql: "SETTINGS (enable_spatial_join = 1) SELECT p.id, row_number() OVER (PARTITION BY a.id ORDER BY p.id) AS rn FROM points AS p JOIN areas AS a ON ST_Intersects(p.geom, a.geom)",
         },
         SqlTestCase {
             name: "order_without_partition",

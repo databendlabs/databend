@@ -101,11 +101,10 @@ impl<'a> RelExpr<'a> {
             RelExpr::MExpr { expr, memo } => {
                 Ok(memo.group(expr.group_index)?.relational_prop.clone())
             }
-            RelExpr::OptContext {
-                expr,
-                memo,
-                children_best_props: _,
-            } => Ok(memo.group(expr.group_index)?.relational_prop.clone()),
+            RelExpr::OptContext { expr, memo, .. } => Ok(memo
+                .group(child_group(expr, index)?)?
+                .relational_prop
+                .clone()),
         }
     }
 
@@ -138,7 +137,7 @@ impl<'a> RelExpr<'a> {
             }
             RelExpr::MExpr { expr, memo } => Ok(memo.group(expr.group_index)?.stat_info.clone()),
             RelExpr::OptContext { expr, memo, .. } => {
-                Ok(memo.group(expr.group_index)?.stat_info.clone())
+                Ok(memo.group(child_group(expr, index)?)?.stat_info.clone())
             }
         }
     }
@@ -195,10 +194,7 @@ impl<'a> RelExpr<'a> {
     ) -> Result<PhysicalProperty> {
         match self {
             RelExpr::MExpr { expr, memo } => {
-                let child = *expr.children.get(index).ok_or_else(|| {
-                    ErrorCode::Internal(format!("Cannot find child {index} of MExpr"))
-                })?;
-                derive_enforced_group_physical_prop(ctx, memo, child)
+                derive_enforced_group_physical_prop(ctx, memo, child_group(expr, index)?)
             }
             _ => self.derive_physical_prop_child(index),
         }
@@ -236,6 +232,14 @@ impl<'a> RelExpr<'a> {
         let prop = plan.compute_required_prop_children(ctx, self, input)?;
         Ok(prop)
     }
+}
+
+fn child_group(m_expr: &MExpr, index: usize) -> Result<IndexType> {
+    m_expr
+        .children
+        .get(index)
+        .copied()
+        .ok_or_else(|| ErrorCode::Internal(format!("Cannot find child {index} of MExpr")))
 }
 
 /// Mirrors `PropertyEnforcer::require_property` on a memo group: derive the
