@@ -66,14 +66,12 @@ column_statistics:
 
 histogram_statistics:
   lineitem.l_partkey:
-    accuracy: true
     buckets:
       - lower_bound: !Int 1
         upper_bound: !Int 200000
         num_values: 6001215
         num_distinct: 186502
   part.p_partkey:
-    accuracy: true
     buckets:
       - lower_bound: !Int 1
         upper_bound: !Int 200000

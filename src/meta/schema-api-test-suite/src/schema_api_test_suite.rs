@@ -342,6 +342,8 @@ impl SchemaApiTestSuite {
             .await?;
         self.vacuum_skips_undecodable_table(&b.build().await)
             .await?;
+        self.vacuum_dropped_database_with_limit(&b.build().await)
+            .await?;
         self.table_commit_after_drop_different_engine(&b.build().await)
             .await?;
         self.table_commit_table_meta_engine_mismatch(&b.build().await)
@@ -7341,6 +7343,12 @@ impl SchemaApiTestSuite {
     /// A table meta that can not be decoded, e.g., with an unknown index type written by a newer
     /// version, must not fail the whole vacuum. It is skipped, and its database is kept, otherwise
     /// the skipped table can never be found again.
+    ///
+    /// Covers both an individually dropped table in a live database and a table with no drop_on
+    /// in a dropped database. Without a limit, healthy tables are collected, but the bad tables
+    /// and dropped database are kept. After repairing the metadata, both tables must still be
+    /// discoverable and eligible for GC, and only the dropped database may be removed.
+    /// This metadata API test checks cleanup candidates and metadata GC, not physical file deletion.
     async fn vacuum_skips_undecodable_table<
         MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + GarbageCollectionApi,
     >(
@@ -7351,37 +7359,72 @@ impl SchemaApiTestSuite {
         let tenant = Tenant::new_literal(tenant_name);
         let drop_on = Some(Utc::now() - Duration::days(1));
 
-        // Create a table, then overwrite its meta with a dropped one that has an unknown index type.
-        let create_undecodable_table = |db_name: &'static str, tbl_name: &'static str| async move {
-            let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "JSON");
-            let (table_id, table_meta) = util.create_table().await?;
+        // Inject an unknown index type while preserving the requested drop state. Keep the
+        // decodable metadata so recovery can repair the same table without recreating its history.
+        let create_undecodable_table =
+            |db_name: &'static str, tbl_name: &'static str, drop_on: Option<DateTime<Utc>>| async move {
+                let mut util = DbTableHarness::new(mt, tenant_name, db_name, tbl_name, "JSON");
+                let (table_id, table_meta) = util.create_table().await?;
 
-            let mut table_pb = TableMeta {
-                drop_on,
-                ..table_meta
-            }
-            .to_pb();
-            table_pb.indexes.insert("idx".to_string(), pb::TableIndex {
-                ver: VER,
-                min_reader_ver: MIN_READER_VER,
-                name: "idx".to_string(),
-                index_type: 4,
-                ..Default::default()
-            });
-            let table_key = TableId::new(table_id);
-            upsert_test_data(mt, &table_key, table_pb.encode_to_vec()).await?;
+                let table_meta = TableMeta {
+                    drop_on,
+                    ..table_meta
+                };
+                let mut table_pb = table_meta.to_pb();
+                table_pb.indexes.insert("idx".to_string(), pb::TableIndex {
+                    ver: VER,
+                    min_reader_ver: MIN_READER_VER,
+                    name: "idx".to_string(),
+                    index_type: 4,
+                    ..Default::default()
+                });
+                let table_key = TableId::new(table_id);
+                upsert_test_data(mt, &table_key, table_pb.encode_to_vec()).await?;
 
-            assert!(
-                mt.get_pb(&table_key).await.is_err(),
-                "the table meta must be undecodable"
-            );
+                assert!(
+                    mt.get_pb(&table_key).await.is_err(),
+                    "the table meta must be undecodable"
+                );
 
-            anyhow::Ok(table_id)
-        };
+                anyhow::Ok((table_id, table_meta))
+            };
 
         let vacuum = || async {
             let req = ListDroppedTableReq::new(&tenant);
             let resp = mt.get_drop_table_infos(req).await?;
+
+            // Physical cleanup candidates and table metadata GC tasks must select the same tables.
+            // Converting these lists to ID sets discards duplicate entries. Also check the original
+            // list lengths to ensure each table appears only once.
+            let vacuum_table_ids: BTreeSet<u64> = resp
+                .vacuum_tables
+                .iter()
+                .map(|(_, table)| table.id().table_id)
+                .collect();
+            let gc_table_ids: BTreeSet<u64> = resp
+                .drop_ids
+                .iter()
+                .filter_map(|id| match id {
+                    DroppedId::Table { id, .. } => Some(id.table_id),
+                    DroppedId::Db { .. } => None,
+                })
+                .collect();
+            assert_eq!(vacuum_table_ids, gc_table_ids);
+            assert_eq!(
+                resp.vacuum_tables.len(),
+                vacuum_table_ids.len(),
+                "physical cleanup candidates must not contain duplicate tables"
+            );
+            let gc_table_count = resp
+                .drop_ids
+                .iter()
+                .filter(|id| matches!(id, DroppedId::Table { .. }))
+                .count();
+            assert_eq!(
+                gc_table_count,
+                gc_table_ids.len(),
+                "metadata GC tasks must not contain duplicate tables"
+            );
 
             mt.gc_drop_tables(GcDroppedTableReq {
                 tenant: tenant.clone(),
@@ -7393,11 +7436,13 @@ impl SchemaApiTestSuite {
             anyhow::Ok(resp.drop_ids)
         };
 
-        // db1 is not dropped: t1 is undecodable, t2 is a normal dropped table.
+        // db1 stays live, so both tables need their own drop_on to be eligible. t1 has an
+        // undecodable index; t2 is healthy and must still be collected.
         let db1_name = "db1";
         let mut db1 = DbTableHarness::new(mt, tenant_name, db1_name, "", "");
         db1.create_db().await?;
-        let undecodable_db1_t1 = create_undecodable_table(db1_name, "t1").await?;
+        let (undecodable_db1_t1, db1_t1_meta) =
+            create_undecodable_table(db1_name, "t1", drop_on).await?;
         let mut db1_t2 = DbTableHarness::new(mt, tenant_name, db1_name, "t2", "JSON");
         let (dropped_db1_t2, _) = db1_t2.create_table().await?;
         mt.drop_table_by_id(DropTableByIdReq {
@@ -7412,12 +7457,14 @@ impl SchemaApiTestSuite {
         })
         .await?;
 
-        // db2 is dropped: t1 is undecodable, t2 is a normal table.
+        // Only db2 is dropped: neither table has its own drop_on. Database-level eligibility
+        // must allow healthy t2 to be collected now and repaired t1 to be collected later.
         let db2_name = "db2";
         let mut db2 = DbTableHarness::new(mt, tenant_name, db2_name, "", "");
         db2.create_db().await?;
         let db2_id = *db2.db_id();
-        let undecodable_db2_t1 = create_undecodable_table(db2_name, "t1").await?;
+        let (undecodable_db2_t1, db2_t1_meta) =
+            create_undecodable_table(db2_name, "t1", None).await?;
         let mut db2_t2 = DbTableHarness::new(mt, tenant_name, db2_name, "t2", "JSON");
         let (db2_t2, _) = db2_t2.create_table().await?;
         db2.drop_db().await?;
@@ -7458,6 +7505,194 @@ impl SchemaApiTestSuite {
         info!("--- vacuum again does not fail either");
         let drop_ids = vacuum().await?;
         assert!(drop_ids.is_empty(), "got: {:?}", drop_ids);
+
+        // Once the skipped metadata becomes decodable, vacuum must finish cleaning up the
+        // remaining tables and the dropped database. This could follow a metadata repair or
+        // a reader upgrade; this test simulates recovery by restoring decodable metadata.
+        // db2.t1 still has no drop_on, so it is eligible only because its database was dropped.
+        info!("--- repaired tables remain discoverable and can be garbage collected");
+        for (table_id, table_meta) in [
+            (undecodable_db1_t1, db1_t1_meta),
+            (undecodable_db2_t1, db2_t1_meta),
+        ] {
+            upsert_test_data(mt, &TableId::new(table_id), serialize_struct(&table_meta)).await?;
+        }
+
+        let drop_ids = vacuum().await?;
+        let table_ids: BTreeSet<u64> = drop_ids
+            .iter()
+            .filter_map(|id| match id {
+                DroppedId::Table { id, .. } => Some(id.table_id),
+                DroppedId::Db { .. } => None,
+            })
+            .collect();
+        assert_eq!(
+            table_ids,
+            BTreeSet::from([undecodable_db1_t1, undecodable_db2_t1])
+        );
+        let db_ids: Vec<u64> = drop_ids
+            .iter()
+            .filter_map(|id| match id {
+                DroppedId::Db { db_id, .. } => Some(*db_id),
+                DroppedId::Table { .. } => None,
+            })
+            .collect();
+        assert_eq!(db_ids, vec![db2_id]);
+
+        for table_id in [undecodable_db1_t1, undecodable_db2_t1] {
+            assert!(
+                mt.get_kv(&TableId::new(table_id).to_string_key())
+                    .await?
+                    .is_none()
+            );
+        }
+        assert!(
+            mt.get_kv(&DatabaseId::new(db2_id).to_string_key())
+                .await?
+                .is_none()
+        );
+        assert!(mt.get_pb(&DatabaseId::new(*db1.db_id())).await?.is_some());
+        assert!(vacuum().await?.is_empty());
+
+        Ok(())
+    }
+
+    /// Reaching the limit does not prove that all tables of a dropped database were processed.
+    /// All tables start without drop_on; they are eligible only because their database is dropped.
+    /// With two healthy tables and limit=2, cover three histories:
+    /// - healthy_only: equality conservatively keeps the database until the next request.
+    /// - bad_before_limit: skipping a bad table must not consume a healthy table's quota.
+    /// - bad_after_limit: the limit keeps the database even before the bad table is processed.
+    ///
+    /// A second request removes an empty healthy database, but keeps one with a bad table.
+    /// Like the recovery test, this checks metadata APIs and cleanup lists, not physical files.
+    async fn vacuum_dropped_database_with_limit<
+        MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + TableApi + GarbageCollectionApi,
+    >(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        for (scenario, bad_table_name) in [
+            ("healthy_only", None),
+            ("bad_before_limit", Some("a_bad")),
+            ("bad_after_limit", Some("z_bad")),
+        ] {
+            let tenant_name = format!("vacuum_dropped_database_with_limit_{scenario}");
+            let tenant = Tenant::new_literal(&tenant_name);
+            let db_name = "db";
+            let mut db = DbTableHarness::new(mt, &tenant_name, db_name, "", "");
+            db.create_db().await?;
+            let db_id = *db.db_id();
+
+            // History keys are ordered by table name. The bad table is either before or after
+            // both healthy tables, independently of table creation order.
+            let mut healthy_ids = BTreeSet::new();
+            for table_name in ["m_good_1", "m_good_2"] {
+                let mut table = DbTableHarness::new(mt, &tenant_name, db_name, table_name, "JSON");
+                let (table_id, _) = table.create_table().await?;
+                healthy_ids.insert(table_id);
+            }
+
+            let bad_table_id = if let Some(table_name) = bad_table_name {
+                let mut table = DbTableHarness::new(mt, &tenant_name, db_name, table_name, "JSON");
+                let (table_id, table_meta) = table.create_table().await?;
+                let mut table_pb = table_meta.to_pb();
+                // Fail metadata decoding, rather than a later storage-engine initialization.
+                table_pb.indexes.insert("idx".to_string(), pb::TableIndex {
+                    ver: VER,
+                    min_reader_ver: MIN_READER_VER,
+                    name: "idx".to_string(),
+                    index_type: 4,
+                    ..Default::default()
+                });
+                upsert_test_data(mt, &TableId::new(table_id), table_pb.encode_to_vec()).await?;
+                assert!(mt.get_pb(&TableId::new(table_id)).await.is_err());
+                Some(table_id)
+            } else {
+                None
+            };
+            db.drop_db().await?;
+
+            let vacuum = || async {
+                let resp = mt
+                    .get_drop_table_infos(ListDroppedTableReq::new(&tenant).with_limit(2))
+                    .await?;
+                let table_ids: BTreeSet<u64> = resp
+                    .vacuum_tables
+                    .iter()
+                    .map(|(_, table)| table.id().table_id)
+                    .collect();
+                // Converting the candidate list to an ID set discards duplicate entries. Compare
+                // its original length and the table GC task count with the number of distinct IDs
+                // to ensure each selected table appears exactly once in each list. Database GC
+                // tasks are excluded: the quota and candidate list count tables, not databases.
+                assert_eq!(
+                    resp.vacuum_tables.len(),
+                    table_ids.len(),
+                    "duplicate physical cleanup candidates in scenario: {scenario}"
+                );
+                let gc_table_count = resp
+                    .drop_ids
+                    .iter()
+                    .filter(|id| matches!(id, DroppedId::Table { .. }))
+                    .count();
+                assert_eq!(
+                    gc_table_count,
+                    table_ids.len(),
+                    "metadata GC must select each candidate exactly once in scenario: {scenario}"
+                );
+                mt.gc_drop_tables(GcDroppedTableReq {
+                    tenant: tenant.clone(),
+                    catalog: "default".to_string(),
+                    drop_ids: resp.drop_ids.clone(),
+                })
+                .await?;
+                anyhow::Ok((table_ids, resp.drop_ids))
+            };
+
+            // Every scenario must collect exactly the two healthy tables and no database task.
+            // If the bad table is last, its protection flag has not been set when the limit is hit.
+            let (table_ids, drop_ids) = vacuum().await?;
+            assert_eq!(table_ids, healthy_ids, "scenario: {scenario}");
+            let gc_table_ids: BTreeSet<u64> = drop_ids
+                .iter()
+                .filter_map(|id| match id {
+                    DroppedId::Table { id, .. } => Some(id.table_id),
+                    DroppedId::Db { .. } => None,
+                })
+                .collect();
+            assert_eq!(gc_table_ids, healthy_ids, "scenario: {scenario}");
+            assert!(
+                !drop_ids.iter().any(|id| matches!(id, DroppedId::Db { .. })),
+                "the database must be kept when the limit is reached: {scenario}"
+            );
+            for table_id in healthy_ids {
+                assert!(mt.get_pb(&TableId::new(table_id)).await?.is_none());
+            }
+            assert!(mt.get_pb(&DatabaseId::new(db_id)).await?.is_some());
+
+            // The first request reached the table limit, so it could not establish that every
+            // table had been collected and had to keep the database metadata. A subsequent vacuum
+            // request can remove that metadata after confirming no tables remain; if an
+            // undecodable table remains, it must keep both the table and the database metadata.
+            let (table_ids, drop_ids) = vacuum().await?;
+            assert!(table_ids.is_empty(), "scenario: {scenario}");
+            if let Some(table_id) = bad_table_id {
+                assert!(drop_ids.is_empty(), "scenario: {scenario}");
+                assert!(
+                    mt.get_kv(&TableId::new(table_id).to_string_key())
+                        .await?
+                        .is_some()
+                );
+                assert!(mt.get_pb(&DatabaseId::new(db_id)).await?.is_some());
+            } else {
+                assert!(matches!(
+                    drop_ids.as_slice(),
+                    [DroppedId::Db { db_id: got_id, .. }] if *got_id == db_id
+                ));
+                assert!(mt.get_pb(&DatabaseId::new(db_id)).await?.is_none());
+            }
+        }
 
         Ok(())
     }
@@ -8372,6 +8607,28 @@ impl SchemaApiTestSuite {
             assert_eq!(tb_ids[0], res[0].1.table_id);
             assert_eq!(tb_ids[1], res[1].1.table_id);
         }
+
+        // A table with an unknown index type must not hide its healthy neighbors.
+        let mut bad = DbTableHarness::new(mt, tenant_name, db_name, "tb1_future", "JSON");
+        let (bad_id, meta) = bad.create_table().await?;
+        let mut table_pb = meta.to_pb();
+        table_pb
+            .indexes
+            .insert("future_index".to_string(), pb::TableIndex {
+                ver: VER,
+                min_reader_ver: MIN_READER_VER,
+                index_type: i32::MAX,
+                ..Default::default()
+            });
+        upsert_test_data(mt, &TableId::new(bad_id), table_pb.encode_to_vec()).await?;
+        let tables = mt.list_tables(ListTableReq::new(&tenant, db_id)).await?;
+        assert_eq!(
+            vec![("tb1", tb_ids[0]), ("tb2", tb_ids[1])],
+            tables
+                .iter()
+                .map(|(name, id, _)| (name.as_str(), id.table_id))
+                .collect::<Vec<_>>()
+        );
 
         Ok(())
     }

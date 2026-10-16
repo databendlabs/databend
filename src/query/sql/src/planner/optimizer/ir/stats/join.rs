@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::conversion::classify_conversion;
 use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCardinality;
@@ -26,6 +25,7 @@ use databend_common_statistics::Histogram;
 
 use super::ColumnStat;
 use super::Selectivity;
+use super::StatContext;
 use super::join_column::JoinColumnStats;
 use super::join_column::aggregate_column_stats;
 use super::join_condition::CompleteStats;
@@ -354,7 +354,8 @@ impl JoinStatsEstimator {
         }
     }
 
-    pub(crate) fn evaluate_join(&mut self, join: &Join, func_ctx: &FunctionContext) -> Result<()> {
+    pub(crate) fn evaluate_join(&mut self, join: &Join, stat_ctx: &StatContext) -> Result<()> {
+        let func_ctx = &stat_ctx.function_context;
         let left_stat_cardinality = self
             .left_input
             .statistics
@@ -409,6 +410,7 @@ impl JoinStatsEstimator {
                     input_cardinality,
                     &column_row_scales,
                     func_ctx,
+                    stat_ctx.filter_and_strategy,
                 )?;
                 self.contributions
                     .push(JoinConditionContribution::from_non_equi(&evaluated));

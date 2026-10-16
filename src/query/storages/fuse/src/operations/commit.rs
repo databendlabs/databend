@@ -155,6 +155,7 @@ impl FuseTable {
                 deduplicated_label.clone(),
                 table_meta_timestamps,
                 false,
+                None,
             )
         })?;
 

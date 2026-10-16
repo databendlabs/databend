@@ -283,6 +283,7 @@ impl Walk for AlterTableAction {
             | AlterTableAction::DropTablePartitionKey
             | AlterTableAction::DropTableClusterKey
             | AlterTableAction::RemoveTableTtl
+            | AlterTableAction::MaterializeTableTtl
             | AlterTableAction::RefreshTableCache
             | AlterTableAction::SetOptions { .. }
             | AlterTableAction::ModifyConnection { .. }
@@ -396,6 +397,7 @@ impl WalkMut for AlterTableAction {
             | AlterTableAction::DropTablePartitionKey
             | AlterTableAction::DropTableClusterKey
             | AlterTableAction::RemoveTableTtl
+            | AlterTableAction::MaterializeTableTtl
             | AlterTableAction::RefreshTableCache
             | AlterTableAction::SetOptions { .. }
             | AlterTableAction::ModifyConnection { .. }

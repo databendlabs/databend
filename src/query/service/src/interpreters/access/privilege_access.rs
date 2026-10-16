@@ -60,6 +60,7 @@ use databend_common_users::UserApiProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
 use databend_meta_client::types::SeqV;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
 use crate::history_tables::session::get_history_log_user;
@@ -84,7 +85,7 @@ enum ObjectId {
 }
 
 // table functions that need `Super` privilege
-const SYSTEM_TABLE_FUNCTIONS: [&str; 2] = ["fuse_amend", "set_cache_capacity"];
+const SYSTEM_TABLE_FUNCTIONS: [&str; 3] = ["fuse_amend", "set_cache_capacity", "send_notification"];
 
 pub(crate) async fn validate_share_management_for_connection(
     ctx: Arc<QueryContext>,
@@ -472,7 +473,9 @@ impl PrivilegeAccess {
 
         match self.ctx.get_catalog(catalog_name).await {
             Ok(catalog) => {
-                if catalog.exists_table_function(table_name) {
+                // Built-in table functions are bound in the system database. Ordinary
+                // tables with the same name must still be checked against their grants.
+                if db_name == "system" && catalog.exists_table_function(table_name) {
                     return self.validate_table_function_access(table_name).await;
                 }
                 // to keep compatibility with the legacy privileges which granted by table name,
@@ -1124,7 +1127,9 @@ impl PrivilegeAccess {
             GrantObject::Global => false,
         };
 
-        if verify_ownership
+        // Attaching storage data requires an explicit grant, even for database owners.
+        if privilege != UserPrivilegeType::AttachTable
+            && verify_ownership
             && self
                 .has_ownership(
                     &session,
@@ -1956,7 +1961,8 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Select, false, false).await?
             }
             Plan::CreateTable(plan) => {
-                if !plan.options.contains_key(OPT_KEY_TEMP_PREFIX) {
+                let is_attach = plan.options.contains_key(OPT_KEY_STORAGE_PREFIX);
+                if is_attach || !plan.options.contains_key(OPT_KEY_TEMP_PREFIX) {
                     self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Create, false).await?;
                 }
                 if let Some(clone) = &plan.clone {
@@ -1982,6 +1988,9 @@ impl AccessChecker for PrivilegeAccess {
                         }
                         Err(err) => return Err(err),
                     }
+                }
+                if is_attach {
+                    self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::AttachTable, false).await?;
                 }
                 if let Some(query) = &plan.as_select {
                     self.check(ctx, query).await?;
@@ -2312,10 +2321,14 @@ impl AccessChecker for PrivilegeAccess {
                         }
                     }
                 }
-                let privileges = match plan.mutation_type {
-                    MutationType::Merge => vec![UserPrivilegeType::Insert, UserPrivilegeType::Update, UserPrivilegeType::Delete],
-                    MutationType::Update => vec![UserPrivilegeType::Update],
-                    MutationType::Delete => vec![UserPrivilegeType::Delete],
+                let privileges = if plan.expected_ttl.is_some() {
+                    vec![UserPrivilegeType::Alter]
+                } else {
+                    match plan.mutation_type {
+                        MutationType::Merge => vec![UserPrivilegeType::Insert, UserPrivilegeType::Update, UserPrivilegeType::Delete],
+                        MutationType::Update => vec![UserPrivilegeType::Update],
+                        MutationType::Delete => vec![UserPrivilegeType::Delete],
+                    }
                 };
                 for privilege in privileges {
                     self.validate_table_access(&plan.catalog_name, &plan.database_name, &plan.table_name, privilege, false, false).await?;

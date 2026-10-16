@@ -970,6 +970,15 @@ impl TestFixture {
 
     pub async fn execute_query(&self, query: &str) -> Result<SendableDataBlockStream> {
         let ctx = self.new_query_ctx().await?;
+        Self::execute_query_with_ctx(ctx, query).await
+    }
+
+    /// Runs `query` on the given context, so callers can inspect the
+    /// context (progress, metrics, ...) after the query finished.
+    pub async fn execute_query_with_ctx(
+        ctx: Arc<QueryContext>,
+        query: &str,
+    ) -> Result<SendableDataBlockStream> {
         let mut planner = Planner::new(ctx.clone());
         let (plan, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;

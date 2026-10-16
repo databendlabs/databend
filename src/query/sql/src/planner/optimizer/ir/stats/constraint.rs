@@ -96,11 +96,9 @@ impl ValueConstraint {
     }
 
     pub(super) fn apply_all(
-        input_stat: &ColumnStat,
+        mut column_stat: ColumnStat,
         constraints: &[ValueConstraint],
     ) -> Result<ColumnStat> {
-        let mut column_stat = input_stat.clone();
-
         for constraint in constraints {
             constraint.apply(&mut column_stat)?;
         }

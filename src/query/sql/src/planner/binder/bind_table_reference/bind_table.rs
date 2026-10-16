@@ -122,10 +122,9 @@ impl Binder {
                 if lineage_enabled() {
                     // The main query scans a temporary table, so retain a separately bound
                     // producer definition that lineage extraction can follow by output position.
-                    let cte_map = bind_context.cte_context.cte_map.clone();
                     materialized_cte_lineage = Some(self.bind_cte_definition(
                         &table_name,
-                        cte_map.as_ref(),
+                        bind_context,
                         &cte_info.query,
                     )?);
                 }
@@ -134,7 +133,11 @@ impl Binder {
                 if self
                     .metadata
                     .read()
-                    .get_table_index(Some(&database), &table_name)
+                    .get_table_index_in_view_scope(
+                        Some(&database),
+                        &table_name,
+                        &bind_context.binding_views,
+                    )
                     .is_some()
                 {
                     return Err(ErrorCode::SyntaxException(format!(
@@ -295,6 +298,7 @@ impl Binder {
                 }
             }
 
+            new_bind_context.binding_depth = bind_context.next_depth()?;
             new_bind_context.parent = Some(Box::new(bind_context.clone()));
             return Ok((s_expr, new_bind_context));
         }
@@ -313,20 +317,27 @@ impl Binder {
                     .ok_or_else(|| ErrorCode::Internal("Invalid VIEW object"))?;
                 let tokens = tokenize_sql(query.as_str())?;
                 let (stmt, _) = parse_sql(&tokens, self.dialect)?;
-                // For view, we need use a new context to bind it.
-                let mut new_bind_context = BindContext::with_parent(bind_context.clone())?;
-                new_bind_context.binding_views.insert(view_ident);
+                // A view definition is an independent name scope: it must not
+                // see the caller's CTEs or columns, otherwise an outer CTE can
+                // capture a table referenced by the view.
+                let mut new_bind_context = bind_context.new_view_scope(view_ident)?;
                 if let Statement::Query(query) = &stmt {
-                    self.metadata.write().add_table(
-                        catalog.clone(),
-                        database.clone(),
-                        table_meta.clone(),
-                        branch_name.clone(),
-                        table_name_alias.clone(),
-                        false,
-                        false,
-                        None,
-                    );
+                    {
+                        let mut metadata = self.metadata.write();
+                        let table_index = metadata.add_table(
+                            catalog.clone(),
+                            database.clone(),
+                            table_meta.clone(),
+                            branch_name.clone(),
+                            table_name_alias.clone(),
+                            false,
+                            false,
+                            None,
+                        );
+                        // The view reference belongs to the caller's name scope,
+                        // not the independent scope used to bind its definition.
+                        metadata.set_table_view_scope(table_index, &bind_context.binding_views);
+                    }
                     let (s_expr, mut new_bind_context) =
                         self.bind_query(&mut new_bind_context, query)?;
                     if lineage_enabled() {
@@ -350,9 +361,11 @@ impl Binder {
                             column.table_name = Some(self.normalize_identifier(table).name);
                         }
                     }
-                    // Restore binding_views to the outer scope's value so the
-                    // current view does not leak into sibling/parent contexts.
+                    // Restore the outer scope so the view's binding path and
+                    // CTEs do not leak into sibling/parent contexts.
                     new_bind_context.binding_views = bind_context.binding_views.clone();
+                    new_bind_context.cte_context = bind_context.cte_context.clone();
+                    new_bind_context.binding_depth = bind_context.next_depth()?;
                     new_bind_context.parent = Some(Box::new(bind_context.clone()));
                     Ok((s_expr, new_bind_context))
                 } else {

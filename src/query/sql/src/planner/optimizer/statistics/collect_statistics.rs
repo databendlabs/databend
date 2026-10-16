@@ -55,6 +55,7 @@ use crate::plans::FunctionCall;
 use crate::plans::Operator;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
+use crate::plans::ScanColumnStatistics;
 use crate::plans::Statistics;
 use crate::plans::UDFCall;
 use crate::plans::Visitor;
@@ -68,6 +69,7 @@ struct StatisticsColumn {
     index: Symbol,
     id: ColumnId,
     name: String,
+    spacing_unit: f64,
 }
 
 /// Persisted column statistics are collected per *leaf* column, keyed by the leaf's
@@ -209,6 +211,7 @@ impl CollectStatisticsOptimizer {
                                 index: *column_index,
                                 id: *column_id,
                                 name: column_name.clone(),
+                                spacing_unit: Statistics::histogram_spacing_unit(&data_type.into()),
                             }),
                             _ => None,
                         })
@@ -231,7 +234,13 @@ impl CollectStatisticsOptimizer {
                 let collect_frequency_stats = scan.change_type.is_none();
                 for column in &columns {
                     let col_stat = column_statistics_provider.column_statistics(column.id);
-                    column_stats.insert(column.index, col_stat.cloned());
+                    column_stats.insert(
+                        column.index,
+                        col_stat.cloned().map(|basic| ScanColumnStatistics {
+                            basic,
+                            histogram_spacing_unit: column.spacing_unit,
+                        }),
+                    );
                     let histogram = column_statistics_provider.histogram(column.id);
                     histograms.insert(column.index, histogram);
                     if collect_frequency_stats
@@ -547,7 +556,7 @@ impl TraceCollector {
         columns: &[StatisticsColumn],
         table_fields: &[TableField],
         table_stats: &Option<TableStatistics>,
-        column_stats: &HashMap<Symbol, Option<BasicColumnStatistics>>,
+        column_stats: &HashMap<Symbol, Option<ScanColumnStatistics>>,
         histograms: &HashMap<Symbol, Option<Histogram>>,
         row_access_policy: Option<ReplayRowAccessPolicy>,
     ) {
@@ -560,7 +569,10 @@ impl TraceCollector {
             });
 
         for column in columns {
-            let column_stat = column_stats.get(&column.index).and_then(Option::as_ref);
+            let column_stat = column_stats
+                .get(&column.index)
+                .and_then(Option::as_ref)
+                .map(|stat| &stat.basic);
             let histogram = histograms.get(&column.index).and_then(Option::as_ref);
             let entry = self
                 .column_stats

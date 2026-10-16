@@ -4316,6 +4316,7 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
     let delete = value(UserPrivilegeType::Delete, rule! { DELETE });
     let alter = value(UserPrivilegeType::Alter, rule! { ALTER });
     let super_priv = value(UserPrivilegeType::Super, rule! { SUPER });
+    let attach_table = value(UserPrivilegeType::AttachTable, rule! { ATTACH ~ TABLE });
     let create_user = value(UserPrivilegeType::CreateUser, rule! { CREATE ~ USER });
     let create_database = value(
         UserPrivilegeType::CreateDatabase,
@@ -4383,6 +4384,7 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
             | #delete
             | #alter
             | #super_priv
+            | #attach_table
             | #create_user
             | #create_database
             | #create_warehouse
@@ -5300,6 +5302,13 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _)| AlterTableAction::RemoveTableTtl,
     );
 
+    let materialize_table_ttl = map(
+        rule! {
+            MATERIALIZE ~ TTL
+        },
+        |(_, _)| AlterTableAction::MaterializeTableTtl,
+    );
+
     let recluster_table = map(
         rule! {
             RECLUSTER ~ FINAL? ~ ( WHERE ~ ^#expr )? ~ ( LIMIT ~ #literal_u64 )?
@@ -5415,6 +5424,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         #unset_table_options
             | #set_table_ttl
             | #remove_table_ttl
+            | #materialize_table_ttl
             | #refresh_cache
             | #modify_table_connection
             | #drop_all_row_access_polices
@@ -5566,15 +5576,10 @@ pub fn literal_duration(i: Input) -> IResult<Duration> {
 }
 
 pub fn task_sql_block(i: Input) -> IResult<TaskSql> {
-    let single_statement = map(
-        rule! {
-            #statement
-        },
-        |stmt| {
-            let sql = format!("{}", stmt.stmt);
-            TaskSql::SingleStatement(sql)
-        },
-    );
+    // Leave the semicolon and end-of-input check to the enclosing statement parser.
+    let single_statement = map(statement_body, |stmt| {
+        TaskSql::SingleStatement(stmt.to_string())
+    });
     let task_block = map(
         rule! {
             BEGIN
@@ -5589,7 +5594,8 @@ pub fn task_sql_block(i: Input) -> IResult<TaskSql> {
             TaskSql::ScriptBlock(sql)
         },
     );
-    alt((single_statement, task_block)).parse(i)
+    // Try the block first because BEGIN also parses as a transaction statement.
+    alt((task_block, single_statement)).parse(i)
 }
 
 pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
