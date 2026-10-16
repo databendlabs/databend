@@ -1691,8 +1691,12 @@ impl Table for FuseTable {
 enum TableStorageKind {
     /// Data is stored in the bucket configured by `[storage]` of the server.
     Internal,
-    /// Data is stored in a location supplied by the user, e.g.
-    /// `CREATE TABLE ... 's3://bucket/path' CONNECTION = (...)` or `ATTACH TABLE`.
+    /// Data is stored in a location supplied by the user, i.e.
+    /// `CREATE TABLE ... 's3://bucket/path' CONNECTION = (...)`.
+    ///
+    /// Attached tables share this code path since they also carry their own
+    /// storage params, but they are read-only and never write new objects,
+    /// so the storage class is effectively irrelevant for them.
     External,
 }
 
@@ -1707,8 +1711,8 @@ enum TableStorageKind {
 ///   The default bucket is owned by the operator of the deployment, so only
 ///   the operator should decide its storage class; letting end users flip it
 ///   per session could silently add cost to a bucket they do not own.
-/// - External / attached tables honor `storage_class_specs`: the bucket is
-///   supplied by the user, who can judge from their own access patterns whether
+/// - External tables honor `storage_class_specs`: the bucket is supplied by
+///   the user, who can judge from their own access patterns whether
 ///   `INTELLIGENT_TIERING` pays off.
 fn apply_storage_class(
     table_info: &TableInfo,

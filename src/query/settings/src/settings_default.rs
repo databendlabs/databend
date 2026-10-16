@@ -1723,7 +1723,7 @@ impl DefaultSettings {
                         let storage_class = Self::extract_s3_storage_class_config(&global_conf).unwrap_or_default();
                         UserSettingValue::String(storage_class.to_string())
                     },
-                    desc: "S3 storage class used when writing new data of external (and attached) fuse tables. Internal tables always follow the storage class of the server configuration.",
+                    desc: "S3 storage class used when writing new data of external fuse tables. Internal tables always follow the storage class of the server configuration.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec![S3StorageClass::Standard.to_string(), S3StorageClass::IntelligentTiering.to_string()])),
