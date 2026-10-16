@@ -1418,5 +1418,44 @@ select number::decimal(15,2) > 2.45 from numbers(5);
 1
 1      
 
+## modulo on decimals is exact, keeps the dividend's sign and stays decimal
+query RRRRR
+SELECT 5.5::decimal(10, 2) % 0.1, 0.25 % 0.1, -7.5 % 2, 7.5 % -2, 7 % 2.5;
+----
+0.00 0.05 -1.5 1.5 2.0
+
+query T
+SELECT typeof(0.25 % 0.1);
+----
+DECIMAL(2, 2)
+
+query RR
+SELECT mod(0.001::decimal(38, 19), 0.1), 0.001::decimal(38, 19) % 0.001;
+----
+0.0010000000000000000 0.0000000000000000000
+
+query R
+SELECT (number::decimal(10, 2) / 4) % 1 FROM numbers(5) ORDER BY number;
+----
+0.00000000
+0.25000000
+0.50000000
+0.75000000
+0.00000000
+
+## aligning to the larger scale can need more than 38 digits; the remainder still fits
+query RR
+SELECT 0.1::decimal(38, 38) % 1, 1 % 0.3::decimal(38, 38);
+----
+0.10000000000000000000000000000000000000 0.10000000000000000000000000000000000000
+
+query T
+SELECT typeof(0.1::decimal(38, 38) % 1);
+----
+DECIMAL(38, 38)
+
+statement error 1006
+SELECT 1.5 % 0;
+
 statement ok
 drop database decimal_t;

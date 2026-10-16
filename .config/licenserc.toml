@@ -22,9 +22,12 @@ excludes = [
     "src/bendpy",
     # hidden files
     ".cargo",
+    ".config",
     ".databend",
     ".devcontainer",
     ".github",
+    ".venv",
+    "target",
     ".dockerignore",
     ".gitignore",
     ".gitattributes",

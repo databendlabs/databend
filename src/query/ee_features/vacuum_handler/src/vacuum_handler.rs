@@ -40,6 +40,9 @@ pub trait VacuumHandler: Sync + Send {
         tables: Vec<TableInfo>,
     ) -> VacuumDropTablesResult;
 
+    /// Returns the share of `vacuum_limit` used: files known to be removed plus those of failed
+    /// delete requests that may have been removed before the error. Files known to be removed
+    /// are reported through [`VacuumReport`].
     async fn do_vacuum_temporary_files(
         &self,
         abort_checker: AbortChecker,
@@ -49,11 +52,15 @@ pub trait VacuumHandler: Sync + Send {
     ) -> Result<usize>;
 }
 
-#[derive(Debug, Clone)]
+/// Called after each delete batch with the total number of files removed so far.
+pub type VacuumReport = Arc<dyn Fn(usize) + Send + Sync>;
+
+#[derive(Clone)]
 pub enum VacuumTempOptions {
     // nodes, query_id
     QueryHook(Vec<usize>, String),
-    VacuumCommand(Option<Duration>),
+    // retain duration, progress report
+    VacuumCommand(Option<Duration>, VacuumReport),
 }
 
 pub struct VacuumHandlerWrapper {

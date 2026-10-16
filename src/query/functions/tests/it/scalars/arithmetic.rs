@@ -441,4 +441,24 @@ fn test_decimal() {
     );
 
     run_ast(file, "1964831797.0000 - 0.0214642400000", &columns);
+
+    // `%` on decimals is exact at the larger scale, keeps the dividend's sign,
+    // and does not round through Float64 (5.5 % 0.1 was 0.0999999999999997).
+    run_ast(file, "5.5 % 0.1", &columns);
+    run_ast(file, "0.25 % 0.1", &columns);
+    run_ast(file, "1.234 % 0.5", &columns);
+    run_ast(file, "-7.5 % 2", &columns);
+    run_ast(file, "7.5 % -2", &columns);
+    run_ast(file, "7 % 2.5", &columns);
+    run_ast(file, "0.001::decimal(38, 19) % 0.1", &columns);
+    run_ast(file, "0.1::decimal(38, 38) % 1", &columns);
+    run_ast(file, "1 % 0.3::decimal(38, 38)", &columns);
+    run_ast(
+        file,
+        "1234567890123456789012345678901234567890::decimal(76, 0) % 7",
+        &columns,
+    );
+    run_ast(file, "l_quantity % 7", &columns);
+    run_ast(file, "l_extendedprice % 0.07", &columns);
+    run_ast(file, "l_quantity % 0", &columns);
 }

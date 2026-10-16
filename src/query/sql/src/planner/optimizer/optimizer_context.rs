@@ -84,7 +84,7 @@ impl OptimizerContext {
         Arc::new(Self {
             table_ctx,
             metadata,
-            stat_context: StatContext::new(function_context),
+            stat_context: StatContext::new(function_context, &settings),
 
             enable_distributed_optimization: RwLock::new(false),
             force_local_execution: RwLock::new(false),

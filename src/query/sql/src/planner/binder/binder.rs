@@ -528,7 +528,7 @@ impl Binder {
             }
             Statement::Replace(stmt) => self.bind_replace(bind_context, stmt).await?,
             Statement::MergeInto(stmt) => self.bind_merge_into(bind_context, stmt).await?,
-            Statement::Delete(stmt) => self.bind_delete(bind_context, stmt).await?,
+            Statement::Delete(stmt) => self.bind_delete(bind_context, stmt, None).await?,
             Statement::Update(stmt) => self.bind_update(bind_context, stmt).await?,
 
             // Permissions

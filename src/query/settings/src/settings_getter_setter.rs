@@ -410,6 +410,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_dio")? != 0)
     }
 
+    pub fn get_filter_and_strategy(&self) -> Result<String> {
+        self.try_get_string("filter_and_strategy")
+    }
+
     /// # Safety
     pub unsafe fn get_disable_join_reorder(&self) -> Result<bool> {
         Ok(unsafe { self.unchecked_try_get_u64("disable_join_reorder") }? != 0)

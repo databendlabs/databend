@@ -60,6 +60,7 @@ use databend_common_users::UserApiProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
 use databend_meta_client::types::SeqV;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
 use crate::history_tables::session::get_history_log_user;
@@ -1124,7 +1125,9 @@ impl PrivilegeAccess {
             GrantObject::Global => false,
         };
 
-        if verify_ownership
+        // Attaching storage data requires an explicit grant, even for database owners.
+        if privilege != UserPrivilegeType::AttachTable
+            && verify_ownership
             && self
                 .has_ownership(
                     &session,
@@ -1956,8 +1959,12 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Select, false, false).await?
             }
             Plan::CreateTable(plan) => {
-                if !plan.options.contains_key(OPT_KEY_TEMP_PREFIX) {
+                let is_attach = plan.options.contains_key(OPT_KEY_STORAGE_PREFIX);
+                if is_attach || !plan.options.contains_key(OPT_KEY_TEMP_PREFIX) {
                     self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Create, false).await?;
+                }
+                if is_attach {
+                    self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::AttachTable, false).await?;
                 }
                 if let Some(query) = &plan.as_select {
                     self.check(ctx, query).await?;
@@ -2288,10 +2295,14 @@ impl AccessChecker for PrivilegeAccess {
                         }
                     }
                 }
-                let privileges = match plan.mutation_type {
-                    MutationType::Merge => vec![UserPrivilegeType::Insert, UserPrivilegeType::Update, UserPrivilegeType::Delete],
-                    MutationType::Update => vec![UserPrivilegeType::Update],
-                    MutationType::Delete => vec![UserPrivilegeType::Delete],
+                let privileges = if plan.expected_ttl.is_some() {
+                    vec![UserPrivilegeType::Alter]
+                } else {
+                    match plan.mutation_type {
+                        MutationType::Merge => vec![UserPrivilegeType::Insert, UserPrivilegeType::Update, UserPrivilegeType::Delete],
+                        MutationType::Update => vec![UserPrivilegeType::Update],
+                        MutationType::Delete => vec![UserPrivilegeType::Delete],
+                    }
                 };
                 for privilege in privileges {
                     self.validate_table_access(&plan.catalog_name, &plan.database_name, &plan.table_name, privilege, false, false).await?;

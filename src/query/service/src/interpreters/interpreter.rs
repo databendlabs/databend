@@ -400,6 +400,7 @@ fn need_acquire_lock(ctx: Arc<QueryContext>, stmt: &Statement) -> bool {
         Statement::AlterTable(AlterTableStmt { action, .. }) => matches!(
             action,
             AlterTableAction::ReclusterTable { .. }
+                | AlterTableAction::MaterializeTableTtl
                 | AlterTableAction::ModifyColumn {
                     action: ModifyColumnAction::SetDataType(_),
                 }

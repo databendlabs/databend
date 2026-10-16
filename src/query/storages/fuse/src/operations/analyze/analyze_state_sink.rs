@@ -221,10 +221,10 @@ enum HistogramState {
     /// and cannot be extended, so after an append rebase they miss the appended values
     /// while the rest of the statistics cover the latest snapshot. They are still
     /// published, as they would be after any later append: histograms are not gated by
-    /// statistics freshness and the optimizer scales them by row count. They also stay
-    /// flagged accurate, so the optimizer still caps a column's NDV by the histogram NDV
-    /// and may underestimate it by the distinct values only present in appended rows;
-    /// this is the same drift a later append causes and is accepted.
+    /// statistics freshness and the optimizer scales them by row count. The optimizer may
+    /// still cap a column's NDV by the histogram NDV and so underestimate it by the
+    /// distinct values only present in appended rows; this is the same drift a later
+    /// append causes and is accepted.
     Window {
         receivers: HashMap<u32, Receiver<DataBlock>>,
         buckets: HashMap<ColumnId, Vec<HistogramBucket>>,
@@ -256,12 +256,6 @@ impl HistogramState {
 
     fn enabled(&self) -> bool {
         !matches!(self, HistogramState::None)
-    }
-
-    /// Window buckets come from exact SQL; the KLL variants are sketches. Stays true for
-    /// rebased Window buckets, see [`HistogramState::Window`].
-    fn accurate(&self) -> bool {
-        matches!(self, HistogramState::Window { .. })
     }
 }
 
@@ -560,15 +554,13 @@ impl SinkAnalyzeState {
             return Ok(None);
         }
 
-        let accurate = self.histogram.accurate();
         let histograms = self
             .histogram_buckets()?
             .into_iter()
             .map(|(column_id, buckets)| {
                 Ok((
                     column_id,
-                    Histogram::try_from_buckets(accurate, buckets, None)
-                        .map_err(ErrorCode::Internal)?,
+                    Histogram::try_from_buckets(buckets).map_err(ErrorCode::Internal)?,
                 ))
             })
             .collect::<Result<_>>()?;
