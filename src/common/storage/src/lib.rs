@@ -82,10 +82,6 @@ pub use operator::init_operator_with_policy_scope;
 
 mod operator_cache;
 
-pub mod metrics;
-pub use crate::metrics::StorageMetrics;
-pub use crate::metrics::StorageMetricsLayer;
-
 mod runtime_layer;
 
 mod column_node;

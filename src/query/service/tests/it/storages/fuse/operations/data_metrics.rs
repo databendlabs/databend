@@ -58,11 +58,11 @@ async fn run_and_observe(fixture: &TestFixture, sql: &str) -> Result<Observed> {
     let stream = interpreter.execute(ctx.clone()).await?;
     stream.try_collect::<Vec<DataBlock>>().await?;
 
-    let data_metrics = ctx.get_data_metrics();
+    let partition_stats = ctx.get_partition_stats();
     Ok(Observed {
         io_stats: ctx.get_io_stats(),
-        partitions_scanned: data_metrics.get_partitions_scanned(),
-        partitions_total: data_metrics.get_partitions_total(),
+        partitions_scanned: partition_stats.scanned,
+        partitions_total: partition_stats.total,
         scan_bytes: ctx.get_scan_progress_value().bytes,
         write_bytes: ctx.get_write_progress_value().bytes,
     })
@@ -130,9 +130,45 @@ async fn select_counts_block_reads() -> Result<()> {
         observed.scan_bytes,
     );
     assert_eq!(observed.io_stats.write_bytes, 0);
-    // Partition counters still come from pruning on the attached table.
     assert_eq!(observed.partitions_total, 1);
     assert_eq!(observed.partitions_scanned, 1);
+    Ok(())
+}
+
+/// With more segments than nodes the scan is *lazy*: block pruning happens in
+/// a prune pipeline on a table instance built from the plan, not on the one
+/// attached to the context. Partition counters must still reach the query.
+#[tokio::test(flavor = "multi_thread")]
+async fn lazy_scan_counts_partitions() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    let table = format!("{db}.lazy_scan");
+
+    fixture
+        .execute_command(&format!("create table {table} (a int, b string)"))
+        .await?;
+    // Two inserts give two segments; on the single-node test context
+    // `segments > nodes` makes `read_partitions` return lazy parts.
+    for _ in 0..2 {
+        fixture
+            .execute_command(&format!(
+                "insert into {table} select number, to_string(number) from numbers(1000)"
+            ))
+            .await?;
+    }
+
+    let observed = run_and_observe(&fixture, &format!("select a from {table}")).await?;
+    assert_eq!(observed.partitions_total, 2);
+    assert_eq!(observed.partitions_scanned, 2);
+
+    let observed =
+        run_and_observe(&fixture, &format!("select a from {table} where a > 2000")).await?;
+    assert_eq!(observed.partitions_total, 2);
+    assert_eq!(
+        observed.partitions_scanned, 0,
+        "min/max pruning drops both blocks"
+    );
     Ok(())
 }
 

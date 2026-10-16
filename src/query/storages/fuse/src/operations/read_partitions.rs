@@ -750,7 +750,6 @@ impl FuseTable {
             derterministic_cache_key,
             limit,
             pruner.clone(),
-            self.data_metrics.clone(),
             partitions_total,
         ));
         prune_pipeline.add_sink(|input| {
@@ -1102,12 +1101,6 @@ impl FuseTable {
             partitions_scanned,
             pruning_stats,
         );
-
-        // Update context statistics.
-        self.data_metrics
-            .inc_partitions_total(partitions_total as u64);
-        self.data_metrics
-            .inc_partitions_scanned(partitions_scanned as u64);
 
         Ok((statistics, parts))
     }

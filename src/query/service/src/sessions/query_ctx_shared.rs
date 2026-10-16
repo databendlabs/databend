@@ -60,7 +60,6 @@ use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::Settings;
 use databend_common_sql::QueryLineage;
 use databend_common_storage::DataOperator;
-use databend_common_storage::StorageMetrics;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -81,6 +80,13 @@ use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::runtime_filter_state::RuntimeFilterState;
 use crate::spillers;
 use crate::storages::Table;
+
+/// Partition counters of a query, see [`QueryContextShared::get_partition_stats`].
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct PartitionStats {
+    pub scanned: u64,
+    pub total: u64,
+}
 
 pub struct MemoryUpdater {
     pub memory_usage: AtomicUsize,
@@ -408,21 +414,17 @@ impl QueryContextShared {
         tables.values().cloned().collect()
     }
 
-    /// Data metrics of the whole query.
-    ///
-    /// Byte and cost counters come from the per-query `IoStats` (local node plus
-    /// the latest snapshot of every remote node). Partition counters come from
-    /// the tables attached to this query, which is where pruning records them.
-    /// Partition counters of the tables attached to this context.
-    ///
-    /// Only `partitions_scanned` / `partitions_total` are meaningful here; the
-    /// byte and cost fields of the returned value are not populated. Storage IO
-    /// of the query is accounted per query in `IoStats`, see [`Self::get_io_stats`].
-    pub fn get_data_metrics(&self) -> StorageMetrics {
-        let tables = self.get_tables_refs();
-        let table_metrics: Vec<Arc<StorageMetrics>> =
-            tables.iter().filter_map(|v| v.get_data_metrics()).collect();
-        StorageMetrics::merge(&table_metrics)
+    /// Partitions scanned and total over every fuse pruning of this query,
+    /// summed from `pruned_partitions_stats`, which every pruning path
+    /// (eager, lazy, remote node) reports into per `plan_id`.
+    pub fn get_partition_stats(&self) -> PartitionStats {
+        let stats = self.pruned_partitions_stats.read();
+        stats
+            .values()
+            .fold(PartitionStats::default(), |acc, s| PartitionStats {
+                scanned: acc.scanned + s.partitions_scanned as u64,
+                total: acc.total + s.partitions_total as u64,
+            })
     }
 
     /// The IO counter of this query on this node. Threads executing the query
