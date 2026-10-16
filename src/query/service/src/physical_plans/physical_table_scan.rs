@@ -84,6 +84,7 @@ use crate::physical_plans::format::TableScanFormatter;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::physical_plans::planned_pruning_stats;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextSettings;
@@ -146,9 +147,10 @@ impl IPhysicalPlan for TableScan {
     }
 
     fn collect_planned_pruning_stats(&self, stats: &mut Vec<(u32, PartStatistics)>) {
-        if self.source.parts.partitions_type() != PartInfoType::LazyLevel {
-            stats.push((self.get_id(), self.source.statistics.clone()));
-        }
+        stats.push((
+            self.get_id(),
+            planned_pruning_stats(&self.source.parts, &self.source.statistics),
+        ));
     }
 
     fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {

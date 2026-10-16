@@ -825,11 +825,6 @@ impl FusePruner {
         }
     }
 
-    /// Blocks contained in the segments this pruner has read so far.
-    pub fn blocks_in_read_segments(&self) -> usize {
-        self.pruning_ctx.pruning_stats.get_blocks_in_read_segments() as usize
-    }
-
     pub fn set_inverse_range_index(&mut self, index: RangeIndex) {
         self.inverse_range_index = Some(index)
     }

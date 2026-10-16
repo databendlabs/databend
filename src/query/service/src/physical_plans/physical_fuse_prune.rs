@@ -16,7 +16,6 @@ use std::any::Any;
 use std::collections::HashMap;
 
 use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_exception::Result;
@@ -28,6 +27,7 @@ use super::format::PhysicalFormat;
 use super::physical_plan::IPhysicalPlan;
 use super::physical_plan::PhysicalPlan;
 use super::physical_plan::PhysicalPlanMeta;
+use crate::physical_plans::planned_pruning_stats;
 use crate::pipelines::PipelineBuilder;
 use crate::servers::flight::v1::exchange::FusePartExchangeInjector;
 use crate::sessions::TableContextPartitionStats;
@@ -74,9 +74,10 @@ impl IPhysicalPlan for FusePrune {
     }
 
     fn collect_planned_pruning_stats(&self, stats: &mut Vec<(u32, PartStatistics)>) {
-        if self.source.parts.partitions_type() != PartInfoType::LazyLevel {
-            stats.push((self.get_id(), self.source.statistics.clone()));
-        }
+        stats.push((
+            self.get_id(),
+            planned_pruning_stats(&self.source.parts, &self.source.statistics),
+        ));
     }
 
     fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {

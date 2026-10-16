@@ -190,6 +190,28 @@ async fn lazy_scan_counts_partitions() -> Result<()> {
         observed.partitions_scanned, 2,
         "first block of the two low segments; the high segment is pruned whole"
     );
+
+    // `_segment_name` skips the other segments before their metadata is
+    // read; the total is the snapshot's block count regardless.
+    let segment = fixture
+        .execute_query(&format!(
+            "select _segment_name from {table} where a = 0 limit 1"
+        ))
+        .await?
+        .try_collect::<Vec<DataBlock>>()
+        .await?
+        .remove(0)
+        .get_by_offset(0)
+        .index(0)
+        .and_then(|s| s.as_string().map(|s| s.to_string()))
+        .expect("segment name");
+    let observed = run_and_observe(
+        &fixture,
+        &format!("select a from {table} where _segment_name = '{segment}'"),
+    )
+    .await?;
+    assert_eq!(observed.partitions_total, 9);
+    assert_eq!(observed.partitions_scanned, 3);
     Ok(())
 }
 
@@ -464,12 +486,14 @@ async fn init_query_fragments_counts_preparation_reads() -> Result<()> {
     );
     assert_eq!(io_stats.write_bytes, 0, "nothing executed yet");
 
-    // The deferred pruning must also publish its partition statistics under
-    // the MutationSource plan id, like eager pruning does in the planner. The
-    // two segments are reshuffled across the two nodes, so this node prunes
-    // one segment of one block; `b like '%99%'` cannot be range-pruned.
+    // `partitions_total` is the whole-table block count, published once by
+    // `build_physical_plan` above on the coordinator. The deferred pruning
+    // publishes only what this node scanned under the same plan id: the two
+    // segments are reshuffled across the two nodes, so one segment of one
+    // block; `b like '%99%'` cannot be range-pruned. A whole-table total
+    // from every node would show up here as 4.
     let partition_stats = ctx.get_partition_stats();
-    assert_eq!(partition_stats.total, 1);
+    assert_eq!(partition_stats.total, 2);
     assert_eq!(partition_stats.scanned, 1);
     Ok(())
 }

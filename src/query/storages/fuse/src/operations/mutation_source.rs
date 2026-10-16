@@ -138,18 +138,21 @@ impl FuseTable {
         is_delete: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         if is_lazy {
-            let segment_len = snapshot.segments.len();
             let mut segments = Vec::with_capacity(snapshot.segments.len());
             for (idx, segment_location) in snapshot.segments.iter().enumerate() {
                 segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
             }
+            // `partitions_total` is in blocks: the whole-table count from the
+            // snapshot, published once by the coordinator. The deferred
+            // pruning on each node reports only `partitions_scanned`.
+            let block_count = snapshot.summary.block_count as usize;
             Ok((
                 PartStatistics::new_estimated(
                     None,
                     snapshot.summary.row_count as usize,
                     snapshot.summary.compressed_byte_size as usize,
-                    segment_len,
-                    segment_len,
+                    block_count,
+                    block_count,
                 ),
                 Partitions::create(PartitionsShuffleKind::Mod, segments),
             ))
@@ -248,14 +251,15 @@ impl FuseTable {
             .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
             .collect::<Vec<_>>();
 
-        // Partition counters are in blocks. The total is the blocks of every
-        // segment the pruner read; the scanned count is finalised below once
-        // whole deleted segments are added.
+        // Partition counters are in blocks. `block_count` is the whole-table
+        // total when pruning in the planner, and `None` for deferred pruning
+        // where the coordinator publishes the total separately. The scanned
+        // count is finalised below once whole deleted segments are added.
         let (mut statistics, inner_parts) = self.read_partitions_with_metas(
             self.schema_with_stream(),
             None,
             &range_block_metas,
-            pruner.blocks_in_read_segments(),
+            block_count.unwrap_or_default(),
             PruningStatistics::default(),
         )?;
 

@@ -85,10 +85,8 @@ impl SendPartState {
         let mut send_part_cache = self.cache.lock();
         let pruning_stats = send_part_cache.fuse_pruner.pruning_stats();
         send_part_cache.statistics.pruning_stats = pruning_stats;
-        // `partitions_scanned` is accumulated in blocks as parts are sent, so
-        // the total must be in blocks too: the blocks of every segment read.
-        send_part_cache.statistics.partitions_total =
-            send_part_cache.fuse_pruner.blocks_in_read_segments();
+        // `partitions_total` is published once by the coordinator from the
+        // snapshot; this node contributes only what it scanned.
         send_part_cache.statistics.clone()
     }
 

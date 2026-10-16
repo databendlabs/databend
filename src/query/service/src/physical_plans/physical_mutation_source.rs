@@ -57,6 +57,7 @@ use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::physical_plans::planned_pruning_stats;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextSettings;
@@ -98,11 +99,10 @@ impl IPhysicalPlan for MutationSource {
     }
 
     fn collect_planned_pruning_stats(&self, stats: &mut Vec<(u32, PartStatistics)>) {
-        // Lazy parts carry an estimate; the deferred pruning in
-        // `build_pipeline2` publishes the real statistics on each node.
-        if self.partitions.partitions_type() != PartInfoType::LazyLevel {
-            stats.push((self.get_id(), self.statistics.clone()));
-        }
+        stats.push((
+            self.get_id(),
+            planned_pruning_stats(&self.partitions, &self.statistics),
+        ));
     }
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {

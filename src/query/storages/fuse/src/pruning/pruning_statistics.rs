@@ -33,10 +33,6 @@ pub struct FusePruningStatistics {
     pub segments_range_pruning_after: AtomicU64,
     /// Segment range pruning cost in nanoseconds.
     pub segments_range_pruning_cost: AtomicU64,
-    /// Blocks contained in every segment read, including segments dropped
-    /// by segment-level pruning.
-    pub blocks_in_read_segments: AtomicU64,
-
     /// Block range pruning stats.
     pub blocks_range_pruning_before: AtomicU64,
     pub blocks_range_pruning_after: AtomicU64,
@@ -120,14 +116,6 @@ impl FusePruningStatistics {
 
     pub fn get_segments_range_pruning_cost(&self) -> u64 {
         nanos_to_display_micros(self.segments_range_pruning_cost.load(Ordering::Relaxed))
-    }
-
-    pub fn add_blocks_in_read_segments(&self, v: u64) {
-        self.blocks_in_read_segments.fetch_add(v, Ordering::Relaxed);
-    }
-
-    pub fn get_blocks_in_read_segments(&self) -> u64 {
-        self.blocks_in_read_segments.load(Ordering::Relaxed)
     }
 
     pub fn set_blocks_range_pruning_before(&self, v: u64) {

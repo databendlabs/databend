@@ -277,13 +277,17 @@ impl FuseTable {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location))
                     }
 
+                    // `partitions_total` is in blocks: the whole-table count
+                    // from the snapshot. It is published once by the
+                    // coordinator; the per-node pruning reports only
+                    // `partitions_scanned`.
                     return Ok((
                         PartStatistics::new_estimated(
                             Some(snapshot_location),
                             read_info.row_count,
                             read_info.compressed_byte_size,
-                            segment_len,
-                            segment_len,
+                            read_info.block_count,
+                            read_info.block_count,
                         ),
                         Partitions::create(PartitionsShuffleKind::Mod, segments),
                         None,
