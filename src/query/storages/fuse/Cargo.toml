@@ -87,7 +87,6 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 divan = { workspace = true }
-http = { workspace = true }
 
 [[bench]]
 name = "bench"

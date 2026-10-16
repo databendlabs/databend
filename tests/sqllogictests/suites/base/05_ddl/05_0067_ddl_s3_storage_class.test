@@ -1,7 +1,7 @@
 # S3 storage class controls new objects only. Database defaults are copied when
 # persistent FUSE-backed tables are created; changing the database is not retroactive.
 # Keep INTELLIGENT_TIERING tests metadata-only: CI may use MinIO, which does not
-# support that class. Real S3 request headers are covered by FUSE unit tests.
+# support that class. Actual object storage classes are covered by the real AWS E2E test.
 # SQL writes below use STANDARD or temporary tables; filesystem cases only check compatibility.
 
 statement ok

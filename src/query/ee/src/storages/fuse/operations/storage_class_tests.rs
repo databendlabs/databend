@@ -22,12 +22,14 @@ mod real_s3 {
     use databend_common_catalog::session_type::SessionType;
     use databend_common_catalog::table::Table;
     use databend_common_catalog::table_context::TableContextTableAccess;
+    use databend_common_meta_app::storage::S3StorageClass;
     use databend_common_meta_app::storage::StorageParams;
     use databend_common_meta_app::storage::StorageS3Config;
     use databend_common_storages_fuse::FuseTable;
     use databend_common_storages_fuse::io::SegmentsIO;
     use databend_query::test_kits::TestFixture;
     use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+    use databend_storages_common_table_meta::table::OPT_KEY_S3_STORAGE_CLASS;
     use futures::TryStreamExt;
     use opendal::Buffer;
     use opendal::Operator;
@@ -44,6 +46,7 @@ mod real_s3 {
         Snapshot,
         Segment,
         Block,
+        OperatorProbe,
     }
 
     type TableObjects = BTreeMap<String, ObjectKind>;
@@ -327,7 +330,7 @@ mod real_s3 {
         response: &HeadResponse,
     ) -> anyhow::Result<()> {
         let mut setup = EESetup::new();
-        setup.config_mut().storage.params = storage;
+        setup.config_mut().storage.params = storage.clone();
         setup.config_mut().storage.allow_insecure = false;
         let fixture = setup_sql_fixture(setup).await?;
         // Keep old blocks/segments intact so a second write cannot compact away
@@ -462,6 +465,42 @@ mod real_s3 {
         fixture
             .execute_command("DROP TABLE storage_class.temp")
             .await?;
+
+        // Exercise the external-operator branch with trusted runtime parameters.
+        // Ambient IAM access is deliberately not persisted for external SQL tables.
+        let StorageParams::S3(mut external_storage) = storage else {
+            anyhow::bail!("real S3 test requires S3 storage parameters");
+        };
+        external_storage.root =
+            format!("{}/external/", external_storage.root.trim_end_matches('/'));
+        let ctx = fixture.new_query_ctx().await?;
+        let table = ctx
+            .get_table("default", "storage_class", "after_alter")
+            .await?;
+        let mut info = table.get_table_info().clone();
+        info.meta.storage_params = Some(StorageParams::S3(external_storage));
+        info.meta.options.insert(
+            OPT_KEY_S3_STORAGE_CLASS.to_owned(),
+            "intelligent_tiering".to_owned(),
+        );
+        let external = FuseTable::create_storage_operator(&info, Some(S3StorageClass::Standard))?;
+        external
+            .write("storage-class-probe", "external data")
+            .await?;
+        anyhow::ensure!(
+            external.read("storage-class-probe").await?.to_vec() == b"external data",
+            "external operator data readback mismatch"
+        );
+        check_objects(
+            operator,
+            response,
+            &BTreeMap::from([(
+                "external/storage-class-probe".to_owned(),
+                ObjectKind::OperatorProbe,
+            )]),
+            "INTELLIGENT_TIERING",
+        )
+        .await?;
         fixture
             .execute_command("DROP DATABASE storage_class")
             .await?;
@@ -469,6 +508,7 @@ mod real_s3 {
     }
 
     /// SQL -> FUSE -> AWS S3, including actual stored StorageClass and data readback.
+    /// Also probes the external-operator branch with real S3 requests.
     /// Run with DATABEND_TEST_S3_BUCKET/REGION and optional DATABEND_TEST_S3_ROOT;
     /// credentials come from the AWS credential chain, never from SQL literals.
     /// The identity needs list/get/put/delete access to the test prefix.
