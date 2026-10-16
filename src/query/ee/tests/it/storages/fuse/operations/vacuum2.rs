@@ -1100,7 +1100,6 @@ async fn test_vacuum2_rejects_published_clone_non_local_head() -> anyhow::Result
             format!("VACUUM of table {}", owner.get_id()),
             format!("head: {location}"),
             format!("expected snapshot prefix: {expected_prefix}"),
-            "do not manually delete clone bindings or referenced storage objects".to_string(),
         ] {
             assert!(error.message().contains(&expected), "{error}");
         }

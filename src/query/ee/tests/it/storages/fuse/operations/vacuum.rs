@@ -248,6 +248,14 @@ async fn test_vacuum_drop_clone_cleans_metadata() -> anyhow::Result<()> {
     let source_fuse = FuseTable::try_from_table(source.as_ref())?;
     let clone_fuse = FuseTable::try_from_table(clone.as_ref())?;
     let group_id = source_fuse.clone_group_id()?;
+    let db_id = DatabaseId::new(
+        catalog
+            .get_database(&tenant, &db)
+            .await?
+            .get_db_info()
+            .database_id
+            .db_id,
+    );
     let clone_id = clone.get_id();
     let binding = TableCloneByGroupIdent::new(group_id, clone_id);
     let source_prefix = FuseTable::parse_storage_prefix_from_table_info(source.get_table_info())?;
@@ -358,10 +366,24 @@ async fn test_vacuum_drop_clone_cleans_metadata() -> anyhow::Result<()> {
     assert!(meta.get_pb(&batch_binding).await?.is_none());
     assert!(meta.get_pb(&clone_lvt_ident).await?.is_none());
     assert!(meta.get_pb(&source_lvt_ident).await?.is_some());
+    // A normal deferral is not a failure, but must still retain the ancestor's directory and
+    // its containing database metadata until a later round can safely reclaim the ancestor.
+    source_fuse.get_operator_ref().stat(&source_marker).await?;
+    assert!(meta.get_pb(&db_id).await?.is_some());
 
     fixture.execute_command("VACUUM DROP TABLE").await?;
     assert!(meta.get_pb(&TableId::new(source.get_id())).await?.is_none());
     assert!(meta.get_pb(&source_lvt_ident).await?.is_none());
+    assert!(meta.get_pb(&db_id).await?.is_none());
+    assert_eq!(
+        source_fuse
+            .get_operator_ref()
+            .stat(&source_marker)
+            .await
+            .unwrap_err()
+            .kind(),
+        ErrorKind::NotFound
+    );
 
     Ok(())
 }

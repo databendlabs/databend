@@ -66,8 +66,9 @@ DROP ROW ACCESS POLICY clone_string_row
 statement ok
 UNSET VARIABLE int_snapshot
 
-# SQLLogic uses the admin connection. The companion EE integration test uses a real
-# restricted owner for detach authorization; here verify the SQL-visible policy lifecycle.
+# SQLLogic uses the admin connection. The companion EE integration test covers latest and
+# historical clones under a restricted owner. Here keep one historical clone to verify the
+# SQL-visible results and policy reverse references across rename and source-policy removal.
 statement ok
 CREATE TABLE secured_source(id INT, secret STRING)
 
@@ -96,16 +97,7 @@ statement ok
 ALTER TABLE secured_source ADD ROW ACCESS POLICY clone_visible_rows ON (id)
 
 statement ok
-CREATE TABLE secured_latest CLONE secured_source
-
-statement ok
 CREATE TABLE secured_history CLONE secured_source AT (SNAPSHOT => $secured_snapshot)
-
-query IT rowsort
-SELECT id, secret FROM secured_latest
-----
-1 ***
-2 ***
 
 query IT
 SELECT id, secret FROM secured_history
@@ -114,15 +106,14 @@ SELECT id, secret FROM secured_history
 
 # Both policies follow stable ColumnIds, including after a rename on the clone.
 statement ok
-ALTER TABLE secured_latest RENAME COLUMN secret TO redacted
+ALTER TABLE secured_history RENAME COLUMN secret TO redacted
 
-query IT rowsort
-SELECT id, redacted FROM secured_latest
+query IT
+SELECT id, redacted FROM secured_history
 ----
 1 ***
-2 ***
 
-# Source policy removal must not remove definitions or reverse references on either clone.
+# Source policy removal must not remove definitions or reverse references on the clone.
 statement ok
 ALTER TABLE secured_source MODIFY COLUMN secret UNSET MASKING POLICY
 
@@ -132,26 +123,17 @@ ALTER TABLE secured_source DROP ROW ACCESS POLICY clone_visible_rows
 query I
 SELECT count(*) FROM policy_references(POLICY_NAME => 'clone_secret_mask')
 ----
-2
+1
 
 query I
 SELECT count(*) FROM policy_references(POLICY_NAME => 'clone_visible_rows')
 ----
-2
-
-query IT rowsort
-SELECT id, redacted FROM secured_latest
-----
-1 ***
-2 ***
+1
 
 query IT
-SELECT id, secret FROM secured_history
+SELECT id, redacted FROM secured_history
 ----
 1 ***
-
-statement ok
-DROP TABLE secured_latest
 
 statement ok
 DROP TABLE secured_history

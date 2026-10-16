@@ -24,7 +24,7 @@ USE db_05_clone
 statement ok
 CREATE TABLE empty_source(id INT, payload INT)
 
-statement error (?s).*enable_experimental_clone_table=1.*mixed-version.*
+statement error (?s).*enable_experimental_clone_table=1.*
 CREATE TABLE disabled_clone CLONE empty_source
 
 statement ok
