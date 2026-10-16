@@ -235,3 +235,106 @@ async fn handler_installed_io_stats_is_reused() -> Result<()> {
     assert_eq!(ctx.get_io_stats(), handler_view);
     Ok(())
 }
+
+/// On a cluster worker, pipeline *preparation* (`INIT_QUERY_FRAGMENTS`) runs in
+/// its own RPC scope, before `START_PREPARED_QUERY`. For a lazy `DELETE` that
+/// phase already reads segment and index data (`do_mutation_block_pruning`).
+/// This exercises `init_query_fragments` the way the RPC handler does, outside
+/// any `io_stats` scope, and checks the preparation IO lands on the query's
+/// counter before any pipeline has executed, so it cannot be hidden behind
+/// execution-time reads.
+#[tokio::test(flavor = "multi_thread")]
+async fn init_query_fragments_counts_preparation_reads() -> Result<()> {
+    use databend_query::interpreters::MutationInterpreter;
+    use databend_query::schedulers::Fragmenter;
+    use databend_query::schedulers::QueryFragmentsActions;
+    use databend_query::servers::flight::v1::actions::init_query_fragments;
+    use databend_query::servers::flight::v1::exchange::DataExchangeManager;
+    use databend_query::sql::plans::Plan;
+    use databend_query::test_kits::ClusterDescriptor;
+
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    let table = format!("{db}.lazy_delete");
+
+    fixture
+        .execute_command(&format!("create table {table} (a int, b string)"))
+        .await?;
+    // Two inserts give two segments; with a two-node cluster below the DELETE
+    // source becomes lazy (`segments >= nodes`), deferring block pruning to
+    // pipeline preparation.
+    for _ in 0..2 {
+        fixture
+            .execute_command(&format!(
+                "insert into {table} select number, to_string(number) from numbers(20000)"
+            ))
+            .await?;
+    }
+
+    let local_id = "node1";
+    let ctx = fixture
+        .new_query_ctx_with_cluster(
+            ClusterDescriptor::new()
+                .with_node(local_id, "")
+                .with_node("node2", ""),
+        )
+        .await?;
+    assert!(ThreadTracker::io_stats().is_none());
+
+    let sql = format!("delete from {table} where b like '%99%'");
+    let (plan, _) = Planner::new(ctx.clone()).plan_sql(&sql).await?;
+    let Plan::DataMutation { s_expr, schema, .. } = plan else {
+        unreachable!("expected a DataMutation plan")
+    };
+    let mutation = s_expr.mutation()?.clone();
+    let interpreter = MutationInterpreter::try_create(
+        ctx.clone(),
+        s_expr.planned()?.clone(),
+        schema,
+        mutation.metadata.clone(),
+    )?;
+    let physical_plan = interpreter.build_physical_plan(&mutation, false).await?;
+    assert_eq!(
+        ctx.get_io_stats().read_bytes,
+        0,
+        "planning must not read through the query counter in this setup"
+    );
+
+    // Split the plan into fragments exactly as the coordinator does, and take
+    // the ones that `INIT_QUERY_FRAGMENTS` would hand to this node.
+    let mut actions = QueryFragmentsActions::create(ctx.clone());
+    for fragment in Fragmenter::try_create(ctx.clone())?.build_fragment(&physical_plan)? {
+        fragment.get_actions(ctx.clone(), &mut actions)?;
+    }
+    let fragments = actions
+        .get_query_fragments()?
+        .remove(local_id)
+        .expect("local node must receive fragments");
+    assert!(
+        fragments
+            .fragments
+            .iter()
+            .any(|fragment| { format!("{:?}", fragment.physical_plan).contains("MutationSource") }),
+        "the lazy mutation source must be prepared on this node"
+    );
+
+    // Register the context like `INIT_QUERY_ENV` does on a worker, then run
+    // the real `INIT_QUERY_FRAGMENTS` handler.
+    let query_id = ctx.get_id();
+    let exchange_manager = DataExchangeManager::instance();
+    exchange_manager.handle_statistics_exchange(query_id.clone(), "peer".to_string())?;
+    exchange_manager.set_ctx(&query_id, ctx.clone())?;
+
+    let prepared = init_query_fragments(fragments).await;
+    exchange_manager.on_finished_query(&query_id, None);
+    prepared?;
+
+    let io_stats = ctx.get_io_stats();
+    assert!(
+        io_stats.read_bytes > 0,
+        "lazy DELETE pruning during pipeline preparation read nothing through the query counter"
+    );
+    assert_eq!(io_stats.write_bytes, 0, "nothing executed yet");
+    Ok(())
+}

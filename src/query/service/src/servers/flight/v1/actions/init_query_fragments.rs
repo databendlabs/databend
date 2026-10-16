@@ -31,6 +31,10 @@ pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
     tracking_payload.mem_stat = ctx.get_query_memory_tracking();
     tracking_payload.query_id = Some(fragments.query_id.clone());
     tracking_payload.warehouse_id = ctx.get_cluster().get_warehouse_id().ok();
+    // Pipeline preparation may already read storage (e.g. lazy pruning of a
+    // DELETE / UPDATE source). Bind the query's counter so that IO is attributed
+    // to it like the IO done later under `start_prepared_query`.
+    tracking_payload.io_stats = Some(ctx.get_local_io_stats());
 
     debug!("init query fragments with {:?}", fragments);
 
