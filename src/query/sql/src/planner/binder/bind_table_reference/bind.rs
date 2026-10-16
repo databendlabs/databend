@@ -25,6 +25,7 @@ impl Binder {
         bind_context: &mut BindContext,
         table_ref: &TableReference,
     ) -> Result<(SExpr, BindContext)> {
+        self.debug_assert_definition_scope(bind_context);
         let (s_expr, bind_context) = match table_ref {
             TableReference::Table {
                 span,

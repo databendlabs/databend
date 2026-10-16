@@ -31,6 +31,7 @@ use log::debug;
 use log::warn;
 
 use crate::BindContext;
+use crate::DefinitionScope;
 use crate::SelectBuilder;
 use crate::ViewRewriter;
 use crate::binder::Binder;
@@ -259,15 +260,14 @@ impl Binder {
     ) -> Result<Plan> {
         let stmt = Statement::Query(Box::new(query.clone()));
         let mut bind_context = BindContext::new();
-        let previous_namespace = self
-            .default_table_namespace
-            .replace((catalog.to_string(), database.to_string()));
-        // A newly created definition always uses strict CTE resolution, even when
-        // it is planned from a legacy-definition reader.
-        let previous_legacy = std::mem::replace(&mut self.legacy_cte_resolution, false);
+        // A newly created definition binds in its own namespace with strict CTE
+        // resolution, even when it is planned from a legacy-definition reader.
+        let previous = std::mem::replace(
+            &mut self.definition_scope,
+            DefinitionScope::in_namespace(catalog.to_string(), database.to_string()),
+        );
         let result = self.bind_statement(&mut bind_context, &stmt).await;
-        self.default_table_namespace = previous_namespace;
-        self.legacy_cte_resolution = previous_legacy;
+        self.definition_scope = previous;
         result
     }
 }

@@ -246,6 +246,117 @@ async fn test_legacy_view_cte_resolution_is_scoped() -> Result<()> {
     Ok(())
 }
 
+// Scalar subqueries are bound by binders that the type checker creates from a
+// `BindContext`, so they only see the view's definition scope through that
+// context. Cover each place that builds the context for such a subquery.
+const SUBQUERY_POSITIONS: &[(&str, &str, i32)] = &[
+    ("select", "SELECT (SELECT n FROM {c}) AS n", 7),
+    (
+        "where",
+        "SELECT n FROM {base} WHERE n < (SELECT n FROM {c})",
+        1,
+    ),
+    (
+        "join_on",
+        "SELECT x.n FROM {base} x JOIN {base} y ON x.n + 6 = (SELECT n FROM {c})",
+        1,
+    ),
+    (
+        "having",
+        "SELECT count(*)::INT AS n FROM {base} HAVING count(*) < (SELECT n FROM {c})",
+        1,
+    ),
+    (
+        "qualify",
+        "SELECT n FROM {base} QUALIFY row_number() OVER (ORDER BY n) < (SELECT n FROM {c})",
+        1,
+    ),
+    (
+        "order_by",
+        "SELECT n FROM {base} ORDER BY (SELECT n FROM {c})",
+        1,
+    ),
+    (
+        "in",
+        "SELECT n FROM {base} WHERE n + 6 IN (SELECT n FROM {c})",
+        1,
+    ),
+    (
+        "exists",
+        "SELECT n FROM {base} WHERE EXISTS (SELECT 1 FROM {c})",
+        1,
+    ),
+    (
+        "union",
+        "SELECT n FROM {base} WHERE n > 1 UNION ALL SELECT (SELECT n FROM {c})",
+        7,
+    ),
+    (
+        "lateral",
+        "SELECT l.n FROM {base} b, LATERAL (SELECT n FROM {c} WHERE n > b.n) l",
+        7,
+    ),
+    ("nested", "SELECT (SELECT (SELECT n FROM {c}) AS n) AS n", 7),
+    (
+        "derived",
+        "SELECT (SELECT max(n) FROM (SELECT n FROM {c}) s) AS n",
+        7,
+    ),
+];
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_view_scope_reaches_scalar_subqueries() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    for sql in [
+        "CREATE DATABASE legacy_cte",
+        "CREATE TABLE legacy_cte.base(n INT)",
+        "INSERT INTO legacy_cte.base VALUES (1)",
+        "CREATE DATABASE scope_ns",
+        "CREATE TABLE scope_ns.base(n INT)",
+        "INSERT INTO scope_ns.base VALUES (1)",
+        "CREATE TABLE scope_ns.c(n INT)",
+        "INSERT INTO scope_ns.c VALUES (7)",
+    ] {
+        execute_command(ctx.clone(), sql).await?;
+    }
+    // Query from `default`, where neither `base` nor `c` exists, so falling back
+    // to the session scope fails instead of returning a plausible value.
+    assert_eq!(ctx.get_current_database(), "default");
+
+    for (name, body, expected) in SUBQUERY_POSITIONS {
+        // Legacy: `legacy_cte.c` only names the CTE, so strict resolution would
+        // look for a nonexistent table.
+        let view = format!("v_{name}");
+        let legacy = body
+            .replace("{base}", "legacy_cte.base")
+            .replace("{c}", "legacy_cte.c");
+        register_legacy_view(
+            &ctx,
+            &view,
+            &format!("WITH c AS (SELECT 7::INT AS n) {legacy}"),
+        )
+        .await?;
+        let sql = format!("SELECT * FROM legacy_cte.{view}");
+        if let Err(e) = assert_numbers(&ctx, &sql, &[&[*expected]]).await {
+            panic!("{sql}: {e}");
+        }
+
+        // Stored namespace: unqualified tables resolve in the view's database.
+        let strict = body.replace("{base}", "base").replace("{c}", "c");
+        execute_command(
+            ctx.clone(),
+            &format!("CREATE VIEW scope_ns.{view} AS {strict}"),
+        )
+        .await?;
+        let sql = format!("SELECT * FROM scope_ns.{view}");
+        if let Err(e) = assert_numbers(&ctx, &sql, &[&[*expected]]).await {
+            panic!("{sql}: {e}");
+        }
+    }
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_legacy_view_schema_readers() -> Result<()> {
     let fixture = TestFixture::setup().await?;
@@ -390,7 +501,7 @@ async fn test_legacy_definition_cache_isolation() -> Result<()> {
             .any(|table| table.name() == "t")
     );
 
-    let mut legacy = Planner::new(ctx.clone()).with_stored_query_namespace(&BTreeMap::new());
+    let mut legacy = Planner::new(ctx.clone()).with_stored_definition(&BTreeMap::new());
     let (plan, _) = legacy.plan_sql(sql).await?;
     let Plan::Query {
         metadata,

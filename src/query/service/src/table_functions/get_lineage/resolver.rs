@@ -314,7 +314,7 @@ impl ObjectResolver {
                     return Ok(None);
                 };
                 let mut planner =
-                    Planner::new(self.ctx.clone()).with_stored_query_namespace(table.options());
+                    Planner::new(self.ctx.clone()).with_stored_definition(table.options());
                 let plan = match planner.bind_sql(query).await {
                     Ok(result) => result,
                     Err(error) => {

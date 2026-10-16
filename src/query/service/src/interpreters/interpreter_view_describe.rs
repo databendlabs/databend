@@ -64,8 +64,8 @@ impl Interpreter for DescribeViewInterpreter {
             let engine = table.get_table_info().engine();
             let schema = if engine == VIEW_ENGINE {
                 if let Some(query) = tbl_info.options().get(QUERY) {
-                    let mut planner = Planner::new(self.ctx.clone())
-                        .with_stored_query_namespace(tbl_info.options());
+                    let mut planner =
+                        Planner::new(self.ctx.clone()).with_stored_definition(tbl_info.options());
                     let (plan, _) = planner.plan_sql(query).await?;
                     infer_table_schema(&plan.schema())
                 } else {

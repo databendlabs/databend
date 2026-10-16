@@ -37,7 +37,6 @@ use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_storages_common_table_meta::table::stored_query_namespace;
 use derive_visitor::DriveMut;
 use log::info;
 use log::warn;
@@ -48,6 +47,7 @@ use super::semantic::DistinctToGroupBy;
 use super::statement_settings::apply_statement_settings;
 use crate::Binder;
 use crate::CountSetOps;
+use crate::DefinitionScope;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::VariableNormalizer;
@@ -62,8 +62,7 @@ const PROBE_INSERT_INITIAL_TOKENS: usize = 128;
 pub struct Planner {
     pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) query_executor: Option<Arc<dyn QueryExecutor>>,
-    default_table_namespace: Option<(String, String)>,
-    legacy_cte_resolution: bool,
+    definition_scope: DefinitionScope,
 }
 
 #[derive(Debug, Clone)]
@@ -77,8 +76,7 @@ impl Planner {
         Planner {
             ctx,
             query_executor: None,
-            default_table_namespace: None,
-            legacy_cte_resolution: false,
+            definition_scope: DefinitionScope::session(),
         }
     }
 
@@ -89,36 +87,23 @@ impl Planner {
         Planner {
             ctx,
             query_executor: Some(query_executor),
-            default_table_namespace: None,
-            legacy_cte_resolution: false,
+            definition_scope: DefinitionScope::session(),
         }
     }
 
-    /// Bind unqualified tables in a stored definition's namespace, without changing
-    /// the session database or the scope used to resolve CTEs.
-    pub fn with_default_table_namespace(mut self, namespace: Option<(String, String)>) -> Self {
-        self.default_table_namespace = namespace;
+    /// Bind SQL in `scope` rather than the session's, without changing the session.
+    pub fn with_definition_scope(mut self, scope: DefinitionScope) -> Self {
+        self.definition_scope = scope;
         self
     }
 
-    pub fn with_legacy_cte_resolution(mut self, enable: bool) -> Self {
-        self.legacy_cte_resolution = enable;
-        self
-    }
-
-    /// Bind an existing stored definition. Definitions written before namespace metadata
-    /// was introduced retain qualified CTE lookup; ordinary SQL is strict by default.
-    pub fn with_stored_query_namespace(
+    /// Bind an existing stored definition as it was written, given its table options.
+    /// See [`DefinitionScope::from_stored_options`].
+    pub fn with_stored_definition(
         self,
         options: &std::collections::BTreeMap<String, String>,
     ) -> Self {
-        self.with_stored_query_namespace_value(stored_query_namespace(options))
-    }
-
-    pub fn with_stored_query_namespace_value(self, namespace: Option<(String, String)>) -> Self {
-        let legacy = namespace.is_none();
-        self.with_default_table_namespace(namespace)
-            .with_legacy_cte_resolution(legacy)
+        self.with_definition_scope(DefinitionScope::from_stored_options(options))
     }
 
     #[async_backtrace::framed]
@@ -149,8 +134,7 @@ impl Planner {
             Metadata::default_ref(),
         )
         .with_subquery_executor(self.query_executor.clone())
-        .with_default_table_namespace(self.default_table_namespace.clone())
-        .with_legacy_cte_resolution(self.legacy_cte_resolution);
+        .with_definition_scope(self.definition_scope.clone());
         // Attach before bind for the same reason as `plan_stmt`: table sources such as
         // ParquetRSTable::create read the query string during binding.
         self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
@@ -342,17 +326,14 @@ impl Planner {
         // Step 3: Bind AST with catalog, and generate a pure logical SExpr
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
 
-        // The session-based cache key describes neither a stored namespace nor legacy
-        // CTE resolution. The same SQL can bind differently in an old definition and
-        // as an ordinary (strict) query.
-        let plan_cache_context = if enable_materialized_view_rewrite
-            && self.default_table_namespace.is_none()
-            && !self.legacy_cte_resolution
-        {
-            self.build_plan_cache_context(name_resolution_ctx.clone(), stmt)?
-        } else {
-            None
-        };
+        // The session-based cache key does not describe a definition scope: the same
+        // SQL can bind differently in a stored definition and as an ordinary query.
+        let plan_cache_context =
+            if enable_materialized_view_rewrite && self.definition_scope.is_session() {
+                self.build_plan_cache_context(name_resolution_ctx.clone(), stmt)?
+            } else {
+                None
+            };
 
         if let Some(cache_ctx) = &plan_cache_context {
             if let Some(plan) = self.get_cache(cache_ctx) {
@@ -375,8 +356,7 @@ impl Planner {
         )
         .with_materialized_view_rewrite(enable_materialized_view_rewrite)
         .with_subquery_executor(self.query_executor.clone())
-        .with_default_table_namespace(self.default_table_namespace.clone())
-        .with_legacy_cte_resolution(self.legacy_cte_resolution);
+        .with_definition_scope(self.definition_scope.clone());
 
         // must attach before bind, because ParquetRSTable::create used it.
         self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());

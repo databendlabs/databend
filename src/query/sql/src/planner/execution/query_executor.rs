@@ -17,19 +17,20 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
+use crate::DefinitionScope;
+
 #[async_trait]
 pub trait QueryExecutor: Send + Sync {
     async fn execute_query_with_sql_string(&self, sql: &str) -> Result<Vec<DataBlock>>;
 
-    /// Execute a materialized CTE producer with its definition's namespace and
-    /// CTE resolution policy, without changing the enclosing session.
-    async fn execute_query_in_namespace(
+    /// Execute a materialized CTE producer in its definition's scope, without
+    /// changing the enclosing session.
+    async fn execute_query_in_scope(
         &self,
         sql: &str,
-        namespace: Option<(String, String)>,
-        legacy_cte_resolution: bool,
+        scope: DefinitionScope,
     ) -> Result<Vec<DataBlock>> {
-        if namespace.is_some() || legacy_cte_resolution {
+        if !scope.is_session() {
             return Err(ErrorCode::Unimplemented(
                 "Query executor does not support a stored query binding context",
             ));
