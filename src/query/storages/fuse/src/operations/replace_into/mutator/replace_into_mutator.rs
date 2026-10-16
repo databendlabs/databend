@@ -90,6 +90,11 @@ impl ReplaceIntoMutator {
             partitioner,
         })
     }
+
+    /// Releases the keys seen so far once all input has been deduplicated.
+    pub fn release_seen_keys(&mut self) {
+        self.key_saw = HashSet::new();
+    }
 }
 
 enum ColumnHash {
