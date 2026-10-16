@@ -171,6 +171,13 @@ impl BlockPartitionStream {
         ready_blocks
     }
 
+    /// Drops every partition builder, including the capacity a flush reserves
+    /// for partitions that received no rows since. Call once the stream ends.
+    pub fn reset(&mut self) {
+        self.initialize = false;
+        self.partitions = vec![];
+    }
+
     pub fn partition_ids(&self) -> Vec<usize> {
         let mut partition_ids = vec![];
 
