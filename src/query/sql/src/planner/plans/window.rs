@@ -103,7 +103,11 @@ impl WindowGroup {
         Ok(used_columns)
     }
 
-    fn required_distribution(&self, rel_expr: &RelExpr) -> Result<Distribution> {
+    fn required_distribution(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
+    ) -> Result<Distribution> {
         let Some(first) = self.windows.first() else {
             return Ok(Distribution::Any);
         };
@@ -127,7 +131,7 @@ impl WindowGroup {
             return Ok(Distribution::Serial);
         }
 
-        let child_physical_prop = rel_expr.derive_physical_prop_child(0)?;
+        let child_physical_prop = rel_expr.derive_enforced_physical_prop_child(ctx, 0)?;
         if child_physical_prop.distribution == Distribution::Serial {
             return Ok(Distribution::Serial);
         }
@@ -137,6 +141,19 @@ impl WindowGroup {
 }
 
 impl Window {
+    /// A partitioned window reads its input as sorted by its partition sort, so
+    /// nothing may be exchanged in between: the parent's distribution is enforced
+    /// above the window instead of being passed down.
+    fn required_input(&self) -> RequiredProperty {
+        RequiredProperty {
+            distribution: if self.partition_by.is_empty() {
+                Distribution::Serial
+            } else {
+                Distribution::Any
+            },
+        }
+    }
+
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
         self.collect_used_columns(&mut used_columns)?;
@@ -499,13 +516,13 @@ impl Operator for WindowGroup {
 
     fn compute_required_prop_child(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         rel_expr: &RelExpr,
         _child_index: usize,
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         let mut required = required.clone();
-        match self.required_distribution(rel_expr)? {
+        match self.required_distribution(ctx, rel_expr)? {
             Distribution::Any => {}
             distribution => required.distribution = distribution,
         }
@@ -514,12 +531,12 @@ impl Operator for WindowGroup {
 
     fn compute_required_prop_children(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         rel_expr: &RelExpr,
         required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
         let mut required = required.clone();
-        match self.required_distribution(rel_expr)? {
+        match self.required_distribution(ctx, rel_expr)? {
             Distribution::Any => {}
             distribution => required.distribution = distribution,
         }
@@ -612,26 +629,18 @@ impl Operator for Window {
         _ctx: Arc<dyn TableContext>,
         _rel_expr: &RelExpr,
         _child_index: usize,
-        required: &RequiredProperty,
+        _required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        let mut required = required.clone();
-        if self.partition_by.is_empty() {
-            required.distribution = Distribution::Serial;
-        }
-        Ok(required.clone())
+        Ok(self.required_input())
     }
 
     fn compute_required_prop_children(
         &self,
         _ctx: Arc<dyn TableContext>,
         _rel_expr: &RelExpr,
-        required: &RequiredProperty,
+        _required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
-        let mut required = required.clone();
-        if self.partition_by.is_empty() {
-            required.distribution = Distribution::Serial;
-        }
-        Ok(vec![vec![required.clone()]])
+        Ok(vec![vec![self.required_input()]])
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {

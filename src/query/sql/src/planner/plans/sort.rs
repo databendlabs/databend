@@ -150,7 +150,7 @@ impl Operator for Sort {
 
     fn compute_required_prop_child(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         rel_expr: &RelExpr,
         _child_index: usize,
         required: &RequiredProperty,
@@ -162,7 +162,7 @@ impl Operator for Sort {
             return Ok(required);
         };
 
-        let child_physical_prop = rel_expr.derive_physical_prop_child(0)?;
+        let child_physical_prop = rel_expr.derive_enforced_physical_prop_child(ctx, 0)?;
         // Can't merge to shuffle
         if child_physical_prop.distribution == Distribution::Serial {
             return Ok(required);
@@ -176,7 +176,7 @@ impl Operator for Sort {
 
     fn compute_required_prop_children(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         rel_expr: &RelExpr,
         required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
@@ -188,7 +188,7 @@ impl Operator for Sort {
         };
 
         // Can't merge to shuffle
-        let child_physical_prop = rel_expr.derive_physical_prop_child(0)?;
+        let child_physical_prop = rel_expr.derive_enforced_physical_prop_child(ctx, 0)?;
         if child_physical_prop.distribution == Distribution::Serial {
             return Ok(vec![vec![required]]);
         }

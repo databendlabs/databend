@@ -25,6 +25,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::ColumnSet;
 use crate::Symbol;
+use crate::binder::wrap_cast;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::JoinStatsEstimator;
 use crate::optimizer::ir::PhysicalProperty;
@@ -363,6 +364,33 @@ impl Default for Join {
 }
 
 impl Join {
+    /// Hash keys to shuffle both inputs by, cast to the type the keys are
+    /// compared in, as `PropertyEnforcer` and the physical hash join do. Both
+    /// sides must hash the same type, or equal keys land on different nodes;
+    /// this also keeps an input hashed by an uncast key from satisfying the
+    /// requirement. `None` if a key pair has no common type to hash.
+    fn shuffle_keys(&self) -> Option<(Vec<ScalarExpr>, Vec<ScalarExpr>)> {
+        let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
+        let mut left_keys = Vec::with_capacity(self.equi_conditions.len());
+        let mut right_keys = Vec::with_capacity(self.equi_conditions.len());
+        for condition in &self.equi_conditions {
+            let left_type = condition.left.data_type().into_owned();
+            let right_type = condition.right.data_type().into_owned();
+            let common_type = common_super_type(left_type.clone(), right_type.clone(), cast_rules)?;
+            for (key, data_type, keys) in [
+                (&condition.left, left_type, &mut left_keys),
+                (&condition.right, right_type, &mut right_keys),
+            ] {
+                keys.push(if data_type == common_type {
+                    key.clone()
+                } else {
+                    wrap_cast(key, &common_type)
+                });
+            }
+        }
+        Some((left_keys, right_keys))
+    }
+
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
         for condition in &self.equi_conditions {
@@ -833,18 +861,9 @@ impl Operator for Join {
         let settings = ctx.get_settings();
         if !matches!(self.join_type, JoinType::Cross) && !settings.get_enforce_broadcast_join()? {
             // (Hash, Hash) – use full equi-join key set to avoid single-column hash shuffle
-            let left_keys: Vec<_> = self
-                .equi_conditions
-                .iter()
-                .map(|condition| condition.left.clone())
-                .collect();
-            let right_keys: Vec<_> = self
-                .equi_conditions
-                .iter()
-                .map(|condition| condition.right.clone())
-                .collect();
-
-            if !left_keys.is_empty() {
+            if let Some((left_keys, right_keys)) = self.shuffle_keys()
+                && !left_keys.is_empty()
+            {
                 children_required.push(vec![
                     RequiredProperty {
                         distribution: Distribution::GlobalHash(left_keys),
