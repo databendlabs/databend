@@ -107,7 +107,7 @@ impl Interpreter for RefreshDynamicTableInterpreter {
             // crafted name break out of its quoting -- in a write path. Only the stored definition,
             // which the system itself serialized, is parsed here.
             let mut planner = Planner::new(self.ctx.clone())
-                .with_stored_query_namespace(table.get_table_info().options());
+                .with_stored_definition(table.get_table_info().options());
             let (select_plan, _) = planner.plan_sql(&query).await?;
             // Check the exact source plan executed below, including source SELECT and UDF access.
             Accessor::create(self.ctx.clone())

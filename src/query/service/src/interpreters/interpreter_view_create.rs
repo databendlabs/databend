@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_sql::DefinitionScope;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::CreateViewPlan;
 use databend_common_sql::plans::Plan;
@@ -62,10 +63,12 @@ impl Interpreter for CreateViewInterpreter {
             let tenant = self.ctx.get_tenant();
             let table_function = catalog.list_table_functions();
             let mut options = BTreeMap::new();
-            let mut planner = Planner::new(self.ctx.clone()).with_default_table_namespace(Some((
-                self.plan.catalog.clone(),
-                self.plan.database.clone(),
-            )));
+            let mut planner = Planner::new(self.ctx.clone()).with_definition_scope(
+                DefinitionScope::in_namespace(
+                    self.plan.catalog.clone(),
+                    self.plan.database.clone(),
+                ),
+            );
             let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
             match plan.clone() {
                 Plan::Query { metadata, .. } => {

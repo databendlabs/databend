@@ -43,6 +43,7 @@ use databend_storages_common_table_meta::table::is_stream_name;
 use super::Any;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::DefinitionScope;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::ScalarExpr;
@@ -99,12 +100,9 @@ pub struct Binder {
     /// Binder-local table instances that take precedence over catalog resolution.
     pub pre_resolved_tables: HashMap<(String, String, String), Arc<dyn Table>>,
 
-    /// Default catalog/database for unqualified tables in a stored query definition.
-    /// CTE lookup still happens first, subject to the definition's CTE resolution mode.
-    pub(crate) default_table_namespace: Option<(String, String)>,
-
-    /// Preserve qualified CTE lookup only while binding a legacy stored definition.
-    pub(crate) legacy_cte_resolution: bool,
+    /// Where the SQL being bound was written. Authoritative: `BindContext` only
+    /// carries a copy for binders created without access to this one.
+    pub(crate) definition_scope: DefinitionScope,
 
     pub enable_result_cache: bool,
 
@@ -139,22 +137,27 @@ impl Binder {
             bind_recursive_cte: None,
             m_cte_table_name: HashMap::new(),
             pre_resolved_tables: HashMap::new(),
-            default_table_namespace: None,
-            legacy_cte_resolution: false,
+            definition_scope: DefinitionScope::session(),
             enable_result_cache,
             enable_materialized_view_rewrite,
             subquery_executor: None,
         }
     }
 
-    pub fn with_default_table_namespace(mut self, namespace: Option<(String, String)>) -> Self {
-        self.default_table_namespace = namespace;
+    pub fn with_definition_scope(mut self, scope: DefinitionScope) -> Self {
+        self.definition_scope = scope;
         self
     }
 
-    pub fn with_legacy_cte_resolution(mut self, enable: bool) -> Self {
-        self.legacy_cte_resolution = enable;
-        self
+    /// Checks that `bind_context` carries this binder's definition scope. A
+    /// mismatch means some `BindContext` was built without copying it, and binders
+    /// created from that context (e.g. for scalar subqueries) would fall back to
+    /// another scope.
+    pub(crate) fn debug_assert_definition_scope(&self, bind_context: &BindContext) {
+        debug_assert_eq!(
+            bind_context.definition_scope, self.definition_scope,
+            "BindContext definition scope diverged from the binder's"
+        );
     }
 
     pub fn with_materialized_view_rewrite(mut self, enable: bool) -> Self {
@@ -201,10 +204,9 @@ impl Binder {
 
                 // Remove unused cache columns and join conditions and construct ExpressionScan's child.
                 (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
-                // A stored namespace or legacy CTE resolution can change the meaning
-                // of identical SQL text, so do not share ordinary result-cache keys.
-                let formatted_ast = if !self.legacy_cte_resolution
-                    && self.default_table_namespace.is_none()
+                // A stored definition scope can change the meaning of identical SQL
+                // text, so do not share ordinary result-cache keys.
+                let formatted_ast = if self.definition_scope.is_session()
                     && self.ctx.get_settings().get_enable_query_result_cache()?
                 {
                     Some(stmt.to_string())

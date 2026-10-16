@@ -148,8 +148,8 @@ impl TableIdentifier {
             None => Identifier {
                 span: None,
                 name: binder
-                    .default_table_namespace
-                    .as_ref()
+                    .definition_scope
+                    .namespace()
                     .map(|(catalog, _)| catalog.clone())
                     .unwrap_or_else(|| ctx.get_current_catalog()),
                 quote: Some(dialect.default_ident_quote()),
@@ -166,8 +166,8 @@ impl TableIdentifier {
             None => Identifier {
                 span: None,
                 name: binder
-                    .default_table_namespace
-                    .as_ref()
+                    .definition_scope
+                    .namespace()
                     .map(|(_, database)| database.clone())
                     .unwrap_or_else(|| ctx.get_current_database()),
                 quote: Some(dialect.default_ident_quote()),

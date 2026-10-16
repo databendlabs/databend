@@ -51,6 +51,7 @@ use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
 use crate::ColumnEntry;
 use crate::ColumnSet;
+use crate::DefinitionScope;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
@@ -275,10 +276,11 @@ pub struct BindContext {
 
     pub cte_context: CteContext,
 
-    /// Inherited by scalar-subquery binders created from this context.
-    pub default_table_namespace: Option<(String, String)>,
-    /// Inherited by scalar subqueries, but restored when returning from a view.
-    pub legacy_cte_resolution: bool,
+    /// A copy of the binder's definition scope, for binders that the type checker
+    /// creates from this context (scalar subqueries) without access to the binder.
+    /// Every `BindContext` built during binding must copy it; the binder checks this
+    /// with `Binder::debug_assert_definition_scope`. Restored on return from a view.
+    pub definition_scope: DefinitionScope,
 
     /// True if there is aggregation in current context, which means
     /// non-grouping columns cannot be referenced outside aggregation
@@ -397,8 +399,7 @@ impl BindContext {
             windows: WindowInfo::default(),
             srf_info: SetReturningInfo::default(),
             cte_context: CteContext::default(),
-            default_table_namespace: None,
-            legacy_cte_resolution: false,
+            definition_scope: DefinitionScope::session(),
             in_grouping: false,
             binding_views: HashSet::new(),
             have_async_func: false,
@@ -449,8 +450,7 @@ impl BindContext {
             windows: Default::default(),
             srf_info: Default::default(),
             cte_context: parent.cte_context.clone(),
-            default_table_namespace: parent.default_table_namespace.clone(),
-            legacy_cte_resolution: parent.legacy_cte_resolution,
+            definition_scope: parent.definition_scope.clone(),
             in_grouping: false,
             binding_views: parent.binding_views.clone(),
             have_async_func: false,
@@ -472,8 +472,7 @@ impl BindContext {
         bind_context.parent = self.parent.clone();
         bind_context.binding_depth = self.depth();
         bind_context.cte_context = self.cte_context.clone();
-        bind_context.default_table_namespace = self.default_table_namespace.clone();
-        bind_context.legacy_cte_resolution = self.legacy_cte_resolution;
+        bind_context.definition_scope = self.definition_scope.clone();
         bind_context.udf_cache = self.udf_cache.clone();
         bind_context.binding_views = self.binding_views.clone();
         bind_context
