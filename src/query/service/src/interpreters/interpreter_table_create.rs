@@ -765,7 +765,7 @@ impl CreateTableInterpreter {
     async fn write_clone_anchor(
         target: &FuseTable,
         staged_table_meta: &mut TableMeta,
-        snapshot: &TableSnapshot,
+        snapshot: &Arc<TableSnapshot>,
     ) -> Result<()> {
         let cluster_key_info = staged_table_meta.cluster_key_meta().map(|cluster_key| {
             ClusterKeyInfo::new(
@@ -773,6 +773,13 @@ impl CreateTableInterpreter {
                 cluster_type_from_options(&staged_table_meta.options),
             )
         });
+        // Share external statistics only if fresh for the selected source snapshot. The new root
+        // has no predecessor and would otherwise accept stale statistics with the same row count.
+        let statistics_location = target
+            .read_table_snapshot_statistics(Some(snapshot))
+            .await?
+            .filter(|statistics| statistics.is_fresh_for(snapshot))
+            .and_then(|_| snapshot.table_statistics_location.clone());
         let anchor = TableSnapshot::try_new(
             None,
             None,
@@ -780,7 +787,7 @@ impl CreateTableInterpreter {
             snapshot.summary.clone(),
             snapshot.segments.clone(),
             cluster_key_info,
-            None,
+            statistics_location,
             TableMetaTimestamps::new(None, Duration::zero()),
         )?;
         let anchor_location = target

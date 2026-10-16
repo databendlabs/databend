@@ -8,7 +8,13 @@ statement ok
 CREATE DATABASE db_05_clone
 
 statement ok
-CREATE DATABASE db_05_clone_target
+CREATE CONNECTION IF NOT EXISTS clone_target_defaults STORAGE_TYPE = 'fs'
+
+statement ok
+CREATE DATABASE db_05_clone_target OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'clone_target_defaults',
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/05_clone_defaults/'
+)
 
 statement ok
 USE db_05_clone
@@ -43,6 +49,16 @@ SELECT (SELECT count(*) FROM empty_source), (SELECT count(*) FROM empty_clone)
 ----
 0 1
 
+# Ordinary tables inherit target database defaults; CLONE stays on the source's managed storage.
+statement ok
+CREATE TABLE db_05_clone_target.uses_defaults(id INT)
+
+query T
+SELECT storage_param FROM system.tables
+WHERE database = 'db_05_clone_target' AND name = 'uses_defaults'
+----
+fs | root=/tmp/05_clone_defaults/
+
 # Cross-database clones are independent tables.
 statement ok
 CREATE TABLE cross_source(id INT)
@@ -52,6 +68,13 @@ INSERT INTO cross_source VALUES (1)
 
 statement ok
 CREATE TABLE db_05_clone_target.cross_clone CLONE db_05_clone.cross_source
+
+query I
+SELECT count(*) FROM system.tables
+WHERE database = 'db_05_clone_target' AND name = 'cross_clone'
+  AND NOT is_external AND storage_param = ''
+----
+1
 
 statement ok
 INSERT INTO db_05_clone_target.cross_clone VALUES (2)
@@ -297,6 +320,9 @@ WHERE database = 'db_05_clone'
 
 statement ok
 DROP DATABASE db_05_clone_target
+
+statement ok
+DROP CONNECTION clone_target_defaults
 
 statement ok
 DROP DATABASE db_05_clone

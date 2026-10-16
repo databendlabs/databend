@@ -617,6 +617,7 @@ impl FuseTable {
     where
         T: Fn(String),
     {
+        // TODO: benchmark descendant-history scans for large clone groups under auto VACUUM.
         let clone_group_id = self.clone_group_id()?;
         let bindings = catalog.list_clone_group_bindings(clone_group_id).await?;
         let descendant_ids = Self::clone_descendant_ids(clone_group_id, self.get_id(), &bindings)?;

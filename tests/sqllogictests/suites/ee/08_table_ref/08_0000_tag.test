@@ -37,6 +37,10 @@ ALTER TABLE t1 CREATE TAG v1_0;
 statement ok
 INSERT INTO t1 VALUES (1, 'a'), (2, 'b'), (3, 'c')
 
+## Missing timestamp history is an error, not an empty table or an empty TAG.
+statement error 2013
+ALTER TABLE t1 CREATE TAG before_history AT (TIMESTAMP => '1970-01-01'::TIMESTAMP)
+
 query IT
 SELECT * FROM t1 ORDER BY a
 ----

@@ -70,6 +70,94 @@ async fn test_clone_feature_gate_at_execution() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_clone_inherits_only_fresh_selected_snapshot_statistics() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.enable_experimental_clone_table()?;
+    fixture.create_default_database().await?;
+    let database = fixture.default_db_name();
+    let source_name = format!("{database}.stats_source");
+    for sql in [
+        format!(
+            "CREATE TABLE {source_name}(id INT) analyze_frequency_columns = 'id' \
+             analyze_top_n_size = 3 analyze_count_min_sketch_error_rate = '0.01'"
+        ),
+        format!("INSERT INTO {source_name} VALUES (1), (1), (2)"),
+        format!("ANALYZE TABLE {source_name}"),
+    ] {
+        fixture.execute_command(&sql).await?;
+    }
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let source = catalog
+        .get_table(&tenant, &database, "stats_source")
+        .await?;
+    let source = FuseTable::try_from_table(source.as_ref())?;
+    let fresh = source.read_table_snapshot().await?.unwrap();
+    let statistics = source
+        .read_table_snapshot_statistics(Some(&fresh))
+        .await?
+        .unwrap();
+    assert!(statistics.is_fresh_for(&fresh));
+    assert!(fresh.table_statistics_location.is_some());
+
+    // Schema DDL preserves row count and the statistics file, but makes its snapshot stamp stale.
+    fixture
+        .execute_command(&format!(
+            "ALTER TABLE {source_name} ADD COLUMN extra INT NULL"
+        ))
+        .await?;
+    let source = catalog
+        .get_table(&tenant, &database, "stats_source")
+        .await?;
+    let stale = FuseTable::try_from_table(source.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+    assert_eq!(fresh.summary.row_count, stale.summary.row_count);
+    assert_eq!(
+        fresh.table_statistics_location,
+        stale.table_statistics_location
+    );
+    assert!(!statistics.is_fresh_for(&stale));
+
+    // The current source is stale, but explicitly selecting the earlier fresh snapshot must
+    // still inherit its file. A new root must not turn the stale current statistics fresh again.
+    for (name, point, inherit) in [
+        (
+            "fresh_stats",
+            format!(" AT (SNAPSHOT => '{}')", fresh.snapshot_id.simple()),
+            true,
+        ),
+        ("stale_stats", String::new(), false),
+    ] {
+        fixture
+            .execute_command(&format!(
+                "CREATE TABLE {database}.{name} CLONE {source_name}{point}"
+            ))
+            .await?;
+        let cloned = catalog.get_table(&tenant, &database, name).await?;
+        let anchor = FuseTable::try_from_table(cloned.as_ref())?
+            .read_table_snapshot()
+            .await?
+            .unwrap();
+        assert!(anchor.prev_snapshot_id.is_none());
+        assert_eq!(
+            anchor.table_statistics_location.as_ref(),
+            if inherit {
+                fresh.table_statistics_location.as_ref()
+            } else {
+                None
+            }
+        );
+        let provider = cloned.column_statistics_provider(ctx.clone()).await?;
+        assert_eq!(provider.top_n(0).is_some(), inherit);
+        assert_eq!(provider.count_min_sketch(0).is_some(), inherit);
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_clone_source_refresh_rechecks_computed_column_license() -> anyhow::Result<()> {
     // Bind a plain schema, then change the source before execution to force a refresh.
     // SQL tests cannot deterministically interleave binding and execution of one plan.

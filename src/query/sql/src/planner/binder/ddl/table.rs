@@ -736,6 +736,8 @@ impl Binder {
             schema: source_info.meta.schema.clone(),
             engine: Engine::Fuse,
             engine_options: Default::default(),
+            // A clone stays on the source's managed storage, ignoring target database defaults.
+            // New objects use the target's own prefix in that storage.
             storage_params: None,
             options,
             table_properties: None,
