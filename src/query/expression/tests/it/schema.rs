@@ -299,7 +299,11 @@ fn test_internal_column_ids_do_not_overflow() -> anyhow::Result<()> {
     assert_eq!(next_column_id, ROW_ID_COLUMN_ID);
 
     let mut schema = TableSchema::new(vec![TableField::new("a", TableDataType::Boolean)]);
-    schema.add_internal_field(ROW_ID_COL_NAME, row_id.data_type().clone(), ROW_ID_COLUMN_ID);
+    schema.add_internal_field(
+        ROW_ID_COL_NAME,
+        row_id.data_type().clone(),
+        ROW_ID_COLUMN_ID,
+    );
     assert_eq!(schema.next_column_id(), 1);
     assert!(!schema.is_column_deleted(ROW_ID_COLUMN_ID));
     // A missing ID makes the lookup walk past the internal column.
