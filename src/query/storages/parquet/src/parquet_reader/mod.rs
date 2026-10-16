@@ -17,7 +17,7 @@ mod read_policy;
 mod reader;
 pub mod row_group;
 mod topk;
-mod utils;
+pub(crate) mod utils;
 
 pub use read_policy::*;
 pub use reader::InmMemoryFile;
