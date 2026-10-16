@@ -30,7 +30,16 @@ use crate::framework::golden::open_golden_file;
 use crate::framework::golden::write_case_header;
 
 const TABLE_SQL: &str = "CREATE TABLE t(k Int64 NOT NULL, v Int64 NOT NULL)";
-const SETUP_SQLS: &[&str] = &[TABLE_SQL];
+// Join keys of other types than the window partition key.
+const NARROW_TABLE_SQL: &str = "CREATE TABLE narrow(k Int32 NOT NULL, v Int64 NOT NULL)";
+const UNSIGNED_TABLE_SQL: &str = "CREATE TABLE unsigned(k UInt64 NOT NULL)";
+const VARIANT_TABLE_SQL: &str = "CREATE TABLE variant(raw Variant, v Int64 NOT NULL)";
+const SETUP_SQLS: &[&str] = &[
+    TABLE_SQL,
+    NARROW_TABLE_SQL,
+    UNSIGNED_TABLE_SQL,
+    VARIANT_TABLE_SQL,
+];
 
 async fn distributed_context() -> Result<Arc<LiteTableContext>> {
     let ctx = LiteTableContext::create().await?;
@@ -38,13 +47,15 @@ async fn distributed_context() -> Result<Arc<LiteTableContext>> {
     ctx.set_table_warehouse_distribution(true);
     // Without row counts every distribution costs zero and ties are broken by
     // search order, so give the table a realistic size.
-    ctx.register_table_sql_with_stats(
-        TABLE_SQL,
-        Some(table_statistics(100_000_000)),
-        HashMap::new(),
-        HashMap::new(),
-    )
-    .await?;
+    for sql in SETUP_SQLS {
+        ctx.register_table_sql_with_stats(
+            sql,
+            Some(table_statistics(100_000_000)),
+            HashMap::new(),
+            HashMap::new(),
+        )
+        .await?;
+    }
     Ok(ctx)
 }
 
@@ -144,6 +155,24 @@ async fn test_distributed_window_cascades() -> Result<()> {
             description: "A partitioned window over a window without PARTITION BY stays on the merged input.",
             setup_sqls: SETUP_SQLS,
             sql: "SELECT k, sum(v) OVER (PARTITION BY k) FROM (SELECT k, v, row_number() OVER (ORDER BY v) AS rn FROM t) AS s",
+        },
+        SqlTestCase {
+            name: "join_hashes_window_input_by_common_key_type",
+            description: "A window input hashed by an Int32 key is shuffled again by the Int64 key a join compares with a UInt64 key, so both join inputs hash the same type.",
+            setup_sqls: SETUP_SQLS,
+            sql: "SETTINGS (enforce_shuffle_join = 1) SELECT u.k, s.rn FROM unsigned AS u JOIN (SELECT k, row_number() OVER (PARTITION BY k ORDER BY v) AS rn FROM narrow) AS s ON u.k = s.k",
+        },
+        SqlTestCase {
+            name: "join_on_column_other_than_partition_key",
+            description: "A join that hashes a window output by another column shuffles above the window, never between the window and its partition sort.",
+            setup_sqls: SETUP_SQLS,
+            sql: "SETTINGS (enforce_shuffle_join = 1) SELECT t.k, s.rn FROM t JOIN (SELECT k, v, row_number() OVER (PARTITION BY k ORDER BY v) AS rn FROM t) AS s ON t.k = s.v",
+        },
+        SqlTestCase {
+            name: "join_keys_without_common_type",
+            description: "Join keys without a common type are not shuffled by hash.",
+            setup_sqls: SETUP_SQLS,
+            sql: "SETTINGS (enforce_shuffle_join = 1) SELECT n.k, s.id FROM narrow AS n JOIN (SELECT raw:id AS id FROM variant QUALIFY row_number() OVER (PARTITION BY id ORDER BY v DESC) = 1) AS s ON n.k = s.id",
         },
         SqlTestCase {
             name: "order_without_partition",

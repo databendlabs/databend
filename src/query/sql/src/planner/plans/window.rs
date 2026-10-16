@@ -141,6 +141,19 @@ impl WindowGroup {
 }
 
 impl Window {
+    /// A partitioned window reads its input as sorted by its partition sort, so
+    /// nothing may be exchanged in between: the parent's distribution is enforced
+    /// above the window instead of being passed down.
+    fn required_input(&self) -> RequiredProperty {
+        RequiredProperty {
+            distribution: if self.partition_by.is_empty() {
+                Distribution::Serial
+            } else {
+                Distribution::Any
+            },
+        }
+    }
+
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
         self.collect_used_columns(&mut used_columns)?;
@@ -616,26 +629,18 @@ impl Operator for Window {
         _ctx: Arc<dyn TableContext>,
         _rel_expr: &RelExpr,
         _child_index: usize,
-        required: &RequiredProperty,
+        _required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        let mut required = required.clone();
-        if self.partition_by.is_empty() {
-            required.distribution = Distribution::Serial;
-        }
-        Ok(required.clone())
+        Ok(self.required_input())
     }
 
     fn compute_required_prop_children(
         &self,
         _ctx: Arc<dyn TableContext>,
         _rel_expr: &RelExpr,
-        required: &RequiredProperty,
+        _required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
-        let mut required = required.clone();
-        if self.partition_by.is_empty() {
-            required.distribution = Distribution::Serial;
-        }
-        Ok(vec![vec![required.clone()]])
+        Ok(vec![vec![self.required_input()]])
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {

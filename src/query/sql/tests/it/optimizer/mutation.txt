@@ -622,7 +622,7 @@ target_table: default.default.target
     └── Exchange(Hash)
         ├── Exchange(Hash): keys: [source.k (#0)]
         └── Exchange(Hash)
-            ├── Exchange(Hash): keys: [source.k (#0)]
+            ├── Exchange(Hash): keys: [CAST(source.k (#0) AS Int64 NULL)]
             └── Scan
                 ├── table: default.source (#0)
                 ├── filters: []
@@ -888,7 +888,7 @@ target_table: default.default.target
     └── Exchange(Hash)
         ├── Exchange(Hash): keys: [source.k (#0)]
         └── Exchange(Hash)
-            ├── Exchange(Hash): keys: [source.k (#0)]
+            ├── Exchange(Hash): keys: [CAST(source.k (#0) AS Int64 NULL)]
             └── Scan
                 ├── table: default.source (#0)
                 ├── filters: []

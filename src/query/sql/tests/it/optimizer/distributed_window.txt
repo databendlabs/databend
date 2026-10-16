@@ -231,6 +231,123 @@ Window
                         └── limit: NONE
 
 
+=== join_hashes_window_input_by_common_key_type ===
+description: A window input hashed by an Int32 key is shuffled again by the Int64 key a join compares with a UInt64 key, so both join inputs hash the same type.
+sql: SETTINGS (enforce_shuffle_join = 1) SELECT u.k, s.rn FROM unsigned AS u JOIN (SELECT k, row_number() OVER (PARTITION BY k ORDER BY v) AS rn FROM narrow) AS s ON u.k = s.k
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [unsigned.k (#0) AS (#0), row_number() OVER (PARTITION BY k ORDER BY v) (#3) AS (#3), narrow.k (#1) AS (#4)]
+    └── Join(Inner)
+        ├── build keys: [narrow.k (#1)]
+        ├── probe keys: [unsigned.k (#0)]
+        ├── other filters: []
+        ├── Exchange(Hash)
+        │   ├── Exchange(Hash): keys: [CAST(narrow.k (#1) AS Int64)]
+        │   └── Window
+        │       ├── aggregate function: row_number
+        │       ├── partition items: [narrow.k (#1) AS (#1)]
+        │       ├── order by items: [narrow.v (#2) AS (#2)]
+        │       ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        │       └── Sort
+        │           ├── sort keys: [narrow.k (#1) ASC NULLS LAST, narrow.v (#2) ASC NULLS LAST]
+        │           ├── limit: [NONE]
+        │           ├── window top: NONE
+        │           ├── window function: RowNumber
+        │           └── Exchange(Hash)
+        │               ├── Exchange(Hash): keys: [narrow.k (#1)]
+        │               └── Scan
+        │                   ├── table: default.narrow (#1)
+        │                   ├── filters: []
+        │                   ├── order by: [narrow.k (#1) ASC, narrow.v (#2) ASC]
+        │                   └── limit: NONE
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [CAST(unsigned.k (#0) AS Int64)]
+            └── Scan
+                ├── table: default.unsigned (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== join_on_column_other_than_partition_key ===
+description: A join that hashes a window output by another column shuffles above the window, never between the window and its partition sort.
+sql: SETTINGS (enforce_shuffle_join = 1) SELECT t.k, s.rn FROM t JOIN (SELECT k, v, row_number() OVER (PARTITION BY k ORDER BY v) AS rn FROM t) AS s ON t.k = s.v
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [t.k (#0) AS (#0), row_number() OVER (PARTITION BY k ORDER BY v) (#4) AS (#4), t.v (#3) AS (#5)]
+    └── Join(Inner)
+        ├── build keys: [t.v (#3)]
+        ├── probe keys: [t.k (#0)]
+        ├── other filters: []
+        ├── Exchange(Hash)
+        │   ├── Exchange(Hash): keys: [t.v (#3)]
+        │   └── Window
+        │       ├── aggregate function: row_number
+        │       ├── partition items: [t.k (#2) AS (#2)]
+        │       ├── order by items: [t.v (#3) AS (#3)]
+        │       ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        │       └── Sort
+        │           ├── sort keys: [t.k (#2) ASC NULLS LAST, t.v (#3) ASC NULLS LAST]
+        │           ├── limit: [NONE]
+        │           ├── window top: NONE
+        │           ├── window function: RowNumber
+        │           └── Exchange(Hash)
+        │               ├── Exchange(Hash): keys: [t.k (#2)]
+        │               └── Scan
+        │                   ├── table: default.t (#1)
+        │                   ├── filters: []
+        │                   ├── order by: [t.k (#2) ASC, t.v (#3) ASC]
+        │                   └── limit: NONE
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [t.k (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== join_keys_without_common_type ===
+description: Join keys without a common type are not shuffled by hash.
+sql: SETTINGS (enforce_shuffle_join = 1) SELECT n.k, s.id FROM narrow AS n JOIN (SELECT raw:id AS id FROM variant QUALIFY row_number() OVER (PARTITION BY id ORDER BY v DESC) = 1) AS s ON n.k = s.id
+EvalScalar
+├── scalars: [narrow.k (#0) AS (#0), id (#4) AS (#4), row_number() OVER (PARTITION BY id ORDER BY v DESC) (#7) AS (#8)]
+└── Join(Inner)
+    ├── build keys: [id (#4)]
+    ├── probe keys: [narrow.k (#0)]
+    ├── other filters: []
+    ├── Exchange(Merge)
+    │   └── EvalScalar
+    │       ├── scalars: [row_number_part_0 (#5) AS (#4), row_number() OVER (PARTITION BY id ORDER BY v DESC) (#6) AS (#7)]
+    │       └── Filter
+    │           ├── filters: [eq(row_number() OVER (PARTITION BY id ORDER BY v DESC) (#6), 1)]
+    │           └── Window
+    │               ├── aggregate function: row_number
+    │               ├── partition items: [get_by_keypath(variant.raw (#2), '{"id"}') AS (#5)]
+    │               ├── order by items: [variant.v (#3) AS (#3) DESC]
+    │               ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    │               └── Sort
+    │                   ├── sort keys: [row_number_part_0 (#5) ASC NULLS LAST, variant.v (#3) DESC NULLS LAST]
+    │                   ├── limit: [NONE]
+    │                   ├── window top: 1
+    │                   ├── window function: RowNumber
+    │                   └── Exchange(Hash)
+    │                       ├── Exchange(Hash): keys: [row_number_part_0 (#5)]
+    │                       └── EvalScalar
+    │                           ├── scalars: [variant.v (#3) AS (#3), get_by_keypath(variant.raw (#2), '{"id"}') AS (#5)]
+    │                           └── Scan
+    │                               ├── table: default.variant (#1)
+    │                               ├── filters: []
+    │                               ├── order by: [row_number_part_0 (#5) ASC, variant.v (#3) DESC]
+    │                               └── limit: NONE
+    └── Exchange(Merge)
+        └── Scan
+            ├── table: default.narrow (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
 === order_without_partition ===
 description: A window without PARTITION BY needs a Serial input.
 sql: SELECT k, row_number() OVER (ORDER BY v) FROM t
