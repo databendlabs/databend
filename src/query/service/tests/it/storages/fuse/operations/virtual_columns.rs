@@ -284,6 +284,11 @@ async fn test_fuse_do_vacuum_virtual_column_prepares_legacy_block_commit() -> an
     let mut segs = snapshot.segments.clone();
     segs.push((new_seg_loc.clone(), SegmentInfo::VERSION));
     new_snap.segments = segs;
+    if !new_snap.segment_block_counts.is_empty() {
+        new_snap
+            .segment_block_counts
+            .push(Some(seg_info.summary.block_count));
+    }
     new_snap.summary = merge_statistics(snapshot.summary.clone(), &seg_info.summary, None);
     fuse_table
         .commit_to_meta_server(

@@ -356,6 +356,7 @@ async fn set_segment_format(
     }
     let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
     let mut new_segment_locations = Vec::with_capacity(segment_locations.len());
+    let mut segment_block_counts = Vec::with_capacity(segment_locations.len());
     let block_per_segment = fuse_table.get_block_thresholds().block_per_segment;
     let table_meta_timestamps =
         ctx.get_table_meta_timestamps(table.as_ref(), Some(table_snapshot.clone()))?;
@@ -389,13 +390,13 @@ async fn set_segment_format(
                     }
                     let additional_stats_meta = segment.summary.additional_stats_meta;
                     let cluster_key_info = fuse_table.cluster_key_info();
-                    let segment = segment_builder
-                        .build(
-                            fuse_table.get_block_thresholds(),
-                            cluster_key_info.as_ref(),
-                            additional_stats_meta,
-                        )?
-                        .serialize()?;
+                    let segment = segment_builder.build(
+                        fuse_table.get_block_thresholds(),
+                        cluster_key_info.as_ref(),
+                        additional_stats_meta,
+                    )?;
+                    segment_block_counts.push(Some(segment.summary.block_count));
+                    let segment = segment.serialize()?;
                     let location_gen = fuse_table.meta_location_generator();
                     let location =
                         location_gen.gen_segment_info_location(table_meta_timestamps, true);
@@ -405,7 +406,7 @@ async fn set_segment_format(
             }
         }
     }
-    let new_snapshot = TableSnapshot::try_new(
+    let mut new_snapshot = TableSnapshot::try_new(
         Some(fuse_table.get_table_info().ident.seq),
         Some(table_snapshot.clone()),
         table.schema().as_ref().clone(),
@@ -415,6 +416,7 @@ async fn set_segment_format(
         table_snapshot.table_statistics_location(),
         table_meta_timestamps,
     )?;
+    new_snapshot.segment_block_counts = segment_block_counts;
     let location = fuse_table
         .meta_location_generator()
         .gen_snapshot_location(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;

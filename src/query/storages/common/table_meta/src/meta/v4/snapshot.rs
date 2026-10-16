@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::Cursor;
 use std::io::Read;
@@ -49,7 +50,7 @@ use crate::meta::v3;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
 use crate::table::ClusterType;
 
-#[frozen_api("9de02316")]
+#[frozen_api("54a6de2b")]
 #[derive(Serialize, Deserialize, Clone, Debug, FrozenAPI)]
 pub struct TableSnapshot {
     /// format version of TableSnapshot metadata
@@ -105,6 +106,12 @@ pub struct TableSnapshot {
     // Also cleared by transaction retry when the complete delta is unknown.
     #[serde(default)]
     logical_change_counters: Option<LogicalChangeCounters>,
+
+    /// Block counts aligned with `segments`. An empty vector means no counts
+    /// were recorded; otherwise its length must match `segments.len()`.
+    /// Individual `None` entries identify segments with unknown block counts.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub segment_block_counts: Vec<Option<u64>>,
 }
 
 /// Cumulative UPDATE/DELETE counters. Only endpoints with the same known epoch
@@ -212,7 +219,7 @@ impl TableSnapshot {
                 epoch: None,
             });
         counters.epoch = counters.epoch.or(prev_table_seq);
-        Ok(Self {
+        let mut snapshot = Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: uuid_from_date_time(snapshot_timestamp_adjusted),
             timestamp: Some(snapshot_timestamp_adjusted),
@@ -225,7 +232,17 @@ impl TableSnapshot {
             cluster_type,
             table_statistics_location,
             logical_change_counters: Some(counters),
-        })
+            segment_block_counts: vec![],
+        };
+        if let Some(previous) = prev_snapshot.as_ref() {
+            previous.ensure_segment_block_counts()?;
+            if snapshot.segments == previous.segments {
+                snapshot.segment_block_counts = previous.segment_block_counts.clone();
+            } else {
+                snapshot.set_segment_block_counts(previous.known_segment_block_counts())?;
+            }
+        }
+        Ok(snapshot)
     }
 
     pub fn try_from_previous(
@@ -257,6 +274,7 @@ impl TableSnapshot {
     /// A Result containing the serialized data as a byte vector. If any errors occur during
     /// encoding, compression, or writing to the byte vector, an error will be returned.
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
+        self.ensure_segment_block_counts()?;
         let encoding = MetaEncoding::MessagePack;
         let compression = MetaCompression::default();
 
@@ -306,6 +324,7 @@ impl TableSnapshot {
             read_and_deserialize(&mut r, snapshot_size, &encoding, &compression)
                 .map_err(|x| x.add_message("fail to deserialize table snapshot"))?;
         snapshot.ensure_segments_unique()?;
+        snapshot.ensure_segment_block_counts()?;
         Ok(snapshot)
     }
 
@@ -322,6 +341,49 @@ impl TableSnapshot {
     #[inline]
     pub fn ensure_segments_unique(&self) -> Result<()> {
         ensure_segments_unique(&self.segments)
+    }
+
+    /// Known counts keyed by immutable segment path, independent of snapshot order.
+    pub fn known_segment_block_counts(&self) -> impl Iterator<Item = (&String, &u64)> {
+        self.segments
+            .iter()
+            .zip(&self.segment_block_counts)
+            .filter_map(|(location, count)| count.as_ref().map(|count| (&location.0, count)))
+    }
+
+    /// Record counts for matching segment paths without discarding other known counts.
+    pub fn set_segment_block_counts<'a>(
+        &mut self,
+        counts: impl IntoIterator<Item = (&'a String, &'a u64)>,
+    ) -> Result<()> {
+        self.ensure_segment_block_counts()?;
+        let counts: HashMap<_, _> = counts
+            .into_iter()
+            .map(|(path, count)| (path.as_str(), *count))
+            .collect();
+        if counts.is_empty() {
+            return Ok(());
+        }
+        self.segment_block_counts.resize(self.segments.len(), None);
+        for (location, count) in self.segments.iter().zip(&mut self.segment_block_counts) {
+            if let Some(known) = counts.get(location.0.as_str()) {
+                *count = Some(*known);
+            }
+        }
+        Ok(())
+    }
+
+    fn ensure_segment_block_counts(&self) -> Result<()> {
+        if !self.segment_block_counts.is_empty()
+            && self.segment_block_counts.len() != self.segments.len()
+        {
+            return Err(ErrorCode::StorageOther(format!(
+                "snapshot has {} segment block counts for {} segments",
+                self.segment_block_counts.len(),
+                self.segments.len()
+            )));
+        }
+        Ok(())
     }
 
     /// Cumulative logical change counters, or `None` when absent or invalidated.
@@ -411,6 +473,7 @@ impl From<v2::TableSnapshot> for TableSnapshot {
             cluster_type: None,
             table_statistics_location: s.table_statistics_location,
             logical_change_counters: None,
+            segment_block_counts: vec![],
         }
     }
 }
@@ -437,6 +500,7 @@ where T: Into<v3::TableSnapshot>
             cluster_type: None,
             table_statistics_location: s.table_statistics_location,
             logical_change_counters: None,
+            segment_block_counts: vec![],
         }
     }
 }
@@ -578,6 +642,102 @@ mod tests {
             TableMetaTimestamps::new(None, TimeDelta::hours(1)),
         )
         .unwrap()
+    }
+
+    fn snapshot_with_segments(entries: &[(&str, Option<u64>)]) -> TableSnapshot {
+        let mut snapshot = snapshot(None);
+        snapshot.segments = entries
+            .iter()
+            .map(|(path, _)| (path.to_string(), 4))
+            .collect();
+        snapshot.segment_block_counts = entries.iter().map(|(_, count)| *count).collect();
+        snapshot
+    }
+
+    #[test]
+    fn test_segment_block_counts_roundtrip_and_legacy_writer() {
+        let original = snapshot_with_segments(&[("a", Some(0)), ("b", None), ("c", Some(7))]);
+        let decoded = TableSnapshot::from_slice(&original.to_bytes().unwrap()).unwrap();
+        assert_eq!(decoded.segment_block_counts, vec![Some(0), None, Some(7)]);
+
+        // Older named-map readers ignore the new field. An older writer omits
+        // it, so the next reader must recover unknown counts, not zero counts.
+        #[derive(Deserialize)]
+        struct LegacyReader {
+            segments: Vec<Location>,
+        }
+        let encoded = encode(&MetaEncoding::MessagePack, &original).unwrap();
+        let legacy: LegacyReader =
+            crate::meta::format::decode(&MetaEncoding::MessagePack, &encoded).unwrap();
+        assert_eq!(legacy.segments, original.segments);
+        let mut value = serde_json::to_value(&original).unwrap();
+        value
+            .as_object_mut()
+            .unwrap()
+            .remove("segment_block_counts");
+        let encoded = encode(&MetaEncoding::MessagePack, &value).unwrap();
+        let legacy: TableSnapshot =
+            crate::meta::format::decode(&MetaEncoding::MessagePack, &encoded).unwrap();
+        assert!(legacy.segment_block_counts.is_empty());
+        assert!(legacy.known_segment_block_counts().next().is_none());
+        let decoded = TableSnapshot::from_slice(&legacy.to_bytes().unwrap()).unwrap();
+        assert!(decoded.segment_block_counts.is_empty());
+    }
+
+    #[test]
+    fn test_segment_block_counts_follow_locations() {
+        let previous = Arc::new(snapshot_with_segments(&[
+            ("a", Some(2)),
+            ("b", None),
+            ("c", Some(7)),
+        ]));
+        let cloned = TableSnapshot::try_from_previous(
+            previous.clone(),
+            None,
+            None,
+            TableMetaTimestamps::new(None, TimeDelta::hours(1)),
+        )
+        .unwrap();
+        assert_eq!(cloned.segment_block_counts, previous.segment_block_counts);
+
+        let mut next = TableSnapshot::try_new(
+            None,
+            Some(previous.clone()),
+            TableSchema::default(),
+            Statistics::default(),
+            vec![
+                ("c".to_string(), 4),
+                ("new".to_string(), 4),
+                ("b".to_string(), 4),
+            ],
+            None,
+            None,
+            TableMetaTimestamps::new(None, TimeDelta::hours(1)),
+        )
+        .unwrap();
+        assert_eq!(next.segment_block_counts, vec![Some(7), None, None]);
+        next.set_segment_block_counts(&HashMap::from([("new".to_string(), 3)]))
+            .unwrap();
+        assert_eq!(next.segment_block_counts, vec![Some(7), Some(3), None]);
+        let truncated = snapshot(Some(previous));
+        assert!(truncated.segments.is_empty());
+        assert!(truncated.segment_block_counts.is_empty());
+    }
+
+    #[test]
+    fn test_segment_block_counts_reject_misaligned_vectors() {
+        let mut snapshot = snapshot_with_segments(&[("a", Some(2)), ("b", None)]);
+        snapshot.segment_block_counts.pop();
+        assert!(snapshot.to_bytes().is_err());
+
+        // Bypass the writer's validation to exercise corrupt metadata on read.
+        let data = encode(&MetaEncoding::MessagePack, &snapshot).unwrap();
+        let mut bytes = TableSnapshot::VERSION.to_le_bytes().to_vec();
+        bytes.push(MetaEncoding::MessagePack as u8);
+        bytes.push(MetaCompression::None as u8);
+        bytes.extend_from_slice(&(data.len() as u64).to_le_bytes());
+        bytes.extend(data);
+        assert!(TableSnapshot::from_slice(&bytes).is_err());
     }
 
     fn strip_counters(snapshot: &TableSnapshot) -> TableSnapshot {

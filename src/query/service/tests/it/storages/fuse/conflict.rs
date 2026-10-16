@@ -28,6 +28,61 @@ use databend_storages_common_table_meta::meta::Statistics;
 
 use crate::storages::fuse::utils::new_empty_snapshot;
 
+#[test]
+fn test_segment_block_counts_rebase_by_location() {
+    let mut base = new_empty_snapshot(TableSchema::default());
+    base.segments = vec![
+        ("a".to_string(), 1),
+        ("b".to_string(), 1),
+        ("c".to_string(), 1),
+    ];
+    base.segment_block_counts = vec![Some(2), None, Some(7)];
+    let mut latest = new_empty_snapshot(TableSchema::default());
+    latest.segments = vec![
+        ("concurrent".to_string(), 1),
+        ("c".to_string(), 1),
+        ("b".to_string(), 1),
+        ("a".to_string(), 1),
+    ];
+    latest.segment_block_counts = vec![Some(11), Some(7), None, Some(2)];
+
+    let changes = SnapshotChanges {
+        appended_segments: vec![("appended".to_string(), 1)],
+        replaced_segments: HashMap::from([(0, ("replacement".to_string(), 1))]),
+        removed_segment_indexes: vec![1],
+        segment_block_counts: HashMap::from([
+            ("appended".to_string(), 4),
+            ("replacement".to_string(), 3),
+        ]),
+        ..Default::default()
+    };
+    let mut generator = MutationGenerator::new(Some(Arc::new(base)), MutationKind::Update);
+    generator.set_conflict_resolve_context(ConflictResolveContext::ModifiedSegmentExistsInLatest(
+        changes,
+    ));
+    let snapshot = generator
+        .do_generate_new_snapshot(
+            &TableInfo::default(),
+            None,
+            &Some(Arc::new(latest)),
+            TestFixture::default_table_meta_timestamps(),
+            Default::default(),
+        )
+        .unwrap();
+    assert_eq!(snapshot.segments, vec![
+        ("appended".to_string(), 1),
+        ("concurrent".to_string(), 1),
+        ("c".to_string(), 1),
+        ("replacement".to_string(), 1),
+    ]);
+    assert_eq!(snapshot.segment_block_counts, vec![
+        Some(4),
+        Some(11),
+        Some(7),
+        Some(3)
+    ]);
+}
+
 /// base snapshot contains segments 1, 2, 3,
 ///
 /// a delete operation wants to remove segment 2,
@@ -55,6 +110,7 @@ fn test_unresolvable_delete_conflict() {
         removed_segment_indexes: vec![1],
         removed_statistics: Statistics::default(),
         merged_statistics: Statistics::default(),
+        ..Default::default()
     });
 
     let mut generator = MutationGenerator::new(Some(Arc::new(base_snapshot)), MutationKind::Delete);
@@ -193,6 +249,7 @@ fn test_resolvable_delete_conflict() {
         removed_segment_indexes: vec![1],
         removed_statistics,
         merged_statistics,
+        ..Default::default()
     });
 
     let mut generator = MutationGenerator::new(Some(Arc::new(base_snapshot)), MutationKind::Delete);
@@ -358,6 +415,7 @@ fn test_resolvable_replace_conflict() {
         removed_segment_indexes: vec![1],
         removed_statistics,
         merged_statistics,
+        ..Default::default()
     });
 
     let mut generator =
