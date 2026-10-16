@@ -18,6 +18,7 @@ use std::time::Duration;
 
 use async_channel::Sender;
 use databend_common_base::JoinHandle;
+use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::QueryPerfGuard;
@@ -72,6 +73,7 @@ impl StatisticsSender {
                     let mut notified = Box::pin(shutdown_flag_receiver.recv());
 
                     let mem_stat = ctx.get_query_memory_tracking();
+                    let mut sent_io_stats = IoStatsSnapshot::default();
 
                     loop {
                         match futures::future::select(sleep_future, notified).await {
@@ -82,7 +84,9 @@ impl StatisticsSender {
                                 break;
                             }
                             Either::Right((Ok(Some(error_code)), _recv)) => {
-                                if let Err(error) = Self::send_io_stats(&tx).await {
+                                if let Err(error) =
+                                    Self::send_io_stats(&ctx, &mut sent_io_stats, &tx).await
+                                {
                                     warn!("IoStats send has error, cause: {:?}.", error);
                                 }
 
@@ -105,6 +109,12 @@ impl StatisticsSender {
                                     ctx.get_exchange_manager()
                                         .shutdown_query(&query_id, Some(cause));
                                     return;
+                                }
+
+                                if let Err(error) =
+                                    Self::send_io_stats(&ctx, &mut sent_io_stats, &tx).await
+                                {
+                                    warn!("IoStats send has error, cause: {:?}.", error);
                                 }
 
                                 cnt += 1;
@@ -149,7 +159,7 @@ impl StatisticsSender {
                         warn!("PartStatistics send has error, cause: {:?}.", error);
                     }
 
-                    if let Err(error) = Self::send_io_stats(&tx).await {
+                    if let Err(error) = Self::send_io_stats(&ctx, &mut sent_io_stats, &tx).await {
                         warn!("IoStats send has error, cause: {:?}.", error);
                     }
                 }
@@ -314,13 +324,26 @@ impl StatisticsSender {
         Ok(())
     }
 
-    async fn send_io_stats(flight_sender: &FlightSender) -> Result<()> {
-        let Some(stats) = ThreadTracker::io_stats() else {
+    /// Send the IO of this node for the query that has not been sent yet.
+    ///
+    /// Deltas, not cumulative snapshots, go over the wire: the receiver adds
+    /// every `DataPacket::IoStats` it gets, which is also what releases before
+    /// periodic sending did, so a coordinator running either version ends up
+    /// with the correct total.
+    async fn send_io_stats(
+        ctx: &Arc<QueryContext>,
+        sent: &mut IoStatsSnapshot,
+        flight_sender: &FlightSender,
+    ) -> Result<()> {
+        let current = ctx.get_local_io_stats().snapshot();
+        let delta = current.delta_since(sent);
+        if delta.is_empty() {
             return Ok(());
-        };
+        }
 
-        let data_packet = DataPacket::IoStats(stats.snapshot());
-        flight_sender.send(data_packet).await
+        flight_sender.send(DataPacket::IoStats(delta)).await?;
+        *sent = current;
+        Ok(())
     }
 
     fn fetch_progress(ctx: &Arc<QueryContext>) -> Vec<ProgressInfo> {
