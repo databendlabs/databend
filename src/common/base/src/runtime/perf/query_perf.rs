@@ -21,6 +21,7 @@ use regex::Regex;
 
 use crate::runtime::ThreadTracker;
 use crate::runtime::TrackingGuard;
+use crate::runtime::perf::CpuStack;
 
 /// This flag need to be accessed in signal handler,
 /// so we use #[thread_local] and put it separately from ThreadTracker
@@ -49,33 +50,53 @@ impl QueryPerf {
     }
 
     pub fn start(frequency: i32) -> Result<QueryPerfGuard> {
-        let filter_closure = || !QueryPerf::flag();
-        let profiler_guard = ProfilerGuardBuilder::default()
-            .frequency(frequency)
-            .blocklist(&["libc", "libgcc", "pthread", "vdso"])
-            .set_filter_func(filter_closure)
-            .build()
-            .map_err(|e| ErrorCode::Internal(format!("Failed to create profiler, {e}")))?;
-        debug!("starting perf with frequency: {}", frequency);
+        let profiler_guard = Self::start_profiler(frequency, true)?;
         let mut payload = ThreadTracker::new_tracking_payload();
         payload.perf_enabled = true;
         let flag_guard = ThreadTracker::tracking(payload);
         Ok((flag_guard, profiler_guard))
     }
 
-    pub fn dump(profiler_guard: &ProfilerGuard<'static>) -> Result<String> {
-        let reporter = profiler_guard
+    /// Starts the CPU profiler of the process. With `filtered`, only the threads whose flag is set
+    /// are sampled, see [`QueryPerf::sync_from_payload`]. Fails if the profiler is already running.
+    pub fn start_profiler(frequency: i32, filtered: bool) -> Result<ProfilerGuard<'static>> {
+        let mut builder = ProfilerGuardBuilder::default()
+            .frequency(frequency)
+            .blocklist(&["libc", "libgcc", "pthread", "vdso"]);
+        if filtered {
+            builder = builder.set_filter_func(|| !QueryPerf::flag());
+        }
+        let profiler_guard = builder
+            .build()
+            .map_err(|e| ErrorCode::Internal(format!("Failed to create profiler, {e}")))?;
+        debug!("starting perf with frequency: {}", frequency);
+        Ok(profiler_guard)
+    }
+
+    /// The sampled call stacks, frames outermost first.
+    pub fn stacks(profiler_guard: &ProfilerGuard<'static>) -> Result<Vec<CpuStack>> {
+        let report = profiler_guard
             .report()
             .frames_post_processor(frames_post_processor())
             .build()
             .map_err(|_e| ErrorCode::Internal("Failed to report profiler data"))?;
-        debug!("perf stop, begin to dump flamegraph");
-        let mut svg = Vec::new();
-        reporter
-            .flamegraph(&mut svg)
-            .map_err(|_e| ErrorCode::Internal("Failed to generate flamegraph SVG"))?;
 
-        String::from_utf8(svg).map_err(|_e| ErrorCode::Internal("Failed to convert SVG to string"))
+        Ok(report
+            .data
+            .iter()
+            .filter(|(_, samples)| **samples > 0)
+            .map(|(frames, samples)| CpuStack {
+                thread: frames.thread_name_or_id(),
+                // Frames and the symbols inlined in them are stored innermost first.
+                frames: frames
+                    .frames
+                    .iter()
+                    .rev()
+                    .flat_map(|symbols| symbols.iter().rev().map(|symbol| symbol.name()))
+                    .collect(),
+                samples: *samples as u64,
+            })
+            .collect())
     }
 
     pub fn pretty_display(
@@ -147,7 +168,8 @@ fn frames_post_processor() -> impl Fn(&mut pprof::Frames) {
         if let Some(pos) = frames.frames.iter().position(|frame| {
             frame
                 .iter()
-                .any(|symbol| symbol.name() == PPROF_TRACE_SYMBOL)
+                // The symbol may carry generic arguments, e.g. `::<perf_signal_handler::{closure#0}>`.
+                .any(|symbol| symbol.name().starts_with(PPROF_TRACE_SYMBOL))
         }) {
             frames.frames.drain(..=pos);
         }

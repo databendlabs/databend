@@ -407,6 +407,20 @@ impl SessionManager {
         )))
     }
 
+    /// Whether this node coordinates `query_id` and the query has not finished yet.
+    pub fn is_query_running(&self, query_id: &str) -> bool {
+        self.active_sessions_snapshot().into_iter().any(|weak_ptr| {
+            let Some(arc_session) = weak_ptr.upgrade() else {
+                return false;
+            };
+            let Some(context_shared) = arc_session.session_ctx.get_query_context_shared() else {
+                return false;
+            };
+            query_id == *context_shared.init_query_id.as_ref().read()
+                && context_shared.finish_time.read().is_none()
+        })
+    }
+
     pub fn get_running_graph_dump(&self, query_id: &str) -> Result<String> {
         for weak_ptr in self.active_sessions_snapshot() {
             let Some(arc_session) = weak_ptr.upgrade() else {

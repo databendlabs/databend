@@ -18,7 +18,9 @@ use std::time::Duration;
 
 use async_channel::Sender;
 use databend_common_base::JoinHandle;
+use databend_common_base::runtime::AllocProfile;
 use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::PerfSamples;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::QueryPerfGuard;
 use databend_common_base::runtime::ThreadTracker;
@@ -39,7 +41,6 @@ use crate::servers::flight::v1::packets::ProgressInfo;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sessions::TableContextPartitionStats;
-use crate::sessions::TableContextPerf;
 use crate::sessions::TableContextProgress;
 use crate::sessions::TableContextTelemetry;
 
@@ -56,6 +57,7 @@ impl StatisticsSender {
         exchange: FlightExchange,
         executor: Arc<PipelineExecutor>,
         perf_guard: Option<QueryPerfGuard>,
+        alloc_profile: Option<Arc<AllocProfile>>,
         profile_rx: oneshot::Receiver<HashMap<u32, PlanProfile>>,
     ) -> Self {
         let spawner = ctx.clone();
@@ -137,12 +139,8 @@ impl StatisticsSender {
                         warn!("Statistics send has error, cause: {:?}.", error);
                     }
 
-                    if let Err(error) = Self::send_perf(&perf_guard, &tx).await {
+                    if let Err(error) = Self::send_perf(&perf_guard, &alloc_profile, &tx).await {
                         warn!("Perf send has error, cause: {:?}.", error);
-                    }
-
-                    if let Err(error) = Self::send_perf_counters(&ctx, &executor, &tx).await {
-                        warn!("PerfCounters send has error, cause: {:?}.", error);
                     }
 
                     if let Err(error) = Self::send_part_statistics(&ctx, &tx).await {
@@ -287,29 +285,22 @@ impl StatisticsSender {
         flight_sender.send(data_packet).await
     }
 
+    /// Sends the call stacks sampled by `EXPLAIN PERF` on this node to the coordinator.
     async fn send_perf(
         perf_guard: &Option<QueryPerfGuard>,
+        alloc_profile: &Option<Arc<AllocProfile>>,
         flight_sender: &FlightSender,
     ) -> Result<()> {
+        let mut samples = PerfSamples::default();
         if let Some((_flag_guard, profiler_guard)) = perf_guard {
-            let dumped = QueryPerf::dump(profiler_guard)?;
-            let data_packet = DataPacket::QueryPerf(dumped);
-            flight_sender.send(data_packet).await?;
+            samples.cpu = QueryPerf::stacks(profiler_guard)?;
         }
-        Ok(())
-    }
+        if let Some(alloc_profile) = alloc_profile {
+            samples.memory = alloc_profile.stacks();
+        }
 
-    async fn send_perf_counters(
-        ctx: &Arc<QueryContext>,
-        executor: &Arc<PipelineExecutor>,
-        flight_sender: &FlightSender,
-    ) -> Result<()> {
-        if ctx.get_perf_config().has_hw_counters() {
-            let counters = executor.fetch_perf_counters();
-            if !counters.counters.is_empty() {
-                let data_packet = DataPacket::QueryPerfCounters(counters);
-                flight_sender.send(data_packet).await?;
-            }
+        if !samples.is_empty() {
+            flight_sender.send(DataPacket::QueryPerf(samples)).await?;
         }
         Ok(())
     }

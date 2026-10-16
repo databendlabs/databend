@@ -12,12 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod perf_counters;
+mod cpu_summary;
+mod perf_config;
+mod perf_targets;
 mod query_perf;
 
-pub use perf_counters::PerfConfig;
-pub use perf_counters::PerfCounters;
-pub use perf_counters::PerfEvent;
-pub use perf_counters::PerfValue;
+pub use cpu_summary::CpuStack;
+pub use cpu_summary::CpuSummaryLevel;
+pub use cpu_summary::CpuSummaryRow;
+pub use cpu_summary::PerfSamples;
+pub(crate) use cpu_summary::caller_path;
+pub use cpu_summary::cpu_flamegraph;
+pub(crate) use cpu_summary::heaviest_path;
+pub(crate) use cpu_summary::site_index;
+pub use cpu_summary::summarize_cpu_stacks;
+pub use perf_config::PerfConfig;
+pub use perf_targets::PerfTargetGuard;
+pub use perf_targets::PerfTargets;
 pub use query_perf::QueryPerf;
 pub use query_perf::QueryPerfGuard;

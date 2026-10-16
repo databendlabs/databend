@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_base::runtime::PerfSamples;
+
 use super::*;
 
 impl TableContextMergeInto for QueryContext {
@@ -53,20 +55,12 @@ impl TableContextPerf for QueryContext {
         self.shared.set_perf_flag(flag);
     }
 
-    fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, String>>> {
+    fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, PerfSamples>>> {
         self.shared.get_nodes_perf()
     }
 
-    fn set_nodes_perf(&self, node: String, perf: String) {
-        self.shared.set_nodes_perf(node, perf);
-    }
-
-    fn get_perf_events(&self) -> Vec<Vec<PerfEvent>> {
-        self.shared.get_perf_events()
-    }
-
-    fn set_perf_events(&self, event_groups: Vec<Vec<PerfEvent>>) {
-        self.shared.set_perf_events(event_groups);
+    fn set_nodes_perf(&self, node: String, samples: PerfSamples) {
+        self.shared.set_nodes_perf(node, samples);
     }
 }
 

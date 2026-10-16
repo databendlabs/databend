@@ -42,7 +42,7 @@ fn executor_settings(max_threads: u64) -> ExecutorSettings {
         enable_queries_executor: false,
         max_threads,
         executor_node_id: "".to_string(),
-        perf_event_groups: vec![],
+        perf_enabled: false,
     }
 }
 

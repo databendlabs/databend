@@ -21,6 +21,7 @@ databend-base = { workspace = true }
 databend-common-exception = { workspace = true }
 
 async-backtrace = { workspace = true }
+backtrace = { workspace = true }
 borsh = { workspace = true }
 bytemuck = { workspace = true }
 bytes = { workspace = true }
@@ -58,7 +59,6 @@ unicode-segmentation = { workspace = true }
 uuid = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-perf-event2 = { workspace = true }
 procfs = { workspace = true }
 
 [dev-dependencies]

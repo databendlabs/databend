@@ -122,6 +122,11 @@ impl AdminService {
             )
             .at("/debug/home", get(debug_home_handler))
             .at("/debug/pprof/profile", get(debug_pprof_handler))
+            .at("/debug/perf/cpu", get(super::v1::perf::perf_cpu_handler))
+            .at(
+                "/debug/perf/memory",
+                get(super::v1::perf::perf_memory_handler),
+            )
             .at("/debug/async_tasks/dump", get(debug_dump_stack));
 
         // Multiple tenants admin api

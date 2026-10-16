@@ -12,22 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::convert_number_size;
+use databend_common_ast::ast::ExplainPerfFormat;
+use databend_common_base::runtime::CpuStack;
+use databend_common_base::runtime::CpuSummaryLevel;
+use databend_common_base::runtime::LOW_CONFIDENCE_SAMPLES;
 use databend_common_base::runtime::PerfConfig;
-use databend_common_base::runtime::PerfEvent;
-use databend_common_base::runtime::PerfValue;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::cpu_flamegraph;
+use databend_common_base::runtime::summarize_cpu_stacks;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_sql::Planner;
 use databend_meta_plugin_semaphore::acquirer::Permit;
@@ -42,62 +47,38 @@ use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextPerf;
 
+/// `EXPLAIN PERF [CPU] <statement>` runs the statement and samples its call stacks on CPU time.
 pub struct ExplainPerfInterpreter {
     pub sql: String,
     pub ctx: Arc<QueryContext>,
-    pub event_groups: Vec<Vec<PerfEvent>>,
+    pub format: ExplainPerfFormat,
+    pub limit: Option<u64>,
 }
+
+/// The rows per level in the `table` format by default.
+const DEFAULT_TABLE_LIMIT: usize = 20;
 
 impl ExplainPerfInterpreter {
     pub fn try_create(
         sql: String,
-        event_group_names: Vec<Vec<String>>,
+        format: ExplainPerfFormat,
+        limit: Option<u64>,
         ctx: Arc<QueryContext>,
-    ) -> Result<Self> {
-        let event_groups = if event_group_names.is_empty() {
-            PerfEvent::default_groups()
-        } else {
-            let mut groups = Vec::with_capacity(event_group_names.len());
-            for group in &event_group_names {
-                let mut resolved = Vec::with_capacity(group.len());
-                for name in group {
-                    match PerfEvent::from_name(name) {
-                        Some(e) => resolved.push(e),
-                        None => {
-                            return Err(ErrorCode::SyntaxException(format!(
-                                "Unknown perf event: '{name}'. Valid events: {}",
-                                PerfEvent::all_names().collect::<Vec<_>>().join(", ")
-                            )));
-                        }
-                    }
-                }
-                groups.push(resolved);
-            }
-            groups
-        };
-        Ok(Self {
+    ) -> Self {
+        Self {
             sql,
             ctx,
-            event_groups,
-        })
+            format,
+            limit,
+        }
     }
 
     pub async fn perf(&self) -> Result<Vec<DataBlock>> {
-        // PerfCounters are only supported with QueryPipelineExecutor。
-        let config_enable_queries_executor = GlobalConfig::instance()
-            .query
-            .common
-            .enable_queries_executor;
-        if config_enable_queries_executor {
-            return Err(ErrorCode::Unimplemented(
-                "EXPLAIN PERF with hardware performance counters is not supported under QueriesPipelineExecutor.",
-            ));
-        }
-
         let _permit = self.acquire_semaphore().await?;
         let config = PerfConfig {
+            perf_enabled: true,
             profiler_enabled: true,
-            event_groups: self.event_groups.clone(),
+            memory_enabled: false,
             frequency: 99,
         };
         self.ctx.set_perf_config(config.clone());
@@ -106,19 +87,28 @@ impl ExplainPerfInterpreter {
 
         let (_flag_guard, profiler_guard) = perf_guard;
 
+        // The other nodes of the cluster profile their fragments and send the stacks back.
         let node_id = GlobalConfig::instance().query.node_id.clone();
-        let dumped = QueryPerf::dump(&profiler_guard)?;
-        let other_nodes = self.ctx.get_nodes_perf().lock().clone();
-        let mut html = QueryPerf::pretty_display(node_id, dumped, other_nodes.into_iter());
+        let mut nodes = vec![(node_id, QueryPerf::stacks(&profiler_guard)?)];
+        let mut others = self
+            .ctx
+            .get_nodes_perf()
+            .lock()
+            .iter()
+            .filter(|(_, samples)| !samples.cpu.is_empty())
+            .map(|(node, samples)| (node.clone(), samples.cpu.clone()))
+            .collect::<Vec<_>>();
+        others.sort_by(|left, right| left.0.cmp(&right.0));
+        nodes.extend(others);
 
-        let hw_counters_html = self.build_hw_counters_html();
-        if !hw_counters_html.is_empty() {
-            html = html.replacen("{{PERF_COUNTERS_TABLE}}", &hw_counters_html, 1);
-        }
-        html = html.replace("{{PERF_COUNTERS_TABLE}}", "");
-
-        let html = StringType::from_data(vec![html]);
-        Ok(vec![DataBlock::new_from_columns(vec![html])])
+        let block = match self.format {
+            ExplainPerfFormat::Html => html_block(nodes)?,
+            ExplainPerfFormat::Table => {
+                let limit = self.limit.map_or(DEFAULT_TABLE_LIMIT, |x| x as usize);
+                table_block(&nodes, limit, config.frequency)
+            }
+        };
+        Ok(vec![block])
     }
 
     pub async fn acquire_semaphore(&self) -> Result<Permit> {
@@ -161,214 +151,72 @@ impl ExplainPerfInterpreter {
         self.ctx.attach_query_lineage(previous_query_lineage);
         result
     }
+}
 
-    fn build_hw_counters_html(&self) -> String {
-        let all_events: Vec<PerfEvent> = self.event_groups.iter().flatten().copied().collect();
-        let mut sections = Vec::new();
+fn html_block(nodes: Vec<(String, Vec<CpuStack>)>) -> Result<DataBlock> {
+    Ok(DataBlock::new_from_columns(vec![StringType::from_data(
+        vec![cpu_report_html(nodes)?],
+    )]))
+}
 
-        let local_node_id = GlobalConfig::instance().query.node_id.clone();
-        let all_nodes = self.ctx.get_nodes_perf_counters();
-        let mut nodes: Vec<_> = all_nodes.into_iter().collect();
-        nodes.sort_by_key(|(id, _)| if id == &local_node_id { 0 } else { 1 });
-
-        for (node_id, node_counters) in &nodes {
-            let entries: Vec<_> = node_counters
-                .counters
-                .iter()
-                .filter(|(_, c)| !c.is_empty())
-                .map(|(name, c)| (name.clone(), c))
-                .collect();
-            if !entries.is_empty() {
-                sections.push(Self::build_node_table(
-                    node_id,
-                    &all_events,
-                    &self.event_groups,
-                    &entries,
-                ));
-            }
-        }
-
-        if sections.is_empty() {
-            return String::new();
-        }
-
-        format!(
-            r#"<div style="max-width:1200px;margin-left:auto;margin-right:auto;margin-bottom:30px;font-family:monospace;">
-<h3>Hardware Performance Counters</h3>
-{}
-</div>"#,
-            sections.join("\n")
-        )
+/// The html report of CPU samples: one flamegraph per node.
+pub fn cpu_report_html(nodes: Vec<(String, Vec<CpuStack>)>) -> Result<String> {
+    let mut svgs = Vec::with_capacity(nodes.len());
+    for (node, stacks) in nodes {
+        let svg = cpu_flamegraph(&stacks, "Flame Graph").map_err(ErrorCode::Internal)?;
+        svgs.push((node, svg));
     }
+    let mut svgs = svgs.into_iter();
+    let (node_id, svg) = svgs.next().unwrap_or_default();
 
-    /// Check if two events are in the same group.
-    fn events_in_same_group(event_groups: &[Vec<PerfEvent>], a: PerfEvent, b: PerfEvent) -> bool {
-        event_groups
-            .iter()
-            .any(|g| g.contains(&a) && g.contains(&b))
-    }
+    Ok(QueryPerf::pretty_display(node_id, svg, svgs).replace("{{SUMMARY_TABLE}}", ""))
+}
 
-    fn build_node_table(
-        node_id: &str,
-        events: &[PerfEvent],
-        event_groups: &[Vec<PerfEvent>],
-        entries: &[(String, &HashMap<PerfEvent, PerfValue>)],
-    ) -> String {
-        // Determine which events have any multiplexed values across all entries.
-        let mut mux_events: std::collections::HashSet<PerfEvent> = std::collections::HashSet::new();
-        for (_, counters) in entries {
-            for (event, pv) in counters.iter() {
-                if pv.multiplexed {
-                    mux_events.insert(*event);
-                }
-            }
-        }
+/// The summary row, then the leaf functions and the Databend sites with the most samples, over the
+/// samples of all nodes.
+fn table_block(nodes: &[(String, Vec<CpuStack>)], limit: usize, frequency: i32) -> DataBlock {
+    let all = nodes
+        .iter()
+        .flat_map(|(_, stacks)| stacks.iter().cloned())
+        .collect::<Vec<_>>();
+    let sampled_nodes = nodes
+        .iter()
+        .map(|(node, stacks)| {
+            let samples = stacks.iter().map(|stack| stack.samples).sum::<u64>();
+            format!("{node} ({samples} samples)")
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
 
-        let mut header = "<th>Plan Node</th>".to_string();
-        for event in events {
-            let name = event.display_name();
-            if mux_events.contains(event) {
-                header.push_str(&format!("<th>{} *</th>", name));
-            } else {
-                header.push_str(&format!("<th>{}</th>", name));
-            }
-        }
-        let has_cycles = events.contains(&PerfEvent::CpuCycles);
-        let has_insns = events.contains(&PerfEvent::Instructions);
-        let has_misses = events.contains(&PerfEvent::CacheMisses);
-        let has_refs = events.contains(&PerfEvent::CacheReferences);
-        let ipc_same_group = has_cycles
-            && has_insns
-            && Self::events_in_same_group(
-                event_groups,
-                PerfEvent::CpuCycles,
-                PerfEvent::Instructions,
-            );
-        let cmr_same_group = has_misses
-            && has_refs
-            && Self::events_in_same_group(
-                event_groups,
-                PerfEvent::CacheMisses,
-                PerfEvent::CacheReferences,
-            );
-        if has_cycles && has_insns {
-            let suffix = if ipc_same_group { "" } else { " \u{2020}" };
-            header.push_str(&format!("<th>IPC{}</th>", suffix));
-        }
-        if has_misses && has_refs {
-            let suffix = if cmr_same_group { "" } else { " \u{2020}" };
-            header.push_str(&format!("<th>Cache Miss Rate{}</th>", suffix));
-        }
+    let rows = summarize_cpu_stacks(&all, limit);
+    let note = |level: CpuSummaryLevel| match level {
+        CpuSummaryLevel::Summary => Some(format!(
+            "Sampled at {frequency} Hz, summed over the nodes {sampled_nodes}. 'function' rows \
+             rank the functions by self_samples, the samples in the function itself. 'site' rows \
+             rank Databend functions by the self_samples of the stacks whose innermost Databend \
+             frame they are, i.e. including the library code they call. total_samples also count \
+             all callees. share is of all samples by self_samples. path is the Databend callers of \
+             the function (innermost first) on the call path with the most samples, with the \
+             share of the row when it is reached through other paths too. Up to {limit} rows per \
+             level."
+        )),
+        _ => None,
+    };
 
-        let mut rows = String::new();
-        let mut totals: HashMap<PerfEvent, PerfValue> =
-            events.iter().map(|e| (*e, PerfValue::default())).collect();
-
-        for (name, counters) in entries {
-            let mut row = format!("<td>{}</td>", name);
-            for event in events {
-                let pv = counters.get(event);
-                let val = pv.map(|v| v.count).unwrap_or(0);
-                let mux = pv.map(|v| v.multiplexed).unwrap_or(false);
-                let t = totals.entry(*event).or_default();
-                t.count += val;
-                t.multiplexed = t.multiplexed || mux;
-                let formatted = convert_number_size(val as f64);
-                if mux {
-                    row.push_str(&format!("<td>≈{}</td>", formatted));
-                } else {
-                    row.push_str(&format!("<td>{}</td>", formatted));
-                }
-            }
-            let row_counts: HashMap<PerfEvent, u64> =
-                counters.iter().map(|(e, v)| (*e, v.count)).collect();
-            Self::append_derived_metrics(
-                &mut row,
-                &row_counts,
-                has_cycles,
-                has_insns,
-                has_misses,
-                has_refs,
-            );
-            rows.push_str(&format!("<tr>{}</tr>\n", row));
-        }
-
-        // Total row
-        let mut total_row = "<td>TOTAL</td>".to_string();
-        for event in events {
-            let pv = totals.get(event).cloned().unwrap_or_default();
-            let formatted = convert_number_size(pv.count as f64);
-            if pv.multiplexed {
-                total_row.push_str(&format!("<td>≈{}</td>", formatted));
-            } else {
-                total_row.push_str(&format!("<td>{}</td>", formatted));
-            }
-        }
-        let total_counts: HashMap<PerfEvent, u64> =
-            totals.iter().map(|(e, v)| (*e, v.count)).collect();
-        Self::append_derived_metrics(
-            &mut total_row,
-            &total_counts,
-            has_cycles,
-            has_insns,
-            has_misses,
-            has_refs,
-        );
-
-        let mut footnotes = Vec::new();
-        if !mux_events.is_empty() {
-            footnotes.push(r#"<p style="color:#cc6600;">* marked columns had kernel counter multiplexing; values with ≈ are estimated.</p>"#);
-        }
-        if (has_cycles && has_insns && !ipc_same_group)
-            || (has_misses && has_refs && !cmr_same_group)
-        {
-            footnotes.push(r#"<p style="color:#888;">&dagger; derived metric computed from events not in the same group; value may be imprecise.</p>"#);
-        }
-
-        format!(
-            r#"<h4 style="color:#4a90e2;">Node: {node_id}</h4>
-<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;margin-bottom:20px;">
-<tr style="background:#e0e0e0;">{header}</tr>
-{rows}
-<tr style="background:#f0f0f0;font-weight:bold;">{total_row}</tr>
-</table>
-{}"#,
-            footnotes.join("\n")
-        )
-    }
-
-    fn append_derived_metrics(
-        row: &mut String,
-        counters: &HashMap<PerfEvent, u64>,
-        has_cycles: bool,
-        has_insns: bool,
-        has_misses: bool,
-        has_refs: bool,
-    ) {
-        if has_cycles && has_insns {
-            let cycles = counters.get(&PerfEvent::CpuCycles).copied().unwrap_or(0);
-            let insns = counters.get(&PerfEvent::Instructions).copied().unwrap_or(0);
-            let ipc = if cycles > 0 {
-                format!("{:.2}", insns as f64 / cycles as f64)
-            } else {
-                "-".into()
-            };
-            row.push_str(&format!("<td>{}</td>", ipc));
-        }
-        if has_misses && has_refs {
-            let misses = counters.get(&PerfEvent::CacheMisses).copied().unwrap_or(0);
-            let refs = counters
-                .get(&PerfEvent::CacheReferences)
-                .copied()
-                .unwrap_or(0);
-            let rate = if refs > 0 {
-                format!("{:.2}%", misses as f64 / refs as f64 * 100.0)
-            } else {
-                "-".into()
-            };
-            row.push_str(&format!("<td>{}</td>", rate));
-        }
-    }
+    DataBlock::new_from_columns(vec![
+        StringType::from_data(rows.iter().map(|x| x.level.as_str().to_string()).collect()),
+        StringType::from_opt_data(rows.iter().map(|x| x.function.clone()).collect()),
+        StringType::from_opt_data(rows.iter().map(|x| x.path.clone()).collect()),
+        UInt64Type::from_data(rows.iter().map(|x| x.self_samples).collect()),
+        UInt64Type::from_data(rows.iter().map(|x| x.total_samples).collect()),
+        Float64Type::from_data(rows.iter().map(|x| x.share).collect()),
+        BooleanType::from_data(
+            rows.iter()
+                .map(|x| x.self_samples < LOW_CONFIDENCE_SAMPLES)
+                .collect(),
+        ),
+        StringType::from_opt_data(rows.iter().map(|x| note(x.level)).collect()),
+    ])
 }
 
 #[async_trait::async_trait]
