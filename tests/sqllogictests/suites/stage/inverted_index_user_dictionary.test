@@ -326,6 +326,69 @@ SELECT id FROM news_ctas WHERE match(content, 'AI') ORDER BY id
 1
 2
 
+# A clone snapshots the existing dictionary into its own storage, without changing
+# the index version of its shared blocks. New writes and persistent navigation use it too.
+statement ok
+SET enable_experimental_clone_table = 1
+
+statement ok
+CREATE TABLE news_clone CLONE news_ctas
+
+statement ok
+CREATE TABLE news_clone_chain CLONE news_clone
+
+# Each target owns its dictionary. Query success alone would also pass with a shared path.
+query TB
+SELECT i.table, regexp_like(
+    regexp_extract(i.definition, 'user_dictionary_location=''([^'']+)''', 1),
+    concat('^', t.database_id::STRING, '/', t.table_id::STRING, '/_i_i_d/')
+)
+FROM system.indexes i JOIN system.tables t ON i.database = t.database AND i.table = t.name
+WHERE i.database = 'test_ii_userdict' AND i.name = 'idx'
+  AND i.table IN ('news_clone', 'news_clone_chain') ORDER BY i.table
+----
+news_clone 1
+news_clone_chain 1
+
+statement ok
+SET VARIABLE clone_dict_snapshot = (
+    SELECT snapshot_id FROM fuse_snapshot('test_ii_userdict', 'news_clone')
+    ORDER BY timestamp DESC LIMIT 1
+)
+
+statement ok
+INSERT INTO news_clone VALUES (6, 'GPT を使う')
+
+query I
+SELECT id FROM news_clone WHERE match(content, 'GPT') ORDER BY id
+----
+3
+6
+
+query I
+SELECT id FROM news_clone_chain WHERE match(content, 'AI') ORDER BY id
+----
+1
+2
+
+statement ok
+ALTER TABLE news_clone FLASHBACK TO (SNAPSHOT => $clone_dict_snapshot)
+
+query I
+SELECT id FROM news_clone WHERE match(content, 'GPT') ORDER BY id
+----
+3
+
+# Persisted internal options are accepted by CLONE/FLASHBACK, not by user DDL.
+statement error 1603
+CREATE INVERTED INDEX bad_dict ON news_clone(content) tokenizer = 'japanese' user_dictionary_location = 'fake/path.csv'
+
+statement ok
+UNSET VARIABLE clone_dict_snapshot
+
+statement ok
+SET enable_experimental_clone_table = 0
+
 statement ok
 DROP DATABASE test_ii_userdict
 

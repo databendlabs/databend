@@ -75,6 +75,7 @@ use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::ListedMaterializedView;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
+use databend_common_meta_app::schema::LvtUpdate;
 use databend_common_meta_app::schema::MVDefinition;
 use databend_common_meta_app::schema::MVSourceBindingSnapshot;
 use databend_common_meta_app::schema::MaterializedViewListFilter;
@@ -244,6 +245,17 @@ impl Catalog for SessionCatalog {
         } else {
             self.inner.get_table_meta_by_id(table_id).await
         }
+    }
+
+    async fn mget_table_metas_by_ids(
+        &self,
+        table_ids: &[u64],
+    ) -> Result<Vec<(u64, Option<SeqV<TableMeta>>)>> {
+        self.inner.mget_table_metas_by_ids(table_ids).await
+    }
+
+    async fn list_clone_group_bindings(&self, clone_group_id: u64) -> Result<Vec<(u64, u64)>> {
+        self.inner.list_clone_group_bindings(clone_group_id).await
     }
 
     async fn get_mv_definition(
@@ -890,10 +902,22 @@ impl Catalog for SessionCatalog {
         self.inner.set_table_lvt(name_ident, value).await
     }
 
+    async fn mget_table_lvts(
+        &self,
+        tenant: &Tenant,
+        table_ids: &[u64],
+    ) -> Result<Vec<(u64, Option<SeqV<LeastVisibleTime>>)>> {
+        self.inner.mget_table_lvts(tenant, table_ids).await
+    }
+
+    async fn set_table_lvts(&self, tenant: &Tenant, updates: &[LvtUpdate]) -> Result<bool> {
+        self.inner.set_table_lvts(tenant, updates).await
+    }
+
     async fn get_table_lvt(
         &self,
         name_ident: &LeastVisibleTimeIdent,
-    ) -> Result<Option<LeastVisibleTime>> {
+    ) -> Result<Option<SeqV<LeastVisibleTime>>> {
         self.inner.get_table_lvt(name_ident).await
     }
 
