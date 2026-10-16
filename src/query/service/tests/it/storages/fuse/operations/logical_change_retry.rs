@@ -127,6 +127,8 @@ async fn test_epochless_transaction_conflict_preserves_complete_delta() -> anyho
         execute(&writer, &format!("INSERT INTO {target} VALUES (100,0)")).await?;
         fixture.execute_command("COMMIT").await?;
         assert_eq!(totals(&fixture, name).await?, (before.0 + 2, before.1 + 1));
+        super::segment_block_counts::assert_segment_block_counts(&table(&fixture, name).await?)
+            .await?;
         assert_eq!(
             table(&fixture, name)
                 .await?
@@ -225,6 +227,8 @@ async fn test_analyze_and_multi_table_retry_preserve_counters() -> anyhow::Resul
         }
         fixture.execute_command("COMMIT").await?;
         for (index, name) in names.into_iter().enumerate() {
+            super::segment_block_counts::assert_segment_block_counts(&table(&fixture, name).await?)
+                .await?;
             assert_eq!(
                 totals(&fixture, name).await?,
                 (before[index].0 + delta.0, before[index].1 + delta.1),

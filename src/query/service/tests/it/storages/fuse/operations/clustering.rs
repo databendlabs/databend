@@ -142,6 +142,7 @@ async fn test_concurrent_disjoint_recluster_commits() -> anyhow::Result<()> {
         snapshot_before.summary.row_count
     );
     assert_eq!(snapshot_after.segments.len(), 2);
+    super::segment_block_counts::assert_segment_block_counts(fuse_table_after).await?;
 
     // Both disjoint recluster commands must have committed. Verify that the snapshot
     // from before reclustering is exactly two successful commits behind the table head.

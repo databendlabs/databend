@@ -70,6 +70,8 @@ pub struct SegmentCompactionState {
     pub num_fragments_compacted: usize,
     // statistics of segments that were consumed by compaction
     pub removed_statistics: Statistics,
+    // Block counts for newly written segments, keyed by segment path.
+    pub segment_block_counts: HashMap<String, u64>,
 }
 
 pub struct SegmentCompactMutator {
@@ -401,6 +403,9 @@ impl<'a> SegmentCompactor<'a> {
         self.compacted_state
             .removed_segment_indexes
             .extend(result.indexes.into_iter().filter(|idx| *idx != replace_idx));
+        self.compacted_state
+            .segment_block_counts
+            .insert(result.location.clone(), result.statistics.block_count);
         self.compacted_state.new_segment_paths.push(result.location);
     }
 }

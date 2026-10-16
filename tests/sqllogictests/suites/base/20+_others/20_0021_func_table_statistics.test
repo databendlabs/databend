@@ -54,5 +54,20 @@ select parse_json(statistics_json):summary:block_count from table_statistics('ta
 1
 
 
+# Per-segment metadata must not inflate either database-wide or single-table statistics.
+query I
+select count(*) from table_statistics('table_statistics')
+where parse_json(statistics_json):segments is not null
+   or parse_json(statistics_json):segment_block_counts is not null;
+----
+0
+
+query I
+select count(*) from table_statistics('table_statistics', 't1')
+where parse_json(statistics_json):segments is not null
+   or parse_json(statistics_json):segment_block_counts is not null;
+----
+0
+
 statement error
 select * from table_statistics();
