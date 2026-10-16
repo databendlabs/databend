@@ -257,12 +257,12 @@ pub async fn get_fuse_table_statistics(
 ) -> Result<Option<String>> {
     // Try to convert to FuseTable
     if let Some(table_snapshot) = get_fuse_table_snapshot(table).await? {
-        // Convert snapshot to JSON, but filter out segments field
+        // Convert snapshot to JSON without per-segment metadata.
         let mut snapshot_json = serde_json::to_value(&table_snapshot)?;
 
-        // If it's an object and contains segments field, remove it
         if let serde_json::Value::Object(ref mut obj) = snapshot_json {
             obj.remove("segments");
+            obj.remove("segment_block_counts");
         }
 
         // Convert JSON to variant
