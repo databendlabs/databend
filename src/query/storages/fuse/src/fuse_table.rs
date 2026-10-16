@@ -1706,7 +1706,7 @@ enum TableStorageKind {
 /// - Temporary tables always use `STANDARD`: their data rarely lives long
 ///   enough to amortize the monitoring fee of `INTELLIGENT_TIERING`.
 /// - Internal tables ignore the user-provided `storage_class_specs` (e.g. the
-///   `s3_storage_class` session setting) and keep whatever `storage_params`
+///   `experimental_s3_storage_class` session setting) and keep whatever `storage_params`
 ///   already carries, i.e. the value from the server `[storage.s3]` config.
 ///   The default bucket is owned by the operator of the deployment, so only
 ///   the operator should decide its storage class; letting end users flip it
