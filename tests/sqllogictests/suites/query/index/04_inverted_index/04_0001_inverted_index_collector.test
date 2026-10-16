@@ -1,0 +1,107 @@
+statement ok
+DROP DATABASE IF EXISTS test_inverted_index_collector
+
+statement ok
+CREATE DATABASE test_inverted_index_collector
+
+statement ok
+USE test_inverted_index_collector
+
+statement ok
+CREATE TABLE docs (
+    id INT,
+    body STRING,
+    INVERTED INDEX idx (body) tokenizer = 'english'
+)
+
+statement ok
+INSERT INTO docs VALUES
+    (1, 'alpha alpha alpha'),
+    (2, 'alpha beta gamma'),
+    (3, 'beta gamma delta'),
+    (4, 'alpha beta gamma')
+
+# Unscored collection returns every matching row, without duplicates for OR clauses.
+query I
+SELECT id FROM docs WHERE MATCH(body, 'alpha') ORDER BY id
+----
+1
+2
+4
+
+query I
+SELECT id FROM docs WHERE QUERY('body:alpha OR body:beta') ORDER BY id
+----
+1
+2
+3
+4
+
+# Scores stay aligned with row IDs even though the collector no longer ranks results.
+query IB
+SELECT id, score() > 0 FROM docs WHERE MATCH(body, 'alpha') ORDER BY id
+----
+1 1
+2 1
+4 1
+
+# SQL, not the collector, is responsible for ORDER BY score() and LIMIT.
+query I
+SELECT id FROM docs WHERE MATCH(body, 'alpha') ORDER BY score() DESC, id LIMIT 2
+----
+1
+2
+
+query I
+SELECT id FROM docs WHERE QUERY('body:"beta gamma"') ORDER BY id
+----
+2
+3
+4
+
+query I
+SELECT id FROM docs WHERE MATCH(body, 'missing') ORDER BY id
+----
+
+query IB
+SELECT id, score() > 0 FROM docs WHERE MATCH(body, 'missing') ORDER BY id
+----
+
+# An absent mandatory term proves an expansion query empty before payload warmup.
+query I
+SELECT count(*) FROM docs WHERE QUERY('body:missing AND body:"beta gam"*')
+----
+0
+
+# Missing alternatives and exclusions are not mandatory terms.
+query I
+SELECT id FROM docs WHERE QUERY('body:missing OR body:"beta gam"*') ORDER BY id
+----
+2
+3
+4
+
+query I
+SELECT id FROM docs WHERE QUERY('body:"beta gam"* AND NOT body:missing') ORDER BY id
+----
+2
+3
+4
+
+# Input tokens are not exact requirements for fuzzy and set expansion.
+query I
+SELECT id FROM docs WHERE MATCH(body, 'alpa', 'fuzziness=1') ORDER BY id
+----
+1
+2
+4
+
+query I
+SELECT id FROM docs WHERE QUERY('body: IN [missing beta]') ORDER BY id
+----
+2
+3
+4
+
+statement ok
+DROP DATABASE test_inverted_index_collector

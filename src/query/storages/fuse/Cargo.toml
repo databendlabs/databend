@@ -92,6 +92,10 @@ divan = { workspace = true }
 name = "bench"
 harness = false
 
+[[bench]]
+name = "inverted_index"
+harness = false
+
 [lints]
 workspace = true
 

@@ -120,6 +120,22 @@ impl SearchPinDirectory {
         }
     }
 
+    /// Sum of currently retained range lengths. Partial overlaps count separately; backing
+    /// allocations, footer slices, and cache metadata are not included. Intended for a snapshot
+    /// after warmup, not a per-read memory accounting operation.
+    pub fn pinned_bytes(&self) -> usize {
+        let files = self.files.read().expect("search pin lock poisoned");
+        files.values().fold(0usize, |total, file| {
+            file.0
+                .read()
+                .expect("search pin lock poisoned")
+                .iter()
+                .fold(total, |total, cached| {
+                    total.saturating_add(cached.bytes.len())
+                })
+        })
+    }
+
     fn file_cache(&self, path: &Path) -> FileRangeCache {
         if let Some(cache) = self
             .files
@@ -244,6 +260,7 @@ mod tests {
             .unwrap();
         let pin = SearchPinDirectory::new(Arc::new(directory));
         let file = pin.open_read(Path::new("file")).unwrap();
+        assert_eq!(pin.pinned_bytes(), 0);
         assert_eq!(
             file.read_bytes_slice(2..4).unwrap_err().kind(),
             io::ErrorKind::WouldBlock
@@ -251,5 +268,13 @@ mod tests {
         pin.insert("file", 1..5, OwnedBytes::new(b"bcde".to_vec()))
             .unwrap();
         assert_eq!(file.read_bytes_slice(2..4).unwrap().as_ref(), b"cd");
+        assert_eq!(pin.pinned_bytes(), 4);
+        // A contained range does not add retained bytes; a larger range replaces it.
+        pin.insert("file", 2..4, OwnedBytes::new(b"cd".to_vec()))
+            .unwrap();
+        assert_eq!(pin.pinned_bytes(), 4);
+        pin.insert("file", 0..6, OwnedBytes::new(b"abcdef".to_vec()))
+            .unwrap();
+        assert_eq!(pin.pinned_bytes(), 6);
     }
 }

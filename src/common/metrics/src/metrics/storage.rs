@@ -14,6 +14,7 @@
 
 use std::sync::LazyLock;
 use std::time::Duration;
+use std::time::Instant;
 
 use databend_common_base::runtime::metrics::Counter;
 use databend_common_base::runtime::metrics::FamilyCounter;
@@ -22,6 +23,7 @@ use databend_common_base::runtime::metrics::Histogram;
 use databend_common_base::runtime::metrics::register_counter;
 use databend_common_base::runtime::metrics::register_counter_family;
 use databend_common_base::runtime::metrics::register_gauge;
+use databend_common_base::runtime::metrics::register_histogram;
 use databend_common_base::runtime::metrics::register_histogram_in_milliseconds;
 use prometheus_client::encoding::EncodeLabelSet;
 
@@ -179,6 +181,106 @@ static BLOCK_INVERTED_INDEX_READ_BYTES: LazyLock<Counter> =
 static BLOCK_INVERTED_INDEX_SEARCH_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram_in_milliseconds("fuse_block_inverted_index_search_milliseconds")
 });
+fn register_inverted_index_phase_milliseconds(name: &str) -> Histogram {
+    // Existing storage buckets start at 50 ms, too coarse for cache hits and queueing.
+    register_histogram(
+        name,
+        [
+            0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0, 50.0, 100.0, 500.0, 1_000.0, 5_000.0, 30_000.0,
+        ]
+        .into_iter(),
+    )
+}
+
+static BLOCK_INVERTED_INDEX_OPEN_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_inverted_index_phase_milliseconds("fuse_block_inverted_index_open_milliseconds")
+});
+static BLOCK_INVERTED_INDEX_WARMUP_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_inverted_index_phase_milliseconds("fuse_block_inverted_index_warmup_milliseconds")
+});
+static BLOCK_INVERTED_INDEX_CACHE_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_inverted_index_phase_milliseconds("fuse_block_inverted_index_cache_milliseconds")
+});
+static BLOCK_INVERTED_INDEX_FETCH_QUEUE_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_inverted_index_phase_milliseconds("fuse_block_inverted_index_fetch_queue_milliseconds")
+});
+static BLOCK_INVERTED_INDEX_SEARCH_QUEUE_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_inverted_index_phase_milliseconds(
+        "fuse_block_inverted_index_search_queue_milliseconds",
+    )
+});
+static BLOCK_INVERTED_INDEX_READ_REQUESTS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_inverted_index_read_requests"));
+static BLOCK_INVERTED_INDEX_READ_ERRORS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_inverted_index_read_errors"));
+static BLOCK_INVERTED_INDEX_WARMUP_BYTES: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram(
+        "fuse_block_inverted_index_warmup_bytes",
+        [
+            1_024.0,
+            16_384.0,
+            65_536.0,
+            262_144.0,
+            1_048_576.0,
+            4_194_304.0,
+            16_777_216.0,
+            67_108_864.0,
+            268_435_456.0,
+            1_073_741_824.0,
+            4_294_967_296.0,
+        ]
+        .into_iter(),
+    )
+});
+
+/// Operation latency, not mutually exclusive pieces of a query's wall time. Open/warmup include
+/// their nested cache, lock-wait, and read operations; concurrent reads may overlap. Search is
+/// blocking-task execution wall time (including result collection), not OS CPU accounting.
+#[derive(Clone, Copy, Debug)]
+pub enum InvertedIndexPhase {
+    Open,
+    Warmup,
+    Cache,
+    FetchQueue,
+    SearchQueue,
+    Read,
+    Search,
+}
+
+/// Records completed, failed, and cancelled operations on drop, without allocating labels.
+/// Keep this guard out of network awaits when measuring Cache, and move SearchQueue into the
+/// blocking closure so it ends when execution starts rather than when the task is submitted.
+#[must_use]
+pub struct InvertedIndexTimer {
+    histogram: &'static Histogram,
+    start: Instant,
+}
+
+impl InvertedIndexTimer {
+    pub fn new(phase: InvertedIndexPhase) -> Self {
+        let histogram: &'static Histogram = match phase {
+            InvertedIndexPhase::Open => &BLOCK_INVERTED_INDEX_OPEN_MILLISECONDS,
+            InvertedIndexPhase::Warmup => &BLOCK_INVERTED_INDEX_WARMUP_MILLISECONDS,
+            InvertedIndexPhase::Cache => &BLOCK_INVERTED_INDEX_CACHE_MILLISECONDS,
+            InvertedIndexPhase::FetchQueue => &BLOCK_INVERTED_INDEX_FETCH_QUEUE_MILLISECONDS,
+            InvertedIndexPhase::SearchQueue => &BLOCK_INVERTED_INDEX_SEARCH_QUEUE_MILLISECONDS,
+            InvertedIndexPhase::Read => &BLOCK_INVERTED_INDEX_READ_MILLISECONDS,
+            InvertedIndexPhase::Search => &BLOCK_INVERTED_INDEX_SEARCH_MILLISECONDS,
+        };
+        Self {
+            histogram,
+            start: Instant::now(),
+        }
+    }
+}
+
+impl Drop for InvertedIndexTimer {
+    fn drop(&mut self) {
+        // Retain sub-millisecond cache and queue timings instead of truncating them to zero.
+        self.histogram
+            .observe(self.start.elapsed().as_secs_f64() * 1000.0);
+    }
+}
 static BLOCK_VECTOR_INDEX_WRITE_NUMS: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_block_vector_index_write_nums"));
 static BLOCK_VECTOR_INDEX_WRITE_BYTES: LazyLock<Counter> =
@@ -643,6 +745,21 @@ pub fn metrics_inc_block_inverted_index_read_bytes(c: u64) {
     BLOCK_INVERTED_INDEX_READ_BYTES.inc_by(c);
 }
 
+/// Logical OpenDAL range-read attempts; backend-internal retries are not counted separately.
+pub fn metrics_inc_block_inverted_index_read_requests(c: u64) {
+    BLOCK_INVERTED_INDEX_READ_REQUESTS.inc_by(c);
+}
+
+pub fn metrics_inc_block_inverted_index_read_errors(c: u64) {
+    BLOCK_INVERTED_INDEX_READ_ERRORS.inc_by(c);
+}
+
+/// Retained logical range bytes after one successful warmup (including early no-match).
+/// Excludes footer slices, allocation overhead, and global caches; not an RSS measurement.
+pub fn metrics_observe_block_inverted_index_warmup_bytes(bytes: usize) {
+    BLOCK_INVERTED_INDEX_WARMUP_BYTES.observe(bytes as f64);
+}
+
 pub fn metrics_inc_block_inverted_index_search_milliseconds(c: u64) {
     BLOCK_INVERTED_INDEX_SEARCH_MILLISECONDS.observe(c as f64);
 }
@@ -1014,4 +1131,47 @@ pub fn metrics_inc_block_virtual_column_write_bytes(c: u64) {
 
 pub fn metrics_inc_block_virtual_column_write_milliseconds(c: u64) {
     BLOCK_VIRTUAL_COLUMN_WRITE_MILLISECONDS.observe(c as f64);
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_base::runtime::ThreadTracker;
+    use databend_common_base::runtime::metrics::MetricValue;
+    use databend_common_base::runtime::metrics::ScopedRegistry;
+
+    use super::*;
+
+    #[test]
+    fn inverted_index_timers_record_in_query_scope() {
+        let metrics = ScopedRegistry::create(None);
+        let mut payload = ThreadTracker::new_tracking_payload();
+        payload.metrics = Some(metrics.clone());
+        let _tracking = ThreadTracker::tracking(payload);
+        let phases = [
+            (InvertedIndexPhase::Open, "open"),
+            (InvertedIndexPhase::Warmup, "warmup"),
+            (InvertedIndexPhase::Cache, "cache"),
+            (InvertedIndexPhase::FetchQueue, "fetch_queue"),
+            (InvertedIndexPhase::SearchQueue, "search_queue"),
+            (InvertedIndexPhase::Read, "read"),
+            (InvertedIndexPhase::Search, "search"),
+        ];
+        for (phase, _) in phases {
+            drop(InvertedIndexTimer::new(phase));
+        }
+        metrics_observe_block_inverted_index_warmup_bytes(4096);
+        let samples = metrics.dump_sample().unwrap();
+        for name in phases
+            .into_iter()
+            .map(|(_, phase)| format!("{phase}_milliseconds"))
+            .chain(std::iter::once("warmup_bytes".to_owned()))
+        {
+            let name = format!("fuse_block_inverted_index_{name}");
+            let sample = samples.iter().find(|sample| sample.name == name).unwrap();
+            let MetricValue::Histogram(buckets) = &sample.value else {
+                panic!("expected a histogram for {name}");
+            };
+            assert_eq!(buckets.last().unwrap().count, 1.0, "{name}");
+        }
+    }
 }

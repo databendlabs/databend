@@ -22,14 +22,16 @@ use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::sync::Weak;
-use std::time::Instant;
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_metrics::storage::InvertedIndexPhase;
+use databend_common_metrics::storage::InvertedIndexTimer;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_bytes;
-use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_milliseconds;
+use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_errors;
+use databend_common_metrics::storage::metrics_inc_block_inverted_index_read_requests;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::InvertedIndexFullPayloadCache;
@@ -70,11 +72,27 @@ const LOOKUP_PAGE_CACHE_KEY_PREFIX: &str = "ii-lookup-page-v1:";
 const PAYLOAD_CACHE_KEY_PREFIX: &str = "ii-payload-page-v1:";
 const FULL_PAYLOAD_CACHE_KEY_PREFIX: &str = "ii-payload-full-v1:";
 
-fn record_inverted_index_read(bytes: usize, elapsed: std::time::Duration) {
-    metrics_inc_block_inverted_index_read_bytes(u64::try_from(bytes).unwrap_or(u64::MAX));
-    metrics_inc_block_inverted_index_read_milliseconds(
-        u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX),
-    );
+/// One logical remote range read, including footer recovery and external components.
+/// Cache hits never call this helper. Backend retries remain inside this one attempt.
+async fn read_inverted_index_range(
+    operator: &Operator,
+    location: &str,
+    range: Range<u64>,
+) -> opendal::Result<Bytes> {
+    metrics_inc_block_inverted_index_read_requests(1);
+    let _timer = InvertedIndexTimer::new(InvertedIndexPhase::Read);
+    let result = operator
+        .read_with(location)
+        .range(range)
+        .await
+        .map(|data| data.to_bytes());
+    match &result {
+        Ok(data) => metrics_inc_block_inverted_index_read_bytes(
+            u64::try_from(data.len()).unwrap_or(u64::MAX),
+        ),
+        Err(_) => metrics_inc_block_inverted_index_read_errors(1),
+    }
+    result
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -253,6 +271,7 @@ impl RemoteBundleFileHandle {
 
     fn cached_full_payload(&self) -> Option<Bytes> {
         let cache = self.full_payload_cache.as_ref()?;
+        let _timer = InvertedIndexTimer::new(InvertedIndexPhase::Cache);
         let key = self.full_payload_key();
         let data = cache.get(&key)?.data.clone();
         if data.len() != self.len() {
@@ -260,6 +279,11 @@ impl RemoteBundleFileHandle {
             return None;
         }
         Some(data)
+    }
+
+    fn copy_cached_bytes(data: &[u8]) -> OwnedBytes {
+        let _timer = InvertedIndexTimer::new(InvertedIndexPhase::Cache);
+        OwnedBytes::new(data.to_vec())
     }
 
     fn page_key(&self, kind: PageCacheKind, page_no: usize) -> String {
@@ -326,21 +350,17 @@ impl RemoteBundleFileHandle {
             .start
             .checked_add(logical_end)
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "bundle range overflow"))?;
-        let start = Instant::now();
-        let data = self
-            .operator
-            .read_with(self.object.as_ref())
-            .range(absolute_start..absolute_end)
-            .await
-            .map_err(io::Error::other)?
-            .to_bytes();
+        let data =
+            read_inverted_index_range(&self.operator, &self.object, absolute_start..absolute_end)
+                .await
+                .map_err(io::Error::other)?;
         if data.len() != range.len() {
+            metrics_inc_block_inverted_index_read_errors(1);
             return Err(io::Error::new(
                 io::ErrorKind::UnexpectedEof,
                 "object storage returned a short inverted-index range",
             ));
         }
-        record_inverted_index_read(data.len(), start.elapsed());
         Ok(data)
     }
 
@@ -354,6 +374,7 @@ impl RemoteBundleFileHandle {
         let logical_end = self.page_range(last_page)?.end;
         let data = self.fetch_range(logical_start..logical_end).await?;
 
+        let _timer = InvertedIndexTimer::new(InvertedIndexPhase::Cache);
         let mut pages = Vec::with_capacity(last_page - first_page + 1);
         for page_no in first_page..=last_page {
             let page_range = self.page_range(page_no)?;
@@ -378,15 +399,18 @@ impl RemoteBundleFileHandle {
         // The warmup planner explicitly requests the complete physical `.idx` / `.pos` through
         // the raw bundle directory, not Tantivy's footer-stripped field slices. Preserve one
         // full-read singleflight per component instead of translating it into page requests.
+        let queue_timer = InvertedIndexTimer::new(InvertedIndexPhase::FetchQueue);
         let fetch_lock = full_payload_fetch_lock(&self.location, self.file_id);
         let _guard = fetch_lock.lock().await;
+        drop(queue_timer);
         if let Some(data) = self.cached_full_payload() {
-            return Ok(OwnedBytes::new(data.to_vec()));
+            return Ok(Self::copy_cached_bytes(&data));
         }
         let data = self.fetch_range(0..self.len()).await?;
         // Full components are stored as one entry in a separate memory pool. Oversized files
         // are only pinned for this search; they must not evict hot payload pages.
         if let Some(cache) = &self.full_payload_cache {
+            let _timer = InvertedIndexTimer::new(InvertedIndexPhase::Cache);
             if data
                 .len()
                 .saturating_add(std::mem::size_of::<InvertedIndexPayloadBytes>())
@@ -401,28 +425,38 @@ impl RemoteBundleFileHandle {
         Ok(OwnedBytes::new(Vec::<u8>::from(data)))
     }
 
+    fn cached_lookup_entry(&self, key: &str) -> Option<Arc<InvertedIndexLookupBytes>> {
+        let _timer = InvertedIndexTimer::new(InvertedIndexPhase::Cache);
+        self.lookup_cache.get(key)
+    }
+
     async fn read_cached_lookup_file(&self, range: Range<usize>) -> io::Result<OwnedBytes> {
         let key = self.whole_lookup_key();
-        if let Some(value) = self.lookup_cache.get(&key)
+        if let Some(value) = self.cached_lookup_entry(&key)
             && value.data.len() == self.len()
         {
-            return Ok(OwnedBytes::new(value.data.slice(range).to_vec()));
+            return Ok(Self::copy_cached_bytes(&value.data[range]));
         }
 
+        let queue_timer = InvertedIndexTimer::new(InvertedIndexPhase::FetchQueue);
         let fetch_lock = page_fetch_lock(&self.location, self.file_id, PageCacheKind::Lookup, 0);
         let _guard = fetch_lock.lock().await;
+        drop(queue_timer);
         // Recheck after waiting for another fetch. Only evict invalid entries under the lock,
         // so a stale lock-free lookup cannot remove a component just populated by another reader.
-        if let Some(value) = self.lookup_cache.get(&key) {
+        if let Some(value) = self.cached_lookup_entry(&key) {
             if value.data.len() == self.len() {
-                return Ok(OwnedBytes::new(value.data.slice(range).to_vec()));
+                return Ok(Self::copy_cached_bytes(&value.data[range]));
             }
             self.lookup_cache.evict(&key);
         }
 
         let data = self.fetch_range(0..self.len()).await?;
-        self.lookup_cache
-            .insert(key, InvertedIndexLookupBytes::new(data.clone()));
+        {
+            let _timer = InvertedIndexTimer::new(InvertedIndexPhase::Cache);
+            self.lookup_cache
+                .insert(key, InvertedIndexLookupBytes::new(data.clone()));
+        }
         Ok(OwnedBytes::new(data.slice(range).to_vec()))
     }
 
@@ -445,7 +479,7 @@ impl RemoteBundleFileHandle {
             RangeCachePolicy::Pages(kind) => {
                 if kind == PageCacheKind::Payload {
                     if let Some(data) = self.cached_full_payload() {
-                        return Ok(OwnedBytes::new(data.slice(range).to_vec()));
+                        return Ok(Self::copy_cached_bytes(&data[range]));
                     }
                     if self.is_full_postings_read(&range)
                         && (self.payload_cache.is_some() || self.full_payload_cache.is_some())
@@ -474,14 +508,19 @@ impl RemoteBundleFileHandle {
         let last_page = (range.end - 1) / CACHE_PAGE_SIZE;
         // Retain pages for this request even if the global cache evicts them before assembly.
         let mut request_pages = HashMap::new();
-        for page_no in first_page..=last_page {
-            if let Some(page) = self.cached_page(kind, page_no)? {
-                request_pages.insert(page_no, page);
+        {
+            // Measure the batch, not each page, to avoid per-page histogram overhead.
+            let _timer = InvertedIndexTimer::new(InvertedIndexPhase::Cache);
+            for page_no in first_page..=last_page {
+                if let Some(page) = self.cached_page(kind, page_no)? {
+                    request_pages.insert(page_no, page);
+                }
             }
         }
         self.fill_missing_pages(kind, first_page, last_page, &mut request_pages)
             .await?;
 
+        let _timer = InvertedIndexTimer::new(InvertedIndexPhase::Cache);
         let mut output = Vec::with_capacity(range.len());
         for page_no in first_page..=last_page {
             let page = request_pages.get(&page_no).ok_or_else(|| {
@@ -533,17 +572,22 @@ impl RemoteBundleFileHandle {
         request_pages: &mut HashMap<usize, Bytes>,
     ) -> io::Result<()> {
         // Always acquire locks in ascending order, including for overlapping requests.
+        let queue_timer = InvertedIndexTimer::new(InvertedIndexPhase::FetchQueue);
         let mut _guards = Vec::with_capacity(last_page - first_page + 1);
         for page_no in first_page..=last_page {
             let fetch_lock = page_fetch_lock(&self.location, self.file_id, kind, page_no);
             _guards.push(fetch_lock.lock_owned().await);
         }
+        drop(queue_timer);
 
         // Another request may have filled some pages while we waited. Retain each hit, then
         // group the remaining holes without probing the global cache again during the scan.
-        for page_no in first_page..=last_page {
-            if let Some(page) = self.cached_page(kind, page_no)? {
-                request_pages.insert(page_no, page);
+        {
+            let _timer = InvertedIndexTimer::new(InvertedIndexPhase::Cache);
+            for page_no in first_page..=last_page {
+                if let Some(page) = self.cached_page(kind, page_no)? {
+                    request_pages.insert(page_no, page);
+                }
             }
         }
         let mut page_no = first_page;
@@ -659,6 +703,7 @@ impl Directory for RemoteBundleDirectory {
 
 pub(crate) struct BundleSearchDirectory {
     pub directory: FooterDirectory,
+    pub search_pin: SearchPinDirectory,
 }
 
 struct FooterCacheState {
@@ -686,7 +731,9 @@ impl FooterCacheState {
     }
 
     fn load(&self) -> Option<InvertedIndexBundleFooter> {
-        let metadata = self.meta_cache.get(&self.meta_key)?;
+        let cache = self.meta_cache.as_ref()?;
+        let _timer = InvertedIndexTimer::new(InvertedIndexPhase::Cache);
+        let metadata = cache.get(&self.meta_key)?;
         if metadata.object_size != self.object_size {
             self.meta_cache.evict(&self.meta_key);
             return None;
@@ -705,6 +752,10 @@ impl FooterCacheState {
     }
 
     fn store(&self, footer_bytes: Bytes) {
+        let _timer = self
+            .meta_cache
+            .as_ref()
+            .map(|_| InvertedIndexTimer::new(InvertedIndexPhase::Cache));
         self.meta_cache.insert(
             self.meta_key.clone(),
             InvertedIndexMeta::new(self.object_size, footer_bytes),
@@ -722,6 +773,7 @@ impl FooterCacheState {
         if self.lookup_cache.is_none() {
             return;
         }
+        let _timer = InvertedIndexTimer::new(InvertedIndexPhase::Cache);
         for (file_id, (path, range)) in footer.file_ranges.files.iter().enumerate() {
             let Some(file_len) = range.end.checked_sub(range.start) else {
                 continue;
@@ -764,8 +816,10 @@ impl FooterCacheState {
 
         // Serialize cold recovery per immutable object. Recheck under the lock so waiters reuse
         // the first caller's complete cached footer instead of issuing another tail read.
+        let queue_timer = InvertedIndexTimer::new(InvertedIndexPhase::FetchQueue);
         let fetch_lock = footer_fetch_lock(location);
         let _guard = fetch_lock.lock().await;
+        drop(queue_timer);
         if let Some(footer) = self.load() {
             return Ok(footer);
         }
@@ -780,13 +834,8 @@ impl FooterCacheState {
         let initial_read_size = u64::try_from(INVERTED_INDEX_BUNDLE_INITIAL_FOOTER_READ_SIZE)
             .map_err(|_| ErrorCode::StorageOther("inverted-index footer read size is invalid"))?;
         let tail_start = self.object_size.saturating_sub(initial_read_size);
-        let start = Instant::now();
-        let tail = operator
-            .read_with(location)
-            .range(tail_start..self.object_size)
-            .await?;
-        record_inverted_index_read(tail.len(), start.elapsed());
-        let tail_bytes = tail.to_bytes();
+        let tail_bytes =
+            read_inverted_index_range(operator, location, tail_start..self.object_size).await?;
         let footer_start = InvertedIndexBundleFooter::footer_start_from_tail(
             tail_bytes.as_ref(),
             self.object_size,
@@ -811,13 +860,9 @@ impl FooterCacheState {
             })?;
             (Bytes::copy_from_slice(footer_bytes), footer)
         } else {
-            let start = Instant::now();
-            let footer_data = operator
-                .read_with(location)
-                .range(footer_start..self.object_size)
-                .await?;
-            record_inverted_index_read(footer_data.len(), start.elapsed());
-            let footer_bytes = footer_data.to_bytes();
+            let footer_bytes =
+                read_inverted_index_range(operator, location, footer_start..self.object_size)
+                    .await?;
             let footer = InvertedIndexBundleFooter::open_footer_for_object(
                 footer_bytes.as_ref(),
                 self.object_size,
@@ -862,8 +907,11 @@ pub(crate) async fn load_bundle_search_directory(
         full_payload_cache: cache_manager.get_inverted_index_full_payload_cache(),
     };
     let search_pin = SearchPinDirectory::new(Arc::new(remote));
-    let directory = FooterDirectory::new(search_pin, footer);
-    Ok(BundleSearchDirectory { directory })
+    let directory = FooterDirectory::new(search_pin.clone(), footer);
+    Ok(BundleSearchDirectory {
+        directory,
+        search_pin,
+    })
 }
 
 #[cfg(test)]
@@ -1042,6 +1090,46 @@ mod tests {
         Bytes::copy_from_slice(&object[usize::try_from(footer.footer_start).unwrap()..])
     }
 
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_read_metrics_exclude_cache_hits_and_include_errors() -> Result<()> {
+        use databend_common_base::runtime::ThreadTracker;
+        use databend_common_base::runtime::metrics::MetricValue;
+        use databend_common_base::runtime::metrics::ScopedRegistry;
+
+        let metrics = ScopedRegistry::create(None);
+        let mut payload = ThreadTracker::new_tracking_payload();
+        payload.metrics = Some(metrics.clone());
+        let _tracking = ThreadTracker::tracking(payload);
+        let data = vec![7; 2 * CACHE_PAGE_SIZE];
+        let (file, ranges) = payload_file_handle("read-metrics", data.clone()).await?;
+        assert_eq!(file.read_range(0..data.len()).await?.as_ref(), &data);
+        assert_eq!(file.read_range(1..10).await?.as_ref(), &data[1..10]);
+        assert_eq!(ranges.lock().unwrap().len(), 1);
+        assert!(
+            read_inverted_index_range(&file.operator, "missing-index", 0..1)
+                .await
+                .is_err()
+        );
+        let samples = metrics.dump_sample()?;
+        for (name, expected) in [
+            ("fuse_block_inverted_index_read_requests", 2.0),
+            ("fuse_block_inverted_index_read_bytes", data.len() as f64),
+            ("fuse_block_inverted_index_read_errors", 1.0),
+        ] {
+            let sample = samples.iter().find(|sample| sample.name == name).unwrap();
+            assert_eq!(sample.value, MetricValue::Counter(expected), "{name}");
+        }
+        let sample = samples
+            .iter()
+            .find(|sample| sample.name == "fuse_block_inverted_index_read_milliseconds")
+            .unwrap();
+        let MetricValue::Histogram(buckets) = &sample.value else {
+            panic!("expected a read-latency histogram");
+        };
+        assert_eq!(buckets.last().unwrap().count, 2.0);
+        Ok(())
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn test_page_reads_merge_misses_and_reuse_cache() -> Result<()> {
         let requested_len = (MAX_MERGED_PAGES * 2 + 1) * CACHE_PAGE_SIZE;
@@ -1201,10 +1289,10 @@ mod tests {
         has_score: bool,
     ) -> Result<Vec<u32>> {
         use tantivy::Index;
-        use tantivy::collector::DocSetCollector;
-        use tantivy::collector::TopDocs;
         use tantivy::query::QueryParser;
         use tantivy::query_grammar::parse_query;
+
+        use crate::io::read::inverted_index::inverted_index_collector::InvertedIndexCollector;
 
         let directory = FooterDirectory::new(
             SearchPinDirectory::new(Arc::new(remote.clone())),
@@ -1228,29 +1316,22 @@ mod tests {
         )?;
         let reader = index.reader()?;
         let searcher = reader.searcher();
-        warmup
+        if !warmup
             .warm_searcher(&searcher, &directory, has_score)
-            .await?;
+            .await?
+        {
+            return Ok(Vec::new());
+        }
         // Search is synchronous and must succeed using pinned data, without remote reads.
-        let mut rows = if has_score {
-            searcher
-                .search(
-                    query.as_ref(),
-                    &TopDocs::with_limit(searcher.num_docs() as usize).order_by_score(),
-                )?
-                .into_iter()
-                .map(|(score, address)| {
-                    assert!(score.is_finite());
-                    address.doc_id
-                })
-                .collect::<Vec<_>>()
+        let docs = searcher.search(query.as_ref(), &InvertedIndexCollector::new(has_score))?;
+        if has_score {
+            let scores = docs.scores.as_ref().unwrap();
+            assert_eq!(docs.rows.len(), scores.len());
+            assert!(scores.iter().all(|score| score.is_finite()));
         } else {
-            searcher
-                .search(query.as_ref(), &DocSetCollector)?
-                .into_iter()
-                .map(|address| address.doc_id)
-                .collect::<Vec<_>>()
-        };
+            assert!(docs.scores.is_none());
+        }
+        let mut rows = docs.rows;
         rows.sort_unstable();
         Ok(rows)
     }
@@ -1348,6 +1429,75 @@ mod tests {
             );
             assert_eq!(payload_reads(), first_reads, "partial query after {text}");
             assert_eq!(page_cache.len(), 0, "{text}");
+        }
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_missing_required_term_skips_expansion_payload() -> Result<()> {
+        let (fixture, footer, ranges) = expansion_bundle_fixture().await?;
+        let payload_ranges = footer
+            .file_ranges
+            .files
+            .iter()
+            .filter(|(path, _)| matches!(component_name(path), "idx" | "pos"))
+            .map(|(_, range)| range.clone())
+            .collect::<Vec<_>>();
+        for (text, fuzziness, skip) in [
+            ("body:missing", None, true),
+            ("body:\"alpha missing\"", None, true),
+            ("body:\"missing be\"*", None, true),
+            ("body:missing AND body:\"alpha be\"*", None, true),
+            ("body:missing AND body:[alpha TO omega]", None, true),
+            ("title:missing AND body:alpa", Some(1), true),
+            // Missing optional/excluded terms must not eliminate matching prefix queries.
+            ("body:missing OR body:\"alpha be\"*", None, false),
+            ("body:\"alpha be\"* AND NOT title:missing", None, false),
+        ] {
+            let mut remote = fixture.clone();
+            remote.payload_cache = payload_cache(16 * 1024 * 1024);
+            remote.full_payload_cache = full_payload_cache(16 * 1024 * 1024);
+            ranges.lock().unwrap().clear();
+            let rows =
+                execute_expansion_bundle_query(&remote, &footer, text, fuzziness, true).await?;
+            if skip {
+                assert!(rows.is_empty(), "{text}");
+                assert_eq!(
+                    remote.full_payload_cache.as_ref().unwrap().len(),
+                    0,
+                    "{text}"
+                );
+                assert_eq!(
+                    remote
+                        .payload_cache
+                        .as_ref()
+                        .unwrap()
+                        .in_memory_cache()
+                        .unwrap()
+                        .len(),
+                    0,
+                    "{text}"
+                );
+                assert!(
+                    !ranges.lock().unwrap().iter().any(|read| {
+                        payload_ranges
+                            .iter()
+                            .any(|payload| read.start < payload.end && read.end > payload.start)
+                    }),
+                    "unexpected payload GET for {text}"
+                );
+            } else {
+                assert_eq!(
+                    rows,
+                    (0..4000u32).filter(|row| row % 2 == 0).collect::<Vec<_>>(),
+                    "{text}"
+                );
+                assert_eq!(
+                    remote.full_payload_cache.as_ref().unwrap().len(),
+                    2,
+                    "{text}"
+                );
+            }
         }
         Ok(())
     }

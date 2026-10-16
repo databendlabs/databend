@@ -23,7 +23,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::ScalarRef;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::TableIndexType;
@@ -43,8 +42,6 @@ use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_FILTERS;
 use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_INDEX_RECORD;
 use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_MODE;
 use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_TOKENIZER;
-use jsonb::RawJsonb;
-use jsonb::from_raw_jsonb;
 use lindera::dictionary::UserDictionary;
 use lindera::mode::Mode;
 use lindera::mode::Penalty;
@@ -61,9 +58,7 @@ use tantivy::SingleSegmentIndexWriter;
 use tantivy::schema::Field;
 use tantivy::schema::IndexRecordOption;
 use tantivy::schema::JsonObjectOptions;
-use tantivy::schema::OwnedValue;
 use tantivy::schema::Schema;
-use tantivy::schema::TantivyDocument;
 use tantivy::schema::TextFieldIndexing;
 use tantivy::schema::TextOptions;
 use tantivy::tokenizer::Language;
@@ -87,6 +82,8 @@ use crate::io::write::block_index::BlockIndexWriteContext;
 use crate::io::write::block_index::BlockIndexWriter;
 use crate::io::write::block_index::PendingBlockIndexOutput;
 use crate::io::write::block_index::WrittenInvertedIndex;
+use crate::io::write::inverted_index_document::BlockDocument;
+use crate::io::write::inverted_index_document::BlockDocumentColumns;
 use crate::io::write::inverted_index_merge::InvertedIndexMerge;
 
 #[derive(Clone)]
@@ -248,7 +245,7 @@ pub struct InvertedIndexWriter {
     /// Indexes on the calling thread into exactly one segment: no worker or merge threads, and
     /// no memory-triggered segment split, which matters because Databend reads Tantivy doc ids
     /// as block row numbers.
-    index_writer: SingleSegmentIndexWriter,
+    index_writer: SingleSegmentIndexWriter<BlockDocument>,
 }
 
 impl InvertedIndexWriter {
@@ -332,48 +329,18 @@ impl InvertedIndexWriter {
     }
 
     pub fn add_block(&mut self, source_schema: &TableSchemaRef, block: &DataBlock) -> Result<()> {
-        let mut field_indexes = Vec::with_capacity(self.schema.num_fields());
-        for field in self.schema.fields() {
-            let ty = field.data_type().remove_nullable();
-            let field_index = source_schema.index_of(field.name().as_str())?;
-            field_indexes.push((field_index, ty))
+        let mut columns = Vec::with_capacity(self.index_fields.len());
+        for (field, schema_field) in self.index_fields.iter().zip(self.schema.fields()) {
+            let field_index = source_schema.index_of(schema_field.name().as_str())?;
+            let is_variant = schema_field.data_type().remove_nullable() == DataType::Variant;
+            // Shares the column buffers; no row values are copied.
+            let entry = block.get_by_offset(field_index).clone();
+            columns.push((*field, entry, is_variant));
         }
+        let columns = BlockDocumentColumns::new(columns, block.num_rows());
 
-        for i in 0..block.num_rows() {
-            let mut doc = TantivyDocument::new();
-            for (field, (field_index, ty)) in self.index_fields.iter().zip(&field_indexes) {
-                let field = *field;
-                let column = block.get_by_offset(*field_index);
-                match unsafe { column.index_unchecked(i) } {
-                    ScalarRef::String(text) => doc.add_text(field, text),
-                    ScalarRef::Variant(jsonb_val) => {
-                        let raw_jsonb = RawJsonb::new(jsonb_val);
-                        if let Ok(value) = from_raw_jsonb::<serde_json::Value>(&raw_jsonb) {
-                            if value.is_object() {
-                                let owned_value = OwnedValue::from(value);
-                                doc.add_field_value(field, &owned_value);
-                            } else {
-                                // tantivy only support object JSON,
-                                // convert other JSON to object with an empty key.
-                                let owned_value = OwnedValue::from(value);
-                                let mut wrap_owned_value = BTreeMap::new();
-                                wrap_owned_value.insert("".to_string(), owned_value);
-                                doc.add_object(field, wrap_owned_value);
-                            }
-                        } else {
-                            doc.add_object(field, BTreeMap::new());
-                        }
-                    }
-                    _ => {
-                        if ty == &DataType::Variant {
-                            doc.add_object(field, BTreeMap::new());
-                        } else {
-                            doc.add_text(field, "");
-                        }
-                    }
-                }
-            }
-            self.index_writer.add_document(doc)?;
+        for row in 0..block.num_rows() {
+            self.index_writer.add_document(columns.document(row))?;
         }
         Ok(())
     }
