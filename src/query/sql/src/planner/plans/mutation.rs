@@ -84,6 +84,8 @@ pub struct Mutation {
     pub predicate_column_index: Option<Symbol>,
     pub direct_filter: Vec<ScalarExpr>,
     pub truncate_table: bool,
+    /// Present only for a MATERIALIZE TTL deletion. Rechecked after commit conflicts.
+    pub expected_ttl: Option<String>,
 }
 
 impl std::fmt::Debug for Mutation {

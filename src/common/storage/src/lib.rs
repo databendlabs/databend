@@ -74,8 +74,10 @@ mod operator;
 pub use operator::DataOperator;
 pub use operator::IcebergFileIO;
 pub use operator::OperatorRegistry;
+pub use operator::RetryStats;
 pub use operator::check_operator;
 pub use operator::init_operator;
+pub use operator::init_operator_observed;
 pub use operator::init_operator_with_policy_scope;
 
 mod operator_cache;

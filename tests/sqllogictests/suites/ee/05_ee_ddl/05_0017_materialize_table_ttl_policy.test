@@ -1,0 +1,107 @@
+# TTL maintenance applies to all expired rows, not only those visible through a row policy.
+statement ok
+SET GLOBAL enable_experimental_row_access_policy = 1
+
+statement ok
+DROP TABLE IF EXISTS ttl_rap_cleanup
+
+statement ok
+DROP ROW ACCESS POLICY IF EXISTS ttl_rap_filter
+
+statement ok
+CREATE ROW ACCESS POLICY ttl_rap_filter AS (dept STRING) RETURNS BOOLEAN -> dept = 'visible'
+
+statement ok
+CREATE TABLE ttl_rap_cleanup (id INT, dept STRING, expires TIMESTAMP) TTL expires
+
+statement ok
+INSERT INTO ttl_rap_cleanup VALUES (1, 'visible', '2000-01-01 00:00:00'), (2, 'hidden', '2000-01-01 00:00:00'), (3, 'hidden', '2099-01-01 00:00:00')
+
+statement ok
+ALTER TABLE ttl_rap_cleanup ADD ROW ACCESS POLICY ttl_rap_filter ON (dept)
+
+statement ok
+ALTER TABLE ttl_rap_cleanup MATERIALIZE TTL
+
+statement ok
+ALTER TABLE ttl_rap_cleanup DROP ROW ACCESS POLICY ttl_rap_filter
+
+query I
+SELECT id FROM ttl_rap_cleanup ORDER BY id
+----
+3
+
+statement ok
+DROP TABLE ttl_rap_cleanup
+
+statement ok
+DROP ROW ACCESS POLICY ttl_rap_filter
+
+# Column masks change query-visible values but must not change TTL's stored-value predicate.
+statement ok
+DROP TABLE IF EXISTS ttl_mask_cleanup
+
+statement ok
+DROP MASKING POLICY IF EXISTS ttl_mask_future
+
+statement ok
+DROP MASKING POLICY IF EXISTS ttl_mask_past
+
+statement ok
+CREATE TABLE ttl_mask_cleanup (id INT, expires TIMESTAMP) TTL expires
+
+statement ok
+INSERT INTO ttl_mask_cleanup VALUES (1, '2000-01-01 00:00:00'), (2, '2099-01-01 00:00:00')
+
+statement ok
+CREATE MASKING POLICY ttl_mask_future AS (v TIMESTAMP) RETURNS TIMESTAMP -> to_timestamp('2099-01-01 00:00:00')
+
+statement ok
+ALTER TABLE ttl_mask_cleanup MODIFY COLUMN expires SET MASKING POLICY ttl_mask_future
+
+query I
+SELECT count(*) FROM ttl_mask_cleanup WHERE expires < to_timestamp('2020-01-01 00:00:00')
+----
+0
+
+statement ok
+ALTER TABLE ttl_mask_cleanup MATERIALIZE TTL
+
+statement ok
+ALTER TABLE ttl_mask_cleanup MODIFY COLUMN expires UNSET MASKING POLICY
+
+query I
+SELECT id FROM ttl_mask_cleanup ORDER BY id
+----
+2
+
+statement ok
+CREATE MASKING POLICY ttl_mask_past AS (v TIMESTAMP) RETURNS TIMESTAMP -> to_timestamp('2000-01-01 00:00:00')
+
+statement ok
+ALTER TABLE ttl_mask_cleanup MODIFY COLUMN expires SET MASKING POLICY ttl_mask_past
+
+query I
+SELECT count(*) FROM ttl_mask_cleanup WHERE expires < to_timestamp('2020-01-01 00:00:00')
+----
+1
+
+statement ok
+ALTER TABLE ttl_mask_cleanup MATERIALIZE TTL
+
+statement ok
+ALTER TABLE ttl_mask_cleanup MODIFY COLUMN expires UNSET MASKING POLICY
+
+query I
+SELECT id FROM ttl_mask_cleanup ORDER BY id
+----
+2
+
+statement ok
+DROP TABLE ttl_mask_cleanup
+
+statement ok
+DROP MASKING POLICY ttl_mask_future
+
+statement ok
+DROP MASKING POLICY ttl_mask_past

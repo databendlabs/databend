@@ -378,6 +378,7 @@ impl ReplaceInterpreter {
             table_meta_timestamps,
             recluster_info: None,
             meta: PhysicalPlanMeta::new("CommitSink"),
+            expected_ttl: None,
         });
 
         root.adjust_plan_id(&mut 0);

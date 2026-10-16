@@ -191,7 +191,7 @@ function devTable(cur, base, run) {
     const names = Object.keys(cur.groups);
     names.forEach((g, i) => {
         const pre = i === names.length - 1 ? '└' : '├';
-        const c = cur.groups[g], b = base.groups[g] || {};
+        const c = cur.groups[g], b = base.groups?.[g] || {};
         lines.push(row(`${pre} ${g} (${c.n} jobs, max)`, c.max, b.max));
     });
     return lines.join('\n');
@@ -224,7 +224,7 @@ function cloudTable(cur, base, run) {
         '|---|--:|--:|--:|',
     ];
     for (const arch of Object.keys(cur.builds).sort()) {
-        const c = cur.builds[arch], b = base.builds[arch] || {};
+        const c = cur.builds[arch], b = base.builds?.[arch] || {};
         lines.push(row(`**build ${arch} (release)**`, c.dur, b.dur));
         if (c.breakdown) {
             const bd = c.breakdown, bb = b.breakdown || {};
@@ -256,14 +256,17 @@ async function baseline(github, context, core, workflowFile, metricsFn, excludeR
         if (workflowFile === 'main.yml') params.branch = 'main';
         const { data } = await github.rest.actions.listWorkflowRuns(params);
         runs = data.workflow_runs.filter((r) => r.id !== excludeRunId).slice(0, BASELINE_RUNS);
-        runs = data.workflow_runs;
     } catch (e) {
         core.warning(`baseline ${workflowFile}: ${e.message}`);
     }
     const all = [];
     for (const r of runs) {
-        const jobs = await listJobs(github, context, r.id);
-        all.push(await metricsFn(github, context, core, r, jobs, false));
+        try {
+            const jobs = await listJobs(github, context, r.id);
+            all.push(await metricsFn(github, context, core, r, jobs, false));
+        } catch (e) {
+            core.warning(`baseline ${workflowFile} run ${r.id}: ${e.message}`);
+        }
     }
     // Median of each scalar; groups / builds medianed per key. Breakdown is not
     // computed for baseline (would need 10 log downloads); shown as — .
@@ -283,6 +286,27 @@ async function baseline(github, context, core, workflowFile, metricsFn, excludeR
 
 async function findPR(github, context, core, run) {
     if (run.pull_requests && run.pull_requests.length) return run.pull_requests[0].number;
+    // For fork PRs, workflow_run.pull_requests is [] and commits/{sha}/pulls
+    // does not index fork commits, so match open PRs by <head_owner>:<head_branch>.
+    const headOwner = run.head_repository && run.head_repository.owner && run.head_repository.owner.login;
+    if (headOwner && run.head_branch) {
+        try {
+            const { data } = await github.rest.pulls.list({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                head: `${headOwner}:${run.head_branch}`,
+            });
+            const matches = data.filter((p) => p.head && p.head.sha === run.head_sha);
+            if (matches.length === 1) return matches[0].number;
+            if (matches.length > 1) {
+                core.warning(`PR lookup by head: ${matches.length} open PRs share ${headOwner}:${run.head_branch}@${run.head_sha}; skipping ambiguous match`);
+                return null;
+            }
+        } catch (e) {
+            core.warning(`PR lookup by head: ${e.message}`);
+        }
+    }
     try {
         const { data } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
             owner: context.repo.owner,
@@ -290,7 +314,11 @@ async function findPR(github, context, core, run) {
             commit_sha: run.head_sha,
         });
         const open = data.filter((p) => p.state === 'open');
-        if (open.length) return open[0].number;
+        if (open.length === 1) return open[0].number;
+        if (open.length > 1) {
+            core.warning(`PR lookup: ${open.length} open PRs share commit ${run.head_sha}; skipping ambiguous match`);
+            return null;
+        }
     } catch (e) {
         core.warning(`PR lookup: ${e.message}`);
     }

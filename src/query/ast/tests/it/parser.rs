@@ -64,6 +64,20 @@ fn test_set_ttl_and_modify_column_are_distinct() {
         assert!(matches!(stmt.action, AlterTableAction::ModifyColumn { .. }));
     }
 
+    let tokens = tokenize_sql("ALTER TABLE t MATERIALIZE TTL").unwrap();
+    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+    let Statement::AlterTable(stmt) = stmt else {
+        panic!("expected ALTER TABLE");
+    };
+    assert!(matches!(stmt.action, AlterTableAction::MaterializeTableTtl));
+    assert_eq!(stmt.to_string(), "ALTER TABLE t MATERIALIZE TTL");
+
+    // MATERIALIZE is not reserved and remains usable as an identifier.
+    let tokens = tokenize_sql("SELECT materialize FROM t").unwrap();
+    assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_ok());
+    let tokens = tokenize_sql("CREATE TABLE materialize (materialize INT)").unwrap();
+    assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_ok());
+
     // MODIFY is exclusively column syntax, not an alias for SET TTL.
     let tokens = tokenize_sql("ALTER TABLE t MODIFY TTL event_time + INTERVAL 7 DAY").unwrap();
     assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err());
@@ -284,6 +298,8 @@ fn test_statement() {
         r#"create table if not exists a.b (a string, b string, ngram index idx1 (a,b) gram_size=5);"#,
         r#"create table a.b like c.d;"#,
         r#"create table t like t2 engine = memory;"#,
+        r#"create table a.b_clone clone c.d;"#,
+        r#"create table a.b_clone clone c.d at (snapshot => '0123456789abcdef');"#,
         r#"create table if not exists a.b (a int) 's3://testbucket/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
         r#"CREATE WORKER read_env"#,
         r#"CREATE WORKER IF NOT EXISTS read_env"#,

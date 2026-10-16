@@ -311,6 +311,12 @@ pub enum CreateTableSource {
         database: Option<Identifier>,
         table: Identifier,
     },
+    Clone {
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        table: Identifier,
+        travel_point: Option<TimeTravelPoint>,
+    },
 }
 
 impl Display for CreateTableSource {
@@ -342,6 +348,19 @@ impl Display for CreateTableSource {
             } => {
                 write!(f, "LIKE ")?;
                 write_dot_separated_list(f, catalog.iter().chain(database).chain(Some(table)))
+            }
+            CreateTableSource::Clone {
+                catalog,
+                database,
+                table,
+                travel_point,
+            } => {
+                write!(f, "CLONE ")?;
+                write_dot_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+                if let Some(point) = travel_point {
+                    write!(f, " AT {point}")?;
+                }
+                Ok(())
             }
         }
     }
@@ -493,6 +512,8 @@ pub enum AlterTableAction {
     /// `DROP TTL` is intentionally not accepted: `DROP <ident>` already means
     /// dropping a column, so it would be ambiguous with a column named `ttl`.
     RemoveTableTtl,
+    /// Apply the current TTL definition to existing rows.
+    MaterializeTableTtl,
     ReclusterTable {
         is_final: bool,
         selection: Option<Expr>,
@@ -590,6 +611,9 @@ impl Display for AlterTableAction {
             }
             AlterTableAction::RemoveTableTtl => {
                 write!(f, "REMOVE TTL")?;
+            }
+            AlterTableAction::MaterializeTableTtl => {
+                write!(f, "MATERIALIZE TTL")?;
             }
             AlterTableAction::ReclusterTable {
                 is_final,
