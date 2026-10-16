@@ -68,14 +68,11 @@ impl SendPartState {
         derterministic_cache_key: Option<String>,
         limit: Option<usize>,
         fuse_pruner: Arc<FusePruner>,
-        partitions_total: usize,
     ) -> Self {
-        let mut statistics = PartStatistics::default_exact();
-        statistics.partitions_total = partitions_total;
         SendPartState {
             cache: Mutex::new(SendPartCache {
                 partitions: Partitions::default(),
-                statistics,
+                statistics: PartStatistics::default_exact(),
                 derterministic_cache_key,
                 fuse_pruner,
             }),
@@ -88,6 +85,10 @@ impl SendPartState {
         let mut send_part_cache = self.cache.lock();
         let pruning_stats = send_part_cache.fuse_pruner.pruning_stats();
         send_part_cache.statistics.pruning_stats = pruning_stats;
+        // `partitions_scanned` is accumulated in blocks as parts are sent, so
+        // the total must be in blocks too: the blocks of every segment read.
+        send_part_cache.statistics.partitions_total =
+            send_part_cache.fuse_pruner.blocks_in_read_segments();
         send_part_cache.statistics.clone()
     }
 

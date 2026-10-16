@@ -415,7 +415,6 @@ impl FuseTable {
                     segment_rx,
                     part_info_tx,
                     derterministic_cache_key.clone(),
-                    lazy_init_segments.len(),
                     plan_id,
                 )?;
             }
@@ -612,7 +611,6 @@ impl FuseTable {
         segment_rx: Receiver<SegmentLocation>,
         part_info_tx: Sender<Result<PartInfoPtr>>,
         derterministic_cache_key: Option<String>,
-        partitions_total: usize,
         plan_id: u32,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -750,7 +748,6 @@ impl FuseTable {
             derterministic_cache_key,
             limit,
             pruner.clone(),
-            partitions_total,
         ));
         prune_pipeline.add_sink(|input| {
             SendPartInfoSink::create(

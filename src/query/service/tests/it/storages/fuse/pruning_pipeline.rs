@@ -102,7 +102,6 @@ async fn apply_snapshot_pruning(
         segment_rx,
         res_tx,
         cache_key,
-        segment_locs.len(),
         plan_id,
     )?;
     prune_pipeline.set_max_threads(1);

@@ -179,9 +179,10 @@ impl IPhysicalPlan for MutationSource {
                 segment_locations,
                 block_count: None,
             };
+            let plan_id = self.get_id();
             Runtime::with_worker_threads(2, Some("do_mutation_block_pruning".to_string()))?
                 .block_on(async move {
-                    let (_, partitions) = table_clone
+                    let (statistics, partitions) = table_clone
                         .do_mutation_block_pruning(
                             ctx_clone,
                             filters_clone,
@@ -190,10 +191,16 @@ impl IPhysicalPlan for MutationSource {
                             true,
                         )
                         .await?;
+                    ctx.set_pruned_partitions_stats(plan_id, statistics);
                     ctx.set_partitions(partitions)?;
                     Ok(())
                 })?;
         } else {
+            // Pruning already happened in the planner; MutationSource is not
+            // a data source the plan builder publishes stats for.
+            builder
+                .ctx
+                .set_pruned_partitions_stats(self.get_id(), self.statistics.clone());
             builder.ctx.set_partitions(self.partitions.clone())?;
         }
 

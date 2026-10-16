@@ -248,11 +248,14 @@ impl FuseTable {
             .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
             .collect::<Vec<_>>();
 
-        let (statistics, inner_parts) = self.read_partitions_with_metas(
+        // Partition counters are in blocks. The total is the blocks of every
+        // segment the pruner read; the scanned count is finalised below once
+        // whole deleted segments are added.
+        let (mut statistics, inner_parts) = self.read_partitions_with_metas(
             self.schema_with_stream(),
             None,
             &range_block_metas,
-            block_count.unwrap_or_default(),
+            pruner.blocks_in_read_segments(),
             PruningStatistics::default(),
         )?;
 
@@ -291,6 +294,7 @@ impl FuseTable {
                 ))));
         }
 
+        statistics.partitions_scanned = part_num;
         if let Some(block_count) = block_count {
             metrics_inc_deletion_block_range_pruned_nums(block_count as u64 - part_num as u64);
         }

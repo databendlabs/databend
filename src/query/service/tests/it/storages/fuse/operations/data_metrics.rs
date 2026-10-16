@@ -30,6 +30,7 @@ use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::TableContextProgress;
 use databend_query::sessions::TableContextQueryIdentity;
 use databend_query::sql::Planner;
+use databend_query::test_kits::ClusterDescriptor;
 use databend_query::test_kits::TestFixture;
 use futures_util::TryStreamExt;
 
@@ -145,30 +146,85 @@ async fn lazy_scan_counts_partitions() -> Result<()> {
     let db = fixture.default_db_name();
     let table = format!("{db}.lazy_scan");
 
+    // Several blocks per segment so that "segments" and "blocks" differ: both
+    // counters must be in blocks.
     fixture
-        .execute_command(&format!("create table {table} (a int, b string)"))
+        .execute_command(&format!(
+            "create table {table} (a int, b string) row_per_block=100 block_per_segment=10"
+        ))
         .await?;
-    // Two inserts give two segments; on the single-node test context
-    // `segments > nodes` makes `read_partitions` return lazy parts.
+    // Two inserts give two segments of three blocks each; on the single-node
+    // test context `segments > nodes` makes `read_partitions` return lazy parts.
     for _ in 0..2 {
         fixture
             .execute_command(&format!(
-                "insert into {table} select number, to_string(number) from numbers(1000)"
+                "insert into {table} select number, to_string(number) from numbers(300)"
             ))
             .await?;
     }
 
     let observed = run_and_observe(&fixture, &format!("select a from {table}")).await?;
-    assert_eq!(observed.partitions_total, 2);
-    assert_eq!(observed.partitions_scanned, 2);
+    assert_eq!(observed.partitions_total, 6);
+    assert_eq!(observed.partitions_scanned, 6);
 
     let observed =
-        run_and_observe(&fixture, &format!("select a from {table} where a > 2000")).await?;
-    assert_eq!(observed.partitions_total, 2);
+        run_and_observe(&fixture, &format!("select a from {table} where a >= 200")).await?;
+    assert_eq!(observed.partitions_total, 6);
     assert_eq!(
-        observed.partitions_scanned, 0,
-        "min/max pruning drops both blocks"
+        observed.partitions_scanned, 2,
+        "min/max pruning keeps the last block of each segment"
     );
+
+    // A third segment with a disjoint range is dropped by segment-level
+    // pruning before any of its blocks is looked at; it still counts towards
+    // the total, in blocks.
+    fixture
+        .execute_command(&format!(
+            "insert into {table} select number + 1000, to_string(number) from numbers(300)"
+        ))
+        .await?;
+    let observed =
+        run_and_observe(&fixture, &format!("select a from {table} where a < 100")).await?;
+    assert_eq!(observed.partitions_total, 9);
+    assert_eq!(
+        observed.partitions_scanned, 2,
+        "first block of the two low segments; the high segment is pruned whole"
+    );
+    Ok(())
+}
+
+/// `UPDATE` / `DELETE` read through `MutationSource`, not `TableScan`. Their
+/// pruning happens in the planner and the statistics must still reach the
+/// query's partition counters.
+#[tokio::test(flavor = "multi_thread")]
+async fn eager_mutation_counts_partitions() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    let table = format!("{db}.eager_mutation");
+
+    fixture
+        .execute_command(&format!(
+            "create table {table} (a int, b string) row_per_block=100 block_per_segment=10"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {table} select number, to_string(number) from numbers(300)"
+        ))
+        .await?;
+
+    let observed = run_and_observe(
+        &fixture,
+        &format!("update {table} set b = 'x' where a >= 200"),
+    )
+    .await?;
+    assert_eq!(observed.partitions_total, 3);
+    assert_eq!(observed.partitions_scanned, 1);
+
+    let observed = run_and_observe(&fixture, &format!("delete from {table} where a < 100")).await?;
+    assert_eq!(observed.partitions_total, 3);
+    assert_eq!(observed.partitions_scanned, 1);
     Ok(())
 }
 
@@ -287,7 +343,6 @@ async fn init_query_fragments_counts_preparation_reads() -> Result<()> {
     use databend_query::servers::flight::v1::actions::init_query_fragments;
     use databend_query::servers::flight::v1::exchange::DataExchangeManager;
     use databend_query::sql::plans::Plan;
-    use databend_query::test_kits::ClusterDescriptor;
 
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
@@ -377,5 +432,13 @@ async fn init_query_fragments_counts_preparation_reads() -> Result<()> {
         "lazy DELETE pruning during pipeline preparation read nothing through the query counter"
     );
     assert_eq!(io_stats.write_bytes, 0, "nothing executed yet");
+
+    // The deferred pruning must also publish its partition statistics under
+    // the MutationSource plan id, like eager pruning does in the planner. The
+    // two segments are reshuffled across the two nodes, so this node prunes
+    // one segment of one block; `b like '%99%'` cannot be range-pruned.
+    let partition_stats = ctx.get_partition_stats();
+    assert_eq!(partition_stats.total, 1);
+    assert_eq!(partition_stats.scanned, 1);
     Ok(())
 }
