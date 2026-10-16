@@ -103,7 +103,11 @@ impl WindowGroup {
         Ok(used_columns)
     }
 
-    fn required_distribution(&self, rel_expr: &RelExpr) -> Result<Distribution> {
+    fn required_distribution(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
+    ) -> Result<Distribution> {
         let Some(first) = self.windows.first() else {
             return Ok(Distribution::Any);
         };
@@ -127,7 +131,7 @@ impl WindowGroup {
             return Ok(Distribution::Serial);
         }
 
-        let child_physical_prop = rel_expr.derive_physical_prop_child(0)?;
+        let child_physical_prop = rel_expr.derive_enforced_physical_prop_child(ctx, 0)?;
         if child_physical_prop.distribution == Distribution::Serial {
             return Ok(Distribution::Serial);
         }
@@ -499,13 +503,13 @@ impl Operator for WindowGroup {
 
     fn compute_required_prop_child(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         rel_expr: &RelExpr,
         _child_index: usize,
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         let mut required = required.clone();
-        match self.required_distribution(rel_expr)? {
+        match self.required_distribution(ctx, rel_expr)? {
             Distribution::Any => {}
             distribution => required.distribution = distribution,
         }
@@ -514,12 +518,12 @@ impl Operator for WindowGroup {
 
     fn compute_required_prop_children(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         rel_expr: &RelExpr,
         required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
         let mut required = required.clone();
-        match self.required_distribution(rel_expr)? {
+        match self.required_distribution(ctx, rel_expr)? {
             Distribution::Any => {}
             distribution => required.distribution = distribution,
         }

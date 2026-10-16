@@ -25,6 +25,7 @@ use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::expr::MExpr;
 use crate::optimizer::ir::expr::SExpr;
 use crate::optimizer::ir::memo::Memo;
+use crate::optimizer::ir::property::Distribution;
 use crate::optimizer::ir::property::PhysicalProperty;
 use crate::optimizer::ir::property::RelationalProperty;
 use crate::optimizer::ir::property::RequiredProperty;
@@ -180,6 +181,29 @@ impl<'a> RelExpr<'a> {
         }
     }
 
+    /// Derive the physical property that the child delivers when every operator
+    /// below gets its required input distribution enforced, as the heuristic
+    /// distributed optimizer does.
+    ///
+    /// Unlike `derive_physical_prop_child`, this also works on a memo expression:
+    /// Cascades asks for the children's required properties before it optimizes
+    /// the children, so the child is derived from its group's original expression.
+    pub fn derive_enforced_physical_prop_child(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        index: usize,
+    ) -> Result<PhysicalProperty> {
+        match self {
+            RelExpr::MExpr { expr, memo } => {
+                let child = *expr.children.get(index).ok_or_else(|| {
+                    ErrorCode::Internal(format!("Cannot find child {index} of MExpr"))
+                })?;
+                derive_enforced_group_physical_prop(ctx, memo, child)
+            }
+            _ => self.derive_physical_prop_child(index),
+        }
+    }
+
     pub fn compute_required_prop_child(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -212,4 +236,41 @@ impl<'a> RelExpr<'a> {
         let prop = plan.compute_required_prop_children(ctx, self, input)?;
         Ok(prop)
     }
+}
+
+/// Mirrors `PropertyEnforcer::require_property` on a memo group: derive the
+/// children first, enforce the distribution this expression requires from each
+/// child, then derive the expression's own property.
+#[recursive::recursive]
+fn derive_enforced_group_physical_prop(
+    ctx: Arc<dyn TableContext>,
+    memo: &Memo,
+    group_index: IndexType,
+) -> Result<PhysicalProperty> {
+    let m_expr = memo
+        .group(group_index)?
+        .m_exprs
+        .first()
+        .ok_or_else(|| ErrorCode::Internal(format!("Group {group_index} has no expression")))?;
+    let mut children_props = m_expr
+        .children
+        .iter()
+        .map(|child| derive_enforced_group_physical_prop(ctx.clone(), memo, *child))
+        .collect::<Result<Vec<_>>>()?;
+
+    // The heuristic optimizer requires `Any` from the root and passes it down.
+    let required = RequiredProperty::default();
+    let rel_expr = RelExpr::with_opt_context(m_expr, memo, &children_props);
+    let children_required = (0..m_expr.children.len())
+        .map(|index| rel_expr.compute_required_prop_child(ctx.clone(), index, &required))
+        .collect::<Result<Vec<_>>>()?;
+    for (child_prop, child_required) in children_props.iter_mut().zip(children_required) {
+        if !child_required.distribution.satisfied_by(&Distribution::Any)
+            && !child_required.satisfied_by(child_prop)
+        {
+            child_prop.distribution = child_required.distribution;
+        }
+    }
+
+    RelExpr::with_opt_context(m_expr, memo, &children_props).derive_physical_prop()
 }

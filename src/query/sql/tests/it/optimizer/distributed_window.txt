@@ -1,0 +1,255 @@
+=== partition_without_order ===
+description: An aggregate window partitioned by a column shuffles its input by the partition key.
+sql: SELECT k, sum(v) OVER (PARTITION BY k) FROM t
+Exchange(Merge)
+└── Window
+    ├── aggregate function: sum
+    ├── partition items: [t.k (#0) AS (#0)]
+    ├── order by items: []
+    ├── frame: [Range: Preceding(None) ~ Following(None)]
+    └── Sort
+        ├── sort keys: [t.k (#0) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: Aggregate(AggregateFunction { span: Some(10..38), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: Some(14..15), column: ColumnBinding { database_name: Some("default"), table_name: Some("t"), column_position: Some(2), table_index: Some(0), column_name: "v", column_name_lower: None, index: 1, data_type: Number(Int64), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(Int64)), sort_descs: [], display_name: "sum(v) OVER (PARTITION BY k)" })
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [t.k (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: [t.k (#0) ASC]
+                └── limit: NONE
+
+
+=== partition_with_order ===
+description: A ranking window with ORDER BY shuffles by the partition key and sorts within partitions.
+sql: SELECT k, row_number() OVER (PARTITION BY k ORDER BY v) FROM t
+Exchange(Merge)
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: [t.k (#0) AS (#0)]
+    ├── order by items: [t.v (#1) AS (#1)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [t.k (#0) ASC NULLS LAST, t.v (#1) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: RowNumber
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [t.k (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: [t.k (#0) ASC, t.v (#1) ASC]
+                └── limit: NONE
+
+
+=== partition_by_expression ===
+description: An expression partition key is evaluated before the shuffle.
+sql: SELECT k, sum(v) OVER (PARTITION BY k + 1) FROM t
+Exchange(Merge)
+└── Window
+    ├── aggregate function: sum
+    ├── partition items: [plus(t.k (#0), 1) AS (#2)]
+    ├── order by items: []
+    ├── frame: [Range: Preceding(None) ~ Following(None)]
+    └── Sort
+        ├── sort keys: [sum_part_0 (#2) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: Aggregate(AggregateFunction { span: Some(10..42), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: Some(14..15), column: ColumnBinding { database_name: Some("default"), table_name: Some("t"), column_position: Some(2), table_index: Some(0), column_name: "v", column_name_lower: None, index: 1, data_type: Number(Int64), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(Int64)), sort_descs: [], display_name: "sum(v) OVER (PARTITION BY k + 1)" })
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [sum_part_0 (#2)]
+            └── EvalScalar
+                ├── scalars: [t.v (#1) AS (#1), plus(t.k (#0), 1) AS (#2)]
+                └── Scan
+                    ├── table: default.t (#0)
+                    ├── filters: []
+                    ├── order by: [sum_part_0 (#2) ASC]
+                    └── limit: NONE
+
+
+=== window_group_same_partition ===
+description: Several windows sharing the partition key are grouped and shuffle once.
+sql: SELECT k, sum(v) OVER (PARTITION BY k), max(v) OVER (PARTITION BY k) FROM t
+Exchange(Merge)
+└── WindowGroup
+    ├── Window
+    │   ├── aggregate function: sum
+    │   ├── partition items: [t.k (#0) AS (#0)]
+    │   ├── order by items: []
+    │   └── frame: [Range: Preceding(None) ~ Following(None)]
+    ├── Window
+    │   ├── aggregate function: max
+    │   ├── partition items: [t.k (#0) AS (#0)]
+    │   ├── order by items: []
+    │   └── frame: [Range: Preceding(None) ~ Following(None)]
+    └── Exchange(Hash)
+        ├── Exchange(Hash): keys: [t.k (#0)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== window_group_different_partitions ===
+description: Windows with different partition keys shuffle once per partition key.
+sql: SELECT k, sum(v) OVER (PARTITION BY k), sum(v) OVER (PARTITION BY v) FROM t
+Exchange(Merge)
+└── Window
+    ├── aggregate function: sum
+    ├── partition items: [t.v (#1) AS (#1)]
+    ├── order by items: []
+    ├── frame: [Range: Preceding(None) ~ Following(None)]
+    └── Exchange(Hash)
+        ├── Exchange(Hash): keys: [t.v (#1)]
+        └── Window
+            ├── aggregate function: sum
+            ├── partition items: [t.k (#0) AS (#0)]
+            ├── order by items: []
+            ├── frame: [Range: Preceding(None) ~ Following(None)]
+            └── Exchange(Hash)
+                ├── Exchange(Hash): keys: [t.k (#0)]
+                └── Scan
+                    ├── table: default.t (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== serial_input ===
+description: A Serial input is not shuffled again for a partitioned window.
+sql: SELECT k, sum(v) OVER (PARTITION BY k) FROM (SELECT * FROM t LIMIT 10) AS s
+Window
+├── aggregate function: sum
+├── partition items: [t.k (#0) AS (#0)]
+├── order by items: []
+├── frame: [Range: Preceding(None) ~ Following(None)]
+└── Sort
+    ├── sort keys: [t.k (#0) ASC NULLS LAST]
+    ├── limit: [NONE]
+    ├── window top: NONE
+    ├── window function: Aggregate(AggregateFunction { span: Some(10..38), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: Some(14..15), column: ColumnBinding { database_name: None, table_name: Some("s"), column_position: Some(2), table_index: Some(0), column_name: "v", column_name_lower: None, index: 1, data_type: Number(Int64), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(Int64)), sort_descs: [], display_name: "sum(v) OVER (PARTITION BY k)" })
+    └── Limit
+        ├── limit: [10]
+        ├── offset: [0]
+        └── Exchange(Merge)
+            └── Limit
+                ├── limit: [10]
+                ├── offset: [0]
+                └── Scan
+                    ├── table: default.t (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: 10
+
+
+=== partition_over_aggregate ===
+description: A partitioned window over a distributed aggregate keeps the plan distributed.
+sql: SELECT k, row_number() OVER (PARTITION BY k ORDER BY v) FROM (SELECT k, max(v) AS v FROM t GROUP BY k) AS s
+Exchange(Merge)
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: [t.k (#0) AS (#0)]
+    ├── order by items: [max(v) (#2) AS (#2)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [t.k (#0) ASC NULLS LAST, max(v) (#2) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: RowNumber
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [t.k (#0)]
+            └── Aggregate(Final)
+                ├── group items: [t.k (#0) AS (#0)]
+                ├── aggregate functions: [max(t.v (#1)) AS (#2)]
+                └── Aggregate(Partial)
+                    ├── group items: [t.k (#0) AS (#0)]
+                    ├── aggregate functions: [max(t.v (#1)) AS (#2)]
+                    └── Exchange(Hash)
+                        ├── Exchange(Hash): keys: [t.k (#0)]
+                        └── Scan
+                            ├── table: default.t (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+
+=== partition_then_global_window ===
+description: A partitioned window runs distributed before a window without PARTITION BY merges its output.
+sql: SELECT k, avg(v) OVER (PARTITION BY k), avg(v) OVER () FROM t
+Window
+├── aggregate function: avg
+├── partition items: []
+├── order by items: []
+├── frame: [Range: Preceding(None) ~ Following(None)]
+└── Exchange(Merge)
+    └── Window
+        ├── aggregate function: avg
+        ├── partition items: [t.k (#0) AS (#0)]
+        ├── order by items: []
+        ├── frame: [Range: Preceding(None) ~ Following(None)]
+        └── Exchange(Hash)
+            ├── Exchange(Hash): keys: [t.k (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== partition_over_serial_window ===
+description: A partitioned window over a window without PARTITION BY stays on the merged input.
+sql: SELECT k, sum(v) OVER (PARTITION BY k) FROM (SELECT k, v, row_number() OVER (ORDER BY v) AS rn FROM t) AS s
+Window
+├── aggregate function: sum
+├── partition items: [t.k (#0) AS (#0)]
+├── order by items: []
+├── frame: [Range: Preceding(None) ~ Following(None)]
+└── Sort
+    ├── sort keys: [t.k (#0) ASC NULLS LAST]
+    ├── limit: [NONE]
+    ├── window top: NONE
+    ├── window function: Aggregate(AggregateFunction { span: Some(10..38), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: Some(14..15), column: ColumnBinding { database_name: None, table_name: Some("s"), column_position: Some(2), table_index: Some(0), column_name: "v", column_name_lower: None, index: 1, data_type: Number(Int64), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(Int64)), sort_descs: [], display_name: "sum(v) OVER (PARTITION BY k)" })
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: []
+        ├── order by items: [t.v (#1) AS (#1)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [t.v (#1) ASC NULLS LAST]
+            ├── limit: [NONE]
+            └── Exchange(MergeSort)
+                └── Sort
+                    ├── sort keys: [t.v (#1) ASC NULLS LAST]
+                    ├── limit: [NONE]
+                    └── Scan
+                        ├── table: default.t (#0)
+                        ├── filters: []
+                        ├── order by: [t.v (#1) ASC]
+                        └── limit: NONE
+
+
+=== order_without_partition ===
+description: A window without PARTITION BY needs a Serial input.
+sql: SELECT k, row_number() OVER (ORDER BY v) FROM t
+Window
+├── aggregate function: row_number
+├── partition items: []
+├── order by items: [t.v (#1) AS (#1)]
+├── frame: [Range: Preceding(None) ~ CurrentRow]
+└── Sort
+    ├── sort keys: [t.v (#1) ASC NULLS LAST]
+    ├── limit: [NONE]
+    └── Exchange(MergeSort)
+        └── Sort
+            ├── sort keys: [t.v (#1) ASC NULLS LAST]
+            ├── limit: [NONE]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: [t.v (#1) ASC]
+                └── limit: NONE
+
+
