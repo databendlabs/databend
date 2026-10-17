@@ -71,6 +71,27 @@ fn select_task_candidates(
             break;
         }
         let window = &pending_windows[window_idx];
+        if window.atomic_tasks {
+            if !selected_task_indices[window_idx].is_empty()
+                || window.tasks.len() > max_tasks - selected_count
+            {
+                continue;
+            }
+            let task_segments = (0..window.tasks.len())
+                .flat_map(|idx| window.task_segment_locations(idx))
+                .collect::<HashSet<_>>();
+            let additional = task_segments
+                .difference(&selected_segment_locations)
+                .count();
+            if selected_segment_locations.len() + additional > MAX_SEGMENT_LOCATIONS_PER_CLAIM {
+                continue;
+            }
+            selected_segment_locations.extend(task_segments);
+            selected_task_indices[window_idx].extend(0..window.tasks.len());
+            selected_count += window.tasks.len();
+            continue;
+        }
+
         let task = &window.tasks[task_idx];
         // Repack-only candidates rewrite no blocks, but each one consumes a
         // whole window. Keep one per round so max_tasks does not repack
@@ -638,6 +659,7 @@ mod tests {
                 .map(|index| ((format!("{}-{}", prefix, index), 0), None))
                 .collect(),
             tasks: vec![candidate(0..segment_count)],
+            atomic_tasks: false,
         }
     }
 
@@ -727,5 +749,23 @@ mod tests {
         let selected = select_task_candidates(&windows, &ranked, 2);
 
         assert_eq!(selected, vec![vec![0, 1]]);
+    }
+
+    #[test]
+    fn test_joint_winner_is_selected_atomically() {
+        let mut joint = window("joint", 2);
+        joint.tasks = vec![candidate([0]), candidate([1])];
+        joint.atomic_tasks = true;
+        let other = window("other", 1);
+        let windows = vec![joint, other];
+        let ranked = vec![
+            (0, 0, score(3), false),
+            (1, 0, score(2), false),
+            (0, 1, score(1), false),
+        ];
+
+        let selected = select_task_candidates(&windows, &ranked, 2);
+
+        assert_eq!(selected, vec![vec![0, 1], vec![]]);
     }
 }
