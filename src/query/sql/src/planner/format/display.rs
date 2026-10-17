@@ -77,7 +77,7 @@ pub struct FormatOptions {
 /// use databend_common_sql::plans::RelOperator;
 ///
 /// let metadata = Metadata::default();
-/// let stats = StatContext::default();
+/// let stats = StatContext::without_settings(Default::default());
 /// let ids = MetadataIdHumanizer::new(&metadata, FormatOptions::default(), &stats);
 /// let op = RelOperator::Filter(Filter { predicates: vec![] });
 /// let tree = DefaultOperatorHumanizer.humanize_operator(&ids, &op);

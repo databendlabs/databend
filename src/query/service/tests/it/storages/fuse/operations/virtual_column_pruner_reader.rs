@@ -29,7 +29,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::VariantType;
-use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_common_storages_fuse::io::VirtualColumnBuilder;
@@ -140,6 +139,7 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
     let mut source_column_ids = HashSet::new();
     source_column_ids.insert(source_column_id);
     let virtual_column_info = VirtualColumnInfo {
+        ignorable_source_column_ids: source_column_ids.clone(),
         source_column_ids,
         virtual_column_fields,
     };
@@ -166,7 +166,7 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         virtual_columns_complete: false,
     };
 
-    let pruner = VirtualColumnPruner::try_create(dal.clone(), &Some(push_down.clone()))?
+    let pruner = VirtualColumnPruner::try_create(dal.clone(), &Some(push_down))?
         .expect("virtual column pruner");
     let virtual_block_meta_index = pruner
         .prune_virtual_columns(&Some(virtual_block_meta), None)
@@ -258,14 +258,10 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         Some(VirtualColumnSharedDataType::String)
     );
 
-    let plan = table
-        .read_plan(ctx.clone(), Some(push_down), None, false, true)
-        .await?;
     let reader = VirtualColumnReader::try_create(
         ctx.clone(),
         dal.clone(),
         schema.clone(),
-        &plan,
         virtual_column_info,
         write_settings.table_compression,
     )?;
@@ -424,6 +420,7 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
     let push_down = PushDownInfo {
         virtual_column: Some(VirtualColumnInfo {
             source_column_ids: HashSet::from([source_column_id]),
+            ignorable_source_column_ids: HashSet::from([source_column_id]),
             virtual_column_fields: vec![field.clone()],
         }),
         ..Default::default()
@@ -452,16 +449,13 @@ async fn test_virtual_column_pruner_reads_block_meta_direct() -> anyhow::Result<
         DataType::from(&draft_meta.column_meta.data_type())
     );
 
-    let plan = table
-        .read_plan(ctx.clone(), None, None, false, true)
-        .await?;
     let reader = VirtualColumnReader::try_create(
         ctx.clone(),
         dal,
         schema,
-        &plan,
         VirtualColumnInfo {
             source_column_ids: HashSet::from([source_column_id]),
+            ignorable_source_column_ids: HashSet::from([source_column_id]),
             virtual_column_fields: vec![field],
         },
         write_settings.table_compression,

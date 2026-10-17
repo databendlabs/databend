@@ -268,7 +268,7 @@ mod tests {
     }
 
     async fn check_traversal<K: ExprKind>(tree: &Expr<K>, empty: Expr<K>) -> Result<Expr<K>> {
-        let stats = StatContext::default();
+        let stats = StatContext::without_settings(Default::default());
         tree.derive_relational_prop()?;
         assert_eq!(tree.derive_cardinality(&stats)?.cardinality, 1.0);
         let replaced = tree.accept(&mut ReplaceDummy(empty.clone()))?.unwrap();

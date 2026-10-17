@@ -36,6 +36,7 @@ use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::PerfConfig;
 use databend_common_base::runtime::PerfEvent;
 use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::drop_guard;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
@@ -173,7 +174,14 @@ pub struct QueryContextShared {
 
     pub(super) pruned_partitions_stats: Arc<RwLock<HashMap<u32, PartStatistics>>>,
 
-    pub(super) io_stats: Arc<IoStats>,
+    /// Object storage IO of this query on this node. Shared with the
+    /// `TrackingPayload.io_stats` of the threads executing the query, so the
+    /// global storage metrics layer records into it regardless of which
+    /// table instance performed the IO.
+    pub(super) local_io_stats: Arc<IoStats>,
+    /// IO reported by remote nodes for this query. Remote nodes send deltas
+    /// (see `StatisticsSender::send_io_stats`), so they are accumulated here.
+    pub(super) remote_io_stats: Arc<IoStats>,
 
     pub(super) broadcast_registry: BroadcastRegistry,
 
@@ -265,7 +273,8 @@ impl QueryContextShared {
             mem_stat: Arc::new(RwLock::new(None)),
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
             pruned_partitions_stats: Arc::new(RwLock::new(HashMap::new())),
-            io_stats: Default::default(),
+            local_io_stats: ThreadTracker::io_stats().cloned().unwrap_or_default(),
+            remote_io_stats: Default::default(),
             broadcast_registry: Default::default(),
             perf_config: Mutex::new(PerfConfig::default()),
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
@@ -399,19 +408,39 @@ impl QueryContextShared {
         tables.values().cloned().collect()
     }
 
+    /// Data metrics of the whole query.
+    ///
+    /// Byte and cost counters come from the per-query `IoStats` (local node plus
+    /// the latest snapshot of every remote node). Partition counters come from
+    /// the tables attached to this query, which is where pruning records them.
+    /// Partition counters of the tables attached to this context.
+    ///
+    /// Only `partitions_scanned` / `partitions_total` are meaningful here; the
+    /// byte and cost fields of the returned value are not populated. Storage IO
+    /// of the query is accounted per query in `IoStats`, see [`Self::get_io_stats`].
     pub fn get_data_metrics(&self) -> StorageMetrics {
         let tables = self.get_tables_refs();
-        let metrics: Vec<Arc<StorageMetrics>> =
+        let table_metrics: Vec<Arc<StorageMetrics>> =
             tables.iter().filter_map(|v| v.get_data_metrics()).collect();
-        StorageMetrics::merge(&metrics)
+        StorageMetrics::merge(&table_metrics)
     }
 
-    pub fn merge_io_stats(&self, stats: &IoStatsSnapshot) {
-        self.io_stats.merge_snapshot(stats);
+    /// The IO counter of this query on this node. Threads executing the query
+    /// must carry it in their `TrackingPayload.io_stats`.
+    pub fn get_local_io_stats(&self) -> Arc<IoStats> {
+        self.local_io_stats.clone()
     }
 
+    /// Add an IO delta reported by a remote node.
+    pub fn merge_remote_io_stats(&self, delta: &IoStatsSnapshot) {
+        self.remote_io_stats.merge_snapshot(delta);
+    }
+
+    /// IO of the whole query: this node plus everything reported by remote nodes.
     pub fn get_io_stats(&self) -> IoStatsSnapshot {
-        self.io_stats.snapshot()
+        let mut stats = self.local_io_stats.snapshot();
+        stats.merge(&self.remote_io_stats.snapshot());
+        stats
     }
 
     pub fn get_tenant(&self) -> Tenant {

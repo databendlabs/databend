@@ -547,6 +547,10 @@ impl Statement {
             | Statement::MergeInto(..)
             | Statement::Delete(..)
             | Statement::Update(..)
+            | Statement::AlterTable(AlterTableStmt {
+                action: AlterTableAction::MaterializeTableTtl,
+                ..
+            })
             | Statement::ShowCatalogs(..)
             | Statement::ShowCreateCatalog(..)
             | Statement::UseCatalog { .. }

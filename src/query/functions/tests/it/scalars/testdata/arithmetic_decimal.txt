@@ -38,3 +38,159 @@ output domain  : {1964831796.9785357600000..=1964831796.9785357600000}
 output         : 1964831796.9785357600000
 
 
+ast            : 5.5 % 0.1
+raw expr       : modulo(5.5, 0.1)
+checked expr   : modulo<Decimal(2, 1), Decimal(1, 1)>(5.5_d64(2,1), 0.1_d64(1,1))
+optimized expr : 0.0_d64(1,1)
+output type    : Decimal(1, 1)
+output domain  : {0.0..=0.0}
+output         : 0.0
+
+
+ast            : 0.25 % 0.1
+raw expr       : modulo(0.25, 0.1)
+checked expr   : modulo<Decimal(2, 2), Decimal(1, 1)>(0.25_d64(2,2), 0.1_d64(1,1))
+optimized expr : 0.05_d64(2,2)
+output type    : Decimal(2, 2)
+output domain  : {0.05..=0.05}
+output         : 0.05
+
+
+ast            : 1.234 % 0.5
+raw expr       : modulo(1.234, 0.5)
+checked expr   : modulo<Decimal(4, 3), Decimal(1, 1)>(1.234_d64(4,3), 0.5_d64(1,1))
+optimized expr : 0.234_d64(3,3)
+output type    : Decimal(3, 3)
+output domain  : {0.234..=0.234}
+output         : 0.234
+
+
+ast            : -7.5 % 2
+raw expr       : modulo(-7.5, 2)
+checked expr   : modulo<Decimal(2, 1), UInt8>(-7.5_d64(2,1), 2_u8)
+optimized expr : -1.5_d64(2,1)
+output type    : Decimal(2, 1)
+output domain  : {-1.5..=-1.5}
+output         : -1.5
+
+
+ast            : 7.5 % -2
+raw expr       : modulo(7.5, -2)
+checked expr   : modulo<Decimal(2, 1), Int8>(7.5_d64(2,1), -2_i8)
+optimized expr : 1.5_d64(2,1)
+output type    : Decimal(2, 1)
+output domain  : {1.5..=1.5}
+output         : 1.5
+
+
+ast            : 7 % 2.5
+raw expr       : modulo(7, 2.5)
+checked expr   : modulo<UInt8, Decimal(2, 1)>(7_u8, 2.5_d64(2,1))
+optimized expr : 2.0_d64(2,1)
+output type    : Decimal(2, 1)
+output domain  : {2.0..=2.0}
+output         : 2.0
+
+
+ast            : 0.001::decimal(38, 19) % 0.1
+raw expr       : modulo(CAST(0.001 AS Decimal(38, 19)), 0.1)
+checked expr   : modulo<Decimal(38, 19), Decimal(1, 1)>(CAST<Decimal(3, 3)>(0.001_d64(3,3) AS Decimal(38, 19)), 0.1_d64(1,1))
+optimized expr : 0.0010000000000000000_d128(19,19)
+output type    : Decimal(19, 19)
+output domain  : {0.0010000000000000000..=0.0010000000000000000}
+output         : 0.0010000000000000000
+
+
+ast            : 0.1::decimal(38, 38) % 1
+raw expr       : modulo(CAST(0.1 AS Decimal(38, 38)), 1)
+checked expr   : modulo<Decimal(38, 38), UInt8>(CAST<Decimal(1, 1)>(0.1_d64(1,1) AS Decimal(38, 38)), 1_u8)
+optimized expr : 0.10000000000000000000000000000000000000_d128(38,38)
+output type    : Decimal(38, 38)
+output domain  : {0.10000000000000000000000000000000000000..=0.10000000000000000000000000000000000000}
+output         : 0.10000000000000000000000000000000000000
+
+
+ast            : 1 % 0.3::decimal(38, 38)
+raw expr       : modulo(1, CAST(0.3 AS Decimal(38, 38)))
+checked expr   : modulo<UInt8, Decimal(38, 38)>(1_u8, CAST<Decimal(1, 1)>(0.3_d64(1,1) AS Decimal(38, 38)))
+optimized expr : 0.10000000000000000000000000000000000000_d128(38,38)
+output type    : Decimal(38, 38)
+output domain  : {0.10000000000000000000000000000000000000..=0.10000000000000000000000000000000000000}
+output         : 0.10000000000000000000000000000000000000
+
+
+ast            : 1234567890123456789012345678901234567890::decimal(76, 0) % 7
+raw expr       : modulo(CAST(1234567890123456789012345678901234567890 AS Decimal(76, 0)), 7)
+checked expr   : modulo<Decimal(76, 0), UInt8>(CAST<Decimal(40, 0)>(1234567890123456789012345678901234567890_d256(40,0) AS Decimal(76, 0)), 7_u8)
+optimized expr : 3_d64(3,0)
+output type    : Decimal(3, 0)
+output domain  : {3..=3}
+output         : 3
+
+
+ast            : l_quantity % 7
+raw expr       : modulo(l_quantity::Decimal(15, 2), 7)
+checked expr   : modulo<Decimal(15, 2), UInt8>(l_quantity, 7_u8)
+evaluation:
++--------+-----------------+---------------+
+|        | l_quantity      | Output        |
++--------+-----------------+---------------+
+| Type   | Decimal(15, 2)  | Decimal(5, 2) |
+| Domain | {16.00..=48.00} | Unknown       |
+| Row 0  | 43.00           | 1.00          |
+| Row 1  | 40.00           | 5.00          |
+| Row 2  | 23.00           | 2.00          |
+| Row 3  | 48.00           | 6.00          |
+| Row 4  | 20.00           | 6.00          |
+| Row 5  | 16.00           | 2.00          |
+| Row 6  | 46.00           | 4.00          |
+| Row 7  | 25.00           | 4.00          |
+| Row 8  | 37.00           | 2.00          |
+| Row 9  | 36.00           | 1.00          |
++--------+-----------------+---------------+
+evaluation (internal):
++------------+-------------------------------------------------------------------------------------------+
+| Column     | Data                                                                                      |
++------------+-------------------------------------------------------------------------------------------+
+| l_quantity | Column(Decimal64([43.00, 40.00, 23.00, 48.00, 20.00, 16.00, 46.00, 25.00, 37.00, 36.00])) |
+| Output     | Decimal64([1.00, 5.00, 2.00, 6.00, 6.00, 2.00, 4.00, 4.00, 2.00, 1.00])                   |
++------------+-------------------------------------------------------------------------------------------+
+
+
+ast            : l_extendedprice % 0.07
+raw expr       : modulo(l_extendedprice::Decimal(15, 2), 0.07)
+checked expr   : modulo<Decimal(15, 2), Decimal(2, 2)>(l_extendedprice, 0.07_d64(2,2))
+evaluation:
++--------+-----------------------+---------------+
+|        | l_extendedprice       | Output        |
++--------+-----------------------+---------------+
+| Type   | Decimal(15, 2)        | Decimal(2, 2) |
+| Domain | {19411.84..=85768.32} | Unknown       |
+| Row 0  | 70290.81              | 0.03          |
+| Row 1  | 39880.40              | 0.00          |
+| Row 2  | 26960.83              | 0.05          |
+| Row 3  | 85768.32              | 0.05          |
+| Row 4  | 31790.20              | 0.05          |
+| Row 5  | 19411.84              | 0.00          |
+| Row 6  | 69118.22              | 0.01          |
+| Row 7  | 48748.25              | 0.04          |
+| Row 8  | 42072.70              | 0.04          |
+| Row 9  | 44254.44              | 0.02          |
++--------+-----------------------+---------------+
+evaluation (internal):
++-----------------+-------------------------------------------------------------------------------------------------------------------------+
+| Column          | Data                                                                                                                    |
++-----------------+-------------------------------------------------------------------------------------------------------------------------+
+| l_extendedprice | Column(Decimal64([70290.81, 39880.40, 26960.83, 85768.32, 31790.20, 19411.84, 69118.22, 48748.25, 42072.70, 44254.44])) |
+| Output          | Decimal64([0.03, 0.00, 0.05, 0.05, 0.05, 0.00, 0.01, 0.04, 0.04, 0.02])                                                 |
++-----------------+-------------------------------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:12
+  |
+1 | l_quantity % 0
+  |            ^ divided by zero while evaluating function `modulo(43.00, 0)` in expr `l_quantity % 0`
+
+
+

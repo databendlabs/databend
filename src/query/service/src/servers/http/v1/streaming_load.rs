@@ -86,6 +86,7 @@ fn execute_query(
 ) -> impl Future<Output = Result<()>> {
     let id = http_query_context.query_id.clone();
     let warehouse_id = query_context.get_cluster().get_warehouse_id().ok();
+    let io_stats = query_context.get_local_io_stats();
     let fut = async move {
         let interpreter = InterpreterFactory::get(query_context.clone(), &plan).await?;
 
@@ -97,9 +98,7 @@ fn execute_query(
     };
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(id.clone());
-    tracking_payload.io_stats = Some(std::sync::Arc::new(
-        databend_common_base::runtime::IoStats::default(),
-    ));
+    tracking_payload.io_stats = Some(io_stats);
     tracking_payload.warehouse_id = warehouse_id;
     tracking_payload.mem_stat = Some(mem_stat);
 

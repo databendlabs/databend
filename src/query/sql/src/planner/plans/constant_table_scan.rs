@@ -220,6 +220,7 @@ impl Operator for ConstantTableScan {
                 self.num_rows as u64,
                 Some((min.clone(), max.clone())),
                 DEFAULT_HISTOGRAM_BUCKETS,
+                crate::plans::Statistics::histogram_spacing_unit(&value.data_type()),
             )
             .ok();
             let bounds = StatBounds::new(min, max)?;

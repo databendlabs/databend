@@ -348,7 +348,7 @@ mod tests {
 
     #[test]
     fn enumeration_completes_once_and_preserves_completed_choices() -> Result<()> {
-        let mut memo = Memo::new(StatContext::default());
+        let mut memo = Memo::new(StatContext::without_settings(Default::default()));
         memo.init(SExpr::create_unary(
             Aggregate::default(),
             SExpr::create_leaf(DummyTableScan::new()),
@@ -381,7 +381,7 @@ mod tests {
 
     #[test]
     fn intermediate_derives_its_own_properties_and_statistics() -> Result<()> {
-        let mut memo = Memo::new(StatContext::default());
+        let mut memo = Memo::new(StatContext::without_settings(Default::default()));
         let input = memo.add_group(
             Arc::new(RelationalProperty {
                 output_columns: [Symbol::new(1)].into_iter().collect(),
@@ -413,7 +413,7 @@ mod tests {
 
     #[test]
     fn memo_property_views_resolve_child_positions_not_parent_group() -> Result<()> {
-        let mut memo = Memo::new(StatContext::default());
+        let mut memo = Memo::new(StatContext::without_settings(Default::default()));
         let mut groups = vec![];
         for (column, rows) in [(1, 10.0), (2, 20.0), (99, 777.0)] {
             groups.push(memo.add_group(
@@ -445,14 +445,20 @@ mod tests {
                     &memo.group(*group)?.relational_prop,
                 ));
                 assert!(Arc::ptr_eq(
-                    &view.derive_cardinality_child(index, &StatContext::default())?,
+                    &view.derive_cardinality_child(
+                        index,
+                        &StatContext::without_settings(Default::default()),
+                    )?,
                     &memo.group(*group)?.stat_info,
                 ));
             }
             assert!(view.derive_relational_prop_child(2).is_err());
             assert!(
-                view.derive_cardinality_child(2, &StatContext::default())
-                    .is_err()
+                view.derive_cardinality_child(
+                    2,
+                    &StatContext::without_settings(Default::default())
+                )
+                .is_err()
             );
         }
         Ok(())
@@ -462,7 +468,7 @@ mod tests {
     fn all_implementation_roots_enter_the_target_group_and_are_interned() -> Result<()> {
         // Local consumer contract, not rewrite-rule evidence. Both fragments
         // implement LIMIT ALL; production keeps its existing single strategy.
-        let mut memo = Memo::new(StatContext::default());
+        let mut memo = Memo::new(StatContext::without_settings(Default::default()));
         memo.init(SExpr::create_unary(
             limit(None),
             SExpr::create_leaf(DummyTableScan::new()),

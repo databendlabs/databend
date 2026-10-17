@@ -25,7 +25,6 @@ use databend_common_sql::optimizer::ir::PVisitAction;
 use databend_common_sql::optimizer::ir::PatternExtractor;
 use databend_common_sql::optimizer::ir::Physical;
 use databend_common_sql::optimizer::ir::RequiredProperty;
-use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::optimize;
 use databend_common_sql::optimizer::optimizers::CascadesOptimizer;
 use databend_common_sql::plans::AggregateMode;
@@ -89,12 +88,12 @@ async fn test_late_split_preserves_aggregate_self_join_elimination() -> Result<(
         writeln!(
             file,
             "raw_plan:\n{}",
-            raw.format_indent(Default::default(), &StatContext::default())?
+            raw.format_indent(Default::default(), &ctx.stat_context()?)?
         )?;
         writeln!(
             file,
             "optimized_plan:\n{}",
-            optimized.format_indent(Default::default(), &StatContext::default())?
+            optimized.format_indent(Default::default(), &ctx.stat_context()?)?
         )?;
     }
     Ok(())
@@ -167,17 +166,17 @@ async fn test_physical_implementation_consumers() -> Result<()> {
         writeln!(
             file,
             "raw_plan:\n{}",
-            raw.format_indent(Default::default(), &StatContext::default())?
+            raw.format_indent(Default::default(), &ctx.stat_context()?)?
         )?;
         writeln!(
             file,
             "default_plan:\n{}",
-            default.pretty_format(&metadata.read(), &StatContext::default())?
+            default.pretty_format(&metadata.read(), &ctx.stat_context()?)?
         )?;
         writeln!(
             file,
             "selected_plan:\n{}",
-            selected.pretty_format(&metadata.read(), &StatContext::default())?
+            selected.pretty_format(&metadata.read(), &ctx.stat_context()?)?
         )?;
     }
     Ok(())

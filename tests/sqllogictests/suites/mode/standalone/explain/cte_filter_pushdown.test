@@ -199,7 +199,7 @@ TableScan
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom index read cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [cte1.a (#0) = 1 and cte1.b (#1) < 50], limit: NONE]
-└── estimated rows: 1.67
+└── estimated rows: 1.63
 
 # Test 9: CTE with aggregation and HAVING clause
 query T
@@ -242,7 +242,7 @@ TableScan
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom index read cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [cte1.a (#0) = 1 and cte1.b (#1) > 15], limit: NONE]
-└── estimated rows: 1.67
+└── estimated rows: 1.42
 
 # Test 11: Test case that demonstrates nested Filter issue
 # This should show merged filters, not nested Filter nodes
@@ -308,7 +308,7 @@ TableScan
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom index read cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [cte1.b (#1) > 10 and (cte1.a (#0) = 1 or cte1.a (#0) = 2)], limit: NONE]
-└── estimated rows: 2.78
+└── estimated rows: 2.71
 
 # Test 15: Test filter pushdown with subquery
 query T

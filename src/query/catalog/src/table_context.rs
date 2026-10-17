@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::IoStatsSnapshot;
 pub use databend_common_component::BroadcastRegistry;
 pub use databend_common_component::CopyState;
 pub use databend_common_component::FragmentId;
@@ -30,7 +31,6 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_settings::Settings;
 use databend_common_storage::StageFileInfo;
-use databend_common_storage::StorageMetrics;
 
 mod authorization;
 mod execution;
@@ -121,7 +121,8 @@ pub struct ProcessInfo {
     pub session_extra_info: Option<String>,
     pub memory_usage: i64,
     /// storage metrics for persisted data reading.
-    pub data_metrics: Option<StorageMetrics>,
+    /// Object-storage IO of the running query (local node plus remote nodes).
+    pub data_metrics: Option<IoStatsSnapshot>,
     pub scan_progress_value: Option<ProgressValues>,
     pub write_progress_value: Option<ProgressValues>,
     pub spill_progress_value: Option<ProgressValues>,

@@ -12,18 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
-use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::ColumnId;
 use databend_common_expression::TableSchemaRef;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::VirtualColumnFileMeta;
@@ -67,8 +63,6 @@ pub struct VirtualColumnReader {
     pub(super) ctx: Arc<dyn TableContext>,
     pub(super) dal: Operator,
     pub(super) source_schema: TableSchemaRef,
-    pub prewhere_schema: Option<TableSchemaRef>,
-    pub output_schema: TableSchemaRef,
     pub(super) compression: TableCompression,
     pub virtual_column_info: VirtualColumnInfo,
 }
@@ -78,57 +72,16 @@ impl VirtualColumnReader {
         ctx: Arc<dyn TableContext>,
         dal: Operator,
         source_schema: TableSchemaRef,
-        plan: &DataSourcePlan,
         virtual_column_info: VirtualColumnInfo,
         compression: TableCompression,
     ) -> Result<Self> {
-        let prewhere_schema =
-            if let Some(v) = PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref()) {
-                let prewhere_schema = v
-                    .prewhere_columns
-                    .project_schema(plan.source_info.schema().as_ref());
-                Some(Arc::new(prewhere_schema))
-            } else {
-                None
-            };
-        let output_schema = plan.schema();
-
         Ok(Self {
             ctx,
             dal,
             source_schema,
-            prewhere_schema,
-            output_schema,
             compression,
             virtual_column_info,
         })
-    }
-
-    pub(super) fn generate_ignore_column_ids(
-        &self,
-        ignored_source_column_ids: &HashSet<ColumnId>,
-    ) -> Option<HashSet<ColumnId>> {
-        if !ignored_source_column_ids.is_empty() {
-            let mut ignore_column_ids = HashSet::new();
-            for column_id in ignored_source_column_ids {
-                // If the source column is not needed, we can ignore it to reduce IO.
-                if self.output_schema.is_column_deleted(*column_id) {
-                    if let Some(prewhere_schema) = &self.prewhere_schema {
-                        if !prewhere_schema.is_column_deleted(*column_id) {
-                            continue;
-                        }
-                    }
-                    ignore_column_ids.insert(*column_id);
-                }
-            }
-            if !ignore_column_ids.is_empty() {
-                Some(ignore_column_ids)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
     }
 }
 

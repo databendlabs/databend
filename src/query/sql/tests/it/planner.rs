@@ -159,6 +159,10 @@ const LITE_REPLAY_CASE_SPECS: &[LiteReplayCaseSpec] = &[
 ];
 
 impl TestCaseRunner for LiteRunner {
+    fn stat_context(&self) -> Result<StatContext> {
+        self.0.stat_context()
+    }
+
     async fn bind_sql(&self, sql: &str) -> Result<databend_common_sql::plans::Plan> {
         self.0.bind_sql(sql).await
     }
@@ -219,9 +223,8 @@ async fn write_statistics_trace_case(
     file: &mut impl Write,
     case: &StatisticsTraceGoldenCase,
 ) -> Result<()> {
-    let (sql, optimized_plan) = replay_statistics_trace_case(case).await?;
-    let optimized =
-        optimized_plan.format_indent(FormatOptions::default(), &StatContext::default())?;
+    let (sql, optimized_plan, stat_context) = replay_statistics_trace_case(case).await?;
+    let optimized = optimized_plan.format_indent(FormatOptions::default(), &stat_context)?;
 
     write_case_title(file, case.name, case.description)?;
     writeln!(file, "trace: {}", case.trace_file)?;
@@ -238,7 +241,7 @@ async fn write_statistics_trace_summary_case(
     file: &mut impl Write,
     case: &StatisticsTraceGoldenCase,
 ) -> Result<()> {
-    let (sql, optimized_plan) = replay_statistics_trace_case(case).await?;
+    let (sql, optimized_plan, _) = replay_statistics_trace_case(case).await?;
     let summary = format_statistics_trace_summary(&optimized_plan)?;
 
     write_case_title(file, case.name, case.description)?;
@@ -252,7 +255,9 @@ async fn write_statistics_trace_summary_case(
     Ok(())
 }
 
-async fn replay_statistics_trace_case(case: &StatisticsTraceGoldenCase) -> Result<(String, Plan)> {
+async fn replay_statistics_trace_case(
+    case: &StatisticsTraceGoldenCase,
+) -> Result<(String, Plan, StatContext)> {
     let sql = read_statistics_trace_fixture(case, "sql")?;
     let trace_input = read_statistics_trace_fixture(case, "traces")?;
     let input = serde_json::from_str(&trace_input).map_err(|err| {
@@ -267,7 +272,8 @@ async fn replay_statistics_trace_case(case: &StatisticsTraceGoldenCase) -> Resul
 
     let raw_plan = ctx.bind_sql(&sql).await?;
     let optimized_plan = ctx.optimize_plan(raw_plan).await?;
-    Ok((sql, optimized_plan))
+    let stat_context = ctx.stat_context()?;
+    Ok((sql, optimized_plan, stat_context))
 }
 
 fn format_statistics_trace_summary(plan: &Plan) -> Result<String> {
@@ -476,7 +482,8 @@ async fn test_subquery_project_set_keeps_lambda_udf_argument_columns() -> Result
         )
         .await?;
     let plan = ctx.optimize_plan(plan).await?;
-    let plan = plan.format_indent(Default::default(), &StatContext::default())?;
+    let stat_context = ctx.stat_context()?;
+    let plan = plan.format_indent(Default::default(), &stat_context)?;
     assert!(
         plan.contains("split(documents.s"),
         "ProjectSet should keep the lambda UDF body bound to documents.s:\n{plan}"

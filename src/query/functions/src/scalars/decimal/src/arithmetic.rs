@@ -46,6 +46,7 @@ enum ArithmeticOp {
     Minus,
     Multiply,
     Divide,
+    Modulo,
 }
 
 impl ArithmeticOp {
@@ -69,8 +70,8 @@ impl ArithmeticOp {
             ArithmeticOp::Plus => domain_plus(lhs, rhs, precision),
             ArithmeticOp::Minus => domain_minus(lhs, rhs, precision),
             ArithmeticOp::Multiply => domain_mul(lhs, rhs, precision),
-            ArithmeticOp::Divide => {
-                // For div, we cannot determine the domain.
+            ArithmeticOp::Divide | ArithmeticOp::Modulo => {
+                // For div and mod, we cannot determine the domain.
                 None
             }
         }
@@ -82,6 +83,10 @@ impl ArithmeticOp {
         a: &DecimalSize,
         b: &DecimalSize,
     ) -> Option<(DecimalSize, DecimalSize, DecimalSize)> {
+        if *self == ArithmeticOp::Modulo {
+            return Self::modulo_size(a, b);
+        }
+
         // from snowflake: https://docs.snowflake.com/sql-reference/operators-arithmetic
         let (precision, scale) = match self {
             ArithmeticOp::Multiply => {
@@ -102,6 +107,8 @@ impl ArithmeticOp {
                 let plus_min_precision = a.leading_digits().max(b.leading_digits()) + scale + 1;
                 (plus_min_precision, scale)
             }
+
+            ArithmeticOp::Modulo => unreachable!(),
         };
 
         // if the args both are Decimal128, we need to clamp the precision to 38
@@ -132,7 +139,27 @@ impl ArithmeticOp {
             ArithmeticOp::Plus | ArithmeticOp::Minus => {
                 Some((result_type, result_type, result_type))
             }
+
+            ArithmeticOp::Modulo => unreachable!(),
         }
+    }
+
+    // The remainder is taken on both operands aligned to the larger scale,
+    // which can need more digits than either operand has: in
+    // `0.1::DECIMAL(38, 38) % 1` the divisor becomes 1 followed by 38 zeros.
+    // So the operands get their own size, up to Decimal256 even for two
+    // Decimal128 operands. The remainder is smaller in magnitude than both
+    // operands, so the result needs only the fewer leading digits.
+    fn modulo_size(
+        a: &DecimalSize,
+        b: &DecimalSize,
+    ) -> Option<(DecimalSize, DecimalSize, DecimalSize)> {
+        let scale = a.scale().max(b.scale());
+        let aligned = a.leading_digits().max(b.leading_digits()) + scale;
+        let operands = DecimalSize::new(aligned.min(i256::MAX_PRECISION), scale).ok()?;
+        let result =
+            DecimalSize::new(a.leading_digits().min(b.leading_digits()) + scale, scale).ok()?;
+        Some((operands, operands, result))
     }
 }
 
@@ -159,10 +186,16 @@ fn op_decimal(
     result_type: DecimalDataType,
     op: ArithmeticOp,
 ) -> Value<AnyType> {
+    // Modulo computes at its operands' size, which can be wider than its result.
+    let compute_size = if op == ArithmeticOp::Modulo {
+        a.2
+    } else {
+        result_type.size()
+    };
     let (a, a_type) = convert_to_decimal(a.0, a.1, a.2, ctx);
     let (b, b_type) = convert_to_decimal(b.0, b.1, b.2, ctx);
 
-    with_decimal_mapped_type!(|T| match DecimalDataType::from(result_type.size()) {
+    with_decimal_mapped_type!(|T| match DecimalDataType::from(compute_size) {
         DecimalDataType::T(_) => {
             with_decimal_mapped_type!(|A| match a_type {
                 DecimalDataType::A(_) => {
@@ -269,6 +302,25 @@ where
 
                 vectorize_with_builder_2_arg::<L, R, DecimalType<U>>(func)(a, b, ctx)
             }
+        }
+
+        ArithmeticOp::Modulo => {
+            // The operands share the result's scale, so the remainder of their
+            // unscaled values is the remainder of the decimals, and it fits the
+            // result's narrower precision. Like `%` on integers, it takes the
+            // sign of the dividend.
+            let func = |a: T, b: T, result: &mut Vec<U>, ctx: &mut EvalContext| {
+                if std::hint::unlikely(b == zero) {
+                    ctx.set_error(result.len(), "divided by zero");
+                    result.push(C::compute(zero));
+                } else {
+                    // checked_rem fails only on T::MIN % -1, which no decimal
+                    // within its precision can reach.
+                    result.push(C::compute(a.checked_rem(b).unwrap_or(zero)));
+                }
+            };
+
+            vectorize_with_builder_2_arg::<L, R, DecimalType<U>>(func)(a, b, ctx)
         }
 
         ArithmeticOp::Plus | ArithmeticOp::Minus => {
@@ -398,7 +450,10 @@ impl ScalarFunctionDomain for DecimalBinaryCalcDomain {
 
         let size = self.return_size;
 
-        let default_domain = if self.arithmetic_op == ArithmeticOp::Divide {
+        let default_domain = if matches!(
+            self.arithmetic_op,
+            ArithmeticOp::Divide | ArithmeticOp::Modulo
+        ) {
             FunctionDomain::MayThrow
         } else {
             FunctionDomain::Full
@@ -603,4 +658,5 @@ pub fn register_decimal_arithmetic(registry: &mut FunctionRegistry) {
     register_decimal_binary_op(registry, ArithmeticOp::Minus);
     register_decimal_binary_op(registry, ArithmeticOp::Divide);
     register_decimal_binary_op(registry, ArithmeticOp::Multiply);
+    register_decimal_binary_op(registry, ArithmeticOp::Modulo);
 }

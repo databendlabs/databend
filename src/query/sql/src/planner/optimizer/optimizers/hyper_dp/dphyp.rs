@@ -963,7 +963,7 @@ mod tests {
         DPhpyOptimizer::collect_materialized_cte_stats(
             &producer,
             &mut cte_stats,
-            &StatContext::default(),
+            &StatContext::without_settings(Default::default()),
         )
         .unwrap();
 
@@ -1005,7 +1005,7 @@ mod tests {
 
         let (optimized, changed) = DPhpyOptimizer::sync_materialized_cte_ref_stats_in_sequences(
             &root,
-            &StatContext::default(),
+            &StatContext::without_settings(Default::default()),
         )
         .unwrap();
 
@@ -1038,7 +1038,7 @@ mod tests {
         DPhpyOptimizer::collect_materialized_cte_stats(
             &producer,
             &mut cte_stats,
-            &StatContext::default(),
+            &StatContext::without_settings(Default::default()),
         )
         .unwrap();
 

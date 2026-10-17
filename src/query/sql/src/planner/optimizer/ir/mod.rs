@@ -59,6 +59,7 @@ pub use query_plan::QueryPlan;
 pub use stats::ColumnStat;
 pub use stats::ColumnStatSet;
 pub use stats::CountMinSketchSet;
+pub use stats::FilterAndStrategy;
 pub(crate) use stats::JoinStatsEstimator;
 pub use stats::MAX_SELECTIVITY;
 pub use stats::SelectivityEstimator;

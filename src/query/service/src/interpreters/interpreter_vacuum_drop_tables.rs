@@ -26,7 +26,9 @@ use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
+use databend_common_meta_app::schema::parse_clone_group_id;
 use databend_common_sql::plans::VacuumDropTablePlan;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_storages_common_table_meta::table::is_fuse_backed_engine;
@@ -50,6 +52,21 @@ pub struct VacuumDropTablesInterpreter {
 impl VacuumDropTablesInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: VacuumDropTablePlan) -> Result<Self> {
         Ok(VacuumDropTablesInterpreter { ctx, plan })
+    }
+
+    /// Classify retained tables for diagnostics only. Metadata GC must continue to use the
+    /// complete unreclaimed set, including normal clone deferrals, to protect their databases.
+    fn classify_unreclaimed_tables(
+        unreclaimed_table_ids: &HashSet<u64>,
+        deferred_clone_ids: &HashSet<u64>,
+    ) -> (Vec<u64>, Vec<u64>) {
+        let (mut deferred, mut failed): (Vec<_>, Vec<_>) = unreclaimed_table_ids
+            .iter()
+            .copied()
+            .partition(|id| deferred_clone_ids.contains(id));
+        deferred.sort_unstable();
+        failed.sort_unstable();
+        (deferred, failed)
     }
 
     /// Vacuum metadata of dropped tables and databases.
@@ -183,7 +200,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
 
             // map: table id to its belonging db id
             let mut containing_db = BTreeMap::new();
-            for drop_id in drop_ids.iter() {
+            for drop_id in &drop_ids {
                 if let DroppedId::Table { name, id } = drop_id {
                     containing_db.insert(id.table_id, name.db_id);
                 }
@@ -202,7 +219,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
             );
 
             let tables_count = tables.len();
-            let mut failed_tables = HashSet::new();
+            let mut unreclaimed_table_ids = HashSet::new();
             let mut fuse_tables = Vec::new();
             for table_info in tables {
                 if is_fuse_backed_engine(table_info.engine()) {
@@ -218,30 +235,94 @@ impl Interpreter for VacuumDropTablesInterpreter {
                     );
                     warn!("{}", msg);
                     ctx.push_warning(msg);
-                    failed_tables.insert(table_info.ident.table_id);
+                    unreclaimed_table_ids.insert(table_info.ident.table_id);
+                }
+            }
+
+            // Clone members can reference ancestor-owned files. Only current lineage leaves are
+            // authorized for physical directory removal; stale bindings conservatively block it.
+            let mut candidate_clone_groups = BTreeMap::<u64, Vec<u64>>::new();
+            for table_info in &fuse_tables {
+                if let Some(group_id) = parse_clone_group_id(&table_info.meta.options)
+                    .ok()
+                    .flatten()
+                {
+                    candidate_clone_groups
+                        .entry(group_id)
+                        .or_default()
+                        .push(table_info.ident.table_id);
+                }
+            }
+            // Bindings track lineage, not actual file references. A descendant binding retains its
+            // dropped ancestor's whole directory even after all shared data has been rewritten.
+            // Directory removal proceeds from lineage leaves, subject to each table's DROP retention.
+            // TODO(zhyass): reclaim ancestor-owned objects once no retained descendant state
+            // references them.
+            // Only a verified member that still has a clone child is a normal deferral. Tables
+            // outside a valid lineage are abnormal and stay in the user-facing warning.
+            let mut deferred_clone_ids = HashSet::new();
+            let mut safe_clone_table_ids = HashSet::new();
+            for (group_id, candidate_ids) in candidate_clone_groups {
+                let bindings = catalog.list_clone_group_bindings(group_id).await?;
+                let members = match FuseTable::clone_descendant_ids(group_id, group_id, &bindings) {
+                    Ok(members) => members,
+                    Err(error) => {
+                        info!(
+                            "defer vacuum of clone group {} with invalid lineage: {}",
+                            group_id, error
+                        );
+                        continue;
+                    }
+                };
+                let direct_sources = bindings
+                    .into_iter()
+                    .map(|(_, source_id)| source_id)
+                    .collect::<HashSet<_>>();
+                for table_id in candidate_ids {
+                    if table_id != group_id && !members.contains(&table_id) {
+                        continue;
+                    }
+                    if direct_sources.contains(&table_id) {
+                        deferred_clone_ids.insert(table_id);
+                    } else {
+                        safe_clone_table_ids.insert(table_id);
+                    }
                 }
             }
 
             let handler = get_vacuum_handler();
             let threads_nums = self.ctx.get_settings().get_max_vacuum_threads()? as usize;
-            let failed = handler
-                .do_vacuum_drop_tables(threads_nums, fuse_tables)
+            let unreclaimed_fuse_table_ids = handler
+                .do_vacuum_drop_tables(threads_nums, fuse_tables, safe_clone_table_ids)
                 .await?;
-            if !failed.is_empty() {
-                let mut ids = failed.iter().copied().collect::<Vec<_>>();
+            // A clone member that still has descendants is deferred, not failed: its metadata is
+            // retained until the lineage lets it go, so do not warn about it on every run.
+            let mut ids = unreclaimed_fuse_table_ids
+                .iter()
+                .filter(|id| !deferred_clone_ids.contains(id))
+                .copied()
+                .collect::<Vec<_>>();
+            if !ids.is_empty() {
                 ids.sort_unstable();
                 ctx.push_warning(format!(
                     "Failed to vacuum dropped tables {:?}; their metadata is retained. See server logs for details.",
                     ids
                 ));
             }
-            failed_tables.extend(failed);
+            unreclaimed_table_ids.extend(unreclaimed_fuse_table_ids);
+            let (deferred_table_ids, failed_table_ids) =
+                Self::classify_unreclaimed_tables(&unreclaimed_table_ids, &deferred_clone_ids);
 
-            let failed_db_ids = failed_tables
+            let unreclaimed_db_ids = unreclaimed_table_ids
                 .iter()
-                // Safe unwrap: the map is built from drop_ids
-                .map(|id| *containing_db.get(id).unwrap())
-                .collect::<HashSet<_>>();
+                .map(|id| {
+                    containing_db.get(id).copied().ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "unreclaimed table {id} has no containing database"
+                        ))
+                    })
+                })
+                .collect::<Result<HashSet<_>>>()?;
 
             let mut success_dropped_ids = vec![];
             // Since drop_ids contains view IDs, any views (if present) will be added to
@@ -249,34 +330,41 @@ impl Interpreter for VacuumDropTablesInterpreter {
             for drop_id in drop_ids {
                 match &drop_id {
                     DroppedId::Db { db_id, db_name: _ } => {
-                        if !failed_db_ids.contains(db_id) {
+                        if !unreclaimed_db_ids.contains(db_id) {
                             success_dropped_ids.push(drop_id);
                         }
                     }
                     DroppedId::Table { name: _, id } => {
-                        if !failed_tables.contains(&id.table_id) {
+                        if !unreclaimed_table_ids.contains(&id.table_id) {
                             success_dropped_ids.push(drop_id);
                         }
                     }
                 }
             }
             info!(
-                "vacuum drop table summary - failed dbs: {}, failed tables: {}, successfully cleaned: {} items",
-                failed_db_ids.len(),
-                failed_tables.len(),
+                "vacuum drop table summary - retained dbs: {}, deferred by clone: {}, failed tables: {}, metadata items eligible for cleanup: {}",
+                unreclaimed_db_ids.len(),
+                deferred_table_ids.len(),
+                failed_table_ids.len(),
                 success_dropped_ids.len()
             );
-            if !failed_tables.is_empty() {
-                info!("failed table ids: {:?}", failed_tables);
+            if !deferred_table_ids.is_empty() {
+                info!("deferred clone table ids: {:?}", deferred_table_ids);
+            }
+            if !failed_table_ids.is_empty() {
+                info!("failed table ids: {:?}", failed_table_ids);
             }
 
             let num_meta_keys_removed = self.gc_drop_tables(catalog, success_dropped_ids).await?;
-            let success_count = tables_count as u64 - failed_tables.len() as u64;
-            let failed_count = failed_tables.len() as u64;
+            let reclaimed_count = tables_count - unreclaimed_table_ids.len();
 
             info!(
-                "=== VACUUM DROP TABLE COMPLETED === success: {}, failed: {}, total: {}, num_meta_keys_removed: {}",
-                success_count, failed_count, tables_count, num_meta_keys_removed
+                "=== VACUUM DROP TABLE COMPLETED === reclaimed: {}, deferred_by_clone: {}, failed: {}, total: {}, num_meta_keys_removed: {}",
+                reclaimed_count,
+                deferred_table_ids.len(),
+                failed_table_ids.len(),
+                tables_count,
+                num_meta_keys_removed
             );
 
             Ok(PipelineBuildResult::create())

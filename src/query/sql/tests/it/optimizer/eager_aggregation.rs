@@ -18,7 +18,6 @@ use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::optimizers::operator::PullUpFilterOptimizer;
 use databend_common_sql::optimizer::optimizers::operator::RuleNormalizeAggregateOptimizer;
 use databend_common_sql::optimizer::optimizers::operator::RuleStatsAggregateOptimizer;
@@ -56,7 +55,7 @@ async fn write_rule_results(file: &mut impl std::io::Write, case: &SqlTestCase) 
     writeln!(
         file,
         "{}",
-        before_plan.format_indent(Default::default(), &StatContext::default())?
+        before_plan.format_indent(Default::default(), &ctx.stat_context()?)?
     )?;
     // The logical plan format does not show rank limits, so record their positions.
     let before_rank_limits = rank_limit_positions(&before_expr);
@@ -78,7 +77,7 @@ async fn write_rule_results(file: &mut impl std::io::Write, case: &SqlTestCase) 
         writeln!(
             file,
             "{}",
-            rewritten.format_indent(Default::default(), &StatContext::default())?
+            rewritten.format_indent(Default::default(), &ctx.stat_context()?)?
         )?;
         // A rank limit below the join keeps the first groups of one join input, which
         // may all be filtered out by the join (#20591).
