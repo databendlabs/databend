@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
+use std::sync::Mutex;
+use std::sync::MutexGuard;
 use std::time::Instant;
 
 use futures::StreamExt;
@@ -77,7 +77,11 @@ struct Shared {
     slots: Arc<Semaphore>,
     /// Permits the bound has shrunk by that other batches held at the time and that still
     /// have to be retired as they come back, so `slots` settles at `concurrency.current()`.
-    deficit: AtomicUsize,
+    ///
+    /// The lock is held across a policy update and the permit adjustment it calls for, so
+    /// two observers on different threads cannot interleave a decrease that is not yet
+    /// booked with an increase that adds a permit.
+    deficit: Mutex<usize>,
     batch_size: usize,
 }
 
@@ -112,17 +116,10 @@ struct Slot {
 
 impl Slot {
     /// Give the slot back: retire it if the bound owes a permit, release it otherwise.
-    fn settle(mut self) {
-        self.give_back();
-    }
-
     fn give_back(&mut self) {
         if let Some(permit) = self.permit.take() {
-            if self.shared.take_deficit() {
-                permit.forget();
-            } else {
-                drop(permit);
-            }
+            let mut deficit = self.shared.deficit.lock().unwrap();
+            Shared::give_back(&mut deficit, permit);
         }
     }
 }
@@ -152,7 +149,7 @@ impl AdaptiveDeleter {
                 retry_stats,
                 concurrency,
                 slots,
-                deficit: AtomicUsize::new(0),
+                deficit: Mutex::new(0),
                 batch_size,
             }),
         })
@@ -278,65 +275,50 @@ impl Shared {
     /// Feed a batch outcome to the policy and move the permit count with the bound, then
     /// give the batch's own slot back.
     ///
-    /// Growing adds permits at once. Shrinking books the whole decrease as deficit before the
-    /// slot is given back, so this slot, which is in hand and cannot reach a waiter in
-    /// between, is the first one retired. Permits sitting free in the semaphore are retired
-    /// next, right away, so an unsaturated deleter does not keep admitting above the new
-    /// bound; only what is still held by other batches remains owed, and they retire it as
-    /// they end.
-    fn observe(&self, feedback: ConcurrencyFeedback, slot: Slot) {
+    /// Growing first cancels permits still owed from an earlier decrease and only adds what
+    /// is left over. Shrinking books the whole decrease as deficit before the slot is given
+    /// back, so this slot, which is in hand and cannot reach a waiter in between, is the
+    /// first one retired; permits sitting free in the semaphore are retired next, right
+    /// away; only what other batches still hold remains owed, and they retire it as they
+    /// end. All of it happens under the deficit lock together with the policy update.
+    fn observe(&self, feedback: ConcurrencyFeedback, mut slot: Slot) {
+        let mut deficit = self.deficit.lock().unwrap();
         let (before, after) = self.concurrency.observe_change(feedback, Instant::now());
         if after > before {
-            // Growth first cancels permits still owed from an earlier decrease; only what is
-            // left over becomes a new permit, or the deleter would run above the bound while
-            // held permits keep returning against a deficit that no longer reflects it.
             let growth = after - before;
-            let cancelled = self.cancel_deficit(growth);
+            let cancelled = growth.min(*deficit);
+            *deficit -= cancelled;
             if growth > cancelled {
                 self.slots.add_permits(growth - cancelled);
             }
         } else if after < before {
-            self.deficit.fetch_add(before - after, Ordering::AcqRel);
+            *deficit += before - after;
         }
-        slot.settle();
-        self.retire_free_permits();
+        if let Some(permit) = slot.permit.take() {
+            Self::give_back(&mut deficit, permit);
+        }
+        self.retire_free_permits(&mut deficit);
     }
 
-    /// Cancel up to `n` units of deficit; returns how many were cancelled.
-    fn cancel_deficit(&self, n: usize) -> usize {
-        let mut cancelled = 0;
-        let _ = self
-            .deficit
-            .try_update(Ordering::AcqRel, Ordering::Acquire, |owed| {
-                cancelled = owed.min(n);
-                Some(owed - cancelled)
-            });
-        cancelled
+    /// Retire the permit if the bound owes one, release it otherwise.
+    fn give_back(deficit: &mut MutexGuard<'_, usize>, permit: OwnedSemaphorePermit) {
+        if **deficit > 0 {
+            **deficit -= 1;
+            permit.forget();
+        } else {
+            drop(permit);
+        }
     }
 
-    /// Retire free permits against the deficit, one at a time so a concurrent release cannot
-    /// make this retire more than is owed.
-    fn retire_free_permits(&self) {
-        while self.deficit.load(Ordering::Acquire) > 0 {
+    /// Retire free permits against the deficit.
+    fn retire_free_permits(&self, deficit: &mut MutexGuard<'_, usize>) {
+        while **deficit > 0 {
             let Ok(permit) = self.slots.clone().try_acquire_owned() else {
                 return;
             };
-            if self.take_deficit() {
-                permit.forget();
-            } else {
-                return;
-            }
+            **deficit -= 1;
+            permit.forget();
         }
-    }
-
-    /// Claim one unit of the deficit, if any; the claim is made before the permit is
-    /// retired, so concurrent settlers never retire more than is owed.
-    fn take_deficit(&self) -> bool {
-        self.deficit
-            .try_update(Ordering::AcqRel, Ordering::Acquire, |owed| {
-                owed.checked_sub(1)
-            })
-            .is_ok()
     }
 
     /// Wait for a slot under the current bound.
