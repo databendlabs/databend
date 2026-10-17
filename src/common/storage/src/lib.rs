@@ -62,12 +62,17 @@ pub use adaptive_concurrency::AdaptiveConcurrency;
 pub use adaptive_concurrency::AdaptiveConcurrencyConfig;
 pub use adaptive_concurrency::ConcurrencyFeedback;
 
+mod adaptive_deleter;
+pub use adaptive_deleter::AdaptiveDeleter;
+pub use adaptive_deleter::RemoveAllReport;
+
 mod concurrent_limit_layer;
 pub use concurrent_limit_layer::ConcurrentLimitLayer;
 
 mod fault_injection_layer;
 pub use fault_injection_layer::FaultHandle;
 pub use fault_injection_layer::FaultInjection;
+pub use fault_injection_layer::FaultInjectionLayer;
 pub use fault_injection_layer::FaultKind;
 pub use fault_injection_layer::FaultOp;
 pub use fault_injection_layer::FaultRule;
