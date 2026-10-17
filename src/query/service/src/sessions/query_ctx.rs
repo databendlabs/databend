@@ -130,7 +130,6 @@ use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
-use databend_common_storage::StorageMetrics;
 use databend_common_storages_basic::ResultScan;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_iceberg::IcebergTable;
@@ -180,6 +179,7 @@ use crate::sessions::Session;
 use crate::sessions::SessionManager;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::query_ctx_shared::MemoryUpdater;
+use crate::sessions::query_ctx_shared::PartitionStats;
 use crate::spillers;
 use crate::sql::binder::StageResolver;
 use crate::storages::Table;
@@ -514,8 +514,8 @@ impl QueryContext {
         self.shared.pop_warnings()
     }
 
-    pub fn get_data_metrics(&self) -> StorageMetrics {
-        self.shared.get_data_metrics()
+    pub fn get_partition_stats(&self) -> PartitionStats {
+        self.shared.get_partition_stats()
     }
 
     pub fn get_local_io_stats(&self) -> Arc<IoStats> {

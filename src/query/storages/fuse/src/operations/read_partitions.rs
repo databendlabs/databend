@@ -19,6 +19,8 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use async_channel::Receiver;
@@ -53,6 +55,8 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sinks::EmptySink;
 use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
@@ -118,6 +122,7 @@ use crate::pruning_pipeline::SegmentPruneTransform;
 use crate::pruning_pipeline::SendPartInfoSink;
 use crate::pruning_pipeline::SendPartState;
 use crate::pruning_pipeline::SyncBlockPruneTransform;
+use crate::pruning_pipeline::SyncPruneSource;
 use crate::pruning_pipeline::TopNPruneTransform;
 use crate::pruning_pipeline::VectorIndexPruneTransform;
 use crate::segment_format_from_location;
@@ -277,13 +282,17 @@ impl FuseTable {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location))
                     }
 
+                    // `partitions_total` is in blocks: the whole-table count
+                    // from the snapshot. It is published once by the
+                    // coordinator; the per-node pruning reports only
+                    // `partitions_scanned`.
                     return Ok((
                         PartStatistics::new_estimated(
                             Some(snapshot_location),
                             read_info.row_count,
                             read_info.compressed_byte_size,
-                            segment_len,
-                            segment_len,
+                            read_info.block_count,
+                            read_info.block_count,
                         ),
                         Partitions::create(PartitionsShuffleKind::Mod, segments),
                         None,
@@ -351,6 +360,16 @@ impl FuseTable {
         let (part_info_tx, part_info_rx) = async_channel::bounded(max_io_requests);
         self.pruned_result_receiver.lock().replace(part_info_rx);
 
+        if !ctx.get_settings().get_enable_prune_pipeline()? {
+            return Ok(Some(self.build_sync_prune_pipeline(
+                ctx,
+                plan_id,
+                push_downs,
+                lazy_init_segments,
+                part_info_tx,
+            )?));
+        }
+
         // If we can get the pruning result from cache, we don't need to prune again, but need sent
         // the parts to the next pipeline
         let derterministic_cache_key =
@@ -415,7 +434,6 @@ impl FuseTable {
                     segment_rx,
                     part_info_tx,
                     derterministic_cache_key.clone(),
-                    lazy_init_segments.len(),
                     plan_id,
                 )?;
             }
@@ -427,7 +445,7 @@ impl FuseTable {
                     plan.scan_id,
                     segment_rx,
                     part_info_tx,
-                    derterministic_cache_key.clone(),
+                    plan_id,
                     table_schema.clone(),
                     internal_column_names.clone(),
                 )?;
@@ -603,6 +621,39 @@ impl FuseTable {
             .collect()
     }
 
+    /// `enable_prune_pipeline = 0`: a one-processor pipeline that prunes the
+    /// lazy segments in a single `prune_snapshot_blocks` pass and feeds the
+    /// parts to `part_info_tx`. See `SyncPruneSource`.
+    fn build_sync_prune_pipeline(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        plan_id: u32,
+        push_downs: Option<PushDownInfo>,
+        lazy_init_segments: Vec<SegmentLocation>,
+        part_info_tx: Sender<Result<PartInfoPtr>>,
+    ) -> Result<Pipeline> {
+        let table = self.clone();
+        let table_schema = self.schema_with_stream();
+        let mut pipeline = Pipeline::create();
+        pipeline.add_source(
+            |output| {
+                SyncPruneSource::create(
+                    ctx.clone(),
+                    output,
+                    table.clone(),
+                    table_schema.clone(),
+                    push_downs.clone(),
+                    lazy_init_segments.clone(),
+                    part_info_tx.clone(),
+                    plan_id,
+                )
+            },
+            1,
+        )?;
+        pipeline.add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
+        Ok(pipeline)
+    }
+
     pub fn prune_segments_with_pipeline(
         &self,
         pruner: Arc<FusePruner>,
@@ -612,7 +663,6 @@ impl FuseTable {
         segment_rx: Receiver<SegmentLocation>,
         part_info_tx: Sender<Result<PartInfoPtr>>,
         derterministic_cache_key: Option<String>,
-        partitions_total: usize,
         plan_id: u32,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -750,8 +800,6 @@ impl FuseTable {
             derterministic_cache_key,
             limit,
             pruner.clone(),
-            self.data_metrics.clone(),
-            partitions_total,
         ));
         prune_pipeline.add_sink(|input| {
             SendPartInfoSink::create(
@@ -808,7 +856,7 @@ impl FuseTable {
         scan_id: usize,
         segment_rx: Receiver<SegmentLocation>,
         part_info_tx: Sender<Result<PartInfoPtr>>,
-        _derterministic_cache_key: Option<String>,
+        plan_id: u32,
         table_schema: TableSchemaRef,
         internal_column_names: HashSet<String>,
     ) -> Result<()> {
@@ -932,6 +980,7 @@ impl FuseTable {
         )?;
         // TODO(Sky): deal with sample
         let dry_run = matches!(ctx.get_query_kind(), QueryKind::Explain);
+        let partitions_scanned = Arc::new(AtomicUsize::new(0));
         prune_pipeline.add_sink(|input| {
             ColumnOrientedBlockPruneSink::create(
                 input,
@@ -941,8 +990,20 @@ impl FuseTable {
                 runtime_filter_prune_context.clone(),
                 runtime_scan_filters.clone(),
                 dry_run,
+                partitions_scanned.clone(),
             )
         })?;
+        // Like the row-oriented pipeline: publish what this node scanned.
+        // `partitions_total` was published once by the planner.
+        prune_pipeline.set_on_finished(move |info: &ExecutionInfo| {
+            if info.res.is_ok() {
+                let mut statistics = PartStatistics::default_exact();
+                statistics.partitions_scanned = partitions_scanned.load(Ordering::Relaxed);
+                statistics.pruning_stats = pruner.pruning_stats();
+                ctx.set_pruned_partitions_stats(plan_id, statistics);
+            }
+            Ok(())
+        });
         // TODO(Sky): populate prune cache , deal with topn prune
         Ok(())
     }
@@ -1102,12 +1163,6 @@ impl FuseTable {
             partitions_scanned,
             pruning_stats,
         );
-
-        // Update context statistics.
-        self.data_metrics
-            .inc_partitions_total(partitions_total as u64);
-        self.data_metrics
-            .inc_partitions_scanned(partitions_scanned as u64);
 
         Ok((statistics, parts))
     }

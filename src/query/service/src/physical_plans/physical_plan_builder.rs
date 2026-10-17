@@ -116,15 +116,16 @@ impl PhysicalPlanBuilder {
         Ok(plan)
     }
 
+    /// Runs once per query, on the coordinator, after plan ids are final.
+    /// Fragments derived from this plan for other nodes carry copies of the
+    /// same statistics, so publishing anywhere later would count them once
+    /// per executor.
     fn publish_synchronous_pruning_stats(&self, plan: &PhysicalPlan) {
-        let mut sources = Vec::new();
-        plan.get_all_data_source(&mut sources);
+        let mut stats = Vec::new();
+        plan.collect_planned_pruning_stats(&mut stats);
 
-        for (plan_id, source) in sources {
-            if source.statistics.pruning_stats != Default::default() {
-                self.ctx
-                    .set_pruned_partitions_stats(plan_id, source.statistics);
-            }
+        for (plan_id, stat) in stats {
+            self.ctx.set_pruned_partitions_stats(plan_id, stat);
         }
     }
 

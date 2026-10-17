@@ -26,6 +26,7 @@ mod sample_block_metas_transform;
 mod segment_prune_transform;
 mod send_part_info_sink;
 mod sync_block_prune_transform;
+mod sync_prune_source;
 mod topn_prune_transform;
 mod vector_index_prune_transform;
 
@@ -44,5 +45,6 @@ pub use segment_prune_transform::SegmentPruneTransform;
 pub use send_part_info_sink::SendPartInfoSink;
 pub use send_part_info_sink::SendPartState;
 pub use sync_block_prune_transform::SyncBlockPruneTransform;
+pub use sync_prune_source::SyncPruneSource;
 pub use topn_prune_transform::TopNPruneTransform;
 pub use vector_index_prune_transform::VectorIndexPruneTransform;

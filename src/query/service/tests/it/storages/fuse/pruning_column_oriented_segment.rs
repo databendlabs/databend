@@ -69,7 +69,6 @@ async fn apply_snapshot_pruning(
     op: Operator,
     bloom_index_cols: BloomIndexColumns,
     fuse_table: &FuseTable,
-    cache_key: Option<String>,
 ) -> Result<Vec<PartInfoPtr>> {
     let ctx: Arc<dyn TableContext> = ctx;
     let segment_locs = table_snapshot.segments.clone();
@@ -96,7 +95,7 @@ async fn apply_snapshot_pruning(
         0,
         segment_rx,
         res_tx,
-        cache_key,
+        0,
         schema.clone(),
         HashSet::new(),
     )?;
@@ -325,8 +324,7 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
         (Some(e5), 2, 2 * row_per_block),
     ];
 
-    for (id, (extra, expected_blocks, expected_rows)) in extras.into_iter().enumerate().take(3) {
-        let cache_key = Some(format!("test_block_pruner_{}", id));
+    for (extra, expected_blocks, expected_rows) in extras.into_iter().take(3) {
         let parts = apply_snapshot_pruning(
             snapshot.clone(),
             table.get_table_info().schema(),
@@ -335,7 +333,6 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
             fuse_table.get_operator(),
             fuse_table.bloom_index_cols(),
             fuse_table,
-            cache_key.clone(),
         )
         .await?;
         let rows = parts

@@ -23,7 +23,9 @@ use std::sync::Arc;
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::runtime::profile::ProfileLabel;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::Partitions;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -68,6 +70,18 @@ pub trait DeriveHandle: Send + Sync + 'static {
         v: &PhysicalPlan,
         children: Vec<PhysicalPlan>,
     ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>>;
+}
+
+/// See [`IPhysicalPlan::collect_planned_pruning_stats`].
+pub fn planned_pruning_stats(parts: &Partitions, statistics: &PartStatistics) -> PartStatistics {
+    if parts.partitions_type() == PartInfoType::LazyLevel {
+        PartStatistics {
+            partitions_total: statistics.partitions_total,
+            ..PartStatistics::default_exact()
+        }
+    } else {
+        statistics.clone()
+    }
 }
 
 #[typetag::serde]
@@ -147,6 +161,17 @@ pub trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
     fn get_all_data_source(&self, sources: &mut Vec<(u32, Box<DataSourcePlan>)>) {
         for child in self.children() {
             child.get_all_data_source(sources);
+        }
+    }
+
+    /// Partition statistics of sources that were pruned while planning, keyed
+    /// by plan id. Sources whose pruning is deferred to the pipeline (lazy
+    /// parts) only carry an estimate and are not reported here; they publish
+    /// their own statistics once pruning has run.
+    #[recursive::recursive]
+    fn collect_planned_pruning_stats(&self, stats: &mut Vec<(u32, PartStatistics)>) {
+        for child in self.children() {
+            child.collect_planned_pruning_stats(stats);
         }
     }
 
