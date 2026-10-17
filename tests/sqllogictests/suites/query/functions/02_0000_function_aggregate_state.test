@@ -1,3 +1,5 @@
+# run-with-settings: partial_aggregate_mode=bypass
+
 query T
 select typeof(max_state(number)) from numbers(100);
 ----

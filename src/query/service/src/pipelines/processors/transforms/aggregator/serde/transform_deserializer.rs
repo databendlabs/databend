@@ -38,6 +38,8 @@ use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::BUCKET_TYPE;
 use crate::pipelines::processors::transforms::aggregator::PARTITIONED_AGGREGATE_TYPE;
 use crate::pipelines::processors::transforms::aggregator::PartitionedData;
+use crate::pipelines::processors::transforms::aggregator::RAW_TYPE;
+use crate::pipelines::processors::transforms::aggregator::RawPayload;
 use crate::pipelines::processors::transforms::aggregator::SPILLED_TYPE;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::SpilledPayload;
@@ -50,6 +52,8 @@ use crate::servers::flight::v1::packets::FragmentData;
 pub struct TransformDeserializer {
     schema: DataSchemaRef,
     arrow_schema: Arc<ArrowSchema>,
+    raw_schema: DataSchemaRef,
+    raw_arrow_schema: Arc<ArrowSchema>,
 }
 
 impl TransformDeserializer {
@@ -57,8 +61,10 @@ impl TransformDeserializer {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         schema: &DataSchemaRef,
+        raw_schema: &DataSchemaRef,
     ) -> Result<ProcessorPtr> {
         let arrow_schema = ArrowSchema::from(schema.as_ref());
+        let raw_arrow_schema = ArrowSchema::from(raw_schema.as_ref());
 
         Ok(ProcessorPtr::create(AccumulatingTransformer::create(
             input,
@@ -66,6 +72,8 @@ impl TransformDeserializer {
             TransformDeserializer {
                 arrow_schema: Arc::new(arrow_schema),
                 schema: schema.clone(),
+                raw_arrow_schema: Arc::new(raw_arrow_schema),
+                raw_schema: raw_schema.clone(),
             },
         )))
     }
@@ -170,6 +178,32 @@ impl TransformDeserializer {
                 }
                 Ok(vec![DataBlock::empty_with_meta(
                     AggregateMeta::create_partitioned(None, PartitionedData::Serialized(metas)),
+                )])
+            }
+            RAW_TYPE => {
+                let data_block = deserialize_block(
+                    dict,
+                    fragment_data,
+                    &self.raw_schema,
+                    self.raw_arrow_schema.clone(),
+                )?;
+                let mut offset = 0;
+                let mut payloads = Vec::with_capacity(meta.buckets.len());
+                for (bucket, rows) in meta.buckets.iter().zip(meta.payload_row_counts.iter()) {
+                    let end = offset + rows;
+                    if end > data_block.num_rows() {
+                        return Err(ErrorCode::Internal(
+                            "Raw aggregate payload rows exceed block rows".to_string(),
+                        ));
+                    }
+                    payloads.push(RawPayload {
+                        bucket: *bucket,
+                        data_block: data_block.slice(offset..end),
+                    });
+                    offset = end;
+                }
+                Ok(vec![DataBlock::empty_with_meta(
+                    AggregateMeta::create_partitioned(None, PartitionedData::Raw(payloads)),
                 )])
             }
             SPILLED_TYPE => {

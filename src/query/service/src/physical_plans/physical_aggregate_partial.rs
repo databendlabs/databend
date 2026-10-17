@@ -48,6 +48,7 @@ use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
+use crate::pipelines::processors::transforms::aggregator::parse_partial_aggregate_mode;
 use crate::sessions::TableContextCluster;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -203,11 +204,16 @@ impl IPhysicalPlan for AggregatePartial {
         let schema_before_group_by = params.input_schema.clone();
 
         let radix_bits = self.shuffle_mode.determine_radix_bits();
-        let partial_agg_config = HashTableConfig::partial_aggregate(
+        let partial_mode =
+            parse_partial_aggregate_mode(&builder.settings.get_partial_aggregate_mode()?)?;
+        let mut partial_agg_config = HashTableConfig::partial_aggregate(
             radix_bits,
             cluster.nodes.len(),
             max_threads as usize,
         );
+        if partial_mode.is_some() {
+            partial_agg_config = partial_agg_config.with_partial_adaptive();
+        }
 
         // For rank limit, we can filter data using sort with rank before partial.
         if let Some((sort_desc, limit)) =
@@ -249,6 +255,7 @@ impl IPhysicalPlan for AggregatePartial {
                 shared_partition_streams.clone(),
                 bucket_num,
                 is_row_shuffle,
+                partial_mode,
             )?))
         })?;
 

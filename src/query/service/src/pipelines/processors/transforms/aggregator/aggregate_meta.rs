@@ -33,6 +33,40 @@ use parquet::file::metadata::RowGroupMetaData;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 
+/// Rows the partial aggregate did not aggregate, for the final aggregate to aggregate as
+/// single-stage input. `data_block` has the partial aggregate's input columns. Group hashes are
+/// not carried: they are random and would not compress on the exchange, and the receiver
+/// recomputes them.
+pub struct RawPayload {
+    pub bucket: isize,
+    pub data_block: DataBlock,
+}
+
+impl RawPayload {
+    /// Split the rows by `partition(hash)` of their group `hashes` into `partitions` payloads,
+    /// keeping `bucket`.
+    pub fn scatter(
+        self,
+        hashes: &[u64],
+        partitions: usize,
+        partition: impl Fn(u64) -> usize,
+    ) -> Result<Vec<Self>> {
+        let mut indices = vec![Vec::<u32>::new(); partitions];
+        for (row, hash) in hashes.iter().enumerate() {
+            indices[partition(*hash)].push(row as u32);
+        }
+        indices
+            .into_iter()
+            .map(|indices| {
+                Ok(RawPayload {
+                    bucket: self.bucket,
+                    data_block: self.data_block.take(indices.as_slice())?,
+                })
+            })
+            .collect()
+    }
+}
+
 pub struct SpilledPayload {
     pub bucket: isize,
     pub location: String,
@@ -56,6 +90,7 @@ pub enum PartitionedData {
     AggregatePayload(Vec<AggregatePayload>),
     BucketSpilled(Vec<SpilledPayload>),
     Mixed(Vec<PartitionItem>),
+    Raw(Vec<RawPayload>),
 }
 
 impl Debug for PartitionedData {
@@ -72,6 +107,7 @@ impl Debug for PartitionedData {
                 .debug_struct("PartitionedAggregateData::BucketSpilled")
                 .finish(),
             PartitionedData::Mixed(_) => f.debug_struct("PartitionedAggregateData::Mixed").finish(),
+            PartitionedData::Raw(_) => f.debug_struct("PartitionedAggregateData::Raw").finish(),
         }
     }
 }
@@ -80,6 +116,10 @@ impl PartitionedData {
     fn output_stats(&self) -> Option<BlockProfileStatistics> {
         match self {
             PartitionedData::Empty => Some(BlockProfileStatistics { rows: 0, bytes: 0 }),
+            PartitionedData::Raw(payloads) => Some(BlockProfileStatistics {
+                rows: payloads.iter().map(|p| p.data_block.num_rows()).sum(),
+                bytes: payloads.iter().map(|p| p.data_block.memory_size()).sum(),
+            }),
             PartitionedData::Serialized(payloads) => Some(BlockProfileStatistics {
                 rows: payloads.iter().map(|p| p.data_block.num_rows()).sum(),
                 bytes: payloads.iter().map(|p| p.data_block.memory_size()).sum(),
