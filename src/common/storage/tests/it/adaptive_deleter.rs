@@ -332,13 +332,100 @@ async fn test_no_batch_is_admitted_after_a_failure() {
     assert_eq!(count(&op, "8/80/").await, 0);
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_halving_under_queued_waiters_shrinks_the_batches_in_flight() {
+    let _serial = SERIAL.lock().await;
+    FaultInjection::clear();
+    let gate = Arc::new(Gate::default());
+    let stats = Arc::new(RetryStats::default());
+    let op = Operator::new(Memory::default())
+        .unwrap()
+        .layer(GateLayer(gate.clone()))
+        .finish();
+    for i in 0..8 {
+        op.write(&format!("9/90/{i}"), "x").await.unwrap();
+        op.write(&format!("9/91/{i}"), "x").await.unwrap();
+    }
+    // Bound 4 so one halving leaves room to see the difference; the cooldown spans the test
+    // so the later throttled batches do not halve it again.
+    let deleter = AdaptiveDeleter::new(op.clone(), stats, AdaptiveConcurrencyConfig {
+        initial: 4,
+        min: 1,
+        max: 4,
+        increase_after: 100,
+        decrease_cooldown: Duration::from_secs(60),
+    })
+    .unwrap();
+
+    // Call A alone saturates the four slots and has waiters queued behind them. Every delete
+    // of A's first batches is throttled, so whichever one is let through first halves the
+    // bound and A stops admitting; call B then has the queue to itself.
+    for i in 0..8 {
+        gate.throttle(&format!("9/90/{i}"));
+    }
+    let a = tokio::spawn({
+        let d = deleter.clone();
+        async move { d.remove_all("9/90/").await }
+    });
+    gate.wait_for_blocked(4).await;
+    let b = tokio::spawn({
+        let d = deleter.clone();
+        async move { d.remove_all("9/91/").await }
+    });
+    tokio::time::sleep(Duration::from_millis(30)).await;
+    assert_eq!(gate.blocked(), 4, "B is queued behind A's four batches");
+
+    // The outcome halves the bound to 2. The finished batch's permit must be retired by that
+    // halving rather than handed to B, so three remain in flight, not four.
+    gate.release_one();
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert_eq!(deleter.concurrency(), 2);
+    assert_eq!(gate.blocked(), 3, "retired, not handed to a waiter");
+
+    // Draining one more of A's retires the deficit; from then on B refills to the new bound
+    // and the in-flight count never climbs back to the old one.
+    gate.release_one();
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert_eq!(gate.blocked(), 2);
+    gate.release_one();
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert_eq!(
+        gate.blocked(),
+        2,
+        "B took the freed slot: steady at the new bound"
+    );
+    assert!(gate.peak() <= 4);
+
+    gate.open();
+    assert_eq!(a.await.unwrap().unwrap_err().kind(), ErrorKind::RateLimited);
+    b.await.unwrap().unwrap();
+    assert_eq!(count(&op, "9/91/").await, 0);
+    assert!(count(&op, "9/90/").await > 0, "A failed closed");
+}
+
 /// Blocks every delete until opened, counting how many are blocked at once.
-#[derive(Default)]
 struct Gate {
     blocked: std::sync::atomic::AtomicUsize,
     peak: std::sync::atomic::AtomicUsize,
     open: tokio::sync::Notify,
     opened: std::sync::atomic::AtomicBool,
+    /// Each permit lets exactly one blocked delete through while the gate is closed.
+    step: tokio::sync::Semaphore,
+    /// Paths whose delete fails with `RateLimited` once let through.
+    throttle: std::sync::Mutex<std::collections::HashSet<String>>,
+}
+
+impl Default for Gate {
+    fn default() -> Self {
+        Self {
+            blocked: Default::default(),
+            peak: Default::default(),
+            open: Default::default(),
+            opened: Default::default(),
+            step: tokio::sync::Semaphore::new(0),
+            throttle: Default::default(),
+        }
+    }
 }
 
 impl Gate {
@@ -356,6 +443,16 @@ impl Gate {
     fn close(&self) {
         self.opened
             .store(false, std::sync::atomic::Ordering::Release);
+    }
+    /// Let one blocked delete through.
+    fn release_one(&self) {
+        self.step.add_permits(1);
+    }
+    fn throttle(&self, path: &str) {
+        self.throttle.lock().unwrap().insert(path.to_owned());
+    }
+    fn is_throttled(&self, path: &str) -> bool {
+        self.throttle.lock().unwrap().remove(path)
     }
     async fn wait_for_blocked(&self, n: usize) {
         while self.blocked() < n {
@@ -384,7 +481,13 @@ impl Gate {
             if self.opened.load(std::sync::atomic::Ordering::Acquire) {
                 break;
             }
-            notified.await;
+            tokio::select! {
+                _ = notified => {}
+                permit = self.step.acquire() => {
+                    permit.unwrap().forget();
+                    break;
+                }
+            }
         }
     }
 }
@@ -448,6 +551,7 @@ impl<A: opendal::raw::Access> opendal::raw::LayeredAccess for GateAccessor<A> {
         Ok((rp, GateDeleter {
             inner,
             gate: self.gate.clone(),
+            paths: Vec::new(),
         }))
     }
 }
@@ -455,14 +559,22 @@ impl<A: opendal::raw::Access> opendal::raw::LayeredAccess for GateAccessor<A> {
 struct GateDeleter<D> {
     inner: D,
     gate: Arc<Gate>,
+    paths: Vec<String>,
 }
 
 impl<D: opendal::raw::oio::Delete> opendal::raw::oio::Delete for GateDeleter<D> {
     fn delete(&mut self, path: &str, args: opendal::raw::OpDelete) -> opendal::Result<()> {
+        self.paths.push(path.to_owned());
         self.inner.delete(path, args)
     }
     async fn flush(&mut self) -> opendal::Result<usize> {
         self.gate.pass().await;
+        if self.paths.iter().any(|p| self.gate.is_throttled(p)) {
+            return Err(opendal::Error::new(
+                ErrorKind::RateLimited,
+                "gate throttled",
+            ));
+        }
         self.inner.flush().await
     }
 }

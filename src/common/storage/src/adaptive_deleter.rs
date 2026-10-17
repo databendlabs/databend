@@ -71,11 +71,12 @@ struct Shared {
     retry_stats: Arc<RetryStats>,
     concurrency: AdaptiveConcurrency,
     /// One permit per batch the policy currently allows, across every `remove_all` on this
-    /// deleter. A batch holds its permit until it is done or dropped, so a cancelled call
-    /// gives its slots back; waiters sleep on the semaphore instead of polling.
+    /// deleter. A batch holds its permit until its outcome has been fed to the policy, or
+    /// until it is dropped, so a cancelled call gives its slots back; waiters sleep on the
+    /// semaphore instead of polling.
     slots: Arc<Semaphore>,
-    /// Permits the bound has shrunk by that were held at the time and still have to be
-    /// forgotten as they come back, so `slots` settles at exactly `concurrency.current()`.
+    /// Permits the bound has shrunk by that other batches held at the time and that still
+    /// have to be retired as they come back, so `slots` settles at `concurrency.current()`.
     deficit: AtomicUsize,
     batch_size: usize,
 }
@@ -93,7 +94,13 @@ pub struct RemoveAllReport {
 }
 
 /// The result of one batch (its object count on success) and the retries seen while it ran.
-type BatchOutcome = (opendal::Result<usize>, usize);
+/// A finished batch: its result, the retries seen while it ran, and the slot it still holds
+/// until the policy has seen the outcome.
+struct BatchOutcome {
+    result: opendal::Result<usize>,
+    retried: usize,
+    permit: OwnedSemaphorePermit,
+}
 
 impl AdaptiveDeleter {
     pub fn new(
@@ -211,11 +218,12 @@ impl AdaptiveDeleter {
 }
 
 impl Shared {
-    /// One delete request's worth of paths; the result and the retries seen while it ran.
-    /// The permit is released when this future completes or is dropped.
+    /// One delete request's worth of paths. The permit travels with the outcome: it is
+    /// released, or retired, only once the policy has seen the result, and dropped with the
+    /// future if the call is cancelled.
     async fn delete_batch(
         self: Arc<Self>,
-        _permit: OwnedSemaphorePermit,
+        permit: OwnedSemaphorePermit,
         paths: Vec<String>,
         counted: bool,
     ) -> BatchOutcome {
@@ -229,34 +237,43 @@ impl Shared {
         }
         .await;
         let retried = self.retry_stats.retried().saturating_sub(before) as usize;
-        (result, retried)
+        BatchOutcome {
+            result,
+            retried,
+            permit,
+        }
     }
 
-    /// Feed a batch outcome to the policy and move the permit count with the bound.
+    /// Feed a batch outcome to the policy and move the permit count with the bound, then
+    /// release or retire the batch's own permit.
     ///
-    /// Called with the batch's permit already released. Growing adds permits at once. When
-    /// the bound shrinks, only free permits can be forgotten now; the rest are held by other
-    /// batches and are forgotten as they return, through the deficit.
-    fn observe(&self, feedback: ConcurrencyFeedback) {
+    /// Growing adds permits at once. Shrinking first retires this batch's permit, which is
+    /// in hand and so cannot be handed to a waiter in between, then books the rest as a
+    /// deficit that other batches retire with their own permits as they finish.
+    fn observe(&self, feedback: ConcurrencyFeedback, permit: OwnedSemaphorePermit) {
         let (before, after) = self.concurrency.observe_change(feedback, Instant::now());
         if after > before {
             self.slots.add_permits(after - before);
         } else if after < before {
-            self.deficit.fetch_add(before - after, Ordering::AcqRel);
-        }
-        self.settle_deficit();
-    }
-
-    /// Forget as much of the deficit as the free permits allow.
-    fn settle_deficit(&self) {
-        let owed = self.deficit.load(Ordering::Acquire);
-        if owed == 0 {
+            self.deficit.fetch_add(before - after - 1, Ordering::AcqRel);
+            permit.forget();
             return;
         }
-        let forgotten = self.slots.forget_permits(owed);
-        if forgotten > 0 {
-            self.deficit.fetch_sub(forgotten, Ordering::AcqRel);
+        if self.take_deficit() {
+            permit.forget();
+        } else {
+            drop(permit);
         }
+    }
+
+    /// Claim one unit of the deficit, if any; the claim is made before the permit is
+    /// retired, so concurrent settlers never retire more than is owed.
+    fn take_deficit(&self) -> bool {
+        self.deficit
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |owed| {
+                owed.checked_sub(1)
+            })
+            .is_ok()
     }
 
     /// Wait for a slot under the current bound.
@@ -339,8 +356,13 @@ impl Run {
     }
 
     /// Record a finished batch in the report and feed it to the policy.
-    fn settle(&mut self, (outcome, retried): BatchOutcome) {
-        let (failed, rate_limited) = match &outcome {
+    fn settle(&mut self, outcome: BatchOutcome) {
+        let BatchOutcome {
+            result,
+            retried,
+            permit,
+        } = outcome;
+        let (failed, rate_limited) = match &result {
             Ok(n) => {
                 self.report.removed += n;
                 (false, false)
@@ -349,12 +371,15 @@ impl Run {
         };
         self.report.batches += 1;
         self.report.retried += retried;
-        self.shared.observe(ConcurrencyFeedback {
-            failed,
-            rate_limited,
-            retried,
-        });
-        if let Err(e) = outcome
+        self.shared.observe(
+            ConcurrencyFeedback {
+                failed,
+                rate_limited,
+                retried,
+            },
+            permit,
+        );
+        if let Err(e) = result
             && self.first_error.is_none()
         {
             self.first_error = Some(e);
