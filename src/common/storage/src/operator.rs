@@ -18,8 +18,6 @@ use std::io::ErrorKind;
 use std::io::Result;
 use std::sync::Arc;
 use std::sync::LazyLock;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use anyhow::anyhow;
@@ -69,25 +67,11 @@ use crate::fault_injection_layer::FaultInjectionLayer;
 use crate::http_client::get_storage_http_client;
 use crate::metrics_layer::METRICS_LAYER;
 use crate::operator_cache::get_operator_cache;
+use crate::retry_stats::RetryStats;
 use crate::runtime_layer::RuntimeLayer;
 
 static METRIC_OPENDAL_RETRIES_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, String)>>> =
     LazyLock::new(|| register_counter_family("opendal_retries_count"));
-
-/// Retries the retry layer absorbed for one operator, for callers that need to tell throttling
-/// of their own requests apart from the node-wide `opendal_retries_count` metric.
-#[derive(Debug, Default)]
-pub struct RetryStats {
-    rate_limited: AtomicU64,
-}
-
-impl RetryStats {
-    /// Retries caused by `RateLimited` so far; sample around a request to detect throttling the
-    /// retry layer hid.
-    pub fn rate_limited(&self) -> u64 {
-        self.rate_limited.load(Ordering::Relaxed)
-    }
-}
 
 /// Build a fresh, uncached operator for `cfg` whose retries are counted in `stats`. The cached
 /// operators are shared by everything on the node that uses the same storage parameters, so
@@ -315,7 +299,7 @@ fn build_operator<B: Builder>(
         .layer(
             RetryLayer::new()
                 .with_jitter()
-                .with_notify(DatabendRetryInterceptor { retry_stats }),
+                .with_notify(DatabendRetryInterceptor::new(retry_stats)),
         )
         // Add async backtrace
         .layer(AsyncBacktraceLayer)
@@ -645,18 +629,24 @@ fn init_huggingface_operator(cfg: &StorageHuggingfaceConfig) -> Result<impl Buil
     Ok(builder)
 }
 
+/// Retry hook of every Databend operator: counts retries in the node-wide metric and, when
+/// the operator is observed, in the caller's [`RetryStats`].
 pub struct DatabendRetryInterceptor {
     retry_stats: Option<Arc<RetryStats>>,
+}
+
+impl DatabendRetryInterceptor {
+    pub fn new(retry_stats: Option<Arc<RetryStats>>) -> Self {
+        Self { retry_stats }
+    }
 }
 
 impl RetryInterceptor for DatabendRetryInterceptor {
     fn intercept(&self, err: &opendal::Error, dur: Duration) {
         let labels = vec![("err", err.kind().to_string())];
         METRIC_OPENDAL_RETRIES_COUNT.get_or_create(&labels).inc();
-        if err.kind() == opendal::ErrorKind::RateLimited
-            && let Some(stats) = &self.retry_stats
-        {
-            stats.rate_limited.fetch_add(1, Ordering::Relaxed);
+        if let Some(stats) = &self.retry_stats {
+            stats.record_retry(err.kind());
         }
         warn!(
             target: "opendal::layers::retry",
@@ -1017,8 +1007,40 @@ impl OperatorRegistry for IcebergFileIO {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::sync::Arc;
+    use std::time::Duration;
 
+    use opendal::Error;
+    use opendal::ErrorKind;
+    use opendal::layers::RetryInterceptor;
+
+    use super::DatabendRetryInterceptor;
     use super::IcebergFileIO;
+    use crate::RetryStats;
+
+    #[test]
+    fn retry_interceptor_updates_only_its_observation_scope() {
+        let first = Arc::new(RetryStats::default());
+        let second = Arc::new(RetryStats::default());
+        let interceptor = DatabendRetryInterceptor::new(Some(first.clone()));
+        let throttled = Error::new(ErrorKind::RateLimited, "test throttling");
+        // How OSS, COS, OBS and Azure throttling reaches the retry layer: a temporary
+        // `Unexpected` error with no `RateLimited` classification.
+        let other = Error::new(ErrorKind::Unexpected, "test failure").set_temporary();
+
+        interceptor.intercept(&other, Duration::ZERO);
+        assert_eq!(first.retried(), 1);
+        assert_eq!(first.rate_limited(), 0);
+        interceptor.intercept(&throttled, Duration::ZERO);
+        assert_eq!(first.retried(), 2);
+        assert_eq!(first.rate_limited(), 1);
+        assert_eq!(second.retried(), 0);
+        assert_eq!(second.rate_limited(), 0);
+
+        DatabendRetryInterceptor::new(None).intercept(&throttled, Duration::ZERO);
+        assert_eq!(first.retried(), 2);
+        assert_eq!(first.rate_limited(), 1);
+    }
 
     #[test]
     fn iceberg_file_io_does_not_mix_catalog_token_with_explicit_s3_credentials() {

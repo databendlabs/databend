@@ -25,9 +25,11 @@ mod unit {
     use chrono::Duration as ChronoDuration;
     use chrono::Utc;
     use databend_common_catalog::table_context::CheckAbort;
+    use databend_common_storage::DatabendRetryInterceptor;
     use opendal::EntryMode;
     use opendal::Metadata;
     use opendal::OperatorBuilder;
+    use opendal::layers::RetryLayer;
     use opendal::raw::Access;
     use opendal::raw::AccessorInfo;
     use opendal::raw::MaybeSend;
@@ -94,8 +96,12 @@ mod unit {
                     .try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
                     .is_ok();
             if failing {
-                self.pending.clear();
-                return Err(opendal::Error::new(self.failure_kind, "mock batch failure"));
+                // Nothing of the batch is removed, and it stays pending: temporary, as the
+                // backends classify throttling and transient 5xx, a `RetryLayer` in front of
+                // the mock flushes the same paths again.
+                return Err(
+                    opendal::Error::new(self.failure_kind, "mock batch failure").set_temporary()
+                );
             }
             let n = self.pending.len();
             self.deleted.lock().append(&mut self.pending);
@@ -424,114 +430,37 @@ mod unit {
     }
 
     #[test]
-    fn test_adaptive_concurrency_ramps_up_once_per_full_streak() {
-        let c = AdaptiveConcurrency::new();
-        let t0 = Instant::now();
-        assert_eq!(c.current(), AdaptiveConcurrency::INIT);
-
-        for _ in 0..AdaptiveConcurrency::RAMP_UP_BATCHES - 1 {
-            c.observe(&clear(), t0);
+    fn test_delete_outcome_preserves_concurrency_feedback() {
+        for outcome in [clear(), failed(), rate_limited(), retried(3)] {
+            let feedback = outcome.feedback();
+            assert_eq!(feedback.failed, outcome.failed);
+            assert_eq!(feedback.rate_limited, outcome.rate_limited);
+            assert_eq!(feedback.retried, outcome.retried);
         }
-        assert_eq!(c.current(), AdaptiveConcurrency::INIT);
-        c.observe(&clear(), t0);
-        assert_eq!(c.current(), AdaptiveConcurrency::INIT + 1);
-
-        for _ in 0..AdaptiveConcurrency::RAMP_UP_BATCHES - 1 {
-            c.observe(&clear(), t0);
-        }
-        assert_eq!(c.current(), AdaptiveConcurrency::INIT + 1);
-
-        for _ in 0..AdaptiveConcurrency::MAX * AdaptiveConcurrency::RAMP_UP_BATCHES {
-            c.observe(&clear(), t0);
-        }
-        assert_eq!(c.current(), AdaptiveConcurrency::MAX);
-    }
-
-    /// A batch that failed for a reason other than throttling is not a clear batch: it must
-    /// neither halve the bound nor count towards raising it, or a persistent backend error
-    /// would see the vacuum ramp up to `MAX` while every delete fails.
-    #[test]
-    fn test_adaptive_concurrency_holds_on_failed_or_retried_batches() {
-        let c = AdaptiveConcurrency::new();
-        let t0 = Instant::now();
-
-        for _ in 0..AdaptiveConcurrency::MAX * AdaptiveConcurrency::RAMP_UP_BATCHES {
-            c.observe(&failed(), t0);
-        }
-        assert_eq!(c.current(), AdaptiveConcurrency::INIT);
-
-        // So does steady low-level throttling: a batch that needed a retry ends its task under
-        // `Pacing::Scheduled`, and must not raise the bound either.
-        for _ in 0..AdaptiveConcurrency::MAX * AdaptiveConcurrency::RAMP_UP_BATCHES {
-            c.observe(&retried(1), t0);
-        }
-        assert_eq!(c.current(), AdaptiveConcurrency::INIT);
-
-        // A failure also resets the streak of clear batches.
-        for _ in 0..AdaptiveConcurrency::RAMP_UP_BATCHES - 1 {
-            c.observe(&clear(), t0);
-        }
-        c.observe(&failed(), t0);
-        c.observe(&clear(), t0);
-        assert_eq!(c.current(), AdaptiveConcurrency::INIT);
-        for _ in 0..AdaptiveConcurrency::RAMP_UP_BATCHES - 1 {
-            c.observe(&clear(), t0);
-        }
-        assert_eq!(c.current(), AdaptiveConcurrency::INIT + 1);
     }
 
     #[test]
-    fn test_adaptive_concurrency_halves_at_most_once_per_cooldown() {
-        let c = AdaptiveConcurrency::new();
-        let t0 = Instant::now();
-        let cooldown = AdaptiveConcurrency::DECREASE_COOLDOWN;
+    fn test_run_settles_feedback_into_shared_concurrency_policy() {
+        let mut run = Run::new(usize::MAX);
+        let initial = run.concurrency.current();
+        let settle = |run: &mut Run, delete| {
+            run.settle(DirOutcome {
+                dir_path: "spill/test/".to_owned(),
+                delete,
+            });
+        };
 
-        // Same episode within the cooldown: one decrease.
-        c.observe(&rate_limited(), t0);
-        c.observe(&rate_limited(), t0);
-        c.observe(&rate_limited(), t0 + Duration::from_secs(3));
-        c.observe(&rate_limited(), t0 + cooldown - Duration::from_millis(1));
-        assert_eq!(c.current(), AdaptiveConcurrency::INIT / 2);
+        settle(&mut run, None);
+        settle(&mut run, Some(failed()));
+        settle(&mut run, Some(retried(1)));
+        assert_eq!(run.concurrency.current(), initial);
 
-        c.observe(&rate_limited(), t0 + cooldown);
-        assert_eq!(c.current(), AdaptiveConcurrency::INIT / 4);
-
-        for i in 2..20 {
-            c.observe(&rate_limited(), t0 + cooldown * i);
-        }
-        assert_eq!(c.current(), AdaptiveConcurrency::MIN);
-
-        // Throttling restarts the streak.
-        for _ in 0..AdaptiveConcurrency::RAMP_UP_BATCHES - 1 {
-            c.observe(&clear(), t0);
-        }
-        c.observe(&rate_limited(), t0 + cooldown * 30);
-        for _ in 0..AdaptiveConcurrency::RAMP_UP_BATCHES - 1 {
-            c.observe(&clear(), t0);
-        }
-        assert_eq!(c.current(), AdaptiveConcurrency::MIN);
-        c.observe(&clear(), t0);
-        assert_eq!(c.current(), AdaptiveConcurrency::MIN + 1);
-    }
-
-    #[test]
-    fn test_adaptive_concurrency_ignores_sporadic_retries() {
-        let c = AdaptiveConcurrency::new();
-        let init = AdaptiveConcurrency::INIT;
-
-        // Below a full INIT round of retries is noise, whatever the bound.
-        assert!(!c.is_throttled(&retried(init - 1)));
-        assert!(c.is_throttled(&retried(init)));
-        assert!(c.is_throttled(&rate_limited()));
-
-        // Above INIT the threshold scales with the bound.
-        let t0 = Instant::now();
-        for _ in 0..(AdaptiveConcurrency::MAX - init) * AdaptiveConcurrency::RAMP_UP_BATCHES {
-            c.observe(&clear(), t0);
-        }
-        assert_eq!(c.current(), AdaptiveConcurrency::MAX);
-        assert!(!c.is_throttled(&retried(AdaptiveConcurrency::MAX / 2 - 1)));
-        assert!(c.is_throttled(&retried(AdaptiveConcurrency::MAX / 2)));
+        settle(&mut run, Some(rate_limited()));
+        assert_eq!(run.concurrency.current(), initial / 2);
+        settle(&mut run, Some(rate_limited()));
+        assert_eq!(run.concurrency.current(), initial / 2);
+        assert_eq!(run.budget.removed(), 1);
+        assert_eq!(run.budget.charged(), 4);
     }
 
     #[test]
@@ -608,6 +537,51 @@ mod unit {
         assert_eq!(outcome.charged, 2);
         assert!(!outcome.rate_limited);
         assert_eq!(accessor.deleted_paths(), paths);
+        Ok(())
+    }
+
+    /// OSS, COS, OBS and Azure answer throttling with a `503` that OpenDAL classifies as a
+    /// temporary `Unexpected` error, not `RateLimited`. Hidden by the retry layer, it must still
+    /// reach the outcome as a retry so the concurrency policy can back off on those stores.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_retried_batch_is_observed_whatever_the_error_kind() -> anyhow::Result<()> {
+        for kind in [
+            opendal::ErrorKind::Unexpected,
+            opendal::ErrorKind::RateLimited,
+        ] {
+            let accessor = MockVacuumAccessor::new(HashMap::new(), HashMap::new(), HashMap::new());
+            let retry_stats = Arc::new(RetryStats::default());
+            let operator = OperatorBuilder::new(accessor.clone())
+                .layer(
+                    RetryLayer::new()
+                        .with_min_delay(Duration::ZERO)
+                        .with_max_delay(Duration::ZERO)
+                        .with_max_times(3)
+                        .with_notify(DatabendRetryInterceptor::new(Some(retry_stats.clone()))),
+                )
+                .finish();
+            let deleter = SpillDeleter::new(operator, retry_stats);
+            let paths = vec!["spill/dir/file1".to_string(), "spill/dir/file2".to_string()];
+
+            accessor.fail_next_batches(1, kind);
+            let outcome = deleter.delete(paths.clone(), "spill/dir/").await;
+
+            assert!(
+                !outcome.failed,
+                "{kind:?}: the retry must have gone through"
+            );
+            assert_eq!(outcome.removed, 2);
+            assert_eq!(outcome.retried, 1, "{kind:?}");
+            assert!(
+                !outcome.rate_limited,
+                "{kind:?}: only an exhausted batch is"
+            );
+            assert_eq!(accessor.deleted_paths(), paths);
+            assert!(
+                !scheduled().continues_after(&outcome),
+                "{kind:?}: a retried batch ends a scheduled task"
+            );
+        }
         Ok(())
     }
 

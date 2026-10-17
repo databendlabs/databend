@@ -36,6 +36,8 @@ use std::time::UNIX_EPOCH;
 use databend_common_catalog::table_context::AbortChecker;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_storage::AdaptiveConcurrency;
+use databend_common_storage::ConcurrencyFeedback;
 use databend_common_storage::DataOperator;
 use databend_common_storage::RetryStats;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumReport;
@@ -80,13 +82,23 @@ struct DeleteOutcome {
     failed: bool,
     /// The batch itself was rejected as rate limited.
     rate_limited: bool,
-    /// `RateLimited` retries of the vacuum's own operator while the batch was in flight. The
-    /// retry layer hides `SlowDown`, so a successful batch may still have been throttled;
-    /// concurrent batches of the same run can each see the same retry.
+    /// Retries of the vacuum's own operator while the batch was in flight, of any error kind:
+    /// S3 reports throttling as `RateLimited`, but OSS, COS, OBS and Azure answer `503`s that
+    /// OpenDAL only classifies as temporary. The retry layer hides both, so a successful batch
+    /// may still have been throttled; concurrent batches of the same run can each see the
+    /// same retry.
     retried: usize,
 }
 
 impl DeleteOutcome {
+    fn feedback(&self) -> ConcurrencyFeedback {
+        ConcurrencyFeedback {
+            failed: self.failed,
+            rate_limited: self.rate_limited,
+            retried: self.retried,
+        }
+    }
+
     /// Merge the outcome of a further batch issued by the same task.
     fn absorb(&mut self, other: DeleteOutcome) {
         self.removed += other.removed;
@@ -148,7 +160,7 @@ impl SpillDeleter {
 
     async fn delete(&self, paths: Vec<String>, from: &str) -> DeleteOutcome {
         let n = paths.len();
-        let retries_before = self.retry_stats.rate_limited();
+        let retries_before = self.retry_stats.retried();
         let mut removed = 0;
         let mut in_flight = 0;
         let result: opendal::Result<()> = async {
@@ -170,10 +182,7 @@ impl SpillDeleter {
             Ok(())
         }
         .await;
-        let retried = self
-            .retry_stats
-            .rate_limited()
-            .saturating_sub(retries_before) as usize;
+        let retried = self.retry_stats.retried().saturating_sub(retries_before) as usize;
         match result {
             Ok(()) => DeleteOutcome {
                 removed,
@@ -201,99 +210,6 @@ impl SpillDeleter {
                 }
             }
         }
-    }
-}
-
-// ---------------------------------------------------------------------------------------------
-// Concurrency policy
-// ---------------------------------------------------------------------------------------------
-
-/// Additive-increase / multiplicative-decrease bound on concurrently vacuumed spill directories.
-///
-/// Object stores throttle deletes per key prefix (S3: 3,500 keys/s), so the right concurrency
-/// depends on the store, not the node: 32 already triggers `SlowDown` storms, 1 is latency-bound.
-/// Every `RAMP_UP_BATCHES` clear batches raise the bound by one; a throttled batch halves it, at
-/// most once per `DECREASE_COOLDOWN` so one throttling episode (visible to every overlapping
-/// batch for the 1s/2s/4s retry back-offs) is counted once. A batch that failed for any other
-/// reason, or that went through only after a retry or two, is not clear either: it holds the
-/// bound where it is, so neither a persistent backend error nor steady low-level throttling
-/// gets amplified by ramping up.
-struct AdaptiveConcurrency(Mutex<ConcurrencyState>);
-
-struct ConcurrencyState {
-    current: usize,
-    clear_streak: usize,
-    last_decrease: Option<Instant>,
-}
-
-impl AdaptiveConcurrency {
-    const INIT: usize = 8;
-    const MIN: usize = 1;
-    const MAX: usize = 32;
-    const RAMP_UP_BATCHES: usize = 16;
-    const DECREASE_COOLDOWN: Duration = Duration::from_secs(10);
-
-    fn new() -> Self {
-        Self(Mutex::new(ConcurrencyState {
-            current: Self::INIT,
-            clear_streak: 0,
-            last_decrease: None,
-        }))
-    }
-
-    fn current(&self) -> usize {
-        self.0.lock().current
-    }
-
-    /// Sporadic retries are noise the retry layer already absorbs and must not halve the bound;
-    /// only a burst of at least half the in-flight batches, and never fewer than a full `INIT`
-    /// round, counts as throttling.
-    fn is_throttled(&self, outcome: &DeleteOutcome) -> bool {
-        outcome.rate_limited || outcome.retried >= self.current().div_ceil(2).max(Self::INIT)
-    }
-
-    fn observe(&self, outcome: &DeleteOutcome, now: Instant) {
-        if self.is_throttled(outcome) {
-            self.back_off(now);
-        } else if outcome.failed || outcome.retried > 0 {
-            // Not clear: the same signal `Pacing` ends the task on must not raise the bound.
-            self.hold();
-        } else {
-            self.ramp_up();
-        }
-    }
-
-    fn hold(&self) {
-        self.0.lock().clear_streak = 0;
-    }
-
-    fn ramp_up(&self) {
-        let mut s = self.0.lock();
-        s.clear_streak += 1;
-        if s.clear_streak < Self::RAMP_UP_BATCHES {
-            return;
-        }
-        s.clear_streak = 0;
-        if s.current < Self::MAX {
-            s.current += 1;
-        }
-    }
-
-    fn back_off(&self, now: Instant) {
-        let mut s = self.0.lock();
-        s.clear_streak = 0;
-        let cooled = s
-            .last_decrease
-            .is_none_or(|t| now.saturating_duration_since(t) >= Self::DECREASE_COOLDOWN);
-        if !cooled || s.current <= Self::MIN {
-            return;
-        }
-        s.last_decrease = Some(now);
-        s.current = (s.current / 2).max(Self::MIN);
-        warn!(
-            "Vacuum temporary files: object store is rate limiting deletes, lowering directory concurrency to {}",
-            s.current
-        );
     }
 }
 
@@ -475,7 +391,7 @@ impl Run {
         let now = Instant::now();
         Self {
             budget: RunBudget::new(limit),
-            concurrency: AdaptiveConcurrency::new(),
+            concurrency: AdaptiveConcurrency::default(),
             gc_metas: HashSet::new(),
             started: now,
             last_progress_log: now,
@@ -488,7 +404,14 @@ impl Run {
         };
         self.budget.record(&delete);
         let now = Instant::now();
-        self.concurrency.observe(&delete, now);
+        let previous = self.concurrency.current();
+        let current = self.concurrency.observe(delete.feedback(), now);
+        if current < previous {
+            warn!(
+                "Vacuum temporary files: object store is rate limiting deletes, lowering directory concurrency to {}",
+                current
+            );
+        }
         if now.duration_since(self.last_progress_log) >= Self::PROGRESS_LOG_INTERVAL {
             self.last_progress_log = now;
             info!(
@@ -533,7 +456,7 @@ impl Run {
 ///   independent task, bounded by [`AdaptiveConcurrency`].
 /// - `limit` is a soft upper bound: no new directory is started once it is reached, but tasks
 ///   already in flight finish, so the final count may exceed it by the contents of up to
-///   `AdaptiveConcurrency::MAX` directories.
+///   the configured maximum number of directories.
 /// - A directory's sibling `.list` meta file is claimed when the directory task is scheduled, so
 ///   the top-level listing never vacuums the same meta file concurrently, whatever order the
 ///   store lists the two entries in.
