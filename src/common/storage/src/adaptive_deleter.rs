@@ -99,7 +99,38 @@ pub struct RemoveAllReport {
 struct BatchOutcome {
     result: opendal::Result<usize>,
     retried: usize,
-    permit: OwnedSemaphorePermit,
+    slot: Slot,
+}
+
+/// A slot under the deleter's bound. However it ends, by `observe` or by being dropped with
+/// a cancelled call, it is retired against the deficit first and returned to the semaphore
+/// only when nothing is owed, so cancellation cannot expose slots above the bound.
+struct Slot {
+    permit: Option<OwnedSemaphorePermit>,
+    shared: Arc<Shared>,
+}
+
+impl Slot {
+    /// Give the slot back: retire it if the bound owes a permit, release it otherwise.
+    fn settle(mut self) {
+        self.give_back();
+    }
+
+    fn give_back(&mut self) {
+        if let Some(permit) = self.permit.take() {
+            if self.shared.take_deficit() {
+                permit.forget();
+            } else {
+                drop(permit);
+            }
+        }
+    }
+}
+
+impl Drop for Slot {
+    fn drop(&mut self) {
+        self.give_back();
+    }
 }
 
 impl AdaptiveDeleter {
@@ -218,12 +249,12 @@ impl AdaptiveDeleter {
 }
 
 impl Shared {
-    /// One delete request's worth of paths. The permit travels with the outcome: it is
-    /// released, or retired, only once the policy has seen the result, and dropped with the
-    /// future if the call is cancelled.
+    /// One delete request's worth of paths. The slot travels with the outcome: it is
+    /// released, or retired, only once the policy has seen the result, and settled by its
+    /// `Drop` if the call is cancelled.
     async fn delete_batch(
         self: Arc<Self>,
-        permit: OwnedSemaphorePermit,
+        slot: Slot,
         paths: Vec<String>,
         counted: bool,
     ) -> BatchOutcome {
@@ -240,30 +271,24 @@ impl Shared {
         BatchOutcome {
             result,
             retried,
-            permit,
+            slot,
         }
     }
 
     /// Feed a batch outcome to the policy and move the permit count with the bound, then
-    /// release or retire the batch's own permit.
+    /// give the batch's own slot back.
     ///
-    /// Growing adds permits at once. Shrinking first retires this batch's permit, which is
-    /// in hand and so cannot be handed to a waiter in between, then books the rest as a
-    /// deficit that other batches retire with their own permits as they finish.
-    fn observe(&self, feedback: ConcurrencyFeedback, permit: OwnedSemaphorePermit) {
+    /// Growing adds permits at once. Shrinking books the whole decrease as deficit before the
+    /// slot is given back, so this slot, which is in hand and cannot reach a waiter in
+    /// between, is the first one retired; the rest are retired by other slots as they end.
+    fn observe(&self, feedback: ConcurrencyFeedback, slot: Slot) {
         let (before, after) = self.concurrency.observe_change(feedback, Instant::now());
         if after > before {
             self.slots.add_permits(after - before);
         } else if after < before {
-            self.deficit.fetch_add(before - after - 1, Ordering::AcqRel);
-            permit.forget();
-            return;
+            self.deficit.fetch_add(before - after, Ordering::AcqRel);
         }
-        if self.take_deficit() {
-            permit.forget();
-        } else {
-            drop(permit);
-        }
+        slot.settle();
     }
 
     /// Claim one unit of the deficit, if any; the claim is made before the permit is
@@ -277,12 +302,17 @@ impl Shared {
     }
 
     /// Wait for a slot under the current bound.
-    async fn acquire(&self) -> OwnedSemaphorePermit {
-        self.slots
+    async fn acquire(self: &Arc<Self>) -> Slot {
+        let permit = self
+            .slots
             .clone()
             .acquire_owned()
             .await
-            .expect("the slot semaphore is never closed")
+            .expect("the slot semaphore is never closed");
+        Slot {
+            permit: Some(permit),
+            shared: self.clone(),
+        }
     }
 }
 
@@ -317,13 +347,13 @@ impl Run {
     /// Wait for a slot, settling this call's own finished batches meanwhile so their outcome
     /// reaches the policy promptly. Nothing is admitted once a batch has failed.
     async fn admit(&mut self, paths: Vec<String>, counted: bool) {
-        let permit = loop {
+        let slot = loop {
             if self.first_error.is_some() {
                 return;
             }
             tokio::select! {
                 biased;
-                permit = self.shared.acquire() => break permit,
+                slot = self.shared.acquire() => break slot,
                 settled = self.batches.next() => match settled {
                     Some(outcome) => self.settle(outcome),
                     // Nothing of ours in flight: wait for another call to release a slot.
@@ -332,10 +362,11 @@ impl Run {
             }
         };
         if self.first_error.is_some() {
+            // Dropping the slot gives it back, retiring it first if the bound owes one.
             return;
         }
         self.batches.push(Box::pin(
-            self.shared.clone().delete_batch(permit, paths, counted),
+            self.shared.clone().delete_batch(slot, paths, counted),
         ));
     }
 
@@ -360,7 +391,7 @@ impl Run {
         let BatchOutcome {
             result,
             retried,
-            permit,
+            slot,
         } = outcome;
         let (failed, rate_limited) = match &result {
             Ok(n) => {
@@ -377,7 +408,7 @@ impl Run {
                 rate_limited,
                 retried,
             },
-            permit,
+            slot,
         );
         if let Err(e) = result
             && self.first_error.is_none()

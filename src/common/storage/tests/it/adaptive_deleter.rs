@@ -403,6 +403,69 @@ async fn test_halving_under_queued_waiters_shrinks_the_batches_in_flight() {
     assert!(count(&op, "9/90/").await > 0, "A failed closed");
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_cancelled_slots_are_retired_against_the_deficit() {
+    let _serial = SERIAL.lock().await;
+    FaultInjection::clear();
+    let gate = Arc::new(Gate::default());
+    let stats = Arc::new(RetryStats::default());
+    let op = Operator::new(Memory::default())
+        .unwrap()
+        .layer(GateLayer(gate.clone()))
+        .finish();
+    for i in 0..8 {
+        op.write(&format!("a/a0/{i}"), "x").await.unwrap();
+        op.write(&format!("a/a1/{i}"), "x").await.unwrap();
+    }
+    let deleter = AdaptiveDeleter::new(op.clone(), stats, AdaptiveConcurrencyConfig {
+        initial: 4,
+        min: 1,
+        max: 4,
+        increase_after: 100,
+        decrease_cooldown: Duration::from_secs(60),
+    })
+    .unwrap();
+
+    // A call saturates the four slots; one throttled outcome halves the bound to 2 while
+    // the other three batches still hold their slots. Then the call is cancelled.
+    gate.throttle("a/a0/0");
+    gate.throttle("a/a0/1");
+    gate.throttle("a/a0/2");
+    gate.throttle("a/a0/3");
+    {
+        let mut call = Box::pin(deleter.remove_all("a/a0/"));
+        let steps = async {
+            gate.wait_for_blocked(4).await;
+            gate.release_one();
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            assert_eq!(deleter.concurrency(), 2);
+            assert_eq!(gate.blocked(), 3);
+        };
+        tokio::select! {
+            _ = &mut call => panic!("gate is closed"),
+            _ = steps => {}
+        }
+        // `call` and its three in-flight batches are dropped here.
+    }
+    assert_eq!(
+        gate.blocked(),
+        0,
+        "dropped batches abandoned their requests"
+    );
+
+    // The dropped slots must have been retired down to the new bound, not handed back
+    // in full: a fresh call gets two in flight, not three.
+    let observe = async {
+        gate.wait_for_blocked(2).await;
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(gate.blocked(), 2, "only the halved bound is available");
+        gate.open();
+    };
+    let (report, ()) = futures::join!(deleter.remove_all("a/a1/"), observe);
+    report.unwrap();
+    assert_eq!(count(&op, "a/a1/").await, 0);
+}
+
 /// Blocks every delete until opened, counting how many are blocked at once.
 struct Gate {
     blocked: std::sync::atomic::AtomicUsize,
