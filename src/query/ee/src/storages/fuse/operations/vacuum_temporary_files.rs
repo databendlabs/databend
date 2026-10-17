@@ -15,16 +15,14 @@
 // `VACUUM TEMPORARY FILES`: remove expired spill files from the tenant's spill prefix.
 //
 // Layout:
-// - [`SpillDeleter`]: the only piece that talks to the object store for deletes, knows how
-//   throttling shows up (`RateLimited` errors, hidden retries) and reports progress per request.
-// - [`AdaptiveConcurrency`]: pure policy deciding how many spill directories may be vacuumed at
-//   once, driven by the delete outcomes.
+// - [`SpillDeleter`]: delegates selected-path deletion, retry observation, request concurrency
+//   and progress to the shared [`AdaptiveDeleter`]; adds spill-specific outcome and error logs.
 // - [`RunBudget`]: `LIMIT` accounting.
 // - [`Pacing`]: decides after each delete batch whether a task issues the next one.
 // - Directory strategies (`delete_by_meta`, `delete_by_list`, `delete_by_probe`) are plain
 //   functions over a [`SpillDeleter`]: they return a [`DeleteOutcome`] and keep no shared state.
 // - [`vacuum_by_duration`] schedules directory tasks and is the single place where outcomes are
-//   settled into the budget, the concurrency policy and the logs.
+//   settled into the budget and the logs. Request-level feedback is handled by the deleter.
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -36,6 +34,8 @@ use std::time::UNIX_EPOCH;
 use databend_common_catalog::table_context::AbortChecker;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_storage::AdaptiveConcurrencyConfig;
+use databend_common_storage::AdaptiveDeleter;
 use databend_common_storage::DataOperator;
 use databend_common_storage::RetryStats;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumReport;
@@ -51,7 +51,6 @@ use opendal::Buffer;
 use opendal::ErrorKind;
 use opendal::Operator;
 use opendal::Scheme;
-use parking_lot::Mutex;
 
 // Default retention duration for temporary files: 3 days.
 const DEFAULT_RETAIN_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 3);
@@ -59,6 +58,9 @@ const SPILL_META_SUFFIX: &str = ".list";
 /// Paths materialized per delete batch, from a manifest or a listing; also the S3 multi-delete
 /// maximum. Bounds a task's memory independently of `LIMIT`.
 const DELETE_BATCH_FILES: usize = 1000;
+/// Bound concurrent manifest reads and listings, independently of the deleter's adaptive
+/// request budget. Only the shared deleter adjusts delete concurrency.
+const MAX_DIRECTORY_TASKS: usize = 32;
 
 // ---------------------------------------------------------------------------------------------
 // Delete I/O
@@ -80,9 +82,11 @@ struct DeleteOutcome {
     failed: bool,
     /// The batch itself was rejected as rate limited.
     rate_limited: bool,
-    /// `RateLimited` retries of the vacuum's own operator while the batch was in flight. The
-    /// retry layer hides `SlowDown`, so a successful batch may still have been throttled;
-    /// concurrent batches of the same run can each see the same retry.
+    /// Retries of the vacuum's own operator while the batch was in flight, of any error kind:
+    /// S3 reports throttling as `RateLimited`, but OSS, COS, OBS and Azure answer `503`s that
+    /// OpenDAL only classifies as temporary. The retry layer hides both, so a successful batch
+    /// may still have been throttled; concurrent batches of the same run can each see the
+    /// same retry.
     retried: usize,
 }
 
@@ -97,25 +101,10 @@ impl DeleteOutcome {
     }
 }
 
-/// Deletes spill files, observes how the object store responds, and reports the running total
-/// after every request so progress is visible while a large directory is still being vacuumed.
+/// Spill-specific adapter: the shared deleter owns all delete I/O and request feedback.
 struct SpillDeleter {
     operator: Operator,
-    /// Paths per request the backend accepts (S3 1000, GCS 100, fs 1). A batch is sent one
-    /// request at a time so a failure mid-batch still accounts for the requests that went
-    /// through.
-    request_size: usize,
-    /// Retries of this operator's own requests, so throttling is told apart from whatever else
-    /// the node is doing against storage.
-    retry_stats: Arc<RetryStats>,
-    /// Running total of files removed and the callback it is published through, under one lock
-    /// so concurrent tasks publish totals in increasing order.
-    progress: Mutex<Progress>,
-}
-
-struct Progress {
-    removed: usize,
-    report: Option<VacuumReport>,
+    deleter: AdaptiveDeleter,
 }
 
 impl SpillDeleter {
@@ -128,18 +117,17 @@ impl SpillDeleter {
         retry_stats: Arc<RetryStats>,
         report: Option<VacuumReport>,
     ) -> Self {
-        let request_size = operator
-            .info()
-            .full_capability()
-            .delete_max_size
-            .unwrap_or(1)
-            .clamp(1, DELETE_BATCH_FILES);
-        Self {
-            operator,
-            request_size,
+        let deleter = AdaptiveDeleter::new(
+            operator.clone(),
             retry_stats,
-            progress: Mutex::new(Progress { removed: 0, report }),
-        }
+            AdaptiveConcurrencyConfig::default(),
+        )
+        .expect("default adaptive delete bounds must be valid");
+        let deleter = match report {
+            Some(report) => deleter.with_progress(report),
+            None => deleter,
+        };
+        Self { operator, deleter }
     }
 
     fn operator(&self) -> &Operator {
@@ -148,152 +136,26 @@ impl SpillDeleter {
 
     async fn delete(&self, paths: Vec<String>, from: &str) -> DeleteOutcome {
         let n = paths.len();
-        let retries_before = self.retry_stats.rate_limited();
-        let mut removed = 0;
-        let mut in_flight = 0;
-        let result: opendal::Result<()> = async {
-            let mut deleter = self.operator.deleter().await?;
-            for request in paths.chunks(self.request_size) {
-                in_flight = request.len();
-                deleter
-                    .delete_iter(request.iter().map(String::as_str))
-                    .await?;
-                deleter.close().await?;
-                in_flight = 0;
-                removed += request.len();
-                let mut progress = self.progress.lock();
-                progress.removed += request.len();
-                if let Some(report) = &progress.report {
-                    report(progress.removed);
-                }
-            }
-            Ok(())
+        let report = self.deleter.remove_files(paths).await;
+        if let Some(e) = &report.error {
+            warn!(
+                "Vacuum temporary files: failed to delete {} of {} files from '{}', will retry in the next run: {}",
+                n - report.removed,
+                n,
+                from,
+                e
+            );
         }
-        .await;
-        let retried = self
-            .retry_stats
-            .rate_limited()
-            .saturating_sub(retries_before) as usize;
-        match result {
-            Ok(()) => DeleteOutcome {
-                removed,
-                charged: removed,
-                failed: false,
-                rate_limited: false,
-                retried,
-            },
-            Err(e) => {
-                warn!(
-                    "Vacuum temporary files: failed to delete {} of {} files from '{}', will retry in the next run: {}",
-                    n - removed,
-                    n,
-                    from,
-                    e
-                );
-                DeleteOutcome {
-                    removed,
-                    // Even a `RateLimited` error can follow per-object successes: the
-                    // store may accept part of a multi-delete and throttle the rest.
-                    charged: removed + in_flight,
-                    failed: true,
-                    rate_limited: e.kind() == ErrorKind::RateLimited,
-                    retried,
-                }
-            }
+        DeleteOutcome {
+            removed: report.removed,
+            charged: report.attempted,
+            failed: report.error.is_some(),
+            rate_limited: report
+                .error
+                .as_ref()
+                .is_some_and(|e| e.kind() == ErrorKind::RateLimited),
+            retried: report.retried,
         }
-    }
-}
-
-// ---------------------------------------------------------------------------------------------
-// Concurrency policy
-// ---------------------------------------------------------------------------------------------
-
-/// Additive-increase / multiplicative-decrease bound on concurrently vacuumed spill directories.
-///
-/// Object stores throttle deletes per key prefix (S3: 3,500 keys/s), so the right concurrency
-/// depends on the store, not the node: 32 already triggers `SlowDown` storms, 1 is latency-bound.
-/// Every `RAMP_UP_BATCHES` clear batches raise the bound by one; a throttled batch halves it, at
-/// most once per `DECREASE_COOLDOWN` so one throttling episode (visible to every overlapping
-/// batch for the 1s/2s/4s retry back-offs) is counted once. A batch that failed for any other
-/// reason, or that went through only after a retry or two, is not clear either: it holds the
-/// bound where it is, so neither a persistent backend error nor steady low-level throttling
-/// gets amplified by ramping up.
-struct AdaptiveConcurrency(Mutex<ConcurrencyState>);
-
-struct ConcurrencyState {
-    current: usize,
-    clear_streak: usize,
-    last_decrease: Option<Instant>,
-}
-
-impl AdaptiveConcurrency {
-    const INIT: usize = 8;
-    const MIN: usize = 1;
-    const MAX: usize = 32;
-    const RAMP_UP_BATCHES: usize = 16;
-    const DECREASE_COOLDOWN: Duration = Duration::from_secs(10);
-
-    fn new() -> Self {
-        Self(Mutex::new(ConcurrencyState {
-            current: Self::INIT,
-            clear_streak: 0,
-            last_decrease: None,
-        }))
-    }
-
-    fn current(&self) -> usize {
-        self.0.lock().current
-    }
-
-    /// Sporadic retries are noise the retry layer already absorbs and must not halve the bound;
-    /// only a burst of at least half the in-flight batches, and never fewer than a full `INIT`
-    /// round, counts as throttling.
-    fn is_throttled(&self, outcome: &DeleteOutcome) -> bool {
-        outcome.rate_limited || outcome.retried >= self.current().div_ceil(2).max(Self::INIT)
-    }
-
-    fn observe(&self, outcome: &DeleteOutcome, now: Instant) {
-        if self.is_throttled(outcome) {
-            self.back_off(now);
-        } else if outcome.failed || outcome.retried > 0 {
-            // Not clear: the same signal `Pacing` ends the task on must not raise the bound.
-            self.hold();
-        } else {
-            self.ramp_up();
-        }
-    }
-
-    fn hold(&self) {
-        self.0.lock().clear_streak = 0;
-    }
-
-    fn ramp_up(&self) {
-        let mut s = self.0.lock();
-        s.clear_streak += 1;
-        if s.clear_streak < Self::RAMP_UP_BATCHES {
-            return;
-        }
-        s.clear_streak = 0;
-        if s.current < Self::MAX {
-            s.current += 1;
-        }
-    }
-
-    fn back_off(&self, now: Instant) {
-        let mut s = self.0.lock();
-        s.clear_streak = 0;
-        let cooled = s
-            .last_decrease
-            .is_none_or(|t| now.saturating_duration_since(t) >= Self::DECREASE_COOLDOWN);
-        if !cooled || s.current <= Self::MIN {
-            return;
-        }
-        s.last_decrease = Some(now);
-        s.current = (s.current / 2).max(Self::MIN);
-        warn!(
-            "Vacuum temporary files: object store is rate limiting deletes, lowering directory concurrency to {}",
-            s.current
-        );
     }
 }
 
@@ -351,12 +213,12 @@ impl RunBudget {
 #[derive(Clone)]
 enum Pacing {
     /// Under the `VACUUM TEMPORARY FILES` scheduler: a batch the store pushed back on ends the
-    /// task, so [`AdaptiveConcurrency`] observes the signal before more requests go out, and so
-    /// does the command being aborted. The remainder is picked up next run.
+    /// task. [`AdaptiveDeleter`] has already observed the request feedback; an aborted command
+    /// also stops the task. The remainder is picked up next run.
     Scheduled(AbortChecker),
-    /// The query hook: no scheduler to hand a throttling signal to, no later pass for its query,
-    /// and the query itself may well be aborted already (that is one reason the hook runs), so
-    /// it keeps going while batches succeed.
+    /// The query hook has no later pass for its query, which may already be aborted. It
+    /// keeps draining successful batches even after absorbed retries; the shared deleter
+    /// still observes every request and adjusts its bound.
     Drain,
 }
 
@@ -462,7 +324,7 @@ struct DirOutcome {
 /// where directory outcomes are settled.
 struct Run {
     budget: RunBudget,
-    concurrency: AdaptiveConcurrency,
+    deleter: AdaptiveDeleter,
     gc_metas: HashSet<String>,
     started: Instant,
     last_progress_log: Instant,
@@ -471,11 +333,11 @@ struct Run {
 impl Run {
     const PROGRESS_LOG_INTERVAL: Duration = Duration::from_secs(10);
 
-    fn new(limit: usize) -> Self {
+    fn new(limit: usize, deleter: AdaptiveDeleter) -> Self {
         let now = Instant::now();
         Self {
             budget: RunBudget::new(limit),
-            concurrency: AdaptiveConcurrency::new(),
+            deleter,
             gc_metas: HashSet::new(),
             started: now,
             last_progress_log: now,
@@ -488,13 +350,12 @@ impl Run {
         };
         self.budget.record(&delete);
         let now = Instant::now();
-        self.concurrency.observe(&delete, now);
         if now.duration_since(self.last_progress_log) >= Self::PROGRESS_LOG_INTERVAL {
             self.last_progress_log = now;
             info!(
-                "Vacuum temporary files progress: removed {} files, directory concurrency {}, elapsed {} sec (last batch: {} from '{}')",
+                "Vacuum temporary files progress: removed {} files, delete request concurrency {}, elapsed {} sec (last batch: {} from '{}')",
                 self.budget.removed(),
-                self.concurrency.current(),
+                self.deleter.concurrency(),
                 self.started.elapsed().as_secs(),
                 delete.removed,
                 outcome.dir_path,
@@ -505,10 +366,10 @@ impl Run {
     /// Returns the budget used, see [`RunBudget::charged`].
     fn finish(self) -> usize {
         info!(
-            "Vacuum temporary files finished: removed {} files ({} charged to the limit), final directory concurrency {}, elapsed {} sec",
+            "Vacuum temporary files finished: removed {} files ({} charged to the limit), final delete request concurrency {}, elapsed {} sec",
             self.budget.removed(),
             self.budget.charged(),
-            self.concurrency.current(),
+            self.deleter.concurrency(),
             self.started.elapsed().as_secs()
         );
         self.budget.charged()
@@ -530,10 +391,11 @@ impl Run {
 ///
 /// Concurrency:
 /// - The top-level listing is consumed sequentially; each spill directory is vacuumed as an
-///   independent task, bounded by [`AdaptiveConcurrency`].
+///   independent task, bounded by [`MAX_DIRECTORY_TASKS`] to cap manifest/listing memory.
+///   Delete requests share the [`AdaptiveDeleter`]'s adaptive budget across every task.
 /// - `limit` is a soft upper bound: no new directory is started once it is reached, but tasks
 ///   already in flight finish, so the final count may exceed it by the contents of up to
-///   `AdaptiveConcurrency::MAX` directories.
+///   the configured maximum number of directories.
 /// - A directory's sibling `.list` meta file is claimed when the directory task is scheduled, so
 ///   the top-level listing never vacuums the same meta file concurrently, whatever order the
 ///   store lists the two entries in.
@@ -558,7 +420,7 @@ async fn vacuum_by_duration(
     ));
     let expiry = Expiry::new(retain);
     let pacing = Pacing::Scheduled(abort_checker.clone());
-    let mut run = Run::new(limit);
+    let mut run = Run::new(limit, deleter.deleter.clone());
 
     let temporary_dir: Arc<str> = format!("{}/", temporary_dir.trim_end_matches('/')).into();
     let mut ds = deleter.operator().lister_with(&temporary_dir).await?;
@@ -574,7 +436,7 @@ async fn vacuum_by_duration(
             break;
         }
 
-        while in_flight.len() >= run.concurrency.current() {
+        while in_flight.len() >= MAX_DIRECTORY_TASKS {
             if let Some(res) = in_flight.next().await {
                 run.settle(res?);
                 abort_checker.try_check_aborting()?;
@@ -646,7 +508,7 @@ async fn vacuum_by_duration(
         }
     }
 
-    // Draining may outlive the listing by a lot (up to `MAX` no-`LIMIT` manifests), so keep
+    // Draining may outlive the listing by a lot (up to `MAX_DIRECTORY_TASKS` manifests), so keep
     // honouring cancellation; returning drops the in-flight tasks.
     while let Some(res) = in_flight.next().await {
         run.settle(res?);
@@ -1126,12 +988,11 @@ async fn vacuum_query_hook(
     query_id: &str,
     limit: usize,
 ) -> Result<usize> {
-    // The hook drains regardless of throttling, so the shared spill operator is fine here and
-    // the retry sample it never consults stays at zero.
-    let deleter = SpillDeleter::new(
-        DataOperator::instance().spill_operator(),
-        Arc::new(RetryStats::default()),
-    );
+    // The hook drains regardless of absorbed retries, but its requests still use the same
+    // observed, adaptive deletion path as the scheduled command.
+    let retry_stats = Arc::new(RetryStats::default());
+    let operator = DataOperator::instance().observed_spill_operator(retry_stats.clone())?;
+    let deleter = SpillDeleter::new(operator, retry_stats);
     let mut budget = RunBudget::new(limit);
 
     let metas_f = nodes

@@ -48,6 +48,7 @@ url = { workspace = true }
 
 [dev-dependencies]
 reqwest = { workspace = true, features = ["gzip"] }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true
