@@ -55,6 +55,8 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sinks::EmptySink;
 use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
@@ -120,6 +122,7 @@ use crate::pruning_pipeline::SegmentPruneTransform;
 use crate::pruning_pipeline::SendPartInfoSink;
 use crate::pruning_pipeline::SendPartState;
 use crate::pruning_pipeline::SyncBlockPruneTransform;
+use crate::pruning_pipeline::SyncPruneSource;
 use crate::pruning_pipeline::TopNPruneTransform;
 use crate::pruning_pipeline::VectorIndexPruneTransform;
 use crate::segment_format_from_location;
@@ -358,15 +361,13 @@ impl FuseTable {
         self.pruned_result_receiver.lock().replace(part_info_rx);
 
         if !ctx.get_settings().get_enable_prune_pipeline()? {
-            self.prune_lazy_segments_synchronously(
+            return Ok(Some(self.build_sync_prune_pipeline(
                 ctx,
                 plan_id,
-                source_pipeline,
                 push_downs,
                 lazy_init_segments,
                 part_info_tx,
-            );
-            return Ok(None);
+            )?));
         }
 
         // If we can get the pruning result from cache, we don't need to prune again, but need sent
@@ -620,66 +621,37 @@ impl FuseTable {
             .collect()
     }
 
-    /// `enable_prune_pipeline = 0`: prune the lazy segments in one
-    /// synchronous pass on a side runtime and feed the parts to
-    /// `part_info_tx`, instead of building a prune pipeline.
-    ///
-    /// Publishes what this node scanned under the physical `plan_id`; the
-    /// planner published `partitions_total` once from the snapshot.
-    fn prune_lazy_segments_synchronously(
+    /// `enable_prune_pipeline = 0`: a one-processor pipeline that prunes the
+    /// lazy segments in a single `prune_snapshot_blocks` pass and feeds the
+    /// parts to `part_info_tx`. See `SyncPruneSource`.
+    fn build_sync_prune_pipeline(
         &self,
         ctx: Arc<dyn TableContext>,
         plan_id: u32,
-        source_pipeline: &mut Pipeline,
         push_downs: Option<PushDownInfo>,
         lazy_init_segments: Vec<SegmentLocation>,
         part_info_tx: Sender<Result<PartInfoPtr>>,
-    ) {
+    ) -> Result<Pipeline> {
         let table = self.clone();
         let table_schema = self.schema_with_stream();
-        source_pipeline.set_on_init(move || {
-            // We cannot use the runtime associated with the query to avoid increasing its lifetime.
-            GlobalIORuntime::instance().spawn(async move {
-                // avoid block global io runtime
-                let runtime = Runtime::with_worker_threads(2, Some("prune-snap-blk".to_string()))?;
-                let handler = runtime.spawn(async move {
-                    match table
-                        .prune_snapshot_blocks(
-                            ctx.clone(),
-                            push_downs,
-                            table_schema,
-                            lazy_init_segments,
-                            0,
-                            ReadPartitionsPruningMode::Normal,
-                            None,
-                        )
-                        .await
-                    {
-                        Ok((mut statistics, partitions, _)) => {
-                            statistics.partitions_total = 0;
-                            ctx.set_pruned_partitions_stats(plan_id, statistics);
-                            for part in partitions.partitions {
-                                // the sql may be killed or early stop, ignore the error
-                                if let Err(_e) = part_info_tx.send(Ok(part)).await {
-                                    break;
-                                }
-                            }
-                        }
-                        Err(err) => {
-                            let _ = part_info_tx.send(Err(err)).await;
-                        }
-                    }
-                });
-
-                if let Err(cause) = handler.await {
-                    log::warn!("Join error while in prune pipeline, cause: {:?}", cause);
-                }
-
-                Result::Ok(())
-            });
-
-            Ok(())
-        });
+        let mut pipeline = Pipeline::create();
+        pipeline.add_source(
+            |output| {
+                SyncPruneSource::create(
+                    ctx.clone(),
+                    output,
+                    table.clone(),
+                    table_schema.clone(),
+                    push_downs.clone(),
+                    lazy_init_segments.clone(),
+                    part_info_tx.clone(),
+                    plan_id,
+                )
+            },
+            1,
+        )?;
+        pipeline.add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
+        Ok(pipeline)
     }
 
     pub fn prune_segments_with_pipeline(

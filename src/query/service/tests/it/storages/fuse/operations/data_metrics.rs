@@ -76,6 +76,50 @@ impl Observed {
 /// tracking payload carrying `io_stats`, the way `FlightSQL` and other
 /// handlers that do not install one call the interpreter. The interpreter
 /// itself must bind the query's counter so the IO is attributed.
+/// Run a statement through the interpreter and return its first column as
+/// text; used for `explain` output.
+async fn run_for_text(
+    fixture: &TestFixture,
+    sql: &str,
+    configure: impl FnOnce(&Arc<QueryContext>) -> Result<()>,
+) -> Result<String> {
+    let ctx = fixture.new_query_ctx().await?;
+    configure(&ctx)?;
+    let mut planner = Planner::new(ctx.clone());
+    let (plan, _) = planner.plan_sql(sql).await?;
+    let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
+    let stream = interpreter.execute(ctx.clone()).await?;
+    let blocks = stream.try_collect::<Vec<DataBlock>>().await?;
+    let mut lines = Vec::new();
+    for block in blocks {
+        let col = block.get_by_offset(0).to_column();
+        for i in 0..col.len() {
+            lines.push(
+                col.index(i)
+                    .unwrap()
+                    .to_string()
+                    .trim_matches('\'')
+                    .to_string(),
+            );
+        }
+    }
+    Ok(lines.join("\n"))
+}
+
+fn scan_counts(explain: &str) -> (Option<u64>, Option<u64>, bool) {
+    let grab = |key: &str| {
+        explain.lines().find_map(|l| {
+            l.split_once(key)
+                .and_then(|(_, v)| v.trim().parse::<u64>().ok())
+        })
+    };
+    (
+        grab("partitions total:"),
+        grab("partitions scanned:"),
+        explain.contains("pruning stats:"),
+    )
+}
+
 async fn run_and_observe(fixture: &TestFixture, sql: &str) -> Result<Observed> {
     run_and_observe_with(fixture, sql, |_| Ok(())).await
 }
@@ -506,6 +550,49 @@ async fn every_pruning_mode_publishes_under_the_scan_plan_id() -> Result<()> {
     }
     Ok(())
 }
+
+/// Plain `explain` of a lazy scan runs whatever prune pipeline
+/// `build_prune_pipeline` returns and prints the result. The synchronous
+/// mode (`enable_prune_pipeline = 0`) has to be such a pipeline too, or the
+/// output shows the planner's total with `scanned: 0` and no pruning stats.
+#[tokio::test(flavor = "multi_thread")]
+async fn explain_runs_synchronous_pruning_for_lazy_scan() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    let table = format!("{db}.explain_sync");
+    fixture
+        .execute_command(&format!(
+            "create table {table} (a int) row_per_block=100 block_per_segment=10"
+        ))
+        .await?;
+    for _ in 0..2 {
+        fixture
+            .execute_command(&format!(
+                "insert into {table} select number from numbers(300)"
+            ))
+            .await?;
+    }
+
+    let out = run_for_text(
+        &fixture,
+        &format!("explain select a % 3, count() from {table} where a >= 200 group by a % 3"),
+        |ctx| {
+            ctx.get_settings()
+                .set_setting("enable_prune_pipeline".into(), "0".into())
+        },
+    )
+    .await?;
+    assert_eq!(scan_counts(&out), (Some(6), Some(2), true), "{out}");
+    Ok(())
+}
+
+// No single-node test for `explain analyze delete` on a lazy `MutationSource`
+// (`MutationSource::set_pruning_stats`): a `DELETE` is lazy only on a cluster
+// with `segments >= nodes`, or on a column-oriented table — and the latter
+// fails in `do_mutation_block_pruning` with `unsupported encoding: 21` on
+// `main` too (row-oriented segment reader). The cluster sqllogictest
+// `mode/cluster/lazy_pruning.test` covers it.
 
 /// `UPDATE` / `DELETE` read through `MutationSource`, not `TableScan`. Their
 /// pruning happens in the planner and the statistics must still reach the

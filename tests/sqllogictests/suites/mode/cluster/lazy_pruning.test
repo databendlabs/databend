@@ -199,6 +199,47 @@ Exchange
 statement ok
 set enable_prune_pipeline = 0
 
+# Plain `explain` runs the prune pipeline it gets from `build_prune_pipeline`
+# to print real counts. The synchronous mode has to be such a pipeline too,
+# or `explain` shows the planner's total with `scanned: 0`.
+query T
+explain select a % 3, count() from t where a > 2500 group by a % 3
+----
+Exchange
+├── output columns: [count() (#2), a % 3 (#3)]
+├── exchange type: Merge
+└── EvalScalar
+    ├── output columns: [count() (#2), a % 3 (#3)]
+    ├── expressions: [group_item (#1)]
+    ├── estimated rows: 3.00
+    └── AggregateFinal
+        ├── output columns: [count() (#2), a % 3 (#1)]
+        ├── group by: [a % 3]
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 3.00
+        └── Exchange
+            ├── output columns: [count() (#2), a % 3 (#1)]
+            ├── exchange type: Hash(0)
+            └── AggregatePartial
+                ├── group by: [a % 3]
+                ├── aggregate functions: [count()]
+                ├── estimated rows: 3.00
+                └── EvalScalar
+                    ├── output columns: [a % 3 (#1)]
+                    ├── expressions: [t.a (#0) % 3]
+                    ├── estimated rows: 654.18
+                    └── TableScan
+                        ├── table: default.lazy_pruning.t
+                        ├── scan id: 0
+                        ├── output columns: [a (#0)]
+                        ├── read rows: 600
+                        ├── read size: 1.51 KiB
+                        ├── partitions total: 12
+                        ├── partitions scanned: 6
+                        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 2 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
+                        ├── push downs: [filters: [is_true(t.a (#0) > 2500)], limit: NONE]
+                        └── estimated rows: 654.18
+
 query T
 explain analyze select a % 3, count() from t where a > 2500 group by a % 3
 ----
@@ -261,6 +302,30 @@ Exchange
 
 statement ok
 unset enable_prune_pipeline
+
+# A lazy `MutationSource` publishes its scanned count after pruning, and
+# `explain analyze` must apply it to the leaf like it does for `TableScan`;
+# otherwise the leaf keeps the planner's estimate. `explain analyze` does not
+# commit the delete.
+query T
+explain analyze delete from t where a > 2500
+----
+MutationSource(Delete)
+├── cpu time: <slt:ignore>
+├── wait time: <slt:ignore>
+├── partitions scanned: 2
+├── table: default.lazy_pruning.t
+├── output columns: [a (#0)]
+├── filters: [is_true(t.a (#0) > 2500)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 12
+└── partitions scanned: 6
+
+query I
+select count() from t
+----
+1200
 
 statement ok
 drop database lazy_pruning
