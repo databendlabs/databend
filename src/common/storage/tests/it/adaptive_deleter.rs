@@ -261,6 +261,77 @@ async fn test_fs_directories_are_removed_after_their_contents() {
     assert_eq!(deleter.remove_all("t/").await.unwrap().removed, 0);
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_cancelled_call_gives_its_slots_back() {
+    let _serial = SERIAL.lock().await;
+    FaultInjection::clear();
+    let gate = Arc::new(Gate::default());
+    let stats = Arc::new(RetryStats::default());
+    let op = Operator::new(Memory::default())
+        .unwrap()
+        .layer(GateLayer(gate.clone()))
+        .finish();
+    for i in 0..4 {
+        op.write(&format!("7/70/{i}"), "x").await.unwrap();
+        op.write(&format!("7/71/{i}"), "x").await.unwrap();
+    }
+    let deleter = AdaptiveDeleter::new(op.clone(), stats, config()).unwrap();
+
+    // Both slots are held by batches of a call that is then dropped mid-flight.
+    {
+        let d = deleter.clone();
+        let mut call = Box::pin(async move { d.remove_all("7/70/").await });
+        let gate_ = gate.clone();
+        tokio::select! {
+            _ = &mut call => panic!("gate is closed"),
+            _ = gate_.wait_for_blocked(2) => {}
+        }
+        assert_eq!(gate.blocked(), 2);
+    }
+    assert_eq!(
+        gate.blocked(),
+        0,
+        "dropped batches abandoned their requests"
+    );
+
+    // The permits came back with them: another call runs at full concurrency, not zero.
+    gate.close();
+    let gate_ = gate.clone();
+    let observe = async move {
+        gate_.wait_for_blocked(2).await;
+        gate_.open();
+    };
+    let (report, ()) = futures::join!(deleter.remove_all("7/71/"), observe);
+    report.unwrap();
+    assert_eq!(count(&op, "7/71/").await, 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_no_batch_is_admitted_after_a_failure() {
+    let _serial = SERIAL.lock().await;
+    FaultInjection::clear();
+    // bound 2, six single-path batches: at least one is still waiting for a slot when the
+    // first failure is settled, and must not be started.
+    let (op, stats) = storage(&[("8/80/", 6)]).await;
+    let deleter = AdaptiveDeleter::new(op.clone(), stats, config()).unwrap();
+
+    let fault = FaultInjection::install(
+        FaultRule::new(FaultOp::Delete, "8/80/0", FaultKind::Permanent).times(1),
+    );
+    let err = deleter.remove_all("8/80/").await.unwrap_err();
+    fault.remove();
+    assert_eq!(err.kind(), ErrorKind::Unexpected);
+
+    let left = count(&op, "8/80/").await;
+    assert!(
+        left >= 6 - 2,
+        "at most the batches in flight with the failed one completed, {left} objects left"
+    );
+
+    deleter.remove_all("8/80/").await.unwrap();
+    assert_eq!(count(&op, "8/80/").await, 0);
+}
+
 /// Blocks every delete until opened, counting how many are blocked at once.
 #[derive(Default)]
 struct Gate {
@@ -282,18 +353,32 @@ impl Gate {
             .store(true, std::sync::atomic::Ordering::Release);
         self.open.notify_waiters();
     }
+    fn close(&self) {
+        self.opened
+            .store(false, std::sync::atomic::Ordering::Release);
+    }
     async fn wait_for_blocked(&self, n: usize) {
         while self.blocked() < n {
             tokio::time::sleep(Duration::from_millis(2)).await;
         }
     }
     async fn pass(&self) {
+        // Counted while blocked, including when the request is dropped mid-wait.
+        struct Blocked<'a>(&'a Gate);
+        impl Drop for Blocked<'_> {
+            fn drop(&mut self) {
+                self.0
+                    .blocked
+                    .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+            }
+        }
         let now = self
             .blocked
             .fetch_add(1, std::sync::atomic::Ordering::AcqRel)
             + 1;
         self.peak
             .fetch_max(now, std::sync::atomic::Ordering::AcqRel);
+        let _blocked = Blocked(self);
         while !self.opened.load(std::sync::atomic::Ordering::Acquire) {
             let notified = self.open.notified();
             if self.opened.load(std::sync::atomic::Ordering::Acquire) {
@@ -301,8 +386,6 @@ impl Gate {
             }
             notified.await;
         }
-        self.blocked
-            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
     }
 }
 

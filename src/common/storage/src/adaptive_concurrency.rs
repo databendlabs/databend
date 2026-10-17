@@ -130,7 +130,14 @@ impl AdaptiveConcurrency {
     /// cooldown behavior testable without sleeping. Ordinary failures and sparse retries
     /// reset the success streak but do not decrease the bound.
     pub fn observe(&self, feedback: ConcurrencyFeedback, now: Instant) -> usize {
+        self.observe_change(feedback, now).1
+    }
+
+    /// Like [`Self::observe`], also returning the bound before this feedback. The pair is
+    /// read under one lock, so concurrent observers each see a distinct, consistent step.
+    pub fn observe_change(&self, feedback: ConcurrencyFeedback, now: Instant) -> (usize, usize) {
         let mut state = self.state.lock().unwrap();
+        let before = state.current;
         if self.throttled(feedback, state.current) {
             state.clear_streak = 0;
             let cooled = state.last_decrease.is_none_or(|last| {
@@ -151,7 +158,7 @@ impl AdaptiveConcurrency {
                 }
             }
         }
-        state.current
+        (before, state.current)
     }
 
     /// Sporadic retries hold the bound; a burst of at least half the current concurrency,

@@ -24,6 +24,8 @@ use futures::stream::FuturesUnordered;
 use opendal::EntryMode;
 use opendal::ErrorKind;
 use opendal::Operator;
+use tokio::sync::OwnedSemaphorePermit;
+use tokio::sync::Semaphore;
 
 use crate::AdaptiveConcurrency;
 use crate::AdaptiveConcurrencyConfig;
@@ -68,8 +70,13 @@ struct Shared {
     operator: Operator,
     retry_stats: Arc<RetryStats>,
     concurrency: AdaptiveConcurrency,
-    /// Batches in flight across every `remove_all` on this deleter.
-    in_flight: AtomicUsize,
+    /// One permit per batch the policy currently allows, across every `remove_all` on this
+    /// deleter. A batch holds its permit until it is done or dropped, so a cancelled call
+    /// gives its slots back; waiters sleep on the semaphore instead of polling.
+    slots: Arc<Semaphore>,
+    /// Permits the bound has shrunk by that were held at the time and still have to be
+    /// forgotten as they come back, so `slots` settles at exactly `concurrency.current()`.
+    deficit: AtomicUsize,
     batch_size: usize,
 }
 
@@ -99,12 +106,15 @@ impl AdaptiveDeleter {
             .full_capability()
             .delete_max_size
             .unwrap_or(1);
+        let concurrency = AdaptiveConcurrency::new(config)?;
+        let slots = Arc::new(Semaphore::new(concurrency.current()));
         Ok(Self {
             shared: Arc::new(Shared {
                 operator,
                 retry_stats,
-                concurrency: AdaptiveConcurrency::new(config)?,
-                in_flight: AtomicUsize::new(0),
+                concurrency,
+                slots,
+                deficit: AtomicUsize::new(0),
                 batch_size,
             }),
         })
@@ -142,7 +152,14 @@ impl AdaptiveDeleter {
             Err(e) => return Err(e),
         };
 
-        let mut lister = shared.operator.lister_with(prefix).recursive(true).await?;
+        let mut lister = match shared.operator.lister_with(prefix).recursive(true).await {
+            Ok(lister) => lister,
+            Err(e) => {
+                run.first_error = Some(e);
+                run.drain().await;
+                return Err(run.first_error.take().unwrap());
+            }
+        };
         let mut batch = Vec::with_capacity(shared.batch_size);
         let mut dirs = Vec::new();
         while run.first_error.is_none() {
@@ -195,8 +212,13 @@ impl AdaptiveDeleter {
 
 impl Shared {
     /// One delete request's worth of paths; the result and the retries seen while it ran.
-    /// Releases the in-flight slot the caller acquired for it.
-    async fn delete_batch(self: Arc<Self>, paths: Vec<String>, counted: bool) -> BatchOutcome {
+    /// The permit is released when this future completes or is dropped.
+    async fn delete_batch(
+        self: Arc<Self>,
+        _permit: OwnedSemaphorePermit,
+        paths: Vec<String>,
+        counted: bool,
+    ) -> BatchOutcome {
         let n = if counted { paths.len() } else { 0 };
         let before = self.retry_stats.retried();
         let result = async {
@@ -207,18 +229,43 @@ impl Shared {
         }
         .await;
         let retried = self.retry_stats.retried().saturating_sub(before) as usize;
-        self.in_flight.fetch_sub(1, Ordering::AcqRel);
         (result, retried)
     }
 
-    /// Take one in-flight slot if the bound allows.
-    fn try_acquire(&self) -> bool {
-        let bound = self.concurrency.current();
-        self.in_flight
-            .try_update(Ordering::AcqRel, Ordering::Acquire, |n| {
-                (n < bound).then_some(n + 1)
-            })
-            .is_ok()
+    /// Feed a batch outcome to the policy and move the permit count with the bound.
+    ///
+    /// Called with the batch's permit already released. Growing adds permits at once. When
+    /// the bound shrinks, only free permits can be forgotten now; the rest are held by other
+    /// batches and are forgotten as they return, through the deficit.
+    fn observe(&self, feedback: ConcurrencyFeedback) {
+        let (before, after) = self.concurrency.observe_change(feedback, Instant::now());
+        if after > before {
+            self.slots.add_permits(after - before);
+        } else if after < before {
+            self.deficit.fetch_add(before - after, Ordering::AcqRel);
+        }
+        self.settle_deficit();
+    }
+
+    /// Forget as much of the deficit as the free permits allow.
+    fn settle_deficit(&self) {
+        let owed = self.deficit.load(Ordering::Acquire);
+        if owed == 0 {
+            return;
+        }
+        let forgotten = self.slots.forget_permits(owed);
+        if forgotten > 0 {
+            self.deficit.fetch_sub(forgotten, Ordering::AcqRel);
+        }
+    }
+
+    /// Wait for a slot under the current bound.
+    async fn acquire(&self) -> OwnedSemaphorePermit {
+        self.slots
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("the slot semaphore is never closed")
     }
 }
 
@@ -250,20 +297,29 @@ impl Run {
         self.admit(vec![dir], false).await
     }
 
-    /// Other calls on the same deleter compete for the same slots, so this call's own batches
-    /// are settled while waiting for one.
+    /// Wait for a slot, settling this call's own finished batches meanwhile so their outcome
+    /// reaches the policy promptly. Nothing is admitted once a batch has failed.
     async fn admit(&mut self, paths: Vec<String>, counted: bool) {
-        loop {
-            if self.shared.try_acquire() {
-                self.batches
-                    .push(Box::pin(self.shared.clone().delete_batch(paths, counted)));
+        let permit = loop {
+            if self.first_error.is_some() {
                 return;
             }
-            if !self.settle_one().await {
-                // Every slot is held by another call; give it a chance to finish a batch.
-                tokio::task::yield_now().await;
+            tokio::select! {
+                biased;
+                permit = self.shared.acquire() => break permit,
+                settled = self.batches.next() => match settled {
+                    Some(outcome) => self.settle(outcome),
+                    // Nothing of ours in flight: wait for another call to release a slot.
+                    None => break self.shared.acquire().await,
+                },
             }
+        };
+        if self.first_error.is_some() {
+            return;
         }
+        self.batches.push(Box::pin(
+            self.shared.clone().delete_batch(permit, paths, counted),
+        ));
     }
 
     /// Wait for every batch of this call.
@@ -271,11 +327,19 @@ impl Run {
         while self.settle_one().await {}
     }
 
-    /// Settle one finished batch into the report and the policy; false when none is in flight.
+    /// Settle one finished batch; false when none is in flight.
     async fn settle_one(&mut self) -> bool {
-        let Some((outcome, retried)) = self.batches.next().await else {
-            return false;
-        };
+        match self.batches.next().await {
+            Some(outcome) => {
+                self.settle(outcome);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Record a finished batch in the report and feed it to the policy.
+    fn settle(&mut self, (outcome, retried): BatchOutcome) {
         let (failed, rate_limited) = match &outcome {
             Ok(n) => {
                 self.report.removed += n;
@@ -285,19 +349,15 @@ impl Run {
         };
         self.report.batches += 1;
         self.report.retried += retried;
-        self.shared.concurrency.observe(
-            ConcurrencyFeedback {
-                failed,
-                rate_limited,
-                retried,
-            },
-            Instant::now(),
-        );
+        self.shared.observe(ConcurrencyFeedback {
+            failed,
+            rate_limited,
+            retried,
+        });
         if let Err(e) = outcome
             && self.first_error.is_none()
         {
             self.first_error = Some(e);
         }
-        true
     }
 }
