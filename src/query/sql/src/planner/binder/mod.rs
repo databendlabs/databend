@@ -79,6 +79,7 @@ pub use constraint_expr::ConstraintExprBinder;
 pub use constraint_expr::validate_constraints_by_schema;
 use databend_common_config::GlobalConfig;
 pub use databend_common_expression::DummyColumnType;
+pub use ddl::database::DEFAULT_S3_STORAGE_CLASS;
 pub use ddl::database::DEFAULT_STORAGE_CONNECTION;
 pub use ddl::database::DEFAULT_STORAGE_PATH;
 pub use ddl::index::validate_table_indexes_by_schema;

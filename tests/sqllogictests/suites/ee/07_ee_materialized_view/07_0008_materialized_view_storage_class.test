@@ -1,0 +1,93 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+CREATE OR REPLACE DATABASE test_mv_storage_class OPTIONS(DEFAULT_S3_STORAGE_CLASS = 'INTELLIGENT_TIERING')
+
+statement ok
+USE test_mv_storage_class
+
+statement ok
+CREATE TABLE source(id INT) S3_STORAGE_CLASS = 'STANDARD'
+
+statement ok
+INSERT INTO source VALUES (1)
+
+# The inherited INTELLIGENT_TIERING view stays metadata-only for MinIO compatibility.
+statement ok
+CREATE MATERIALIZED VIEW inherited_mv AS SELECT id FROM source
+
+statement ok
+CREATE MATERIALIZED VIEW explicit_mv S3_STORAGE_CLASS = 'STANDARD' AS SELECT id FROM source
+
+query TBB rowsort
+SELECT name, table_option LIKE '%S3_STORAGE_CLASS=''INTELLIGENT_TIERING''%', table_option LIKE '%S3_STORAGE_CLASS=''STANDARD''%'
+FROM system.tables WHERE database = 'test_mv_storage_class' AND engine = 'MATERIALIZED_VIEW'
+----
+explicit_mv 0 1
+inherited_mv 1 0
+
+statement ok
+ALTER DATABASE test_mv_storage_class SET OPTIONS(DEFAULT_S3_STORAGE_CLASS = 'STANDARD')
+
+statement ok
+CREATE MATERIALIZED VIEW after_alter_mv AS SELECT id FROM source
+
+query TBB rowsort
+SELECT name, table_option LIKE '%S3_STORAGE_CLASS=''INTELLIGENT_TIERING''%', table_option LIKE '%S3_STORAGE_CLASS=''STANDARD''%'
+FROM system.tables WHERE database = 'test_mv_storage_class' AND engine = 'MATERIALIZED_VIEW'
+----
+after_alter_mv 0 1
+explicit_mv 0 1
+inherited_mv 1 0
+
+statement ok
+SET s3_storage_class = 'intelligent_tiering'
+
+statement ok
+REFRESH MATERIALIZED VIEW explicit_mv
+
+query I
+SELECT id FROM explicit_mv
+----
+1
+
+statement ok
+ALTER MATERIALIZED VIEW inherited_mv SET OPTIONS(s3_storage_class = 'STANDARD')
+
+statement ok
+REFRESH MATERIALIZED VIEW inherited_mv
+
+query I
+SELECT id FROM inherited_mv
+----
+1
+
+statement ok
+UNSET s3_storage_class
+
+statement ok
+ALTER MATERIALIZED VIEW inherited_mv UNSET OPTIONS(s3_storage_class)
+
+query B
+SELECT table_option LIKE '%S3_STORAGE_CLASS=%'
+FROM system.tables WHERE database = 'test_mv_storage_class' AND name = 'inherited_mv'
+----
+0
+
+statement error 1301
+ALTER MATERIALIZED VIEW explicit_mv SET OPTIONS(s3_storage_class = 'glacier')
+
+statement ok
+DROP DATABASE test_mv_storage_class

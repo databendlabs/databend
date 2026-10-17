@@ -26,7 +26,7 @@ runs:
         # RUST_BACKTRACE: 1
 
     - name: Test vacuum2 streaming GC against AWS S3
-      if: env.RUNNER_PROVIDER == 'aws'
+      if: ${{ !cancelled() && env.RUNNER_PROVIDER == 'aws' }}
       shell: bash
       run: |
         cargo nextest run \
@@ -39,6 +39,24 @@ runs:
         DATABEND_TEST_S3_BUCKET: databend-ci
         DATABEND_TEST_S3_REGION: us-east-2
         DATABEND_TEST_S3_ROOT: stateful/vacuum2-ci/github-${{ github.run_id }}-${{ github.run_attempt }}
+        RUST_LOG: ERROR
+        RUST_MIN_STACK: 33554432
+
+    - name: Test storage classes against AWS S3
+      if: ${{ !cancelled() && env.RUNNER_PROVIDER == 'aws' }}
+      shell: bash
+      run: |
+        cargo nextest run \
+          --no-fail-fast \
+          --hide-progress-bar \
+          --run-ignored only \
+          --workspace \
+          real_s3::storage_class_sql_roundtrip
+      env:
+        DATABEND_TEST_S3_BUCKET: databend-ci
+        DATABEND_TEST_S3_REGION: us-east-2
+        # Dedicated prefix for an independently scoped bucket lifecycle rule.
+        DATABEND_TEST_S3_ROOT: stateful/storage-class-ci/github-${{ github.run_id }}-${{ github.run_attempt }}
         RUST_LOG: ERROR
         RUST_MIN_STACK: 33554432
 

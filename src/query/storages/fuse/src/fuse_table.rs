@@ -118,6 +118,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
+use databend_storages_common_table_meta::table::OPT_KEY_S3_STORAGE_CLASS;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG;
@@ -313,7 +314,7 @@ impl FuseTable {
                 match storage_params {
                     // External or attached table.
                     Some(sp) => {
-                        let sp = apply_storage_class(table_info, sp, storage_class_specs);
+                        let sp = apply_storage_class(table_info, sp, storage_class_specs)?;
                         // Special handling for history tables. Since history
                         // table storage params are fully generated from server
                         // config, we both allow the credential chain and treat
@@ -344,7 +345,7 @@ impl FuseTable {
                                 table_info,
                                 default_storage_params,
                                 storage_class_specs,
-                            )
+                            )?
                         };
                         Ok(init_operator(&storage_params)?)
                     }
@@ -1683,15 +1684,22 @@ fn apply_storage_class(
     table_info: &TableInfo,
     storage_params: StorageParams,
     storage_class_specs: Option<S3StorageClass>,
-) -> StorageParams {
+) -> Result<StorageParams> {
     let mut sp = storage_params;
     if is_temp_table_by_table_info(table_info) {
         // For temporary tables, always use the standard storage class
         set_s3_storage_class(&mut sp, S3StorageClass::Standard);
+    } else if let Some(value) = table_info.options().get(OPT_KEY_S3_STORAGE_CLASS) {
+        let storage_class = value.parse::<S3StorageClass>().map_err(|e| {
+            ErrorCode::TableOptionInvalid(format!(
+                "Invalid table option {OPT_KEY_S3_STORAGE_CLASS}: {e}"
+            ))
+        })?;
+        set_s3_storage_class(&mut sp, storage_class);
     } else if let Some(s3storage_class) = storage_class_specs {
         set_s3_storage_class(&mut sp, s3storage_class);
     }
-    sp
+    Ok(sp)
 }
 
 pub enum RetentionPolicy {
@@ -1740,11 +1748,17 @@ mod tests {
     use databend_common_meta_app::schema::TableIdent;
     use databend_common_meta_app::schema::TableInfo;
     use databend_common_meta_app::schema::TableMeta;
+    use databend_common_meta_app::storage::S3StorageClass;
     use databend_common_meta_app::storage::StorageParams;
+    use databend_common_meta_app::storage::StorageS3Config;
+    use databend_storages_common_table_meta::table::OPT_KEY_S3_STORAGE_CLASS;
+    use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+    use databend_storages_common_table_meta::table_id_ranges::TEMP_TBL_ID_BEGIN;
 
     use super::ApproxDistinctColumns;
     use super::FuseTable;
     use super::allow_credential_chain_for_s3;
+    use super::apply_storage_class;
     use super::is_system_history_table;
 
     fn table_info_with_db(db_name: &str) -> TableInfo {
@@ -1792,6 +1806,90 @@ mod tests {
         let sp = StorageParams::Memory;
         let result = allow_credential_chain_for_s3(sp.clone());
         assert_eq!(result, sp);
+    }
+
+    #[test]
+    fn test_apply_storage_class_precedence() {
+        use S3StorageClass::IntelligentTiering;
+        use S3StorageClass::Standard;
+
+        for configured in [Standard, IntelligentTiering] {
+            for session in [None, Some(Standard), Some(IntelligentTiering)] {
+                for table_class in [None, Some(Standard), Some(IntelligentTiering)] {
+                    let mut info = table_info_with_db("default");
+                    if let Some(table_class) = table_class {
+                        info.meta.options.insert(
+                            OPT_KEY_S3_STORAGE_CLASS.to_owned(),
+                            table_class.to_string().to_lowercase(),
+                        );
+                    }
+                    let params = StorageParams::S3(StorageS3Config {
+                        storage_class: configured,
+                        ..Default::default()
+                    });
+                    let StorageParams::S3(actual) =
+                        apply_storage_class(&info, params, session).unwrap()
+                    else {
+                        panic!("S3 storage params must remain S3");
+                    };
+                    assert_eq!(
+                        actual.storage_class,
+                        table_class.or(session).unwrap_or(configured)
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_apply_storage_class_temporary_table_always_standard() {
+        let mut info = table_info_with_db("default");
+        info.ident.table_id = TEMP_TBL_ID_BEGIN;
+        info.meta
+            .options
+            .insert(OPT_KEY_TEMP_PREFIX.to_owned(), "session".to_owned());
+        info.meta.options.insert(
+            OPT_KEY_S3_STORAGE_CLASS.to_owned(),
+            "INTELLIGENT_TIERING".to_owned(),
+        );
+        let params = StorageParams::S3(StorageS3Config {
+            storage_class: S3StorageClass::IntelligentTiering,
+            ..Default::default()
+        });
+        let StorageParams::S3(actual) =
+            apply_storage_class(&info, params, Some(S3StorageClass::IntelligentTiering)).unwrap()
+        else {
+            panic!("S3 storage params must remain S3");
+        };
+        assert_eq!(actual.storage_class, S3StorageClass::Standard);
+    }
+
+    #[test]
+    fn test_apply_storage_class_non_s3_unchanged() {
+        let mut info = table_info_with_db("default");
+        info.meta.options.insert(
+            OPT_KEY_S3_STORAGE_CLASS.to_owned(),
+            "INTELLIGENT_TIERING".to_owned(),
+        );
+        assert_eq!(
+            apply_storage_class(&info, StorageParams::Memory, Some(S3StorageClass::Standard))
+                .unwrap(),
+            StorageParams::Memory,
+        );
+    }
+
+    #[test]
+    fn test_apply_storage_class_rejects_invalid_table_option() {
+        let mut info = table_info_with_db("default");
+        info.meta
+            .options
+            .insert(OPT_KEY_S3_STORAGE_CLASS.to_owned(), "glacier".to_owned());
+        let params = StorageParams::S3(StorageS3Config::default());
+        let err = apply_storage_class(&info, params, Some(S3StorageClass::Standard)).unwrap_err();
+        assert_eq!(
+            err.code(),
+            databend_common_exception::ErrorCode::TABLE_OPTION_INVALID
+        );
     }
 
     #[test]
