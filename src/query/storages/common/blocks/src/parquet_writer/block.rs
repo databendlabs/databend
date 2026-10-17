@@ -29,6 +29,7 @@ use arrow_schema::Schema;
 use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use parquet::arrow::ARROW_SCHEMA_META_KEY;
 use parquet::arrow::ArrowSchemaConverter;
@@ -40,6 +41,7 @@ use parquet::arrow::encode_arrow_schema;
 use parquet::file::metadata::ColumnChunkMetaData;
 use parquet::file::metadata::FileMetaData;
 use parquet::file::metadata::KeyValue;
+use parquet::file::metadata::ParquetMetaData;
 use parquet::file::metadata::ParquetMetaDataBuilder;
 use parquet::file::metadata::ParquetMetaDataWriter;
 use parquet::file::metadata::RowGroupMetaData;
@@ -120,41 +122,9 @@ impl BlockParquetWriter {
         // Convert through the arrow schema so the columns line up with the parquet leaves by
         // schema (name/type/coercion), not by the block's positional column order.
         let batch = block.to_record_batch_with_arrow_schema(&arrow_schema)?;
-        let batch_size = batch.get_array_memory_size();
-
-        // Fast path: the whole batch fits within the soft limit, encode it in one go.
-        if batch_size <= MAX_BATCH_MEMORY_SIZE {
-            self.write_record_batch(&arrow_schema, &batch)?;
-            self.num_rows += num_rows;
-            return Ok(());
-        }
-
-        // A single row cannot be split across pages, so if one row exceeds the ~2GB hard limit
-        // the encode would overflow the i32 page size. Reject it up front with a clear error.
-        if num_rows == 1 {
-            if batch_size > PARQUET_PAGE_SIZE_HARD_LIMIT {
-                return Err(ErrorCode::Internal(format!(
-                    "A single row requires {} bytes which exceeds Parquet's page size limit ({} bytes).",
-                    batch_size, PARQUET_PAGE_SIZE_HARD_LIMIT
-                )));
-            }
-            self.write_record_batch(&arrow_schema, &batch)?;
-            self.num_rows += num_rows;
-            return Ok(());
-        }
-
-        // Split into row-chunks sized to stay under the soft limit, assuming uniform row size.
-        let rows_per_chunk = (((num_rows as f64) * (MAX_BATCH_MEMORY_SIZE as f64)
-            / batch_size as f64)
-            .ceil() as usize)
-            .max(1);
-        let mut offset = 0;
-        while offset < num_rows {
-            let length = rows_per_chunk.min(num_rows - offset);
-            let chunk = batch.slice(offset, length);
-            self.write_record_batch(&arrow_schema, &chunk)?;
-            offset += length;
-        }
+        for_each_bounded_slice(&batch, |chunk| {
+            self.write_record_batch(&arrow_schema, chunk)
+        })?;
         self.num_rows += num_rows;
         Ok(())
     }
@@ -217,6 +187,45 @@ impl BlockParquetWriter {
     }
 }
 
+/// Feed `batch` to `f` in row-chunks bounded by [`MAX_BATCH_MEMORY_SIZE`] (see
+/// [`BlockParquetWriter::write_block`] for why the split is needed).
+fn for_each_bounded_slice(
+    batch: &RecordBatch,
+    mut f: impl FnMut(&RecordBatch) -> Result<()>,
+) -> Result<()> {
+    let num_rows = batch.num_rows();
+    let batch_size = batch.get_array_memory_size();
+
+    // Fast path: the whole batch fits within the soft limit, encode it in one go.
+    if batch_size <= MAX_BATCH_MEMORY_SIZE {
+        return f(batch);
+    }
+
+    // A single row cannot be split across pages, so if one row exceeds the ~2GB hard limit
+    // the encode would overflow the i32 page size. Reject it up front with a clear error.
+    if num_rows == 1 {
+        if batch_size > PARQUET_PAGE_SIZE_HARD_LIMIT {
+            return Err(ErrorCode::Internal(format!(
+                "A single row requires {} bytes which exceeds Parquet's page size limit ({} bytes).",
+                batch_size, PARQUET_PAGE_SIZE_HARD_LIMIT
+            )));
+        }
+        return f(batch);
+    }
+
+    // Split into row-chunks sized to stay under the soft limit, assuming uniform row size.
+    let rows_per_chunk = (((num_rows as f64) * (MAX_BATCH_MEMORY_SIZE as f64) / batch_size as f64)
+        .ceil() as usize)
+        .max(1);
+    let mut offset = 0;
+    while offset < num_rows {
+        let length = rows_per_chunk.min(num_rows - offset);
+        f(&batch.slice(offset, length))?;
+        offset += length;
+    }
+    Ok(())
+}
+
 /// Assemble a single-row-group parquet file from closed column chunks, pushing their compressed
 /// bytes into the output with no copy and remapping page offsets — mirroring the fork's
 /// `SerializedRowGroupWriter::append_column` offset logic, but writing owned `Bytes` directly.
@@ -230,36 +239,58 @@ fn assemble_parquet(
         column_writers,
         parquet_schema,
     } = state;
-    let schema_descr = parquet_schema;
 
-    // The payload is assembled directly as a list of `Bytes`: the magic, then each column
-    // chunk's already-encoded compressed `Bytes` (pushed with no copy — an `Arc` move), then
-    // the footer. `file_offset` tracks the absolute write position for page-offset remapping.
     let mut payload: Vec<Bytes> = Vec::with_capacity(column_writers.len() + 2);
     payload.push(Bytes::from_static(PARQUET_MAGIC));
-    let mut file_offset = PARQUET_MAGIC.len() as i64;
-
-    let mut column_chunks = Vec::with_capacity(column_writers.len());
-    let mut total_uncompressed: i64 = 0;
+    let mut assembler = ParquetAssembler::new(parquet_schema, column_writers.len());
     for writer in column_writers {
+        assembler.push_column(writer, &mut payload)?;
+    }
+    let (footer, metadata) = assembler.finish(arrow_schema, &props, num_rows)?;
+    payload.push(footer);
+    Ok(SerializedParquet { payload, metadata })
+}
+
+/// Incremental single-row-group assembler: tracks the absolute file offset across columns so
+/// closed column chunks can be emitted (and uploaded) one at a time, then builds the footer.
+struct ParquetAssembler {
+    schema_descr: SchemaDescPtr,
+    /// Absolute write position; starts after the leading `PAR1` magic.
+    file_offset: i64,
+    column_chunks: Vec<ColumnChunkMetaData>,
+    total_uncompressed: i64,
+}
+
+impl ParquetAssembler {
+    fn new(schema_descr: SchemaDescPtr, num_leaves: usize) -> Self {
+        Self {
+            schema_descr,
+            file_offset: PARQUET_MAGIC.len() as i64,
+            column_chunks: Vec::with_capacity(num_leaves),
+            total_uncompressed: 0,
+        }
+    }
+
+    /// Close one leaf writer, append its encoded bytes to `out` and record its chunk metadata.
+    fn push_column(&mut self, writer: ArrowColumnWriter, out: &mut Vec<Bytes>) -> Result<()> {
         let (data, close) = writer.close()?.into_parts();
         let metadata = close.metadata;
 
         // A freshly closed chunk's offsets are relative to its own start (offset 0), so the
         // absolute file offset is simply the current write position.
-        let write_offset = file_offset;
+        let write_offset = self.file_offset;
         let src_data_offset = metadata.data_page_offset();
         let src_dictionary_offset = metadata.dictionary_page_offset();
         let map_offset = |x: i64| x + write_offset;
 
         for chunk in data {
-            file_offset += chunk.len() as i64;
+            self.file_offset += chunk.len() as i64;
             if !chunk.is_empty() {
-                payload.push(chunk);
+                out.push(chunk);
             }
         }
 
-        total_uncompressed += metadata.uncompressed_size();
+        self.total_uncompressed += metadata.uncompressed_size();
         let mut builder = ColumnChunkMetaData::builder(metadata.column_descr_ptr())
             .set_compression(metadata.compression())
             .set_encodings_mask(*metadata.encodings_mask())
@@ -286,54 +317,178 @@ fn assemble_parquet(
             builder = builder.set_page_encoding_stats(page_encoding_stats.clone());
         }
 
-        column_chunks.push(builder.build()?);
+        self.column_chunks.push(builder.build()?);
+        Ok(())
     }
 
-    let row_group = RowGroupMetaData::builder(schema_descr.clone())
-        .set_column_metadata(column_chunks)
-        .set_total_byte_size(total_uncompressed)
-        .set_num_rows(num_rows as i64)
-        .set_ordinal(0)
-        .build()?;
+    /// Build the footer (thrift FileMetaData + 4-byte length + trailing `PAR1`) and metadata.
+    fn finish(
+        self,
+        arrow_schema: &Schema,
+        props: &WriterPropertiesPtr,
+        num_rows: usize,
+    ) -> Result<(Bytes, ParquetMetaData)> {
+        let schema_descr = self.schema_descr;
+        let row_group = RowGroupMetaData::builder(schema_descr.clone())
+            .set_column_metadata(self.column_chunks)
+            .set_total_byte_size(self.total_uncompressed)
+            .set_num_rows(num_rows as i64)
+            .set_ordinal(0)
+            .build()?;
 
-    // Replicate `ArrowWriter`: embed the IPC-encoded Arrow schema under `ARROW:schema` so
-    // readers can reconstruct Databend extension-backed types (Variant, Bitmap, Geometry,
-    // TimestampTz, ...) instead of inferring them as plain LargeBinary/Decimal. We assemble the
-    // footer by hand, so this metadata must be added explicitly here. Any existing
-    // `ARROW:schema` entry from the writer props is replaced to keep a single authoritative copy.
-    let mut key_value_metadata: Vec<KeyValue> = props
-        .key_value_metadata()
-        .cloned()
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|kv| kv.key != ARROW_SCHEMA_META_KEY)
-        .collect();
+        // Replicate `ArrowWriter`: embed the IPC-encoded Arrow schema under `ARROW:schema` so
+        // readers can reconstruct Databend extension-backed types (Variant, Bitmap, Geometry,
+        // TimestampTz, ...) instead of inferring them as plain LargeBinary/Decimal. We assemble the
+        // footer by hand, so this metadata must be added explicitly here. Any existing
+        // `ARROW:schema` entry from the writer props is replaced to keep a single authoritative copy.
+        let mut key_value_metadata: Vec<KeyValue> = props
+            .key_value_metadata()
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|kv| kv.key != ARROW_SCHEMA_META_KEY)
+            .collect();
 
-    key_value_metadata.push(KeyValue {
-        key: ARROW_SCHEMA_META_KEY.to_string(),
-        value: Some(encode_arrow_schema(arrow_schema)),
-    });
+        key_value_metadata.push(KeyValue {
+            key: ARROW_SCHEMA_META_KEY.to_string(),
+            value: Some(encode_arrow_schema(arrow_schema)),
+        });
 
-    let file_metadata = FileMetaData::new(
-        props.writer_version().as_num(),
-        num_rows as i64,
-        Some(props.created_by().to_string()),
-        Some(key_value_metadata),
-        schema_descr.clone(),
-        None,
-    );
+        let file_metadata = FileMetaData::new(
+            props.writer_version().as_num(),
+            num_rows as i64,
+            Some(props.created_by().to_string()),
+            Some(key_value_metadata),
+            schema_descr.clone(),
+            None,
+        );
 
-    let metadata = ParquetMetaDataBuilder::new(file_metadata)
-        .set_row_groups(vec![row_group])
-        .build();
+        let metadata = ParquetMetaDataBuilder::new(file_metadata)
+            .set_row_groups(vec![row_group])
+            .build();
 
-    // Footer (thrift FileMetaData + 4-byte length + trailing PAR1) is a few KB; serialize it
-    // into a small buffer and push as the final chunk. The column data above was zero-copy.
-    let mut footer = Vec::new();
-    ParquetMetaDataWriter::new(&mut footer, &metadata).finish()?;
-    payload.push(Bytes::from(footer));
+        // Footer (thrift FileMetaData + 4-byte length + trailing PAR1) is a few KB; serialize it
+        // into a small buffer and push as the final chunk. The column data above was zero-copy.
+        let mut footer = Vec::new();
+        ParquetMetaDataWriter::new(&mut footer, &metadata).finish()?;
+        Ok((Bytes::from(footer), metadata))
+    }
+}
 
-    Ok(SerializedParquet { payload, metadata })
+/// Column-at-a-time single-row-group writer over one in-memory `DataBlock`.
+///
+/// Each [`Self::write_next_column`] call converts, encodes and closes exactly one top-level
+/// column and returns its encoded bytes, so the caller can upload (and drop) them before the
+/// next column is encoded. Peak memory is the remaining raw columns plus one compressed column,
+/// instead of all compressed columns at once. The bytes emitted across all calls followed by
+/// [`Self::finish`]'s footer form exactly one valid parquet file.
+pub struct ColumnWiseParquetWriter {
+    arrow_schema: Arc<Schema>,
+    props: WriterPropertiesPtr,
+    /// Remaining raw columns, consumed in schema order.
+    entries: std::vec::IntoIter<BlockEntry>,
+    /// Remaining leaf writers, in leaf order.
+    writers: std::vec::IntoIter<ArrowColumnWriter>,
+    /// Number of parquet leaves under each top-level field.
+    leaves_per_field: Vec<usize>,
+    next_field: usize,
+    num_rows: usize,
+    assembler: ParquetAssembler,
+    magic_written: bool,
+}
+
+impl ColumnWiseParquetWriter {
+    pub fn new(
+        arrow_schema: Arc<Schema>,
+        props: WriterPropertiesPtr,
+        block: DataBlock,
+    ) -> Result<Self> {
+        let num_rows = block.num_rows();
+        let parquet_schema = ArrowSchemaConverter::new()
+            .with_coerce_types(props.coerce_types())
+            .convert(&arrow_schema)?;
+        #[allow(deprecated)]
+        let writers = get_column_writers(&parquet_schema, &props, &arrow_schema)?;
+        let mut leaves_per_field = vec![0usize; arrow_schema.fields().len()];
+        for leaf in 0..parquet_schema.num_columns() {
+            leaves_per_field[parquet_schema.get_column_root_idx(leaf)] += 1;
+        }
+        let entries = block.take_columns();
+        if entries.len() != arrow_schema.fields().len() {
+            return Err(ErrorCode::Internal(format!(
+                "block has {} columns but schema has {} fields",
+                entries.len(),
+                arrow_schema.fields().len()
+            )));
+        }
+        let num_leaves = writers.len();
+        Ok(Self {
+            arrow_schema,
+            props,
+            entries: entries.into_iter(),
+            writers: writers.into_iter(),
+            leaves_per_field,
+            next_field: 0,
+            num_rows,
+            assembler: ParquetAssembler::new(Arc::new(parquet_schema), num_leaves),
+            magic_written: false,
+        })
+    }
+
+    /// Encode the next top-level column and return its bytes (prefixed with `PAR1` on the
+    /// first call). Returns `None` once every column has been written.
+    pub fn write_next_column(&mut self) -> Result<Option<Vec<Bytes>>> {
+        let Some(entry) = self.entries.next() else {
+            return Ok(None);
+        };
+        let field = self.arrow_schema.field(self.next_field).clone();
+        let num_leaves = self.leaves_per_field[self.next_field];
+        self.next_field += 1;
+
+        let single_schema = Arc::new(Schema::new(vec![field.clone()]));
+        let batch = DataBlock::new(vec![entry], self.num_rows)
+            .to_record_batch_with_arrow_schema(&single_schema)?;
+        let mut writers: Vec<ArrowColumnWriter> = self.writers.by_ref().take(num_leaves).collect();
+        for_each_bounded_slice(&batch, |chunk| {
+            let leaves = compute_leaves(&field, chunk.column(0))?;
+            if leaves.len() != writers.len() {
+                return Err(ErrorCode::Internal("leaf count mismatch"));
+            }
+            for (writer, leaf) in writers.iter_mut().zip(leaves.iter()) {
+                writer.write(leaf)?;
+            }
+            Ok(())
+        })?;
+        drop(batch);
+
+        let mut out = Vec::with_capacity(num_leaves + 1);
+        if !self.magic_written {
+            out.push(Bytes::from_static(PARQUET_MAGIC));
+            self.magic_written = true;
+        }
+        for writer in writers {
+            self.assembler.push_column(writer, &mut out)?;
+        }
+        Ok(Some(out))
+    }
+
+    /// Build the footer once all columns are written. Returns the trailing bytes and metadata.
+    pub fn finish(self) -> Result<(Vec<Bytes>, ParquetMetaData)> {
+        if self.entries.len() != 0 {
+            return Err(ErrorCode::Internal(
+                "finish called before all columns were written",
+            ));
+        }
+        let (footer, metadata) =
+            self.assembler
+                .finish(&self.arrow_schema, &self.props, self.num_rows)?;
+        let mut out = Vec::with_capacity(2);
+        if !self.magic_written {
+            out.push(Bytes::from_static(PARQUET_MAGIC));
+        }
+        out.push(footer);
+        Ok((out, metadata))
+    }
 }
 
 #[cfg(test)]
