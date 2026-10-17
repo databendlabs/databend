@@ -184,6 +184,10 @@ impl FromToProto for mt::TableMeta {
         let indexes = p
             .indexes
             .into_iter()
+            // Skip indexes whose type this binary does not recognize, so a table
+            // that enables a newer index type can still be read by an older binary
+            // instead of failing to deserialize the whole TableMeta (#20113).
+            .filter(|(_, index)| mt::TableIndexType::from_i32(index.index_type).is_some())
             .map(|(name, index)| Ok((name, mt::TableIndex::from_pb(index)?)))
             .collect::<Result<BTreeMap<_, _>, _>>()?;
 
