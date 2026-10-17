@@ -72,6 +72,49 @@ SELECT count(*) FROM fs_t l CROSS JOIN fs_r r WHERE NOT (l.c LIKE 'h%' AND r.x I
 ----
 10
 
+# The null-extended side of a LEFT JOIN without matches is a constant NULL column. A LIKE
+# over it inside an OR must leave its rows to the next OR child instead of dropping them.
+statement ok
+CREATE OR REPLACE TABLE fs_l(k INT, f BOOLEAN NULL, d INT NULL)
+
+statement ok
+INSERT INTO fs_l VALUES (1, true, 1), (2, true, 0), (3, false, 1), (4, false, 0), (5, true, 1), (6, NULL, 1), (7, true, NULL), (8, true, 1)
+
+statement ok
+CREATE OR REPLACE TABLE fs_m(k INT, x INT NULL, c STRING NULL)
+
+statement ok
+INSERT INTO fs_m VALUES (100, 10, 'a')
+
+query I
+SELECT l.k FROM fs_l l LEFT JOIN fs_m r ON l.k = r.k
+WHERE (10 = r.x OR l.f) AND (r.c LIKE '_' OR l.d = 1) ORDER BY l.k
+----
+1
+5
+8
+
+query I
+SELECT l.k FROM fs_l l LEFT JOIN fs_m r ON l.k = r.k
+WHERE (r.c LIKE '_' OR l.f) AND (r.c NOT LIKE 'b%' OR l.d = 1) ORDER BY l.k
+----
+1
+5
+8
+
+query I
+SELECT (SELECT count(*) FROM fs_l l LEFT JOIN fs_m r ON l.k = r.k WHERE (l.f) AND (r.c LIKE '_' OR l.d = 1))
+     + (SELECT count(*) FROM fs_l l LEFT JOIN fs_m r ON l.k = r.k WHERE NOT ((l.f) AND (r.c LIKE '_' OR l.d = 1)))
+     + (SELECT count(*) FROM fs_l l LEFT JOIN fs_m r ON l.k = r.k WHERE ((l.f) AND (r.c LIKE '_' OR l.d = 1)) IS NULL)
+----
+8
+
+statement ok
+DROP TABLE fs_l
+
+statement ok
+DROP TABLE fs_m
+
 statement ok
 DROP TABLE fs_t
 
