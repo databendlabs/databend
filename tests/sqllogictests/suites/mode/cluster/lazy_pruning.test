@@ -86,7 +86,28 @@ Exchange
 query T
 explain analyze select * from t where a > 2500
 ----
-<slt:ignore>
+Exchange
+├── output columns: [t.a (#0)]
+├── exchange type: Merge
+└── TableScan
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
+    ├── output rows: 600
+    ├── output bytes: <slt:ignore>
+    ├── bytes scanned: <slt:ignore>
+    ├── read from remote: <slt:ignore>
+    ├── runtime filter bloom time: <slt:ignore>
+    ├── runtime filter inlist/min-max time: <slt:ignore>
+    ├── table: default.lazy_pruning.t
+    ├── scan id: 0
+    ├── output columns: [a (#0)]
+    ├── read rows: 600
+    ├── read size: 1.51 KiB
+    ├── partitions total: 12
+    ├── partitions scanned: 6
+    ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 2 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
+    ├── push downs: [filters: [is_true(t.a (#0) > 2500)], limit: NONE]
+    └── estimated rows: 654.18
 
 statement ok
 unset enable_distributed_pruning
@@ -114,7 +135,66 @@ insert into tc select number + 4000 from numbers(300)
 query T
 explain analyze select a % 3, count() from tc where a > 2500 group by a % 3
 ----
-<slt:ignore>
+Exchange
+├── output columns: [count() (#2), a % 3 (#3)]
+├── exchange type: Merge
+└── EvalScalar
+    ├── cpu time: <slt:ignore>
+    ├── output rows: 3
+    ├── output bytes: <slt:ignore>
+    ├── output columns: [count() (#2), a % 3 (#3)]
+    ├── expressions: [group_item (#1)]
+    ├── estimated rows: 3.00
+    └── AggregateFinal
+        ├── cpu time: <slt:ignore>
+        ├── wait time: <slt:ignore>
+        ├── exchange bytes: <slt:ignore>
+        ├── output rows: 3
+        ├── output bytes: <slt:ignore>
+        ├── output columns: [count() (#2), a % 3 (#1)]
+        ├── group by: [a % 3]
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 3.00
+        └── Exchange
+            ├── output columns: [count() (#2), a % 3 (#1)]
+            ├── exchange type: Hash(0)
+            └── AggregatePartial
+                ├── cpu time: <slt:ignore>
+                ├── output rows: <slt:ignore>
+                ├── output bytes: <slt:ignore>
+                ├── group by: [a % 3]
+                ├── aggregate functions: [count()]
+                ├── estimated rows: 3.00
+                └── EvalScalar
+                    ├── cpu time: <slt:ignore>
+                    ├── output rows: 600
+                    ├── output bytes: <slt:ignore>
+                    ├── output columns: [a % 3 (#1)]
+                    ├── expressions: [tc.a (#0) % 3]
+                    ├── estimated rows: 654.18
+                    └── FuseBlockRead
+                        ├── cpu time: <slt:ignore>
+                        ├── wait time: <slt:ignore>
+                        ├── exchange bytes: <slt:ignore>
+                        ├── output rows: 600
+                        ├── output bytes: <slt:ignore>
+                        ├── bytes scanned: <slt:ignore>
+                        ├── partitions scanned: 6
+                        ├── read from remote: <slt:ignore>
+                        ├── runtime filter bloom time: <slt:ignore>
+                        ├── runtime filter inlist/min-max time: <slt:ignore>
+                        └── Exchange
+                            ├── output columns: []
+                            ├── exchange type: Hash()
+                            └── FusePrune
+                                ├── cpu time: <slt:ignore>
+                                ├── wait time: <slt:ignore>
+                                ├── table: default.lazy_pruning.tc
+                                ├── read rows: 0
+                                ├── read size: 0
+                                ├── partitions total: 12
+                                ├── partitions scanned: 6
+                                └── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 4 to 2 cost: <slt:ignore>>]
 
 statement ok
 set enable_prune_pipeline = 0
@@ -122,7 +202,62 @@ set enable_prune_pipeline = 0
 query T
 explain analyze select a % 3, count() from t where a > 2500 group by a % 3
 ----
-<slt:ignore>
+Exchange
+├── output columns: [count() (#2), a % 3 (#3)]
+├── exchange type: Merge
+└── EvalScalar
+    ├── cpu time: <slt:ignore>
+    ├── output rows: 3
+    ├── output bytes: <slt:ignore>
+    ├── output columns: [count() (#2), a % 3 (#3)]
+    ├── expressions: [group_item (#1)]
+    ├── estimated rows: 3.00
+    └── AggregateFinal
+        ├── cpu time: <slt:ignore>
+        ├── wait time: <slt:ignore>
+        ├── exchange bytes: <slt:ignore>
+        ├── output rows: 3
+        ├── output bytes: <slt:ignore>
+        ├── output columns: [count() (#2), a % 3 (#1)]
+        ├── group by: [a % 3]
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 3.00
+        └── Exchange
+            ├── output columns: [count() (#2), a % 3 (#1)]
+            ├── exchange type: Hash(0)
+            └── AggregatePartial
+                ├── cpu time: <slt:ignore>
+                ├── output rows: <slt:ignore>
+                ├── output bytes: <slt:ignore>
+                ├── group by: [a % 3]
+                ├── aggregate functions: [count()]
+                ├── estimated rows: 3.00
+                └── EvalScalar
+                    ├── cpu time: <slt:ignore>
+                    ├── output rows: 600
+                    ├── output bytes: <slt:ignore>
+                    ├── output columns: [a % 3 (#1)]
+                    ├── expressions: [t.a (#0) % 3]
+                    ├── estimated rows: 654.18
+                    └── TableScan
+                        ├── cpu time: <slt:ignore>
+                        ├── wait time: <slt:ignore>
+                        ├── output rows: 600
+                        ├── output bytes: <slt:ignore>
+                        ├── bytes scanned: <slt:ignore>
+                        ├── read from remote: <slt:ignore>
+                        ├── runtime filter bloom time: <slt:ignore>
+                        ├── runtime filter inlist/min-max time: <slt:ignore>
+                        ├── table: default.lazy_pruning.t
+                        ├── scan id: 0
+                        ├── output columns: [a (#0)]
+                        ├── read rows: 600
+                        ├── read size: 1.51 KiB
+                        ├── partitions total: 12
+                        ├── partitions scanned: 6
+                        ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 2 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
+                        ├── push downs: [filters: [is_true(t.a (#0) > 2500)], limit: NONE]
+                        └── estimated rows: 654.18
 
 statement ok
 unset enable_prune_pipeline
