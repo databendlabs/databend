@@ -92,13 +92,18 @@ impl SubqueryDecorrelatorOptimizer {
                     .iter()
                     .map(|arg| self.flatten_scalar(arg, correlated_columns, derived_columns))
                     .collect::<Result<Vec<_>>>()?;
-                Ok(ScalarExpr::FunctionCall(FunctionCall {
+                let mut function = FunctionCall {
                     span: func.span,
                     func_name: func.func_name.clone(),
                     params: func.params.clone(),
                     arguments,
                     return_type: func.return_type.clone(),
-                }))
+                };
+                // Derived correlation columns can have different nullability.
+                // Refresh at the rewrite point, before the plan enters the
+                // production logical pipeline and its type validation.
+                function.refresh_return_type()?;
+                Ok(ScalarExpr::FunctionCall(function))
             }
             ScalarExpr::LambdaFunction(lambda) => {
                 let args = lambda

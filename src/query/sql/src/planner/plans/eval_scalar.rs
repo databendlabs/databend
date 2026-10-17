@@ -79,6 +79,15 @@ impl ScalarItem {
 }
 
 impl EvalScalar {
+    /// Only copies of the same input symbols are identities. Aliases, literals
+    /// and computations (including ones shadowing input symbols) are not.
+    /// Callers removing the node must also verify the symbols exist in its input.
+    pub fn is_identity(&self) -> bool {
+        self.items.iter().all(|item| {
+            matches!(&item.scalar, ScalarExpr::BoundColumnRef(column) if column.column.index == item.index)
+        })
+    }
+
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
         for item in &self.items {
@@ -184,12 +193,7 @@ impl Operator for EvalScalar {
 
     fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         let input = rel_expr.derive_cardinality_child(0, stat_ctx)?;
-        if self.items.iter().all(|item| {
-            matches!(
-                &item.scalar,
-                ScalarExpr::BoundColumnRef(column) if column.column.index == item.index
-            )
-        }) {
+        if self.is_identity() {
             return Ok(input);
         }
 

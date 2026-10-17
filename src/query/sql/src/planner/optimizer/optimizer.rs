@@ -29,22 +29,9 @@ use crate::optimizer::ir::PlannedQuery;
 use crate::optimizer::ir::QueryPlan;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::mutation::optimize_mutation;
-use crate::optimizer::optimizers::CTEFilterPushdownOptimizer;
-use crate::optimizer::optimizers::CommonSubexpressionOptimizer;
-use crate::optimizer::optimizers::DPhpyOptimizer;
-use crate::optimizer::optimizers::EliminateSelfJoinOptimizer;
-use crate::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
-use crate::optimizer::optimizers::operator::PullUpFilterOptimizer;
-use crate::optimizer::optimizers::operator::RuleNormalizeAggregateOptimizer;
-use crate::optimizer::optimizers::operator::RuleStatsAggregateOptimizer;
-use crate::optimizer::optimizers::operator::SingleToInnerOptimizer;
 use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
-use crate::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
-use crate::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
-use crate::optimizer::optimizers::rule::RuleEagerAggregation;
-use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::pipeline::OptimizerPipeline;
-use crate::optimizer::statistics::CollectStatisticsOptimizer;
+use crate::optimizer::pipeline::OptimizerStrategy;
 use crate::plans::EvalScalar;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
@@ -296,73 +283,18 @@ async fn optimize_query_inner(
     s_expr: SExpr,
     output_columns: Option<std::collections::HashSet<Symbol>>,
 ) -> Result<PlannedQuery> {
-    let mut pipeline = query_logical_pipeline(opt_ctx.clone(), s_expr, output_columns).await?;
+    let mut pipeline = OptimizerPipeline::query(
+        opt_ctx.clone(),
+        s_expr,
+        output_columns,
+        OptimizerStrategy::Query,
+    )
+    .await?;
     let input = pipeline.execute().await?;
     PhysicalPlanner::new(opt_ctx)
         .with_trace_collector(pipeline.get_trace_collector(), pipeline.num_optimizers())
         .plan(input)
         .await
-}
-
-/// Build the common logical passes without selecting distributions or execution plans.
-/// Mutation preparation runs after these passes and before query planning.
-pub(super) async fn query_logical_pipeline(
-    opt_ctx: Arc<OptimizerContext>,
-    s_expr: SExpr,
-    output_columns: Option<std::collections::HashSet<Symbol>>,
-) -> Result<OptimizerPipeline> {
-    let settings = opt_ctx.get_table_ctx().get_settings();
-    let pipeline = OptimizerPipeline::new(opt_ctx.clone(), s_expr)
-        .await?
-        // Eliminate subqueries by rewriting them into more efficient form
-        .add(SubqueryDecorrelatorOptimizer::new(opt_ctx.clone(), None))
-        // Apply statistics aggregation to gather and propagate statistics
-        .add(RuleStatsAggregateOptimizer::new(opt_ctx.clone()))
-        // Collect statistics for SExpr nodes to support cost estimation
-        .add(CollectStatisticsOptimizer::new(opt_ctx.clone()))
-        // Normalize aggregate, it should be executed before RuleSplitAggregate.
-        .add(RuleNormalizeAggregateOptimizer::new())
-        // Pull up and infer filter.
-        .add(PullUpFilterOptimizer::new(opt_ctx.clone()))
-        // Common subexpression elimination optimization
-        // TODO(Sky): Currently uses heuristic approach, will be integrated into Cascades optimizer in the future.
-        .add_if(
-            settings.get_enable_cse_optimizer()?,
-            CommonSubexpressionOptimizer::new(opt_ctx.clone()),
-        )
-        // Run default rewrite rules. Only an outer Plan::Query supplies authoritative result
-        // columns; internal mutation/query fragments leave them unset.
-        .add(
-            RecursiveRuleOptimizer::new_with_materialized_view_output_columns(
-                opt_ctx.clone(),
-                &DEFAULT_REWRITE_RULES,
-                output_columns,
-            ),
-        )
-        // CTE filter pushdown optimization
-        .add(CTEFilterPushdownOptimizer::new(opt_ctx.clone()))
-        // Run post rewrite rules
-        .add(RecursiveRuleOptimizer::new(opt_ctx.clone(), &[
-            RuleID::SplitAggregate,
-        ]))
-        // Apply DPhyp algorithm for cost-based join reordering
-        .add(DPhpyOptimizer::new(opt_ctx.clone()))
-        // Eliminate self joins when possible
-        .add(EliminateSelfJoinOptimizer::new(opt_ctx.clone()))
-        // After join reorder, Convert some single join to inner join.
-        .add(SingleToInnerOptimizer::new())
-        // Deduplicate join conditions.
-        .add(DeduplicateJoinConditionOptimizer::new())
-        // Apply join commutativity to further optimize join ordering
-        .add_if(
-            opt_ctx.get_enable_join_reorder(),
-            RecursiveRuleOptimizer::new(opt_ctx.clone(), [RuleID::CommuteJoin].as_slice()),
-        )
-        .add_if(
-            settings.get_force_eager_aggregate()?,
-            RuleEagerAggregation::new(opt_ctx.get_metadata()),
-        );
-    Ok(pipeline)
 }
 
 fn rewrite_insert_multi_table_whens(
@@ -419,26 +351,8 @@ fn rewrite_insert_multi_table_whens(
 }
 
 async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<Memo> {
-    let mut pipeline = OptimizerPipeline::new(opt_ctx.clone(), s_expr.clone())
-        .await?
-        // Decorrelate subqueries, after this step, there should be no subquery in the expression.
-        .add(SubqueryDecorrelatorOptimizer::new(opt_ctx.clone(), None))
-        .add(RuleStatsAggregateOptimizer::new(opt_ctx.clone()))
-        // Collect statistics for each leaf node in SExpr.
-        .add(CollectStatisticsOptimizer::new(opt_ctx.clone()))
-        // Pull up and infer filter.
-        .add(PullUpFilterOptimizer::new(opt_ctx.clone()))
-        // Run default rewrite rules
-        .add(RecursiveRuleOptimizer::new(
-            opt_ctx.clone(),
-            &DEFAULT_REWRITE_RULES,
-        ))
-        // Run post rewrite rules
-        .add(RecursiveRuleOptimizer::new(opt_ctx.clone(), &[
-            RuleID::SplitAggregate,
-        ]))
-        // Cost based optimization
-        .add(DPhpyOptimizer::new(opt_ctx.clone()));
+    let mut pipeline =
+        OptimizerPipeline::query(opt_ctx.clone(), s_expr, None, OptimizerStrategy::Memo).await?;
 
     let input = pipeline.execute().await?;
     PhysicalPlanner::new(opt_ctx)

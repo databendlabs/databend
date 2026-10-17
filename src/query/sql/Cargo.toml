@@ -104,5 +104,9 @@ harness = false
 name = "cse"
 harness = false
 
+[[bench]]
+name = "dphyp"
+harness = false
+
 [lints]
 workspace = true
