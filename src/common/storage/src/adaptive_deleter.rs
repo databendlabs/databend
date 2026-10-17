@@ -13,10 +13,13 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use futures::StreamExt;
 use futures::TryStreamExt;
+use futures::future::BoxFuture;
 use futures::stream::FuturesUnordered;
 use opendal::EntryMode;
 use opendal::ErrorKind;
@@ -37,11 +40,13 @@ use crate::RetryStats;
 ///
 /// One deleter is one observation scope. Create it with the operator of the storage whose
 /// prefixes it removes (through [`crate::init_operator_observed`] so retries the retry layer
-/// absorbs reach it) and share it across every prefix on that storage, so the bound reflects
-/// that storage and not another one. Calls to [`Self::remove_all`] on the same deleter run
-/// under the shared bound.
+/// absorbs reach it) and share it, by cloning, across every prefix on that storage so the
+/// bound reflects that storage and not another one. All clones admit batches against the
+/// same bound: it caps the batches in flight across every concurrent [`Self::remove_all`],
+/// not per call.
 ///
-/// Memory is bounded by the batches in flight, not by the size of the prefix.
+/// Memory is bounded by the batches in flight plus, on filesystem-style backends, the
+/// directory entries under the prefix, which are removed after their contents.
 ///
 /// ```ignore
 /// let stats = Arc::new(RetryStats::default());
@@ -54,22 +59,34 @@ use crate::RetryStats;
 ///     deleter.remove_all(&table_prefix(&table)).await?;
 /// }
 /// ```
+#[derive(Clone)]
 pub struct AdaptiveDeleter {
+    shared: Arc<Shared>,
+}
+
+struct Shared {
     operator: Operator,
     retry_stats: Arc<RetryStats>,
     concurrency: AdaptiveConcurrency,
+    /// Batches in flight across every `remove_all` on this deleter.
+    in_flight: AtomicUsize,
     batch_size: usize,
 }
 
 /// What one [`AdaptiveDeleter::remove_all`] did, for progress reporting.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct RemoveAllReport {
+    /// Objects removed; directory entries on filesystem-style backends are not counted.
     pub removed: usize,
+    /// Delete requests issued, directory removals included.
     pub batches: usize,
     /// Retries the retry layer absorbed while this prefix was being removed. A pressure
     /// signal shared with concurrent work on the same deleter, not an exact count.
     pub retried: usize,
 }
+
+/// The result of one batch (its object count on success) and the retries seen while it ran.
+type BatchOutcome = (opendal::Result<usize>, usize);
 
 impl AdaptiveDeleter {
     pub fn new(
@@ -83,16 +100,19 @@ impl AdaptiveDeleter {
             .delete_max_size
             .unwrap_or(1);
         Ok(Self {
-            operator,
-            retry_stats,
-            concurrency: AdaptiveConcurrency::new(config)?,
-            batch_size,
+            shared: Arc::new(Shared {
+                operator,
+                retry_stats,
+                concurrency: AdaptiveConcurrency::new(config)?,
+                in_flight: AtomicUsize::new(0),
+                batch_size,
+            }),
         })
     }
 
     /// Concurrent batches currently allowed; moves with the backend's feedback.
     pub fn concurrency(&self) -> usize {
-        self.concurrency.current()
+        self.shared.concurrency.current()
     }
 
     /// Remove every object under `prefix`, and `prefix` itself if it is an object.
@@ -101,90 +121,83 @@ impl AdaptiveDeleter {
     /// failed batch or listing error, no new batch is started, the batches already in flight
     /// are awaited, and the error is returned: the prefix is then only partially removed and
     /// the caller must keep whatever points at it.
+    ///
+    /// On filesystem-style backends the directories under the prefix, and the prefix itself,
+    /// are removed after their contents, as [`Operator::remove_all`] does.
     pub async fn remove_all(&self, prefix: &str) -> opendal::Result<RemoveAllReport> {
-        match self.operator.stat(prefix).await {
-            Ok(meta) if meta.mode() != EntryMode::DIR => {
-                self.operator.delete(prefix).await?;
-                // Other objects may still share the prefix on object stores.
+        let shared = &self.shared;
+        let mut run = Run::new(self.shared.clone());
+
+        // Listings may or may not include an entry for the prefix itself, so it is handled
+        // here and skipped there.
+        let prefix_is_dir = match shared.operator.stat(prefix).await {
+            Ok(meta) if meta.mode() == EntryMode::DIR => true,
+            // An object at the prefix itself; other objects may still share the prefix.
+            Ok(_) => {
+                run.push(vec![prefix.to_owned()]).await;
+                false
             }
-            Ok(_) => {}
             // A prefix with no object of its own, the normal case on object stores.
-            Err(e) if e.kind() == ErrorKind::NotFound => {}
+            Err(e) if e.kind() == ErrorKind::NotFound => false,
             Err(e) => return Err(e),
-        }
+        };
 
-        let mut lister = self.operator.lister_with(prefix).recursive(true).await?;
-        let mut in_flight = FuturesUnordered::new();
-        let mut report = RemoveAllReport::default();
-        let mut batch = Vec::with_capacity(self.batch_size);
-        let mut listing_done = false;
-        let mut first_error = None;
-
-        loop {
-            // Fill the admitted slots from the listing; stop producing after any error.
-            while first_error.is_none()
-                && !listing_done
-                && in_flight.len() < self.concurrency.current()
-            {
-                match lister.try_next().await {
-                    Ok(Some(entry)) => {
-                        if entry.metadata().mode() == EntryMode::DIR {
-                            continue;
-                        }
-                        batch.push(entry.path().to_owned());
-                        if batch.len() == self.batch_size {
-                            in_flight.push(self.delete_batch(std::mem::take(&mut batch)));
-                        }
+        let mut lister = shared.operator.lister_with(prefix).recursive(true).await?;
+        let mut batch = Vec::with_capacity(shared.batch_size);
+        let mut dirs = Vec::new();
+        while run.first_error.is_none() {
+            match lister.try_next().await {
+                Ok(Some(entry)) => {
+                    if entry.path() == prefix {
+                        continue;
                     }
-                    Ok(None) => {
-                        listing_done = true;
-                        if !batch.is_empty() {
-                            in_flight.push(self.delete_batch(std::mem::take(&mut batch)));
-                        }
+                    if entry.metadata().mode() == EntryMode::DIR {
+                        dirs.push(entry.path().to_owned());
+                        continue;
                     }
-                    Err(e) => {
-                        listing_done = true;
-                        first_error = Some(e);
+                    batch.push(entry.path().to_owned());
+                    if batch.len() == shared.batch_size {
+                        run.push(std::mem::take(&mut batch)).await;
                     }
                 }
+                Ok(None) => {
+                    if !batch.is_empty() {
+                        run.push(std::mem::take(&mut batch)).await;
+                    }
+                    break;
+                }
+                Err(e) => run.first_error = Some(e),
             }
+        }
+        run.drain().await;
 
-            let Some((outcome, retried)) = in_flight.next().await else {
-                break;
-            };
-            let (failed, rate_limited) = match &outcome {
-                Ok(n) => {
-                    report.removed += n;
-                    (false, false)
+        // Directories only exist on filesystem-style backends: deepest first, the prefix last.
+        if run.first_error.is_none() {
+            dirs.sort_unstable_by(|a, b| b.len().cmp(&a.len()).then_with(|| b.cmp(a)));
+            if prefix_is_dir {
+                dirs.push(prefix.to_owned());
+            }
+            for dir in dirs {
+                if run.first_error.is_some() {
+                    break;
                 }
-                Err(e) => (true, e.kind() == ErrorKind::RateLimited),
-            };
-            report.batches += 1;
-            report.retried += retried;
-            self.concurrency.observe(
-                ConcurrencyFeedback {
-                    failed,
-                    rate_limited,
-                    retried,
-                },
-                Instant::now(),
-            );
-            if let Err(e) = outcome
-                && first_error.is_none()
-            {
-                first_error = Some(e);
+                run.push_dir(dir).await;
+                run.drain().await;
             }
         }
 
-        match first_error {
+        match run.first_error {
             Some(e) => Err(e),
-            None => Ok(report),
+            None => Ok(run.report),
         }
     }
+}
 
+impl Shared {
     /// One delete request's worth of paths; the result and the retries seen while it ran.
-    async fn delete_batch(&self, paths: Vec<String>) -> (opendal::Result<usize>, usize) {
-        let n = paths.len();
+    /// Releases the in-flight slot the caller acquired for it.
+    async fn delete_batch(self: Arc<Self>, paths: Vec<String>, counted: bool) -> BatchOutcome {
+        let n = if counted { paths.len() } else { 0 };
         let before = self.retry_stats.retried();
         let result = async {
             let mut deleter = self.operator.deleter().await?;
@@ -194,6 +207,97 @@ impl AdaptiveDeleter {
         }
         .await;
         let retried = self.retry_stats.retried().saturating_sub(before) as usize;
+        self.in_flight.fetch_sub(1, Ordering::AcqRel);
         (result, retried)
+    }
+
+    /// Take one in-flight slot if the bound allows.
+    fn try_acquire(&self) -> bool {
+        let bound = self.concurrency.current();
+        self.in_flight
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |n| {
+                (n < bound).then_some(n + 1)
+            })
+            .is_ok()
+    }
+}
+
+/// The batches one `remove_all` has in flight, admitted under the deleter's shared bound.
+struct Run {
+    shared: Arc<Shared>,
+    batches: FuturesUnordered<BoxFuture<'static, BatchOutcome>>,
+    report: RemoveAllReport,
+    first_error: Option<opendal::Error>,
+}
+
+impl Run {
+    fn new(shared: Arc<Shared>) -> Self {
+        Self {
+            shared,
+            batches: FuturesUnordered::new(),
+            report: RemoveAllReport::default(),
+            first_error: None,
+        }
+    }
+
+    /// Start deleting the objects at `paths` once a slot is free.
+    async fn push(&mut self, paths: Vec<String>) {
+        self.admit(paths, true).await
+    }
+
+    /// Start removing a directory entry once a slot is free; not counted as an object.
+    async fn push_dir(&mut self, dir: String) {
+        self.admit(vec![dir], false).await
+    }
+
+    /// Other calls on the same deleter compete for the same slots, so this call's own batches
+    /// are settled while waiting for one.
+    async fn admit(&mut self, paths: Vec<String>, counted: bool) {
+        loop {
+            if self.shared.try_acquire() {
+                self.batches
+                    .push(Box::pin(self.shared.clone().delete_batch(paths, counted)));
+                return;
+            }
+            if !self.settle_one().await {
+                // Every slot is held by another call; give it a chance to finish a batch.
+                tokio::task::yield_now().await;
+            }
+        }
+    }
+
+    /// Wait for every batch of this call.
+    async fn drain(&mut self) {
+        while self.settle_one().await {}
+    }
+
+    /// Settle one finished batch into the report and the policy; false when none is in flight.
+    async fn settle_one(&mut self) -> bool {
+        let Some((outcome, retried)) = self.batches.next().await else {
+            return false;
+        };
+        let (failed, rate_limited) = match &outcome {
+            Ok(n) => {
+                self.report.removed += n;
+                (false, false)
+            }
+            Err(e) => (true, e.kind() == ErrorKind::RateLimited),
+        };
+        self.report.batches += 1;
+        self.report.retried += retried;
+        self.shared.concurrency.observe(
+            ConcurrencyFeedback {
+                failed,
+                rate_limited,
+                retried,
+            },
+            Instant::now(),
+        );
+        if let Err(e) = outcome
+            && self.first_error.is_none()
+        {
+            self.first_error = Some(e);
+        }
+        true
     }
 }

@@ -158,3 +158,228 @@ async fn test_clean_prefixes_ramp_the_shared_bound_up() {
         "six clean batches at +1 per two: capped at max"
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_exact_prefix_object_goes_through_the_observed_batch_path() {
+    let _serial = SERIAL.lock().await;
+    FaultInjection::clear();
+    let (op, stats) = storage(&[("5/50/", 2)]).await;
+    let deleter = AdaptiveDeleter::new(op.clone(), stats, config()).unwrap();
+    // An object at exactly the prefix path, next to the objects under it.
+    op.write("5/50", "x").await.unwrap();
+    op.write("5/6", "x").await.unwrap();
+
+    // The object at the prefix is deleted through a counted batch whose absorbed retry reaches
+    // the report, like every other object; `Operator::remove_all` deletes it uncounted.
+    let fault = FaultInjection::install(
+        FaultRule::new(FaultOp::Delete, "5/50", FaultKind::Temporary).times(1),
+    );
+    let report = deleter.remove_all("5/50").await.unwrap();
+    fault.remove();
+
+    assert_eq!(report.removed, 3, "the prefix object and the two under it");
+    assert_eq!(report.batches, 3);
+    assert_eq!(report.retried, 1);
+    assert_eq!(count(&op, "5/50").await, 0);
+    assert!(op.exists("5/6").await.unwrap(), "sibling untouched");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_concurrent_calls_share_one_bound() {
+    let _serial = SERIAL.lock().await;
+    FaultInjection::clear();
+    let gate = Arc::new(Gate::default());
+    let stats = Arc::new(RetryStats::default());
+    let op = Operator::new(Memory::default())
+        .unwrap()
+        .layer(GateLayer(gate.clone()))
+        .finish();
+    for i in 0..6 {
+        op.write(&format!("6/60/{i}"), "x").await.unwrap();
+        op.write(&format!("6/61/{i}"), "x").await.unwrap();
+    }
+    let deleter = AdaptiveDeleter::new(op.clone(), stats, config()).unwrap();
+    assert_eq!(deleter.concurrency(), 2);
+
+    // Memory deletes one path per batch. Two calls could each admit two batches on their own;
+    // the shared bound lets only two in flight in total.
+    let gate_ = gate.clone();
+    let observe = async move {
+        gate_.wait_for_blocked(2).await;
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(
+            gate_.blocked(),
+            2,
+            "no more than the bound across both calls"
+        );
+        gate_.open();
+    };
+    let (a, b, ()) = futures::join!(
+        deleter.remove_all("6/60/"),
+        deleter.remove_all("6/61/"),
+        observe
+    );
+    a.unwrap();
+    b.unwrap();
+    assert_eq!(
+        gate.peak(),
+        2,
+        "never exceeded the bound while it stayed at 2"
+    );
+    assert_eq!(count(&op, "6/").await, 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fs_directories_are_removed_after_their_contents() {
+    let _serial = SERIAL.lock().await;
+    FaultInjection::clear();
+    let root = tempfile::tempdir().unwrap();
+    let stats = Arc::new(RetryStats::default());
+    let op = Operator::new(opendal::services::Fs::default().root(root.path().to_str().unwrap()))
+        .unwrap()
+        .finish();
+    for p in ["t/1/a", "t/1/b", "t/2/x/y", "t/c"] {
+        op.write(p, "x").await.unwrap();
+    }
+    op.create_dir("t/empty/").await.unwrap();
+    op.write("u/keep", "x").await.unwrap();
+    let deleter = AdaptiveDeleter::new(op.clone(), stats, config()).unwrap();
+
+    let report = deleter.remove_all("t/").await.unwrap();
+
+    assert_eq!(report.removed, 4, "directory entries are not objects");
+    assert_eq!(
+        report.batches,
+        4 + 5,
+        "four files, then 2/x, 2, 1, empty and t itself"
+    );
+    assert!(
+        !root.path().join("t").exists(),
+        "the prefix directory is gone"
+    );
+    assert!(root.path().join("u/keep").exists());
+    assert_eq!(deleter.remove_all("t/").await.unwrap().removed, 0);
+}
+
+/// Blocks every delete until opened, counting how many are blocked at once.
+#[derive(Default)]
+struct Gate {
+    blocked: std::sync::atomic::AtomicUsize,
+    peak: std::sync::atomic::AtomicUsize,
+    open: tokio::sync::Notify,
+    opened: std::sync::atomic::AtomicBool,
+}
+
+impl Gate {
+    fn blocked(&self) -> usize {
+        self.blocked.load(std::sync::atomic::Ordering::Acquire)
+    }
+    fn peak(&self) -> usize {
+        self.peak.load(std::sync::atomic::Ordering::Acquire)
+    }
+    fn open(&self) {
+        self.opened
+            .store(true, std::sync::atomic::Ordering::Release);
+        self.open.notify_waiters();
+    }
+    async fn wait_for_blocked(&self, n: usize) {
+        while self.blocked() < n {
+            tokio::time::sleep(Duration::from_millis(2)).await;
+        }
+    }
+    async fn pass(&self) {
+        let now = self
+            .blocked
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel)
+            + 1;
+        self.peak
+            .fetch_max(now, std::sync::atomic::Ordering::AcqRel);
+        while !self.opened.load(std::sync::atomic::Ordering::Acquire) {
+            let notified = self.open.notified();
+            if self.opened.load(std::sync::atomic::Ordering::Acquire) {
+                break;
+            }
+            notified.await;
+        }
+        self.blocked
+            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+    }
+}
+
+struct GateLayer(Arc<Gate>);
+
+impl<A: opendal::raw::Access> opendal::raw::Layer<A> for GateLayer {
+    type LayeredAccess = GateAccessor<A>;
+    fn layer(&self, inner: A) -> Self::LayeredAccess {
+        GateAccessor {
+            inner,
+            gate: self.0.clone(),
+        }
+    }
+}
+
+struct GateAccessor<A> {
+    inner: A,
+    gate: Arc<Gate>,
+}
+
+impl<A> std::fmt::Debug for GateAccessor<A> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GateAccessor").finish()
+    }
+}
+
+impl<A: opendal::raw::Access> opendal::raw::LayeredAccess for GateAccessor<A> {
+    type Inner = A;
+    type Reader = A::Reader;
+    type Writer = A::Writer;
+    type Lister = A::Lister;
+    type Deleter = GateDeleter<A::Deleter>;
+
+    fn inner(&self) -> &Self::Inner {
+        &self.inner
+    }
+    async fn read(
+        &self,
+        path: &str,
+        args: opendal::raw::OpRead,
+    ) -> opendal::Result<(opendal::raw::RpRead, Self::Reader)> {
+        self.inner.read(path, args).await
+    }
+    async fn write(
+        &self,
+        path: &str,
+        args: opendal::raw::OpWrite,
+    ) -> opendal::Result<(opendal::raw::RpWrite, Self::Writer)> {
+        self.inner.write(path, args).await
+    }
+    async fn list(
+        &self,
+        path: &str,
+        args: opendal::raw::OpList,
+    ) -> opendal::Result<(opendal::raw::RpList, Self::Lister)> {
+        self.inner.list(path, args).await
+    }
+    async fn delete(&self) -> opendal::Result<(opendal::raw::RpDelete, Self::Deleter)> {
+        let (rp, inner) = self.inner.delete().await?;
+        Ok((rp, GateDeleter {
+            inner,
+            gate: self.gate.clone(),
+        }))
+    }
+}
+
+struct GateDeleter<D> {
+    inner: D,
+    gate: Arc<Gate>,
+}
+
+impl<D: opendal::raw::oio::Delete> opendal::raw::oio::Delete for GateDeleter<D> {
+    fn delete(&mut self, path: &str, args: opendal::raw::OpDelete) -> opendal::Result<()> {
+        self.inner.delete(path, args)
+    }
+    async fn flush(&mut self) -> opendal::Result<usize> {
+        self.gate.pass().await;
+        self.inner.flush().await
+    }
+}
