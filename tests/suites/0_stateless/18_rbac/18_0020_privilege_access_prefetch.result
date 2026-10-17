@@ -1,0 +1,33 @@
+=== db owner: repeated binds of the same tables ===
+1
+1
+1
+2
+2
+=== table owner: only the owned table ===
+2
+Permission denied
+Permission denied
+=== table owner: owned joined with denied ===
+Permission denied
+=== cross-database plan ===
+1
+Permission denied
+=== system schema mixed with user table ===
+true
+1
+true
+=== table function alongside an owned table ===
+3
+=== name-based grant, no ownership ===
+1
+Permission denied
+=== owner role dropped, falls back to account_admin ===
+0
+0
+Permission denied
+=== temp table alongside an owned table ===
+1
+1
+=== view over owned tables ===
+2

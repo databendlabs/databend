@@ -996,7 +996,7 @@ pub struct DbTableVisibilityResult {
 
 /// Maximum batch size for `mget_ownerships` calls to avoid oversized RPC payloads.
 /// Aligned with `KVPbApi::CHUNK_SIZE = 256` as the default batch size.
-const MGET_OWNERSHIP_BATCH_SIZE: usize = 256;
+pub const MGET_OWNERSHIP_BATCH_SIZE: usize = 256;
 
 /// Filter table targets by one exact privilege, with table/database ownership fallback.
 ///
