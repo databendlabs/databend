@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::MutexGuard;
 use std::time::Instant;
 
 use futures::StreamExt;
@@ -24,8 +23,7 @@ use futures::stream::FuturesUnordered;
 use opendal::EntryMode;
 use opendal::ErrorKind;
 use opendal::Operator;
-use tokio::sync::OwnedSemaphorePermit;
-use tokio::sync::Semaphore;
+use tokio::sync::Notify;
 
 use crate::AdaptiveConcurrency;
 use crate::AdaptiveConcurrencyConfig;
@@ -70,18 +68,12 @@ struct Shared {
     operator: Operator,
     retry_stats: Arc<RetryStats>,
     concurrency: AdaptiveConcurrency,
-    /// One permit per batch the policy currently allows, across every `remove_all` on this
-    /// deleter. A batch holds its permit until its outcome has been fed to the policy, or
-    /// until it is dropped, so a cancelled call gives its slots back; waiters sleep on the
-    /// semaphore instead of polling.
-    slots: Arc<Semaphore>,
-    /// Permits the bound has shrunk by that other batches held at the time and that still
-    /// have to be retired as they come back, so `slots` settles at `concurrency.current()`.
-    ///
-    /// The lock is held across a policy update and the permit adjustment it calls for, so
-    /// two observers on different threads cannot interleave a decrease that is not yet
-    /// booked with an increase that adds a permit.
-    deficit: Mutex<usize>,
+    /// Admission and policy updates share this lock. A request is admitted only when this
+    /// count is below the current bound, so a decrease cannot expose stale capacity. Already
+    /// admitted work is allowed to finish, even if it temporarily exceeds the new bound.
+    in_flight: Mutex<usize>,
+    /// Slot returns wake registered waiters; no polling or separate permit accounting.
+    available: Notify,
     batch_size: usize,
     progress: Mutex<Progress>,
 }
@@ -141,27 +133,18 @@ struct BatchOutcome {
     slot: Slot,
 }
 
-/// A slot under the deleter's bound. However it ends, by `observe` or by being dropped with
-/// a cancelled call, it is retired against the deficit first and returned to the semaphore
-/// only when nothing is owed, so cancellation cannot expose slots above the bound.
+/// An admitted request, held through feedback observation or returned on cancellation.
 struct Slot {
-    permit: Option<OwnedSemaphorePermit>,
     shared: Arc<Shared>,
-}
-
-impl Slot {
-    /// Give the slot back: retire it if the bound owes a permit, release it otherwise.
-    fn give_back(&mut self) {
-        if let Some(permit) = self.permit.take() {
-            let mut deficit = self.shared.deficit.lock().unwrap();
-            Shared::give_back(&mut deficit, permit);
-        }
-    }
 }
 
 impl Drop for Slot {
     fn drop(&mut self) {
-        self.give_back();
+        {
+            let mut in_flight = self.shared.in_flight.lock().unwrap();
+            *in_flight -= 1;
+        }
+        self.shared.available.notify_waiters();
     }
 }
 
@@ -178,14 +161,13 @@ impl AdaptiveDeleter {
             .unwrap_or(1)
             .max(1);
         let concurrency = AdaptiveConcurrency::new(config)?;
-        let slots = Arc::new(Semaphore::new(concurrency.current()));
         Ok(Self {
             shared: Arc::new(Shared {
                 operator,
                 retry_stats,
                 concurrency,
-                slots,
-                deficit: Mutex::new(0),
+                in_flight: Mutex::new(0),
+                available: Notify::new(),
                 batch_size,
                 progress: Mutex::new(Progress::default()),
             }),
@@ -239,7 +221,7 @@ impl AdaptiveDeleter {
     /// Remove every object under `prefix`, and `prefix` itself if it is an object.
     ///
     /// Returns only when the listing is exhausted and every batch is done. On the first
-    /// failed batch or listing error, no new batch is started, the batches already in flight
+    /// observed batch failure or listing error, no new batch is started, batches already in flight
     /// are awaited, and the error is returned: the prefix is then only partially removed and
     /// the caller must keep whatever points at it.
     ///
@@ -322,9 +304,8 @@ impl AdaptiveDeleter {
 }
 
 impl Shared {
-    /// One delete request's worth of paths. The slot travels with the outcome: it is
-    /// released, or retired, only once the policy has seen the result, and settled by its
-    /// `Drop` if the call is cancelled.
+    /// One delete request's worth of paths. The slot travels with the outcome and is
+    /// released only once the policy has seen the result, or by `Drop` on cancellation.
     async fn delete_batch(
         self: Arc<Self>,
         slot: Slot,
@@ -389,71 +370,40 @@ impl Shared {
         }
     }
 
-    /// Feed a batch outcome to the policy and move the permit count with the bound, then
-    /// give the batch's own slot back.
-    ///
-    /// Growing first cancels permits still owed from an earlier decrease and only adds what
-    /// is left over. Shrinking books the whole decrease as deficit before the slot is given
-    /// back, so this slot, which is in hand and cannot reach a waiter in between, is the
-    /// first one retired; permits sitting free in the semaphore are retired next, right
-    /// away; only what other batches still hold remains owed, and they retire it as they
-    /// end. All of it happens under the deficit lock together with the policy update.
-    fn observe(&self, feedback: ConcurrencyFeedback, mut slot: Slot) {
-        let mut deficit = self.deficit.lock().unwrap();
-        let (before, after) = self.concurrency.observe_change(feedback, Instant::now());
-        if after > before {
-            let growth = after - before;
-            let cancelled = growth.min(*deficit);
-            *deficit -= cancelled;
-            if growth > cancelled {
-                self.slots.add_permits(growth - cancelled);
-            }
-        } else if after < before {
-            *deficit += before - after;
+    /// Serialize policy changes with admission, then return this batch's slot. No separate
+    /// permit count needs reconciling when the bound moves.
+    fn observe(&self, feedback: ConcurrencyFeedback, slot: Slot) {
+        let (before, after) = {
+            let _in_flight = self.in_flight.lock().unwrap();
+            self.concurrency.observe_change(feedback, Instant::now())
+        };
+        if after < before {
             log::warn!(
                 "Storage delete pressure: lowering request concurrency from {} to {}",
                 before,
                 after
             );
         }
-        if let Some(permit) = slot.permit.take() {
-            Self::give_back(&mut deficit, permit);
-        }
-        self.retire_free_permits(&mut deficit);
+        drop(slot);
     }
 
-    /// Retire the permit if the bound owes one, release it otherwise.
-    fn give_back(deficit: &mut MutexGuard<'_, usize>, permit: OwnedSemaphorePermit) {
-        if **deficit > 0 {
-            **deficit -= 1;
-            permit.forget();
-        } else {
-            drop(permit);
-        }
-    }
-
-    /// Retire free permits against the deficit.
-    fn retire_free_permits(&self, deficit: &mut MutexGuard<'_, usize>) {
-        while **deficit > 0 {
-            let Ok(permit) = self.slots.clone().try_acquire_owned() else {
-                return;
-            };
-            **deficit -= 1;
-            permit.forget();
-        }
-    }
-
-    /// Wait for a slot under the current bound.
+    /// Register before checking the bound, so a concurrent slot return cannot be missed.
+    /// Only the short admission check is locked; waiting and backend I/O never hold it.
     async fn acquire(self: &Arc<Self>) -> Slot {
-        let permit = self
-            .slots
-            .clone()
-            .acquire_owned()
-            .await
-            .expect("the slot semaphore is never closed");
-        Slot {
-            permit: Some(permit),
-            shared: self.clone(),
+        loop {
+            let available = self.available.notified();
+            tokio::pin!(available);
+            available.as_mut().enable();
+            {
+                let mut in_flight = self.in_flight.lock().unwrap();
+                if *in_flight < self.concurrency.current() {
+                    *in_flight += 1;
+                    return Slot {
+                        shared: self.clone(),
+                    };
+                }
+            }
+            available.await;
         }
     }
 }
@@ -495,16 +445,17 @@ impl Run {
             }
             tokio::select! {
                 biased;
-                slot = self.shared.acquire() => break slot,
+                // Observe every ready outcome before a freed slot can admit more work.
                 settled = self.batches.next() => match settled {
                     Some(outcome) => self.settle(outcome),
                     // Nothing of ours in flight: wait for another call to release a slot.
                     None => break self.shared.acquire().await,
                 },
+                slot = self.shared.acquire() => break slot,
             }
         };
         if self.first_error.is_some() {
-            // Dropping the slot gives it back, retiring it first if the bound owes one.
+            // Dropping the slot returns it without starting a request.
             return;
         }
         self.batches.push(Box::pin(

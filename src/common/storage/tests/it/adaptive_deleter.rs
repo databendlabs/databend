@@ -516,6 +516,102 @@ async fn test_no_batch_is_admitted_after_a_failure() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_ready_failure_is_settled_before_a_freed_slot_is_reused() {
+    let _serial = SERIAL.lock().await;
+    FaultInjection::clear();
+    let gate = Arc::new(Gate::default());
+    let op = Operator::new(Memory::default())
+        .unwrap()
+        .layer(GateLayer(gate.clone()))
+        .finish();
+    for i in 0..6 {
+        op.write(&format!("ready/{i}"), "x").await.unwrap();
+    }
+    let deleter = AdaptiveDeleter::new(op.clone(), Arc::default(), AdaptiveConcurrencyConfig {
+        max: 2,
+        increase_after: 100,
+        ..config()
+    })
+    .unwrap();
+    gate.throttle("ready/1");
+    let release = async {
+        gate.wait_for_blocked(2).await;
+        // Both outcomes become ready together. The success at ready/0 returns a slot, but
+        // the queued failure at ready/1 must be settled before that slot starts ready/2.
+        gate.open();
+    };
+    let (result, ()) = futures::join!(deleter.remove_all("ready/"), release);
+    assert_eq!(result.unwrap_err().kind(), ErrorKind::RateLimited);
+    assert!(!op.exists("ready/0").await.unwrap());
+    for i in 1..6 {
+        assert!(
+            op.exists(&format!("ready/{i}")).await.unwrap(),
+            "ready/{i} must not be deleted after the queued failure"
+        );
+    }
+    assert_eq!(gate.peak(), 2);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_selected_file_waiters_share_the_lowered_bound() {
+    let _serial = SERIAL.lock().await;
+    FaultInjection::clear();
+    let gate = Arc::new(Gate::default());
+    let op = Operator::new(Memory::default())
+        .unwrap()
+        .layer(GateLayer(gate.clone()))
+        .finish();
+    for i in 0..17 {
+        op.write(&format!("admission/{i}"), "x").await.unwrap();
+    }
+    for i in 0..8 {
+        op.write(&format!("admission-prefix/{i}"), "x")
+            .await
+            .unwrap();
+    }
+    let deleter = AdaptiveDeleter::new(op.clone(), Arc::default(), AdaptiveConcurrencyConfig {
+        initial: 8,
+        max: 8,
+        increase_after: 100,
+        decrease_cooldown: Duration::from_secs(60),
+        ..config()
+    })
+    .unwrap();
+    gate.throttle("admission/0");
+    gate.open();
+    let report = deleter.remove_files(["admission/0".to_owned()]).await;
+    assert_eq!(report.error.unwrap().kind(), ErrorKind::RateLimited);
+    assert_eq!(deleter.concurrency(), 4);
+    gate.close();
+
+    // Many independent clones compete after an unsaturated 8 -> 4 decrease. They cannot
+    // reuse idle capacity from the old bound, even when both entry points are active.
+    let calls = futures::future::join_all((1..17).map(|i| {
+        let deleter = deleter.clone();
+        databend_common_base::runtime::spawn(async move {
+            deleter.remove_files([format!("admission/{i}")]).await
+        })
+    }));
+    let release = async {
+        gate.wait_for_blocked(4).await;
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        assert_eq!(gate.blocked(), 4);
+        gate.open();
+    };
+    let (reports, prefix, ()) =
+        futures::join!(calls, deleter.remove_all("admission-prefix/"), release);
+    assert_eq!(prefix.unwrap().removed, 8);
+    for report in reports {
+        let report = report.unwrap();
+        assert!(report.error.is_none());
+        assert_eq!(report.removed, 1);
+    }
+    assert_eq!(gate.peak(), 4);
+    assert!(op.exists("admission/0").await.unwrap());
+    assert_eq!(count(&op, "admission/").await, 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_halving_under_queued_waiters_shrinks_the_batches_in_flight() {
     let _serial = SERIAL.lock().await;
     FaultInjection::clear();
@@ -556,14 +652,14 @@ async fn test_halving_under_queued_waiters_shrinks_the_batches_in_flight() {
         tokio::time::sleep(Duration::from_millis(30)).await;
         assert_eq!(gate.blocked(), 4, "B is queued behind A's four batches");
 
-        // The outcome halves the bound to 2. The finished batch's permit must be retired by
-        // that halving rather than handed to B, so three remain in flight, not four.
+        // The outcome halves the bound to 2. The returned slot cannot admit B while three
+        // of A's requests are still in flight above the new bound.
         gate.release_one();
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert_eq!(deleter.concurrency(), 2);
-        assert_eq!(gate.blocked(), 3, "retired, not handed to a waiter");
+        assert_eq!(gate.blocked(), 3, "no admission above the new bound");
 
-        // Draining one more of A's retires the deficit; from then on B refills to the new
+        // Draining one more of A's reaches the new bound; from then on B refills to that
         // bound and the in-flight count never climbs back to the old one.
         gate.release_one();
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -587,7 +683,7 @@ async fn test_halving_under_queued_waiters_shrinks_the_batches_in_flight() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_cancelled_slots_are_retired_against_the_deficit() {
+async fn test_cancellation_after_a_decrease_preserves_the_lower_bound() {
     let _serial = SERIAL.lock().await;
     FaultInjection::clear();
     let gate = Arc::new(Gate::default());
@@ -636,8 +732,8 @@ async fn test_cancelled_slots_are_retired_against_the_deficit() {
         "dropped batches abandoned their requests"
     );
 
-    // The dropped slots must have been retired down to the new bound, not handed back
-    // in full: a fresh call gets two in flight, not three.
+    // Cancellation must not restore the old capacity: a fresh call gets two in flight,
+    // not the three that were still active when the previous call was dropped.
     let observe = async {
         gate.wait_for_blocked(2).await;
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -650,7 +746,7 @@ async fn test_cancelled_slots_are_retired_against_the_deficit() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_halving_while_unsaturated_retires_idle_permits_at_once() {
+async fn test_decrease_with_idle_capacity_applies_to_the_next_call() {
     let _serial = SERIAL.lock().await;
     FaultInjection::clear();
     let gate = Arc::new(Gate::default());
@@ -681,8 +777,8 @@ async fn test_halving_while_unsaturated_retires_idle_permits_at_once() {
     );
     assert_eq!(deleter.concurrency(), 2);
 
-    // The idle permits must have been retired with the bound: the next call gets two in
-    // flight, not the three that were sitting free plus the one just released.
+    // Idle capacity must follow the new bound: the next call gets two in flight, not the
+    // three previously idle slots plus the one just released.
     gate.close();
     let observe = async {
         gate.wait_for_blocked(2).await;
@@ -697,7 +793,7 @@ async fn test_halving_while_unsaturated_retires_idle_permits_at_once() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_growth_cancels_an_outstanding_deficit_before_adding_permits() {
+async fn test_growth_after_a_decrease_follows_the_current_bound() {
     let _serial = SERIAL.lock().await;
     FaultInjection::clear();
     let gate = Arc::new(Gate::default());
@@ -710,7 +806,7 @@ async fn test_growth_cancels_an_outstanding_deficit_before_adding_permits() {
         op.write(&format!("c/c0/{i}"), "x").await.unwrap();
         op.write(&format!("c/c1/{i}"), "x").await.unwrap();
     }
-    // Every clean batch raises the bound by one, so growth and an outstanding deficit meet.
+    // Every clean batch raises the bound by one, including while old work is still draining.
     let deleter = AdaptiveDeleter::new(op.clone(), stats, AdaptiveConcurrencyConfig {
         initial: 4,
         min: 1,
@@ -720,10 +816,9 @@ async fn test_growth_cancels_an_outstanding_deficit_before_adding_permits() {
     })
     .unwrap();
 
-    // Four in flight. One throttled outcome halves the bound to 2: its own slot is retired,
-    // three are still held, deficit 1. Each of the next clean completions raises the bound by
-    // one; that growth must cancel the owed unit first, not add a permit on top of the slot
-    // the completion then returns.
+    // Four in flight. One throttled outcome halves the bound to 2 with three old requests
+    // still active. Later clean completions raise the bound one at a time; admission must
+    // follow that bound rather than adding capacity on top of returned slots.
     gate.throttle("c/c0/0");
     gate.throttle("c/c0/1");
     gate.throttle("c/c0/2");
