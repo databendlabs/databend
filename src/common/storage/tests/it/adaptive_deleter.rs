@@ -466,6 +466,53 @@ async fn test_cancelled_slots_are_retired_against_the_deficit() {
     assert_eq!(count(&op, "a/a1/").await, 0);
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_halving_while_unsaturated_retires_idle_permits_at_once() {
+    let _serial = SERIAL.lock().await;
+    FaultInjection::clear();
+    let gate = Arc::new(Gate::default());
+    let stats = Arc::new(RetryStats::default());
+    let op = Operator::new(Memory::default())
+        .unwrap()
+        .layer(GateLayer(gate.clone()))
+        .finish();
+    op.write("b/b0/0", "x").await.unwrap();
+    for i in 0..8 {
+        op.write(&format!("b/b1/{i}"), "x").await.unwrap();
+    }
+    let deleter = AdaptiveDeleter::new(op.clone(), stats, AdaptiveConcurrencyConfig {
+        initial: 4,
+        min: 1,
+        max: 4,
+        increase_after: 100,
+        decrease_cooldown: Duration::from_secs(60),
+    })
+    .unwrap();
+
+    // A single throttled batch, with the other three slots idle, halves the bound to 2.
+    gate.throttle("b/b0/0");
+    gate.open();
+    assert_eq!(
+        deleter.remove_all("b/b0/").await.unwrap_err().kind(),
+        ErrorKind::RateLimited
+    );
+    assert_eq!(deleter.concurrency(), 2);
+
+    // The idle permits must have been retired with the bound: the next call gets two in
+    // flight, not the three that were sitting free plus the one just released.
+    gate.close();
+    let observe = async {
+        gate.wait_for_blocked(2).await;
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(gate.blocked(), 2, "only the halved bound is available");
+        gate.open();
+    };
+    let (report, ()) = futures::join!(deleter.remove_all("b/b1/"), observe);
+    report.unwrap();
+    assert_eq!(gate.peak(), 2);
+    assert_eq!(count(&op, "b/b1/").await, 0);
+}
+
 /// Blocks every delete until opened, counting how many are blocked at once.
 struct Gate {
     blocked: std::sync::atomic::AtomicUsize,

@@ -280,7 +280,10 @@ impl Shared {
     ///
     /// Growing adds permits at once. Shrinking books the whole decrease as deficit before the
     /// slot is given back, so this slot, which is in hand and cannot reach a waiter in
-    /// between, is the first one retired; the rest are retired by other slots as they end.
+    /// between, is the first one retired. Permits sitting free in the semaphore are retired
+    /// next, right away, so an unsaturated deleter does not keep admitting above the new
+    /// bound; only what is still held by other batches remains owed, and they retire it as
+    /// they end.
     fn observe(&self, feedback: ConcurrencyFeedback, slot: Slot) {
         let (before, after) = self.concurrency.observe_change(feedback, Instant::now());
         if after > before {
@@ -289,6 +292,22 @@ impl Shared {
             self.deficit.fetch_add(before - after, Ordering::AcqRel);
         }
         slot.settle();
+        self.retire_free_permits();
+    }
+
+    /// Retire free permits against the deficit, one at a time so a concurrent release cannot
+    /// make this retire more than is owed.
+    fn retire_free_permits(&self) {
+        while self.deficit.load(Ordering::Acquire) > 0 {
+            let Ok(permit) = self.slots.clone().try_acquire_owned() else {
+                return;
+            };
+            if self.take_deficit() {
+                permit.forget();
+            } else {
+                return;
+            }
+        }
     }
 
     /// Claim one unit of the deficit, if any; the claim is made before the permit is
