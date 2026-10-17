@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use databend_common_storage::AdaptiveConcurrencyConfig;
@@ -67,6 +68,188 @@ async fn storage(prefixes: &[(&str, usize)]) -> (Operator, Arc<RetryStats>) {
 
 async fn count(op: &Operator, prefix: &str) -> usize {
     op.list_with(prefix).recursive(true).await.unwrap().len()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_remove_files_only_deletes_selected_paths_and_shares_progress() {
+    let _serial = SERIAL.lock().await;
+    FaultInjection::clear();
+    let (op, stats) = storage(&[("d/selected/", 5), ("d/other/", 3)]).await;
+    let progress = Arc::new(Mutex::new(Vec::new()));
+    let sink = progress.clone();
+    let deleter = AdaptiveDeleter::new(op.clone(), stats, config())
+        .unwrap()
+        .with_progress(Arc::new(move |n| sink.lock().unwrap().push(n)));
+
+    // Deliberately not in listing order. No unselected path is removed.
+    let report = deleter
+        .remove_files(["d/selected/3", "d/selected/1"].map(String::from))
+        .await;
+    assert!(report.error.is_none());
+    assert_eq!(
+        (report.removed, report.attempted, report.batches),
+        (2, 2, 2)
+    );
+    assert_eq!(report.retried, 0);
+    assert!(!op.exists("d/selected/3").await.unwrap());
+    assert!(!op.exists("d/selected/1").await.unwrap());
+    assert_eq!(count(&op, "d/selected/").await, 3);
+    assert_eq!(*progress.lock().unwrap(), vec![1, 2]);
+
+    // Both entry points, including cloned handles, report one shared running total.
+    let other = deleter.clone().remove_all("d/other/").await.unwrap();
+    assert_eq!(other.removed, 3);
+    assert_eq!(*progress.lock().unwrap(), vec![1, 2, 3, 4, 5]);
+    let report = deleter.remove_files(Vec::new()).await;
+    assert!(report.error.is_none());
+    assert_eq!(
+        (report.removed, report.attempted, report.batches),
+        (0, 0, 0)
+    );
+    assert_eq!(*progress.lock().unwrap(), vec![1, 2, 3, 4, 5]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_remove_files_stops_at_failure_and_reports_a_confirmed_input_prefix() {
+    let _serial = SERIAL.lock().await;
+    FaultInjection::clear();
+    let (op, stats) = storage(&[("e/files/", 4)]).await;
+    let deleter = AdaptiveDeleter::new(op.clone(), stats, config()).unwrap();
+    let paths = ["e/files/2", "e/files/0", "e/files/3"].map(String::from);
+    let fault = FaultInjection::install(
+        FaultRule::new(FaultOp::Delete, "e/files/0", FaultKind::Permanent).times(1),
+    );
+
+    let report = deleter.remove_files(paths.clone()).await;
+    assert_eq!(report.error.unwrap().kind(), ErrorKind::Unexpected);
+    assert_eq!(
+        (report.removed, report.attempted, report.batches),
+        (1, 2, 2)
+    );
+    assert!(!op.exists(&paths[0]).await.unwrap());
+    assert!(op.exists(&paths[1]).await.unwrap());
+    assert!(
+        op.exists(&paths[2]).await.unwrap(),
+        "later input was not attempted"
+    );
+    assert!(
+        op.exists("e/files/1").await.unwrap(),
+        "unselected path untouched"
+    );
+    fault.remove();
+
+    let report = deleter.remove_files(paths.into_iter().skip(1)).await;
+    assert!(report.error.is_none());
+    assert_eq!((report.removed, report.attempted), (2, 2));
+    assert_eq!(count(&op, "e/files/").await, 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_remove_files_observes_hidden_retries_once() {
+    let _serial = SERIAL.lock().await;
+    FaultInjection::clear();
+    let (op, stats) = storage(&[("f/files/", 3)]).await;
+    let deleter = AdaptiveDeleter::new(op.clone(), stats.clone(), config()).unwrap();
+    let paths: Vec<_> = (0..3).map(|i| format!("f/files/{i}")).collect();
+    let faults: Vec<_> = paths
+        .iter()
+        .map(|path| {
+            FaultInjection::install(
+                FaultRule::new(FaultOp::Delete, path, FaultKind::Temporary).times(1),
+            )
+        })
+        .collect();
+
+    let report = deleter.remove_files(paths).await;
+    assert!(report.error.is_none());
+    assert_eq!(
+        (report.removed, report.attempted, report.batches),
+        (3, 3, 3)
+    );
+    assert_eq!(report.retried, 3);
+    assert_eq!(stats.retried(), 3);
+    assert_eq!(stats.rate_limited(), 0);
+    assert_eq!(deleter.concurrency(), 2, "sparse retries hold the bound");
+    assert_eq!(count(&op, "f/files/").await, 0);
+    for fault in faults {
+        assert_eq!(fault.hits(), 1);
+        fault.remove();
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_remove_files_and_remove_all_share_one_request_bound() {
+    let _serial = SERIAL.lock().await;
+    FaultInjection::clear();
+    let gate = Arc::new(Gate::default());
+    let op = Operator::new(Memory::default())
+        .unwrap()
+        .layer(GateLayer(gate.clone()))
+        .finish();
+    for i in 0..6 {
+        op.write(&format!("g/all/{i}"), "x").await.unwrap();
+        op.write(&format!("g/selected/{i}"), "x").await.unwrap();
+    }
+    let deleter = AdaptiveDeleter::new(op.clone(), Arc::default(), AdaptiveConcurrencyConfig {
+        max: 2,
+        ..config()
+    })
+    .unwrap();
+    let paths = (0..6).map(|i| format!("g/selected/{i}"));
+    let observe = async {
+        gate.wait_for_blocked(2).await;
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(gate.blocked(), 2);
+        gate.open();
+    };
+    let (all, selected, ()) = futures::join!(
+        deleter.remove_all("g/all/"),
+        deleter.remove_files(paths),
+        observe,
+    );
+    assert_eq!(all.unwrap().removed, 6);
+    assert!(selected.error.is_none());
+    assert_eq!(selected.removed, 6);
+    assert_eq!(
+        gate.peak(),
+        2,
+        "both entry points use the same request budget"
+    );
+    assert_eq!(count(&op, "g/").await, 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_cancelled_remove_files_releases_its_request_slot() {
+    let _serial = SERIAL.lock().await;
+    FaultInjection::clear();
+    let gate = Arc::new(Gate::default());
+    let op = Operator::new(Memory::default())
+        .unwrap()
+        .layer(GateLayer(gate.clone()))
+        .finish();
+    for i in 0..4 {
+        op.write(&format!("h/files/{i}"), "x").await.unwrap();
+    }
+    let deleter = AdaptiveDeleter::new(op.clone(), Arc::default(), AdaptiveConcurrencyConfig {
+        max: 2,
+        ..config()
+    })
+    .unwrap();
+    {
+        let mut selected = Box::pin(deleter.remove_files(["h/files/0".to_owned()]));
+        tokio::select! {
+            _ = &mut selected => panic!("gate is closed"),
+            _ = gate.wait_for_blocked(1) => {}
+        }
+    }
+    assert_eq!(gate.blocked(), 0);
+    let observe = async {
+        gate.wait_for_blocked(2).await;
+        gate.open();
+    };
+    let (report, ()) = futures::join!(deleter.remove_all("h/files/"), observe);
+    assert_eq!(report.unwrap().removed, 4);
+    assert_eq!(gate.peak(), 2);
 }
 
 #[tokio::test(flavor = "multi_thread")]

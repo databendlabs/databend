@@ -32,7 +32,7 @@ use crate::AdaptiveConcurrencyConfig;
 use crate::ConcurrencyFeedback;
 use crate::RetryStats;
 
-/// Delete whole prefixes with as many concurrent delete requests as the object store accepts.
+/// Delete prefixes or selected paths under a shared adaptive request bound.
 ///
 /// [`Operator::remove_all`] lists the prefix and issues one batch delete after another; one
 /// large table then takes as long as its number of batches times the request latency. This
@@ -44,8 +44,8 @@ use crate::RetryStats;
 /// prefixes it removes (through [`crate::init_operator_observed`] so retries the retry layer
 /// absorbs reach it) and share it, by cloning, across every prefix on that storage so the
 /// bound reflects that storage and not another one. All clones admit batches against the
-/// same bound: it caps the batches in flight across every concurrent [`Self::remove_all`],
-/// not per call.
+/// same bound: it caps batches across every concurrent [`Self::remove_all`] and
+/// [`Self::remove_files`], not per call.
 ///
 /// Memory is bounded by the batches in flight plus, on filesystem-style backends, the
 /// directory entries under the prefix, which are removed after their contents.
@@ -83,6 +83,13 @@ struct Shared {
     /// booked with an increase that adds a permit.
     deficit: Mutex<usize>,
     batch_size: usize,
+    progress: Mutex<Progress>,
+}
+
+#[derive(Default)]
+struct Progress {
+    removed: usize,
+    report: Option<Arc<dyn Fn(usize) + Send + Sync>>,
 }
 
 /// What one [`AdaptiveDeleter::remove_all`] did, for progress reporting.
@@ -97,11 +104,39 @@ pub struct RemoveAllReport {
     pub retried: usize,
 }
 
-/// The result of one batch (its object count on success) and the retries seen while it ran.
-/// A finished batch: its result, the retries seen while it ran, and the slot it still holds
-/// until the policy has seen the outcome.
+/// What one [`AdaptiveDeleter::remove_files`] did, including progress before an error.
+#[derive(Debug, Default)]
+#[must_use = "check the error and attempted count before advancing a manifest or deletion budget"]
+pub struct RemoveFilesReport {
+    /// Confirmed deletions form a contiguous prefix of the input. A failed request may have
+    /// deleted additional paths, which are unconfirmed and must remain eligible for retry.
+    /// Paths beyond `attempted` have not been submitted.
+    pub removed: usize,
+    /// Paths accounted for as attempted, including all paths of a failed request that may
+    /// have partially succeeded. A deletion budget must use this rather than just `removed`.
+    pub attempted: usize,
+    pub batches: usize,
+    /// Retry pressure sampled around each request, not an additive per-request metric.
+    pub retried: usize,
+    pub error: Option<opendal::Error>,
+}
+
+impl RemoveFilesReport {
+    fn absorb(&mut self, other: Self) {
+        self.removed += other.removed;
+        self.attempted += other.attempted;
+        self.batches += other.batches;
+        self.retried += other.retried;
+        if self.error.is_none() {
+            self.error = other.error;
+        }
+    }
+}
+
+/// A finished batch and the slot it still holds until the policy has seen the outcome.
 struct BatchOutcome {
     result: opendal::Result<usize>,
+    attempted: usize,
     retried: usize,
     slot: Slot,
 }
@@ -140,7 +175,8 @@ impl AdaptiveDeleter {
             .info()
             .full_capability()
             .delete_max_size
-            .unwrap_or(1);
+            .unwrap_or(1)
+            .max(1);
         let concurrency = AdaptiveConcurrency::new(config)?;
         let slots = Arc::new(Semaphore::new(concurrency.current()));
         Ok(Self {
@@ -151,13 +187,53 @@ impl AdaptiveDeleter {
                 slots,
                 deficit: Mutex::new(0),
                 batch_size,
+                progress: Mutex::new(Progress::default()),
             }),
         })
+    }
+
+    /// Publish the running total of confirmed deletions after each successful request.
+    /// Configure before starting work; the callback and total are shared by all clones.
+    /// Directory cleanup by `remove_all` is excluded from the total.
+    pub fn with_progress(self, report: Arc<dyn Fn(usize) + Send + Sync>) -> Self {
+        self.shared.progress.lock().unwrap().report = Some(report);
+        self
     }
 
     /// Concurrent batches currently allowed; moves with the backend's feedback.
     pub fn concurrency(&self) -> usize {
         self.shared.concurrency.current()
+    }
+
+    /// Remove selected paths in input order, stopping at the first failed request.
+    ///
+    /// Requests within this call are sequential so `removed` always describes a confirmed
+    /// input prefix, suitable for advancing a manifest. Concurrent calls share the same
+    /// request budget as `remove_all`. Directories, if supplied, must follow their contents.
+    /// No listing or deletion of unselected paths is performed.
+    ///
+    /// Unlike `remove_all`, errors are returned inside the report so callers can retain
+    /// unconfirmed paths and account for a failed request's possible partial deletion.
+    pub async fn remove_files<I>(&self, paths: I) -> RemoveFilesReport
+    where
+        I: IntoIterator<Item = String>,
+        I::IntoIter: Send,
+    {
+        let mut paths = paths.into_iter();
+        let mut report = RemoveFilesReport::default();
+        loop {
+            let batch: Vec<_> = paths.by_ref().take(self.shared.batch_size).collect();
+            if batch.is_empty() {
+                break;
+            }
+            let slot = self.shared.acquire().await;
+            let outcome = self.shared.clone().delete_batch(slot, batch, true).await;
+            report.absorb(self.shared.complete(outcome));
+            if report.error.is_some() {
+                break;
+            }
+        }
+        report
     }
 
     /// Remove every object under `prefix`, and `prefix` itself if it is an object.
@@ -256,9 +332,11 @@ impl Shared {
         counted: bool,
     ) -> BatchOutcome {
         let n = if counted { paths.len() } else { 0 };
+        let mut attempted = 0;
         let before = self.retry_stats.retried();
         let result = async {
             let mut deleter = self.operator.deleter().await?;
+            attempted = paths.len();
             deleter.delete_iter(paths).await?;
             deleter.close().await?;
             Ok(n)
@@ -267,8 +345,47 @@ impl Shared {
         let retried = self.retry_stats.retried().saturating_sub(before) as usize;
         BatchOutcome {
             result,
+            attempted,
             retried,
             slot,
+        }
+    }
+
+    /// Settle a request once, regardless of which public entry point issued it.
+    fn complete(&self, outcome: BatchOutcome) -> RemoveFilesReport {
+        let BatchOutcome {
+            result,
+            attempted,
+            retried,
+            slot,
+        } = outcome;
+        self.observe(
+            ConcurrencyFeedback {
+                failed: result.is_err(),
+                rate_limited: result
+                    .as_ref()
+                    .is_err_and(|e| e.kind() == ErrorKind::RateLimited),
+                retried,
+            },
+            slot,
+        );
+        let (removed, error) = match result {
+            Ok(n) => (n, None),
+            Err(e) => (0, Some(e)),
+        };
+        if removed > 0 {
+            let mut progress = self.progress.lock().unwrap();
+            progress.removed += removed;
+            if let Some(report) = &progress.report {
+                report(progress.removed);
+            }
+        }
+        RemoveFilesReport {
+            removed,
+            attempted,
+            batches: 1,
+            retried,
+            error,
         }
     }
 
@@ -293,6 +410,11 @@ impl Shared {
             }
         } else if after < before {
             *deficit += before - after;
+            log::warn!(
+                "Storage delete pressure: lowering request concurrency from {} to {}",
+                before,
+                after
+            );
         }
         if let Some(permit) = slot.permit.take() {
             Self::give_back(&mut deficit, permit);
@@ -408,32 +530,12 @@ impl Run {
 
     /// Record a finished batch in the report and feed it to the policy.
     fn settle(&mut self, outcome: BatchOutcome) {
-        let BatchOutcome {
-            result,
-            retried,
-            slot,
-        } = outcome;
-        let (failed, rate_limited) = match &result {
-            Ok(n) => {
-                self.report.removed += n;
-                (false, false)
-            }
-            Err(e) => (true, e.kind() == ErrorKind::RateLimited),
-        };
-        self.report.batches += 1;
-        self.report.retried += retried;
-        self.shared.observe(
-            ConcurrencyFeedback {
-                failed,
-                rate_limited,
-                retried,
-            },
-            slot,
-        );
-        if let Err(e) = result
-            && self.first_error.is_none()
-        {
-            self.first_error = Some(e);
+        let report = self.shared.complete(outcome);
+        self.report.removed += report.removed;
+        self.report.batches += report.batches;
+        self.report.retried += report.retried;
+        if self.first_error.is_none() {
+            self.first_error = report.error;
         }
     }
 }

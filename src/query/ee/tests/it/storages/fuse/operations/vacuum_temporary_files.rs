@@ -46,6 +46,7 @@ mod unit {
     use opendal::raw::Timestamp;
     use opendal::raw::oio;
     use opendal::raw::oio::Entry;
+    use parking_lot::Mutex;
 
     #[derive(Clone, Debug)]
     enum StatResult {
@@ -76,6 +77,7 @@ mod unit {
         /// Flushes that still succeed before `failing_batches` kicks in.
         passing_batches: Arc<AtomicUsize>,
         failing_batches: Arc<AtomicUsize>,
+        partial_successes: Arc<AtomicUsize>,
         failure_kind: opendal::ErrorKind,
     }
 
@@ -96,9 +98,16 @@ mod unit {
                     .try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
                     .is_ok();
             if failing {
-                // Nothing of the batch is removed, and it stays pending: temporary, as the
-                // backends classify throttling and transient 5xx, a `RetryLayer` in front of
-                // the mock flushes the same paths again.
+                // Some deletes may have reached the backend even though the whole request
+                // is unacknowledged. Keep every path pending so a retry is idempotent.
+                let n = self
+                    .partial_successes
+                    .swap(0, Ordering::AcqRel)
+                    .min(self.pending.len());
+                self.deleted
+                    .lock()
+                    .extend(self.pending[..n].iter().cloned());
+                // A `RetryLayer`, if present, retries this temporary failure.
                 return Err(
                     opendal::Error::new(self.failure_kind, "mock batch failure").set_temporary()
                 );
@@ -147,6 +156,8 @@ mod unit {
         written: Writes,
         passing_batches: Arc<AtomicUsize>,
         failing_batches: Arc<AtomicUsize>,
+        /// Unacknowledged deletes performed by the next failing request.
+        partial_successes: Arc<AtomicUsize>,
         failure_kind: Mutex<opendal::ErrorKind>,
         list_calls: AtomicUsize,
         read_calls: AtomicUsize,
@@ -169,6 +180,7 @@ mod unit {
                 written: Arc::new(Mutex::new(Vec::new())),
                 passing_batches: Arc::new(AtomicUsize::new(0)),
                 failing_batches: Arc::new(AtomicUsize::new(0)),
+                partial_successes: Arc::new(AtomicUsize::new(0)),
                 failure_kind: Mutex::new(opendal::ErrorKind::RateLimited),
                 list_calls: AtomicUsize::new(0),
                 read_calls: AtomicUsize::new(0),
@@ -195,6 +207,11 @@ mod unit {
             *self.failure_kind.lock() = kind;
             self.passing_batches.store(ok, Ordering::Release);
             self.failing_batches.store(n, Ordering::Release);
+        }
+
+        fn partially_fail_batch_after(&self, ok: usize, removed: usize, kind: opendal::ErrorKind) {
+            self.fail_batches_after(ok, 1, kind);
+            self.partial_successes.store(removed, Ordering::Release);
         }
 
         fn deleted_paths(&self) -> Vec<String> {
@@ -295,6 +312,7 @@ mod unit {
                 pending: Vec::new(),
                 passing_batches: self.passing_batches.clone(),
                 failing_batches: self.failing_batches.clone(),
+                partial_successes: self.partial_successes.clone(),
                 failure_kind: *self.failure_kind.lock(),
             }))
         }
@@ -429,38 +447,45 @@ mod unit {
         }
     }
 
-    #[test]
-    fn test_delete_outcome_preserves_concurrency_feedback() {
-        for outcome in [clear(), failed(), rate_limited(), retried(3)] {
-            let feedback = outcome.feedback();
-            assert_eq!(feedback.failed, outcome.failed);
-            assert_eq!(feedback.rate_limited, outcome.rate_limited);
-            assert_eq!(feedback.retried, outcome.retried);
-        }
-    }
-
-    #[test]
-    fn test_run_settles_feedback_into_shared_concurrency_policy() {
-        let mut run = Run::new(usize::MAX);
-        let initial = run.concurrency.current();
-        let settle = |run: &mut Run, delete| {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_shared_deleter_observes_requests_not_directory_outcomes() {
+        let accessor = MockVacuumAccessor::new(HashMap::new(), HashMap::new(), HashMap::new());
+        let deleter = SpillDeleter::new(
+            OperatorBuilder::new(accessor.clone()).finish(),
+            Arc::default(),
+        );
+        let initial = deleter.deleter.concurrency();
+        let mut run = Run::new(usize::MAX, deleter.deleter.clone());
+        // Sixteen successful requests raise the shared bound once. Settling their directory
+        // outcomes only accounts for the budget, not a second concurrency feedback signal.
+        for i in 0..16 {
+            let delete = deleter
+                .delete(vec![format!("spill/dir/file{i}")], "spill/dir/")
+                .await;
             run.settle(DirOutcome {
-                dir_path: "spill/test/".to_owned(),
-                delete,
+                dir_path: "spill/dir/".to_owned(),
+                delete: Some(delete),
             });
-        };
+        }
+        let raised = initial + 1;
+        assert_eq!(deleter.deleter.concurrency(), raised);
+        assert_eq!(run.budget.removed(), 16);
+        assert_eq!(run.budget.charged(), 16);
 
-        settle(&mut run, None);
-        settle(&mut run, Some(failed()));
-        settle(&mut run, Some(retried(1)));
-        assert_eq!(run.concurrency.current(), initial);
-
-        settle(&mut run, Some(rate_limited()));
-        assert_eq!(run.concurrency.current(), initial / 2);
-        settle(&mut run, Some(rate_limited()));
-        assert_eq!(run.concurrency.current(), initial / 2);
-        assert_eq!(run.budget.removed(), 1);
-        assert_eq!(run.budget.charged(), 4);
+        // An exhausted rate-limited request lowers the bound before a directory is settled.
+        accessor.throttle_next_batches(1);
+        let delete = deleter
+            .delete(vec!["spill/dir/failed".to_owned()], "spill/dir/")
+            .await;
+        assert!(delete.failed && delete.rate_limited);
+        assert_eq!(deleter.deleter.concurrency(), raised / 2);
+        run.settle(DirOutcome {
+            dir_path: "spill/dir/".to_owned(),
+            delete: Some(delete),
+        });
+        assert_eq!(deleter.deleter.concurrency(), raised / 2);
+        assert_eq!(run.budget.removed(), 16);
+        assert_eq!(run.budget.charged(), 17);
     }
 
     #[test]
@@ -581,6 +606,71 @@ mod unit {
                 !scheduled().continues_after(&outcome),
                 "{kind:?}: a retried batch ends a scheduled task"
             );
+        }
+        Ok(())
+    }
+
+    /// The shared deleter observes the retry, while the spill caller still decides whether
+    /// to stop between manifest chunks: scheduled cleanup defers, query-finish cleanup drains.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_hidden_retry_preserves_scheduled_and_query_hook_pacing() -> anyhow::Result<()> {
+        for kind in [
+            opendal::ErrorKind::Unexpected,
+            opendal::ErrorKind::RateLimited,
+        ] {
+            for query_hook in [false, true] {
+                let mut lines: Vec<_> = (0..DELETE_BATCH_FILES + 5)
+                    .map(|i| format!("spill/dir/file{i}"))
+                    .collect();
+                lines.extend(["spill/dir/".to_owned(), "spill/dir.list".to_owned()]);
+                let accessor = MockVacuumAccessor::new(
+                    HashMap::new(),
+                    HashMap::new(),
+                    HashMap::from([(
+                        "spill/dir.list".to_owned(),
+                        ReadResult::Buffer(Buffer::from(lines.join("\n"))),
+                    )]),
+                );
+                let stats = Arc::new(RetryStats::default());
+                let operator = OperatorBuilder::new(accessor.clone())
+                    .layer(
+                        RetryLayer::new()
+                            .with_min_delay(Duration::ZERO)
+                            .with_max_delay(Duration::ZERO)
+                            .with_max_times(3)
+                            .with_notify(DatabendRetryInterceptor::new(Some(stats.clone()))),
+                    )
+                    .finish();
+                let deleter = SpillDeleter::new(operator, stats);
+                accessor.fail_next_batches(1, kind);
+                let pacing = if query_hook {
+                    Pacing::Drain
+                } else {
+                    scheduled()
+                };
+                let outcome =
+                    delete_by_meta(&deleter, "spill/", "spill/dir.list", usize::MAX, &pacing)
+                        .await?
+                        .outcome();
+                assert!(!outcome.failed);
+                assert_eq!(outcome.retried, 1);
+                if query_hook {
+                    assert_eq!(outcome.removed, lines.len());
+                    assert_eq!(accessor.deleted_paths(), lines);
+                    assert!(
+                        accessor.written().is_empty(),
+                        "drained manifest needs no rewrite"
+                    );
+                } else {
+                    assert_eq!(outcome.removed, DELETE_BATCH_FILES);
+                    assert_eq!(accessor.deleted_paths(), lines[..DELETE_BATCH_FILES]);
+                    assert_eq!(accessor.written(), vec![(
+                        "spill/dir.list".to_owned(),
+                        lines[DELETE_BATCH_FILES..].join("\n"),
+                    )]);
+                }
+                assert_eq!(outcome.charged, outcome.removed);
+            }
         }
         Ok(())
     }
@@ -1162,6 +1252,100 @@ mod unit {
             "spill/dir.list".to_string(),
             lines[2..].join("\n")
         )]);
+        Ok(())
+    }
+
+    /// A request can delete some objects and still return an error. Only preceding,
+    /// acknowledged requests advance the manifest; the failed request is charged in full
+    /// and all its paths remain retryable, including any that were actually removed.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_unacknowledged_partial_deletion_is_charged_and_retried() -> anyhow::Result<()> {
+        for kind in [
+            opendal::ErrorKind::RateLimited,
+            opendal::ErrorKind::Unexpected,
+        ] {
+            let lines: Vec<_> = (0..5).map(|i| format!("spill/dir/file{i}")).collect();
+            let accessor = MockVacuumAccessor::new(
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::from([(
+                    "spill/dir.list".to_owned(),
+                    ReadResult::Buffer(Buffer::from(lines.join("\n"))),
+                )]),
+            );
+            accessor.set_delete_max_size(2);
+            // First request deletes files 0,1; second deletes file 2 but reports failure.
+            accessor.partially_fail_batch_after(1, 1, kind);
+            let progress = Arc::new(Mutex::new(Vec::new()));
+            let sink = progress.clone();
+            let deleter = SpillDeleter::with_report(
+                OperatorBuilder::new(accessor.clone()).finish(),
+                Arc::default(),
+                Some(Arc::new(move |n| sink.lock().push(n))),
+            );
+            let outcome =
+                delete_by_meta(&deleter, "spill/", "spill/dir.list", 100, &scheduled()).await?;
+            let MetaVacuum::Partial(outcome) = outcome else {
+                panic!("{kind:?}: a failed request must stop the task");
+            };
+            assert!(outcome.failed);
+            assert_eq!(outcome.removed, 2, "only confirmed deletions are reported");
+            assert_eq!(
+                outcome.charged, 4,
+                "both paths of the failed request consume budget"
+            );
+            assert_eq!(accessor.deleted_paths(), lines[..3]);
+            assert_eq!(
+                *progress.lock(),
+                vec![2],
+                "unacknowledged work is not progress"
+            );
+            let remaining = lines[2..].join("\n");
+            assert_eq!(accessor.written(), vec![(
+                "spill/dir.list".to_owned(),
+                remaining.clone()
+            )]);
+            assert!(
+                !accessor
+                    .deleted_paths()
+                    .iter()
+                    .any(|p| p.ends_with(".list"))
+            );
+
+            // A later pass reads the rewritten manifest. It retries file 2 (safe even though
+            // it was removed), finishes the remaining files and finally removes the metadata.
+            let resumed = MockVacuumAccessor::new(
+                HashMap::new(),
+                HashMap::new(),
+                HashMap::from([(
+                    "spill/dir.list".to_owned(),
+                    ReadResult::Buffer(Buffer::from(remaining)),
+                )]),
+            );
+            resumed.set_delete_max_size(2);
+            let deleter = Arc::new(SpillDeleter::new(
+                OperatorBuilder::new(resumed.clone()).finish(),
+                Arc::default(),
+            ));
+            let outcome = vacuum_meta_entry(
+                deleter,
+                Arc::from("spill/"),
+                "spill/dir.list".to_owned(),
+                100,
+                scheduled(),
+            )
+            .await?;
+            let outcome = outcome
+                .delete
+                .expect("resumed cleanup attempted the remaining paths");
+            assert!(!outcome.failed);
+            assert_eq!((outcome.removed, outcome.charged), (5, 5));
+            let deleted = resumed.deleted_paths();
+            assert!(deleted.starts_with(&lines[2..]));
+            assert!(deleted.contains(&"spill/dir.list".to_owned()));
+            assert!(deleted.contains(&"spill/dir/".to_owned()));
+            assert!(!deleted.contains(&lines[0]) && !deleted.contains(&lines[1]));
+        }
         Ok(())
     }
 

@@ -65,6 +65,7 @@ pub use adaptive_concurrency::ConcurrencyFeedback;
 mod adaptive_deleter;
 pub use adaptive_deleter::AdaptiveDeleter;
 pub use adaptive_deleter::RemoveAllReport;
+pub use adaptive_deleter::RemoveFilesReport;
 
 mod concurrent_limit_layer;
 pub use concurrent_limit_layer::ConcurrentLimitLayer;
