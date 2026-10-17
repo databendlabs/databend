@@ -43,6 +43,7 @@ use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_meta_app::schema::is_materialized_view_engine;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_sql::DefinitionScope;
 use databend_common_sql::Planner;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::plans::AlterSharePlanAction;
@@ -2335,7 +2336,10 @@ impl AccessChecker for PrivilegeAccess {
                 }
             }
             Plan::CreateView(plan) => {
-                let mut planner = Planner::new(self.ctx.clone());
+                let mut planner = Planner::new(self.ctx.clone()).with_definition_scope(DefinitionScope::in_namespace(
+                    plan.catalog.clone(),
+                    plan.database.clone(),
+                ));
                 let (plan, _) = planner.plan_sql(&plan.subquery).await?;
                 self.check(ctx, &plan).await?
             }

@@ -412,6 +412,9 @@ struct ReplayView {
     view: String,
     #[educe(PartialEq(ignore), PartialOrd(ignore))]
     query: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[educe(PartialEq(ignore), PartialOrd(ignore))]
+    query_namespace: Option<(String, String)>,
 }
 
 #[derive(Educe, serde::Serialize)]
@@ -533,6 +536,9 @@ impl TraceCollector {
                 database: table_entry.database().to_string(),
                 view: table_entry.name().to_string(),
                 query: query.clone(),
+                query_namespace: databend_storages_common_table_meta::table::stored_query_namespace(
+                    table.options(),
+                ),
             });
         }
     }

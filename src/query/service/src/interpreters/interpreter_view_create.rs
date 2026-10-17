@@ -20,11 +20,14 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_sql::DefinitionScope;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::CreateViewPlan;
 use databend_common_sql::plans::Plan;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
+use databend_storages_common_table_meta::table::OPT_KEY_QUERY_CATALOG;
+use databend_storages_common_table_meta::table::OPT_KEY_QUERY_DATABASE;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::util::check_view_circular_dependency;
@@ -60,7 +63,12 @@ impl Interpreter for CreateViewInterpreter {
             let tenant = self.ctx.get_tenant();
             let table_function = catalog.list_table_functions();
             let mut options = BTreeMap::new();
-            let mut planner = Planner::new(self.ctx.clone());
+            let mut planner = Planner::new(self.ctx.clone()).with_definition_scope(
+                DefinitionScope::in_namespace(
+                    self.plan.catalog.clone(),
+                    self.plan.database.clone(),
+                ),
+            );
             let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
             match plan.clone() {
                 Plan::Query { metadata, .. } => {
@@ -117,6 +125,11 @@ impl Interpreter for CreateViewInterpreter {
                 )
             };
             options.insert(QUERY.to_string(), subquery);
+            options.insert(OPT_KEY_QUERY_CATALOG.to_string(), self.plan.catalog.clone());
+            options.insert(
+                OPT_KEY_QUERY_DATABASE.to_string(),
+                self.plan.database.clone(),
+            );
 
             let plan = CreateTableReq {
                 create_option: self.plan.create_option,

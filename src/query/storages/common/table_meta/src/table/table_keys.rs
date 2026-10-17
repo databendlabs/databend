@@ -32,6 +32,10 @@ pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_STORAGE_PREFIX: &str = "storage_prefix";
 pub const OPT_KEY_TEMP_PREFIX: &str = "temp_prefix";
 pub const OPT_KEY_RECURSIVE_CTE: &str = "recursive_cte";
+/// Default namespace for unqualified table references in a stored query definition.
+pub const OPT_KEY_QUERY_CATALOG: &str = "query_catalog";
+pub const OPT_KEY_QUERY_DATABASE: &str = "query_database";
+
 pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
 pub const OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION: &str =
     "materialized_view_source_snapshot_location";
@@ -141,6 +145,8 @@ pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_CLONE_GROUP_ID);
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_RECURSIVE_CTE);
+    r.insert(OPT_KEY_QUERY_CATALOG);
+    r.insert(OPT_KEY_QUERY_DATABASE);
     r.insert(OPT_KEY_PARTITION_BY);
     r.insert(OPT_KEY_CLUSTER_TYPE);
     r.insert(OPT_KEY_MATERIALIZED_VIEW_SOURCE_SNAPSHOT_LOCATION);
@@ -162,6 +168,8 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER);
     r.insert(OPT_KEY_TEMP_PREFIX);
+    r.insert(OPT_KEY_QUERY_CATALOG);
+    r.insert(OPT_KEY_QUERY_DATABASE);
     r.insert(OPT_KEY_RECURSIVE_CTE);
     r.insert(OPT_KEY_PARTITION_BY);
     r.insert(OPT_KEY_CLUSTER_TYPE);
@@ -175,6 +183,13 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_SOURCE_TABLE_IDS);
     r
 });
+
+pub fn stored_query_namespace(options: &BTreeMap<String, String>) -> Option<(String, String)> {
+    Some((
+        options.get(OPT_KEY_QUERY_CATALOG)?.clone(),
+        options.get(OPT_KEY_QUERY_DATABASE)?.clone(),
+    ))
+}
 
 pub fn is_reserved_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
     RESERVED_TABLE_OPTION_KEYS.contains(opt_key.as_ref().to_lowercase().as_str())
@@ -268,6 +283,22 @@ mod tests {
         assert!(is_internal_opt_key(OPT_KEY_CLUSTER_TYPE));
         assert!(is_reserved_opt_key(OPT_KEY_CLONE_GROUP_ID));
         assert!(is_internal_opt_key(OPT_KEY_CLONE_GROUP_ID));
+    }
+
+    #[test]
+    fn test_stored_query_metadata_is_reserved_and_internal() {
+        for key in [OPT_KEY_QUERY_CATALOG, OPT_KEY_QUERY_DATABASE] {
+            assert!(is_reserved_opt_key(key));
+            assert!(is_internal_opt_key(key));
+        }
+        let mut options = BTreeMap::new();
+        assert_eq!(stored_query_namespace(&options), None);
+        options.insert(OPT_KEY_QUERY_CATALOG.to_string(), "default".to_string());
+        options.insert(OPT_KEY_QUERY_DATABASE.to_string(), "db".to_string());
+        assert_eq!(
+            stored_query_namespace(&options),
+            Some(("default".to_string(), "db".to_string()))
+        );
     }
 
     #[test]
