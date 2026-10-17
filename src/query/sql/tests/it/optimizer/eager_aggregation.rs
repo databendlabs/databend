@@ -12,19 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::ir::SExprVisitor;
 use databend_common_sql::optimizer::ir::StatContext;
-use databend_common_sql::optimizer::ir::VisitAction;
 use databend_common_sql::optimizer::optimizers::operator::PullUpFilterOptimizer;
 use databend_common_sql::optimizer::optimizers::operator::RuleNormalizeAggregateOptimizer;
 use databend_common_sql::optimizer::optimizers::operator::RuleStatsAggregateOptimizer;
 use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
 use databend_common_sql::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
-use databend_common_sql::optimizer::optimizers::rule::EagerAggregationOptimizer;
 use databend_common_sql::optimizer::optimizers::rule::Rule;
 use databend_common_sql::optimizer::optimizers::rule::RuleEagerAggregation;
 use databend_common_sql::optimizer::optimizers::rule::TransformResult;
@@ -69,7 +68,7 @@ async fn write_rule_results(file: &mut impl std::io::Write, case: &SqlTestCase) 
         rule: RuleEagerAggregation::new(metadata.clone()),
         results: TransformResult::new(),
     };
-    before_expr.accept(&mut extractor)?;
+    extractor.extract(&before_expr)?;
     let results = extractor.results.results();
     for (result_index, result) in results.iter().enumerate() {
         result.validate_types(metadata)?;
@@ -125,32 +124,46 @@ fn write_rank_limit_positions(
     Ok(())
 }
 
-/// Applies `RuleEagerAggregation` to the first node that yields candidates.
+/// Applies the rule at the first matching node and preserves its ancestors in
+/// every candidate, so the golden also checks surrounding Sort/TopN/Limit nodes.
 struct Extractor {
     rule: RuleEagerAggregation,
     results: TransformResult,
 }
 
-impl SExprVisitor for Extractor {
-    fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
-        if !self.results.results().is_empty() {
-            return Ok(VisitAction::SkipChildren);
-        }
+impl Extractor {
+    fn extract(&mut self, expr: &SExpr) -> Result<()> {
         self.rule.apply(expr, &mut self.results)?;
-        Ok(if self.results.results().is_empty() {
-            VisitAction::Continue
-        } else {
-            VisitAction::SkipChildren
-        })
+        if !self.results.results().is_empty() {
+            return Ok(());
+        }
+        for (child_index, child) in expr.children().enumerate() {
+            self.extract(child)?;
+            if self.results.results().is_empty() {
+                continue;
+            }
+            let mut results = TransformResult::new();
+            for result in self.results.results() {
+                results.add_result(expr.replace_children(expr.children.iter().enumerate().map(
+                    |(index, child)| {
+                        if index == child_index {
+                            Arc::new(result.clone())
+                        } else {
+                            child.clone()
+                        }
+                    },
+                )));
+            }
+            self.results = results;
+            break;
+        }
+        Ok(())
     }
 }
 
 /// Mirrors the production pipeline up to the point where `RuleEagerAggregation` runs,
 /// without the cost-based join reordering in between.
-async fn optimize_before(
-    opt_ctx: std::sync::Arc<OptimizerContext>,
-    s_expr: &SExpr,
-) -> Result<SExpr> {
+async fn optimize_before(opt_ctx: Arc<OptimizerContext>, s_expr: &SExpr) -> Result<SExpr> {
     let expr = RuleStatsAggregateOptimizer::new(opt_ctx.clone())
         .optimize_async(s_expr.clone())
         .await?;
@@ -205,6 +218,53 @@ async fn test_eager_aggregation_rule_results() -> Result<()> {
 FROM eager_count_l l JOIN eager_count_r r ON l.k = r.k",
         },
         SqlTestCase {
+            name: "scalar_min_opposite_nullable_count",
+            description: "Every candidate must preserve opposite-side COUNT multiplicity; only the two-sided rewrite can weight a raw nullable COUNT.",
+            setup_sqls: &[
+                "CREATE TABLE eager_count_l (k INT NOT NULL, v INT NULL)",
+                "CREATE TABLE eager_count_r (k INT NOT NULL, v INT NULL)",
+            ],
+            sql: "SELECT min(l.v), count(r.v)
+FROM eager_count_l l JOIN eager_count_r r ON l.k = r.k",
+        },
+        SqlTestCase {
+            name: "scalar_nullable_count_opposite_min",
+            description: "A one-sided eager COUNT remains legal when the untouched side only contributes MIN.",
+            setup_sqls: &[
+                "CREATE TABLE eager_count_l (k INT NOT NULL, v INT NULL)",
+                "CREATE TABLE eager_count_r (k INT NOT NULL, v INT NULL)",
+            ],
+            sql: "SELECT count(l.v), min(r.v)
+FROM eager_count_l l JOIN eager_count_r r ON l.k = r.k",
+        },
+        SqlTestCase {
+            name: "scalar_nullable_counts_from_both_sides",
+            description: "Both nullable COUNTs must be weighted by the opposite row count and restored to zero on empty input.",
+            setup_sqls: &[
+                "CREATE TABLE eager_count_l (k INT NOT NULL, v INT NULL)",
+                "CREATE TABLE eager_count_r (k INT NOT NULL, v INT NULL)",
+            ],
+            sql: "SELECT count(l.v), count(r.v)
+FROM eager_count_l l JOIN eager_count_r r ON l.k = r.k",
+        },
+        SqlTestCase {
+            name: "scalar_min_max_with_count_star_assignments",
+            description: "COUNT(*) can be assigned to either already-bound side; only its left assignment permits a one-sided candidate.",
+            setup_sqls: &[
+                "CREATE TABLE eager_count_l (k INT NOT NULL, v INT NULL)",
+                "CREATE TABLE eager_count_r (k INT NOT NULL, v INT NULL)",
+            ],
+            sql: "SELECT min(l.v), max(r.v), count(*)
+FROM eager_count_l l JOIN eager_count_r r ON l.k = r.k",
+        },
+        SqlTestCase {
+            name: "mixed_sum_count_is_not_eager",
+            description: "A visible SUM and COUNT must trigger the mixed-aggregate guard, independently of DISTINCT or unsupported functions.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT sum(o_totalprice), count(*)
+FROM orders JOIN lineitem ON o_orderkey = l_orderkey",
+        },
+        SqlTestCase {
             name: "q5_sum_plus_constant",
             description: "Original pre-#19579 SUM output used by a scalar expression.",
             setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
@@ -247,6 +307,15 @@ FROM eager_count_l l JOIN eager_count_r r ON l.k = r.k",
             sql: Q11,
         },
         SqlTestCase {
+            name: "non_equi_join_is_not_eager",
+            description: "Plain equi keys do not make preaggregation safe when a cross-side residual still filters individual joined rows.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT o_custkey, sum(o_totalprice)
+FROM orders JOIN lineitem
+  ON o_orderkey = l_orderkey AND o_totalprice > l_extendedprice
+GROUP BY o_custkey",
+        },
+        SqlTestCase {
             name: "grouping_sets_are_not_eager",
             description: "Grouping-set descriptors must not be copied to pruned join inputs.",
             setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
@@ -281,6 +350,14 @@ GROUP BY CUBE (o_custkey)",
             description: "#20591 shape: the join side filter can drop the first groups of the other side, so a rank limit below the join returns too few rows.",
             setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
             sql: Q13,
+        },
+        SqlTestCase {
+            name: "top_n_on_aggregate_expression",
+            description: "Every candidate retains the whole query's descending aggregate ordering, limit and offset.",
+            setup_sqls: &[ORDERS_TABLE, LINEITEM_TABLE],
+            sql: "SELECT o_orderkey, sum(l_extendedprice) + 1 AS s
+FROM lineitem JOIN orders ON o_orderkey = l_orderkey
+GROUP BY o_orderkey ORDER BY s DESC LIMIT 5 OFFSET 2",
         },
         SqlTestCase {
             name: "sum_distinct_is_not_eager",
@@ -366,9 +443,18 @@ GROUP BY ss_store_sk",
         unreachable!("test query should bind to Plan::Query")
     };
 
-    let rewritten =
-        EagerAggregationOptimizer::new(metadata.clone()).optimize_sync(s_expr.logical()?)?;
-    rewritten.validate_types(&metadata)?;
+    let mut extractor = Extractor {
+        rule: RuleEagerAggregation::new(metadata.clone()),
+        results: TransformResult::new(),
+    };
+    extractor.extract(s_expr.logical()?)?;
+    // Check SingleGroupBy, SingleCount and SingleDouble, not just the last
+    // candidate selected by the forced optimizer (or an unchanged original plan).
+    assert_eq!(extractor.results.results().len(), 3);
+    for result in extractor.results.results() {
+        result.validate_types(&metadata)?;
+        result.validate_column_scope(&metadata)?;
+    }
 
     Ok(())
 }
@@ -406,48 +492,6 @@ GROUP BY ss_store_sk"
         RuleEagerAggregation::new(metadata.clone()).apply(s_expr.logical()?, &mut results)?;
         assert_eq!(!results.results().is_empty(), eligible, "{aggregate}");
         for result in results.results() {
-            result.validate_types(&metadata)?;
-            result.validate_column_scope(&metadata)?;
-        }
-    }
-    Ok(())
-}
-
-// Sort/TopN above the aggregate and an aggregate nested below the join must still
-// produce valid candidates.
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_eager_aggregation_split_boundary_candidates() -> Result<()> {
-    for sql in [
-        Q0,
-        Q3,
-        "SELECT o_orderkey, sum(l_extendedprice) + 1 AS s
-FROM lineitem JOIN orders ON o_orderkey = l_orderkey
-GROUP BY o_orderkey ORDER BY s DESC LIMIT 5",
-    ] {
-        let case = SqlTestCase {
-            name: "split_boundary_candidates",
-            description: "Sort/TopN and nested aggregates still yield valid eager candidates.",
-            setup_sqls: &[CUSTOMER_TABLE, ORDERS_TABLE, LINEITEM_TABLE],
-            sql,
-        };
-        let ctx = setup_context(&case).await?;
-        let Plan::Query {
-            s_expr, metadata, ..
-        } = ctx.bind_sql(sql).await?
-        else {
-            unreachable!("test query should bind to Plan::Query")
-        };
-        let opt_ctx =
-            OptimizerContext::new(ctx.clone(), metadata.clone(), ctx.get_function_context()?);
-        let before = optimize_before(opt_ctx, s_expr.logical()?).await?;
-        let mut extractor = Extractor {
-            rule: RuleEagerAggregation::new(metadata.clone()),
-            results: TransformResult::new(),
-        };
-        before.accept(&mut extractor)?;
-        let results = extractor.results.results();
-        assert!(!results.is_empty(), "{sql}");
-        for result in results {
             result.validate_types(&metadata)?;
             result.validate_column_scope(&metadata)?;
         }

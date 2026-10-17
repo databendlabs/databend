@@ -56,83 +56,14 @@ Sort
                         └── limit: NONE
 
 apply_plan_0:
-EvalScalar
-├── scalars: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), lineitem.l_orderkey (#17) AS (#17), _eager_final_sum (#40) AS (#34)]
-└── Aggregate(Initial)
-    ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
-    ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) (#34)) AS (#40)]
-    └── Join(Inner)
-        ├── build keys: [lineitem.l_orderkey (#17)]
-        ├── probe keys: [orders.o_orderkey (#0)]
-        ├── other filters: []
-        ├── Aggregate(Initial)
-        │   ├── group items: [lineitem.l_orderkey (#17) AS (#17)]
-        │   ├── aggregate functions: [sum(sum_arg_0 (#33)) AS (#34)]
-        │   └── EvalScalar
-        │       ├── scalars: [lineitem.l_orderkey (#17) AS (#17), multiply(lineitem.l_extendedprice (#22), minus(1, lineitem.l_discount (#23))) AS (#33), lineitem.l_shipdate (#27) AS (#39)]
-        │       └── Scan
-        │           ├── table: default.lineitem (#2)
-        │           ├── filters: [gt(lineitem.l_shipdate (#27), '1995-03-15')]
-        │           ├── order by: []
-        │           └── limit: NONE
-        └── Join(Inner)
-            ├── build keys: [customer.c_custkey (#9)]
-            ├── probe keys: [orders.o_custkey (#1)]
-            ├── other filters: []
-            ├── Scan
-            │   ├── table: default.customer (#1)
-            │   ├── filters: [eq(customer.c_mktsegment (#15), 'BUILDING')]
-            │   ├── order by: []
-            │   └── limit: NONE
-            └── Scan
-                ├── table: default.orders (#0)
-                ├── filters: [lt(orders.o_orderdate (#4), '1995-03-15')]
-                ├── order by: []
-                └── limit: NONE
-
-apply_plan_1:
-EvalScalar
-├── scalars: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), lineitem.l_orderkey (#17) AS (#17), sum(l_extendedprice * (1 - l_discount)) (#34) AS (#34)]
-└── Aggregate(Initial)
-    ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
-    ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) * _eager_count (#42)) AS (#34)]
-    └── EvalScalar
-        ├── scalars: [CAST(multiply(multiply(lineitem.l_extendedprice (#22), minus(1, lineitem.l_discount (#23))), CAST(count(*) (#41) AS UInt64)) AS Decimal(38, 4) NULL) AS (#42)]
-        └── Join(Inner)
-            ├── build keys: [lineitem.l_orderkey (#17)]
-            ├── probe keys: [orders.o_orderkey (#0)]
-            ├── other filters: []
-            ├── Scan
-            │   ├── table: default.lineitem (#2)
-            │   ├── filters: [gt(lineitem.l_shipdate (#27), '1995-03-15')]
-            │   ├── order by: []
-            │   └── limit: NONE
-            └── Aggregate(Initial)
-                ├── group items: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), orders.o_orderkey (#0) AS (#0)]
-                ├── aggregate functions: [count() AS (#41)]
-                └── Join(Inner)
-                    ├── build keys: [customer.c_custkey (#9)]
-                    ├── probe keys: [orders.o_custkey (#1)]
-                    ├── other filters: []
-                    ├── Scan
-                    │   ├── table: default.customer (#1)
-                    │   ├── filters: [eq(customer.c_mktsegment (#15), 'BUILDING')]
-                    │   ├── order by: []
-                    │   └── limit: NONE
-                    └── Scan
-                        ├── table: default.orders (#0)
-                        ├── filters: [lt(orders.o_orderdate (#4), '1995-03-15')]
-                        ├── order by: []
-                        └── limit: NONE
-
-apply_plan_2:
-EvalScalar
-├── scalars: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), lineitem.l_orderkey (#17) AS (#17), _eager_final_sum (#43) AS (#34)]
-└── Aggregate(Initial)
-    ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
-    ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) * _eager_count (#45)) AS (#43)]
-    └── EvalScalar
-        ├── scalars: [CAST(multiply(sum(l_extendedprice * (1 - l_discount)) (#34), CAST(count(*) (#44) AS UInt64)) AS Decimal(38, 4) NULL) AS (#45)]
+Sort
+├── sort keys: [sum(l_extendedprice * (1 - l_discount)) (#34) DESC NULLS LAST, orders.o_orderdate (#4) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), lineitem.l_orderkey (#17) AS (#17), _eager_final_sum (#40) AS (#34)]
+    └── Aggregate(Initial)
+        ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
+        ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) (#34)) AS (#40)]
         └── Join(Inner)
             ├── build keys: [lineitem.l_orderkey (#17)]
             ├── probe keys: [orders.o_orderkey (#0)]
@@ -147,23 +78,101 @@ EvalScalar
             │           ├── filters: [gt(lineitem.l_shipdate (#27), '1995-03-15')]
             │           ├── order by: []
             │           └── limit: NONE
-            └── Aggregate(Initial)
-                ├── group items: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), orders.o_orderkey (#0) AS (#0)]
-                ├── aggregate functions: [count() AS (#44)]
-                └── Join(Inner)
-                    ├── build keys: [customer.c_custkey (#9)]
-                    ├── probe keys: [orders.o_custkey (#1)]
-                    ├── other filters: []
-                    ├── Scan
-                    │   ├── table: default.customer (#1)
-                    │   ├── filters: [eq(customer.c_mktsegment (#15), 'BUILDING')]
-                    │   ├── order by: []
-                    │   └── limit: NONE
-                    └── Scan
-                        ├── table: default.orders (#0)
-                        ├── filters: [lt(orders.o_orderdate (#4), '1995-03-15')]
-                        ├── order by: []
-                        └── limit: NONE
+            └── Join(Inner)
+                ├── build keys: [customer.c_custkey (#9)]
+                ├── probe keys: [orders.o_custkey (#1)]
+                ├── other filters: []
+                ├── Scan
+                │   ├── table: default.customer (#1)
+                │   ├── filters: [eq(customer.c_mktsegment (#15), 'BUILDING')]
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Scan
+                    ├── table: default.orders (#0)
+                    ├── filters: [lt(orders.o_orderdate (#4), '1995-03-15')]
+                    ├── order by: []
+                    └── limit: NONE
+
+apply_plan_1:
+Sort
+├── sort keys: [sum(l_extendedprice * (1 - l_discount)) (#34) DESC NULLS LAST, orders.o_orderdate (#4) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), lineitem.l_orderkey (#17) AS (#17), sum(l_extendedprice * (1 - l_discount)) (#34) AS (#34)]
+    └── Aggregate(Initial)
+        ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
+        ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) * _eager_count (#42)) AS (#34)]
+        └── EvalScalar
+            ├── scalars: [CAST(multiply(multiply(lineitem.l_extendedprice (#22), minus(1, lineitem.l_discount (#23))), CAST(count(*) (#41) AS UInt64)) AS Decimal(38, 4) NULL) AS (#42)]
+            └── Join(Inner)
+                ├── build keys: [lineitem.l_orderkey (#17)]
+                ├── probe keys: [orders.o_orderkey (#0)]
+                ├── other filters: []
+                ├── Scan
+                │   ├── table: default.lineitem (#2)
+                │   ├── filters: [gt(lineitem.l_shipdate (#27), '1995-03-15')]
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Aggregate(Initial)
+                    ├── group items: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), orders.o_orderkey (#0) AS (#0)]
+                    ├── aggregate functions: [count() AS (#41)]
+                    └── Join(Inner)
+                        ├── build keys: [customer.c_custkey (#9)]
+                        ├── probe keys: [orders.o_custkey (#1)]
+                        ├── other filters: []
+                        ├── Scan
+                        │   ├── table: default.customer (#1)
+                        │   ├── filters: [eq(customer.c_mktsegment (#15), 'BUILDING')]
+                        │   ├── order by: []
+                        │   └── limit: NONE
+                        └── Scan
+                            ├── table: default.orders (#0)
+                            ├── filters: [lt(orders.o_orderdate (#4), '1995-03-15')]
+                            ├── order by: []
+                            └── limit: NONE
+
+apply_plan_2:
+Sort
+├── sort keys: [sum(l_extendedprice * (1 - l_discount)) (#34) DESC NULLS LAST, orders.o_orderdate (#4) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), lineitem.l_orderkey (#17) AS (#17), _eager_final_sum (#43) AS (#34)]
+    └── Aggregate(Initial)
+        ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
+        ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) * _eager_count (#45)) AS (#43)]
+        └── EvalScalar
+            ├── scalars: [CAST(multiply(sum(l_extendedprice * (1 - l_discount)) (#34), CAST(count(*) (#44) AS UInt64)) AS Decimal(38, 4) NULL) AS (#45)]
+            └── Join(Inner)
+                ├── build keys: [lineitem.l_orderkey (#17)]
+                ├── probe keys: [orders.o_orderkey (#0)]
+                ├── other filters: []
+                ├── Aggregate(Initial)
+                │   ├── group items: [lineitem.l_orderkey (#17) AS (#17)]
+                │   ├── aggregate functions: [sum(sum_arg_0 (#33)) AS (#34)]
+                │   └── EvalScalar
+                │       ├── scalars: [lineitem.l_orderkey (#17) AS (#17), multiply(lineitem.l_extendedprice (#22), minus(1, lineitem.l_discount (#23))) AS (#33), lineitem.l_shipdate (#27) AS (#39)]
+                │       └── Scan
+                │           ├── table: default.lineitem (#2)
+                │           ├── filters: [gt(lineitem.l_shipdate (#27), '1995-03-15')]
+                │           ├── order by: []
+                │           └── limit: NONE
+                └── Aggregate(Initial)
+                    ├── group items: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), orders.o_orderkey (#0) AS (#0)]
+                    ├── aggregate functions: [count() AS (#44)]
+                    └── Join(Inner)
+                        ├── build keys: [customer.c_custkey (#9)]
+                        ├── probe keys: [orders.o_custkey (#1)]
+                        ├── other filters: []
+                        ├── Scan
+                        │   ├── table: default.customer (#1)
+                        │   ├── filters: [eq(customer.c_mktsegment (#15), 'BUILDING')]
+                        │   ├── order by: []
+                        │   └── limit: NONE
+                        └── Scan
+                            ├── table: default.orders (#0)
+                            ├── filters: [lt(orders.o_orderdate (#4), '1995-03-15')]
+                            ├── order by: []
+                            └── limit: NONE
 
 
 === q1_sum ===
@@ -710,6 +719,363 @@ EvalScalar
                         ├── filters: []
                         ├── order by: []
                         └── limit: NONE
+
+
+=== scalar_min_opposite_nullable_count ===
+description: Every candidate must preserve opposite-side COUNT multiplicity; only the two-sided rewrite can weight a raw nullable COUNT.
+sql: SELECT min(l.v), count(r.v)
+FROM eager_count_l l JOIN eager_count_r r ON l.k = r.k
+before_plan:
+EvalScalar
+├── scalars: [min(l.v) (#4) AS (#4), count(r.v) (#5) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [min(eager_count_l.v (#1)) AS (#4), count(eager_count_r.v (#3)) AS (#5)]
+    └── EvalScalar
+        ├── scalars: [eager_count_l.v (#1) AS (#1), eager_count_r.v (#3) AS (#3), eager_count_l.k (#0) AS (#6), eager_count_r.k (#2) AS (#7)]
+        └── Join(Inner)
+            ├── build keys: [eager_count_r.k (#2)]
+            ├── probe keys: [eager_count_l.k (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.eager_count_r (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.eager_count_l (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+apply_plan_0:
+EvalScalar
+├── scalars: [_eager_final_min (#8) AS (#4), CAST(if(is_not_null(_eager_final_count (#9)), _eager_final_count (#9), 0) AS UInt64) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [min(min(l.v) (#4)) AS (#8), sum(count(r.v) * _eager_count (#12)) AS (#9)]
+    └── EvalScalar
+        ├── scalars: [multiply(count(r.v) (#5), CAST(count(*) (#10) AS UInt64)) AS (#12)]
+        └── Join(Inner)
+            ├── build keys: [eager_count_r.k (#2)]
+            ├── probe keys: [eager_count_l.k (#0)]
+            ├── other filters: []
+            ├── Aggregate(Initial)
+            │   ├── group items: [eager_count_r.k (#2) AS (#2)]
+            │   ├── aggregate functions: [count(eager_count_r.v (#3)) AS (#5), count() AS (#11)]
+            │   └── EvalScalar
+            │       ├── scalars: [eager_count_r.v (#3) AS (#3), eager_count_r.k (#2) AS (#7)]
+            │       └── Scan
+            │           ├── table: default.eager_count_r (#1)
+            │           ├── filters: []
+            │           ├── order by: []
+            │           └── limit: NONE
+            └── Aggregate(Initial)
+                ├── group items: [eager_count_l.k (#0) AS (#0)]
+                ├── aggregate functions: [min(eager_count_l.v (#1)) AS (#4), count() AS (#10)]
+                └── EvalScalar
+                    ├── scalars: [eager_count_l.v (#1) AS (#1), eager_count_l.k (#0) AS (#6)]
+                    └── Scan
+                        ├── table: default.eager_count_l (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+
+=== scalar_nullable_count_opposite_min ===
+description: A one-sided eager COUNT remains legal when the untouched side only contributes MIN.
+sql: SELECT count(l.v), min(r.v)
+FROM eager_count_l l JOIN eager_count_r r ON l.k = r.k
+before_plan:
+EvalScalar
+├── scalars: [count(l.v) (#4) AS (#4), min(r.v) (#5) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count(eager_count_l.v (#1)) AS (#4), min(eager_count_r.v (#3)) AS (#5)]
+    └── EvalScalar
+        ├── scalars: [eager_count_l.v (#1) AS (#1), eager_count_r.v (#3) AS (#3), eager_count_l.k (#0) AS (#6), eager_count_r.k (#2) AS (#7)]
+        └── Join(Inner)
+            ├── build keys: [eager_count_r.k (#2)]
+            ├── probe keys: [eager_count_l.k (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.eager_count_r (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.eager_count_l (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+apply_plan_0:
+EvalScalar
+├── scalars: [CAST(if(is_not_null(_eager_final_count (#8)), _eager_final_count (#8), 0) AS UInt64) AS (#4), min(r.v) (#5) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [sum(count(l.v) (#4)) AS (#8), min(eager_count_r.v (#3)) AS (#5)]
+    └── Join(Inner)
+        ├── build keys: [eager_count_r.k (#2)]
+        ├── probe keys: [eager_count_l.k (#0)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.eager_count_r (#1)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Aggregate(Initial)
+            ├── group items: [eager_count_l.k (#0) AS (#0)]
+            ├── aggregate functions: [count(eager_count_l.v (#1)) AS (#4), count() AS (#9)]
+            └── EvalScalar
+                ├── scalars: [eager_count_l.v (#1) AS (#1), eager_count_l.k (#0) AS (#6)]
+                └── Scan
+                    ├── table: default.eager_count_l (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+apply_plan_1:
+EvalScalar
+├── scalars: [CAST(if(is_not_null(_eager_final_count (#10)), _eager_final_count (#10), 0) AS UInt64) AS (#4), _eager_final_min (#11) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [sum(count(l.v) * _eager_count (#14)) AS (#10), min(min(r.v) (#5)) AS (#11)]
+    └── EvalScalar
+        ├── scalars: [multiply(count(l.v) (#4), CAST(count(*) (#13) AS UInt64)) AS (#14)]
+        └── Join(Inner)
+            ├── build keys: [eager_count_r.k (#2)]
+            ├── probe keys: [eager_count_l.k (#0)]
+            ├── other filters: []
+            ├── Aggregate(Initial)
+            │   ├── group items: [eager_count_r.k (#2) AS (#2)]
+            │   ├── aggregate functions: [min(eager_count_r.v (#3)) AS (#5), count() AS (#13)]
+            │   └── EvalScalar
+            │       ├── scalars: [eager_count_r.v (#3) AS (#3), eager_count_r.k (#2) AS (#7)]
+            │       └── Scan
+            │           ├── table: default.eager_count_r (#1)
+            │           ├── filters: []
+            │           ├── order by: []
+            │           └── limit: NONE
+            └── Aggregate(Initial)
+                ├── group items: [eager_count_l.k (#0) AS (#0)]
+                ├── aggregate functions: [count(eager_count_l.v (#1)) AS (#4), count() AS (#12)]
+                └── EvalScalar
+                    ├── scalars: [eager_count_l.v (#1) AS (#1), eager_count_l.k (#0) AS (#6)]
+                    └── Scan
+                        ├── table: default.eager_count_l (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+
+=== scalar_nullable_counts_from_both_sides ===
+description: Both nullable COUNTs must be weighted by the opposite row count and restored to zero on empty input.
+sql: SELECT count(l.v), count(r.v)
+FROM eager_count_l l JOIN eager_count_r r ON l.k = r.k
+before_plan:
+EvalScalar
+├── scalars: [count(l.v) (#4) AS (#4), count(r.v) (#5) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count(eager_count_l.v (#1)) AS (#4), count(eager_count_r.v (#3)) AS (#5)]
+    └── EvalScalar
+        ├── scalars: [eager_count_l.v (#1) AS (#1), eager_count_r.v (#3) AS (#3), eager_count_l.k (#0) AS (#6), eager_count_r.k (#2) AS (#7)]
+        └── Join(Inner)
+            ├── build keys: [eager_count_r.k (#2)]
+            ├── probe keys: [eager_count_l.k (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.eager_count_r (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.eager_count_l (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+apply_plan_0:
+EvalScalar
+├── scalars: [CAST(if(is_not_null(_eager_final_count (#8)), _eager_final_count (#8), 0) AS UInt64) AS (#4), CAST(if(is_not_null(_eager_final_count (#9)), _eager_final_count (#9), 0) AS UInt64) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [sum(count(l.v) * _eager_count (#12)) AS (#8), sum(count(r.v) * _eager_count (#13)) AS (#9)]
+    └── EvalScalar
+        ├── scalars: [multiply(count(l.v) (#4), CAST(count(*) (#11) AS UInt64)) AS (#12), multiply(count(r.v) (#5), CAST(count(*) (#10) AS UInt64)) AS (#13)]
+        └── Join(Inner)
+            ├── build keys: [eager_count_r.k (#2)]
+            ├── probe keys: [eager_count_l.k (#0)]
+            ├── other filters: []
+            ├── Aggregate(Initial)
+            │   ├── group items: [eager_count_r.k (#2) AS (#2)]
+            │   ├── aggregate functions: [count(eager_count_r.v (#3)) AS (#5), count() AS (#11)]
+            │   └── EvalScalar
+            │       ├── scalars: [eager_count_r.v (#3) AS (#3), eager_count_r.k (#2) AS (#7)]
+            │       └── Scan
+            │           ├── table: default.eager_count_r (#1)
+            │           ├── filters: []
+            │           ├── order by: []
+            │           └── limit: NONE
+            └── Aggregate(Initial)
+                ├── group items: [eager_count_l.k (#0) AS (#0)]
+                ├── aggregate functions: [count(eager_count_l.v (#1)) AS (#4), count() AS (#10)]
+                └── EvalScalar
+                    ├── scalars: [eager_count_l.v (#1) AS (#1), eager_count_l.k (#0) AS (#6)]
+                    └── Scan
+                        ├── table: default.eager_count_l (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+
+=== scalar_min_max_with_count_star_assignments ===
+description: COUNT(*) can be assigned to either already-bound side; only its left assignment permits a one-sided candidate.
+sql: SELECT min(l.v), max(r.v), count(*)
+FROM eager_count_l l JOIN eager_count_r r ON l.k = r.k
+before_plan:
+EvalScalar
+├── scalars: [min(l.v) (#4) AS (#4), max(r.v) (#5) AS (#5), COUNT(*) (#6) AS (#6)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [min(eager_count_l.v (#1)) AS (#4), max(eager_count_r.v (#3)) AS (#5), count() AS (#6)]
+    └── EvalScalar
+        ├── scalars: [eager_count_l.v (#1) AS (#1), eager_count_r.v (#3) AS (#3), eager_count_l.k (#0) AS (#7), eager_count_r.k (#2) AS (#8)]
+        └── Join(Inner)
+            ├── build keys: [eager_count_r.k (#2)]
+            ├── probe keys: [eager_count_l.k (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.eager_count_r (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.eager_count_l (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+apply_plan_0:
+EvalScalar
+├── scalars: [_eager_final_min (#9) AS (#4), max(r.v) (#5) AS (#5), CAST(if(is_not_null(_eager_final_count (#10)), _eager_final_count (#10), 0) AS UInt64) AS (#6)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [min(min(l.v) (#4)) AS (#9), max(eager_count_r.v (#3)) AS (#5), sum(COUNT(*) (#6)) AS (#10)]
+    └── Join(Inner)
+        ├── build keys: [eager_count_r.k (#2)]
+        ├── probe keys: [eager_count_l.k (#0)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.eager_count_r (#1)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Aggregate(Initial)
+            ├── group items: [eager_count_l.k (#0) AS (#0)]
+            ├── aggregate functions: [min(eager_count_l.v (#1)) AS (#4), count() AS (#6), count() AS (#11)]
+            └── EvalScalar
+                ├── scalars: [eager_count_l.v (#1) AS (#1), eager_count_l.k (#0) AS (#7)]
+                └── Scan
+                    ├── table: default.eager_count_l (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+apply_plan_1:
+EvalScalar
+├── scalars: [_eager_final_min (#12) AS (#4), _eager_final_max (#14) AS (#5), CAST(if(is_not_null(_eager_final_count (#13)), _eager_final_count (#13), 0) AS UInt64) AS (#6)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [min(min(l.v) (#4)) AS (#12), max(max(r.v) (#5)) AS (#14), sum(COUNT(*) * _eager_count (#17)) AS (#13)]
+    └── EvalScalar
+        ├── scalars: [multiply(COUNT(*) (#6), CAST(count(*) (#16) AS UInt64)) AS (#17)]
+        └── Join(Inner)
+            ├── build keys: [eager_count_r.k (#2)]
+            ├── probe keys: [eager_count_l.k (#0)]
+            ├── other filters: []
+            ├── Aggregate(Initial)
+            │   ├── group items: [eager_count_r.k (#2) AS (#2)]
+            │   ├── aggregate functions: [max(eager_count_r.v (#3)) AS (#5), count() AS (#16)]
+            │   └── EvalScalar
+            │       ├── scalars: [eager_count_r.v (#3) AS (#3), eager_count_r.k (#2) AS (#8)]
+            │       └── Scan
+            │           ├── table: default.eager_count_r (#1)
+            │           ├── filters: []
+            │           ├── order by: []
+            │           └── limit: NONE
+            └── Aggregate(Initial)
+                ├── group items: [eager_count_l.k (#0) AS (#0)]
+                ├── aggregate functions: [min(eager_count_l.v (#1)) AS (#4), count() AS (#6), count() AS (#15)]
+                └── EvalScalar
+                    ├── scalars: [eager_count_l.v (#1) AS (#1), eager_count_l.k (#0) AS (#7)]
+                    └── Scan
+                        ├── table: default.eager_count_l (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+apply_plan_2:
+EvalScalar
+├── scalars: [_eager_final_min (#18) AS (#4), _eager_final_max (#19) AS (#5), CAST(if(is_not_null(_eager_final_count (#20)), _eager_final_count (#20), 0) AS UInt64) AS (#6)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [min(min(l.v) (#4)) AS (#18), max(max(r.v) (#5)) AS (#19), sum(COUNT(*) * _eager_count (#23)) AS (#20)]
+    └── EvalScalar
+        ├── scalars: [multiply(COUNT(*) (#6), CAST(count(*) (#21) AS UInt64)) AS (#23)]
+        └── Join(Inner)
+            ├── build keys: [eager_count_r.k (#2)]
+            ├── probe keys: [eager_count_l.k (#0)]
+            ├── other filters: []
+            ├── Aggregate(Initial)
+            │   ├── group items: [eager_count_r.k (#2) AS (#2)]
+            │   ├── aggregate functions: [max(eager_count_r.v (#3)) AS (#5), count() AS (#6), count() AS (#22)]
+            │   └── EvalScalar
+            │       ├── scalars: [eager_count_r.v (#3) AS (#3), eager_count_r.k (#2) AS (#8)]
+            │       └── Scan
+            │           ├── table: default.eager_count_r (#1)
+            │           ├── filters: []
+            │           ├── order by: []
+            │           └── limit: NONE
+            └── Aggregate(Initial)
+                ├── group items: [eager_count_l.k (#0) AS (#0)]
+                ├── aggregate functions: [min(eager_count_l.v (#1)) AS (#4), count() AS (#21)]
+                └── EvalScalar
+                    ├── scalars: [eager_count_l.v (#1) AS (#1), eager_count_l.k (#0) AS (#7)]
+                    └── Scan
+                        ├── table: default.eager_count_l (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+
+=== mixed_sum_count_is_not_eager ===
+description: A visible SUM and COUNT must trigger the mixed-aggregate guard, independently of DISTINCT or unsupported functions.
+sql: SELECT sum(o_totalprice), count(*)
+FROM orders JOIN lineitem ON o_orderkey = l_orderkey
+before_plan:
+EvalScalar
+├── scalars: [sum(o_totalprice) (#25) AS (#25), COUNT(*) (#26) AS (#26)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [sum(orders.o_totalprice (#3)) AS (#25), count() AS (#26)]
+    └── EvalScalar
+        ├── scalars: [orders.o_totalprice (#3) AS (#3), orders.o_orderkey (#0) AS (#27), lineitem.l_orderkey (#9) AS (#28)]
+        └── Join(Inner)
+            ├── build keys: [lineitem.l_orderkey (#9)]
+            ├── probe keys: [orders.o_orderkey (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.lineitem (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.orders (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
 
 
 === q5_sum_plus_constant ===
@@ -1338,6 +1704,36 @@ EvalScalar
                 └── limit: NONE
 
 
+=== non_equi_join_is_not_eager ===
+description: Plain equi keys do not make preaggregation safe when a cross-side residual still filters individual joined rows.
+sql: SELECT o_custkey, sum(o_totalprice)
+FROM orders JOIN lineitem
+  ON o_orderkey = l_orderkey AND o_totalprice > l_extendedprice
+GROUP BY o_custkey
+before_plan:
+EvalScalar
+├── scalars: [orders.o_custkey (#1) AS (#1), sum(o_totalprice) (#25) AS (#25)]
+└── Aggregate(Initial)
+    ├── group items: [orders.o_custkey (#1) AS (#1)]
+    ├── aggregate functions: [sum(orders.o_totalprice (#3)) AS (#25)]
+    └── EvalScalar
+        ├── scalars: [orders.o_custkey (#1) AS (#1), orders.o_totalprice (#3) AS (#3), orders.o_orderkey (#0) AS (#26), lineitem.l_orderkey (#9) AS (#27), lineitem.l_extendedprice (#14) AS (#28)]
+        └── Join(Inner)
+            ├── build keys: [lineitem.l_orderkey (#9)]
+            ├── probe keys: [orders.o_orderkey (#0)]
+            ├── other filters: [gt(orders.o_totalprice (#3), lineitem.l_extendedprice (#14))]
+            ├── Scan
+            │   ├── table: default.lineitem (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.orders (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
 === grouping_sets_are_not_eager ===
 description: Grouping-set descriptors must not be copied to pruned join inputs.
 sql: SELECT o_custkey, grouping(o_custkey), sum(l_extendedprice)
@@ -1462,79 +1858,24 @@ TopN
 
 rank_limit_aggregates: above_join=1 below_join=0
 apply_plan_0:
-EvalScalar
-├── scalars: [lineitem.l_orderkey (#0) AS (#0), _eager_final_sum (#27) AS (#25)]
-└── Aggregate(Initial)
-    ├── group items: [lineitem.l_orderkey (#0) AS (#0)]
-    ├── aggregate functions: [sum(sum(l_extendedprice) (#25)) AS (#27)]
-    └── Join(Inner)
-        ├── build keys: [orders.o_orderkey (#16)]
-        ├── probe keys: [lineitem.l_orderkey (#0)]
-        ├── other filters: []
-        ├── Scan
-        │   ├── table: default.orders (#1)
-        │   ├── filters: []
-        │   ├── order by: []
-        │   └── limit: NONE
-        └── Aggregate(Initial)
-            ├── group items: [lineitem.l_orderkey (#0) AS (#0)]
-            ├── aggregate functions: [sum(lineitem.l_extendedprice (#5)) AS (#25)]
-            └── EvalScalar
-                ├── scalars: [lineitem.l_orderkey (#0) AS (#0), lineitem.l_extendedprice (#5) AS (#5)]
-                └── Scan
-                    ├── table: default.lineitem (#0)
-                    ├── filters: []
-                    ├── order by: []
-                    └── limit: NONE
-
-rank_limit_aggregates: above_join=1 below_join=0
-apply_plan_1:
-EvalScalar
-├── scalars: [lineitem.l_orderkey (#0) AS (#0), sum(l_extendedprice) (#25) AS (#25)]
-└── Aggregate(Initial)
-    ├── group items: [lineitem.l_orderkey (#0) AS (#0)]
-    ├── aggregate functions: [sum(sum(l_extendedprice) * _eager_count (#29)) AS (#25)]
-    └── EvalScalar
-        ├── scalars: [CAST(multiply(lineitem.l_extendedprice (#5), CAST(count(*) (#28) AS UInt64)) AS Decimal(18, 2) NULL) AS (#29)]
+TopN
+├── sort keys: [lineitem.l_orderkey (#0) ASC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── EvalScalar
+    ├── scalars: [lineitem.l_orderkey (#0) AS (#0), _eager_final_sum (#27) AS (#25)]
+    └── Aggregate(Initial)
+        ├── group items: [lineitem.l_orderkey (#0) AS (#0)]
+        ├── aggregate functions: [sum(sum(l_extendedprice) (#25)) AS (#27)]
         └── Join(Inner)
             ├── build keys: [orders.o_orderkey (#16)]
             ├── probe keys: [lineitem.l_orderkey (#0)]
             ├── other filters: []
-            ├── Aggregate(Initial)
-            │   ├── group items: [orders.o_orderkey (#16) AS (#16)]
-            │   ├── aggregate functions: [count() AS (#28)]
-            │   └── Scan
-            │       ├── table: default.orders (#1)
-            │       ├── filters: []
-            │       ├── order by: []
-            │       └── limit: NONE
-            └── Scan
-                ├── table: default.lineitem (#0)
-                ├── filters: []
-                ├── order by: []
-                └── limit: NONE
-
-rank_limit_aggregates: above_join=1 below_join=0
-apply_plan_2:
-EvalScalar
-├── scalars: [lineitem.l_orderkey (#0) AS (#0), _eager_final_sum (#30) AS (#25)]
-└── Aggregate(Initial)
-    ├── group items: [lineitem.l_orderkey (#0) AS (#0)]
-    ├── aggregate functions: [sum(sum(l_extendedprice) * _eager_count (#32)) AS (#30)]
-    └── EvalScalar
-        ├── scalars: [CAST(multiply(sum(l_extendedprice) (#25), CAST(count(*) (#31) AS UInt64)) AS Decimal(18, 2) NULL) AS (#32)]
-        └── Join(Inner)
-            ├── build keys: [orders.o_orderkey (#16)]
-            ├── probe keys: [lineitem.l_orderkey (#0)]
-            ├── other filters: []
-            ├── Aggregate(Initial)
-            │   ├── group items: [orders.o_orderkey (#16) AS (#16)]
-            │   ├── aggregate functions: [count() AS (#31)]
-            │   └── Scan
-            │       ├── table: default.orders (#1)
-            │       ├── filters: []
-            │       ├── order by: []
-            │       └── limit: NONE
+            ├── Scan
+            │   ├── table: default.orders (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
             └── Aggregate(Initial)
                 ├── group items: [lineitem.l_orderkey (#0) AS (#0)]
                 ├── aggregate functions: [sum(lineitem.l_extendedprice (#5)) AS (#25)]
@@ -1545,6 +1886,73 @@ EvalScalar
                         ├── filters: []
                         ├── order by: []
                         └── limit: NONE
+
+rank_limit_aggregates: above_join=1 below_join=0
+apply_plan_1:
+TopN
+├── sort keys: [lineitem.l_orderkey (#0) ASC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── EvalScalar
+    ├── scalars: [lineitem.l_orderkey (#0) AS (#0), sum(l_extendedprice) (#25) AS (#25)]
+    └── Aggregate(Initial)
+        ├── group items: [lineitem.l_orderkey (#0) AS (#0)]
+        ├── aggregate functions: [sum(sum(l_extendedprice) * _eager_count (#29)) AS (#25)]
+        └── EvalScalar
+            ├── scalars: [CAST(multiply(lineitem.l_extendedprice (#5), CAST(count(*) (#28) AS UInt64)) AS Decimal(18, 2) NULL) AS (#29)]
+            └── Join(Inner)
+                ├── build keys: [orders.o_orderkey (#16)]
+                ├── probe keys: [lineitem.l_orderkey (#0)]
+                ├── other filters: []
+                ├── Aggregate(Initial)
+                │   ├── group items: [orders.o_orderkey (#16) AS (#16)]
+                │   ├── aggregate functions: [count() AS (#28)]
+                │   └── Scan
+                │       ├── table: default.orders (#1)
+                │       ├── filters: []
+                │       ├── order by: []
+                │       └── limit: NONE
+                └── Scan
+                    ├── table: default.lineitem (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+rank_limit_aggregates: above_join=1 below_join=0
+apply_plan_2:
+TopN
+├── sort keys: [lineitem.l_orderkey (#0) ASC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── EvalScalar
+    ├── scalars: [lineitem.l_orderkey (#0) AS (#0), _eager_final_sum (#30) AS (#25)]
+    └── Aggregate(Initial)
+        ├── group items: [lineitem.l_orderkey (#0) AS (#0)]
+        ├── aggregate functions: [sum(sum(l_extendedprice) * _eager_count (#32)) AS (#30)]
+        └── EvalScalar
+            ├── scalars: [CAST(multiply(sum(l_extendedprice) (#25), CAST(count(*) (#31) AS UInt64)) AS Decimal(18, 2) NULL) AS (#32)]
+            └── Join(Inner)
+                ├── build keys: [orders.o_orderkey (#16)]
+                ├── probe keys: [lineitem.l_orderkey (#0)]
+                ├── other filters: []
+                ├── Aggregate(Initial)
+                │   ├── group items: [orders.o_orderkey (#16) AS (#16)]
+                │   ├── aggregate functions: [count() AS (#31)]
+                │   └── Scan
+                │       ├── table: default.orders (#1)
+                │       ├── filters: []
+                │       ├── order by: []
+                │       └── limit: NONE
+                └── Aggregate(Initial)
+                    ├── group items: [lineitem.l_orderkey (#0) AS (#0)]
+                    ├── aggregate functions: [sum(lineitem.l_extendedprice (#5)) AS (#25)]
+                    └── EvalScalar
+                        ├── scalars: [lineitem.l_orderkey (#0) AS (#0), lineitem.l_extendedprice (#5) AS (#5)]
+                        └── Scan
+                            ├── table: default.lineitem (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
 
 rank_limit_aggregates: above_join=1 below_join=0
 
@@ -1585,79 +1993,24 @@ TopN
 
 rank_limit_aggregates: above_join=1 below_join=0
 apply_plan_0:
-EvalScalar
-├── scalars: [lineitem.l_orderkey (#0) AS (#0), lineitem.l_quantity (#4) AS (#4), _eager_final_sum (#28) AS (#25)]
-└── Aggregate(Initial)
-    ├── group items: [lineitem.l_orderkey (#0) AS (#0), lineitem.l_quantity (#4) AS (#4)]
-    ├── aggregate functions: [sum(sum(l_quantity) (#25)) AS (#28)]
-    └── Join(Inner)
-        ├── build keys: [orders.o_orderkey (#16)]
-        ├── probe keys: [lineitem.l_orderkey (#0)]
-        ├── other filters: []
-        ├── Scan
-        │   ├── table: default.orders (#1)
-        │   ├── filters: [eq(orders.o_orderstatus (#18), 'F')]
-        │   ├── order by: []
-        │   └── limit: NONE
-        └── Aggregate(Initial)
-            ├── group items: [lineitem.l_orderkey (#0) AS (#0), lineitem.l_quantity (#4) AS (#4)]
-            ├── aggregate functions: [sum(lineitem.l_quantity (#4)) AS (#25)]
-            └── EvalScalar
-                ├── scalars: [lineitem.l_orderkey (#0) AS (#0), lineitem.l_quantity (#4) AS (#4)]
-                └── Scan
-                    ├── table: default.lineitem (#0)
-                    ├── filters: []
-                    ├── order by: []
-                    └── limit: NONE
-
-rank_limit_aggregates: above_join=1 below_join=0
-apply_plan_1:
-EvalScalar
-├── scalars: [lineitem.l_orderkey (#0) AS (#0), lineitem.l_quantity (#4) AS (#4), sum(l_quantity) (#25) AS (#25)]
-└── Aggregate(Initial)
-    ├── group items: [lineitem.l_orderkey (#0) AS (#0), lineitem.l_quantity (#4) AS (#4)]
-    ├── aggregate functions: [sum(sum(l_quantity) * _eager_count (#30)) AS (#25)]
-    └── EvalScalar
-        ├── scalars: [CAST(multiply(lineitem.l_quantity (#4), CAST(count(*) (#29) AS UInt64)) AS Decimal(18, 2) NULL) AS (#30)]
+TopN
+├── sort keys: [lineitem.l_orderkey (#0) ASC NULLS LAST, lineitem.l_quantity (#4) ASC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── EvalScalar
+    ├── scalars: [lineitem.l_orderkey (#0) AS (#0), lineitem.l_quantity (#4) AS (#4), _eager_final_sum (#28) AS (#25)]
+    └── Aggregate(Initial)
+        ├── group items: [lineitem.l_orderkey (#0) AS (#0), lineitem.l_quantity (#4) AS (#4)]
+        ├── aggregate functions: [sum(sum(l_quantity) (#25)) AS (#28)]
         └── Join(Inner)
             ├── build keys: [orders.o_orderkey (#16)]
             ├── probe keys: [lineitem.l_orderkey (#0)]
             ├── other filters: []
-            ├── Aggregate(Initial)
-            │   ├── group items: [orders.o_orderkey (#16) AS (#16)]
-            │   ├── aggregate functions: [count() AS (#29)]
-            │   └── Scan
-            │       ├── table: default.orders (#1)
-            │       ├── filters: [eq(orders.o_orderstatus (#18), 'F')]
-            │       ├── order by: []
-            │       └── limit: NONE
-            └── Scan
-                ├── table: default.lineitem (#0)
-                ├── filters: []
-                ├── order by: []
-                └── limit: NONE
-
-rank_limit_aggregates: above_join=1 below_join=0
-apply_plan_2:
-EvalScalar
-├── scalars: [lineitem.l_orderkey (#0) AS (#0), lineitem.l_quantity (#4) AS (#4), _eager_final_sum (#31) AS (#25)]
-└── Aggregate(Initial)
-    ├── group items: [lineitem.l_orderkey (#0) AS (#0), lineitem.l_quantity (#4) AS (#4)]
-    ├── aggregate functions: [sum(sum(l_quantity) * _eager_count (#33)) AS (#31)]
-    └── EvalScalar
-        ├── scalars: [CAST(multiply(sum(l_quantity) (#25), CAST(count(*) (#32) AS UInt64)) AS Decimal(18, 2) NULL) AS (#33)]
-        └── Join(Inner)
-            ├── build keys: [orders.o_orderkey (#16)]
-            ├── probe keys: [lineitem.l_orderkey (#0)]
-            ├── other filters: []
-            ├── Aggregate(Initial)
-            │   ├── group items: [orders.o_orderkey (#16) AS (#16)]
-            │   ├── aggregate functions: [count() AS (#32)]
-            │   └── Scan
-            │       ├── table: default.orders (#1)
-            │       ├── filters: [eq(orders.o_orderstatus (#18), 'F')]
-            │       ├── order by: []
-            │       └── limit: NONE
+            ├── Scan
+            │   ├── table: default.orders (#1)
+            │   ├── filters: [eq(orders.o_orderstatus (#18), 'F')]
+            │   ├── order by: []
+            │   └── limit: NONE
             └── Aggregate(Initial)
                 ├── group items: [lineitem.l_orderkey (#0) AS (#0), lineitem.l_quantity (#4) AS (#4)]
                 ├── aggregate functions: [sum(lineitem.l_quantity (#4)) AS (#25)]
@@ -1670,6 +2023,201 @@ EvalScalar
                         └── limit: NONE
 
 rank_limit_aggregates: above_join=1 below_join=0
+apply_plan_1:
+TopN
+├── sort keys: [lineitem.l_orderkey (#0) ASC NULLS LAST, lineitem.l_quantity (#4) ASC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── EvalScalar
+    ├── scalars: [lineitem.l_orderkey (#0) AS (#0), lineitem.l_quantity (#4) AS (#4), sum(l_quantity) (#25) AS (#25)]
+    └── Aggregate(Initial)
+        ├── group items: [lineitem.l_orderkey (#0) AS (#0), lineitem.l_quantity (#4) AS (#4)]
+        ├── aggregate functions: [sum(sum(l_quantity) * _eager_count (#30)) AS (#25)]
+        └── EvalScalar
+            ├── scalars: [CAST(multiply(lineitem.l_quantity (#4), CAST(count(*) (#29) AS UInt64)) AS Decimal(18, 2) NULL) AS (#30)]
+            └── Join(Inner)
+                ├── build keys: [orders.o_orderkey (#16)]
+                ├── probe keys: [lineitem.l_orderkey (#0)]
+                ├── other filters: []
+                ├── Aggregate(Initial)
+                │   ├── group items: [orders.o_orderkey (#16) AS (#16)]
+                │   ├── aggregate functions: [count() AS (#29)]
+                │   └── Scan
+                │       ├── table: default.orders (#1)
+                │       ├── filters: [eq(orders.o_orderstatus (#18), 'F')]
+                │       ├── order by: []
+                │       └── limit: NONE
+                └── Scan
+                    ├── table: default.lineitem (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+rank_limit_aggregates: above_join=1 below_join=0
+apply_plan_2:
+TopN
+├── sort keys: [lineitem.l_orderkey (#0) ASC NULLS LAST, lineitem.l_quantity (#4) ASC NULLS LAST]
+├── limit: [3]
+├── offset: [0]
+└── EvalScalar
+    ├── scalars: [lineitem.l_orderkey (#0) AS (#0), lineitem.l_quantity (#4) AS (#4), _eager_final_sum (#31) AS (#25)]
+    └── Aggregate(Initial)
+        ├── group items: [lineitem.l_orderkey (#0) AS (#0), lineitem.l_quantity (#4) AS (#4)]
+        ├── aggregate functions: [sum(sum(l_quantity) * _eager_count (#33)) AS (#31)]
+        └── EvalScalar
+            ├── scalars: [CAST(multiply(sum(l_quantity) (#25), CAST(count(*) (#32) AS UInt64)) AS Decimal(18, 2) NULL) AS (#33)]
+            └── Join(Inner)
+                ├── build keys: [orders.o_orderkey (#16)]
+                ├── probe keys: [lineitem.l_orderkey (#0)]
+                ├── other filters: []
+                ├── Aggregate(Initial)
+                │   ├── group items: [orders.o_orderkey (#16) AS (#16)]
+                │   ├── aggregate functions: [count() AS (#32)]
+                │   └── Scan
+                │       ├── table: default.orders (#1)
+                │       ├── filters: [eq(orders.o_orderstatus (#18), 'F')]
+                │       ├── order by: []
+                │       └── limit: NONE
+                └── Aggregate(Initial)
+                    ├── group items: [lineitem.l_orderkey (#0) AS (#0), lineitem.l_quantity (#4) AS (#4)]
+                    ├── aggregate functions: [sum(lineitem.l_quantity (#4)) AS (#25)]
+                    └── EvalScalar
+                        ├── scalars: [lineitem.l_orderkey (#0) AS (#0), lineitem.l_quantity (#4) AS (#4)]
+                        └── Scan
+                            ├── table: default.lineitem (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+rank_limit_aggregates: above_join=1 below_join=0
+
+=== top_n_on_aggregate_expression ===
+description: Every candidate retains the whole query's descending aggregate ordering, limit and offset.
+sql: SELECT o_orderkey, sum(l_extendedprice) + 1 AS s
+FROM lineitem JOIN orders ON o_orderkey = l_orderkey
+GROUP BY o_orderkey ORDER BY s DESC LIMIT 5 OFFSET 2
+before_plan:
+TopN
+├── sort keys: [s (#26) DESC NULLS LAST]
+├── limit: [5]
+├── offset: [2]
+└── EvalScalar
+    ├── scalars: [orders.o_orderkey (#16) AS (#16), plus(sum(l_extendedprice) (#25), 1) AS (#26)]
+    └── Aggregate(Initial)
+        ├── group items: [orders.o_orderkey (#16) AS (#16)]
+        ├── aggregate functions: [sum(lineitem.l_extendedprice (#5)) AS (#25)]
+        └── EvalScalar
+            ├── scalars: [lineitem.l_extendedprice (#5) AS (#5), orders.o_orderkey (#16) AS (#16), lineitem.l_orderkey (#0) AS (#27)]
+            └── Join(Inner)
+                ├── build keys: [orders.o_orderkey (#16)]
+                ├── probe keys: [lineitem.l_orderkey (#0)]
+                ├── other filters: []
+                ├── Scan
+                │   ├── table: default.orders (#1)
+                │   ├── filters: []
+                │   ├── order by: []
+                │   └── limit: NONE
+                └── Scan
+                    ├── table: default.lineitem (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+apply_plan_0:
+TopN
+├── sort keys: [s (#26) DESC NULLS LAST]
+├── limit: [5]
+├── offset: [2]
+└── EvalScalar
+    ├── scalars: [orders.o_orderkey (#16) AS (#16), plus(_eager_final_sum (#28), 1) AS (#26)]
+    └── Aggregate(Initial)
+        ├── group items: [orders.o_orderkey (#16) AS (#16)]
+        ├── aggregate functions: [sum(sum(l_extendedprice) (#25)) AS (#28)]
+        └── Join(Inner)
+            ├── build keys: [orders.o_orderkey (#16)]
+            ├── probe keys: [lineitem.l_orderkey (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.orders (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Aggregate(Initial)
+                ├── group items: [lineitem.l_orderkey (#0) AS (#0)]
+                ├── aggregate functions: [sum(lineitem.l_extendedprice (#5)) AS (#25)]
+                └── EvalScalar
+                    ├── scalars: [lineitem.l_extendedprice (#5) AS (#5), lineitem.l_orderkey (#0) AS (#27)]
+                    └── Scan
+                        ├── table: default.lineitem (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+apply_plan_1:
+TopN
+├── sort keys: [s (#26) DESC NULLS LAST]
+├── limit: [5]
+├── offset: [2]
+└── EvalScalar
+    ├── scalars: [orders.o_orderkey (#16) AS (#16), plus(sum(l_extendedprice) (#25), 1) AS (#26)]
+    └── Aggregate(Initial)
+        ├── group items: [orders.o_orderkey (#16) AS (#16)]
+        ├── aggregate functions: [sum(sum(l_extendedprice) * _eager_count (#30)) AS (#25)]
+        └── EvalScalar
+            ├── scalars: [CAST(multiply(lineitem.l_extendedprice (#5), CAST(count(*) (#29) AS UInt64)) AS Decimal(18, 2) NULL) AS (#30)]
+            └── Join(Inner)
+                ├── build keys: [orders.o_orderkey (#16)]
+                ├── probe keys: [lineitem.l_orderkey (#0)]
+                ├── other filters: []
+                ├── Aggregate(Initial)
+                │   ├── group items: [orders.o_orderkey (#16) AS (#16)]
+                │   ├── aggregate functions: [count() AS (#29)]
+                │   └── Scan
+                │       ├── table: default.orders (#1)
+                │       ├── filters: []
+                │       ├── order by: []
+                │       └── limit: NONE
+                └── Scan
+                    ├── table: default.lineitem (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+apply_plan_2:
+TopN
+├── sort keys: [s (#26) DESC NULLS LAST]
+├── limit: [5]
+├── offset: [2]
+└── EvalScalar
+    ├── scalars: [orders.o_orderkey (#16) AS (#16), plus(_eager_final_sum (#31), 1) AS (#26)]
+    └── Aggregate(Initial)
+        ├── group items: [orders.o_orderkey (#16) AS (#16)]
+        ├── aggregate functions: [sum(sum(l_extendedprice) * _eager_count (#33)) AS (#31)]
+        └── EvalScalar
+            ├── scalars: [CAST(multiply(sum(l_extendedprice) (#25), CAST(count(*) (#32) AS UInt64)) AS Decimal(18, 2) NULL) AS (#33)]
+            └── Join(Inner)
+                ├── build keys: [orders.o_orderkey (#16)]
+                ├── probe keys: [lineitem.l_orderkey (#0)]
+                ├── other filters: []
+                ├── Aggregate(Initial)
+                │   ├── group items: [orders.o_orderkey (#16) AS (#16)]
+                │   ├── aggregate functions: [count() AS (#32)]
+                │   └── Scan
+                │       ├── table: default.orders (#1)
+                │       ├── filters: []
+                │       ├── order by: []
+                │       └── limit: NONE
+                └── Aggregate(Initial)
+                    ├── group items: [lineitem.l_orderkey (#0) AS (#0)]
+                    ├── aggregate functions: [sum(lineitem.l_extendedprice (#5)) AS (#25)]
+                    └── EvalScalar
+                        ├── scalars: [lineitem.l_extendedprice (#5) AS (#5), lineitem.l_orderkey (#0) AS (#27)]
+                        └── Scan
+                            ├── table: default.lineitem (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
 
 === sum_distinct_is_not_eager ===
 description: Distinct sums cannot combine finalized local sums.

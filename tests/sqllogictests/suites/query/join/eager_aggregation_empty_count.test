@@ -44,11 +44,13 @@ FROM eager_empty_l l JOIN eager_empty_r r ON l.k = r.k;
 ----
 0 0 1 NULL
 
-query II
-SELECT count(l.v), count(l.v) + 1
-FROM eager_empty_l l JOIN eager_empty_r r ON l.k = r.k;
+# MIN/nullable-COUNT must preserve join multiplicity, including when COUNT
+# belongs to the right join input (PR #20667).
+query III
+SELECT min(r.g), count(l.v), count(l.v) + 1
+FROM eager_empty_r r JOIN eager_empty_l l ON l.k = r.k;
 ----
-0 1
+NULL 0 1
 
 query I
 SELECT count(*) FROM eager_empty_l l JOIN eager_empty_r r ON l.k = r.k
@@ -73,11 +75,11 @@ FROM eager_empty_l l JOIN eager_empty_r r ON l.k = r.k;
 ----
 4 0 1 NULL
 
-query II
-SELECT count(l.v), count(l.v) + 1
-FROM eager_empty_l l JOIN eager_empty_r r ON l.k = r.k;
+query III
+SELECT min(r.g), count(l.v), count(l.v) + 1
+FROM eager_empty_r r JOIN eager_empty_l l ON l.k = r.k;
 ----
-0 1
+0 0 1
 
 query III rowsort
 SELECT r.g, count(*), count(l.v)
@@ -96,11 +98,11 @@ FROM eager_empty_l l JOIN eager_empty_r r ON l.k = r.k;
 ----
 6 2 3 10
 
-query II
-SELECT count(l.v), count(l.v) + 1
-FROM eager_empty_l l JOIN eager_empty_r r ON l.k = r.k;
+query III
+SELECT min(r.g), count(l.v), count(l.v) + 1
+FROM eager_empty_r r JOIN eager_empty_l l ON l.k = r.k;
 ----
-2 3
+0 2 3
 
 query III rowsort
 SELECT r.g, count(*), count(l.v)
@@ -119,11 +121,11 @@ FROM eager_empty_l l JOIN eager_empty_r r ON l.k = r.k;
 ----
 0 0 1 NULL
 
-query IIII
-SELECT count(*), count(l.v), count(*) + 1, sum(l.v)
+query III
+SELECT min(r.g), count(l.v), count(l.v) + 1
 FROM eager_empty_r r JOIN eager_empty_l l ON l.k = r.k;
 ----
-0 0 1 NULL
+NULL 0 1
 
 statement ok
 INSERT INTO eager_empty_l VALUES (1, 5);

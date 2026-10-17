@@ -414,10 +414,28 @@ impl<'a> EagerInput<'a> {
             && keeps_empty_side[Side::Left]
             && keeps_empty_side[Side::Right]
         {
-            return vec![
-                analysis(EagerRewriteKind::DoubleGroupByCount(Side::Left)),
-                analysis(EagerRewriteKind::DoubleSplit(Side::Left)),
-            ];
+            // Grouping only the left input reduces the multiplicity seen by right-side
+            // aggregates. DoubleGroupByCount weights raw SUM arguments, but does not
+            // implement NULL-aware weighting for a raw COUNT. DoubleSplit first
+            // rewrites local COUNTs to SUMs and can compensate them on both sides.
+            let right_has_count =
+                assignment.eager_aggregations[Side::Right]
+                    .iter()
+                    .any(|candidate| {
+                        matches!(
+                            &final_agg.aggregate_functions[candidate.agg_index].scalar,
+                            ScalarExpr::AggregateFunction(function)
+                                if eager_aggregation(function) == EagerAggregation::Count
+                        )
+                    });
+            return if !right_has_count {
+                vec![
+                    analysis(EagerRewriteKind::DoubleGroupByCount(Side::Left)),
+                    analysis(EagerRewriteKind::DoubleSplit(Side::Left)),
+                ]
+            } else {
+                vec![analysis(EagerRewriteKind::DoubleSplit(Side::Left))]
+            };
         }
 
         let d = if can_push_down[Side::Left] {
