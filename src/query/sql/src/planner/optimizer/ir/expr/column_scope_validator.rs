@@ -15,19 +15,24 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use super::PExpr;
+use super::SExpr;
 use super::node::Expr;
-use super::node::RelExprKind;
+use super::node::ExprKind;
 use crate::ColumnSet;
 use crate::MetadataRef;
 use crate::Symbol;
 use crate::plans::AggregateMode;
 use crate::plans::Operator;
+use crate::plans::PhysicalRelOperator;
+use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::Visitor as ScalarExprVisitor;
+use crate::plans::WindowGroup;
 
-impl<K: RelExprKind> Expr<K> {
+impl<K: ExprKind> Expr<K> {
     /// Validate that every column an operator references is produced by its inputs.
     ///
     /// For each node, the columns referenced by its scalar expressions must be a subset of
@@ -41,8 +46,24 @@ impl<K: RelExprKind> Expr<K> {
     /// propagate a column. Without this check, such a plan only fails at execution time
     /// with an opaque `Unable to get field named "<symbol>"` from the physical plan builder.
     pub fn validate_column_scope(&self, metadata: &MetadataRef) -> Result<()> {
-        ColumnScopeValidator { metadata }.validate(self, &ColumnSet::new())
+        K::validate_column_scope(self, metadata, &ColumnSet::new())
     }
+}
+
+pub(super) fn validate_logical_scope(
+    expr: &SExpr,
+    metadata: &MetadataRef,
+    ambient: &ColumnSet,
+) -> Result<()> {
+    ColumnScopeValidator { metadata }.validate_logical(expr, ambient)
+}
+
+pub(super) fn validate_physical_scope(
+    expr: &PExpr,
+    metadata: &MetadataRef,
+    ambient: &ColumnSet,
+) -> Result<()> {
+    ColumnScopeValidator { metadata }.validate_physical(expr, ambient)
 }
 
 struct ColumnScopeValidator<'a> {
@@ -50,52 +71,83 @@ struct ColumnScopeValidator<'a> {
 }
 
 impl ColumnScopeValidator<'_> {
-    #[recursive::recursive]
-    fn validate<K: RelExprKind>(&self, s_expr: &Expr<K>, ambient: &ColumnSet) -> Result<()> {
-        let plan = s_expr.plan();
+    fn validate_logical(&self, expr: &SExpr, ambient: &ColumnSet) -> Result<()> {
+        let plan = expr.plan();
+        let mut local = ColumnSet::new();
+        if let RelOperator::Aggregate(aggregate) = plan
+            && let Some(sets) = &aggregate.grouping_sets
+        {
+            local.insert(sets.grouping_id_index);
+        }
+        self.validate(
+            expr,
+            ambient,
+            local,
+            plan.as_window_group(),
+            matches!(plan, RelOperator::Join(join) if join.is_lateral),
+        )
+    }
 
-        let mut available = ambient.clone();
-        if plan.arity() == 0 && !matches!(plan, RelOperator::ExpressionScan(_)) {
-            // A leaf scan references its own columns in its predicates. ExpressionScan,
-            // however, computes its outputs from values and cannot read those outputs.
-            available.extend(s_expr.derive_relational_prop()?.output_columns.iter());
-        }
-        for child in s_expr.children() {
-            available.extend(child.derive_relational_prop()?.output_columns.iter());
-        }
-        if let RelOperator::Aggregate(aggregate) = plan {
-            // A `Final` aggregate keeps the same scalar items as the `Partial` one below it
-            // and consumes its states, so its arguments come from the partial's input. In a
-            // distributed plan an `Exchange` sits between the two.
+    fn validate_physical(&self, expr: &PExpr, ambient: &ColumnSet) -> Result<()> {
+        let plan = expr.plan();
+        let mut local = ColumnSet::new();
+        if let PhysicalRelOperator::Aggregate(aggregate) = plan {
+            // Final retains raw argument descriptors; resolve them against the
+            // Partial input, across Exchange. Only physical validation needs this.
             if aggregate.mode == AggregateMode::Final {
-                let mut node = s_expr.child(0)?;
-                while let RelOperator::Exchange(_) = node.plan() {
+                let mut node = expr.child(0)?;
+                while node.plan().is_exchange() {
                     node = node.child(0)?;
                 }
-                if let RelOperator::Aggregate(_) = node.plan() {
+                if node.plan().is_aggregate() {
                     for input in node.children() {
-                        available.extend(input.derive_relational_prop()?.output_columns.iter());
+                        local.extend(input.derive_relational_prop()?.output_columns.iter());
                     }
                 }
             }
-            // `_grouping_id` is produced by the aggregate itself and read by `grouping()`.
-            if let Some(grouping_sets) = &aggregate.grouping_sets {
-                available.insert(grouping_sets.grouping_id_index);
+            if let Some(sets) = &aggregate.aggregate.grouping_sets {
+                local.insert(sets.grouping_id_index);
             }
         }
+        self.validate(
+            expr,
+            ambient,
+            local,
+            plan.as_window_group(),
+            matches!(plan, PhysicalRelOperator::Join(join) if join.is_lateral),
+        )
+    }
 
-        if let RelOperator::WindowGroup(group) = plan {
-            // The physical builder evaluates scalar items over the child before evaluating
-            // windows. An item cannot read its own output or another item's output.
+    #[recursive::recursive]
+    fn validate<K: ExprKind>(
+        &self,
+        expr: &Expr<K>,
+        ambient: &ColumnSet,
+        local: ColumnSet,
+        window_group: Option<&WindowGroup>,
+        is_lateral: bool,
+    ) -> Result<()> {
+        let plan = expr.plan();
+        let mut available = ambient.clone();
+        available.extend(local);
+        if plan.arity() == 0 && plan.rel_op() != RelOp::ExpressionScan {
+            // Leaf scans read their own columns; ExpressionScan computes outputs.
+            available.extend(expr.derive_relational_prop()?.output_columns.iter());
+        }
+        for child in expr.children() {
+            available.extend(child.derive_relational_prop()?.output_columns.iter());
+        }
+        if let Some(group) = window_group {
+            // Items read only the child, while windows may read scalar outputs.
             self.validate_scalars::<K>(
-                plan,
+                plan.rel_op(),
                 group.scalar_items.iter().map(|item| &item.scalar),
                 &available,
             )?;
             let mut window_available = available.clone();
             window_available.extend(group.scalar_items.iter().map(|item| item.index));
             self.validate_scalars::<K>(
-                plan,
+                plan.rel_op(),
                 group
                     .windows
                     .iter()
@@ -103,33 +155,29 @@ impl ColumnScopeValidator<'_> {
                 &window_available,
             )?;
         } else {
-            self.validate_scalars::<K>(plan, plan.scalar_expr_iter(), &available)?;
+            self.validate_scalars::<K>(plan.rel_op(), plan.scalar_expr_iter(), &available)?;
         }
-        // The right side of a LATERAL join is correlated to the left side without a
-        // `SubqueryExpr`, so the left outputs become its ambient scope.
-        if let RelOperator::Join(join) = plan
-            && join.is_lateral
-        {
+        // The right input of LATERAL may refer to left outputs, not vice versa.
+        if is_lateral {
             let mut lateral_ambient = ambient.clone();
             lateral_ambient.extend(
-                s_expr
-                    .child(0)?
+                expr.left_child()
                     .derive_relational_prop()?
                     .output_columns
                     .iter(),
             );
-            self.validate(s_expr.child(0)?, ambient)?;
-            return self.validate(s_expr.child(1)?, &lateral_ambient);
+            K::validate_column_scope(expr.left_child(), self.metadata, ambient)?;
+            return K::validate_column_scope(expr.right_child(), self.metadata, &lateral_ambient);
         }
-        for child in s_expr.children() {
-            self.validate(child, ambient)?;
+        for child in expr.children() {
+            K::validate_column_scope(child, self.metadata, ambient)?;
         }
         Ok(())
     }
 
-    fn validate_scalars<'a, K: RelExprKind>(
+    fn validate_scalars<'a, K: ExprKind>(
         &self,
-        plan: &RelOperator,
+        plan: RelOp,
         scalars: impl IntoIterator<Item = &'a ScalarExpr>,
         available: &ColumnSet,
     ) -> Result<()> {
@@ -154,13 +202,13 @@ impl ColumnScopeValidator<'_> {
             return Err(ErrorCode::Internal(format!(
                 "{} column scope violation in {:?}: references {} which no input produces; available columns: {}",
                 K::NAME,
-                plan.rel_op(),
+                plan,
                 self.describe(&unresolved),
                 self.describe(&available.iter().copied().collect::<Vec<_>>()),
             )));
         }
         for subquery in &collector.subqueries {
-            self.validate(&subquery.subquery, available)?;
+            self.validate_logical(&subquery.subquery, available)?;
         }
         Ok(())
     }
@@ -233,7 +281,6 @@ mod tests {
     use crate::plans::Window;
     use crate::plans::WindowFuncFrame;
     use crate::plans::WindowFuncType;
-    use crate::plans::WindowGroup;
 
     fn metadata_with_columns(n: usize) -> MetadataRef {
         let mut metadata = Metadata::default();

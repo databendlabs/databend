@@ -25,20 +25,15 @@ use crate::optimizer::ir::expr::MExpr;
 use crate::optimizer::ir::expr::SExpr;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 
-/// A matcher used to describe a pattern to be matched.
+/// Match operator kinds and tree shape without inspecting stage-specific payloads.
+/// Logical rules and physical passes may share structural patterns; Memo
+/// extraction remains restricted to logical expressions.
 pub enum Matcher {
     /// A pattern to match an operator with children.
     MatchOp {
         /// The type of the operator to match.
         op_type: RelOp,
-        children: Vec<Self>,
-    },
-    /// A pattern to match an operator with a predicate.
-    MatchFn {
-        /// The function to match the operator.
-        predicate: Box<dyn Fn(&RelOperator) -> bool + 'static>,
         children: Vec<Self>,
     },
     /// A leaf pattern to match any node.
@@ -84,31 +79,10 @@ macro_rules! match_op {
 impl Matcher {
     /// Check whether a relational expression matches this pattern.
     #[recursive::recursive]
-    pub fn matches<K: ExprKind<Operator = RelOperator>>(&self, s_expr: &Expr<K>) -> bool {
+    pub fn matches<K: ExprKind>(&self, s_expr: &Expr<K>) -> bool {
         match self {
             Matcher::MatchOp { op_type, children } => {
                 if s_expr.plan().rel_op() != *op_type {
-                    return false;
-                }
-
-                if s_expr.plan().arity() != children.len() {
-                    return false;
-                }
-
-                for (child_expr, child_matcher) in s_expr.children.iter().zip(children.iter()) {
-                    if !child_matcher.matches(child_expr) {
-                        return false;
-                    }
-                }
-
-                true
-            }
-
-            Matcher::MatchFn {
-                predicate,
-                children,
-            } => {
-                if !predicate(s_expr.plan()) {
                     return false;
                 }
 
@@ -129,17 +103,12 @@ impl Matcher {
         }
     }
 
-    /// Check if the `RelOperator` can be matched by the `Matcher`.
-    pub fn matches_op(&self, op: &RelOperator) -> bool {
+    /// Check the operator kind and arity without inspecting its payload.
+    pub fn matches_op(&self, op: &impl Operator) -> bool {
         match self {
             Matcher::MatchOp { op_type, children } => {
                 op.rel_op() == *op_type && op.arity() == children.len()
             }
-
-            Matcher::MatchFn {
-                predicate,
-                children,
-            } => predicate(op) && op.arity() == children.len(),
 
             Matcher::Leaf => true,
         }
@@ -166,27 +135,12 @@ impl PatternExtractor {
         m_expr: &MExpr,
         matcher: &Matcher,
     ) -> Result<Vec<SExpr>> {
+        let Some(plan) = m_expr.plan.logical() else {
+            return Ok(vec![]);
+        };
         match matcher {
             Matcher::MatchOp { children, .. } => {
-                if !matcher.matches_op(&m_expr.plan) {
-                    return Ok(vec![]);
-                }
-
-                let mut children_results = Vec::with_capacity(m_expr.arity());
-                for (child_index, child_matcher) in m_expr.children.iter().zip(children.iter()) {
-                    let child_group = memo.group(*child_index)?;
-                    let result = self.extract_group(memo, child_group, child_matcher)?;
-                    children_results.push(result);
-                }
-
-                Self::generate_expression_with_children(memo, m_expr, children_results)
-            }
-
-            Matcher::MatchFn {
-                predicate,
-                children,
-            } => {
-                if !predicate(&m_expr.plan) {
+                if !matcher.matches_op(plan.as_ref()) {
                     return Ok(vec![]);
                 }
 
@@ -243,7 +197,9 @@ impl PatternExtractor {
 
         if cursors.is_empty() {
             results.push(SExpr::create(
-                m_expr.plan.clone(),
+                m_expr.plan.logical().cloned().ok_or_else(|| {
+                    ErrorCode::Internal("Physical candidate cannot be extracted as SExpr")
+                })?,
                 vec![],
                 Some(m_expr.group_index),
                 Some(memo.group(m_expr.group_index)?.relational_prop.clone()),
@@ -258,7 +214,9 @@ impl PatternExtractor {
                 children.push(Arc::new(candidates[index][*cursor].clone()));
             }
             results.push(SExpr::create(
-                m_expr.plan.clone(),
+                m_expr.plan.logical().cloned().ok_or_else(|| {
+                    ErrorCode::Internal("Physical candidate cannot be extracted as SExpr")
+                })?,
                 children,
                 Some(m_expr.group_index),
                 Some(memo.group(m_expr.group_index)?.relational_prop.clone()),
@@ -301,13 +259,16 @@ impl PatternExtractor {
             let child_group = memo.group(*child)?;
             let child_m_expr = child_group
                 .m_exprs
-                .first()
+                .iter()
+                .find(|expr| expr.plan.is_logical())
                 .ok_or_else(|| ErrorCode::Internal(format!("No MExpr in group {child}")))?;
             children.push(Arc::new(Self::expand_pattern(memo, child_m_expr)?));
         }
 
         Ok(SExpr::create(
-            m_expr.plan.clone(),
+            m_expr.plan.logical().cloned().ok_or_else(|| {
+                ErrorCode::Internal("Physical candidate cannot be extracted as SExpr")
+            })?,
             children,
             Some(m_expr.group_index),
             Some(memo.group(m_expr.group_index)?.relational_prop.clone()),

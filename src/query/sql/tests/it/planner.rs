@@ -29,8 +29,8 @@ use databend_common_sql::Planner;
 use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Operator;
+use databend_common_sql::plans::PhysicalRelOperator;
 use databend_common_sql::plans::Plan;
-use databend_common_sql::plans::RelOperator;
 use databend_common_sql_test_support::TestCase;
 use databend_common_sql_test_support::TestCaseRunner;
 use databend_common_sql_test_support::TestSuite;
@@ -291,7 +291,7 @@ fn format_statistics_trace_summary(plan: &Plan) -> Result<String> {
 
 fn statistics_trace_summary_tree(s_expr: &PExpr, metadata: &MetadataRef) -> Result<FormatTreeNode> {
     match s_expr.plan() {
-        RelOperator::MaterializedCTE(cte) => {
+        PhysicalRelOperator::MaterializedCTE(cte) => {
             let children = s_expr
                 .children()
                 .map(|child| statistics_trace_summary_tree(child, metadata))
@@ -301,12 +301,12 @@ fn statistics_trace_summary_tree(s_expr: &PExpr, metadata: &MetadataRef) -> Resu
                 children,
             ))
         }
-        RelOperator::MaterializedCTERef(cte_ref) => Ok(FormatTreeNode::new(format!(
+        PhysicalRelOperator::MaterializedCTERef(cte_ref) => Ok(FormatTreeNode::new(format!(
             "MaterializedCTERef: {} output_columns={}",
             cte_ref.cte_name,
             cte_ref.output_columns.len()
         ))),
-        RelOperator::Scan(scan) => {
+        PhysicalRelOperator::Scan(scan) => {
             let metadata = metadata.read();
             let table = metadata.table(scan.table_index);
             let rows = scan
@@ -329,7 +329,7 @@ fn statistics_trace_summary_tree(s_expr: &PExpr, metadata: &MetadataRef) -> Resu
                 row_access_policy
             )))
         }
-        RelOperator::Join(join) => {
+        PhysicalRelOperator::Join(join) => {
             let children = s_expr
                 .children()
                 .map(|child| statistics_trace_summary_tree(child, metadata))
@@ -339,7 +339,7 @@ fn statistics_trace_summary_tree(s_expr: &PExpr, metadata: &MetadataRef) -> Resu
                 children,
             ))
         }
-        RelOperator::Udf(udf) => {
+        PhysicalRelOperator::Udf(udf) => {
             let children = s_expr
                 .children()
                 .map(|child| statistics_trace_summary_tree(child, metadata))
