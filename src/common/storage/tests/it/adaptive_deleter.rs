@@ -513,6 +513,72 @@ async fn test_halving_while_unsaturated_retires_idle_permits_at_once() {
     assert_eq!(count(&op, "b/b1/").await, 0);
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_growth_cancels_an_outstanding_deficit_before_adding_permits() {
+    let _serial = SERIAL.lock().await;
+    FaultInjection::clear();
+    let gate = Arc::new(Gate::default());
+    let stats = Arc::new(RetryStats::default());
+    let op = Operator::new(Memory::default())
+        .unwrap()
+        .layer(GateLayer(gate.clone()))
+        .finish();
+    for i in 0..8 {
+        op.write(&format!("c/c0/{i}"), "x").await.unwrap();
+        op.write(&format!("c/c1/{i}"), "x").await.unwrap();
+    }
+    // Every clean batch raises the bound by one, so growth and an outstanding deficit meet.
+    let deleter = AdaptiveDeleter::new(op.clone(), stats, AdaptiveConcurrencyConfig {
+        initial: 4,
+        min: 1,
+        max: 4,
+        increase_after: 1,
+        decrease_cooldown: Duration::from_secs(60),
+    })
+    .unwrap();
+
+    // Four in flight. One throttled outcome halves the bound to 2: its own slot is retired,
+    // three are still held, deficit 1. Each of the next clean completions raises the bound by
+    // one; that growth must cancel the owed unit first, not add a permit on top of the slot
+    // the completion then returns.
+    gate.throttle("c/c0/0");
+    gate.throttle("c/c0/1");
+    gate.throttle("c/c0/2");
+    gate.throttle("c/c0/3");
+    let a = deleter.remove_all("c/c0/");
+    let b = async {
+        gate.wait_for_blocked(4).await;
+        deleter.remove_all("c/c1/").await
+    };
+    let steps = async {
+        gate.wait_for_blocked(4).await;
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        gate.release_one();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(deleter.concurrency(), 2);
+        assert_eq!(gate.blocked(), 3);
+
+        // A's remaining three are all throttled too, but the cooldown holds the bound; their
+        // completions release slots B takes. From here on B's clean completions grow the
+        // bound 2 → 3 → 4, and the in-flight count must follow the bound, never exceed it.
+        for _ in 0..12 {
+            gate.release_one();
+            tokio::time::sleep(Duration::from_millis(30)).await;
+            assert!(
+                gate.blocked() <= deleter.concurrency(),
+                "in flight {} above bound {}",
+                gate.blocked(),
+                deleter.concurrency()
+            );
+        }
+        gate.open();
+    };
+    let (a, b, ()) = futures::join!(a, b, steps);
+    assert_eq!(a.unwrap_err().kind(), ErrorKind::RateLimited);
+    b.unwrap();
+    assert_eq!(count(&op, "c/c1/").await, 0);
+}
+
 /// Blocks every delete until opened, counting how many are blocked at once.
 struct Gate {
     blocked: std::sync::atomic::AtomicUsize,

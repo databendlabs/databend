@@ -287,12 +287,31 @@ impl Shared {
     fn observe(&self, feedback: ConcurrencyFeedback, slot: Slot) {
         let (before, after) = self.concurrency.observe_change(feedback, Instant::now());
         if after > before {
-            self.slots.add_permits(after - before);
+            // Growth first cancels permits still owed from an earlier decrease; only what is
+            // left over becomes a new permit, or the deleter would run above the bound while
+            // held permits keep returning against a deficit that no longer reflects it.
+            let growth = after - before;
+            let cancelled = self.cancel_deficit(growth);
+            if growth > cancelled {
+                self.slots.add_permits(growth - cancelled);
+            }
         } else if after < before {
             self.deficit.fetch_add(before - after, Ordering::AcqRel);
         }
         slot.settle();
         self.retire_free_permits();
+    }
+
+    /// Cancel up to `n` units of deficit; returns how many were cancelled.
+    fn cancel_deficit(&self, n: usize) -> usize {
+        let mut cancelled = 0;
+        let _ = self
+            .deficit
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |owed| {
+                cancelled = owed.min(n);
+                Some(owed - cancelled)
+            });
+        cancelled
     }
 
     /// Retire free permits against the deficit, one at a time so a concurrent release cannot
