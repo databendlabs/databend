@@ -67,3 +67,69 @@ select time_slice('2022-02-02'::date, 0, 'week');
 statement error 1006
 select time_slice('2022-02-02'::date, 1, 'week', 'err_string');
 
+# Sub-day slices floor before the epoch, whatever the case of the unit.
+query TTTT
+SELECT time_slice('1969-12-31 23:59:59.500'::timestamp, 1, 'second'),
+       time_slice('1969-12-31 23:59:59.500'::timestamp, 1, 'second', 'end'),
+       time_slice('1969-12-31 20:00:00'::timestamp, 7, 'hour'),
+       time_slice('1900-03-01 10:17:00'::timestamp, 15, 'Minute', 'eNd')
+----
+1969-12-31 23:59:59.000000 1970-01-01 00:00:00.000000 1969-12-31 17:00:00.000000 1900-03-01 10:30:00.000000
+
+# Slices wider than i64 microseconds: the epoch starts the only slice.
+query TT
+SELECT time_slice('2024-03-08 15:27:13'::timestamp, 2562048, 'hour'),
+       time_slice('2024-03-08 15:27:13'::timestamp, 9223372036854775807, 'second')
+----
+1970-01-01 00:00:00.000000 1970-01-01 00:00:00.000000
+
+statement error 1006
+SELECT time_slice('2024-03-08 15:27:13'::timestamp, 3000000000000, 'hour', 'end')
+
+statement error 1006
+SELECT time_slice(to_timestamp(-1), 9223372036854775807, 'second')
+
+# The same over columns, which build the slice once for every row.
+query ITTT
+SELECT number,
+       time_slice(add_minutes('1969-12-31 22:30:00'::timestamp, number * 30), 1, 'hour'),
+       time_slice(add_minutes('1969-12-31 22:30:00'::timestamp, number * 30), 1, 'HOUR', 'end'),
+       time_slice(add_minutes('1969-12-31 22:30:00'::timestamp, number * 30), 15, 'Minute')
+FROM numbers(6) ORDER BY number
+----
+0 1969-12-31 22:00:00.000000 1969-12-31 23:00:00.000000 1969-12-31 22:30:00.000000
+1 1969-12-31 23:00:00.000000 1970-01-01 00:00:00.000000 1969-12-31 23:00:00.000000
+2 1969-12-31 23:00:00.000000 1970-01-01 00:00:00.000000 1969-12-31 23:30:00.000000
+3 1970-01-01 00:00:00.000000 1970-01-01 01:00:00.000000 1970-01-01 00:00:00.000000
+4 1970-01-01 00:00:00.000000 1970-01-01 01:00:00.000000 1970-01-01 00:30:00.000000
+5 1970-01-01 01:00:00.000000 1970-01-01 02:00:00.000000 1970-01-01 01:00:00.000000
+
+query IT
+SELECT number, time_slice(add_hours('2024-03-08 15:27:13'::timestamp, number), 2562048, 'hour')
+FROM numbers(3) ORDER BY number
+----
+0 1970-01-01 00:00:00.000000
+1 1970-01-01 00:00:00.000000
+2 1970-01-01 00:00:00.000000
+
+query ITT
+SELECT number, time_slice(add_days('2024-02-27'::date, number), 1, 'month'),
+       time_slice(add_days('2024-02-27'::date, number), 1, 'week', 'end')
+FROM numbers(4) ORDER BY number
+----
+0 2024-02-01 2024-03-04
+1 2024-02-01 2024-03-04
+2 2024-02-01 2024-03-04
+3 2024-03-01 2024-03-04
+
+query IT
+SELECT number, time_slice(if(number = 1, NULL, add_minutes('2024-03-08 15:27:00'::timestamp, number * 50)), 1, 'hour')
+FROM numbers(3) ORDER BY number
+----
+0 2024-03-08 15:00:00.000000
+1 NULL
+2 2024-03-08 17:00:00.000000
+
+# One row out of range fails the column.
+statement error 1006
+SELECT time_slice(add_seconds('1970-01-01 00:00:01'::timestamp, - number), 9223372036854775807, 'second') FROM numbers(3)
