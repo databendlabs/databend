@@ -44,6 +44,7 @@ use databend_storages_common_cache::TableSnapshot;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::meta::is_uuid_v7;
+use databend_storages_common_table_meta::meta::try_extract_uuid_v7_timestamp_from_path;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
@@ -133,12 +134,25 @@ async fn general_list_until_prefix(
 ) -> Result<Vec<Entry>> {
     let mut lister = dal.lister(path).await?;
     let mut paths = vec![];
+    let mut listed_files = 0usize;
+    let mut safety_skipped = 0usize;
+    let mut stopped_at_cutoff = false;
     while let Some(entry) = lister.try_next().await? {
         if entry.metadata().is_dir() {
             continue;
         }
+        listed_files += 1;
         if entry.path() >= until {
-            info!("entry path: {} >= until: {}", entry.path(), until);
+            stopped_at_cutoff = true;
+            info!(
+                "Listing cutoff reached: path={}, until={}, uuid_timestamp={:?}, last_modified={:?}, include_boundary={}",
+                entry.path(),
+                until,
+                try_extract_uuid_v7_timestamp_from_path(entry.path())
+                    .map_err(|error| error.to_string()),
+                entry.metadata().last_modified(),
+                need_one_more
+            );
             if need_one_more {
                 paths.push(entry);
             }
@@ -148,8 +162,20 @@ async fn general_list_until_prefix(
             || is_gc_candidate_segment_block(&entry, dal, gc_root_meta_ts.unwrap()).await?
         {
             paths.push(entry);
+        } else {
+            safety_skipped += 1;
         }
     }
+    info!(
+        "Bounded listing: prefix={}, until={}, listed_files={}, safety_skipped={}, returned_files={}, stopped_at_cutoff={}, include_boundary={}",
+        path,
+        until,
+        listed_files,
+        safety_skipped,
+        paths.len(),
+        stopped_at_cutoff,
+        stopped_at_cutoff && need_one_more
+    );
     Ok(paths)
 }
 
@@ -173,10 +199,24 @@ async fn fs_list_until_prefix(
     entries.sort_by(|l, r| l.path().cmp(r.path()));
 
     // Extract entries up to the `until` path, respecting lexicographical order.
+    let listed_files = entries.len();
+    let mut examined_files = 0usize;
+    let mut safety_skipped = 0usize;
+    let mut stopped_at_cutoff = false;
     let mut res = Vec::new();
     for entry in entries {
+        examined_files += 1;
         if entry.path() >= until {
-            info!("entry path: {} >= until: {}", entry.path(), until);
+            stopped_at_cutoff = true;
+            info!(
+                "Listing cutoff reached: path={}, until={}, uuid_timestamp={:?}, last_modified={:?}, include_boundary={}",
+                entry.path(),
+                until,
+                try_extract_uuid_v7_timestamp_from_path(entry.path())
+                    .map_err(|error| error.to_string()),
+                entry.metadata().last_modified(),
+                need_one_more
+            );
             if need_one_more {
                 res.push(entry);
             }
@@ -186,9 +226,22 @@ async fn fs_list_until_prefix(
             || is_gc_candidate_segment_block(&entry, dal, gc_root_meta_ts.unwrap()).await?
         {
             res.push(entry);
+        } else {
+            safety_skipped += 1;
         }
     }
 
+    info!(
+        "Bounded FS listing: prefix={}, until={}, listed_files={}, examined_files={}, safety_skipped={}, returned_files={}, stopped_at_cutoff={}, include_boundary={}",
+        path,
+        until,
+        listed_files,
+        examined_files,
+        safety_skipped,
+        res.len(),
+        stopped_at_cutoff,
+        stopped_at_cutoff && need_one_more
+    );
     Ok(res)
 }
 
@@ -236,6 +289,10 @@ impl FuseTable {
             })
             .await?;
 
+        let tag_count = tags.len();
+        let segments_before_tags = protected_segments.len();
+        let snapshots_before_tags = snapshot_files_to_gc.len();
+        let mut expired_tags = 0usize;
         let mut protected_snapshot_locs = HashSet::new();
         for (tag_name, seq_tag) in tags {
             if seq_tag
@@ -243,6 +300,7 @@ impl FuseTable {
                 .expire_at
                 .is_some_and(|expire_at| expire_at <= now)
             {
+                expired_tags += 1;
                 if let Err(error) = catalog
                     .drop_table_tag(DropTableTagReq {
                         table_id: self.get_id(),
@@ -272,6 +330,15 @@ impl FuseTable {
         }
 
         snapshot_files_to_gc.retain(|path| !protected_snapshot_locs.contains(path));
+        info!(
+            "Table tag protection: table_id={}, tags={}, expired_tags={}, protected_snapshots={}, snapshots_retained={}, segments_added={}",
+            self.get_id(),
+            tag_count,
+            expired_tags,
+            protected_snapshot_locs.len(),
+            snapshots_before_tags - snapshot_files_to_gc.len(),
+            protected_segments.len() - segments_before_tags
+        );
         Ok(())
     }
 
@@ -954,13 +1021,32 @@ impl FuseTable {
         let start = Instant::now();
         let retention_policy = self.get_data_retention_policy(ctx.as_ref())?;
         let snapshot_location_prefix = self.meta_location_generator().snapshot_location_prefix();
+        info!(
+            "Vacuum snapshot head: table={}, table_id={}, table_seq={}, location={}, snapshot_id={}, timestamp={:?}, prev_snapshot_id={:?}, segments={}, blocks={}, observed_lvt={:?}, transient={}, respect_flash_back={}",
+            self.table_info.desc,
+            self.get_id(),
+            self.table_info.ident.seq,
+            latest_location,
+            latest_snapshot.snapshot_id,
+            latest_snapshot.timestamp,
+            latest_snapshot.prev_snapshot_id,
+            latest_snapshot.segments.len(),
+            latest_snapshot.summary.block_count,
+            observed_lvt,
+            self.is_transient(),
+            respect_flash_back
+        );
 
         let mut is_vacuum_all = false;
         let mut respect_flash_back_with_lvt = None;
 
         let snapshots_before_lvt = match retention_policy {
             RetentionPolicy::ByTimePeriod(delta_duration) => {
-                info!("Using ByTimePeriod policy {:?}", delta_duration);
+                info!(
+                    "Using ByTimePeriod policy {:?}, table_id={}",
+                    delta_duration,
+                    self.get_id()
+                );
                 let retention_period = if self.is_transient() {
                     // For transient table, keep no history data
                     TimeDelta::zero()
@@ -972,23 +1058,35 @@ impl FuseTable {
                 is_vacuum_all = retention_period.is_zero();
 
                 if !is_uuid_v7(&latest_snapshot.snapshot_id) {
+                    info!(
+                        "Skipping vacuum: table_id={}, head snapshot {} is not v7",
+                        self.get_id(),
+                        latest_snapshot.snapshot_id
+                    );
                     return Ok(None);
                 }
                 let timestamp = latest_snapshot
                     .timestamp
                     .ok_or_else(|| ErrorCode::Internal("GC head has no timestamp"))?;
-                let lvt = max(
-                    retention_cutoff(Utc::now(), timestamp, retention_period),
-                    observed_lvt.time,
-                );
+                let now = Utc::now();
+                let candidate_lvt = retention_cutoff(now, timestamp, retention_period);
+                let lvt = max(candidate_lvt, observed_lvt.time);
 
                 respect_flash_back_with_lvt = respect_flash_back.then_some(lvt);
 
                 ctx.set_status_info(&format!(
-                    "Calculated LVT for table {}, elapsed: {:?}, LVT: {:?}",
+                    "Calculated LVT for table {}, table_id: {}, elapsed: {:?}, now: {}, retention_period: {:?}, retention_boundary: {}, latest_snapshot_timestamp: {}, candidate_lvt: {}, observed_lvt: {}, LVT: {}, vacuum_all: {}",
                     self.table_info.desc,
+                    self.get_id(),
                     start.elapsed(),
-                    lvt
+                    now,
+                    retention_period,
+                    now - retention_period,
+                    timestamp,
+                    candidate_lvt,
+                    observed_lvt.time,
+                    lvt,
+                    is_vacuum_all
                 ));
 
                 if is_vacuum_all {
@@ -1006,8 +1104,9 @@ impl FuseTable {
             }
             RetentionPolicy::ByNumOfSnapshotsToKeep(num_snapshots_to_keep) => {
                 info!(
-                    "Using ByNumOfSnapshotsToKeep policy {:?}",
-                    num_snapshots_to_keep
+                    "Using ByNumOfSnapshotsToKeep policy {:?}, table_id={}",
+                    num_snapshots_to_keep,
+                    self.get_id()
                 );
                 // List the snapshot order by timestamp asc, till the current snapshot(inclusively).
                 let need_one_more = true;
@@ -1022,6 +1121,12 @@ impl FuseTable {
                 let len = snapshots.len();
                 if len <= num_snapshots_to_keep {
                     // Only the current snapshot is there, done
+                    info!(
+                        "Skipping vacuum: table_id={}, listed_snapshots={} <= snapshots_to_keep={}",
+                        self.get_id(),
+                        len,
+                        num_snapshots_to_keep
+                    );
                     return Ok(None);
                 }
                 if num_snapshots_to_keep == 1 {
@@ -1038,6 +1143,13 @@ impl FuseTable {
                 // see `select_gc_root` for details.
                 let num_candidates = len - num_snapshots_to_keep + 2;
                 snapshots.truncate(num_candidates);
+                info!(
+                    "Snapshot-count retention: table_id={}, listed_snapshots={}, retained_candidates={}, vacuum_all={}",
+                    self.get_id(),
+                    len,
+                    snapshots.len(),
+                    is_vacuum_all
+                );
                 snapshots
             }
         };
@@ -1066,10 +1178,16 @@ impl FuseTable {
         };
 
         ctx.set_status_info(&format!(
-            "Selected gc_root for table {}, elapsed: {:?}, gc_root: {:?}, snapshots_to_gc: {:?}",
+            "Selected gc_root for table {}, table_id: {}, elapsed: {:?}, gc_root_path: {}, gc_root_id: {}, gc_root_timestamp: {:?}, gc_root_meta_ts: {}, segments: {}, blocks: {}, snapshots_to_gc: {:?}",
             self.table_info.desc,
+            self.get_id(),
             start.elapsed(),
-            selection.gc_root,
+            selection.gc_root_path,
+            selection.gc_root.snapshot_id,
+            selection.gc_root.timestamp,
+            selection.gc_root_meta_ts,
+            selection.gc_root.segments.len(),
+            selection.gc_root.summary.block_count,
             slice_summary(&selection.snapshots_to_gc)
         ));
         Ok(Some(selection))
@@ -1087,6 +1205,11 @@ impl FuseTable {
         let op = self.get_operator();
         let version = TableMetaLocationGenerator::snapshot_version(&latest_location);
         let (gc_root_path, selected_root) = if is_vacuum_all {
+            info!(
+                "GC root selection: table_id={}, reason=vacuum_all, head={}",
+                self.get_id(),
+                latest_location
+            );
             (latest_location, Some((latest_snapshot, version)))
         } else if let Some(lvt) = respect_flash_back {
             let (root, version) = self
@@ -1101,29 +1224,62 @@ impl FuseTable {
             // An intact chain may end at an anchor newer than the cutoff. It must still be
             // protected, but there is no owner history at the requested cutoff to reclaim.
             if root.timestamp.is_none_or(|timestamp| timestamp > lvt) {
+                info!(
+                    "Skipping vacuum: table_id={}, history root {} at {:?} is beyond LVT {}",
+                    self.get_id(),
+                    root.snapshot_id,
+                    root.timestamp,
+                    lvt
+                );
                 return Ok(None);
             }
             let location = self
                 .meta_location_generator()
                 .gen_snapshot_location(&root.snapshot_id, version)?;
+            info!(
+                "GC root selection: table_id={}, reason=committed_history, lvt={}, root={}",
+                self.get_id(),
+                lvt,
+                location
+            );
             (location, Some((root, version)))
         } else {
             let Some(anchor_entry) = snapshots_before_lvt.last() else {
-                info!("no snapshots before lvt, stop vacuuming");
+                info!(
+                    "Skipping vacuum: table_id={}, no snapshots before LVT",
+                    self.get_id()
+                );
                 return Ok(None);
             };
             let (anchor, _) =
                 SnapshotsIO::read_snapshot(anchor_entry.path().to_owned(), op.clone(), false)
                     .await?;
+            info!(
+                "GC root selection: table_id={}, reason=anchor_predecessor, anchor_path={}, anchor_id={}, anchor_timestamp={:?}, anchor_last_modified={:?}, anchor_prev_snapshot_id={:?}, listed_snapshots={}",
+                self.get_id(),
+                anchor_entry.path(),
+                anchor.snapshot_id,
+                anchor.timestamp,
+                anchor_entry.metadata().last_modified(),
+                anchor.prev_snapshot_id,
+                snapshots_before_lvt.len()
+            );
             let Some((gc_root_id, gc_root_ver)) = anchor.prev_snapshot_id else {
-                info!("anchor has no prev_snapshot_id, stop vacuuming");
+                info!(
+                    "Skipping vacuum: table_id={}, anchor has no prev_snapshot_id",
+                    self.get_id()
+                );
                 return Ok(None);
             };
             let gc_root_path = self
                 .meta_location_generator()
                 .gen_snapshot_location(&gc_root_id, gc_root_ver)?;
             if !is_uuid_v7(&gc_root_id) {
-                info!("gc_root {} is not v7", gc_root_path);
+                info!(
+                    "Skipping vacuum: table_id={}, gc_root {} is not v7",
+                    self.get_id(),
+                    gc_root_path
+                );
                 return Ok(None);
             }
             (gc_root_path, None)
@@ -1144,6 +1300,11 @@ impl FuseTable {
             Err(e) => {
                 return if e.kind() == ErrorKind::NotFound {
                     // Concurrent vacuum, ignore it
+                    info!(
+                        "Skipping vacuum: table_id={}, GC root object {} not found during stat",
+                        self.get_id(),
+                        gc_root_path
+                    );
                     Ok(None)
                 } else {
                     Err(e.into())
@@ -1154,7 +1315,6 @@ impl FuseTable {
 
         match gc_root {
             Ok((gc_root, _)) => {
-                info!("gc_root found: {:?}", gc_root);
                 let mut gc_candidates = Vec::with_capacity(snapshots_before_lvt.len());
 
                 for snapshot in snapshots_before_lvt.iter() {
@@ -1189,6 +1349,15 @@ impl FuseTable {
                     ))
                 })?;
                 let snapshots_to_gc = gc_candidates[..gc_root_idx].to_vec();
+                info!(
+                    "Snapshot GC candidates: table_id={}, listed={}, safety_skipped={}, candidates={}, gc_root_index={}, snapshots_to_gc={}",
+                    self.get_id(),
+                    snapshots_before_lvt.len(),
+                    snapshots_before_lvt.len() - gc_candidates.len(),
+                    gc_candidates.len(),
+                    gc_root_idx,
+                    snapshots_to_gc.len()
+                );
                 let timestamp = gc_root.timestamp.ok_or_else(|| {
                     ErrorCode::Internal(format!("GC root {} has no timestamp", gc_root_path))
                 })?;
