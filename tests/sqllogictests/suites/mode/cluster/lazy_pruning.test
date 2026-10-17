@@ -91,5 +91,41 @@ explain analyze select * from t where a > 2500
 statement ok
 unset enable_distributed_pruning
 
+# The deferred pruning publishes under the scan's *physical* plan id, which
+# is what `explain analyze` looks up. With an aggregate above the scan the
+# physical id differs from the logical `scan_id`, so a publisher keyed on the
+# wrong one shows `partitions scanned: 0` here. Column-oriented segments and
+# `enable_prune_pipeline = 0` each have their own publisher; cover both.
+statement ok
+create table tc (a int) row_per_block=100 block_per_segment=10 segment_format='column_oriented'
+
+statement ok
+insert into tc select number + 1000 from numbers(300)
+
+statement ok
+insert into tc select number + 2000 from numbers(300)
+
+statement ok
+insert into tc select number + 3000 from numbers(300)
+
+statement ok
+insert into tc select number + 4000 from numbers(300)
+
+query T
+explain analyze select a % 3, count() from tc where a > 2500 group by a % 3
+----
+<slt:ignore>
+
+statement ok
+set enable_prune_pipeline = 0
+
+query T
+explain analyze select a % 3, count() from t where a > 2500 group by a % 3
+----
+<slt:ignore>
+
+statement ok
+unset enable_prune_pipeline
+
 statement ok
 drop database lazy_pruning

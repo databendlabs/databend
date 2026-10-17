@@ -357,6 +357,18 @@ impl FuseTable {
         let (part_info_tx, part_info_rx) = async_channel::bounded(max_io_requests);
         self.pruned_result_receiver.lock().replace(part_info_rx);
 
+        if !ctx.get_settings().get_enable_prune_pipeline()? {
+            self.prune_lazy_segments_synchronously(
+                ctx,
+                plan_id,
+                source_pipeline,
+                push_downs,
+                lazy_init_segments,
+                part_info_tx,
+            );
+            return Ok(None);
+        }
+
         // If we can get the pruning result from cache, we don't need to prune again, but need sent
         // the parts to the next pipeline
         let derterministic_cache_key =
@@ -432,7 +444,7 @@ impl FuseTable {
                     plan.scan_id,
                     segment_rx,
                     part_info_tx,
-                    derterministic_cache_key.clone(),
+                    plan_id,
                     table_schema.clone(),
                     internal_column_names.clone(),
                 )?;
@@ -606,6 +618,68 @@ impl FuseTable {
                 (Some(block_meta_index.clone()), block_meta.clone())
             })
             .collect()
+    }
+
+    /// `enable_prune_pipeline = 0`: prune the lazy segments in one
+    /// synchronous pass on a side runtime and feed the parts to
+    /// `part_info_tx`, instead of building a prune pipeline.
+    ///
+    /// Publishes what this node scanned under the physical `plan_id`; the
+    /// planner published `partitions_total` once from the snapshot.
+    fn prune_lazy_segments_synchronously(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        plan_id: u32,
+        source_pipeline: &mut Pipeline,
+        push_downs: Option<PushDownInfo>,
+        lazy_init_segments: Vec<SegmentLocation>,
+        part_info_tx: Sender<Result<PartInfoPtr>>,
+    ) {
+        let table = self.clone();
+        let table_schema = self.schema_with_stream();
+        source_pipeline.set_on_init(move || {
+            // We cannot use the runtime associated with the query to avoid increasing its lifetime.
+            GlobalIORuntime::instance().spawn(async move {
+                // avoid block global io runtime
+                let runtime = Runtime::with_worker_threads(2, Some("prune-snap-blk".to_string()))?;
+                let handler = runtime.spawn(async move {
+                    match table
+                        .prune_snapshot_blocks(
+                            ctx.clone(),
+                            push_downs,
+                            table_schema,
+                            lazy_init_segments,
+                            0,
+                            ReadPartitionsPruningMode::Normal,
+                            None,
+                        )
+                        .await
+                    {
+                        Ok((mut statistics, partitions, _)) => {
+                            statistics.partitions_total = 0;
+                            ctx.set_pruned_partitions_stats(plan_id, statistics);
+                            for part in partitions.partitions {
+                                // the sql may be killed or early stop, ignore the error
+                                if let Err(_e) = part_info_tx.send(Ok(part)).await {
+                                    break;
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            let _ = part_info_tx.send(Err(err)).await;
+                        }
+                    }
+                });
+
+                if let Err(cause) = handler.await {
+                    log::warn!("Join error while in prune pipeline, cause: {:?}", cause);
+                }
+
+                Result::Ok(())
+            });
+
+            Ok(())
+        });
     }
 
     pub fn prune_segments_with_pipeline(
@@ -810,7 +884,7 @@ impl FuseTable {
         scan_id: usize,
         segment_rx: Receiver<SegmentLocation>,
         part_info_tx: Sender<Result<PartInfoPtr>>,
-        _derterministic_cache_key: Option<String>,
+        plan_id: u32,
         table_schema: TableSchemaRef,
         internal_column_names: HashSet<String>,
     ) -> Result<()> {
@@ -954,7 +1028,7 @@ impl FuseTable {
                 let mut statistics = PartStatistics::default_exact();
                 statistics.partitions_scanned = partitions_scanned.load(Ordering::Relaxed);
                 statistics.pruning_stats = pruner.pruning_stats();
-                ctx.set_pruned_partitions_stats(scan_id as u32, statistics);
+                ctx.set_pruned_partitions_stats(plan_id, statistics);
             }
             Ok(())
         });

@@ -20,16 +20,19 @@
 //! interpreter was entered, and that the partition counters still come from
 //! the attached table.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
+use databend_common_catalog::plan::PartStatistics;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::TableContextPartitionStats;
 use databend_query::sessions::TableContextProgress;
 use databend_query::sessions::TableContextQueryIdentity;
 use databend_query::sessions::TableContextSettings;
@@ -42,8 +45,31 @@ struct Observed {
     io_stats: IoStatsSnapshot,
     partitions_scanned: u64,
     partitions_total: u64,
+    /// `pruned_partitions_stats` as `explain analyze` reads it.
+    per_plan: HashMap<u32, PartStatistics>,
     scan_bytes: usize,
     write_bytes: usize,
+}
+
+impl Observed {
+    /// Every pruning path publishes under the physical id of its scan node,
+    /// and each value for that id is published by exactly one party. For a
+    /// single-scan statement that means: one entry in the per-plan map, and
+    /// the query-level sum equals it.
+    fn assert_single_scan_published_once(&self) {
+        assert_eq!(
+            self.per_plan.len(),
+            1,
+            "a single-scan statement must publish under exactly one plan id, got {:?}",
+            self.per_plan.keys().collect::<Vec<_>>()
+        );
+        let (_, stat) = self.per_plan.iter().next().unwrap();
+        assert_eq!(
+            (self.partitions_total, self.partitions_scanned),
+            (stat.partitions_total as u64, stat.partitions_scanned as u64),
+            "query-level sum must equal the single plan entry"
+        );
+    }
 }
 
 /// Run `sql` on a fresh `QueryContext` created and executed *without* any
@@ -77,6 +103,7 @@ async fn run_and_observe_with(
         io_stats: ctx.get_io_stats(),
         partitions_scanned: partition_stats.scanned,
         partitions_total: partition_stats.total,
+        per_plan: ctx.get_pruned_partitions_stats(),
         scan_bytes: ctx.get_scan_progress_value().bytes,
         write_bytes: ctx.get_write_progress_value().bytes,
     })
@@ -367,6 +394,116 @@ async fn analyze_table_counts_every_histogram_scan() -> Result<()> {
     // One scan per histogram column (a, b) over the single block.
     assert_eq!(observed.partitions_total, 2);
     assert_eq!(observed.partitions_scanned, 2);
+    Ok(())
+}
+
+/// Every pruning mode must publish its statistics under the scan node's
+/// physical plan id, exactly once per value. The query here has an aggregate
+/// above the scan so that the logical `scan_id` (0) and the physical plan id
+/// differ; a publisher keyed on the wrong one shows up as a second entry in
+/// the per-plan map, and a duplicate publisher as a sum larger than the entry.
+#[tokio::test(flavor = "multi_thread")]
+async fn every_pruning_mode_publishes_under_the_scan_plan_id() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+
+    // (table, lazy?) — lazy needs segments > nodes (1 here).
+    let row = format!("{db}.inv_row");
+    let col = format!("{db}.inv_col");
+    for (table, extra) in [(&row, ""), (&col, " segment_format='column_oriented'")] {
+        fixture
+            .execute_command(&format!(
+                "create table {table} (a int) row_per_block=100 block_per_segment=10{extra}"
+            ))
+            .await?;
+        for _ in 0..2 {
+            fixture
+                .execute_command(&format!(
+                    "insert into {table} select number from numbers(300)"
+                ))
+                .await?;
+        }
+    }
+    // Eager: a single segment.
+    let eager = format!("{db}.inv_eager");
+    fixture
+        .execute_command(&format!("create table {eager} (a int) row_per_block=100"))
+        .await?;
+    fixture
+        .execute_command(&format!(
+            "insert into {eager} select number from numbers(300)"
+        ))
+        .await?;
+
+    let aggregate =
+        |table: &str| format!("select a % 3, count() from {table} where a >= 200 group by a % 3");
+
+    struct Case {
+        name: &'static str,
+        sql: String,
+        prune_pipeline: bool,
+        expect: (u64, u64),
+    }
+    let cases = [
+        Case {
+            name: "eager scan",
+            sql: aggregate(&eager),
+            prune_pipeline: true,
+            expect: (3, 1),
+        },
+        Case {
+            name: "lazy row-oriented, prune pipeline",
+            sql: aggregate(&row),
+            prune_pipeline: true,
+            expect: (6, 2),
+        },
+        Case {
+            name: "lazy row-oriented, synchronous",
+            sql: aggregate(&row),
+            prune_pipeline: false,
+            expect: (6, 2),
+        },
+        Case {
+            name: "lazy column-oriented, prune pipeline",
+            sql: aggregate(&col),
+            prune_pipeline: true,
+            expect: (6, 2),
+        },
+        // No "lazy column-oriented, synchronous" case: `prune_snapshot_blocks`
+        // reads segments through `RowOrientedSegmentReader` and fails on a
+        // column-oriented table with `unsupported encoding`, on `main` too.
+        Case {
+            name: "eager update",
+            sql: format!("update {eager} set a = a where a >= 200"),
+            prune_pipeline: true,
+            expect: (3, 1),
+        },
+        Case {
+            name: "eager delete",
+            sql: format!("delete from {eager} where a >= 200"),
+            prune_pipeline: true,
+            expect: (3, 1),
+        },
+    ];
+
+    for case in cases {
+        let observed = run_and_observe_with(&fixture, &case.sql, |ctx| {
+            ctx.get_settings().set_setting(
+                "enable_prune_pipeline".into(),
+                if case.prune_pipeline { "1" } else { "0" }.into(),
+            )
+        })
+        .await
+        .unwrap_or_else(|e| panic!("{}: {e}", case.name));
+        assert_eq!(
+            (observed.partitions_total, observed.partitions_scanned),
+            case.expect,
+            "{}: (total, scanned)",
+            case.name
+        );
+        observed.assert_single_scan_published_once();
+    }
     Ok(())
 }
 

@@ -87,7 +87,6 @@ use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::planned_pruning_stats;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::TableContextPartitionStats;
-use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableFactory;
 
 fn should_use_distributed_block_meta_shuffle(
@@ -212,15 +211,13 @@ impl IPhysicalPlan for TableScan {
         let table = builder.ctx.build_table_from_source_plan(&self.source)?;
         builder.ctx.set_partitions(self.source.parts.clone())?;
 
-        if builder.ctx.get_settings().get_enable_prune_pipeline()? {
-            if let Some(prune_pipeline) = table.build_prune_pipeline(
-                builder.ctx.clone(),
-                &self.source,
-                &mut builder.main_pipeline,
-                self.get_id(),
-            )? {
-                builder.pipelines.push(prune_pipeline);
-            }
+        if let Some(prune_pipeline) = table.build_prune_pipeline(
+            builder.ctx.clone(),
+            &self.source,
+            &mut builder.main_pipeline,
+            self.get_id(),
+        )? {
+            builder.pipelines.push(prune_pipeline);
         }
 
         table.read_data(

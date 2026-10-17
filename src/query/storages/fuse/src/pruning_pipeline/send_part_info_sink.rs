@@ -85,8 +85,8 @@ impl SendPartState {
         let mut send_part_cache = self.cache.lock();
         let pruning_stats = send_part_cache.fuse_pruner.pruning_stats();
         send_part_cache.statistics.pruning_stats = pruning_stats;
-        // `partitions_total` is published once by the coordinator from the
-        // snapshot; this node contributes only what it scanned.
+        // `partitions_total` stays 0 (see `create`): the planner published it
+        // once from the snapshot; this node contributes only what it scanned.
         send_part_cache.statistics.clone()
     }
 
