@@ -40,6 +40,7 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
+use databend_common_grpc::RpcClientTlsConfig;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::WarehouseApi;
@@ -75,6 +76,7 @@ use tokio::task::JoinHandle;
 use tokio::time::sleep as tokio_async_sleep;
 use tokio::time::sleep;
 
+use super::control_channel::ControlChannel;
 use crate::servers::flight::FlightClient;
 use crate::servers::flight::FlightOperation;
 use crate::servers::flight::add_flight_error_context;
@@ -194,22 +196,43 @@ impl ClusterHelper for Cluster {
                     let mut attempt = 0;
 
                     loop {
-                        let mut conn = create_client(
-                            &config,
-                            &node_id,
-                            &flight_address,
-                            flight_params.keep_alive,
-                        )
-                        .await?;
-                        match conn
-                            .do_action::<_, Res>(
+                        let result = if flight_params.reuse_control_channel {
+                            let channel = ControlChannel::acquire(
+                                &config,
+                                &node_id,
+                                &flight_address,
+                                flight_params.keep_alive,
+                            )
+                            .await?;
+                            let result = channel
+                                .client(&config.query.node_id, &node_id)
+                                .do_action::<_, Res>(
+                                    path,
+                                    node_secret.clone(),
+                                    message.clone(),
+                                    flight_params.timeout,
+                                )
+                                .await;
+                            channel.finish(&result);
+                            result
+                        } else {
+                            let mut conn = create_client(
+                                &config,
+                                &node_id,
+                                &flight_address,
+                                flight_params.keep_alive,
+                            )
+                            .await?;
+                            conn.do_action::<_, Res>(
                                 path,
                                 node_secret.clone(),
                                 message.clone(),
                                 flight_params.timeout,
                             )
                             .await
-                        {
+                        };
+
+                        match result {
                             Ok(result) => return Ok(result),
                             Err(e)
                                 if e.code() == ErrorCode::CANNOT_CONNECT_NODE
@@ -992,13 +1015,9 @@ impl ClusterHeartbeat {
     }
 }
 
-#[async_backtrace::framed]
-pub async fn create_client(
+pub(super) fn rpc_client_options(
     config: &InnerConfig,
-    remote_node_id: &str,
-    address: &str,
-    keep_alive: FlightKeepAliveParams,
-) -> Result<FlightClient> {
+) -> (Option<Duration>, Option<RpcClientTlsConfig>) {
     let timeout = if config.query.common.rpc_client_timeout_secs > 0 {
         Some(Duration::from_secs(
             config.query.common.rpc_client_timeout_secs,
@@ -1012,6 +1031,17 @@ pub async fn create_client(
     } else {
         None
     };
+    (timeout, rpc_tls_config)
+}
+
+#[async_backtrace::framed]
+pub async fn create_client(
+    config: &InnerConfig,
+    remote_node_id: &str,
+    address: &str,
+    keep_alive: FlightKeepAliveParams,
+) -> Result<FlightClient> {
+    let (timeout, rpc_tls_config) = rpc_client_options(config);
     let keep_alive_config = build_keep_alive_config(keep_alive);
 
     let channel = ConnectionFactory::create_rpc_channel(
@@ -1039,10 +1069,12 @@ pub async fn create_client(
 
 #[derive(Clone, Copy, Debug)]
 pub struct FlightParams {
-    pub(crate) timeout: u64,
-    pub(crate) retry_times: u64,
-    pub(crate) retry_interval: u64,
-    pub(crate) keep_alive: FlightKeepAliveParams,
+    pub timeout: u64,
+    pub retry_times: u64,
+    pub retry_interval: u64,
+    pub keep_alive: FlightKeepAliveParams,
+    /// Send the requests over a cached channel per node instead of a new connection.
+    pub reuse_control_channel: bool,
 }
 
 #[derive(Clone)]
