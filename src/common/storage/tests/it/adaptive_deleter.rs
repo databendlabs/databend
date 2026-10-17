@@ -363,42 +363,42 @@ async fn test_halving_under_queued_waiters_shrinks_the_batches_in_flight() {
     for i in 0..8 {
         gate.throttle(&format!("9/90/{i}"));
     }
-    let a = tokio::spawn({
-        let d = deleter.clone();
-        async move { d.remove_all("9/90/").await }
-    });
-    gate.wait_for_blocked(4).await;
-    let b = tokio::spawn({
-        let d = deleter.clone();
-        async move { d.remove_all("9/91/").await }
-    });
-    tokio::time::sleep(Duration::from_millis(30)).await;
-    assert_eq!(gate.blocked(), 4, "B is queued behind A's four batches");
+    let a = deleter.remove_all("9/90/");
+    let b = async {
+        gate.wait_for_blocked(4).await;
+        deleter.remove_all("9/91/").await
+    };
+    let steps = async {
+        gate.wait_for_blocked(4).await;
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        assert_eq!(gate.blocked(), 4, "B is queued behind A's four batches");
 
-    // The outcome halves the bound to 2. The finished batch's permit must be retired by that
-    // halving rather than handed to B, so three remain in flight, not four.
-    gate.release_one();
-    tokio::time::sleep(Duration::from_millis(50)).await;
-    assert_eq!(deleter.concurrency(), 2);
-    assert_eq!(gate.blocked(), 3, "retired, not handed to a waiter");
+        // The outcome halves the bound to 2. The finished batch's permit must be retired by
+        // that halving rather than handed to B, so three remain in flight, not four.
+        gate.release_one();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(deleter.concurrency(), 2);
+        assert_eq!(gate.blocked(), 3, "retired, not handed to a waiter");
 
-    // Draining one more of A's retires the deficit; from then on B refills to the new bound
-    // and the in-flight count never climbs back to the old one.
-    gate.release_one();
-    tokio::time::sleep(Duration::from_millis(50)).await;
-    assert_eq!(gate.blocked(), 2);
-    gate.release_one();
-    tokio::time::sleep(Duration::from_millis(50)).await;
-    assert_eq!(
-        gate.blocked(),
-        2,
-        "B took the freed slot: steady at the new bound"
-    );
-    assert!(gate.peak() <= 4);
+        // Draining one more of A's retires the deficit; from then on B refills to the new
+        // bound and the in-flight count never climbs back to the old one.
+        gate.release_one();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(gate.blocked(), 2);
+        gate.release_one();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(
+            gate.blocked(),
+            2,
+            "B took the freed slot: steady at the new bound"
+        );
+        assert!(gate.peak() <= 4);
 
-    gate.open();
-    assert_eq!(a.await.unwrap().unwrap_err().kind(), ErrorKind::RateLimited);
-    b.await.unwrap().unwrap();
+        gate.open();
+    };
+    let (a, b, ()) = futures::join!(a, b, steps);
+    assert_eq!(a.unwrap_err().kind(), ErrorKind::RateLimited);
+    b.unwrap();
     assert_eq!(count(&op, "9/91/").await, 0);
     assert!(count(&op, "9/90/").await > 0, "A failed closed");
 }
