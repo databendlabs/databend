@@ -224,9 +224,13 @@ impl AsyncSink for CommitMultiTableInsert {
                     let txn_mgr = self.ctx.txn_mgr();
                     let mut txn_mgr = txn_mgr.lock();
                     if txn_mgr.is_active() {
-                        txn_mgr.add_multi_table_insert_rows(insert_rows.clone());
                         for (&table_id, &delta) in &logical_deltas {
-                            txn_mgr.add_logical_change_delta(table_id, delta);
+                            txn_mgr.add_table_delta(
+                                table_id,
+                                delta,
+                                &hlls[&table_id],
+                                insert_rows.get(&table_id).copied().unwrap_or_default(),
+                            );
                         }
                     }
                 }

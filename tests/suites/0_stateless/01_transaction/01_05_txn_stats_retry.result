@@ -1,0 +1,17 @@
+single insert with low NDV: statistics after COMMIT retry look good
+multiple inserts: statistics after COMMIT retry look good
+mixed ordinary and multi-table inserts: statistics after COMMIT retry look good
+statistics disabled in transaction: statistics after COMMIT retry look good
+statistics disabled in concurrent insert: statistics after COMMIT retry look good
+partially covered table: statistics after COMMIT retry look good
+latest snapshot without statistics: statistics after COMMIT retry look good
+concurrent ANALYZE removes stale HLL values: statistics after COMMIT retry look good
+transaction ANALYZE keeps append statistics: statistics after COMMIT retry look good
+insert then delete retains accumulated coverage until ANALYZE: statistics after COMMIT retry look good
+repeated updates retain each statement's coverage until ANALYZE: statistics after COMMIT retry look good
+DELETE preserves latest coverage until ANALYZE: statistics after COMMIT retry look good
+single logical UPDATE does not count the full rewritten block: statistics after COMMIT retry look good
+deduplicated INSERT records its delta once: statistics after COMMIT retry look good
+rollback clears deltas before the next transaction: statistics after COMMIT retry look good
+failed statement clears deltas before the next transaction: statistics after COMMIT retry look good
+commit clears deltas before the next transaction: statistics after COMMIT retry look good
