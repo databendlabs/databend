@@ -445,6 +445,41 @@ async fn test_fs_directories_are_removed_after_their_contents() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_fs_remove_all_preserves_the_configured_root() {
+    let _serial = SERIAL.lock().await;
+    FaultInjection::clear();
+    for prefix in ["", "/", "///", " \t/// \t"] {
+        let parent = tempfile::tempdir().unwrap();
+        let root = parent.path().join("storage");
+        let op = Operator::new(opendal::services::Fs::default().root(root.to_str().unwrap()))
+            .unwrap()
+            .finish();
+        for path in ["a", "nested/b", "nested/deep/c", "other/d"] {
+            op.write(path, "x").await.unwrap();
+        }
+        op.create_dir("empty/sub/").await.unwrap();
+        let deleter = AdaptiveDeleter::new(op.clone(), Arc::default(), config()).unwrap();
+
+        let report = deleter.remove_all(prefix).await.unwrap();
+        assert_eq!(report.removed, 4);
+        assert!(
+            root.is_dir(),
+            "{prefix:?} must preserve the configured root"
+        );
+        assert!(std::fs::read_dir(&root).unwrap().next().is_none());
+
+        let report = deleter.remove_all(prefix).await.unwrap();
+        assert_eq!((report.removed, report.batches), (0, 0));
+        assert!(root.is_dir(), "empty-root cleanup must be a no-op");
+        op.write("after/cleanup", "still usable").await.unwrap();
+        assert_eq!(
+            op.read("after/cleanup").await.unwrap().to_vec(),
+            b"still usable"
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_cancelled_call_gives_its_slots_back() {
     let _serial = SERIAL.lock().await;
     FaultInjection::clear();

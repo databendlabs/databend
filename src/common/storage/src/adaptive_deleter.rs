@@ -22,6 +22,7 @@ use futures::stream::FuturesUnordered;
 use opendal::EntryMode;
 use opendal::ErrorKind;
 use opendal::Operator;
+use opendal::raw::normalize_path;
 use parking_lot::Mutex;
 use tokio::sync::Notify;
 
@@ -225,19 +226,20 @@ impl AdaptiveDeleter {
     /// are awaited, and the error is returned: the prefix is then only partially removed and
     /// the caller must keep whatever points at it.
     ///
-    /// On filesystem-style backends the directories under the prefix, and the prefix itself,
-    /// are removed after their contents, as [`Operator::remove_all`] does.
+    /// On filesystem-style backends, directories are removed after their contents. An empty
+    /// or root prefix clears the configured storage root's contents but preserves the root.
     pub async fn remove_all(&self, prefix: &str) -> opendal::Result<RemoveAllReport> {
+        let prefix = normalize_path(prefix);
         let shared = &self.shared;
         let mut run = Run::new(self.shared.clone());
 
         // Listings may or may not include an entry for the prefix itself, so it is handled
         // here and skipped there.
-        let prefix_is_dir = match shared.operator.stat(prefix).await {
+        let prefix_is_dir = match shared.operator.stat(&prefix).await {
             Ok(meta) if meta.mode() == EntryMode::DIR => true,
             // An object at the prefix itself; other objects may still share the prefix.
             Ok(_) => {
-                run.push(vec![prefix.to_owned()]).await;
+                run.push(vec![prefix.clone()]).await;
                 false
             }
             // A prefix with no object of its own, the normal case on object stores.
@@ -245,7 +247,7 @@ impl AdaptiveDeleter {
             Err(e) => return Err(e),
         };
 
-        let mut lister = match shared.operator.lister_with(prefix).recursive(true).await {
+        let mut lister = match shared.operator.lister_with(&prefix).recursive(true).await {
             Ok(lister) => lister,
             Err(e) => {
                 run.first_error = Some(e);
@@ -284,8 +286,8 @@ impl AdaptiveDeleter {
         // Directories only exist on filesystem-style backends: deepest first, the prefix last.
         if run.first_error.is_none() {
             dirs.sort_unstable_by(|a, b| b.len().cmp(&a.len()).then_with(|| b.cmp(a)));
-            if prefix_is_dir {
-                dirs.push(prefix.to_owned());
+            if prefix_is_dir && prefix != "/" {
+                dirs.push(prefix);
             }
             for dir in dirs {
                 if run.first_error.is_some() {
