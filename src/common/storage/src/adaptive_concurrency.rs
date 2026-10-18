@@ -13,9 +13,10 @@
 // limitations under the License.
 
 use std::io;
-use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
+
+use parking_lot::Mutex;
 
 /// Bounds and pacing for additive-increase / multiplicative-decrease concurrency control.
 /// Defaults preserve the policy used by vacuuming temporary spill directories.
@@ -123,7 +124,7 @@ impl AdaptiveConcurrency {
     }
 
     pub fn current(&self) -> usize {
-        self.state.lock().unwrap().current
+        self.state.lock().current
     }
 
     /// Apply feedback and return the resulting concurrency bound. The supplied clock makes
@@ -136,7 +137,7 @@ impl AdaptiveConcurrency {
     /// Like [`Self::observe`], also returning the bound before this feedback. The pair is
     /// read under one lock, so concurrent observers each see a distinct, consistent step.
     pub fn observe_change(&self, feedback: ConcurrencyFeedback, now: Instant) -> (usize, usize) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock();
         let before = state.current;
         if self.throttled(feedback, state.current) {
             state.clear_streak = 0;

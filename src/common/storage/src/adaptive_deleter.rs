@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::Instant;
 
 use futures::StreamExt;
@@ -23,6 +22,7 @@ use futures::stream::FuturesUnordered;
 use opendal::EntryMode;
 use opendal::ErrorKind;
 use opendal::Operator;
+use parking_lot::Mutex;
 use tokio::sync::Notify;
 
 use crate::AdaptiveConcurrency;
@@ -141,7 +141,7 @@ struct Slot {
 impl Drop for Slot {
     fn drop(&mut self) {
         {
-            let mut in_flight = self.shared.in_flight.lock().unwrap();
+            let mut in_flight = self.shared.in_flight.lock();
             *in_flight -= 1;
         }
         self.shared.available.notify_waiters();
@@ -178,7 +178,7 @@ impl AdaptiveDeleter {
     /// Configure before starting work; the callback and total are shared by all clones.
     /// Directory cleanup by `remove_all` is excluded from the total.
     pub fn with_progress(self, report: Arc<dyn Fn(usize) + Send + Sync>) -> Self {
-        self.shared.progress.lock().unwrap().report = Some(report);
+        self.shared.progress.lock().report = Some(report);
         self
     }
 
@@ -355,7 +355,7 @@ impl Shared {
             Err(e) => (0, Some(e)),
         };
         if removed > 0 {
-            let mut progress = self.progress.lock().unwrap();
+            let mut progress = self.progress.lock();
             progress.removed += removed;
             if let Some(report) = &progress.report {
                 report(progress.removed);
@@ -374,7 +374,7 @@ impl Shared {
     /// permit count needs reconciling when the bound moves.
     fn observe(&self, feedback: ConcurrencyFeedback, slot: Slot) {
         let (before, after) = {
-            let _in_flight = self.in_flight.lock().unwrap();
+            let _in_flight = self.in_flight.lock();
             self.concurrency.observe_change(feedback, Instant::now())
         };
         if after < before {
@@ -395,7 +395,7 @@ impl Shared {
             tokio::pin!(available);
             available.as_mut().enable();
             {
-                let mut in_flight = self.in_flight.lock().unwrap();
+                let mut in_flight = self.in_flight.lock();
                 if *in_flight < self.concurrency.current() {
                     *in_flight += 1;
                     return Slot {

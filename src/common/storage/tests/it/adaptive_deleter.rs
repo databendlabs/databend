@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::Duration;
 
 use databend_common_storage::AdaptiveConcurrencyConfig;
@@ -29,6 +28,7 @@ use opendal::ErrorKind;
 use opendal::Operator;
 use opendal::layers::RetryLayer;
 use opendal::services::Memory;
+use parking_lot::Mutex;
 
 // The fault registry is global; run these tests one at a time.
 static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -79,7 +79,7 @@ async fn test_remove_files_only_deletes_selected_paths_and_shares_progress() {
     let sink = progress.clone();
     let deleter = AdaptiveDeleter::new(op.clone(), stats, config())
         .unwrap()
-        .with_progress(Arc::new(move |n| sink.lock().unwrap().push(n)));
+        .with_progress(Arc::new(move |n| sink.lock().push(n)));
 
     // Deliberately not in listing order. No unselected path is removed.
     let report = deleter
@@ -94,19 +94,19 @@ async fn test_remove_files_only_deletes_selected_paths_and_shares_progress() {
     assert!(!op.exists("d/selected/3").await.unwrap());
     assert!(!op.exists("d/selected/1").await.unwrap());
     assert_eq!(count(&op, "d/selected/").await, 3);
-    assert_eq!(*progress.lock().unwrap(), vec![1, 2]);
+    assert_eq!(*progress.lock(), vec![1, 2]);
 
     // Both entry points, including cloned handles, report one shared running total.
     let other = deleter.clone().remove_all("d/other/").await.unwrap();
     assert_eq!(other.removed, 3);
-    assert_eq!(*progress.lock().unwrap(), vec![1, 2, 3, 4, 5]);
+    assert_eq!(*progress.lock(), vec![1, 2, 3, 4, 5]);
     let report = deleter.remove_files(Vec::new()).await;
     assert!(report.error.is_none());
     assert_eq!(
         (report.removed, report.attempted, report.batches),
         (0, 0, 0)
     );
-    assert_eq!(*progress.lock().unwrap(), vec![1, 2, 3, 4, 5]);
+    assert_eq!(*progress.lock(), vec![1, 2, 3, 4, 5]);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -866,7 +866,7 @@ struct Gate {
     /// Each permit lets exactly one blocked delete through while the gate is closed.
     step: tokio::sync::Semaphore,
     /// Paths whose delete fails with `RateLimited` once let through.
-    throttle: std::sync::Mutex<std::collections::HashSet<String>>,
+    throttle: Mutex<std::collections::HashSet<String>>,
 }
 
 impl Default for Gate {
@@ -903,10 +903,10 @@ impl Gate {
         self.step.add_permits(1);
     }
     fn throttle(&self, path: &str) {
-        self.throttle.lock().unwrap().insert(path.to_owned());
+        self.throttle.lock().insert(path.to_owned());
     }
     fn is_throttled(&self, path: &str) -> bool {
-        self.throttle.lock().unwrap().remove(path)
+        self.throttle.lock().remove(path)
     }
     async fn wait_for_blocked(&self, n: usize) {
         while self.blocked() < n {

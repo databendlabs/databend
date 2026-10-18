@@ -4261,6 +4261,7 @@ dependencies = [
  "log",
  "lru 0.12.5",
  "opendal",
+ "parking_lot 0.12.3",
  "parquet",
  "prometheus-client 0.22.3",
  "rand 0.8.5",
