@@ -20,6 +20,7 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_http::HttpError;
 use databend_common_http::HttpShutdownHandler;
+use databend_common_http::TlsConfig;
 use databend_meta_client::types::anyerror::AnyError;
 use http::StatusCode;
 use log::info;
@@ -28,7 +29,6 @@ use poem::EndpointExt;
 use poem::IntoResponse;
 use poem::Route;
 use poem::get;
-use poem::listener::OpensslTlsConfig;
 use poem::middleware::CatchPanic;
 use poem::middleware::NormalizePath;
 use poem::middleware::TrailingSlash;
@@ -100,8 +100,8 @@ impl HttpHandler {
             .boxed()
     }
 
-    fn build_tls(config: &InnerConfig) -> Result<OpensslTlsConfig, std::io::Error> {
-        let cfg = OpensslTlsConfig::new()
+    fn build_tls(config: &InnerConfig) -> Result<TlsConfig, std::io::Error> {
+        let cfg = TlsConfig::new()
             .cert_from_file(config.query.common.http_handler_tls_server_cert.as_str())
             .key_from_file(config.query.common.http_handler_tls_server_key.as_str());
 

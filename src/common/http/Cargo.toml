@@ -17,10 +17,13 @@ futures = { workspace = true }
 http = { workspace = true }
 log = { workspace = true }
 poem = { workspace = true }
+rustls = { workspace = true }
+rustls-pemfile = { workspace = true }
 serde = { workspace = true }
 tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+tokio-rustls = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

@@ -282,7 +282,7 @@ globiter = "0.1"
 goldenfile = "1.4"
 h3o = "0.9.4"
 hashbrown = { version = "0.15.2", default-features = false }
-hashlink = "0.8"
+hashlink = "0.10"
 headers = "0.4.0"
 hex = "0.4.3"
 hickory-resolver = "0.25"
@@ -326,7 +326,8 @@ limits-rs = "0.2.0"
 lindera = { version = "5.0.1", features = ["embed-ipadic"] }
 lindera-analysis = "5.0.1"
 lindera-tantivy = { version = "5.0.1", features = ["embed-ipadic"] }
-logforth = { git = "https://github.com/datafuse-extras/logforth", branch = "main", features = [
+# TODO(local fork): push /workspace/forks/logforth (branch databend-otel-0.31) and pin its rev.
+logforth = { path = "../forks/logforth", features = [
     'json',
     'rolling-file',
     'opentelemetry',
@@ -339,7 +340,7 @@ memchr = { version = "2", default-features = false }
 micromarshal = "0.7.0"
 mlua = { version = "0.11", features = ["lua54", "vendored", "async", "serialize"] }
 mockall = "0.11.2"
-mysql_async = { version = "0.34", default-features = false, features = ["native-tls-tls"] }
+mysql_async = { version = "0.37.1", default-features = false, features = ["minimal-rust", "rustls-tls", "ring", "tls12"] }
 naive-cityhash = "0.2.0"
 ndarray = "0.15.6"
 num = { version = "0.4.0", features = ["std"] }
@@ -375,10 +376,10 @@ parquet = { version = "58.1.0", features = ["async"] }
 passwords = { version = "3.1.16" }
 paste = "1.0.15"
 percent-encoding = "2.3.1"
-petgraph = { version = "0.6.2", features = ["serde-1"] }
+petgraph = { version = "0.8.3", features = ["serde-1"] }
 pin-project = "1"
 pin-project-lite = "0.2.9"
-poem = { version = "3.0", features = ["openssl-tls", "multipart", "compression", "cookie"] }
+poem = { version = "3.0", features = ["server", "multipart", "compression", "cookie"] }
 pprof = { git = "https://github.com/datafuse-extras/pprof-rs", rev = "edecd74", features = [
     "flamegraph",
     "protobuf-codec",
@@ -402,8 +403,7 @@ replace_with = "0.1.7"
 reqwest = { version = "0.12", default-features = false, features = [
     "json",
     "http2",
-    "native-tls-vendored",
-    "native-tls-alpn",
+    "rustls-tls-native-roots",
     "cookies",
 ] }
 reqwest-hickory-resolver = "0.2"
@@ -466,6 +466,7 @@ thrift = "0.17.0"
 tikv-jemalloc-ctl = { version = "0.6.0", features = ["use_std", "stats"] }
 tikv-jemalloc-sys = "0.6.0"
 tokio = { version = "1.52.3", features = ["full"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "ring", "tls12"] }
 tokio-stream = { version = "0.1.11", features = ["net"] }
 tokio-util = { version = "0.7.13" }
 toml = { version = "0.8", features = ["parse"] }
@@ -519,11 +520,11 @@ vergen-gix = { version = "1", features = ["build", "cargo", "rustc"] }
 # Observability
 env_logger = "0.11"
 fastrace = { version = "0.7.14", features = ["enable"] }
-fastrace-opentelemetry = "0.10"
+fastrace-opentelemetry = "0.14"
 log = { version = "0.4.27", features = ["serde", "kv_serde", "kv_unstable_std"] }
 logcall = "0.1.9"
-opentelemetry = { version = "0.29", features = ["trace", "logs"] }
-opentelemetry-otlp = { version = "0.29", default-features = false, features = [
+opentelemetry = { version = "0.31", features = ["trace", "logs"] }
+opentelemetry-otlp = { version = "0.31", default-features = false, features = [
     "trace",
     "logs",
     "metrics",
@@ -533,7 +534,7 @@ opentelemetry-otlp = { version = "0.29", default-features = false, features = [
     "http-proto",
     "reqwest-client",
 ] }
-opentelemetry_sdk = { version = "0.29", features = ["trace", "logs", "rt-tokio"] }
+opentelemetry_sdk = { version = "0.31", features = ["trace", "logs", "rt-tokio"] }
 prometheus-client = "0.22"
 prometheus-parse = "0.2.3"
 
@@ -614,7 +615,8 @@ arrow-schema = { version = "=58.4.0" }
 arrow-select = { version = "=58.4.0" }
 
 [patch.crates-io]
-arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "c1de708add62ecd1afa2721b2e5c639f29be1f9d" }
+# TODO(local fork): push /workspace/forks/arrow-udf (branch databend-no-default-tls) and switch to its rev.
+arrow-udf-runtime = { path = "../forks/arrow-udf/arrow-udf-runtime" }
 async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
@@ -625,6 +627,7 @@ databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.gi
 databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.7.0" }
 jsonb = { git = "https://github.com/databendlabs/jsonb.git", rev = "fba895c" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.5.0" }
+paimon = { path = "../forks/paimon" } # TODO(local fork): upstream reqwest default-features=false to apache/paimon-rust.
 parquet = { git = "https://github.com/datafuse-extras/arrow-rs.git", rev = "221c744" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
 reqwest-hickory-resolver = { git = "https://github.com/datafuse-extras/reqwest-hickory-resolver", rev = "5ad03257a3c702d34b9643878efb5a3536323d2d" }
@@ -635,3 +638,11 @@ state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.g
 sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.2.1" }
 watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.5.0" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }
+
+# TODO(local fork): push /workspace/forks/iceberg-rust (branch databend-ring) and bump the iceberg rev instead.
+[patch."https://github.com/databendlabs/iceberg-rust"]
+iceberg = { path = "../forks/iceberg-rust/crates/iceberg" }
+iceberg-catalog-glue = { path = "../forks/iceberg-rust/crates/catalog/glue" }
+iceberg-catalog-hms = { path = "../forks/iceberg-rust/crates/catalog/hms" }
+iceberg-catalog-rest = { path = "../forks/iceberg-rust/crates/catalog/rest" }
+iceberg-catalog-s3tables = { path = "../forks/iceberg-rust/crates/catalog/s3tables" }
