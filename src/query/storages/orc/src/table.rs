@@ -133,6 +133,7 @@ impl OrcTable {
             operator,
             size: file_info.size,
             path: file_info.path.clone(),
+            read_bytes: Default::default(),
         };
         let builder = ArrowReaderBuilder::try_new_async(file)
             .await

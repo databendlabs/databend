@@ -16,18 +16,19 @@ use std::io::Cursor;
 use std::io::Result;
 use std::io::Write;
 
-use async_compression::Level;
-use async_compression::codec::BrotliEncoder;
-use async_compression::codec::BzEncoder;
-use async_compression::codec::DeflateEncoder;
-use async_compression::codec::Encode;
-use async_compression::codec::GzipEncoder;
-use async_compression::codec::LzmaEncoder;
-use async_compression::codec::XzEncoder;
-use async_compression::codec::ZlibEncoder;
-use async_compression::codec::ZstdEncoder;
-use async_compression::util::PartialBuffer;
-use brotli::enc::backward_references::BrotliEncoderParams;
+use compression_codecs::BrotliEncoder;
+use compression_codecs::BzEncoder;
+use compression_codecs::DeflateEncoder;
+use compression_codecs::Encode;
+use compression_codecs::GzipEncoder;
+use compression_codecs::LzmaEncoder;
+use compression_codecs::XzEncoder;
+use compression_codecs::ZlibEncoder;
+use compression_codecs::ZstdEncoder;
+use compression_codecs::brotli::params::EncoderParams as BrotliEncoderParams;
+use compression_codecs::core::Level;
+use compression_codecs::core::util::PartialBuffer;
+use compression_codecs::zstd::params::CParameter as ZstdCParameter;
 use databend_common_exception::ErrorCode;
 use zip::ZipWriter;
 use zip::write::FileOptions;
@@ -63,24 +64,16 @@ impl From<CompressAlgorithm> for CompressCodec {
             CompressAlgorithm::Brotli => {
                 CompressCodec::Brotli(Box::new(BrotliEncoder::new(BrotliEncoderParams::default())))
             }
-            CompressAlgorithm::Bz2 => {
-                CompressCodec::Bz2(BzEncoder::new(Level::Default.into_bzip2(), 0))
-            }
+            CompressAlgorithm::Bz2 => CompressCodec::Bz2(BzEncoder::new(Level::Default.into(), 0)),
             CompressAlgorithm::Deflate => {
-                CompressCodec::Deflate(DeflateEncoder::new(Level::Default.into_flate2()))
+                CompressCodec::Deflate(DeflateEncoder::new(Level::Default.into()))
             }
-            CompressAlgorithm::Gzip => {
-                CompressCodec::Gzip(GzipEncoder::new(Level::Default.into_flate2()))
-            }
-            CompressAlgorithm::Lzma => {
-                CompressCodec::Lzma(LzmaEncoder::new(Level::Default.into_xz2()))
-            }
-            CompressAlgorithm::Xz => CompressCodec::Xz(XzEncoder::new(Level::Default.into_xz2())),
-            CompressAlgorithm::Zlib => {
-                CompressCodec::Zlib(ZlibEncoder::new(Level::Default.into_flate2()))
-            }
+            CompressAlgorithm::Gzip => CompressCodec::Gzip(GzipEncoder::new(Level::Default.into())),
+            CompressAlgorithm::Lzma => CompressCodec::Lzma(LzmaEncoder::new(Level::Default)),
+            CompressAlgorithm::Xz => CompressCodec::Xz(XzEncoder::new(Level::Default)),
+            CompressAlgorithm::Zlib => CompressCodec::Zlib(ZlibEncoder::new(Level::Default.into())),
             CompressAlgorithm::Zstd => {
-                CompressCodec::Zstd(ZstdEncoder::new(Level::Default.into_zstd()))
+                CompressCodec::Zstd(ZstdEncoder::new(ZstdCParameter::quality(Level::Default)))
             }
             CompressAlgorithm::Zip => {
                 unreachable!("Zip type requires additional judgment and use `compress_all_zip`")
@@ -224,6 +217,7 @@ mod tests {
         let mut content = vec![0; size];
         rng.fill_bytes(&mut content);
         for algo in [
+            CompressAlgorithm::Brotli,
             CompressAlgorithm::Zlib,
             CompressAlgorithm::Gzip,
             CompressAlgorithm::Bz2,
@@ -252,6 +246,7 @@ mod tests {
     #[test]
     fn test_compress_empty_content() -> databend_common_exception::Result<()> {
         for algo in [
+            CompressAlgorithm::Brotli,
             CompressAlgorithm::Zlib,
             CompressAlgorithm::Gzip,
             CompressAlgorithm::Bz2,
