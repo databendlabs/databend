@@ -30,6 +30,7 @@ use databend_common_sql::optimizer::optimizers::rule::Rule;
 use databend_common_sql::optimizer::optimizers::rule::RuleCommuteJoin;
 use databend_common_sql::optimizer::optimizers::rule::TransformResult;
 use databend_common_sql::plans::JoinType;
+use databend_common_sql::plans::PhysicalRelOperator;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
 
@@ -66,7 +67,7 @@ fn large_overlap_stats() -> TableStats {
 }
 
 fn find_join(expr: &PExpr, join_type: JoinType) -> Option<&PExpr> {
-    if matches!(expr.plan(), RelOperator::Join(join) if join.join_type == join_type) {
+    if matches!(expr.plan(), PhysicalRelOperator::Join(join) if join.join_type == join_type) {
         return Some(expr);
     }
     expr.children()
@@ -151,7 +152,8 @@ async fn write_optimizer_commuted_right_single(
                 .ok_or_else(|| ErrorCode::Internal(format!(
                     "join commute rule did not derive RIGHT SINGLE: left={left_cardinality}, right={right_cardinality}"
                 )))?;
-            physical_commuted = PExpr::from(right_single.clone());
+            physical_commuted =
+                databend_common_sql::optimizer::ir::DefaultPhysicalPlanner::plan(right_single)?;
             (&physical_commuted, "CommuteJoin")
         }
     };

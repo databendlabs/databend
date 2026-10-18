@@ -46,6 +46,7 @@ use databend_common_base::base::SpillProgress;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::IoStats;
 use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::PerfConfig;
@@ -517,8 +518,12 @@ impl QueryContext {
         self.shared.get_data_metrics()
     }
 
-    pub fn merge_io_stats(&self, stats: &IoStatsSnapshot) {
-        self.shared.merge_io_stats(stats);
+    pub fn get_local_io_stats(&self) -> Arc<IoStats> {
+        self.shared.get_local_io_stats()
+    }
+
+    pub fn merge_remote_io_stats(&self, delta: &IoStatsSnapshot) {
+        self.shared.merge_remote_io_stats(delta);
     }
 
     pub fn get_io_stats(&self) -> IoStatsSnapshot {
@@ -1099,7 +1104,8 @@ mod tests {
         let fixture = TestFixture::setup().await?;
         let ctx = fixture.new_query_ctx().await?;
 
-        ctx.merge_io_stats(&IoStatsSnapshot {
+        // Local IO recorded through the shared counter.
+        ctx.get_local_io_stats().merge_snapshot(&IoStatsSnapshot {
             list_count: 1,
             list_duration_ms: 2,
             read_count: 2,
@@ -1109,15 +1115,26 @@ mod tests {
             write_bytes: 5,
             write_duration_ms: 6,
         });
-        ctx.merge_io_stats(&IoStatsSnapshot {
-            list_count: 10,
-            list_duration_ms: 20,
-            read_count: 20,
-            read_bytes: 30,
-            read_duration_ms: 40,
-            write_count: 40,
-            write_bytes: 50,
-            write_duration_ms: 60,
+        // Remote nodes report deltas, which accumulate.
+        ctx.merge_remote_io_stats(&IoStatsSnapshot {
+            list_count: 4,
+            list_duration_ms: 8,
+            read_count: 8,
+            read_bytes: 12,
+            read_duration_ms: 16,
+            write_count: 16,
+            write_bytes: 20,
+            write_duration_ms: 24,
+        });
+        ctx.merge_remote_io_stats(&IoStatsSnapshot {
+            list_count: 6,
+            list_duration_ms: 12,
+            read_count: 12,
+            read_bytes: 18,
+            read_duration_ms: 24,
+            write_count: 24,
+            write_bytes: 30,
+            write_duration_ms: 36,
         });
 
         assert_eq!(ctx.get_io_stats(), IoStatsSnapshot {

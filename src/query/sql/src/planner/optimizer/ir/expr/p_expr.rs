@@ -12,32 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
+use databend_common_exception::Result;
 use educe::Educe;
 
+use super::visitor::ExprVisitor;
+use super::visitor::VisitAction;
 use crate::IndexType;
+use crate::Symbol;
 use crate::optimizer::ir::Expr;
 use crate::optimizer::ir::ExprKind;
 use crate::optimizer::ir::RelExpr;
-use crate::optimizer::ir::RelExprKind;
 use crate::optimizer::ir::RelationalProperty;
-use crate::optimizer::ir::RewriteExprKind;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::optimizers::rule::AppliedRules;
 use crate::optimizer::optimizers::rule::RuleID;
-use crate::plans::RelOperator;
+use crate::plans::Exchange;
+use crate::plans::PhysicalRelOperator;
 
 /// Physical expression, with stage-specific state on a shared recursive tree.
 pub type PExpr = Expr<Physical>;
 
 pub struct Physical;
-
-impl ExprKind for Physical {
-    type Operator = RelOperator;
-    type State = PhysicalState;
-}
 
 #[derive(Educe)]
 #[educe(PartialEq, Eq, Hash, Clone)]
@@ -51,7 +50,11 @@ pub struct PhysicalState {
     pub(crate) applied_rules: AppliedRules,
 }
 
-impl RewriteExprKind for Physical {
+impl ExprKind for Physical {
+    type Operator = PhysicalRelOperator;
+    type State = PhysicalState;
+    const NAME: &'static str = "PExpr";
+
     fn rewritten_state(state: &Self::State) -> Self::State {
         Self::State {
             original_group: None,
@@ -60,10 +63,7 @@ impl RewriteExprKind for Physical {
             applied_rules: state.applied_rules.clone(),
         }
     }
-}
 
-impl RelExprKind for Physical {
-    const NAME: &'static str = "PExpr";
     fn rel_expr(expr: &Expr<Self>) -> RelExpr<'_> {
         RelExpr::with_p_expr(expr)
     }
@@ -72,6 +72,16 @@ impl RelExprKind for Physical {
     }
     fn statistics_cache(state: &Self::State) -> &Arc<OnceLock<Arc<StatInfo>>> {
         &state.stat_info
+    }
+    fn validate_types(expr: &Expr<Self>, metadata: &crate::MetadataRef) -> Result<()> {
+        super::type_validator::validate_physical_types(expr, metadata)
+    }
+    fn validate_column_scope(
+        expr: &Expr<Self>,
+        metadata: &crate::MetadataRef,
+        ambient: &crate::ColumnSet,
+    ) -> Result<()> {
+        super::column_scope_validator::validate_physical_scope(expr, metadata, ambient)
     }
 }
 
@@ -91,8 +101,60 @@ impl std::fmt::Debug for Expr<Physical> {
 }
 
 impl PExpr {
+    #[recursive::recursive]
+    pub fn support_lazy_materialize(&self) -> bool {
+        self.plan.support_lazy_materialize()
+            && self
+                .children
+                .iter()
+                .all(|child| child.support_lazy_materialize())
+    }
+
+    #[recursive::recursive]
+    pub fn get_udfs_col_ids(&self) -> Result<BTreeSet<Symbol>> {
+        let mut udf_ids = BTreeSet::new();
+        if let PhysicalRelOperator::Udf(udf) = self.plan() {
+            udf_ids.extend(udf.items.iter().map(|item| item.index));
+        }
+        for child in &self.children {
+            udf_ids.extend(child.get_udfs_col_ids()?);
+        }
+        Ok(udf_ids)
+    }
+
+    #[recursive::recursive]
+    pub fn has_merge_exchange(&self) -> bool {
+        matches!(self.plan(), PhysicalRelOperator::Exchange(Exchange::Merge))
+            || self.children.iter().any(|child| child.has_merge_exchange())
+    }
+
+    pub fn get_data_distribution(&self) -> Result<Option<Exchange>> {
+        struct Visitor {
+            result: Option<Exchange>,
+        }
+        impl ExprVisitor<Physical> for Visitor {
+            fn visit(&mut self, expr: &PExpr) -> Result<VisitAction<Physical>> {
+                match expr.plan() {
+                    PhysicalRelOperator::Exchange(exchange) => {
+                        self.result = Some(exchange.clone());
+                        Ok(VisitAction::Stop)
+                    }
+                    PhysicalRelOperator::Join(_) => {
+                        self.result = expr.probe_side_child().get_data_distribution()?;
+                        Ok(VisitAction::Stop)
+                    }
+                    _ if expr.arity() > 0 => Ok(VisitAction::Continue),
+                    _ => Ok(VisitAction::Stop),
+                }
+            }
+        }
+        let mut visitor = Visitor { result: None };
+        let _ = self.accept(&mut visitor);
+        Ok(visitor.result)
+    }
+
     pub fn create(
-        plan: impl Into<Arc<RelOperator>>,
+        plan: impl Into<Arc<PhysicalRelOperator>>,
         children: Vec<Arc<PExpr>>,
         original_group: Option<IndexType>,
         rel_prop: Option<Arc<RelationalProperty>>,
@@ -116,12 +178,15 @@ impl PExpr {
         }
     }
 
-    pub fn create_unary(plan: impl Into<Arc<RelOperator>>, child: impl Into<Arc<PExpr>>) -> Self {
+    pub fn create_unary(
+        plan: impl Into<Arc<PhysicalRelOperator>>,
+        child: impl Into<Arc<PExpr>>,
+    ) -> Self {
         Self::create(plan.into(), vec![child.into()], None, None, None)
     }
 
     pub fn create_binary(
-        plan: impl Into<Arc<RelOperator>>,
+        plan: impl Into<Arc<PhysicalRelOperator>>,
         left_child: impl Into<Arc<PExpr>>,
         right_child: impl Into<Arc<PExpr>>,
     ) -> Self {
@@ -134,15 +199,15 @@ impl PExpr {
         )
     }
 
-    pub fn create_leaf(plan: impl Into<Arc<RelOperator>>) -> Self {
+    pub fn create_leaf(plan: impl Into<Arc<PhysicalRelOperator>>) -> Self {
         Self::create(plan, vec![], None, None, None)
     }
 
-    pub fn build_unary(self, plan: impl Into<Arc<RelOperator>>) -> Self {
+    pub fn build_unary(self, plan: impl Into<Arc<PhysicalRelOperator>>) -> Self {
         Self::create(plan, vec![self.into()], None, None, None)
     }
 
-    pub fn ref_build_unary(self: &Arc<PExpr>, plan: impl Into<Arc<RelOperator>>) -> Self {
+    pub fn ref_build_unary(self: &Arc<PExpr>, plan: impl Into<Arc<PhysicalRelOperator>>) -> Self {
         Self::create(plan, vec![self.clone()], None, None, None)
     }
 

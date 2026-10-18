@@ -44,8 +44,8 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
-use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
+use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::JoinType;
@@ -132,66 +132,43 @@ use crate::plans::ScalarItem;
 ///                     | eager group-by: eager SUM(y), eager count: cnt2
 ///                     |
 ///                     eager group-by: eager SUM(x), eager count: cnt1
-pub struct RuleEagerAggregation {
-    matchers: Vec<Matcher>,
+pub struct EagerAggregationRewriter {
     metadata: MetadataRef,
 }
 
-impl RuleEagerAggregation {
+impl EagerAggregationRewriter {
     pub fn new(metadata: MetadataRef) -> Self {
-        Self {
-            // There are multiple patterns for EagerAggregation, we will match them
-            // in the `apply` function, so the pattern here only contains Expression.
-            // Expression
-            //     |
-            //     *
-            matchers: vec![
-                match_op!(EvalScalar -> Aggregate -> Aggregate -> Join[*, *]),
-                match_op!(EvalScalar -> Aggregate -> Aggregate -> EvalScalar -> Join[*, *]),
-                match_op!(EvalScalar -> Sort -> Aggregate -> Aggregate -> Join[*, *]),
-                match_op!(EvalScalar -> Sort -> Aggregate -> Aggregate -> EvalScalar -> Join[*, *]),
-                match_op!(EvalScalar -> TopN -> Aggregate -> Aggregate -> Join[*, *]),
-                match_op!(EvalScalar -> TopN -> Aggregate -> Aggregate -> EvalScalar -> Join[*, *]),
-            ],
-            metadata,
-        }
+        Self { metadata }
     }
 }
 
-impl Rule for RuleEagerAggregation {
-    fn id(&self) -> RuleID {
-        RuleID::EagerAggregation
-    }
-
-    fn matchers(&self) -> &[Matcher] {
-        &self.matchers
-    }
-
-    fn transformation(&self) -> bool {
-        false
-    }
-
-    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<(), ErrorCode> {
+impl EagerAggregationRewriter {
+    /// Generate every legal logical rewrite, independently of physical aggregate splitting
+    /// and candidate selection. Cascades costs all candidates; heuristic callers select one.
+    pub fn candidates(&self, s_expr: &SExpr) -> Result<Vec<SExpr>, ErrorCode> {
         let Some(input) = EagerInput::parse(s_expr) else {
-            return Ok(());
+            return Ok(vec![]);
         };
-
+        // Eager aggregates prune group columns to one join input. The original
+        // grouping-set descriptor (including grouping_id) is not valid there.
+        if input.final_agg.grouping_sets.is_some() {
+            return Ok(vec![]);
+        }
         let join = input.join_expr.plan().as_join().unwrap();
-        // Only supports inner/cross join and equal conditions.
         if !matches!(join.join_type, JoinType::Inner | JoinType::Cross)
-            | !join.non_equi_conditions.is_empty()
+            || !join.non_equi_conditions.is_empty()
         {
-            return Ok(());
+            return Ok(vec![]);
         }
 
+        let mut results = Vec::new();
         for analysis in input.analyze(&self.metadata)? {
             if let Some(mut result) = analysis.apply(&self.metadata, &input)? {
-                result.set_applied_rule(&self.id());
-                state.add_result(result);
+                result.set_applied_rule(&RuleID::EagerAggregation);
+                results.push(result);
             }
         }
-
-        Ok(())
+        Ok(results)
     }
 }
 
@@ -219,9 +196,6 @@ impl<'a> EagerInput<'a> {
         };
 
         let final_agg = current.plan().as_aggregate()?.clone();
-        current = current.unary_child();
-
-        current.plan().as_aggregate()?;
         current = current.unary_child();
 
         let extra_eval_scalar = current
@@ -321,20 +295,20 @@ impl<'a> EagerInput<'a> {
             let ScalarExpr::BoundColumnRef(right_column) = &condition.right else {
                 return Ok(vec![]);
             };
+            // Join keys are required by any aggregate pushed below the join. They may be
+            // temporary grouping keys even when neither side appears in the final GROUP BY.
+            // The final aggregate removes them again in `build_result`.
             let cond_column = Pair {
                 left: left_column.column.index,
                 right: right_column.column.index,
             };
             cond_column.for_each(|side, index| {
-                let opposite = side.opposite();
-                if eager_group_columns[side].contains(index)
-                    && !eager_group_columns[opposite].contains(&cond_column[opposite])
-                {
+                if !eager_group_columns[side].contains(index) {
                     final_agg.group_items.push(ScalarItem {
-                        scalar: opposite.join_condition(condition).clone(),
-                        index: cond_column[opposite],
+                        scalar: side.join_condition(condition).clone(),
+                        index: *index,
                     });
-                    eager_group_columns[opposite].insert(cond_column[opposite]);
+                    eager_group_columns[side].insert(*index);
                 }
             });
         }
@@ -440,10 +414,28 @@ impl<'a> EagerInput<'a> {
             && keeps_empty_side[Side::Left]
             && keeps_empty_side[Side::Right]
         {
-            return vec![
-                analysis(EagerRewriteKind::DoubleGroupByCount(Side::Left)),
-                analysis(EagerRewriteKind::DoubleSplit(Side::Left)),
-            ];
+            // Grouping only the left input reduces the multiplicity seen by right-side
+            // aggregates. DoubleGroupByCount weights raw SUM arguments, but does not
+            // implement NULL-aware weighting for a raw COUNT. DoubleSplit first
+            // rewrites local COUNTs to SUMs and can compensate them on both sides.
+            let right_has_count =
+                assignment.eager_aggregations[Side::Right]
+                    .iter()
+                    .any(|candidate| {
+                        matches!(
+                            &final_agg.aggregate_functions[candidate.agg_index].scalar,
+                            ScalarExpr::AggregateFunction(function)
+                                if eager_aggregation(function) == EagerAggregation::Count
+                        )
+                    });
+            return if !right_has_count {
+                vec![
+                    analysis(EagerRewriteKind::DoubleGroupByCount(Side::Left)),
+                    analysis(EagerRewriteKind::DoubleSplit(Side::Left)),
+                ]
+            } else {
+                vec![analysis(EagerRewriteKind::DoubleSplit(Side::Left))]
+            };
         }
 
         let d = if can_push_down[Side::Left] {
@@ -695,36 +687,36 @@ impl EagerAnalysis {
     fn apply(self, metadata: &MetadataRef, input: &EagerInput) -> Result<Option<SExpr>, ErrorCode> {
         match self.rewrite_kind {
             // EvalScalar
-            // └── Aggregate(Final: rewrite agg on child(d), keep agg on child(d^1) as count-adjusted)
+            // └── Aggregate(Initial: rewrite agg on child(d), keep agg on child(d^1) as count-adjusted)
             //     └── Join
-            //         ├── child(d):     Aggregate(Final: eager group-by + eager count)
+            //         ├── child(d):     Aggregate(Initial: eager group-by + eager count)
             //         └── child(d^1):   original
             EagerRewriteKind::DoubleGroupByCount(d) => {
                 self.apply_double_group_by_count(metadata, input, d)
             }
             // EvalScalar
-            // └── Aggregate(Final: rewrite aggs on both children, each multiplied by the opposite count)
+            // └── Aggregate(Initial: rewrite aggs on both children, each multiplied by the opposite count)
             //     └── Join
-            //         ├── child(d):     Aggregate(Final: eager group-by + eager count)
-            //         └── child(d^1):   Aggregate(Final: eager group-by + eager count)
+            //         ├── child(d):     Aggregate(Initial: eager group-by + eager count)
+            //         └── child(d^1):   Aggregate(Initial: eager group-by + eager count)
             EagerRewriteKind::DoubleSplit(d) => self.apply_double_split(metadata, input, d),
             // EvalScalar
-            // └── Aggregate(Final: rewrite agg on child(d))
+            // └── Aggregate(Initial: rewrite agg on child(d))
             //     └── Join
-            //         ├── child(d):     Aggregate(Final: eager group-by)
+            //         ├── child(d):     Aggregate(Initial: eager group-by)
             //         └── child(d^1):   original
             EagerRewriteKind::SingleGroupBy(d) => self.apply_single_group_by(metadata, input, d),
             // EvalScalar
-            // └── Aggregate(Final: keep original agg, multiply by count from child(d^1))
+            // └── Aggregate(Initial: keep original agg, multiply by count from child(d^1))
             //     └── Join
             //         ├── child(d):     original
-            //         └── child(d^1):   Aggregate(Final: eager count)
+            //         └── child(d^1):   Aggregate(Initial: eager count)
             EagerRewriteKind::SingleCount(d) => self.apply_single_count(metadata, input, d),
             // EvalScalar
-            // └── Aggregate(Final: rewrite agg on child(d), then multiply by count from child(d^1))
+            // └── Aggregate(Initial: rewrite agg on child(d), then multiply by count from child(d^1))
             //     └── Join
-            //         ├── child(d):     Aggregate(Final: eager group-by)
-            //         └── child(d^1):   Aggregate(Final: eager count)
+            //         ├── child(d):     Aggregate(Initial: eager group-by)
+            //         └── child(d^1):   Aggregate(Initial: eager count)
             EagerRewriteKind::SingleDouble(d) => self.apply_single_double(metadata, input, d),
         }
     }
@@ -1070,12 +1062,7 @@ impl EagerAnalysis {
         final_aggr
             .group_items
             .truncate(self.original_group_items_len);
-        let plan = s_expr
-            .build_unary(Aggregate {
-                mode: AggregateMode::Partial,
-                ..final_aggr.clone()
-            })
-            .build_unary(final_aggr);
+        let plan = s_expr.build_unary(final_aggr);
         let plan = match input.ordering_expr {
             Some(ordering_expr) => plan.build_unary(ordering_expr.plan.clone()),
             None => plan,
@@ -1202,16 +1189,38 @@ impl EagerAnalysis {
     }
 
     fn rewritten_count_output(new_index: Symbol) -> ScalarExpr {
+        let count = ScalarExpr::BoundColumnRef(BoundColumnRef {
+            span: None,
+            column: ColumnBindingBuilder::new(
+                "_eager_final_count".to_string(),
+                new_index,
+                Box::new(UInt64Type::data_type().wrap_nullable()),
+                Visibility::Visible,
+            )
+            .build(),
+        });
+        // COUNT returns zero for an empty input, but the SUM combining eager
+        // counts returns NULL. Restore that value before the non-nullable cast.
         wrap_cast(
-            &ScalarExpr::BoundColumnRef(BoundColumnRef {
+            &ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
-                column: ColumnBindingBuilder::new(
-                    "_eager_final_count".to_string(),
-                    new_index,
-                    Box::new(UInt64Type::data_type().wrap_nullable()),
-                    Visibility::Visible,
-                )
-                .build(),
+                func_name: "if".to_string(),
+                params: vec![],
+                arguments: vec![
+                    ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "is_not_null".to_string(),
+                        params: vec![],
+                        arguments: vec![count.clone()],
+                        return_type: Box::new(DataType::Boolean),
+                    }),
+                    count,
+                    ScalarExpr::ConstantExpr(ConstantExpr {
+                        span: None,
+                        value: 0u64.into(),
+                    }),
+                ],
+                return_type: Box::new(UInt64Type::data_type().wrap_nullable()),
             }),
             &UInt64Type::data_type(),
         )
@@ -1348,18 +1357,13 @@ impl Side {
         extra_eval_scalar: &EvalScalar,
         aggregate: Aggregate,
     ) -> SExpr {
-        if !extra_eval_scalar.items.is_empty() {
+        let child = if !extra_eval_scalar.items.is_empty() {
             self.child(join_expr)
                 .ref_build_unary(extra_eval_scalar.clone())
-                .into()
         } else {
-            self.child(join_expr)
-        }
-        .ref_build_unary(Aggregate {
-            mode: AggregateMode::Partial,
-            ..aggregate.clone()
-        })
-        .build_unary(aggregate)
+            self.child(join_expr).as_ref().clone()
+        };
+        child.build_unary(aggregate)
     }
 }
 
@@ -1417,10 +1421,24 @@ impl<T> std::ops::IndexMut<Side> for Pair<T> {
     }
 }
 
+/// Forced eager aggregation traversal and candidate selection. Candidate generation
+/// is shared with self-join preparation and Cascades, but their policies are independent.
+pub struct EagerAggregationOptimizer {
+    rewriter: EagerAggregationRewriter,
+}
+
+impl EagerAggregationOptimizer {
+    pub fn new(metadata: MetadataRef) -> Self {
+        Self {
+            rewriter: EagerAggregationRewriter::new(metadata),
+        }
+    }
+}
+
 #[async_trait::async_trait]
-impl Optimizer for RuleEagerAggregation {
+impl Optimizer for EagerAggregationOptimizer {
     fn name(&self) -> String {
-        "RuleEagerAggregationOptimizer".to_string()
+        "EagerAggregationOptimizer".to_string()
     }
 
     async fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr, ErrorCode> {
@@ -1428,32 +1446,67 @@ impl Optimizer for RuleEagerAggregation {
     }
 }
 
-unsafe impl Sync for RuleEagerAggregation {}
-unsafe impl Send for RuleEagerAggregation {}
-
-impl RuleEagerAggregation {
+impl EagerAggregationOptimizer {
+    /// Forced eager aggregation uses the last (most eager) candidate, top-down.
     pub fn optimize_sync(&mut self, s_expr: &SExpr) -> Result<SExpr, ErrorCode> {
         s_expr
-            .clone()
             .accept(self)
             .map(|res| res.unwrap_or_else(|| s_expr.clone()))
     }
 }
 
-impl SExprVisitor for RuleEagerAggregation {
+impl SExprVisitor for EagerAggregationOptimizer {
     fn visit(&mut self, expr: &SExpr) -> Result<VisitAction, ErrorCode> {
-        for (i, matcher) in self.matchers.iter().enumerate() {
-            let mut state = TransformResult::new();
-            if matcher.matches(expr) {
-                self.apply_matcher(i, expr, &mut state)?;
-                let results = state.results();
-                if results.is_empty() {
-                    continue;
-                } else {
-                    return Ok(VisitAction::Replace(results[results.len() - 1].clone()));
-                }
-            }
+        if expr.applied_rule(&RuleID::EagerAggregation) {
+            return Ok(VisitAction::Continue);
+        }
+        if let Some(result) = self.rewriter.candidates(expr)?.pop() {
+            return Ok(VisitAction::Replace(result));
         }
         Ok(VisitAction::Continue)
+    }
+}
+
+/// Cascades exploration rule. Both inputs and candidates contain logical aggregates;
+/// Cascades implements them only when it starts costing execution alternatives.
+pub struct RuleEagerAggregation {
+    matchers: Vec<Matcher>,
+    logical: EagerAggregationRewriter,
+}
+
+impl RuleEagerAggregation {
+    pub fn new(metadata: MetadataRef) -> Self {
+        Self {
+            matchers: vec![
+                match_op!(EvalScalar -> Aggregate -> Join[*, *]),
+                match_op!(EvalScalar -> Aggregate -> EvalScalar -> Join[*, *]),
+                match_op!(EvalScalar -> Sort -> Aggregate -> Join[*, *]),
+                match_op!(EvalScalar -> Sort -> Aggregate -> EvalScalar -> Join[*, *]),
+                match_op!(EvalScalar -> TopN -> Aggregate -> Join[*, *]),
+                match_op!(EvalScalar -> TopN -> Aggregate -> EvalScalar -> Join[*, *]),
+            ],
+            logical: EagerAggregationRewriter::new(metadata),
+        }
+    }
+}
+
+impl Rule for RuleEagerAggregation {
+    fn id(&self) -> RuleID {
+        RuleID::EagerAggregation
+    }
+
+    fn matchers(&self) -> &[Matcher] {
+        &self.matchers
+    }
+
+    fn transformation(&self) -> bool {
+        false
+    }
+
+    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<(), ErrorCode> {
+        for candidate in self.logical.candidates(s_expr)? {
+            state.add_result(candidate);
+        }
+        Ok(())
     }
 }

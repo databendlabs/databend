@@ -54,6 +54,7 @@ use crate::plans::EvalScalar;
 use crate::plans::LagLeadFunction;
 use crate::plans::NtileFunction;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
 
@@ -514,35 +515,6 @@ impl Operator for WindowGroup {
         Box::new(scalar_items.chain(windows))
     }
 
-    fn compute_required_prop_child(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr,
-        _child_index: usize,
-        required: &RequiredProperty,
-    ) -> Result<RequiredProperty> {
-        let mut required = required.clone();
-        match self.required_distribution(ctx, rel_expr)? {
-            Distribution::Any => {}
-            distribution => required.distribution = distribution,
-        }
-        Ok(required)
-    }
-
-    fn compute_required_prop_children(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr,
-        required: &RequiredProperty,
-    ) -> Result<Vec<Vec<RequiredProperty>>> {
-        let mut required = required.clone();
-        match self.required_distribution(ctx, rel_expr)? {
-            Distribution::Any => {}
-            distribution => required.distribution = distribution,
-        }
-        Ok(vec![vec![required]])
-    }
-
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
 
@@ -602,6 +574,37 @@ impl Operator for WindowGroup {
     }
 }
 
+impl PhysicalOperator for WindowGroup {
+    fn compute_required_prop_child(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
+        _child_index: usize,
+        required: &RequiredProperty,
+    ) -> Result<RequiredProperty> {
+        let mut required = required.clone();
+        match self.required_distribution(ctx, rel_expr)? {
+            Distribution::Any => {}
+            distribution => required.distribution = distribution,
+        }
+        Ok(required)
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
+        required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        let mut required = required.clone();
+        match self.required_distribution(ctx, rel_expr)? {
+            Distribution::Any => {}
+            distribution => required.distribution = distribution,
+        }
+        Ok(vec![vec![required]])
+    }
+}
+
 impl Operator for Window {
     fn rel_op(&self) -> RelOp {
         RelOp::Window
@@ -622,25 +625,6 @@ impl Operator for Window {
             }
             _ => Box::new(iter),
         }
-    }
-
-    fn compute_required_prop_child(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
-        _child_index: usize,
-        _required: &RequiredProperty,
-    ) -> Result<RequiredProperty> {
-        Ok(self.required_input())
-    }
-
-    fn compute_required_prop_children(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
-        _required: &RequiredProperty,
-    ) -> Result<Vec<Vec<RequiredProperty>>> {
-        Ok(vec![vec![self.required_input()]])
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
@@ -686,6 +670,27 @@ impl Operator for Window {
             stat_info = cap_stat_info_by_rows(stat_info, limit);
         }
         Ok(Arc::new(stat_info))
+    }
+}
+
+impl PhysicalOperator for Window {
+    fn compute_required_prop_child(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _child_index: usize,
+        _required: &RequiredProperty,
+    ) -> Result<RequiredProperty> {
+        Ok(self.required_input())
+    }
+
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        Ok(vec![vec![self.required_input()]])
     }
 }
 

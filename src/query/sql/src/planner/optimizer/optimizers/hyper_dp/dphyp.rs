@@ -667,10 +667,6 @@ impl DPhpyOptimizer {
 
             RelOperator::UnionAll(_) => self.process_union_all_node(s_expr).await,
 
-            RelOperator::Exchange(_) => {
-                unreachable!()
-            }
-
             RelOperator::DummyTableScan(_)
             | RelOperator::ConstantTableScan(_)
             | RelOperator::ExpressionScan(_)

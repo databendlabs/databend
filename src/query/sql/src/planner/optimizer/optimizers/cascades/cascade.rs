@@ -143,11 +143,14 @@ impl CascadesOptimizer {
                     e
                 );
 
+                // The input is still logical when Cascades fails (including CBO
+                // disabled). Lower aggregates before either fallback execution path.
+                let fallback = crate::optimizer::ir::DefaultPhysicalPlanner::plan(s_expr)?;
                 if self.opt_ctx.get_enable_distributed_optimization() {
                     let distributed_optimizer = DistributedOptimizer::new(self.opt_ctx.clone());
-                    distributed_optimizer.optimize(&PExpr::from(s_expr.clone()))
+                    distributed_optimizer.optimize(&fallback)
                 } else {
-                    Ok(PExpr::from(s_expr.clone()))
+                    Ok(fallback)
                 }
             }
         }
@@ -268,7 +271,17 @@ impl CascadesOptimizer {
             .map(|(index, required_prop)| Ok(Arc::new(self.find_best_plan(*index, required_prop)?)))
             .collect::<Result<Vec<_>>>()?;
 
-        let result = PExpr::create(m_expr.plan.clone(), children, None, None, None);
+        let result = PExpr::create(
+            m_expr
+                .plan
+                .physical()
+                .cloned()
+                .ok_or_else(|| ErrorCode::Internal("Best Memo candidate must be physical"))?,
+            children,
+            None,
+            None,
+            None,
+        );
 
         Ok(result)
     }

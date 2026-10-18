@@ -159,7 +159,6 @@ use crate::plans::RefreshMaterializedViewPlan;
 use crate::plans::RefreshTableCachePlan;
 use crate::plans::RefreshTableIndexPlan;
 use crate::plans::RefreshVirtualColumnPlan;
-use crate::plans::RelOperator;
 use crate::plans::RemoveStagePlan;
 use crate::plans::RenameDatabasePlan;
 use crate::plans::RenameTableColumnPlan;
@@ -706,7 +705,10 @@ impl Plan {
         } = self
         {
             if s_expr.planned().is_ok_and(|plan| {
-                matches!(plan.expr().plan(), RelOperator::Exchange(Exchange::Merge))
+                matches!(
+                    plan.expr().plan(),
+                    crate::plans::PhysicalRelOperator::Exchange(Exchange::Merge)
+                )
             }) {
                 let s_expr = Box::new(s_expr.remove_root_merge());
                 return Plan::Query {

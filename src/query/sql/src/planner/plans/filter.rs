@@ -26,6 +26,7 @@ use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 
@@ -109,3 +110,5 @@ impl Operator for Filter {
         }))
     }
 }
+
+impl PhysicalOperator for Filter {}

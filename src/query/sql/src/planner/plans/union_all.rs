@@ -35,6 +35,7 @@ use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::EvalScalar;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -298,6 +299,14 @@ impl Operator for UnionAll {
         }))
     }
 
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        let left_stat_info = rel_expr.derive_cardinality_child(0, stat_ctx)?;
+        let right_stat_info = rel_expr.derive_cardinality_child(1, stat_ctx)?;
+        self.derive_union_stats(left_stat_info, right_stat_info, stat_ctx)
+    }
+}
+
+impl PhysicalOperator for UnionAll {
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         let left_physical_prop = rel_expr.derive_physical_prop_child(0)?;
         let right_physical_prop = rel_expr.derive_physical_prop_child(1)?;
@@ -313,12 +322,6 @@ impl Operator for UnionAll {
         Ok(PhysicalProperty {
             distribution: Distribution::Random,
         })
-    }
-
-    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
-        let left_stat_info = rel_expr.derive_cardinality_child(0, stat_ctx)?;
-        let right_stat_info = rel_expr.derive_cardinality_child(1, stat_ctx)?;
-        self.derive_union_stats(left_stat_info, right_stat_info, stat_ctx)
     }
 
     fn compute_required_prop_child(

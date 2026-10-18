@@ -22,7 +22,7 @@ use parquet::arrow::arrow_reader::RowSelection;
 
 use crate::parquet_reader::row_group::InMemoryRowGroup;
 use crate::parquet_reader::topk::ParquetTopK;
-use crate::parquet_reader::utils::FieldPaths;
+use crate::parquet_reader::utils::BatchReadPlan;
 use crate::parquet_reader::utils::bitmap_to_boolean_array;
 use crate::parquet_reader::utils::transform_record_batch;
 
@@ -31,14 +31,14 @@ pub fn read_all(
     rg: &InMemoryRowGroup,
     field_levels: &FieldLevels,
     selection: Option<RowSelection>,
-    field_paths: &Option<FieldPaths>,
+    read_plan: &Option<BatchReadPlan>,
     num_rows: usize,
 ) -> Result<DataBlock> {
     let mut reader =
         ParquetRecordBatchReader::try_new_with_row_groups(field_levels, rg, num_rows, selection)?;
     let batch = reader.next().transpose()?.unwrap();
     debug_assert!(reader.next().is_none());
-    transform_record_batch(data_schema, &batch, field_paths)
+    transform_record_batch(data_schema, &batch, read_plan)
 }
 
 #[inline]
