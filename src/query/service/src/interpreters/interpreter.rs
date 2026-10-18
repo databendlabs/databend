@@ -23,6 +23,8 @@ use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::ModifyColumnAction;
 use databend_common_ast::ast::Statement;
 use databend_common_base::base::short_sql;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -91,7 +93,31 @@ pub trait Interpreter: Sync + Send {
 
     /// Build and run the pipeline with the given lifecycle hooks.
     /// All logging (start/finish) is handled here based on `hooks.log_finished`.
+    ///
+    /// Runs inside a tracking scope whose `io_stats` is the query's own
+    /// counter, so the pipeline nodes built here (which capture the current
+    /// payload) attribute their storage IO to the query no matter which
+    /// handler called us. Handlers that already installed it see no change.
     async fn execute_with_hooks(
+        &self,
+        ctx: Arc<QueryContext>,
+        hooks: QueryFinishHooks,
+    ) -> Result<SendableDataBlockStream> {
+        let query_io_stats = ctx.get_local_io_stats();
+        let already_tracked =
+            ThreadTracker::io_stats().is_some_and(|current| Arc::ptr_eq(current, &query_io_stats));
+        if already_tracked {
+            return self.execute_with_hooks_inner(ctx, hooks).await;
+        }
+
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.io_stats = Some(query_io_stats);
+        tracking_payload
+            .tracking(self.execute_with_hooks_inner(ctx, hooks))
+            .await
+    }
+
+    async fn execute_with_hooks_inner(
         &self,
         ctx: Arc<QueryContext>,
         hooks: QueryFinishHooks,
@@ -400,6 +426,7 @@ fn need_acquire_lock(ctx: Arc<QueryContext>, stmt: &Statement) -> bool {
         Statement::AlterTable(AlterTableStmt { action, .. }) => matches!(
             action,
             AlterTableAction::ReclusterTable { .. }
+                | AlterTableAction::MaterializeTableTtl
                 | AlterTableAction::ModifyColumn {
                     action: ModifyColumnAction::SetDataType(_),
                 }

@@ -225,7 +225,8 @@ impl RangeJoinState {
             left_sorted_blocks,
             self.ctx.get_settings().get_enable_fixed_rows_sort()?,
             self.ctx.get_settings().get_enable_loser_tree_merge_sort()?,
-        )?;
+        )?
+        .collect::<Result<Vec<_>>>()?;
 
         // Add a column at the end of `left_sorted_blocks`, named `_pos`, which is used to record the position of the block in the original table
         let mut count: usize = 0;
@@ -254,14 +255,16 @@ impl RangeJoinState {
             )?);
         }
         let settings = self.ctx.get_settings();
-        merged_blocks = DataBlock::concat(&sort_merge(
+        let l2_merged_blocks = sort_merge(
             ie_join_state.data_schema.clone(),
             block_size,
             ie_join_state.l2_sort_descriptions.clone(),
             l2_sorted_blocks,
             settings.get_enable_fixed_rows_sort()?,
             settings.get_enable_loser_tree_merge_sort()?,
-        )?)?;
+        )?
+        .collect::<Result<Vec<_>>>()?;
+        merged_blocks = DataBlock::concat(&l2_merged_blocks)?;
 
         // The pos col of l2 sorted blocks is permutation array
         let mut p_array = Vec::with_capacity(merged_blocks.num_rows());

@@ -368,8 +368,19 @@ impl<'a> Selector<'a> {
             DataType::String | DataType::Nullable(deref!(DataType::String))
         ));
 
+        let buffers = SelectionBuffers {
+            true_selection,
+            false_selection: false_selection.0,
+            mutable_true_idx,
+            mutable_false_idx,
+            select_strategy,
+            count,
+        };
         if value.is_scalar_null() {
-            return Ok(0);
+            // LIKE over NULL is NULL, which selects as false. The rows must still be written
+            // to the false selection when the caller tracks it: OR evaluates its next child
+            // only over the rows a previous child left false.
+            return Ok(self.select_boolean_scalar_adapt(false, buffers, false_selection.1));
         }
         // The operand is usually a column, but a block may carry it as a constant (e.g. the
         // replicated side of a cross join); the LIKE fast path then applies to every row.
@@ -382,14 +393,7 @@ impl<'a> Selector<'a> {
             like_pattern,
             not,
             validity,
-            SelectionBuffers {
-                true_selection,
-                false_selection: false_selection.0,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            },
+            buffers,
             false_selection.1,
         )
     }

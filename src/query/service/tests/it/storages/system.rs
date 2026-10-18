@@ -596,23 +596,27 @@ async fn test_show_tables_ignores_broken_attached_table_refresh() -> anyhow::Res
             },
             source_table_option: None,
             as_dropped: false,
+            clone: None,
             materialized_view: None,
             table_properties: None,
             table_partition: None,
         })
         .await?;
 
-    let list_tables_error = catalog.list_tables(&tenant, "default").await;
+    let tables = catalog.list_tables(&tenant, "default").await?;
+    assert!(tables.iter().any(|table| table.name() == "healthy"));
     assert!(
-        list_tables_error.is_err(),
-        "loading attached tables without disabling refresh should fail"
+        tables.iter().all(|table| table.name() != "broken_attached"),
+        "a failed attached-table refresh should only skip that table"
     );
 
     let disabled_catalog = catalog.clone().disable_table_info_refresh()?;
-    let disabled_list_tables = disabled_catalog.list_tables(&tenant, "default").await;
+    let disabled_list_tables = disabled_catalog.list_tables(&tenant, "default").await?;
     assert!(
-        disabled_list_tables.is_ok(),
-        "loading attached tables with disable_table_info_refresh should succeed"
+        disabled_list_tables
+            .iter()
+            .any(|table| table.name() == "broken_attached"),
+        "disabling refresh should keep the attached table visible"
     );
 
     mock_server.reset().await;

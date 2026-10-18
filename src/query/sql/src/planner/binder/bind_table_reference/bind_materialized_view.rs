@@ -68,7 +68,6 @@ use crate::optimizer::ir::SExpr;
 use crate::parse_materialized_view_query;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
-use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::ScalarItem;
@@ -273,7 +272,6 @@ impl Binder {
         }
 
         let aggregate = Aggregate {
-            mode: AggregateMode::Initial,
             group_items,
             aggregate_functions,
             from_distinct: false,
@@ -282,6 +280,8 @@ impl Binder {
         };
         let s_expr = SExpr::create_unary(Arc::new(aggregate.into()), Arc::new(child));
         let mut output_context = BindContext::new();
+        output_context.binding_depth = physical_context.depth();
+        output_context.binding_views = physical_context.binding_views.clone();
         output_context.parent = physical_context.parent.clone();
         output_context
             .cte_context
@@ -303,6 +303,7 @@ impl Binder {
             .cloned()
             .collect::<Vec<_>>();
         let mut expression_context = BindContext::new();
+        expression_context.binding_depth = physical_context.depth();
         expression_context.columns = physical_columns;
 
         let mut items = Vec::with_capacity(logical_schema.num_fields());
@@ -363,6 +364,8 @@ impl Binder {
         let projection =
             SExpr::create_unary(Arc::new(EvalScalar { items }.into()), Arc::new(child));
         let mut output_context = BindContext::new();
+        output_context.binding_depth = physical_context.depth();
+        output_context.binding_views = physical_context.binding_views.clone();
         output_context.parent = physical_context.parent.clone();
         output_context
             .cte_context
@@ -669,6 +672,7 @@ impl Binder {
         )
         .with_subquery_executor(self.subquery_executor.clone());
         let mut definition_context = BindContext::new();
+        definition_context.binding_depth = bind_context.next_depth()?;
         let (definition_expr, _) = definition_binder.bind_query(&mut definition_context, &query)?;
         validate_materialized_view_source(
             &definition_metadata,

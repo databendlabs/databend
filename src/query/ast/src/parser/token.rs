@@ -510,6 +510,8 @@ pub enum TokenKind {
     CHANGES,
     #[token("CLUSTER", ignore(ascii_case))]
     CLUSTER,
+    #[token("CLONE", ignore(ascii_case))]
+    CLONE,
     #[token("COMMENT", ignore(ascii_case))]
     COMMENT,
     #[token("COMMENTS", ignore(ascii_case))]
@@ -966,6 +968,8 @@ pub enum TokenKind {
     MONTH,
     #[token("MODIFY", ignore(ascii_case))]
     MODIFY,
+    #[token("MATERIALIZE", ignore(ascii_case))]
+    MATERIALIZE,
     #[token("MATERIALIZED", ignore(ascii_case))]
     MATERIALIZED,
     #[token("MUST_CHANGE_PASSWORD", ignore(ascii_case))]

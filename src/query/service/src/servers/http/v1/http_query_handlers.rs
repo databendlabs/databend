@@ -635,6 +635,7 @@ async fn query_page_handler(
     ctx.try_refresh_worksheet_session().await.ok();
 
     let query_mem_stat = query.query_mem_stat.clone();
+    let query_io_stats = query.query_io_stats.clone();
 
     let query_page_handle = {
         let query_id = query_id.clone();
@@ -697,9 +698,7 @@ async fn query_page_handler(
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.mem_stat = query_mem_stat;
         tracking_payload.query_id = Some(query_id.clone());
-        tracking_payload.io_stats = Some(std::sync::Arc::new(
-            databend_common_base::runtime::IoStats::default(),
-        ));
+        tracking_payload.io_stats = Some(query_io_stats);
 
         tracking_payload.tracking(query_page_handle)
     };

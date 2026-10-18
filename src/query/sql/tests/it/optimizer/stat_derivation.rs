@@ -27,9 +27,9 @@ use databend_common_sql::optimizer::CollectStatisticsOptimizer;
 use databend_common_sql::optimizer::Optimizer;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::ColumnStat;
+use databend_common_sql::optimizer::ir::DefaultPhysicalPlanner;
 use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::RelExpr;
-use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::optimizer::ir::StatInfo;
 use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
 use databend_common_sql::optimizer::optimizers::rule::RuleID;
@@ -154,6 +154,30 @@ async fn write_case(file: &mut impl Write, case: &StatsCase) -> Result<()> {
         HashMap::new(),
     )
     .await?;
+    // Equal temporal distributions represented as days and microseconds. The
+    // collector must preserve the logical type until lazy histogram synthesis.
+    ctx.register_table_sql_with_stats(
+        "CREATE TABLE temporal(d DATE NOT NULL, ts TIMESTAMP NOT NULL)",
+        Some(table_statistics(1000)),
+        HashMap::from([
+            ("d".to_string(), BasicColumnStatistics {
+                min: Some(Datum::Int(0)),
+                max: Some(Datum::Int(80_000)),
+                ndv: Some(1000),
+                null_count: 0,
+                in_memory_size: 4000,
+            }),
+            ("ts".to_string(), BasicColumnStatistics {
+                min: Some(Datum::Int(0)),
+                max: Some(Datum::Int(80_000 * 86_400 * 1_000_000)),
+                ndv: Some(1000),
+                null_count: 0,
+                in_memory_size: 8000,
+            }),
+        ]),
+        HashMap::new(),
+    )
+    .await?;
 
     let raw_plan = ctx.bind_sql(case.sql).await?;
     let (s_expr, metadata) = if case.operator == RelOp::Sort {
@@ -169,7 +193,7 @@ async fn write_case(file: &mut impl Write, case: &StatsCase) -> Result<()> {
         let s_expr = collector.optimize((*s_expr).into_logical()?).await?;
         let s_expr = RecursiveRuleOptimizer::new(opt_ctx, &[RuleID::PushDownLimitSort])
             .optimize_sync(s_expr)?;
-        (PExpr::from(s_expr), metadata)
+        (DefaultPhysicalPlanner::plan(&s_expr)?, metadata)
     } else {
         let Plan::Query {
             s_expr, metadata, ..
@@ -182,7 +206,7 @@ async fn write_case(file: &mut impl Write, case: &StatsCase) -> Result<()> {
     let target = find_operator(&s_expr, case.operator.clone()).ok_or_else(|| {
         ErrorCode::Internal(format!("cannot find {:?} in optimized plan", case.operator))
     })?;
-    let stats = RelExpr::with_p_expr(target).derive_cardinality(&StatContext::default())?;
+    let stats = RelExpr::with_p_expr(target).derive_cardinality(&ctx.stat_context()?)?;
 
     write_case_title(file, case.name, case.description)?;
     writeln!(file, "sql: {}", case.sql)?;
@@ -196,6 +220,18 @@ async fn write_case(file: &mut impl Write, case: &StatsCase) -> Result<()> {
 async fn test_sort_and_window_statistics_golden() -> Result<()> {
     let mut file = open_golden_file("optimizer", "stat_derivation.txt")?;
     let cases = [
+        StatsCase {
+            name: "date_synthetic_spacing_unit",
+            description: "Date synthesis uses the same temporal reference as Timestamp, in days.",
+            sql: "SELECT d FROM temporal WHERE d < to_date('1991-11-27')",
+            operator: RelOp::Scan,
+        },
+        StatsCase {
+            name: "timestamp_synthetic_spacing_unit",
+            description: "Microsecond bounds must not cause an equivalent Timestamp distribution to lose its histogram.",
+            sql: "SELECT ts FROM temporal WHERE ts < to_timestamp('1991-11-27 00:00:00')",
+            operator: RelOp::Scan,
+        },
         StatsCase {
             name: "sort_top_n_caps_statistics",
             description: "Top-N sort caps row-count statistics without discarding value bounds.",

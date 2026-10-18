@@ -71,7 +71,7 @@ pub struct TxnBuffer {
     table_desc_to_id: HashMap<String, u64>,
     mutated_tables: HashMap<u64, TableInfo>,
     base_snapshot_location: HashMap<u64, Option<String>>,
-    lvt_check: HashMap<u64, Option<TableLvtCheck>>,
+    lvt_check: HashMap<u64, TableLvtCheck>,
     copied_files: HashMap<u64, Vec<UpsertTableCopiedFileReq>>,
     update_stream_meta: HashMap<u64, UpdateStreamMetaReq>,
     deduplicated_labels: HashSet<String>,
@@ -143,7 +143,15 @@ impl TxnBuffer {
                 .entry(table_id)
                 .or_insert(req.base_snapshot_location);
 
-            self.lvt_check.entry(table_id).or_insert(req.lvt_check);
+            if let Some(check) = req.lvt_check {
+                self.lvt_check
+                    .entry(table_id)
+                    .and_modify(|existing| {
+                        existing.time = existing.time.min(check.time);
+                        existing.touch |= check.touch;
+                    })
+                    .or_insert(check);
+            }
         }
 
         for (table_id, file) in std::mem::take(&mut req.copied_files) {
@@ -417,7 +425,7 @@ impl TxnManager {
                             seq: MatchSeq::Exact(info.ident.seq),
                             new_table_meta: info.meta.clone(),
                             base_snapshot_location: None,
-                            lvt_check: self.txn_buffer.lvt_check.get(id).cloned().flatten(),
+                            lvt_check: self.txn_buffer.lvt_check.get(id).cloned(),
                         },
                         info.clone(),
                     )
@@ -526,6 +534,15 @@ impl TxnManager {
 mod tests {
     use std::collections::HashMap;
 
+    use chrono::DateTime;
+    use chrono::Utc;
+    use databend_common_meta_app::schema::TableInfo;
+    use databend_common_meta_app::schema::TableLvtCheck;
+    use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+    use databend_common_meta_app::schema::UpdateTableMetaReq;
+    use databend_common_meta_app::tenant::Tenant;
+    use databend_meta_client::types::MatchSeq;
+
     use super::TxnBuffer;
     use super::TxnManager;
 
@@ -573,6 +590,52 @@ mod tests {
             txn.add_logical_change_delta(id, (0, 0));
             assert_eq!(txn.logical_change_deltas().get(&id), Some(&None));
         }
+    }
+
+    #[test]
+    fn test_transaction_preserves_first_lvt_fence() {
+        let tenant = Tenant::new_literal("tenant");
+        let first_time = DateTime::from_timestamp(1_000, 0).unwrap();
+        let later_time = DateTime::from_timestamp(2_000, 0).unwrap();
+        let mut table_info = TableInfo::default();
+        table_info.ident.table_id = 7;
+        table_info.ident.seq = 1;
+
+        let make_req = |time: Option<DateTime<Utc>>, touch| UpdateMultiTableMetaReq {
+            update_table_metas: vec![(
+                UpdateTableMetaReq {
+                    table_id: 7,
+                    seq: MatchSeq::Exact(1),
+                    new_table_meta: table_info.meta.clone(),
+                    base_snapshot_location: Some("snapshot".to_string()),
+                    lvt_check: time.map(|time| TableLvtCheck { time, touch }),
+                },
+                table_info.clone(),
+            )],
+            ..Default::default()
+        };
+
+        let txn_mgr = TxnManager::init();
+        let mut txn_mgr = txn_mgr.lock();
+        txn_mgr.begin();
+        txn_mgr
+            .update_multi_table_meta(&tenant, make_req(None, false))
+            .unwrap();
+        txn_mgr
+            .update_multi_table_meta(&tenant, make_req(Some(later_time), true))
+            .unwrap();
+        txn_mgr
+            .update_multi_table_meta(&tenant, make_req(Some(first_time), false))
+            .unwrap();
+
+        let request = txn_mgr.req();
+        assert_eq!(request.update_table_metas.len(), 1);
+        let check = request.update_table_metas[0].0.lvt_check.as_ref().unwrap();
+        assert_eq!(check.time, first_time);
+        assert!(
+            check.touch,
+            "later requests must not discard a historical publication touch"
+        );
     }
 
     #[test]

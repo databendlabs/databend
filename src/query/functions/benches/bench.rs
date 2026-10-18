@@ -892,3 +892,91 @@ mod datetime_fast_path {
             * 1_000_000
     }
 }
+
+// Day-level functions on timestamps, which compute by integer division when
+// the UTC offset cannot change across the column (see
+// `scalars/timestamp/src/fixed_offset.rs`). Each column holds 100,000 rows
+// 0.8s apart, about 22 hours.
+#[divan::bench_group(max_time = 0.5)]
+mod datetime_fixed_offset {
+    use std::sync::LazyLock;
+
+    use chrono_tz::Tz;
+    use databend_common_column::bitmap::Bitmap;
+    use databend_common_column::buffer::Buffer;
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::Column;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::Evaluator;
+    use databend_common_expression::FunctionContext;
+    use databend_common_expression::type_check;
+    use databend_common_expression_test_support as parser;
+    use databend_common_functions::BUILTIN_FUNCTIONS;
+
+    const ROWS: i64 = 100_000;
+    const STEP: i64 = 800_000;
+
+    const EXPRS: [&str; 4] = [
+        "to_date(ts)",
+        "to_yyyymmdd(ts)",
+        "to_start_of_day(ts)",
+        "to_start_of_minute(ts)",
+    ];
+
+    fn timestamps(start: i64) -> Buffer<i64> {
+        (0..ROWS).map(|i| start + i * STEP).collect()
+    }
+
+    // 2024-07-15 00:00 UTC: no DST change in Paris within the column.
+    static SUMMER: LazyLock<Buffer<i64>> = LazyLock::new(|| timestamps(1_721_001_600_000_000));
+    // 2024-10-26 12:00 UTC: crosses the Paris change at 2024-10-27 01:00 UTC.
+    static ACROSS_DST: LazyLock<Buffer<i64>> = LazyLock::new(|| timestamps(1_729_944_000_000_000));
+
+    fn run(bencher: divan::Bencher, sql: &str, tz: &str, column: Column) {
+        let data_type = column.data_type();
+        let raw_expr = parser::parse_raw_expr(sql, &[("ts", data_type)], &BUILTIN_FUNCTIONS);
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+        let block = DataBlock::new(vec![BlockEntry::Column(column)], ROWS as usize);
+        let func_ctx = FunctionContext {
+            tz: tz.parse::<Tz>().unwrap(),
+            ..Default::default()
+        };
+        let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+        bencher.bench(|| divan::black_box(evaluator.run(&expr).unwrap()));
+    }
+
+    #[divan::bench(args = EXPRS)]
+    fn utc(bencher: divan::Bencher, sql: &str) {
+        run(bencher, sql, "UTC", Column::Timestamp(SUMMER.clone()));
+    }
+
+    #[divan::bench(args = EXPRS)]
+    fn paris(bencher: divan::Bencher, sql: &str) {
+        run(
+            bencher,
+            sql,
+            "Europe/Paris",
+            Column::Timestamp(SUMMER.clone()),
+        );
+    }
+
+    // Every tenth row NULL; the values under them stay in the column.
+    #[divan::bench(args = EXPRS)]
+    fn paris_nullable(bencher: divan::Bencher, sql: &str) {
+        let validity = Bitmap::from_iter((0..ROWS).map(|i| i % 10 != 0));
+        let column = Column::Timestamp(SUMMER.clone()).wrap_nullable(Some(validity));
+        run(bencher, sql, "Europe/Paris", column);
+    }
+
+    // The fast path declines: this measures its min/max and transition check
+    // on top of the per-row path.
+    #[divan::bench(args = EXPRS)]
+    fn paris_across_dst(bencher: divan::Bencher, sql: &str) {
+        run(
+            bencher,
+            sql,
+            "Europe/Paris",
+            Column::Timestamp(ACROSS_DST.clone()),
+        );
+    }
+}

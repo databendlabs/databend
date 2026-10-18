@@ -30,6 +30,7 @@ use crate::plans::MaterializedCTE;
 use crate::plans::MaterializedCTERef;
 use crate::plans::Mutation;
 use crate::plans::Operator;
+use crate::plans::PhysicalRelOperator;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -41,37 +42,80 @@ use crate::plans::UnionAll;
 use crate::plans::Window;
 use crate::plans::WindowGroup;
 
-impl<I: IdHumanizer> OperatorHumanizer<I> for DefaultOperatorHumanizer {
-    fn humanize_operator(&self, id_humanizer: &I, op: &RelOperator) -> FormatTreeNode {
-        to_format_tree(id_humanizer, op)
+impl OperatorHumanizer<RelOperator> for DefaultOperatorHumanizer {
+    fn humanize_operator<I: IdHumanizer>(&self, ids: &I, op: &RelOperator) -> FormatTreeNode {
+        match op {
+            RelOperator::Join(op) => join_to_format_tree(ids, op),
+            RelOperator::Scan(op) => scan_to_format_tree(ids, op),
+            RelOperator::EvalScalar(op) => eval_scalar_to_format_tree(ids, op),
+            RelOperator::Filter(op) => filter_to_format_tree(ids, op),
+            RelOperator::Aggregate(op) => {
+                aggregate_to_format_tree(ids, op, "Aggregate(Initial)".to_string())
+            }
+            RelOperator::Window(op) => window_to_format_tree(ids, op),
+            RelOperator::WindowGroup(op) => window_group_to_format_tree(ids, op),
+            RelOperator::Udf(op) => udf_to_format_tree(ids, op),
+            RelOperator::AsyncFunction(op) => async_func_to_format_tree(ids, op),
+            RelOperator::Sort(op) => sort_to_format_tree(ids, op),
+            RelOperator::Limit(op) => limit_to_format_tree(ids, op),
+            RelOperator::TopN(op) => top_n_to_format_tree(ids, op),
+            RelOperator::ConstantTableScan(op) => constant_scan_to_format_tree(ids, op),
+            RelOperator::UnionAll(op) => union_all_to_format_tree(ids, op),
+            RelOperator::Mutation(op) => merge_into_to_format_tree(ids, op),
+            RelOperator::MaterializedCTE(op) => materialized_cte_to_format_tree(op),
+            RelOperator::MaterializedCTERef(op) => materialized_cte_ref_to_format_tree(ids, op),
+            RelOperator::DummyTableScan(_)
+            | RelOperator::ProjectSet(_)
+            | RelOperator::ExpressionScan(_)
+            | RelOperator::CacheScan(_)
+            | RelOperator::RecursiveCteScan(_)
+            | RelOperator::CompactBlock(_)
+            | RelOperator::MutationSource(_)
+            | RelOperator::Sequence(_) => FormatTreeNode::with_children(format!("{op:?}"), vec![]),
+        }
     }
 }
 
-/// Build `FormatTreeNode` for a `RelOperator`, which may returns a tree structure instead of
-/// a single node.
-fn to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &RelOperator) -> FormatTreeNode {
-    match op {
-        RelOperator::Join(op) => join_to_format_tree(id_humanizer, op),
-        RelOperator::Scan(op) => scan_to_format_tree(id_humanizer, op),
-        RelOperator::EvalScalar(op) => eval_scalar_to_format_tree(id_humanizer, op),
-        RelOperator::Filter(op) => filter_to_format_tree(id_humanizer, op),
-        RelOperator::Aggregate(op) => aggregate_to_format_tree(id_humanizer, op),
-        RelOperator::Window(op) => window_to_format_tree(id_humanizer, op),
-        RelOperator::WindowGroup(op) => window_group_to_format_tree(id_humanizer, op),
-        RelOperator::Udf(op) => udf_to_format_tree(id_humanizer, op),
-        RelOperator::AsyncFunction(op) => async_func_to_format_tree(id_humanizer, op),
-        RelOperator::Sort(op) => sort_to_format_tree(id_humanizer, op),
-        RelOperator::Limit(op) => limit_to_format_tree(id_humanizer, op),
-        RelOperator::TopN(op) => top_n_to_format_tree(id_humanizer, op),
-        RelOperator::Exchange(op) => exchange_to_format_tree(id_humanizer, op),
-        RelOperator::ConstantTableScan(op) => constant_scan_to_format_tree(id_humanizer, op),
-        RelOperator::UnionAll(op) => union_all_to_format_tree(id_humanizer, op),
-        RelOperator::Mutation(op) => merge_into_to_format_tree(id_humanizer, op),
-        RelOperator::MaterializedCTE(op) => materialized_cte_to_format_tree(op),
-        RelOperator::MaterializedCTERef(op) => {
-            materialized_cte_ref_to_format_tree(id_humanizer, op)
+impl OperatorHumanizer<PhysicalRelOperator> for DefaultOperatorHumanizer {
+    fn humanize_operator<I: IdHumanizer>(
+        &self,
+        ids: &I,
+        op: &PhysicalRelOperator,
+    ) -> FormatTreeNode {
+        match op {
+            PhysicalRelOperator::Join(op) => join_to_format_tree(ids, op),
+            PhysicalRelOperator::Scan(op) => scan_to_format_tree(ids, op),
+            PhysicalRelOperator::EvalScalar(op) => eval_scalar_to_format_tree(ids, op),
+            PhysicalRelOperator::Filter(op) => filter_to_format_tree(ids, op),
+            PhysicalRelOperator::Aggregate(op) => {
+                aggregate_to_format_tree(ids, &op.aggregate, format!("Aggregate({:?})", op.mode))
+            }
+            PhysicalRelOperator::Window(op) => window_to_format_tree(ids, op),
+            PhysicalRelOperator::WindowGroup(op) => window_group_to_format_tree(ids, op),
+            PhysicalRelOperator::Udf(op) => udf_to_format_tree(ids, op),
+            PhysicalRelOperator::AsyncFunction(op) => async_func_to_format_tree(ids, op),
+            PhysicalRelOperator::Sort(op) => sort_to_format_tree(ids, op),
+            PhysicalRelOperator::Limit(op) => limit_to_format_tree(ids, op),
+            PhysicalRelOperator::TopN(op) => top_n_to_format_tree(ids, op),
+            PhysicalRelOperator::Exchange(op) => exchange_to_format_tree(ids, op),
+            PhysicalRelOperator::ConstantTableScan(op) => constant_scan_to_format_tree(ids, op),
+            PhysicalRelOperator::UnionAll(op) => union_all_to_format_tree(ids, op),
+            PhysicalRelOperator::Mutation(op) => merge_into_to_format_tree(ids, op),
+            PhysicalRelOperator::MaterializedCTE(op) => materialized_cte_to_format_tree(op),
+            PhysicalRelOperator::MaterializedCTERef(op) => {
+                materialized_cte_ref_to_format_tree(ids, op)
+            }
+            PhysicalRelOperator::DummyTableScan(_)
+            | PhysicalRelOperator::ProjectSet(_)
+            | PhysicalRelOperator::ExpressionScan(_)
+            | PhysicalRelOperator::CacheScan(_)
+            | PhysicalRelOperator::RecursiveCteScan(_)
+            | PhysicalRelOperator::CompactBlock(_)
+            | PhysicalRelOperator::MutationSource(_)
+            | PhysicalRelOperator::Sequence(_) => {
+                FormatTreeNode::with_children(format!("{op:?}"), vec![])
+            }
         }
-        _ => FormatTreeNode::with_children(format!("{:?}", op), vec![]),
     }
 }
 
@@ -236,7 +280,11 @@ fn join_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Join) -> FormatTre
     ])
 }
 
-fn aggregate_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Aggregate) -> FormatTreeNode {
+fn aggregate_to_format_tree<I: IdHumanizer>(
+    id_humanizer: &I,
+    op: &Aggregate,
+    label: String,
+) -> FormatTreeNode {
     let group_items = op
         .group_items
         .iter()
@@ -249,7 +297,7 @@ fn aggregate_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Aggregate) ->
         .map(|item| format_scalar_item(id_humanizer, item))
         .collect::<Vec<String>>()
         .join(", ");
-    FormatTreeNode::with_children(format!("Aggregate({:?})", op.mode), vec![
+    FormatTreeNode::with_children(label, vec![
         FormatTreeNode::new(format!("group items: [{}]", group_items)),
         FormatTreeNode::new(format!("aggregate functions: [{}]", agg_funcs)),
     ])

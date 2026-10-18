@@ -1,5 +1,12 @@
 module.exports = async ({ context, core }) => {
-  const body = context.payload.pull_request.body;
+  const pullRequest = context.payload.pull_request;
+  if (pullRequest.draft) {
+    core.info("PR is in draft state, skipping description checkbox check");
+    core.setOutput("tests", "checked");
+    core.setOutput("changes", "checked");
+    return;
+  }
+  const body = pullRequest.body || "";
   let section = "summary";
   let testsChecked = false;
   let changesChecked = false;

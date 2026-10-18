@@ -18,7 +18,6 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use databend_common_base::runtime::IoStatsSnapshot;
-use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::PruningStatistics;
@@ -324,17 +323,20 @@ impl InterpreterQueryLog {
         let query_start_time = convert_query_log_timestamp(ctx.get_query_created_time());
         let query_duration_ms = ctx.get_query_duration_ms();
         let query_queued_duration_ms = ctx.get_query_queued_duration().as_millis() as i64;
+        // Read the IO counter once so that the `*_io_bytes*` columns and
+        // `resource_usage` describe the same IoStatsSnapshot.
+        let io_stats = ctx.get_io_stats();
         let data_metrics = ctx.get_data_metrics();
 
         let written_rows = ctx.get_write_progress_value().rows as u64;
         let written_bytes = ctx.get_write_progress_value().bytes as u64;
-        let written_io_bytes = data_metrics.get_write_bytes() as u64;
-        let written_io_bytes_cost_ms = data_metrics.get_write_bytes_cost();
+        let written_io_bytes = io_stats.write_bytes;
+        let written_io_bytes_cost_ms = io_stats.write_duration_ms;
 
         let scan_rows = ctx.get_scan_progress_value().rows as u64;
         let scan_bytes = ctx.get_scan_progress_value().bytes as u64;
-        let scan_io_bytes = data_metrics.get_read_bytes() as u64;
-        let scan_io_bytes_cost_ms = data_metrics.get_read_bytes_cost();
+        let scan_io_bytes = io_stats.read_bytes;
+        let scan_io_bytes_cost_ms = io_stats.read_duration_ms;
 
         let scan_partitions = data_metrics.get_partitions_scanned();
         let total_partitions = data_metrics.get_partitions_total();
@@ -401,10 +403,6 @@ impl InterpreterQueryLog {
 
         let peek_memory_usage = ctx.get_node_peek_memory_usage();
         let extra = pruning_stats_query_log_extra(&ctx.get_pruned_partitions_stats())?;
-        let mut io_stats = ctx.get_io_stats();
-        if let Some(stats) = ThreadTracker::io_stats() {
-            io_stats.merge(&stats.snapshot());
-        }
         let resource_usage = resource_usage_query_log(io_stats, query_profiles);
 
         Self::write_log(QueryLogElement {

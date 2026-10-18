@@ -45,6 +45,11 @@ class NotificationServiceStub(object):
             request_serializer=notification__pb2.ListNotificationHistoryRequest.SerializeToString,
             response_deserializer=notification__pb2.ListNotificationHistoryResponse.FromString,
         )
+        self.EnqueueNotification = channel.unary_unary(
+            "/notificationproto.NotificationService/EnqueueNotification",
+            request_serializer=notification__pb2.EnqueueNotificationRequest.SerializeToString,
+            response_deserializer=notification__pb2.EnqueueNotificationResponse.FromString,
+        )
 
 
 class NotificationServiceServicer(object):
@@ -86,6 +91,12 @@ class NotificationServiceServicer(object):
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
+    def EnqueueNotification(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
 
 def add_NotificationServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -118,6 +129,11 @@ def add_NotificationServiceServicer_to_server(servicer, server):
             servicer.ListNotificationHistory,
             request_deserializer=notification__pb2.ListNotificationHistoryRequest.FromString,
             response_serializer=notification__pb2.ListNotificationHistoryResponse.SerializeToString,
+        ),
+        "EnqueueNotification": grpc.unary_unary_rpc_method_handler(
+            servicer.EnqueueNotification,
+            request_deserializer=notification__pb2.EnqueueNotificationRequest.FromString,
+            response_serializer=notification__pb2.EnqueueNotificationResponse.SerializeToString,
         ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -294,6 +310,35 @@ class NotificationService(object):
             "/notificationproto.NotificationService/ListNotificationHistory",
             notification__pb2.ListNotificationHistoryRequest.SerializeToString,
             notification__pb2.ListNotificationHistoryResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+        )
+
+    @staticmethod
+    def EnqueueNotification(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/notificationproto.NotificationService/EnqueueNotification",
+            notification__pb2.EnqueueNotificationRequest.SerializeToString,
+            notification__pb2.EnqueueNotificationResponse.FromString,
             options,
             channel_credentials,
             insecure,

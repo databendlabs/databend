@@ -188,7 +188,11 @@ impl RulePushDownFilterWindowTopN {
             }
         }
 
-        let Some((index, top_n)) = top_n_windows.into_iter().min_by_key(|(_, top_n)| *top_n) else {
+        let Some((index, top_n)) = top_n_windows
+            .into_iter()
+            .filter(|(index, _)| can_truncate_window_group(&window_group, *index))
+            .min_by_key(|(_, top_n)| *top_n)
+        else {
             return Ok(());
         };
 
@@ -221,6 +225,21 @@ impl RulePushDownFilterWindowTopN {
 
         Ok(())
     }
+}
+
+/// Windows in a group are evaluated in order, and the top-n of `windows[index]`
+/// drops rows before that window is evaluated, so every window evaluated after
+/// it only sees the kept rows. That is only safe when those windows are
+/// ranking functions over the same partition and order: the kept rows are a
+/// prefix of each partition, so their ranking values do not change. Windows
+/// evaluated before `index` already saw all rows.
+fn can_truncate_window_group(window_group: &WindowGroup, index: usize) -> bool {
+    let top_window = &window_group.windows[index];
+    window_group.windows[index + 1..].iter().all(|window| {
+        is_ranking_function(&window.function)
+            && window.partition_by == top_window.partition_by
+            && window.order_by == top_window.order_by
+    })
 }
 
 fn extract_top_n(

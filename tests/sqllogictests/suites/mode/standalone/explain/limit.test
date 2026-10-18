@@ -130,10 +130,10 @@ TopN(Final)
             ├── rank limit: 3
             └── Filter
                 ├── output columns: [t.number (#0)]
-                ├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = if(CAST(is_not_null(scalar_subquery_4 (#4)) AS Boolean NULL), scalar_subquery_4 (#4), 0))]
+                ├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = CAST(CAST(if(CAST(is_not_null(COUNT(*) (#5)) AS Boolean NULL), COUNT(*) (#5), 0) AS UInt64) AS UInt64 NULL))]
                 ├── estimated rows: 0.20
                 └── HashJoin
-                    ├── output columns: [t.number (#0), COUNT(*) (#4)]
+                    ├── output columns: [t.number (#0), COUNT(*) (#5)]
                     ├── join type: LEFT OUTER
                     ├── build keys: [number (#2)]
                     ├── probe keys: [CAST(number (#0) AS UInt64 NULL)]
@@ -141,7 +141,7 @@ TopN(Final)
                     ├── filters: []
                     ├── estimated rows: 1.00
                     ├── AggregateFinal(Build)
-                    │   ├── output columns: [COUNT(*) (#4), t2.number (#2)]
+                    │   ├── output columns: [COUNT(*) (#5), t2.number (#2)]
                     │   ├── group by: [number]
                     │   ├── aggregate functions: [count()]
                     │   ├── estimated rows: 1.00
