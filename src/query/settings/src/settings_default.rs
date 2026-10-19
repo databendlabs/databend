@@ -1266,15 +1266,15 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("exchange_frame_bytes", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(256 * 1024),
-                    desc: "Sets the target bytes of one network frame sent to a node by broadcast and hash shuffle exchanges.",
+                    value: UserSettingValue::UInt64(4 * 1024 * 1024),
+                    desc: "Sets the maximum bytes of one network frame sent to a node by broadcast and hash shuffle exchanges. Frames are smaller when exchange_send_queue_bytes is shared by many nodes.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u32::MAX as u64)),
                 }),
                 ("exchange_send_queue_bytes", DefaultSettingValue {
                     value: UserSettingValue::UInt64(64 * 1024 * 1024),
-                    desc: "Sets the bytes one broadcast or hash shuffle exchange may queue for sending on a node.",
+                    desc: "Sets the bytes one broadcast or hash shuffle exchange may queue or have in flight for sending on a node.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u32::MAX as u64)),

@@ -54,6 +54,10 @@ impl RemoteQueueItem {
         drop(self.owned_semaphore_permit);
         self.data
     }
+
+    pub fn into_parts(self) -> (FlightData, OwnedSemaphorePermit) {
+        (self.data, self.owned_semaphore_permit)
+    }
 }
 
 /// Per-connection sub-queue within a NetworkInboundChannel.

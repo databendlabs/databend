@@ -40,8 +40,8 @@ use crate::servers::flight::v1::network::inbound_quota::RemoteQueueItem;
 /// Configuration for ExchangeSinkBuffer.
 #[derive(Clone)]
 pub struct ExchangeBufferConfig {
-    /// Maximum bytes queued for all destinations of one exchange. Senders wait
-    /// once the queue is full.
+    /// Maximum bytes queued or in flight for all destinations of one exchange.
+    /// Senders wait once the queue is full.
     pub max_queued_bytes: usize,
     /// Maximum bytes per batch.
     pub max_batch_bytes: usize,
@@ -51,8 +51,23 @@ impl Default for ExchangeBufferConfig {
     fn default() -> Self {
         Self {
             max_queued_bytes: 64 * 1024 * 1024,
-            max_batch_bytes: 256 * 1024,
+            max_batch_bytes: 4 * 1024 * 1024,
         }
+    }
+}
+
+const MIN_BATCH_BYTES: usize = 256 * 1024;
+
+impl ExchangeBufferConfig {
+    /// Batch size used for `num_remotes` destinations.
+    ///
+    /// A destination has one frame in flight and sends the next one only after the
+    /// response, so a small frame leaves the link idle for most of each round trip.
+    /// Each destination gets half of its share of the queue, so the next frame can
+    /// fill up while one is in flight, bounded by `max_batch_bytes`.
+    fn batch_bytes(&self, num_remotes: usize) -> usize {
+        let share = self.max_queued_bytes / (2 * num_remotes.max(1));
+        share.max(MIN_BATCH_BYTES).min(self.max_batch_bytes).max(1)
     }
 }
 
@@ -68,24 +83,28 @@ impl PendingQueue {
         }
     }
 
-    fn pop_front(&self, max_batch_bytes: usize) -> Option<FlightData> {
+    /// Pop items up to `max_batch_bytes` as one frame, with the quota they hold.
+    fn pop_front(&self, max_batch_bytes: usize) -> Option<(FlightData, Vec<OwnedSemaphorePermit>)> {
         let mut items = Vec::new();
+        let mut permits = Vec::new();
         let mut total = 0usize;
 
         while let Ok(next) = self.queue.pop() {
-            let data = next.into_data();
+            let (data, permit) = next.into_parts();
             total += data.data_body.len();
             items.push(data);
+            permits.push(permit);
             if total >= max_batch_bytes {
                 break;
             }
         }
 
-        match items.len() {
-            0 => None,
-            1 => Some(items.into_iter().next().unwrap()),
-            _ => Some(merge_flight_data_batch(items)),
-        }
+        let data = match items.len() {
+            0 => return None,
+            1 => items.into_iter().next().unwrap(),
+            _ => merge_flight_data_batch(items),
+        };
+        Some((data, permits))
     }
 }
 
@@ -129,6 +148,8 @@ pub(crate) fn merge_flight_data_batch(items: Vec<FlightData>) -> FlightData {
 /// Mutable state within RemoteInstance, protected by its own lock.
 struct RemoteInstanceState {
     pending: PendingQueue,
+    /// Quota of the frame in flight, released when its response arrives.
+    in_flight: Vec<OwnedSemaphorePermit>,
     /// Last error from the exchange, returned on next poll_send call
     last_error: Option<ErrorCode>,
 }
@@ -141,6 +162,7 @@ impl RemoteInstanceState {
 
         self.pending.queue.close();
         while self.pending.queue.pop().is_ok() {}
+        self.in_flight.clear();
     }
 }
 
@@ -157,6 +179,7 @@ impl RemoteInstance {
             exchange,
             state: Mutex::new(RemoteInstanceState {
                 pending: PendingQueue::new(),
+                in_flight: Vec::new(),
                 last_error: None,
             }),
         }
@@ -211,9 +234,14 @@ impl ExchangeSinkBufferSharedState {
         let mut state = remote.state.lock();
 
         let Some(status) = status else {
-            let Some(flight) = state.pending.pop_front(self.config.max_batch_bytes) else {
+            // The caller owns the in-flight slot, so the previous frame was answered.
+            state.in_flight.clear();
+
+            let Some((flight, permits)) = state.pending.pop_front(self.config.max_batch_bytes)
+            else {
                 return remote.exchange.ready_send();
             };
+            state.in_flight = permits;
 
             let Err(status) = remote.exchange.force_send(flight) else {
                 return;
@@ -289,6 +317,10 @@ impl ExchangeSinkBuffer {
     ) -> Result<Self> {
         let max_permits = config.max_queued_bytes.clamp(1, u32::MAX as usize);
         let semaphore = Arc::new(Semaphore::new(max_permits));
+        let config = ExchangeBufferConfig {
+            max_batch_bytes: config.batch_bytes(exchanges.len()),
+            ..config
+        };
 
         let remotes = exchanges
             .into_iter()
@@ -322,7 +354,8 @@ impl ExchangeSinkBuffer {
     /// Queue items for one destination node and send them, packed into as few
     /// frames as the batch size allows.
     ///
-    /// Each item holds queue quota proportional to its size until it is sent.
+    /// Each item holds queue quota proportional to its size until the frame
+    /// carrying it is answered.
     pub async fn add_items(&self, dest_idx: usize, items: Vec<FlightData>) -> Result<()> {
         let remote = &self.inner.state.remotes[dest_idx];
 
@@ -464,11 +497,14 @@ mod tests {
             make_flight_data_with_tid(3, &[0x01], 100),
         );
 
-        let result = queue.pop_front(256 * 1024).unwrap();
+        let (result, permits) = queue.pop_front(256 * 1024).unwrap();
         // Single item: no batch wrapping, original data returned as-is
         assert_eq!(result.data_body.len(), 100);
         assert_eq!(result.app_metadata.len(), 3); // 2 tid + 1 marker
         assert_eq!(result.app_metadata[2], 0x01);
+        // The quota moves with the frame.
+        assert_eq!(semaphore.available_permits(), 0);
+        drop(permits);
         assert_eq!(semaphore.available_permits(), 1);
     }
 
@@ -485,9 +521,10 @@ mod tests {
             );
         }
 
-        let result = queue.pop_front(256 * 1024).unwrap();
+        let (result, permits) = queue.pop_front(256 * 1024).unwrap();
         assert!(is_batch_frame(&result));
         assert_eq!(batch_len(&result), 3);
+        assert_eq!(permits.len(), 3);
 
         let items = split_batch_flight_data(result);
         let tids = items.iter().map(extract_tid).collect::<Vec<_>>();
@@ -513,7 +550,7 @@ mod tests {
         }
 
         // Budget of 250 bytes: should pop 3 items (100+100+100 >= 250)
-        let result = queue.pop_front(250).unwrap();
+        let (result, _permits) = queue.pop_front(250).unwrap();
         assert!(is_batch_frame(&result));
         assert_eq!(batch_len(&result), 3);
         // 7 items remain
@@ -524,6 +561,30 @@ mod tests {
     fn test_pop_front_empty_queue() {
         let queue = PendingQueue::new();
         assert!(queue.pop_front(256 * 1024).is_none());
+    }
+
+    #[test]
+    fn test_batch_bytes_shares_queue_among_remotes() {
+        const MIB: usize = 1024 * 1024;
+        let config = ExchangeBufferConfig {
+            max_queued_bytes: 64 * MIB,
+            max_batch_bytes: 4 * MIB,
+        };
+
+        // Few remotes: capped by max_batch_bytes.
+        assert_eq!(config.batch_bytes(1), 4 * MIB);
+        assert_eq!(config.batch_bytes(8), 4 * MIB);
+        // Many remotes: half of each remote's share of the queue.
+        assert_eq!(config.batch_bytes(16), 2 * MIB);
+        assert_eq!(config.batch_bytes(29), 64 * MIB / 58);
+        // Never below the minimum batch size, unless max_batch_bytes is lower.
+        assert_eq!(config.batch_bytes(1000), MIN_BATCH_BYTES);
+        let config = ExchangeBufferConfig {
+            max_queued_bytes: 64 * MIB,
+            max_batch_bytes: 1,
+        };
+        assert_eq!(config.batch_bytes(1), 1);
+        assert_eq!(config.batch_bytes(1000), 1);
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -643,16 +704,12 @@ mod tests {
             .unwrap(),
         );
 
-        // First send goes out directly and releases its quota.
+        // The frame in flight keeps the whole quota until it is answered.
         buffer.add_data(0, make_flight_data(10)).await.unwrap();
         let _ = send_rx.recv().await.unwrap();
-        assert_eq!(buffer.semaphore.available_permits(), 10);
-
-        // Second send is queued and holds the whole quota.
-        buffer.add_data(0, make_flight_data(10)).await.unwrap();
         assert_eq!(buffer.semaphore.available_permits(), 0);
 
-        // Third send should block due to backpressure
+        // Second send should block due to backpressure
         let buffer2 = buffer.clone();
         let send_handle = spawn(async move {
             buffer2.add_data(0, make_flight_data(1)).await.unwrap();
@@ -662,15 +719,25 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(!send_handle.is_finished());
 
-        // Send pong to release — flushes queued item and its quota
+        // The response releases the quota of the answered frame
         pong_tx.send(Ok(FlightData::default())).await.unwrap();
-        tokio::time::sleep(Duration::from_millis(100)).await;
 
-        // The blocked sender should now complete
+        // The blocked sender should now complete and its data be sent
         tokio::time::timeout(Duration::from_secs(2), send_handle)
             .await
             .expect("send should unblock")
             .unwrap();
+        assert_eq!(send_rx.recv().await.unwrap().data_body.len(), 1);
+        assert_eq!(buffer.semaphore.available_permits(), 9);
+
+        pong_tx.send(Ok(FlightData::default())).await.unwrap();
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while buffer.semaphore.available_permits() != 10 {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("the last response should release the remaining quota");
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -767,7 +834,8 @@ mod tests {
             let state = buffer.inner.state.remotes[0].state.lock();
             assert_eq!(state.pending.queue.len(), 2);
         }
-        assert_eq!(buffer.semaphore.available_permits(), 3);
+        // The frame in flight still holds its quota.
+        assert_eq!(buffer.semaphore.available_permits(), 2);
 
         drop(send_rx);
         pong_tx.send(Ok(FlightData::default())).await.unwrap();
@@ -860,7 +928,7 @@ mod tests {
             ExchangeSinkBuffer::create(
                 vec![exchange],
                 ExchangeBufferConfig {
-                    max_queued_bytes: 2,
+                    max_queued_bytes: 3,
                     max_batch_bytes: 1,
                 },
                 &rt,
@@ -893,8 +961,8 @@ mod tests {
         assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
         assert_eq!(
             buffer.semaphore.available_permits(),
-            2,
-            "draining pending items should release the queued permit"
+            3,
+            "closing should release the queued and in-flight permits"
         );
     }
 
@@ -906,7 +974,7 @@ mod tests {
             ExchangeSinkBuffer::create(
                 vec![exchange],
                 ExchangeBufferConfig {
-                    max_queued_bytes: 2,
+                    max_queued_bytes: 3,
                     ..Default::default()
                 },
                 &rt,
@@ -938,8 +1006,8 @@ mod tests {
         assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
         assert_eq!(
             buffer.semaphore.available_permits(),
-            2,
-            "draining pending items should release the queued permit"
+            3,
+            "closing should release the queued and in-flight permits"
         );
     }
 }
