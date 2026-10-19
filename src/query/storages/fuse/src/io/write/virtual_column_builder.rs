@@ -285,13 +285,11 @@ impl VirtualColumnBuilder {
                     virtual_values: &mut self.virtual_values,
                     key_paths: Vec::with_capacity(3),
                 };
-                raw_jsonb
-                    .visit_structure(&mut collector)
-                    .map_err(|error| {
-                        ErrorCode::VirtualColumnError(format!(
-                            "failed to extract virtual column values: {error}"
-                        ))
-                    })?;
+                raw_jsonb.visit_structure(&mut collector).map_err(|error| {
+                    ErrorCode::VirtualColumnError(format!(
+                        "failed to extract virtual column values: {error}"
+                    ))
+                })?;
             }
         }
         Ok(())
@@ -463,10 +461,7 @@ impl VirtualColumnBuilder {
             let segment_name = Self::key_path_segment(segment);
             let segment_id =
                 Self::get_string_table_id(&segment_name, string_table, string_table_index);
-            current = current
-                .children
-                .entry(segment_id)
-                .or_default();
+            current = current.children.entry(segment_id).or_default();
         }
         current
     }
@@ -604,15 +599,14 @@ impl VirtualColumnBuilder {
     /// Materialize a complete scalar array leaf, preserving JSON null elements
     /// as nullable array entries. Inference has already rejected containers and
     /// selected a lossless common scalar type across the leaf's arrays.
-    fn build_typed_array_scalar(
-        bytes: &[u8],
-        inner: &VirtualColumnPhysicalType,
-    ) -> Result<Scalar> {
+    fn build_typed_array_scalar(bytes: &[u8], inner: &VirtualColumnPhysicalType) -> Result<Scalar> {
         let value = RawJsonb::new(bytes).to_value().map_err(|error| {
             ErrorCode::VirtualColumnError(format!("failed to decode typed array leaf: {error}"))
         })?;
         let JsonbValue::Array(elements) = value else {
-            return Err(ErrorCode::Internal("typed virtual array leaf is not an array"));
+            return Err(ErrorCode::Internal(
+                "typed virtual array leaf is not an array",
+            ));
         };
         let inner_type = DataType::from(&inner.table_data_type());
         let mut builder = ColumnBuilder::with_capacity(&inner_type.wrap_nullable(), elements.len());
@@ -818,13 +812,17 @@ impl VirtualColumnBuilder {
     ) -> Result<Option<Vec<ArrayElementColumn>>> {
         let mut has_array = false;
         for value in values.iter().filter(|value| value.state.is_none()) {
-            let Scalar::Variant(bytes) = &value.scalar else { return Ok(None); };
+            let Scalar::Variant(bytes) = &value.scalar else {
+                return Ok(None);
+            };
             match RawJsonb::new(bytes).array_length() {
                 Ok(Some(_)) => has_array = true,
                 Ok(None) => return Ok(None),
-                Err(error) => return Err(ErrorCode::VirtualColumnError(format!(
-                    "failed to inspect array group: {error}"
-                ))),
+                Err(error) => {
+                    return Err(ErrorCode::VirtualColumnError(format!(
+                        "failed to inspect array group: {error}"
+                    )));
+                }
             }
         }
         if !has_array {
@@ -852,7 +850,8 @@ impl VirtualColumnBuilder {
                 };
                 let Some(elements) = RawJsonb::new(bytes).array_values().map_err(|error| {
                     ErrorCode::VirtualColumnError(format!("failed to read array group: {error}"))
-                })? else {
+                })?
+                else {
                     return Ok(None);
                 };
                 validity.set(value.row, true);
@@ -878,11 +877,14 @@ impl VirtualColumnBuilder {
                         virtual_values: &mut element_values,
                         key_paths: Vec::new(),
                     };
-                    element.as_raw().visit_structure(&mut collector).map_err(|error| {
-                        ErrorCode::VirtualColumnError(format!(
-                            "failed to extract array group elements: {error}"
-                        ))
-                    })?;
+                    element
+                        .as_raw()
+                        .visit_structure(&mut collector)
+                        .map_err(|error| {
+                            ErrorCode::VirtualColumnError(format!(
+                                "failed to extract array group elements: {error}"
+                            ))
+                        })?;
                     element_count += 1;
                     if paths.len() > max_element_paths {
                         return Ok(None);
@@ -1051,27 +1053,37 @@ impl VirtualColumnBuilder {
                         // Scalar-only BlockMeta planning cannot reconstruct groups.
                         needs_footer = true;
                         let group_node = Self::virtual_column_node_mut(
-                            node, &path, &mut string_table, &mut string_table_index,
+                            node,
+                            &path,
+                            &mut string_table,
+                            &mut string_table_index,
                         );
-                        let element_node = group_node.element
+                        let element_node = group_node
+                            .element
                             .get_or_insert_with(|| Box::new(VirtualColumnNode::default()));
                         for element in columns {
                             let element_path = jsonb::keypath::encode_canonical_structure_path(
-                                path.paths.iter().map(|key| match key {
-                                    OwnedKeyPath::Name(key) => JsonbPathSegment::Key(key),
-                                    OwnedKeyPath::Index(_) => unreachable!(),
-                                })
-                                .chain(std::iter::once(JsonbPathSegment::Element))
-                                .chain(element.path.paths.iter().map(|key| match key {
-                                    OwnedKeyPath::Name(key) => JsonbPathSegment::Key(key),
-                                    OwnedKeyPath::Index(_) => unreachable!(),
-                                })),
+                                path.paths
+                                    .iter()
+                                    .map(|key| match key {
+                                        OwnedKeyPath::Name(key) => JsonbPathSegment::Key(key),
+                                        OwnedKeyPath::Index(_) => unreachable!(),
+                                    })
+                                    .chain(std::iter::once(JsonbPathSegment::Element))
+                                    .chain(element.path.paths.iter().map(|key| match key {
+                                        OwnedKeyPath::Name(key) => JsonbPathSegment::Key(key),
+                                        OwnedKeyPath::Index(_) => unreachable!(),
+                                    })),
                             );
                             let name = Self::physical_column_name(
-                                source_field.column_id, &source_field.name, &element_path,
+                                source_field.column_id,
+                                &source_field.name,
+                                &element_path,
                             );
                             virtual_fields.push(TableField::new_from_column_id(
-                                &name, element.table_type, leaf_index,
+                                &name,
+                                element.table_type,
+                                leaf_index,
                             ));
                             virtual_columns.push(BlockEntry::Column(element.column));
                             virtual_column_mappings.push(LeafMapping::ArrayElement(
@@ -1083,9 +1095,11 @@ impl VirtualColumnBuilder {
                                 },
                             ));
                             Self::insert_virtual_column_node(
-                                element_node, &element.path,
+                                element_node,
+                                &element.path,
                                 VirtualColumnNameIndex::Column(leaf_index),
-                                &mut string_table, &mut string_table_index,
+                                &mut string_table,
+                                &mut string_table_index,
                             );
                             leaf_index += 1;
                         }
@@ -1188,7 +1202,8 @@ impl VirtualColumnBuilder {
             // Typed array leaves count Parquet elements, not source rows.
             // Retain their source-row frequencies for compaction layout selection.
             if !array_path_counts.is_empty() {
-                let statistics = path_statistics.entry(source_field.column_id)
+                let statistics = path_statistics
+                    .entry(source_field.column_id)
                     .or_insert_with(|| DraftVirtualColumnPathStatistics {
                         path_statistics_complete: true,
                         path_counts: Vec::new(),
@@ -1201,7 +1216,9 @@ impl VirtualColumnBuilder {
                     });
                     statistics.path_counts.truncate(self.max_path_statistics);
                 }
-                statistics.path_counts.sort_by(|left, right| left.0.cmp(&right.0));
+                statistics
+                    .path_counts
+                    .sort_by(|left, right| left.0.cmp(&right.0));
             }
 
             for (shared_data_type, shared_values) in shared_values_by_type {
@@ -1434,7 +1451,9 @@ impl VirtualColumnBuilder {
                             return VirtualColumnPhysicalType::Jsonb;
                         }
                         element_types.insert(
-                            Self::jsonb_value_to_scalar(element).as_ref().infer_data_type(),
+                            Self::jsonb_value_to_scalar(element)
+                                .as_ref()
+                                .infer_data_type(),
                         );
                     }
                     continue;
@@ -1443,7 +1462,10 @@ impl VirtualColumnBuilder {
             value_types.insert(value.scalar.as_ref().infer_data_type());
         }
         if has_array {
-            if value_types.iter().any(|data_type| *data_type != DataType::Null) {
+            if value_types
+                .iter()
+                .any(|data_type| *data_type != DataType::Null)
+            {
                 return VirtualColumnPhysicalType::Jsonb;
             }
             // Empty/all-null arrays do not establish an element type, but may
@@ -1594,7 +1616,8 @@ impl VirtualColumnBuilder {
                     path: key_name,
                     physical_type,
                     value_state_mask,
-                }) | LeafMapping::ArrayElement(DirectColumnMapping {
+                })
+                | LeafMapping::ArrayElement(DirectColumnMapping {
                     source_column_id,
                     path: key_name,
                     physical_type,
@@ -1734,7 +1757,9 @@ enum LeafMapping {
     /// `typed_shared_column_ids`.
     Shared,
     /// The root validity column of a source.
-    Validity { source_column_id: ColumnId },
+    Validity {
+        source_column_id: ColumnId,
+    },
     /// The key leaf of an overflow bucket; its value leaf follows.
     OverflowKey {
         source_column_id: ColumnId,
@@ -1835,7 +1860,11 @@ impl<'a> JsonbStructureVisitor<'a> for VirtualValueCollector<'a, '_> {
         value: JsonbValue<'a>,
     ) -> JsonbResult<()> {
         let state = matches!(value, JsonbValue::Null).then_some(VirtualValueState::JsonNull);
-        self.add_leaf(path, VirtualColumnBuilder::jsonb_value_to_scalar(value), state)
+        self.add_leaf(
+            path,
+            VirtualColumnBuilder::jsonb_value_to_scalar(value),
+            state,
+        )
     }
 
     fn enter_object(
@@ -1882,7 +1911,6 @@ mod type_inference_tests {
 
     use super::JsonbScalarValue;
     use super::VirtualColumnBuilder;
-    use super::VirtualValueState;
 
     fn types(values: impl IntoIterator<Item = DataType>) -> HashSet<DataType> {
         values.into_iter().collect()

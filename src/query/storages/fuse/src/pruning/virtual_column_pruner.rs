@@ -154,8 +154,13 @@ impl VirtualColumnPruner {
             if has_index
                 && let Some(root) = virtual_meta.virtual_column_nodes.get(&source_column_id)
                 && let Some(plan) = build_array_index_plan(
-                    root, source_column_id, &field.key_paths, &virtual_meta,
-                    virtual_block_meta, projected_virtual_schema, &mut slot_builder,
+                    root,
+                    source_column_id,
+                    &field.key_paths,
+                    &virtual_meta,
+                    virtual_block_meta,
+                    projected_virtual_schema,
+                    &mut slot_builder,
                 )?
             {
                 fields.insert(field.query_column_id, plan);
@@ -329,7 +334,10 @@ impl VirtualColumnPruner {
             }
             let block_column = |column_id: Option<ColumnId>| {
                 let column_id = column_id?;
-                Some((column_id, virtual_block_meta.virtual_column_metas.get(&column_id)?))
+                Some((
+                    column_id,
+                    virtual_block_meta.virtual_column_metas.get(&column_id)?,
+                ))
             };
             let requested_type = DataType::from(field.data_type.as_ref());
             let value_meta = block_column(projected_field.column_id);
@@ -374,7 +382,10 @@ impl VirtualColumnPruner {
 }
 
 fn is_extractable_meta(meta: &VirtualColumnIdWithMeta) -> bool {
-    matches!(meta.data_type.remove_nullable(), DataType::Variant | DataType::Array(_))
+    matches!(
+        meta.data_type.remove_nullable(),
+        DataType::Variant | DataType::Array(_)
+    )
 }
 
 /// How a plan reads the overflow map of a path.
@@ -809,8 +820,14 @@ fn build_plans_for_node(
 
     if let Some(element) = node.element.as_deref() {
         let element_plans = build_plans_for_node(
-            element, source_column_id, &[], virtual_meta, block_meta,
-            projected_virtual_schema, slot_builder, OverflowRead::Element,
+            element,
+            source_column_id,
+            &[],
+            virtual_meta,
+            block_meta,
+            projected_virtual_schema,
+            slot_builder,
+            OverflowRead::Element,
         )?;
         if let Some(element_plan) = coalesce_read_plans(element_plans) {
             let boundary_slot = array_element_boundary(&element_plan, slot_builder)?;
@@ -938,25 +955,40 @@ fn build_array_index_plan(
                     let Some(OwnedKeyPath::Name(name)) = suffix.get(consumed) else {
                         break;
                     };
-                    let Some(id) = virtual_meta.string_table.iter().position(|key| key == name) else {
+                    let Some(id) = virtual_meta.string_table.iter().position(|key| key == name)
+                    else {
                         break;
                     };
-                    let Some(child) = target.children.get(&(id as u32)) else { break; };
+                    let Some(child) = target.children.get(&(id as u32)) else {
+                        break;
+                    };
                     target = child;
                     consumed += 1;
                 }
                 let mut plans = Vec::new();
                 if consumed == suffix.len() {
                     plans.extend(build_plans_for_node(
-                        target, source_column_id, &[], virtual_meta, block_meta,
-                        schema, slots, OverflowRead::Element,
+                        target,
+                        source_column_id,
+                        &[],
+                        virtual_meta,
+                        block_meta,
+                        schema,
+                        slots,
+                        OverflowRead::Element,
                     )?);
                 }
                 if let Some((parent, depth)) = parent
                     && depth < suffix.len()
                     && let Some(parent) = coalesce_read_plans(build_plans_for_node(
-                        parent, source_column_id, &[], virtual_meta, block_meta,
-                        schema, slots, OverflowRead::Element,
+                        parent,
+                        source_column_id,
+                        &[],
+                        virtual_meta,
+                        block_meta,
+                        schema,
+                        slots,
+                        OverflowRead::Element,
                     )?)
                 {
                     plans.push(VirtualFieldReadPlan::FromParent {
@@ -1045,4 +1077,3 @@ fn build_virtual_column_suffix_path(key_paths: &OwnedKeyPaths, start: usize) -> 
     };
     format_runtime_keypaths(&suffix)
 }
-

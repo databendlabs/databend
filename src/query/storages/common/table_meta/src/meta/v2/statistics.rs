@@ -300,7 +300,7 @@ impl VectorColumnStatistics {
     Hash,
     serde::Serialize,
     serde::Deserialize,
-    FrozenAPI
+    FrozenAPI,
 )]
 #[serde(into = "u8", try_from = "u8")]
 #[repr(u8)]

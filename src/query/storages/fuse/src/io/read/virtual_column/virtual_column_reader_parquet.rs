@@ -420,13 +420,19 @@ fn validate_read_plan(plan: &VirtualFieldReadPlan, read_slots: &[VirtualReadSlot
                 && key.num_values == value.num_values
                 && shared_data_type_from_physical(&value.data_type).is_ok()
         }
-        VirtualFieldReadPlan::ArrayGroup { boundary_slot, element, .. } => {
+        VirtualFieldReadPlan::ArrayGroup {
+            boundary_slot,
+            element,
+            ..
+        } => {
             let mut slots = HashSet::from([*boundary_slot]);
             collect_array_element_slots(element, &mut slots)
-                && slots.iter().all(|slot| read_slots.get(slot.as_usize()).is_some_and(|meta| {
-                    matches!(&meta.data_type, DataType::Nullable(inner)
+                && slots.iter().all(|slot| {
+                    read_slots.get(slot.as_usize()).is_some_and(|meta| {
+                        matches!(&meta.data_type, DataType::Nullable(inner)
                         if matches!(inner.as_ref(), DataType::Array(_)))
-                }))
+                    })
+                })
         }
         VirtualFieldReadPlan::FromParent { parent, .. } => validate_read_plan(parent, read_slots),
         VirtualFieldReadPlan::Coalesce { plans } => {
@@ -605,12 +611,20 @@ fn eval_read_plan(
                     })?;
             materialize_shared_map_value(column, data_type, shared_data_type, *index, num_rows)
         }
-        VirtualFieldReadPlan::ArrayGroup { boundary_slot, element, index } => {
-            materialize_array_group(
-                *boundary_slot, element, *index, record_batch, orig_schema,
-                read_slots, func_ctx, num_rows,
-            )
-        }
+        VirtualFieldReadPlan::ArrayGroup {
+            boundary_slot,
+            element,
+            index,
+        } => materialize_array_group(
+            *boundary_slot,
+            element,
+            *index,
+            record_batch,
+            orig_schema,
+            read_slots,
+            func_ctx,
+            num_rows,
+        ),
         VirtualFieldReadPlan::Coalesce { plans } => materialize_coalesce_read_plan(
             plans,
             record_batch,
@@ -672,12 +686,20 @@ fn collect_array_element_slots(
             slots.insert(*slot);
             true
         }
-        VirtualFieldReadPlan::FromParent { parent, .. } => collect_array_element_slots(parent, slots),
+        VirtualFieldReadPlan::FromParent { parent, .. } => {
+            collect_array_element_slots(parent, slots)
+        }
         VirtualFieldReadPlan::Coalesce { plans } => {
-            !plans.is_empty() && plans.iter().all(|plan| collect_array_element_slots(plan, slots))
+            !plans.is_empty()
+                && plans
+                    .iter()
+                    .all(|plan| collect_array_element_slots(plan, slots))
         }
         VirtualFieldReadPlan::Object { entries } => {
-            !entries.is_empty() && entries.iter().all(|(_, plan)| collect_array_element_slots(plan, slots))
+            !entries.is_empty()
+                && entries
+                    .iter()
+                    .all(|(_, plan)| collect_array_element_slots(plan, slots))
         }
         VirtualFieldReadPlan::ArrayGroup { .. }
         | VirtualFieldReadPlan::Shared { .. }
@@ -696,17 +718,23 @@ fn materialize_array_group(
     func_ctx: &FunctionContext,
     num_rows: usize,
 ) -> Result<(Value<AnyType>, DataType)> {
-    let (boundary, _) = column_from_record_batch(
-        record_batch, orig_schema, &boundary_slot.0.to_string(),
-    )?.ok_or_else(|| ErrorCode::Internal("virtual array boundary column is missing"))?;
+    let (boundary, _) =
+        column_from_record_batch(record_batch, orig_schema, &boundary_slot.0.to_string())?
+            .ok_or_else(|| ErrorCode::Internal("virtual array boundary column is missing"))?;
     let Column::Nullable(boundary) = boundary else {
-        return Err(ErrorCode::Internal("virtual array boundary must be nullable"));
+        return Err(ErrorCode::Internal(
+            "virtual array boundary must be nullable",
+        ));
     };
     let Column::Array(array) = &boundary.column else {
-        return Err(ErrorCode::Internal("virtual array boundary must be an Array"));
+        return Err(ErrorCode::Internal(
+            "virtual array boundary must be an Array",
+        ));
     };
     if array.len() != num_rows {
-        return Err(ErrorCode::Internal("virtual array group row count mismatch"));
+        return Err(ErrorCode::Internal(
+            "virtual array group row count mismatch",
+        ));
     }
     let offsets = array.offsets();
     let first = offsets[0] as usize;
@@ -724,10 +752,14 @@ fn materialize_array_group(
         let (column, data_type) = column_from_record_batch(record_batch, orig_schema, &name)?
             .ok_or_else(|| ErrorCode::Internal("virtual array element column is missing"))?;
         let Column::Nullable(column) = column else {
-            return Err(ErrorCode::Internal("virtual array element column must be nullable"));
+            return Err(ErrorCode::Internal(
+                "virtual array element column must be nullable",
+            ));
         };
         let Column::Array(array) = &column.column else {
-            return Err(ErrorCode::Internal("virtual array element column must be an Array"));
+            return Err(ErrorCode::Internal(
+                "virtual array element column must be an Array",
+            ));
         };
         if array.len() != num_rows || column.validity != boundary.validity {
             return Err(ErrorCode::Internal("virtual array group validity mismatch"));
@@ -745,14 +777,21 @@ fn materialize_array_group(
             return Err(ErrorCode::Internal("virtual array group type mismatch"));
         };
         fields.push(TableField::new(&name, infer_schema_type(&inner_type)?));
-        columns.push(BlockEntry::Column(array.values().slice(
-            actual[0] as usize..actual[num_rows] as usize,
-        )));
+        columns.push(BlockEntry::Column(
+            array
+                .values()
+                .slice(actual[0] as usize..actual[num_rows] as usize),
+        ));
     }
     let element_schema = TableSchema::new(fields);
     let elements = DataBlock::new(columns, total_elements).to_record_batch(&element_schema)?;
     let (values, _) = eval_read_plan(
-        element_plan, &elements, &element_schema, read_slots, func_ctx, total_elements,
+        element_plan,
+        &elements,
+        &element_schema,
+        read_slots,
+        func_ctx,
+        total_elements,
     )?;
     let output_type = DataType::Nullable(Box::new(DataType::Variant));
     let mut builder = ColumnBuilder::with_capacity(&output_type, num_rows);
@@ -767,9 +806,15 @@ fn materialize_array_group(
         let end = offsets[row + 1] as usize - first;
         if let Some(index) = index {
             let len = (end - start) as i64;
-            let index = if index < 0 { len + i64::from(index) } else { i64::from(index) };
+            let index = if index < 0 {
+                len + i64::from(index)
+            } else {
+                i64::from(index)
+            };
             let value = if index >= 0 && index < len {
-                values.index(start + index as usize).unwrap_or(ScalarRef::Null)
+                values
+                    .index(start + index as usize)
+                    .unwrap_or(ScalarRef::Null)
             } else {
                 ScalarRef::Null
             };
@@ -791,11 +836,11 @@ fn materialize_array_group(
                 cast_scalar_to_variant(scalar, &func_ctx.tz, &mut bytes, None);
                 element_bytes.push(bytes);
             }
-            let array = OwnedJsonb::build_array(
-                element_bytes.iter().map(|bytes| RawJsonb::new(bytes)),
-            ).map_err(|error| ErrorCode::Internal(format!(
-                "failed to reconstruct virtual array: {error}"
-            )))?;
+            let array =
+                OwnedJsonb::build_array(element_bytes.iter().map(|bytes| RawJsonb::new(bytes)))
+                    .map_err(|error| {
+                        ErrorCode::Internal(format!("failed to reconstruct virtual array: {error}"))
+                    })?;
             builder.push(ScalarRef::Variant(array.as_ref()));
         }
     }

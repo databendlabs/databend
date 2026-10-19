@@ -290,7 +290,10 @@ pub struct VirtualSourceBlockMeta {
 
 impl VirtualSourceBlockMeta {
     /// The bucket that may hold `canonical_path`, or `None` when it is empty.
-    pub fn overflow_bucket(&self, canonical_path: &str) -> Option<(usize, &VirtualOverflowBucketMeta)> {
+    pub fn overflow_bucket(
+        &self,
+        canonical_path: &str,
+    ) -> Option<(usize, &VirtualOverflowBucketMeta)> {
         if self.overflow_buckets.is_empty() {
             return None;
         }

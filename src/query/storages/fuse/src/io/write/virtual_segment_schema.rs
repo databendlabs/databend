@@ -57,8 +57,7 @@ impl SourcePaths {
         if let Some(kinds) = self.paths.get_mut(path) {
             kinds.insert(kind);
         } else {
-            self.paths
-                .insert(path.to_string(), BTreeSet::from([kind]));
+            self.paths.insert(path.to_string(), BTreeSet::from([kind]));
         }
     }
 }
@@ -155,8 +154,7 @@ impl VirtualSegmentSchemaBuilder {
         );
         debug_assert!(schema.column_paths.iter().all(|column| {
             column.paths.windows(2).all(|paths| {
-                paths[0].sort_key() < paths[1].sort_key()
-                    && paths[0].column_id < paths[1].column_id
+                paths[0].sort_key() < paths[1].sort_key() && paths[0].column_id < paths[1].column_id
             })
         }));
         (!schema.is_empty()).then_some(schema)

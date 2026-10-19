@@ -405,10 +405,11 @@ fn collect_virtual_column_leaves(
     shared_buckets: &mut HashMap<(u32, VirtualColumnSharedDataType), SharedPathBucket>,
 ) {
     if let Some(leaf) = node.leaf.as_ref() {
-        let canonical_path = encode_canonical_structure_path(key_paths.iter().map(|part| match part {
-            OwnedJsonbPathSegment::Key(key) => JsonbPathSegment::Key(key),
-            OwnedJsonbPathSegment::Element => JsonbPathSegment::Element,
-        }));
+        let canonical_path =
+            encode_canonical_structure_path(key_paths.iter().map(|part| match part {
+                OwnedJsonbPathSegment::Key(key) => JsonbPathSegment::Key(key),
+                OwnedJsonbPathSegment::Element => JsonbPathSegment::Element,
+            }));
         let column_name = format!("{}.{}", source_column_name, canonical_path);
         match leaf {
             VirtualColumnNameIndex::Column(leaf_index) => {
@@ -451,8 +452,13 @@ fn collect_virtual_column_leaves(
     if let Some(element) = node.element.as_deref() {
         key_paths.push(OwnedJsonbPathSegment::Element);
         collect_virtual_column_leaves(
-            virtual_meta, source_column_id, source_column_name, element,
-            key_paths, entries, shared_buckets,
+            virtual_meta,
+            source_column_id,
+            source_column_name,
+            element,
+            key_paths,
+            entries,
+            shared_buckets,
         );
         key_paths.pop();
     }

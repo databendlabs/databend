@@ -141,7 +141,9 @@ impl ProjectedVirtualSegmentSchema {
                 let find_value = |path: &str| {
                     source
                         .paths
-                        .binary_search_by(|item| item.sort_key().cmp(&(path, VirtualPathKind::Value)))
+                        .binary_search_by(|item| {
+                            item.sort_key().cmp(&(path, VirtualPathKind::Value))
+                        })
                         .ok()
                         .map(|index| &source.paths[index])
                 };

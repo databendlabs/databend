@@ -185,11 +185,13 @@ impl VirtualColumnLayoutPlanner {
                     // array leaf frequencies are recorded separately; root-group
                     // element paths are not candidates for source-row layouts.
                     if matches!(meta.physical_type(), VirtualColumnPhysicalType::Array(_))
-                        || jsonb::keypath::decode_canonical_structure_path(path).is_some_and(|parts| {
-                            parts.iter().any(|part| {
-                                matches!(part, jsonb::OwnedJsonbPathSegment::Element)
-                            })
-                        })
+                        || jsonb::keypath::decode_canonical_structure_path(path).is_some_and(
+                            |parts| {
+                                parts.iter().any(|part| {
+                                    matches!(part, jsonb::OwnedJsonbPathSegment::Element)
+                                })
+                            },
+                        )
                     {
                         continue;
                     }

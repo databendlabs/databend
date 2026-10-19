@@ -184,10 +184,9 @@ impl CompactVirtualColumnLeaf {
 impl serde::Serialize for CompactVirtualColumnNode {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where S: serde::Serializer {
-        let len =
-            if self.children.is_empty() { 0 } else { 1 }
-                + if self.leaf.is_some() { 1 } else { 0 }
-                + if self.element.is_some() { 1 } else { 0 };
+        let len = if self.children.is_empty() { 0 } else { 1 }
+            + if self.leaf.is_some() { 1 } else { 0 }
+            + if self.element.is_some() { 1 } else { 0 };
         let mut map = serializer.serialize_map(Some(len))?;
         if !self.children.is_empty() {
             map.serialize_entry("c", &self.children)?;
@@ -211,7 +210,8 @@ impl<'de> serde::Deserialize<'de> for CompactVirtualColumnNode {
             None => HashMap::new(),
         };
 
-        let element = fields.remove("e")
+        let element = fields
+            .remove("e")
             .map(serde_json::from_value)
             .transpose()
             .map_err(serde::de::Error::custom)?;
@@ -235,7 +235,11 @@ impl<'de> serde::Deserialize<'de> for CompactVirtualColumnNode {
             )));
         }
 
-        Ok(Self { children, leaf, element })
+        Ok(Self {
+            children,
+            leaf,
+            element,
+        })
     }
 }
 
@@ -282,7 +286,10 @@ impl From<&VirtualColumnNode> for CompactVirtualColumnNode {
         CompactVirtualColumnNode {
             children,
             leaf,
-            element: node.element.as_deref().map(|node| Box::new(Self::from(node))),
+            element: node
+                .element
+                .as_deref()
+                .map(|node| Box::new(Self::from(node))),
         }
     }
 }
@@ -319,10 +326,15 @@ impl CompactVirtualColumnNode {
                 index,
             },
         });
-        let element = self.element
+        let element = self
+            .element
             .map(|node| node.into_virtual_column_node().map(Box::new))
             .transpose()?;
-        Ok(VirtualColumnNode { children, leaf, element })
+        Ok(VirtualColumnNode {
+            children,
+            leaf,
+            element,
+        })
     }
 }
 
