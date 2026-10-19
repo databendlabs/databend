@@ -1,0 +1,57 @@
+name: Metachaos toda validation
+
+on:
+  push:
+    branches:
+      - ci/metachaos-toda-030-validation-20261019
+
+permissions:
+  contents: read
+
+concurrency:
+  group: metachaos-toda-validation
+  cancel-in-progress: false
+
+env:
+  BUILD_PROFILE: release
+  RUNNER_PROVIDER: aws
+
+jobs:
+  metachaos:
+    runs-on: [self-hosted, X64, Linux, 4c, aws]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - name: Record validation environment
+        run: |
+          uname -a
+          git rev-parse HEAD
+          docker version
+      - name: Download the binaries from the failing release
+        uses: ./.github/actions/artifact_download
+        with:
+          sha: 8862a6285be5181957fdca2271ec59d0ee7e6437
+          target: x86_64-unknown-linux-gnu
+          artifacts: meta,metactl,metaverifier
+      - name: Run the complete IO delay chaos test
+        uses: ./.github/actions/io_delay_chaos
+        # Allow the replacement image build without changing the test's limits.
+        timeout-minutes: 30
+      - name: Collect Chaos Mesh diagnostics
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p logs
+          uname -a > logs/runner-kernel.txt
+          kubectl get daemonsets -n chaos-mesh -o yaml > logs/chaos-daemonsets.yaml 2>&1 || true
+          kubectl describe pods -n chaos-mesh > logs/chaos-pods-describe.txt 2>&1 || true
+          kubectl get events -n chaos-mesh --sort-by='.lastTimestamp' > logs/chaos-events.txt 2>&1 || true
+          for pod in $(kubectl get pods -n chaos-mesh -o name 2>/dev/null); do
+            name=${pod#pod/}
+            kubectl logs -n chaos-mesh "$pod" --all-containers --prefix > "logs/${name}.log" 2>&1 || true
+          done
+      - name: Upload all meta and chaos diagnostics
+        if: always()
+        uses: ./.github/actions/artifact_meta_container_failure
+        with:
+          name: meta-io-delay-chaos-toda030-full
