@@ -6105,6 +6105,7 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-config",
  "databend-common-exception",
+ "databend-common-expression",
  "databend-common-metrics",
  "databend-storages-common-index",
  "databend-storages-common-table-meta",

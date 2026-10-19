@@ -3265,7 +3265,8 @@ pub struct CacheConfig {
     )]
     pub disk_cache_vector_index_meta_size: u64,
 
-    /// Max bytes of cached vector index filters used. Set it to 0 to disable it.
+    /// Max bytes of decoded vector indexes cached in memory, including retained search workspaces.
+    /// Set it to 0 to disable retention when vector_index_filter_memory_ratio is also 0.
     #[clap(
         long = "cache-vector-index-filter-size",
         value_name = "VALUE",
@@ -3281,7 +3282,8 @@ pub struct CacheConfig {
     )]
     pub disk_cache_vector_index_data_size: u64,
 
-    /// Max percentage of in memory vector index filter cache relative to whole memory. By default it is 0 (disabled).
+    /// Max percentage of memory for decoded vector indexes. A nonzero value overrides
+    /// vector_index_filter_size; 0 uses the byte limit instead.
     #[clap(
         long = "cache-vector-index-filter-memory-ratio",
         value_name = "VALUE",
