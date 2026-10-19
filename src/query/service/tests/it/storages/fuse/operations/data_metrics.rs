@@ -503,7 +503,7 @@ async fn every_pruning_mode_publishes_under_the_scan_plan_id() -> Result<()> {
             expect: (6, 2),
         },
         Case {
-            name: "lazy row-oriented, synchronous",
+            name: "lazy row-oriented, one-shot",
             sql: aggregate(&row),
             prune_pipeline: false,
             expect: (6, 2),
@@ -514,7 +514,7 @@ async fn every_pruning_mode_publishes_under_the_scan_plan_id() -> Result<()> {
             prune_pipeline: true,
             expect: (6, 2),
         },
-        // No "lazy column-oriented, synchronous" case: `prune_snapshot_blocks`
+        // No "lazy column-oriented, one-shot" case: `prune_snapshot_blocks`
         // reads segments through `RowOrientedSegmentReader` and fails on a
         // column-oriented table with `unsupported encoding`, on `main` too.
         Case {
@@ -552,11 +552,11 @@ async fn every_pruning_mode_publishes_under_the_scan_plan_id() -> Result<()> {
 }
 
 /// Plain `explain` of a lazy scan runs whatever prune pipeline
-/// `build_prune_pipeline` returns and prints the result. The synchronous
+/// `build_prune_pipeline` returns and prints the result. The one-shot
 /// mode (`enable_prune_pipeline = 0`) has to be such a pipeline too, or the
 /// output shows the planner's total with `scanned: 0` and no pruning stats.
 #[tokio::test(flavor = "multi_thread")]
-async fn explain_runs_synchronous_pruning_for_lazy_scan() -> Result<()> {
+async fn explain_runs_one_shot_pruning_for_lazy_scan() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
     let db = fixture.default_db_name();

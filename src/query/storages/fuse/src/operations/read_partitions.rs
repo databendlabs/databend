@@ -112,6 +112,8 @@ use crate::pruning_pipeline::AsyncBlockPruneTransform;
 use crate::pruning_pipeline::ColumnOrientedBlockPruneSink;
 use crate::pruning_pipeline::ExtractSegmentTransform;
 use crate::pruning_pipeline::LazySegmentReceiverSource;
+use crate::pruning_pipeline::OneShotPrune;
+use crate::pruning_pipeline::OneShotPruneSource;
 use crate::pruning_pipeline::PrunedColumnOrientedSegmentMeta;
 use crate::pruning_pipeline::PrunedCompactSegmentMeta;
 use crate::pruning_pipeline::PrunedSegmentMeta;
@@ -122,7 +124,6 @@ use crate::pruning_pipeline::SegmentPruneTransform;
 use crate::pruning_pipeline::SendPartInfoSink;
 use crate::pruning_pipeline::SendPartState;
 use crate::pruning_pipeline::SyncBlockPruneTransform;
-use crate::pruning_pipeline::SyncPruneSource;
 use crate::pruning_pipeline::TopNPruneTransform;
 use crate::pruning_pipeline::VectorIndexPruneTransform;
 use crate::segment_format_from_location;
@@ -361,7 +362,7 @@ impl FuseTable {
         self.pruned_result_receiver.lock().replace(part_info_rx);
 
         if !ctx.get_settings().get_enable_prune_pipeline()? {
-            return Ok(Some(self.build_sync_prune_pipeline(
+            return Ok(Some(self.build_one_shot_prune_pipeline(
                 ctx,
                 plan_id,
                 push_downs,
@@ -623,8 +624,8 @@ impl FuseTable {
 
     /// `enable_prune_pipeline = 0`: a one-processor pipeline that prunes the
     /// lazy segments in a single `prune_snapshot_blocks` pass and feeds the
-    /// parts to `part_info_tx`. See `SyncPruneSource`.
-    fn build_sync_prune_pipeline(
+    /// parts to `part_info_tx`. See `OneShotPruneSource`.
+    fn build_one_shot_prune_pipeline(
         &self,
         ctx: Arc<dyn TableContext>,
         plan_id: u32,
@@ -632,22 +633,17 @@ impl FuseTable {
         lazy_init_segments: Vec<SegmentLocation>,
         part_info_tx: Sender<Result<PartInfoPtr>>,
     ) -> Result<Pipeline> {
-        let table = self.clone();
-        let table_schema = self.schema_with_stream();
+        let prune = OneShotPrune {
+            ctx,
+            table: self.clone(),
+            push_downs,
+            lazy_init_segments,
+            part_info_tx,
+            plan_id,
+        };
         let mut pipeline = Pipeline::create();
         pipeline.add_source(
-            |output| {
-                SyncPruneSource::create(
-                    ctx.clone(),
-                    output,
-                    table.clone(),
-                    table_schema.clone(),
-                    push_downs.clone(),
-                    lazy_init_segments.clone(),
-                    part_info_tx.clone(),
-                    plan_id,
-                )
-            },
+            |output| OneShotPruneSource::create(prune.clone(), output),
             1,
         )?;
         pipeline.add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;

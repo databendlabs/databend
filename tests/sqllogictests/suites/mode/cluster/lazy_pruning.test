@@ -60,8 +60,8 @@ Exchange
             └── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 2 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
 
 # Without distributed pruning the scan is a lazy TableScan. Plain `explain`
-# prunes synchronously to print the plan, so the counts match; the pipeline
-# path is what `explain analyze` and the query log go through.
+# runs the prune pipeline to print the plan, so the counts match; `explain
+# analyze` and the query log go through the same pipeline.
 statement ok
 set enable_distributed_pruning = 0
 
@@ -200,7 +200,7 @@ statement ok
 set enable_prune_pipeline = 0
 
 # Plain `explain` runs the prune pipeline it gets from `build_prune_pipeline`
-# to print real counts. The synchronous mode has to be such a pipeline too,
+# to print real counts. The one-shot mode has to be such a pipeline too,
 # or `explain` shows the planner's total with `scanned: 0`.
 query T
 explain select a % 3, count() from t where a > 2500 group by a % 3
