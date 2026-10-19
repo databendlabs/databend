@@ -3481,7 +3481,6 @@ dependencies = [
  "poem",
  "pretty_assertions",
  "rustls",
- "rustls-pemfile",
  "serde",
  "tempfile",
  "thiserror 1.0.69",

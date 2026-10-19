@@ -19,7 +19,6 @@
 //! clean build, so we provide a small acceptor on top of `tokio-rustls` instead.
 
 use std::io;
-use std::io::BufReader;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
@@ -31,6 +30,9 @@ use poem::listener::Acceptor;
 use poem::web::LocalAddr;
 use poem::web::RemoteAddr;
 use rustls::ServerConfig;
+use rustls::pki_types::CertificateDer;
+use rustls::pki_types::PrivateKeyDer;
+use rustls::pki_types::pem::PemObject;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncWrite;
 use tokio::io::ReadBuf;
@@ -63,10 +65,9 @@ impl TlsConfig {
     }
 
     pub(crate) fn server_config(&self) -> io::Result<ServerConfig> {
-        let certs = {
-            let mut reader = BufReader::new(open(&self.cert_path)?);
-            rustls_pemfile::certs(&mut reader).collect::<io::Result<Vec<_>>>()?
-        };
+        let certs = CertificateDer::pem_file_iter(&self.cert_path)
+            .and_then(|iter| iter.collect::<Result<Vec<_>, _>>())
+            .map_err(|e| invalid_input(format!("{}: {e}", self.cert_path)))?;
         if certs.is_empty() {
             return Err(invalid_input(format!(
                 "no certificate found in {}",
@@ -74,12 +75,8 @@ impl TlsConfig {
             )));
         }
 
-        let key = {
-            let mut reader = BufReader::new(open(&self.key_path)?);
-            rustls_pemfile::private_key(&mut reader)?.ok_or_else(|| {
-                invalid_input(format!("no private key found in {}", self.key_path))
-            })?
-        };
+        let key = PrivateKeyDer::from_pem_file(&self.key_path)
+            .map_err(|e| invalid_input(format!("{}: {e}", self.key_path)))?;
 
         let provider = Arc::new(rustls::crypto::ring::default_provider());
         let mut config = ServerConfig::builder_with_provider(provider)
@@ -91,10 +88,6 @@ impl TlsConfig {
         config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
         Ok(config)
     }
-}
-
-fn open(path: &str) -> io::Result<std::fs::File> {
-    std::fs::File::open(path).map_err(|e| io::Error::new(e.kind(), format!("{path}: {e}")))
 }
 
 fn invalid_input(msg: String) -> io::Error {

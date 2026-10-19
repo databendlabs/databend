@@ -18,7 +18,6 @@ http = { workspace = true }
 log = { workspace = true }
 poem = { workspace = true }
 rustls = { workspace = true }
-rustls-pemfile = { workspace = true }
 serde = { workspace = true }
 tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true }

@@ -171,7 +171,7 @@ structkey = "0.1.1"
 
 # Crates.io dependencies
 ahash = { version = "0.8", features = ["no-rng"] }
-aho-corasick = { version = "1.0.1" }                                                      #
+aho-corasick = { version = "1.0.1" }
 anyerror = { version = "=0.1.13" }
 anyhow = { version = "1.0.65" }
 apache-avro = { version = "0.21.0", features = ["snappy", "zstandard", "xz", "bzip"] }
@@ -596,9 +596,8 @@ databend-binaries = { codegen-units = 4 }
 debug = "line-tables-only"
 split-debuginfo = "unpacked"
 overflow-checks = true
-# Report to https://github.com/rust-lang/rust/issues/100142 if incremental works well.
 # Incremental only pays off for repeated rebuilds. For a from-scratch build (fresh clone, branch
-# switch, CI) use `CARGO_INCREMENTAL=0`: on 24 cores that is 165s instead of 211s and 14GB
+# switch, CI) use `CARGO_INCREMENTAL=0`: on 24 cores that is 209s instead of 249s and 14GB
 # instead of 24GB of target/.
 incremental = true
 
@@ -647,7 +646,8 @@ databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.gi
 databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.7.0" }
 jsonb = { git = "https://github.com/databendlabs/jsonb.git", rev = "fba895c" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.5.0" }
-paimon = { git = "https://github.com/datafuse-extras/paimon-rust", branch = "dev" }                                                                  # dev: carries the reqwest rustls fix
+# dev: v0.2.0 plus the reqwest rustls fix (datafuse-extras/paimon-rust#1).
+paimon = { git = "https://github.com/datafuse-extras/paimon-rust", branch = "dev" }
 parquet = { git = "https://github.com/datafuse-extras/arrow-rs.git", rev = "221c744" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
 reqwest-hickory-resolver = { git = "https://github.com/datafuse-extras/reqwest-hickory-resolver", rev = "5ad03257a3c702d34b9643878efb5a3536323d2d" }

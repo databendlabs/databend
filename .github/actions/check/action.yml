@@ -40,6 +40,10 @@ runs:
         taplo check --config .config/taplo.toml
         taplo fmt --config .config/taplo.toml --check
 
+    - name: Check TLS backend
+      shell: bash
+      run: ./scripts/ci/ci-check-tls-backend.sh
+
     - name: Clippy
       shell: bash
       run: cargo clippy --workspace --all-targets --all-features -- -D warnings
