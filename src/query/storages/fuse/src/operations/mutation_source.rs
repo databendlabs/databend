@@ -143,7 +143,7 @@ impl FuseTable {
                 segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
             }
             // `partitions_total` is in blocks: the whole-table count from the
-            // snapshot, published once by the coordinator. The deferred
+            // snapshot, published once by the coordinator. The lazy
             // pruning on each node reports only `partitions_scanned`.
             let block_count = snapshot.summary.block_count as usize;
             Ok((
@@ -252,7 +252,7 @@ impl FuseTable {
             .collect::<Vec<_>>();
 
         // Partition counters are in blocks. `block_count` is the whole-table
-        // total when pruning in the planner, and `None` for deferred pruning
+        // total when pruning in the planner, and `None` for lazy pruning
         // where the coordinator publishes the total separately. The scanned
         // count is finalised below once whole deleted segments are added.
         let (mut statistics, inner_parts) = self.read_partitions_with_metas(

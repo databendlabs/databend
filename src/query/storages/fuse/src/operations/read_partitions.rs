@@ -375,7 +375,7 @@ impl FuseTable {
         // the parts to the next pipeline.
         //
         // The key is namespaced apart from `prune_snapshot_blocks`'s: entries written here carry
-        // `partitions_total = 0` (the planner publishes the total for deferred pruning) and no
+        // `partitions_total = 0` (the planner publishes the total for lazy pruning) and no
         // `pruning_stats`, while the eager path stores the real total. Sharing one key would
         // double the total on an eager->lazy hit and zero it on a lazy->eager hit.
         let derterministic_cache_key =
@@ -385,10 +385,7 @@ impl FuseTable {
                 .map(|push_downs| {
                     format!(
                         "{:x}",
-                        Sha256::digest(format!(
-                            "deferred_{:?}_{:?}",
-                            lazy_init_segments, push_downs
-                        ))
+                        Sha256::digest(format!("lazy_{:?}_{:?}", lazy_init_segments, push_downs))
                     )
                 });
 

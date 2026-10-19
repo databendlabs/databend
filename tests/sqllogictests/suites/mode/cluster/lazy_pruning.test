@@ -1,4 +1,5 @@
-# Lazy (deferred) block pruning: when a table has more segments than the
+# Lazy block pruning (pruning deferred from the planner to the pipeline):
+# when a table has more segments than the
 # cluster has nodes, `read_partitions` hands out segments as lazy parts and
 # block pruning runs inside the pipeline on each node, either in a dedicated
 # `FusePrune` stage (`enable_distributed_pruning`, the default) or in the
@@ -112,7 +113,7 @@ Exchange
 statement ok
 unset enable_distributed_pruning
 
-# The deferred pruning publishes under the scan's *physical* plan id, which
+# The lazy pruning publishes under the scan's *physical* plan id, which
 # is what `explain analyze` looks up. With an aggregate above the scan the
 # physical id differs from the logical `scan_id`, so a publisher keyed on the
 # wrong one shows `partitions scanned: 0` here. Column-oriented segments and

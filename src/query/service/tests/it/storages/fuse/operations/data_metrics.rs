@@ -628,7 +628,7 @@ async fn explain_fails_when_one_shot_pruning_fails() -> Result<()> {
     };
 
     // Every segment read fails. The planner does not read segments for a lazy
-    // scan, so this only bites the deferred pruning.
+    // scan, so this only bites the lazy pruning.
     let fault = FaultInjection::install(FaultRule::new(
         FaultOp::Read,
         format!("{prefix}/_sg/"),
@@ -657,12 +657,12 @@ async fn explain_fails_when_one_shot_pruning_fails() -> Result<()> {
 
 /// The prune cache (`enable_prune_cache`, on by default) is in-process and
 /// keyed by segments + push-downs. Eager pruning stores the real
-/// `partitions_total`; deferred pruning stores `0` because the planner
+/// `partitions_total`; lazy pruning stores `0` because the planner
 /// publishes the total. The two paths must not share entries: the same
 /// query flips between them with `enable_distributed_pruning` or when the
 /// node count crosses the segment count.
 #[tokio::test(flavor = "multi_thread")]
-async fn prune_cache_is_not_shared_between_eager_and_deferred_pruning() -> Result<()> {
+async fn prune_cache_is_not_shared_between_eager_and_lazy_pruning() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
     let db = fixture.default_db_name();
@@ -693,34 +693,34 @@ async fn prune_cache_is_not_shared_between_eager_and_deferred_pruning() -> Resul
         }
     };
     let eager = with_distributed_pruning(false);
-    let deferred = with_distributed_pruning(true);
+    let lazy = with_distributed_pruning(true);
 
-    // eager first (populates its entry), then deferred (must not hit it)
+    // eager first (populates its entry), then lazy (must not hit it)
     let first = run_and_observe_with(&fixture, &sql, eager).await?;
     assert_eq!(
         (first.partitions_total, first.partitions_scanned),
         (6, 2),
         "eager"
     );
-    let second = run_and_observe_with(&fixture, &sql, deferred).await?;
+    let second = run_and_observe_with(&fixture, &sql, lazy).await?;
     assert_eq!(
         (second.partitions_total, second.partitions_scanned),
         (6, 2),
-        "deferred after eager: an eager cache hit would add its total again (12)"
+        "lazy after eager: an eager cache hit would add its total again (12)"
     );
 
-    // deferred again (now its own entry exists), then eager (must not hit it)
-    let third = run_and_observe_with(&fixture, &sql, deferred).await?;
+    // lazy again (now its own entry exists), then eager (must not hit it)
+    let third = run_and_observe_with(&fixture, &sql, lazy).await?;
     assert_eq!(
         (third.partitions_total, third.partitions_scanned),
         (6, 2),
-        "deferred, cached"
+        "lazy, cached"
     );
     let fourth = run_and_observe_with(&fixture, &sql, eager).await?;
     assert_eq!(
         (fourth.partitions_total, fourth.partitions_scanned),
         (6, 2),
-        "eager after deferred: a deferred cache hit would report total 0"
+        "eager after lazy: a lazy cache hit would report total 0"
     );
     Ok(())
 }
@@ -973,7 +973,7 @@ async fn init_query_fragments_counts_preparation_reads() -> Result<()> {
     assert_eq!(io_stats.write_bytes, 0, "nothing executed yet");
 
     // `partitions_total` is the whole-table block count, published once by
-    // `build_physical_plan` above on the coordinator. The deferred pruning
+    // `build_physical_plan` above on the coordinator. The lazy pruning
     // publishes only what this node scanned under the same plan id: the two
     // segments are reshuffled across the two nodes, so one segment of one
     // block; `b like '%99%'` cannot be range-pruned. A whole-table total
