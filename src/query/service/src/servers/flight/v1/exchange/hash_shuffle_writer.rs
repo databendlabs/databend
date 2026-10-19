@@ -79,6 +79,9 @@ pub struct HashShuffleWriter {
     scatter: Arc<Box<dyn FlightScatter>>,
     stream: BlockPartitionStream,
     num_partitions: usize,
+    /// Rows decide whether there is anything to send: a block may have no columns
+    /// (e.g. under `count(*)`) or only NULL columns, and so a zero memory size.
+    buffered_rows: usize,
     buffered_bytes: usize,
     budget: usize,
     nodes: Vec<ShuffleNode>,
@@ -102,6 +105,7 @@ impl HashShuffleWriter {
             // No per-partition thresholds: partitions are only sent together.
             stream: BlockPartitionStream::create(0, 0, num_partitions),
             num_partitions,
+            buffered_rows: 0,
             buffered_bytes: 0,
             budget,
             nodes,
@@ -144,6 +148,7 @@ impl HashShuffleWriter {
             )));
         };
 
+        self.buffered_rows += block.num_rows();
         self.buffered_bytes += block.memory_size();
         self.stream.partition(partition_ids, block, false);
         Ok(self.buffered_bytes >= self.budget)
@@ -156,9 +161,10 @@ impl HashShuffleWriter {
     pub fn flush(&mut self, own: Option<usize>) -> Result<(Option<DataBlock>, bool)> {
         debug_assert!(self.handle.is_none());
 
-        if self.buffered_bytes == 0 {
+        if self.buffered_rows == 0 {
             return Ok((None, false));
         }
+        self.buffered_rows = 0;
         self.buffered_bytes = 0;
 
         let mut partitions: Vec<Option<DataBlock>> = vec![None; self.num_partitions];
@@ -331,10 +337,11 @@ impl HashShuffleWriter {
             .sum::<usize>();
 
         format!(
-            "handle_pending={}, closed_partitions={}/{}, buffered_bytes={}, budget={}",
+            "handle_pending={}, closed_partitions={}/{}, buffered_rows={}, buffered_bytes={}, budget={}",
             self.handle.is_some(),
             closed,
             self.num_partitions,
+            self.buffered_rows,
             self.buffered_bytes,
             self.budget,
         )
@@ -349,8 +356,11 @@ mod tests {
     use arrow_flight::FlightData;
     use arrow_schema::Schema as ArrowSchema;
     use databend_common_base::runtime::Runtime;
+    use databend_common_expression::BlockEntry;
     use databend_common_expression::FromData;
+    use databend_common_expression::Scalar;
     use databend_common_expression::types::AccessType;
+    use databend_common_expression::types::DataType;
     use databend_common_expression::types::StringType;
     use databend_common_expression::types::UInt64Type;
     use databend_common_settings::FlightCompression;
@@ -384,6 +394,29 @@ mod tests {
             Ok(Some(
                 values(data_block)
                     .into_iter()
+                    .map(|x| x % self.num_partitions)
+                    .collect(),
+            ))
+        }
+    }
+
+    /// Routes row `i` to partition `i % num_partitions`, for blocks without keys.
+    struct RowScatter {
+        num_partitions: u64,
+    }
+
+    impl FlightScatter for RowScatter {
+        fn name(&self) -> &'static str {
+            "Row"
+        }
+
+        fn execute(&self, _data_block: DataBlock) -> Result<Vec<DataBlock>> {
+            unreachable!()
+        }
+
+        fn scatter_indices(&self, data_block: &DataBlock) -> Result<Option<Vec<u64>>> {
+            Ok(Some(
+                (0..data_block.num_rows() as u64)
                     .map(|x| x % self.num_partitions)
                     .collect(),
             ))
@@ -529,6 +562,43 @@ mod tests {
         Ok(())
     }
 
+    /// Blocks without columns (e.g. under `count(*)`) or with only NULL columns
+    /// have a zero memory size, but their rows must still be sent.
+    #[test]
+    fn test_writer_sends_rows_of_zero_size_blocks() -> Result<()> {
+        let no_columns = || DataBlock::new(vec![], 10);
+        let only_null = || {
+            DataBlock::new(
+                vec![BlockEntry::new_const_column(
+                    DataType::Null,
+                    Scalar::Null,
+                    10,
+                )],
+                10,
+            )
+        };
+
+        for make_block in [&no_columns as &dyn Fn() -> DataBlock, &only_null] {
+            let (nodes, collectors) = local_nodes(1, 4);
+            let scatter: Arc<Box<dyn FlightScatter>> =
+                Arc::new(Box::new(RowScatter { num_partitions: 4 }));
+            let mut writer =
+                HashShuffleWriter::create(0, ExecutorWaker::create(), scatter, nodes, usize::MAX);
+
+            assert_eq!(make_block().memory_size(), 0);
+            writer.add_block(make_block())?;
+            writer.add_block(make_block())?;
+            writer.flush(None)?;
+
+            let rows = collectors
+                .iter()
+                .map(|x| x.blocks.lock().iter().map(|x| x.num_rows()).sum::<usize>())
+                .sum::<usize>();
+            assert_eq!(rows, 20);
+        }
+        Ok(())
+    }
+
     #[test]
     fn test_writer_returns_own_partition_and_skips_closed() -> Result<()> {
         let (nodes, collectors) = local_nodes(1, 4);
@@ -571,6 +641,46 @@ mod tests {
             "query-node-1",
         );
         (exchange, send_rx, pong_tx)
+    }
+
+    /// Blocks without columns or with only NULL columns keep their row count over
+    /// the wire, with and without LZ4 body compression.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_remote_zero_size_blocks_keep_rows() -> Result<()> {
+        let runtime = Runtime::with_worker_threads(2, None)?;
+        let blocks = [
+            DataBlock::new(vec![], 10),
+            DataBlock::new(
+                vec![BlockEntry::new_const_column(
+                    DataType::Null,
+                    Scalar::Null,
+                    10,
+                )],
+                10,
+            ),
+        ];
+
+        for block in blocks {
+            for compression in [None, Some(FlightCompression::Lz4)] {
+                let (exchange, _send_rx, _pong_tx) = create_mock_exchange(1);
+                let buffer = Arc::new(ExchangeSinkBuffer::create(
+                    vec![exchange],
+                    ExchangeBufferConfig::default(),
+                    &runtime,
+                )?);
+
+                let schema = Arc::new(block.infer_schema());
+                let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
+                let channel =
+                    RemoteNodeChannel::create(0, buffer, compression, arrow_schema.clone())?;
+
+                let item = channel.encode(0, block.clone())?;
+                let decoded = deserialize_flight_data(strip_tid(item), &schema, &arrow_schema)?;
+                assert_eq!(decoded.num_rows(), 10);
+                assert_eq!(decoded.num_columns(), block.num_columns());
+            }
+        }
+        Ok(())
     }
 
     /// The rows of all threads of a remote node travel in one frame, each item
