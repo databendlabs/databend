@@ -178,9 +178,15 @@ pub struct QueryContextShared {
     pub(super) mem_stat: Arc<RwLock<Option<Arc<MemStat>>>>,
     pub(super) node_memory_usage: Arc<RwLock<HashMap<String, Arc<MemoryUpdater>>>>,
 
+    /// Pruning statistics keyed by physical `plan_id`. The key is unique only
+    /// within one physical plan tree (`adjust_plan_id` numbers each tree from
+    /// 0), so the map is cleared at the start of every root
+    /// `PhysicalPlanBuilder::build` and is meaningful only for the last plan
+    /// built on this context. Its reader is `EXPLAIN`, which builds one plan.
     pub(super) pruned_partitions_stats: Arc<RwLock<HashMap<u32, PartStatistics>>>,
-    /// Running sum of every `PartStatistics` published to this query; see
-    /// [`Self::get_partition_stats`].
+    /// Running sum of every `PartStatistics` published to this query, across
+    /// all plans built on this context (`ANALYZE TABLE`, multi-table insert,
+    /// ...); never cleared. See [`Self::get_partition_stats`].
     query_partition_stats: Arc<RwLock<PartitionStats>>,
 
     /// Object storage IO of this query on this node. Shared with the
