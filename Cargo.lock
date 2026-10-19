@@ -11311,7 +11311,7 @@ checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
 [[package]]
 name = "pprof"
 version = "0.15.0"
-source = "git+https://github.com/datafuse-extras/pprof-rs?rev=4e8f79247a0dc0f97ebdf14ea7ae8051a3486984#4e8f79247a0dc0f97ebdf14ea7ae8051a3486984"
+source = "git+https://github.com/datafuse-extras/pprof-rs?rev=edecd74#edecd74268ea5dcd31836bc4cb8acdcb21c51b24"
 dependencies = [
  "aligned-vec",
  "backtrace",
@@ -11323,6 +11323,7 @@ dependencies = [
  "nix 0.26.4",
  "once_cell",
  "protobuf",
+ "protobuf-codegen",
  "smallvec",
  "spin 0.10.0",
  "symbolic-demangle",
@@ -11776,6 +11777,37 @@ dependencies = [
  "once_cell",
  "protobuf-support",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "protobuf-codegen"
+version = "3.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d3976825c0014bbd2f3b34f0001876604fe87e0c86cd8fa54251530f1544ace"
+dependencies = [
+ "anyhow",
+ "once_cell",
+ "protobuf",
+ "protobuf-parse",
+ "regex",
+ "tempfile",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "protobuf-parse"
+version = "3.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4aeaa1f2460f1d348eeaeed86aea999ce98c1bded6f089ff8514c9d9dbdc973"
+dependencies = [
+ "anyhow",
+ "indexmap 2.14.0",
+ "log",
+ "protobuf",
+ "protobuf-support",
+ "tempfile",
+ "thiserror 1.0.69",
+ "which 4.4.2",
 ]
 
 [[package]]

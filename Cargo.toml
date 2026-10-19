@@ -171,7 +171,7 @@ structkey = "0.1.1"
 
 # Crates.io dependencies
 ahash = { version = "0.8", features = ["no-rng"] }
-aho-corasick = { version = "1.0.1" } #
+aho-corasick = { version = "1.0.1" }                                                      #
 anyerror = { version = "=0.1.13" }
 anyhow = { version = "1.0.65" }
 apache-avro = { version = "0.21.0", features = ["snappy", "zstandard", "xz", "bzip"] }
@@ -342,7 +342,12 @@ memchr = { version = "2", default-features = false }
 micromarshal = "0.7.0"
 mlua = { version = "0.11", features = ["lua54", "vendored", "async", "serialize"] }
 mockall = "0.11.2"
-mysql_async = { version = "0.37.1", default-features = false, features = ["minimal-rust", "rustls-tls", "ring", "tls12"] }
+mysql_async = { version = "0.37.1", default-features = false, features = [
+    "minimal-rust",
+    "rustls-tls",
+    "ring",
+    "tls12",
+] }
 naive-cityhash = "0.2.0"
 ndarray = "0.15.6"
 num = { version = "0.4.0", features = ["std"] }
@@ -369,7 +374,9 @@ opendal = { version = "0.55.0", features = [
     "services-webhdfs",
     "services-huggingface",
 ] }
-opensrv-mysql = { git = "https://github.com/databendlabs/opensrv.git", rev = "967a45f5bb397bef22f6dd435d5704ff0ce6e215", features = ["tls"] }
+opensrv-mysql = { git = "https://github.com/databendlabs/opensrv.git", rev = "967a45f5bb397bef22f6dd435d5704ff0ce6e215", features = [
+    "tls",
+] }
 orc-rust = "0.8.0"
 ordered-float = { version = "5.1.0", default-features = false }
 p256 = "0.13"
@@ -382,7 +389,7 @@ petgraph = { version = "0.8.3", features = ["serde-1"] }
 pin-project = "1"
 pin-project-lite = "0.2.9"
 poem = { version = "3.0", features = ["server", "multipart", "compression", "cookie"] }
-pprof = { git = "https://github.com/datafuse-extras/pprof-rs", rev = "4e8f79247a0dc0f97ebdf14ea7ae8051a3486984", features = [
+pprof = { git = "https://github.com/datafuse-extras/pprof-rs", rev = "edecd74", features = [
     "flamegraph",
     "protobuf-codec",
     "protobuf",
@@ -635,7 +642,7 @@ databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.gi
 databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.7.0" }
 jsonb = { git = "https://github.com/databendlabs/jsonb.git", rev = "fba895c" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.5.0" }
-paimon = { git = "https://github.com/datafuse-extras/paimon-rust", rev = "f55c3a68fdd0ef2c0618585d1cb93a21441a0339" } # dev: carries the reqwest rustls fix
+paimon = { git = "https://github.com/datafuse-extras/paimon-rust", rev = "f55c3a68fdd0ef2c0618585d1cb93a21441a0339" }                                # dev: carries the reqwest rustls fix
 parquet = { git = "https://github.com/datafuse-extras/arrow-rs.git", rev = "221c744" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
 reqwest-hickory-resolver = { git = "https://github.com/datafuse-extras/reqwest-hickory-resolver", rev = "5ad03257a3c702d34b9643878efb5a3536323d2d" }
