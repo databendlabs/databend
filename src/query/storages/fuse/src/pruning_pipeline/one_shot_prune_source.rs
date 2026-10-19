@@ -48,9 +48,12 @@ pub struct OneShotPrune {
 }
 
 impl OneShotPrune {
-    async fn run(self) {
+    /// Prunes and forwards the parts. A pruning error is sent down the
+    /// channel for the scan side and also returned, so the processor fails
+    /// too: `EXPLAIN` drops the receiver and only sees the pipeline result.
+    async fn run(self) -> Result<()> {
         let table_schema = self.table.schema_with_stream();
-        match self
+        let pruned = self
             .table
             .prune_snapshot_blocks(
                 self.ctx.clone(),
@@ -61,23 +64,24 @@ impl OneShotPrune {
                 ReadPartitionsPruningMode::Normal,
                 None,
             )
-            .await
-        {
-            Ok((mut statistics, partitions, _)) => {
-                statistics.partitions_total = 0;
-                self.ctx
-                    .set_pruned_partitions_stats(self.plan_id, statistics);
-                for part in partitions.partitions {
-                    // the query may be killed or finished early; stop quietly
-                    if self.part_info_tx.send(Ok(part)).await.is_err() {
-                        break;
-                    }
-                }
-            }
+            .await;
+        let (mut statistics, partitions, _) = match pruned {
+            Ok(pruned) => pruned,
             Err(err) => {
-                let _ = self.part_info_tx.send(Err(err)).await;
+                let _ = self.part_info_tx.send(Err(err.clone())).await;
+                return Err(err);
+            }
+        };
+        statistics.partitions_total = 0;
+        self.ctx
+            .set_pruned_partitions_stats(self.plan_id, statistics);
+        for part in partitions.partitions {
+            // the query may be killed or finished early; stop quietly
+            if self.part_info_tx.send(Ok(part)).await.is_err() {
+                break;
             }
         }
+        Ok(())
     }
 }
 
@@ -104,7 +108,7 @@ impl AsyncSource for OneShotPruneSource {
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if let Some(prune) = self.prune.take() {
-            prune.run().await;
+            prune.run().await?;
         }
         Ok(None)
     }

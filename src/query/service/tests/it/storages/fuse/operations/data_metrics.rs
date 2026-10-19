@@ -30,13 +30,19 @@ use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_storage::FaultInjection;
+use databend_common_storage::FaultKind;
+use databend_common_storage::FaultOp;
+use databend_common_storage::FaultRule;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextPartitionStats;
 use databend_query::sessions::TableContextProgress;
 use databend_query::sessions::TableContextQueryIdentity;
 use databend_query::sessions::TableContextSettings;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::sql::Planner;
+use databend_query::storages::fuse::FuseTable;
 use databend_query::test_kits::ClusterDescriptor;
 use databend_query::test_kits::TestFixture;
 use futures_util::TryStreamExt;
@@ -584,6 +590,138 @@ async fn explain_runs_one_shot_pruning_for_lazy_scan() -> Result<()> {
     )
     .await?;
     assert_eq!(scan_counts(&out), (Some(6), Some(2), true), "{out}");
+    Ok(())
+}
+
+/// `EXPLAIN` drops the prune pipeline's receiver and only looks at whether
+/// the pipeline completed. A pruning error in the one-shot mode must
+/// therefore fail the processor, not just be sent down the channel, or
+/// `explain` prints `scanned: 0` as if pruning had run.
+#[tokio::test(flavor = "multi_thread")]
+async fn explain_fails_when_one_shot_pruning_fails() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    let table = format!("{db}.explain_prune_fault");
+    fixture
+        .execute_command(&format!(
+            "create table {table} (a int) row_per_block=100 block_per_segment=10"
+        ))
+        .await?;
+    for _ in 0..2 {
+        fixture
+            .execute_command(&format!(
+                "insert into {table} select number from numbers(300)"
+            ))
+            .await?;
+    }
+    let prefix = {
+        let t = fixture
+            .new_query_ctx()
+            .await?
+            .get_table(&fixture.default_catalog_name(), &db, "explain_prune_fault")
+            .await?;
+        FuseTable::try_from_table(t.as_ref())?
+            .meta_location_generator()
+            .prefix()
+            .to_string()
+    };
+
+    // Every segment read fails. The planner does not read segments for a lazy
+    // scan, so this only bites the deferred pruning.
+    let fault = FaultInjection::install(FaultRule::new(
+        FaultOp::Read,
+        format!("{prefix}/_sg/"),
+        FaultKind::Permanent,
+    ));
+    let result = run_for_text(
+        &fixture,
+        &format!("explain select a % 3, count() from {table} where a >= 200 group by a % 3"),
+        |ctx| {
+            ctx.get_settings()
+                .set_setting("enable_prune_pipeline".into(), "0".into())
+        },
+    )
+    .await;
+    let hits = fault.hits();
+    fault.remove();
+
+    assert!(hits > 0, "the segment-read fault was never exercised");
+    let err = result.expect_err("explain must fail when the one-shot pruning fails");
+    assert!(
+        err.to_string().contains("injected"),
+        "unexpected error: {err}"
+    );
+    Ok(())
+}
+
+/// The prune cache (`enable_prune_cache`, on by default) is in-process and
+/// keyed by segments + push-downs. Eager pruning stores the real
+/// `partitions_total`; deferred pruning stores `0` because the planner
+/// publishes the total. The two paths must not share entries: the same
+/// query flips between them with `enable_distributed_pruning` or when the
+/// node count crosses the segment count.
+#[tokio::test(flavor = "multi_thread")]
+async fn prune_cache_is_not_shared_between_eager_and_deferred_pruning() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    let table = format!("{db}.prune_cache_modes");
+    fixture
+        .execute_command(&format!(
+            "create table {table} (a int) row_per_block=100 block_per_segment=10"
+        ))
+        .await?;
+    for _ in 0..2 {
+        fixture
+            .execute_command(&format!(
+                "insert into {table} select number from numbers(300)"
+            ))
+            .await?;
+    }
+    // deterministic filter so the result is cacheable; 2 segments x 3 blocks,
+    // `a >= 200` keeps one block per segment
+    let sql = format!("select count() from {table} where a >= 200");
+
+    // On one node, 2 segments prune lazily iff `enable_distributed_pruning`.
+    let with_distributed_pruning = |on: bool| {
+        move |ctx: &Arc<QueryContext>| {
+            ctx.get_settings().set_setting(
+                "enable_distributed_pruning".into(),
+                if on { "1" } else { "0" }.into(),
+            )
+        }
+    };
+    let eager = with_distributed_pruning(false);
+    let deferred = with_distributed_pruning(true);
+
+    // eager first (populates its entry), then deferred (must not hit it)
+    let first = run_and_observe_with(&fixture, &sql, eager).await?;
+    assert_eq!(
+        (first.partitions_total, first.partitions_scanned),
+        (6, 2),
+        "eager"
+    );
+    let second = run_and_observe_with(&fixture, &sql, deferred).await?;
+    assert_eq!(
+        (second.partitions_total, second.partitions_scanned),
+        (6, 2),
+        "deferred after eager: an eager cache hit would add its total again (12)"
+    );
+
+    // deferred again (now its own entry exists), then eager (must not hit it)
+    let third = run_and_observe_with(&fixture, &sql, deferred).await?;
+    assert_eq!(
+        (third.partitions_total, third.partitions_scanned),
+        (6, 2),
+        "deferred, cached"
+    );
+    let fourth = run_and_observe_with(&fixture, &sql, eager).await?;
+    assert_eq!(
+        (fourth.partitions_total, fourth.partitions_scanned),
+        (6, 2),
+        "eager after deferred: a deferred cache hit would report total 0"
+    );
     Ok(())
 }
 
