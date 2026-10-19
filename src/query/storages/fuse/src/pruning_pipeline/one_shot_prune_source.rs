@@ -29,6 +29,7 @@ use databend_common_pipeline::sources::AsyncSourcer;
 
 use crate::FuseTable;
 use crate::SegmentLocation;
+use crate::operations::PruneCacheScope;
 
 /// The pruning work of the `enable_prune_pipeline = 0` mode: the lazy
 /// segments assigned to this node are pruned by one `prune_snapshot_blocks`
@@ -63,6 +64,7 @@ impl OneShotPrune {
                 0,
                 ReadPartitionsPruningMode::Normal,
                 None,
+                PruneCacheScope::Lazy,
             )
             .await;
         let (mut statistics, partitions, _) = match pruned {

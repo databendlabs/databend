@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
@@ -165,7 +166,13 @@ impl FuseTable {
 
         // Lazy parts are pruned by `build_prune_pipeline`, which runs before
         // `read_data` and leaves the pruned parts in `pruned_result_receiver`.
+        // Without it a lazy plan has nothing to dispatch and would read nothing.
         let rx = self.pruned_result_receiver.lock().take();
+        if rx.is_none() && plan.parts.partitions_type() == PartInfoType::LazyLevel {
+            return Err(ErrorCode::Internal(
+                "lazy fuse parts require build_prune_pipeline to run before read_data",
+            ));
+        }
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let table_schema = self.schema_with_stream();

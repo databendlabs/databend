@@ -17,8 +17,8 @@ use std::sync::Arc;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::SendableDataBlockStream;
-use databend_common_pipeline::core::Pipeline;
 
+use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::sessions::QueryContext;
@@ -44,14 +44,23 @@ impl<T: ?Sized + Table> ReadDataBlockStream for T {
         ctx: Arc<QueryContext>,
         plan: &DataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let mut pipeline = Pipeline::create();
+        let mut build_res = PipelineBuildResult::create();
         ctx.set_partitions(plan.parts.clone())?;
-        self.read_data(ctx.clone(), plan, &mut pipeline, true)?;
+        // Same sequence as `TableScan::build_pipeline2`: lazy parts are pruned
+        // by a separate pipeline that feeds `read_data`. There is no physical
+        // plan here, so the statistics are published under plan id 0.
+        if let Some(prune_pipeline) =
+            self.build_prune_pipeline(ctx.clone(), plan, &mut build_res.main_pipeline, 0)?
+        {
+            build_res.sources_pipelines.push(prune_pipeline);
+        }
+        self.read_data(ctx.clone(), plan, &mut build_res.main_pipeline, true)?;
 
         let settings = ctx.get_settings();
-        pipeline.set_max_threads(settings.get_max_threads()? as usize);
+        let max_threads = settings.get_max_threads()? as usize;
+        build_res.set_max_threads(max_threads);
         let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
-        let executor = PipelinePullingExecutor::try_create(pipeline, executor_settings)?;
+        let executor = PipelinePullingExecutor::from_pipelines(build_res, executor_settings)?;
         ctx.set_executor(executor.get_inner())?;
         Ok(Box::pin(PullingExecutorStream::create(executor)?))
     }

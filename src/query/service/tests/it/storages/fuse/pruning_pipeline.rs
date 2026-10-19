@@ -43,6 +43,7 @@ use databend_common_sql::parse_to_filters;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::PruneCacheScope;
 use databend_common_storages_fuse::pruning::FusePruner;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_query::interpreters::CreateTableInterpreter;
@@ -388,6 +389,7 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
             snapshot.summary.block_count as usize,
             ReadPartitionsPruningMode::Normal,
             None,
+            PruneCacheScope::Eager,
         )
         .await?
         .0;
@@ -405,6 +407,7 @@ async fn test_snapshot_pruner() -> anyhow::Result<()> {
             snapshot.summary.block_count as usize,
             ReadPartitionsPruningMode::Normal,
             None,
+            PruneCacheScope::Eager,
         )
         .await?
         .0;

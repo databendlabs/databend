@@ -180,10 +180,25 @@ fn same_segment_locations(left: &[SegmentLocation], right: &[SegmentLocation]) -
         })
 }
 
+/// Which pruning path a prune-cache entry belongs to.
+///
+/// Eager pruning (planner side) caches the real `partitions_total`. Lazy
+/// pruning (pipeline side, either streaming or one-shot) caches
+/// `partitions_total = 0`, because the planner publishes the total for lazy
+/// scans. The two must not hit each other's entries: an eager entry hit from
+/// the lazy path doubles the total, a lazy entry hit from the eager path
+/// zeroes it. The scope is part of the key.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PruneCacheScope {
+    Eager,
+    Lazy,
+}
+
 fn deterministic_prune_cache_key(
     segments_location: &[SegmentLocation],
     push_downs: &Option<PushDownInfo>,
     pruning_mode: ReadPartitionsPruningMode,
+    scope: PruneCacheScope,
 ) -> Option<String> {
     let mut push_downs = push_downs.as_ref()?.clone();
     if !push_downs.is_deterministic {
@@ -192,7 +207,10 @@ fn deterministic_prune_cache_key(
     push_downs.read_partitions_pruning_mode = pruning_mode;
     Some(format!(
         "{:x}",
-        Sha256::digest(format!("{:?}_{:?}", segments_location, push_downs))
+        Sha256::digest(format!(
+            "{:?}_{:?}_{:?}",
+            scope, segments_location, push_downs
+        ))
     ))
 }
 
@@ -312,6 +330,7 @@ impl FuseTable {
                     summary,
                     pruning_mode,
                     reusable_pruned_metas,
+                    PruneCacheScope::Eager,
                 )
                 .await
             }
@@ -373,22 +392,12 @@ impl FuseTable {
 
         // If we can get the pruning result from cache, we don't need to prune again, but need sent
         // the parts to the next pipeline.
-        //
-        // The key is namespaced apart from `prune_snapshot_blocks`'s: entries written here carry
-        // `partitions_total = 0` (the planner publishes the total for lazy pruning) and no
-        // `pruning_stats`, while the eager path stores the real total. Sharing one key would
-        // double the total on an eager->lazy hit and zero it on a lazy->eager hit.
-        let derterministic_cache_key =
-            push_downs
-                .as_ref()
-                .filter(|p| p.is_deterministic)
-                .map(|push_downs| {
-                    format!(
-                        "{:x}",
-                        Sha256::digest(format!("lazy_{:?}_{:?}", lazy_init_segments, push_downs))
-                    )
-                });
-
+        let derterministic_cache_key = deterministic_prune_cache_key(
+            &lazy_init_segments,
+            &push_downs,
+            read_partitions_pruning_mode(&push_downs),
+            PruneCacheScope::Lazy,
+        );
         let enable_prune_cache = enable_prune_cache_for_query(&ctx)?;
         if enable_prune_cache {
             if let Some((stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
@@ -494,6 +503,7 @@ impl FuseTable {
         summary: usize,
         pruning_mode: ReadPartitionsPruningMode,
         reusable_pruned_metas: Option<ReusablePrunedMetas>,
+        cache_scope: PruneCacheScope,
     ) -> Result<(PartStatistics, Partitions, Option<ReusablePrunedMetas>)> {
         let num_segments_to_prune = segments_location.len();
         let start = Instant::now();
@@ -507,8 +517,12 @@ impl FuseTable {
 
         type CacheItem = (PartStatistics, Partitions);
 
-        let derterministic_cache_key =
-            deterministic_prune_cache_key(&segments_location, &push_downs, pruning_mode);
+        let derterministic_cache_key = deterministic_prune_cache_key(
+            &segments_location,
+            &push_downs,
+            pruning_mode,
+            cache_scope,
+        );
         let enable_prune_cache = enable_prune_cache_for_query(&ctx)?;
         if enable_prune_cache
             && let Some(cached_result) = Self::check_prune_cache(&derterministic_cache_key)

@@ -27,9 +27,11 @@ use databend_common_base::base::tokio;
 use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_storage::FaultInjection;
 use databend_common_storage::FaultKind;
 use databend_common_storage::FaultOp;
@@ -43,6 +45,7 @@ use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::sql::Planner;
 use databend_query::storages::fuse::FuseTable;
+use databend_query::stream::ReadDataBlockStream;
 use databend_query::test_kits::ClusterDescriptor;
 use databend_query::test_kits::TestFixture;
 use futures_util::TryStreamExt;
@@ -722,6 +725,85 @@ async fn prune_cache_is_not_shared_between_eager_and_lazy_pruning() -> Result<()
         (6, 2),
         "eager after lazy: a lazy cache hit would report total 0"
     );
+
+    // The one-shot lazy mode (`enable_prune_pipeline = 0`) goes through
+    // `prune_snapshot_blocks` like the eager planner does, so it must opt
+    // into the lazy cache scope explicitly. Use a fresh filter so no entry
+    // from above is hit.
+    let sql = format!("select count() from {table} where a >= 100");
+    let lazy_one_shot = |ctx: &Arc<QueryContext>| {
+        with_distributed_pruning(true)(ctx)?;
+        ctx.get_settings()
+            .set_setting("enable_prune_pipeline".into(), "0".into())
+    };
+    let fifth = run_and_observe_with(&fixture, &sql, lazy_one_shot).await?;
+    assert_eq!(
+        (fifth.partitions_total, fifth.partitions_scanned),
+        (6, 4),
+        "lazy one-shot"
+    );
+    let sixth = run_and_observe_with(&fixture, &sql, eager).await?;
+    assert_eq!(
+        (sixth.partitions_total, sixth.partitions_scanned),
+        (6, 4),
+        "eager after lazy one-shot: a shared entry would report total 0"
+    );
+    Ok(())
+}
+
+/// `Table::read_data_block_stream` reads a `DataSourcePlan` without a
+/// physical plan. It has to run the prune pipeline for lazy parts the way
+/// `TableScan` does, in both lazy modes; otherwise `read_data` has nothing to
+/// dispatch and the stream is silently empty.
+#[tokio::test(flavor = "multi_thread")]
+async fn read_data_block_stream_prunes_lazy_parts() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    let table_name = "stream_lazy";
+    fixture
+        .execute_command(&format!(
+            "create table {db}.{table_name} (a int) row_per_block=100 block_per_segment=10"
+        ))
+        .await?;
+    for _ in 0..2 {
+        fixture
+            .execute_command(&format!(
+                "insert into {db}.{table_name} select number from numbers(300)"
+            ))
+            .await?;
+    }
+
+    for enable_prune_pipeline in ["1", "0"] {
+        let ctx = fixture.new_query_ctx().await?;
+        ctx.get_settings()
+            .set_setting("enable_distributed_pruning".into(), "1".into())?;
+        ctx.get_settings()
+            .set_setting("enable_prune_pipeline".into(), enable_prune_pipeline.into())?;
+        let table = ctx
+            .get_table(&fixture.default_catalog_name(), &db, table_name)
+            .await?;
+        let plan = table
+            .read_plan(ctx.clone(), None, None, false, true)
+            .await?;
+        assert!(
+            plan.parts.partitions_type() == PartInfoType::LazyLevel,
+            "2 segments with distributed pruning must plan lazily"
+        );
+
+        let rows: usize = table
+            .read_data_block_stream(ctx.clone(), &plan)
+            .await?
+            .try_collect::<Vec<DataBlock>>()
+            .await?
+            .iter()
+            .map(|b| b.num_rows())
+            .sum();
+        assert_eq!(
+            rows, 600,
+            "enable_prune_pipeline = {enable_prune_pipeline}: lazy parts were not pruned and read"
+        );
+    }
     Ok(())
 }
 
