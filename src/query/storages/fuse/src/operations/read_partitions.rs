@@ -622,9 +622,12 @@ impl FuseTable {
             .collect()
     }
 
-    /// `enable_prune_pipeline = 0`: a one-processor pipeline that prunes the
-    /// lazy segments in a single `prune_snapshot_blocks` pass and feeds the
-    /// parts to `part_info_tx`. See `OneShotPruneSource`.
+    /// `enable_prune_pipeline = 0`: a one-processor pipeline that prunes
+    /// this node's share of the lazy segments (`plan.parts` after fragment
+    /// redistribution; the planner did not read them) in a single
+    /// `prune_snapshot_blocks` pass and feeds the parts to `part_info_tx`,
+    /// instead of streaming them through `SegmentPruner` / `BlockPruner`.
+    /// See `OneShotPruneSource`.
     fn build_one_shot_prune_pipeline(
         &self,
         ctx: Arc<dyn TableContext>,

@@ -30,9 +30,11 @@ use databend_common_pipeline::sources::AsyncSourcer;
 use crate::FuseTable;
 use crate::SegmentLocation;
 
-/// The pruning work of the `enable_prune_pipeline = 0` mode: all lazy
-/// segments pruned by one `prune_snapshot_blocks` call instead of a streaming
-/// prune pipeline. Pruned parts go out over `part_info_tx`; what was scanned
+/// The pruning work of the `enable_prune_pipeline = 0` mode: the lazy
+/// segments assigned to this node are pruned by one `prune_snapshot_blocks`
+/// call instead of a streaming prune pipeline. Which node prunes which
+/// segments is decided earlier, by fragment redistribution, and is the same
+/// in both modes. Pruned parts go out over `part_info_tx`; what was scanned
 /// is published under `plan_id` (`partitions_total` was published once by the
 /// planner).
 #[derive(Clone)]
