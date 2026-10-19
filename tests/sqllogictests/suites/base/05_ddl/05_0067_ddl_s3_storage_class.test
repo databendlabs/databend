@@ -1,7 +1,5 @@
-# User-selected storage classes apply only to external tables. Database defaults
-# are copied at creation time after the effective external location is resolved.
-# Filesystem external tables below test SQL/metadata semantics, not S3 tiering;
-# actual S3 object classes are checked by the real AWS test.
+# Backend-independent SQL contracts only. Positive external-table inheritance,
+# PUT probe classes and stored S3 object classes are tested against real AWS S3.
 
 statement ok
 CREATE OR REPLACE DATABASE test_storage_class OPTIONS(DEFAULT_S3_STORAGE_CLASS = 'intelligent_tiering')
@@ -14,24 +12,9 @@ test_storage_class CREATE DATABASE `test_storage_class` ENGINE=DEFAULT OPTIONS (
 statement ok
 SET experimental_s3_storage_class = 'intelligent_tiering'
 
-# Neither database defaults nor the session setting are persisted on internal tables.
+# Internal tables (including Dynamic Tables) do not inherit the database class.
 statement ok
-CREATE TABLE test_storage_class.internal AS SELECT 1 AS id
-
-statement ok
-INSERT INTO test_storage_class.internal VALUES (2)
-
-statement ok
-UPDATE test_storage_class.internal SET id = 3 WHERE id = 2
-
-statement ok
-OPTIMIZE TABLE test_storage_class.internal COMPACT
-
-query I rowsort
-SELECT id FROM test_storage_class.internal
-----
-1
-3
+CREATE TABLE test_storage_class.internal(id INT)
 
 statement ok
 CREATE DYNAMIC TABLE test_storage_class.dynamic AS SELECT id FROM test_storage_class.internal
@@ -43,7 +26,6 @@ FROM system.tables WHERE database = 'test_storage_class'
 dynamic 0
 internal 0
 
-# Explicit options on internal tables must fail rather than silently do nothing.
 statement error 1301
 CREATE TABLE test_storage_class.invalid(id INT) S3_STORAGE_CLASS = 'standard'
 
@@ -56,183 +38,34 @@ ALTER TABLE test_storage_class.internal SET OPTIONS(S3_STORAGE_CLASS = 'intellig
 statement error 1301
 CREATE DYNAMIC TABLE test_storage_class.invalid_dynamic S3_STORAGE_CLASS = 'standard' AS SELECT id FROM test_storage_class.internal
 
+# Temporary tables reject both classes; UNSET can still clean legacy metadata.
 statement error 1301
 CREATE TEMPORARY TABLE test_storage_class.invalid_temp(id INT) S3_STORAGE_CLASS = 'standard'
 
-# UNSET remains permitted for removing options from legacy internal metadata.
-statement ok
-ALTER TABLE test_storage_class.internal UNSET OPTIONS(S3_STORAGE_CLASS)
+statement error 1301
+CREATE TEMPORARY TABLE test_storage_class.invalid_temp_it(id INT) S3_STORAGE_CLASS = 'intelligent_tiering'
 
 statement ok
 CREATE TEMPORARY TABLE test_storage_class.temp(id INT)
 
-statement ok
-INSERT INTO test_storage_class.temp VALUES (42)
+statement error 1301
+ALTER TABLE test_storage_class.temp SET OPTIONS(S3_STORAGE_CLASS = 'standard')
 
-query I
-SELECT id FROM test_storage_class.temp
-----
-42
+statement ok
+ALTER TABLE test_storage_class.temp UNSET OPTIONS(S3_STORAGE_CLASS)
 
 statement ok
 DROP TABLE test_storage_class.temp
 
 statement ok
-UNSET experimental_s3_storage_class
+ALTER TABLE test_storage_class.internal UNSET OPTIONS(S3_STORAGE_CLASS)
 
-# Non-FUSE engines still reject the option and do not inherit a default.
 statement error 1301
 CREATE TABLE test_storage_class.invalid_memory(id INT) ENGINE = MEMORY S3_STORAGE_CLASS = 'standard'
 
-statement ok
-CREATE TABLE test_storage_class.memory(id INT) ENGINE = MEMORY
-
-query B
-SELECT table_option LIKE '%S3_STORAGE_CLASS=%'
-FROM system.tables WHERE database = 'test_storage_class' AND name = 'memory'
-----
-0
-
-statement error 1301
-ALTER TABLE test_storage_class.memory SET OPTIONS(S3_STORAGE_CLASS = 'standard')
-
-statement ok
-CREATE OR REPLACE CONNECTION storage_class_fs STORAGE_TYPE = 'fs'
-
-# An explicit external location can inherit the class without database connection defaults.
-statement ok
-CREATE TABLE test_storage_class.external_uri(id INT)
-    ENGINE = FUSE 'fs:///tmp/05_0067_storage_class_uri/' CONNECTION = (connection_name = 'storage_class_fs')
-
-query B
-SELECT upper(table_option) LIKE '%S3_STORAGE_CLASS=''INTELLIGENT_TIERING''%'
-FROM system.tables WHERE database = 'test_storage_class' AND name = 'external_uri'
-----
-1
-
-statement ok
-CREATE OR REPLACE DATABASE test_storage_class_external OPTIONS(
-    DEFAULT_STORAGE_CONNECTION = 'storage_class_fs',
-    DEFAULT_STORAGE_PATH = 'fs:///tmp/05_0067_storage_class/',
-    default_s3_storage_class = 'InTeLlIgEnT_TiErInG'
-)
-
-# Even external temporary tables must reject an explicitly selected storage class,
-# whether their location is inherited from the database or provided in the DDL.
-statement error 1301
-CREATE TEMPORARY TABLE test_storage_class_external.invalid_temp_standard(id INT) S3_STORAGE_CLASS = 'standard'
-
-statement error 1301
-CREATE TEMPORARY TABLE test_storage_class_external.invalid_temp_tiered(id INT) S3_STORAGE_CLASS = 'intelligent_tiering'
-
-statement error 1301
-CREATE TEMPORARY TABLE test_storage_class_external.invalid_temp_ctas S3_STORAGE_CLASS = 'standard' AS SELECT 1 AS id
-
-statement error 1301
-CREATE TEMPORARY TABLE test_storage_class_external.invalid_temp_uri(id INT)
-    ENGINE = FUSE 'fs:///tmp/05_0067_storage_class_temp/' CONNECTION = (connection_name = 'storage_class_fs')
-    S3_STORAGE_CLASS = 'standard'
-
-# Without an explicit class, temporary tables neither inherit the database class
-# nor lose normal CREATE/INSERT/SELECT support. SET must reject the class too.
-statement ok
-CREATE TEMPORARY TABLE test_storage_class_external.inherited_temp(id INT)
-
-statement ok
-INSERT INTO test_storage_class_external.inherited_temp VALUES (42)
-
-query I
-SELECT id FROM test_storage_class_external.inherited_temp
-----
-42
-
-statement error 1301
-ALTER TABLE test_storage_class_external.inherited_temp SET OPTIONS(S3_STORAGE_CLASS = 'standard')
-
-statement ok
-ALTER TABLE test_storage_class_external.inherited_temp UNSET OPTIONS(S3_STORAGE_CLASS)
-
-statement ok
-DROP TABLE test_storage_class_external.inherited_temp
-
-statement ok
-CREATE TEMPORARY TABLE test_storage_class_external.explicit_temp(id INT)
-    ENGINE = FUSE 'fs:///tmp/05_0067_storage_class_temp/' CONNECTION = (connection_name = 'storage_class_fs')
-
-statement ok
-INSERT INTO test_storage_class_external.explicit_temp VALUES (43)
-
-query I
-SELECT id FROM test_storage_class_external.explicit_temp
-----
-43
-
-statement error 1301
-ALTER TABLE test_storage_class_external.explicit_temp SET OPTIONS(S3_STORAGE_CLASS = 'intelligent_tiering')
-
-statement ok
-DROP TABLE test_storage_class_external.explicit_temp
-
-# A database-provided connection/path is also an external location.
-statement ok
-CREATE TABLE test_storage_class_external.inherited(id INT)
-
-statement ok
-CREATE TABLE test_storage_class_external.explicit(id INT) S3_STORAGE_CLASS = 'StAnDaRd'
-
-statement ok
-ALTER DATABASE test_storage_class_external SET OPTIONS(DEFAULT_S3_STORAGE_CLASS = 'STANDARD')
-
-statement ok
-CREATE TABLE test_storage_class_external.after_alter(id INT)
-
-query TBB rowsort
-SELECT name, upper(table_option) LIKE '%S3_STORAGE_CLASS=''INTELLIGENT_TIERING''%', upper(table_option) LIKE '%S3_STORAGE_CLASS=''STANDARD''%'
-FROM system.tables WHERE database = 'test_storage_class_external'
-----
-after_alter 0 1
-explicit 0 1
-inherited 1 0
-
-# An explicit location overrides the database location, not its storage-class default.
-statement ok
-CREATE TABLE test_storage_class_external.explicit_location(id INT)
-    ENGINE = FUSE 'fs:///tmp/05_0067_storage_class_explicit/' CONNECTION = (connection_name = 'storage_class_fs')
-
-query B
-SELECT table_option LIKE '%S3_STORAGE_CLASS=''STANDARD''%'
-FROM system.tables WHERE database = 'test_storage_class_external' AND name = 'explicit_location'
-----
-1
-
-statement ok
-ALTER TABLE test_storage_class_external.inherited SET OPTIONS(S3_STORAGE_CLASS = 'standard')
-
-query B
-SELECT upper(table_option) LIKE '%S3_STORAGE_CLASS=''STANDARD''%'
-FROM system.tables WHERE database = 'test_storage_class_external' AND name = 'inherited'
-----
-1
-
-# UNSET falls back to the experimental session setting, not the current database default.
-statement ok
-ALTER TABLE test_storage_class_external.inherited UNSET OPTIONS(S3_STORAGE_CLASS)
-
-query B
-SELECT table_option LIKE '%S3_STORAGE_CLASS=%'
-FROM system.tables WHERE database = 'test_storage_class_external' AND name = 'inherited'
-----
-0
-
-# Bad values must not be persisted, including on valid external locations.
-statement error 1301
-CREATE TABLE test_storage_class_external.invalid(id INT) S3_STORAGE_CLASS = 'glacier'
-
-statement error 1301
-ALTER TABLE test_storage_class_external.explicit SET OPTIONS(S3_STORAGE_CLASS = '')
-
+# Invalid or duplicate database values fail without requiring a storage backend.
 statement error 2004
-ALTER DATABASE test_storage_class_external SET OPTIONS(DEFAULT_S3_STORAGE_CLASS = 'glacier')
+ALTER DATABASE test_storage_class SET OPTIONS(DEFAULT_S3_STORAGE_CLASS = 'glacier')
 
 statement error 2004
 CREATE DATABASE invalid_storage_class OPTIONS(DEFAULT_S3_STORAGE_CLASS = '')
@@ -240,30 +73,8 @@ CREATE DATABASE invalid_storage_class OPTIONS(DEFAULT_S3_STORAGE_CLASS = '')
 statement error 2004
 CREATE DATABASE duplicate_storage_class OPTIONS(DEFAULT_S3_STORAGE_CLASS = 'standard', default_s3_storage_class = 'intelligent_tiering')
 
-query TT
-SHOW CREATE DATABASE test_storage_class_external
-----
-test_storage_class_external CREATE DATABASE `test_storage_class_external` ENGINE=DEFAULT OPTIONS (DEFAULT_S3_STORAGE_CLASS='STANDARD', DEFAULT_STORAGE_CONNECTION='storage_class_fs', DEFAULT_STORAGE_PATH='fs:///tmp/05_0067_storage_class/')
-
-query B
-SELECT upper(table_option) LIKE '%S3_STORAGE_CLASS=''STANDARD''%'
-FROM system.tables WHERE database = 'test_storage_class_external' AND name = 'explicit'
-----
-1
-
 statement ok
-INSERT INTO test_storage_class_external.inherited VALUES (7)
-
-query I
-SELECT id FROM test_storage_class_external.inherited
-----
-7
-
-statement ok
-DROP DATABASE test_storage_class_external
+UNSET experimental_s3_storage_class
 
 statement ok
 DROP DATABASE test_storage_class
-
-statement ok
-DROP CONNECTION storage_class_fs

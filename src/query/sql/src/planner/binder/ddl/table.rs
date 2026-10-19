@@ -104,7 +104,9 @@ use databend_common_meta_app::schema::SecurityPolicyColumnMap;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::storage::set_s3_storage_class;
 use databend_common_pipeline::core::SharedLockGuard;
 use databend_common_storage::EndpointPolicyScope;
 use databend_common_storage::check_operator;
@@ -118,6 +120,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_AGGRESSIVE_RECLUSTER;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
+use databend_storages_common_table_meta::table::OPT_KEY_S3_STORAGE_CLASS;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
@@ -133,7 +136,6 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use derive_visitor::Visitor;
 use log::debug;
-use opendal::Operator;
 use parking_lot::RwLock;
 use uuid::Uuid;
 
@@ -820,14 +822,21 @@ impl Binder {
             GlobalConfig::instance().storage.allow_insecure,
         )?;
 
+        let fuse_database = if engine == Engine::Fuse {
+            Some(
+                catalog
+                    .get_database(&self.ctx.get_tenant(), &database)
+                    .await?,
+            )
+        } else {
+            None
+        };
+
         // Construct a UriLocation from database defaults if table doesn't have explicit location
         let uri_location_to_use: Option<UriLocation> = if uri_location.is_none()
             && matches!(engine, Engine::Fuse)
         {
-            if let Ok(database_info) = catalog
-                .get_database(&self.ctx.get_tenant(), &database)
-                .await
-            {
+            if let Some(database_info) = fuse_database.as_ref() {
                 // Extract database-level default connection options
                 let default_connection_name =
                     database_info.options().get(DEFAULT_STORAGE_CONNECTION);
@@ -934,6 +943,20 @@ impl Binder {
             None
         };
 
+        let is_temporary = matches!(table_type, TableType::Temporary);
+        if is_temporary && options.contains_key(OPT_KEY_S3_STORAGE_CLASS) {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "{OPT_KEY_S3_STORAGE_CLASS} is not supported for temporary tables"
+            )));
+        }
+        if uri_location_to_use.is_some()
+            && !is_temporary
+            && let Some(db) = fuse_database.as_ref()
+        {
+            // Resolve the final table override before any permission probe, not after it.
+            Self::inherit_database_storage_class(&mut options, db.options());
+        }
+
         let storage_params = match (uri_location_to_use.as_ref(), engine) {
             (Some(uri), Engine::Fuse) => {
                 let mut uri = UriLocation {
@@ -956,7 +979,16 @@ impl Binder {
                 // Verify essential privileges.
                 // The permission check might fail for reasons other than the permissions themselves,
                 // such as network communication issues.
-                verify_external_location_privileges(op).await?;
+                let storage_class = if is_temporary {
+                    S3StorageClass::Standard
+                } else if let Some(value) = options.get(OPT_KEY_S3_STORAGE_CLASS) {
+                    value
+                        .parse::<S3StorageClass>()
+                        .map_err(ErrorCode::TableOptionInvalid)?
+                } else {
+                    self.ctx.get_settings().get_s3_storage_class()?
+                };
+                verify_external_location_privileges(&sp, storage_class).await?;
                 Some(sp)
             }
             (Some(uri), _) => Err(ErrorCode::BadArguments(format!(
@@ -1088,7 +1120,7 @@ impl Binder {
             options.insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
         }
 
-        if engine == Engine::Fuse {
+        if let Some(db) = fuse_database.as_ref() {
             // Currently, [Table] can not accesses its database id yet, thus
             // here we keep the db id AS an entry of `table_meta.options`.
             //
@@ -1097,14 +1129,8 @@ impl Binder {
             //
             // Later, when database id is kept, let say in `TableInfo`, we can
             // safely eliminate this "FUSE" constant and the table meta option entry.
-            let db = catalog
-                .get_database(&self.ctx.get_tenant(), &database)
-                .await?;
             let db_id = db.get_db_info().database_id.db_id;
             options.insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
-            if storage_params.is_some() && !matches!(table_type, TableType::Temporary) {
-                Self::inherit_database_storage_class(&mut options, db.options());
-            }
 
             let config = GlobalConfig::instance();
             let is_blocking_fs = matches!(
@@ -3098,14 +3124,24 @@ pub async fn validate_security_policies_by_schema(
     Ok(())
 }
 
-const VERIFICATION_KEY: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d";
+/// Reserved object written by external-location permission checks.
+pub const VERIFICATION_KEY: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d";
 const VERIFICATION_KEY_DEL: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d_del";
 
 // verify that essential privileges has granted for accessing external location
 //
 // The permission check might fail for reasons other than the permissions themselves,
 // such as network communication issues.
-pub async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
+pub async fn verify_external_location_privileges(
+    storage_params: &StorageParams,
+    storage_class: S3StorageClass,
+) -> Result<()> {
+    // Match the intended PUT class, including for the one-byte probe. Bucket
+    // policies can restrict class independently of the object's tiering eligibility.
+    // Use a copy: a session default must not become persistent table metadata.
+    let mut probe_params = storage_params.clone();
+    set_s3_storage_class(&mut probe_params, storage_class);
+    let dal = init_operator_with_policy_scope(&probe_params, EndpointPolicyScope::External)?;
     let verification_task = async move {
         // verify privilege to put
         let mut errors = Vec::new();

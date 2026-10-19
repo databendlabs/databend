@@ -83,6 +83,7 @@ pub use ddl::database::DEFAULT_S3_STORAGE_CLASS;
 pub use ddl::database::DEFAULT_STORAGE_CONNECTION;
 pub use ddl::database::DEFAULT_STORAGE_PATH;
 pub use ddl::index::validate_table_indexes_by_schema;
+pub use ddl::table::VERIFICATION_KEY as EXTERNAL_STORAGE_VERIFICATION_KEY;
 pub use ddl::table::validate_security_policies_by_schema;
 pub use ddl::table::verify_external_location_privileges;
 pub use default_expr::DefaultExprBinder;

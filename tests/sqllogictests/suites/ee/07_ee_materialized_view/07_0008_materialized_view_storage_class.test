@@ -24,9 +24,6 @@ statement ok
 CREATE TABLE source(id INT)
 
 statement ok
-INSERT INTO source VALUES (1)
-
-statement ok
 CREATE MATERIALIZED VIEW inherited_mv AS SELECT id FROM source
 
 statement error 1301
@@ -46,25 +43,11 @@ after_alter_mv 0
 inherited_mv 0
 source 0
 
-statement ok
-SET experimental_s3_storage_class = 'intelligent_tiering'
-
-statement ok
-REFRESH MATERIALIZED VIEW inherited_mv
-
-query I
-SELECT id FROM inherited_mv
-----
-1
-
 statement error 1301
 ALTER MATERIALIZED VIEW inherited_mv SET OPTIONS(s3_storage_class = 'STANDARD')
 
 statement ok
 ALTER MATERIALIZED VIEW inherited_mv UNSET OPTIONS(s3_storage_class)
-
-statement ok
-UNSET experimental_s3_storage_class
 
 statement ok
 DROP DATABASE test_mv_storage_class

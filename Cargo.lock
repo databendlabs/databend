@@ -4918,6 +4918,8 @@ dependencies = [
  "log",
  "opendal",
  "parking_lot 0.12.3",
+ "reqsign",
+ "reqwest",
  "serde",
  "serde_json",
  "siphasher 0.3.11",
