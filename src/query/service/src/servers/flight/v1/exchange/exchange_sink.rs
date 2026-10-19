@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use arrow_schema::Schema as ArrowSchema;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -23,6 +24,7 @@ use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_settings::Settings;
 
 use super::exchange_params::BroadcastExchangeParams;
 use super::exchange_params::ExchangeParams;
@@ -32,11 +34,15 @@ use super::exchange_sorting::ExchangeSorting;
 use super::exchange_sorting::TransformExchangeSorting;
 use super::exchange_transform_shuffle::exchange_shuffle;
 use super::hash_send_sink::HashSendSink;
+use super::hash_shuffle_writer::ShuffleNode;
+use super::hash_shuffle_writer::ShuffleTarget;
+use super::hash_shuffle_writer::hash_shuffle_send_budget;
 use super::serde::ExchangeSerializeMeta;
 use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::network::OutboundChannel;
 use crate::servers::flight::v1::network::RemoteChannel;
+use crate::servers::flight::v1::network::RemoteNodeChannel;
 use crate::servers::flight::v1::network::RoundRobinChannel;
 use crate::servers::flight::v1::network::create_local_channels;
 use crate::servers::flight::v1::network::outbound_buffer::ExchangeBufferConfig;
@@ -146,9 +152,13 @@ impl ExchangeSink {
             local_pos += threads.len();
         }
 
-        let compression = ctx.get_settings().get_query_flight_compression()?;
-        let rows_threshold = ctx.get_settings().get_hash_shuffle_rows_threshold()?;
-        let bytes_threshold = ctx.get_settings().get_hash_shuffle_bytes_threshold()?;
+        let settings = ctx.get_settings();
+        let compression = settings.get_query_flight_compression()?;
+        let buffer_config = exchange_buffer_config(&settings)?;
+        let budget = hash_shuffle_send_budget(
+            local_threads,
+            settings.get_hash_shuffle_send_buffer_bytes()?,
+        );
         let waker = pipeline.get_waker();
 
         pipeline.resize(local_threads, false)?;
@@ -161,12 +171,13 @@ impl ExchangeSink {
         assert_eq!(channel_set.channels.len(), local_threads);
 
         let local_outbound = create_local_channels(&channel_set);
-        let remote_outbound = build_hash_outbound_channels(params, local_outbound, compression)?;
+        let nodes = build_hash_shuffle_nodes(params, local_outbound, compression, buffer_config)?;
+        let num_partitions = nodes.last().map(|x| x.partitions.end).unwrap_or_default();
 
         let scatter = Arc::new(HashFlightScatter::try_create(
             ctx.get_function_context()?,
             params.shuffle_keys.clone(),
-            remote_outbound.len(),
+            num_partitions,
             local_pos,
         )?);
 
@@ -175,16 +186,23 @@ impl ExchangeSink {
             items.push(HashSendSink::create_item(
                 idx,
                 scatter.clone(),
-                remote_outbound.clone(),
+                nodes.clone(),
                 waker.clone(),
-                rows_threshold,
-                bytes_threshold,
+                budget,
             ));
         }
 
         pipeline.add_pipe(Pipe::create(local_threads, 0, items));
         Ok(())
     }
+}
+
+/// Send queue configuration of ping-pong exchanges.
+pub(super) fn exchange_buffer_config(settings: &Settings) -> Result<ExchangeBufferConfig> {
+    Ok(ExchangeBufferConfig {
+        max_queued_bytes: settings.get_exchange_send_queue_bytes()?,
+        max_batch_bytes: settings.get_exchange_frame_bytes()?,
+    })
 }
 
 struct SinkExchangeSorting;
@@ -216,6 +234,7 @@ pub(super) fn build_broadcast_outbound_channels(
     params: &BroadcastExchangeParams,
     local_outbound_channels: Vec<Arc<dyn OutboundChannel>>,
     compression: Option<databend_common_settings::FlightCompression>,
+    config: ExchangeBufferConfig,
 ) -> Result<Vec<Arc<dyn OutboundChannel>>> {
     let query_id = &params.query_id;
     let exchange_id = &params.exchange_id;
@@ -238,8 +257,7 @@ pub(super) fn build_broadcast_outbound_channels(
         }
     }
 
-    // Create shared ExchangeSinkBuffer: one RemoteInstance per PingPong, N channels each
-    let config = ExchangeBufferConfig::default();
+    // Create shared ExchangeSinkBuffer: one RemoteInstance per PingPong
     let shared_buffer = Arc::new(ExchangeSinkBuffer::create(
         exchanges_seq,
         config,
@@ -272,13 +290,15 @@ pub(super) fn build_broadcast_outbound_channels(
     Ok(channels)
 }
 
-/// Build per-thread OutboundChannels for hash exchange.
-pub(super) fn build_hash_outbound_channels(
+/// Build the shuffle destinations of a hash exchange, one entry per node in
+/// `destination_channels` order. Each node owns a contiguous range of partitions,
+/// one per thread.
+pub(super) fn build_hash_shuffle_nodes(
     params: &GlobalExchangeParams,
-    mut local_outbound_channels: Vec<Arc<dyn OutboundChannel>>,
+    local_outbound_channels: Vec<Arc<dyn OutboundChannel>>,
     compression: Option<databend_common_settings::FlightCompression>,
-) -> Result<Vec<Arc<dyn OutboundChannel>>> {
-    let num_threads = local_outbound_channels.len();
+    config: ExchangeBufferConfig,
+) -> Result<Vec<ShuffleNode>> {
     let query_id = &params.query_id;
     let exchange_id = &params.exchange_id;
     let exchange_manager = DataExchangeManager::instance();
@@ -299,33 +319,44 @@ pub(super) fn build_hash_outbound_channels(
         }
     }
 
-    let config = ExchangeBufferConfig::default();
     let shared_buffer = Arc::new(ExchangeSinkBuffer::create(
         exchanges_seq,
         config,
         &GlobalIORuntime::instance(),
     )?);
 
+    let arrow_schema = Arc::new(ArrowSchema::from(params.schema.as_ref()));
     let mut remote_idx = 0;
-    let mut channels = Vec::with_capacity(params.destination_channels.len() * num_threads);
+    let mut partition_start = 0;
+    let mut local_outbound_channels = Some(local_outbound_channels);
+    let mut nodes = Vec::with_capacity(params.destination_channels.len());
 
     for (target_id, threads) in &params.destination_channels {
-        if target_id == &params.executor_id {
-            channels.extend(std::mem::take(&mut local_outbound_channels));
-            continue;
-        }
+        let partitions = partition_start..partition_start + threads.len();
+        partition_start = partitions.end;
 
-        for t_idx in 0..threads.len() {
-            channels.push(RemoteChannel::create(
-                remote_idx,
-                t_idx,
-                shared_buffer.clone(),
-                compression,
-            )?);
-        }
+        let target = match target_id == &params.executor_id {
+            true => {
+                let channels = local_outbound_channels.take().ok_or_else(|| {
+                    ErrorCode::Internal("Local node appears twice in hash exchange destinations")
+                })?;
+                assert_eq!(channels.len(), threads.len());
+                ShuffleTarget::Local(channels.into_iter().map(Some).collect())
+            }
+            false => {
+                let channel = RemoteNodeChannel::create(
+                    remote_idx,
+                    shared_buffer.clone(),
+                    compression,
+                    arrow_schema.clone(),
+                )?;
+                remote_idx += 1;
+                ShuffleTarget::Remote(Some(channel))
+            }
+        };
 
-        remote_idx += 1;
+        nodes.push(ShuffleNode { partitions, target });
     }
 
-    Ok(channels)
+    Ok(nodes)
 }

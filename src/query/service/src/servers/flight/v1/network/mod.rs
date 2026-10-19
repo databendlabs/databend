@@ -32,6 +32,7 @@ pub use outbound_buffer::ExchangeSinkBuffer;
 pub use outbound_channel::DummyOutboundChannel;
 pub use outbound_channel::OutboundChannel;
 pub use outbound_channel::RemoteChannel;
+pub use outbound_channel::RemoteNodeChannel;
 pub use outbound_channel::RoundRobinChannel;
 pub use outbound_transport::PingPongCallback;
 pub use outbound_transport::PingPongExchange;

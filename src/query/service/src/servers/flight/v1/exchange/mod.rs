@@ -30,12 +30,14 @@ mod fuse_part_exchange;
 mod hash_send_sink;
 mod hash_send_source;
 mod hash_send_transform;
+mod hash_shuffle_writer;
 mod outbound_send_channels;
 mod statistics_receiver;
 mod statistics_sender;
 
 pub mod serde;
 
+pub use broadcast_recv_transform::CoalesceThreshold;
 pub use broadcast_recv_transform::ExchangeRecvTransform;
 pub type BroadcastRecvTransform = ExchangeRecvTransform;
 pub type HashRecvTransform = ExchangeRecvTransform;

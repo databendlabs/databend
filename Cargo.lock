@@ -5930,6 +5930,7 @@ dependencies = [
  "jsonb",
  "jwt-simple",
  "log",
+ "lz4_flex 0.13.0",
  "maplit",
  "match-template",
  "md-5",

@@ -29,6 +29,7 @@ use arrow_schema::Schema as ArrowSchema;
 use bytes::Bytes;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_io::prelude::BinaryWrite;
@@ -187,27 +188,121 @@ impl OutboundChannel for RemoteChannel {
     }
 
     async fn add_block(&self, block: DataBlock) -> Result<()> {
+        let items = serialize_block_for_thread(block, self.channel_id, &self.ipc_options)?;
+        self.buffer.add_items(self.dest_idx, items).await
+    }
+}
+
+/// Serialize a block for thread `tid` of a remote node: the tid is prefixed to the
+/// app_metadata of every FlightData so the receiver can route it.
+fn serialize_block_for_thread(
+    block: DataBlock,
+    tid: usize,
+    ipc_options: &IpcWriteOptions,
+) -> Result<Vec<FlightData>> {
+    Profile::record_usize_profile(ProfileStatisticsName::ExchangeRows, block.num_rows());
+    Profile::record_usize_profile(ProfileStatisticsName::ExchangeBytes, block.memory_size());
+
+    let tid_prefix = (tid as u16).to_le_bytes();
+    let flight_data_list = serialize_block(block, ipc_options, None)?;
+
+    Ok(flight_data_list
+        .into_iter()
+        .map(|flight_data| {
+            let mut metadata = tid_prefix.to_vec();
+            metadata.extend_from_slice(&flight_data.app_metadata);
+            FlightData {
+                app_metadata: metadata.into(),
+                ..flight_data
+            }
+        })
+        .collect())
+}
+
+/// Marker of a block whose whole IPC body is one size-prepended LZ4 block.
+/// Its metadata is the same as a plain fragment (0x01).
+pub const LZ4_BODY_MARKER: u8 = 0x06;
+
+// ---------------------------------------------------------------------------
+// RemoteNodeChannel — sends blocks for many threads of one remote node together
+// ---------------------------------------------------------------------------
+
+/// Sends the blocks for several threads of one remote node in one call, so they
+/// are packed into the same frames instead of one frame per thread.
+pub struct RemoteNodeChannel {
+    dest_idx: usize,
+    buffer: Arc<ExchangeSinkBuffer>,
+    ipc_options: IpcWriteOptions,
+    /// Compress the whole IPC body as one LZ4 block instead of one LZ4 frame per
+    /// buffer: a frame costs a fresh encoder and its buffers, which dominates when
+    /// the blocks sent to each thread are small.
+    lz4_body: bool,
+    /// Schema of the exchange, built once instead of for every block.
+    arrow_schema: Arc<ArrowSchema>,
+}
+
+impl RemoteNodeChannel {
+    pub fn create(
+        dest_idx: usize,
+        buffer: Arc<ExchangeSinkBuffer>,
+        compression: Option<FlightCompression>,
+        arrow_schema: Arc<ArrowSchema>,
+    ) -> Result<Arc<RemoteNodeChannel>> {
+        let lz4_body = matches!(compression, Some(FlightCompression::Lz4));
+        let ipc_compression = match lz4_body {
+            true => None,
+            false => compression,
+        };
+
+        Ok(Arc::new(Self {
+            dest_idx,
+            buffer,
+            ipc_options: make_ipc_options(ipc_compression)?,
+            lz4_body,
+            arrow_schema,
+        }))
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.buffer.is_closed(self.dest_idx)
+    }
+
+    /// Encode `block` for thread `tid` of the remote node, in the same format as
+    /// [`RemoteChannel`] sends.
+    pub fn encode(&self, tid: usize, block: DataBlock) -> Result<FlightData> {
         Profile::record_usize_profile(ProfileStatisticsName::ExchangeRows, block.num_rows());
         Profile::record_usize_profile(ProfileStatisticsName::ExchangeBytes, block.memory_size());
 
-        let flight_data_list = serialize_block(block, &self.ipc_options, None)?;
+        let mut app_metadata = Vec::with_capacity(16);
+        app_metadata.extend_from_slice(&(tid as u16).to_le_bytes());
+        app_metadata.write_scalar_own(block.num_rows() as u32)?;
+        bincode_serialize_into_buf(&mut app_metadata, &block.get_meta())?;
 
-        let tid_prefix = (self.channel_id as u16).to_le_bytes();
-
-        for flight_data in flight_data_list {
-            let mut metadata = tid_prefix.to_vec();
-            metadata.extend_from_slice(&flight_data.app_metadata);
-            let flight_data = FlightData {
-                app_metadata: metadata.into(),
-                ..flight_data
-            };
-
-            self.buffer
-                .add_data(self.channel_id, self.dest_idx, flight_data)
-                .await?;
+        let batch = block.to_record_batch_with_arrow_schema(&self.arrow_schema)?;
+        let (dictionaries, mut data) = encode_batch(&batch, &self.ipc_options)?;
+        if !dictionaries.is_empty() {
+            return Err(ErrorCode::Unimplemented(
+                "dictionary encoded columns are not supported in hash shuffle",
+            ));
         }
 
-        Ok(())
+        match self.lz4_body {
+            true => {
+                data.data_body = lz4_flex::block::compress_prepend_size(&data.data_body).into();
+                app_metadata.push(LZ4_BODY_MARKER);
+            }
+            false => app_metadata.push(0x01),
+        }
+
+        Ok(FlightData {
+            app_metadata: app_metadata.into(),
+            ..data
+        })
+    }
+
+    /// Queue encoded blocks for the remote node.
+    pub async fn add_items(&self, items: Vec<FlightData>) -> Result<()> {
+        self.buffer.add_items(self.dest_idx, items).await
     }
 }
 
