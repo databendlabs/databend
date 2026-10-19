@@ -23,9 +23,11 @@ use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
+use crate::Scalar;
 use crate::types::AnyType;
 use crate::types::ArrayColumn;
 use crate::types::BinaryColumn;
+use crate::types::DataType;
 use crate::types::DecimalColumn;
 use crate::types::DecimalColumnBuilder;
 use crate::types::NullableColumn;
@@ -43,9 +45,191 @@ use crate::types::string::StringColumnBuilder;
 use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 
+/// Bytes a constant takes once it is copied into a builder, as
+/// `base + rows * per_64_rows / 64`.
+#[derive(Clone, Copy)]
+struct ExpandedSize {
+    base: usize,
+    per_64_rows: usize,
+}
+
+impl ExpandedSize {
+    fn measure(scalar: &Scalar, data_type: &DataType) -> Self {
+        let size = |rows| {
+            let mut builder = ColumnBuilder::with_capacity(data_type, rows);
+            copy_const(scalar, data_type, rows, &mut builder);
+            builder.memory_size()
+        };
+        let (size_64, size_128) = (size(64), size(128));
+        let per_64_rows = size_128.saturating_sub(size_64);
+        ExpandedSize {
+            base: size_64.saturating_sub(per_64_rows),
+            per_64_rows,
+        }
+    }
+
+    fn of(&self, rows: usize) -> usize {
+        self.base + rows * self.per_64_rows / 64
+    }
+}
+
+/// The rows of one column waiting in a partition. A column whose rows so far
+/// are all the same constant stays a constant instead of being copied.
+enum PendingColumn {
+    /// No rows. `data_type` and `capacity` are those of the next builder.
+    Empty {
+        data_type: DataType,
+        capacity: usize,
+    },
+    Const {
+        scalar: Scalar,
+        data_type: DataType,
+        rows: usize,
+        // Counted as if copied, so blocks are cut where they would be if the
+        // constant had been expanded.
+        size: ExpandedSize,
+    },
+    Builder(ColumnBuilder),
+}
+
+impl PendingColumn {
+    /// Add `rows` of a constant if they can stay constant: no rows yet, or
+    /// only rows of the same constant. Returns false otherwise.
+    fn try_push_const(
+        &mut self,
+        scalar: &Scalar,
+        data_type: &DataType,
+        rows: usize,
+        size: &mut impl FnMut() -> ExpandedSize,
+    ) -> bool {
+        match self {
+            PendingColumn::Empty {
+                data_type: expected,
+                ..
+            } if expected == data_type => {
+                *self = PendingColumn::Const {
+                    scalar: scalar.clone(),
+                    data_type: data_type.clone(),
+                    rows,
+                    size: size(),
+                };
+                true
+            }
+            PendingColumn::Const {
+                scalar: pending,
+                data_type: pending_type,
+                rows: pending_rows,
+                ..
+            } if pending == scalar && pending_type == data_type => {
+                *pending_rows += rows;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn push_column<I: Index>(&mut self, indices: &[I], column: &Column) {
+        copy_column(indices, column, self.builder(indices.len()));
+    }
+
+    /// Turn the pending rows into a builder with room for `additional` more.
+    fn builder(&mut self, additional: usize) -> &mut ColumnBuilder {
+        match self {
+            PendingColumn::Empty {
+                data_type,
+                capacity,
+            } => {
+                let builder = ColumnBuilder::with_capacity(data_type, (*capacity).max(additional));
+                *self = PendingColumn::Builder(builder);
+            }
+            PendingColumn::Const {
+                scalar,
+                data_type,
+                rows,
+                ..
+            } => {
+                let mut builder = ColumnBuilder::with_capacity(data_type, *rows + additional);
+                copy_const(scalar, data_type, *rows, &mut builder);
+                *self = PendingColumn::Builder(builder);
+            }
+            PendingColumn::Builder(_) => {}
+        }
+        match self {
+            PendingColumn::Builder(builder) => builder,
+            _ => unreachable!(),
+        }
+    }
+
+    fn memory_size(&self) -> usize {
+        match self {
+            PendingColumn::Empty { .. } => 0,
+            PendingColumn::Const { rows, size, .. } => size.of(*rows),
+            PendingColumn::Builder(builder) => builder.memory_size(),
+        }
+    }
+
+    /// Take the pending rows. The next builder gets room for as many rows when
+    /// `keep_capacity` is set.
+    fn take(&mut self, keep_capacity: bool) -> BlockEntry {
+        let placeholder = PendingColumn::Empty {
+            data_type: DataType::Null,
+            capacity: 0,
+        };
+        let (entry, data_type, rows) = match std::mem::replace(self, placeholder) {
+            PendingColumn::Empty { data_type, .. } => {
+                let entry = ColumnBuilder::with_capacity(&data_type, 0).build().into();
+                (entry, data_type, 0)
+            }
+            PendingColumn::Const {
+                scalar,
+                data_type,
+                rows,
+                ..
+            } => {
+                let entry = BlockEntry::new_const_column(data_type.clone(), scalar, rows);
+                (entry, data_type, rows)
+            }
+            PendingColumn::Builder(builder) => {
+                let data_type = builder.data_type();
+                let rows = builder.len();
+                (builder.build().into(), data_type, rows)
+            }
+        };
+        *self = PendingColumn::Empty {
+            data_type,
+            capacity: if keep_capacity { rows } else { 0 },
+        };
+        entry
+    }
+}
+
+/// Copy `rows` of a constant into `to` row by row, as a column of the constant
+/// would be copied, so the builder ends up as if the constant had been expanded.
+fn copy_const(scalar: &Scalar, data_type: &DataType, rows: usize, to: &mut ColumnBuilder) {
+    let column = ColumnBuilder::repeat(&scalar.as_ref(), rows, data_type).build();
+    let indices = (0..rows as u32).collect::<Vec<_>>();
+    copy_column(&indices, &column, to);
+}
+
 struct PartitionBlockBuilder {
     num_rows: usize,
-    columns_builder: Vec<ColumnBuilder>,
+    columns: Vec<PendingColumn>,
+}
+
+impl PartitionBlockBuilder {
+    fn memory_size(&self) -> usize {
+        self.columns.iter().map(PendingColumn::memory_size).sum()
+    }
+
+    fn take_block(&mut self, keep_capacity: bool) -> DataBlock {
+        let columns = self
+            .columns
+            .iter_mut()
+            .map(|column| column.take(keep_capacity))
+            .collect();
+        let num_rows = std::mem::take(&mut self.num_rows);
+        DataBlock::new(columns, num_rows)
+    }
 }
 
 pub struct BlockPartitionStream {
@@ -54,6 +238,9 @@ pub struct BlockPartitionStream {
     rows_threshold: usize,
     bytes_threshold: usize,
     partitions: Vec<PartitionBlockBuilder>,
+    // The expanded size of the last constant seen in each column, as the same
+    // constant usually comes in every block.
+    const_sizes: Vec<Option<(Scalar, DataType, ExpandedSize)>>,
 }
 
 impl BlockPartitionStream {
@@ -76,6 +263,7 @@ impl BlockPartitionStream {
             bytes_threshold,
             initialize: false,
             partitions: vec![],
+            const_sizes: vec![],
         }
     }
 
@@ -94,26 +282,21 @@ impl BlockPartitionStream {
 
             self.partitions.reserve(self.scatter_size);
             for _ in 0..self.scatter_size {
-                let mut columns_builder = Vec::with_capacity(block.num_columns());
-
-                for column in block.columns() {
-                    let data_type = column.data_type();
-                    columns_builder.push(ColumnBuilder::with_capacity(&data_type, 0));
-                }
-
-                let block_builder = PartitionBlockBuilder {
+                let columns = block
+                    .columns()
+                    .iter()
+                    .map(|column| PendingColumn::Empty {
+                        data_type: column.data_type(),
+                        capacity: 0,
+                    })
+                    .collect();
+                self.partitions.push(PartitionBlockBuilder {
                     num_rows: 0,
-                    columns_builder,
-                };
-                self.partitions.push(block_builder);
+                    columns,
+                });
             }
+            self.const_sizes = vec![None; block.num_columns()];
         }
-
-        let columns = block
-            .take_columns()
-            .into_iter()
-            .map(|x| x.to_column())
-            .collect::<Vec<_>>();
 
         let scatter_indices =
             DataBlock::divide_indices_by_scatter_size(&indices, self.scatter_size);
@@ -122,18 +305,48 @@ impl BlockPartitionStream {
             self.partitions[partition_id].num_rows += indices.len();
         }
 
-        for (column_idx, column) in columns.into_iter().enumerate() {
-            for (partition_id, indices) in scatter_indices.iter().enumerate() {
-                if indices.is_empty() {
-                    continue;
+        for (column_idx, entry) in block.take_columns().into_iter().enumerate() {
+            match entry {
+                BlockEntry::Const(scalar, data_type, num_rows) => {
+                    let const_size = &mut self.const_sizes[column_idx];
+                    let mut size = || {
+                        if let Some((s, t, size)) = const_size.as_ref()
+                            && *s == scalar
+                            && *t == data_type
+                        {
+                            return *size;
+                        }
+                        let size = ExpandedSize::measure(&scalar, &data_type);
+                        *const_size = Some((scalar.clone(), data_type.clone(), size));
+                        size
+                    };
+                    // Expanded once for the partitions that already hold other
+                    // rows, as every block used to be.
+                    let mut expanded = None;
+                    for (partition_id, indices) in scatter_indices.iter().enumerate() {
+                        if indices.is_empty() {
+                            continue;
+                        }
+                        let column = &mut self.partitions[partition_id].columns[column_idx];
+                        if !column.try_push_const(&scalar, &data_type, indices.len(), &mut size) {
+                            let expanded = expanded.get_or_insert_with(|| {
+                                ColumnBuilder::repeat(&scalar.as_ref(), num_rows, &data_type)
+                                    .build()
+                            });
+                            column.push_column(indices, expanded);
+                        }
+                    }
                 }
-
-                let partition = &mut self.partitions[partition_id];
-                let column_builder = &mut partition.columns_builder[column_idx];
-                copy_column(indices, &column, column_builder);
+                BlockEntry::Column(column) => {
+                    for (partition_id, indices) in scatter_indices.iter().enumerate() {
+                        if indices.is_empty() {
+                            continue;
+                        }
+                        self.partitions[partition_id].columns[column_idx]
+                            .push_column(indices, &column);
+                    }
+                }
             }
-
-            drop(column);
         }
 
         if !out_ready {
@@ -142,29 +355,10 @@ impl BlockPartitionStream {
 
         let mut ready_blocks = Vec::with_capacity(self.partitions.len());
         for (id, partition) in self.partitions.iter_mut().enumerate() {
-            let memory_size = partition
-                .columns_builder
-                .iter()
-                .map(|x| x.memory_size())
-                .sum::<usize>();
-
-            let rows = partition.num_rows;
-
-            if memory_size >= self.bytes_threshold || rows >= self.rows_threshold {
-                let mut columns = Vec::with_capacity(partition.columns_builder.len());
-                let columns_builder = std::mem::take(&mut partition.columns_builder);
-                partition.columns_builder.reserve(columns_builder.len());
-
-                for column_builder in columns_builder {
-                    let historical_size = column_builder.len();
-                    let data_type = column_builder.data_type();
-                    let new_builder = ColumnBuilder::with_capacity(&data_type, historical_size);
-                    partition.columns_builder.push(new_builder);
-                    columns.push(BlockEntry::from(column_builder.build()));
-                }
-
-                partition.num_rows = 0;
-                ready_blocks.push((id, DataBlock::new(columns, rows)));
+            if partition.memory_size() >= self.bytes_threshold
+                || partition.num_rows >= self.rows_threshold
+            {
+                ready_blocks.push((id, partition.take_block(true)));
             }
         }
 
@@ -200,21 +394,7 @@ impl BlockPartitionStream {
                 continue;
             }
 
-            let mut columns = Vec::with_capacity(partition.columns_builder.len());
-            let columns_builder = std::mem::take(&mut partition.columns_builder);
-            partition.columns_builder.reserve(columns_builder.len());
-
-            for column_builder in columns_builder {
-                let historical_size = column_builder.len();
-                let data_type = column_builder.data_type();
-                let new_builder = ColumnBuilder::with_capacity(&data_type, historical_size);
-                partition.columns_builder.push(new_builder);
-                columns.push(BlockEntry::from(column_builder.build()));
-            }
-
-            let num_rows = partition.num_rows;
-            partition.num_rows = 0;
-            take_blocks.push((id, DataBlock::new(columns, num_rows)));
+            take_blocks.push((id, partition.take_block(true)));
         }
 
         take_blocks
@@ -227,25 +407,11 @@ impl BlockPartitionStream {
 
         let partition = &mut self.partitions[partition_id];
 
-        let num_rows = partition.num_rows;
-
-        if num_rows == 0 {
+        if partition.num_rows == 0 {
             return None;
         }
 
-        let mut columns = Vec::with_capacity(partition.columns_builder.len());
-        let columns_builder = std::mem::take(&mut partition.columns_builder);
-        partition.columns_builder.reserve(columns_builder.len());
-
-        for column_builder in columns_builder {
-            let data_type = column_builder.data_type();
-            let new_builder = ColumnBuilder::with_capacity(&data_type, 0);
-            partition.columns_builder.push(new_builder);
-            columns.push(BlockEntry::from(column_builder.build()));
-        }
-
-        partition.num_rows = 0;
-        Some(DataBlock::new(columns, num_rows))
+        Some(partition.take_block(false))
     }
 }
 

@@ -45,6 +45,7 @@ mod scalar_hash;
 mod schema;
 mod serde;
 mod sort;
+mod stream_partition;
 mod types;
 
 mod like_pattern_escape;
