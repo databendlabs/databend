@@ -73,6 +73,12 @@ pub trait DeriveHandle: Send + Sync + 'static {
 }
 
 /// See [`IPhysicalPlan::collect_planned_pruning_stats`].
+///
+/// Lazy vs. eager is decided by the parts, not by `statistics.is_exact`
+/// (which eager pruning also clears under a limit). Empty `parts` read as
+/// eager, so only nodes that own their parts call this; `FuseBlockRead`,
+/// whose lazy parts moved to the `FusePrune` below it, keeps the default
+/// (recurse only).
 pub fn planned_pruning_stats(parts: &Partitions, statistics: &PartStatistics) -> PartStatistics {
     if parts.partitions_type() == PartInfoType::LazyLevel {
         PartStatistics {
