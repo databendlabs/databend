@@ -187,7 +187,10 @@ arrow-json = { version = "58.4.0" }
 arrow-ord = { version = "58.4.0" }
 arrow-schema = { version = "58.4.0", features = ["serde"] }
 arrow-select = { version = "58.4.0" }
-arrow-udf-runtime = { version = "0.8.0", default-features = false, features = ["javascript", "wasm"] }
+# `javascript-runtime` rather than `javascript`: the latter also pulls in `javascript-fetch`,
+# which requires reqwest (with native-tls by default) for a `fetch()` API we never enable —
+# `Runtime::enable_fetch()` is not called anywhere.
+arrow-udf-runtime = { version = "0.8.0", default-features = false, features = ["javascript-runtime", "wasm"] }
 async-backtrace = "0.2"
 async-channel = "2.3.1"
 async-compat = { version = "0.2" }
@@ -621,8 +624,8 @@ arrow-schema = { version = "=58.4.0" }
 arrow-select = { version = "=58.4.0" }
 
 [patch.crates-io]
-# TODO(local fork): push /workspace/forks/arrow-udf (branch databend-no-default-tls) and switch to its rev.
-arrow-udf-runtime = { path = "../forks/arrow-udf/arrow-udf-runtime" }
+# Kept from main: crates.io 0.8.0 does not resolve here (pyo3 0.24 vs bendpy's 0.28).
+arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "c1de708add62ecd1afa2721b2e5c639f29be1f9d" }
 async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
