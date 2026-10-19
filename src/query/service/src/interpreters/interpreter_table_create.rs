@@ -1060,7 +1060,11 @@ impl CreateTableInterpreter {
             FuseSegmentFormat::from_str(segment_format)?;
         }
 
-        is_valid_s3_storage_class(&table_meta.options, table_meta.storage_params.as_ref())?;
+        is_valid_s3_storage_class(
+            &table_meta.options,
+            table_meta.storage_params.as_ref(),
+            table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX),
+        )?;
         is_valid_block_per_segment(&table_meta.options)?;
         is_valid_row_per_block(&table_meta.options)?;
         is_valid_recluster_depth(&table_meta.options)?;

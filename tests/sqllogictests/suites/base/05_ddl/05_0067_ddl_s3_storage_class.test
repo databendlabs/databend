@@ -117,6 +117,62 @@ CREATE OR REPLACE DATABASE test_storage_class_external OPTIONS(
     default_s3_storage_class = 'InTeLlIgEnT_TiErInG'
 )
 
+# Even external temporary tables must reject an explicitly selected storage class,
+# whether their location is inherited from the database or provided in the DDL.
+statement error 1301
+CREATE TEMPORARY TABLE test_storage_class_external.invalid_temp_standard(id INT) S3_STORAGE_CLASS = 'standard'
+
+statement error 1301
+CREATE TEMPORARY TABLE test_storage_class_external.invalid_temp_tiered(id INT) S3_STORAGE_CLASS = 'intelligent_tiering'
+
+statement error 1301
+CREATE TEMPORARY TABLE test_storage_class_external.invalid_temp_ctas S3_STORAGE_CLASS = 'standard' AS SELECT 1 AS id
+
+statement error 1301
+CREATE TEMPORARY TABLE test_storage_class_external.invalid_temp_uri(id INT)
+    ENGINE = FUSE 'fs:///tmp/05_0067_storage_class_temp/' CONNECTION = (connection_name = 'storage_class_fs')
+    S3_STORAGE_CLASS = 'standard'
+
+# Without an explicit class, temporary tables neither inherit the database class
+# nor lose normal CREATE/INSERT/SELECT support. SET must reject the class too.
+statement ok
+CREATE TEMPORARY TABLE test_storage_class_external.inherited_temp(id INT)
+
+statement ok
+INSERT INTO test_storage_class_external.inherited_temp VALUES (42)
+
+query I
+SELECT id FROM test_storage_class_external.inherited_temp
+----
+42
+
+statement error 1301
+ALTER TABLE test_storage_class_external.inherited_temp SET OPTIONS(S3_STORAGE_CLASS = 'standard')
+
+statement ok
+ALTER TABLE test_storage_class_external.inherited_temp UNSET OPTIONS(S3_STORAGE_CLASS)
+
+statement ok
+DROP TABLE test_storage_class_external.inherited_temp
+
+statement ok
+CREATE TEMPORARY TABLE test_storage_class_external.explicit_temp(id INT)
+    ENGINE = FUSE 'fs:///tmp/05_0067_storage_class_temp/' CONNECTION = (connection_name = 'storage_class_fs')
+
+statement ok
+INSERT INTO test_storage_class_external.explicit_temp VALUES (43)
+
+query I
+SELECT id FROM test_storage_class_external.explicit_temp
+----
+43
+
+statement error 1301
+ALTER TABLE test_storage_class_external.explicit_temp SET OPTIONS(S3_STORAGE_CLASS = 'intelligent_tiering')
+
+statement ok
+DROP TABLE test_storage_class_external.explicit_temp
+
 # A database-provided connection/path is also an external location.
 statement ok
 CREATE TABLE test_storage_class_external.inherited(id INT)

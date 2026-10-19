@@ -464,15 +464,23 @@ pub fn is_valid_random_seed(
     is_valid_option_of_type::<u64>(options, OPT_KEY_RANDOM_SEED)
 }
 
-/// User-selected storage classes must not affect the operator-owned internal bucket.
+/// User-selected storage classes apply only to persistent external tables.
 pub fn is_valid_s3_storage_class(
     options: &BTreeMap<String, String>,
     storage_params: Option<&StorageParams>,
+    is_temporary: bool,
 ) -> databend_common_exception::Result<()> {
-    if options.contains_key(OPT_KEY_S3_STORAGE_CLASS) && storage_params.is_none() {
-        return Err(ErrorCode::TableOptionInvalid(format!(
-            "{OPT_KEY_S3_STORAGE_CLASS} is only supported for tables with an external location"
-        )));
+    if options.contains_key(OPT_KEY_S3_STORAGE_CLASS) {
+        if is_temporary {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "{OPT_KEY_S3_STORAGE_CLASS} is not supported for temporary tables"
+            )));
+        }
+        if storage_params.is_none() {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "{OPT_KEY_S3_STORAGE_CLASS} is only supported for tables with an external location"
+            )));
+        }
     }
     is_valid_option_of_type::<S3StorageClass>(options, OPT_KEY_S3_STORAGE_CLASS)
 }
@@ -574,13 +582,18 @@ mod tests {
 
     #[test]
     fn test_s3_storage_class_requires_external_location() {
-        for (value, external, valid) in [
-            (None, false, true),
-            (Some("standard"), false, false),
-            (Some("intelligent_tiering"), false, false),
-            (Some("standard"), true, true),
-            (Some("intelligent_tiering"), true, true),
-            (Some("glacier"), true, false),
+        for (value, external, temporary, valid) in [
+            (None, false, false, true),
+            (None, false, true, true),
+            (None, true, true, true),
+            (Some("standard"), false, false, false),
+            (Some("intelligent_tiering"), false, false, false),
+            (Some("standard"), true, false, true),
+            (Some("intelligent_tiering"), true, false, true),
+            (Some("glacier"), true, false, false),
+            (Some("standard"), false, true, false),
+            (Some("standard"), true, true, false),
+            (Some("intelligent_tiering"), true, true, false),
         ] {
             let options: BTreeMap<_, _> = value
                 .into_iter()
@@ -588,9 +601,9 @@ mod tests {
                 .collect();
             let storage = external.then_some(StorageParams::Memory);
             assert_eq!(
-                is_valid_s3_storage_class(&options, storage.as_ref()).is_ok(),
+                is_valid_s3_storage_class(&options, storage.as_ref(), temporary).is_ok(),
                 valid,
-                "value={value:?}, external={external}"
+                "value={value:?}, external={external}, temporary={temporary}"
             );
         }
     }

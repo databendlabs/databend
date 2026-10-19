@@ -211,6 +211,7 @@ impl Interpreter for SetOptionsInterpreter {
             is_valid_s3_storage_class(
                 &self.plan.set_options,
                 table.get_table_info().meta.storage_params.as_ref(),
+                table.is_temp(),
             )?;
 
             if let Some(mode) = self.plan.set_options.get(OPT_KEY_WRITE_DISTRIBUTION_MODE) {
