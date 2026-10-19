@@ -47,6 +47,12 @@ pub struct VirtualColumnInfo {
     /// If the virtual columns are not generated,
     /// we can read data from source column to generate them.
     pub source_column_ids: HashSet<u32>,
+    /// Source column ids that may be skipped when all virtual columns derived
+    /// from them are served by the virtual column file. Source columns that the
+    /// scan outputs or uses in prewhere are excluded, since their own values
+    /// are required.
+    #[serde(default)]
+    pub ignorable_source_column_ids: HashSet<u32>,
     /// The virtual column fields info.
     pub virtual_column_fields: Vec<VirtualColumnField>,
 }

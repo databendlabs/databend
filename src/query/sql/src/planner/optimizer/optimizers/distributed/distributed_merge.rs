@@ -20,8 +20,8 @@ use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::PExpr;
 use crate::plans::Exchange;
 use crate::plans::Join;
+use crate::plans::PhysicalRelOperator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 pub struct BroadcastToShuffleOptimizer {
     pub matcher: Matcher,
 }
@@ -37,7 +37,7 @@ impl BroadcastToShuffleOptimizer {
         let right = s_expr.child(1)?;
         Ok(matches!(
             right.plan(),
-            RelOperator::Exchange(Exchange::Broadcast)
+            PhysicalRelOperator::Exchange(Exchange::Broadcast)
         ))
     }
 
@@ -59,19 +59,19 @@ impl BroadcastToShuffleOptimizer {
 
         let new_join_children = vec![
             Arc::new(PExpr::create_unary(
-                Arc::new(RelOperator::Exchange(Exchange::NodeToNodeHash(
+                Arc::new(PhysicalRelOperator::Exchange(Exchange::NodeToNodeHash(
                     left_conditions,
                 ))),
                 Arc::new(left_exchange_input.clone()),
             )),
             Arc::new(PExpr::create_unary(
-                Arc::new(RelOperator::Exchange(Exchange::NodeToNodeHash(
+                Arc::new(PhysicalRelOperator::Exchange(Exchange::NodeToNodeHash(
                     right_conditions,
                 ))),
                 Arc::new(right_exchange_input.clone()),
             )),
         ];
-        let mut join_s_expr = s_expr.replace_plan(Arc::new(RelOperator::Join(join)));
+        let mut join_s_expr = s_expr.replace_plan(Arc::new(PhysicalRelOperator::Join(join)));
         join_s_expr = join_s_expr.replace_children(new_join_children);
         Ok(join_s_expr)
     }

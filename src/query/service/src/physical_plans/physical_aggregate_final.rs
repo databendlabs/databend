@@ -34,6 +34,7 @@ use databend_common_sql::plans::Aggregate;
 use databend_common_sql::plans::AggregateMode;
 use databend_common_sql::plans::ConstantTableScan;
 use databend_common_sql::plans::GroupingSets;
+use databend_common_sql::plans::PhysicalAggregate;
 use databend_common_sql::plans::ScalarItem;
 use itertools::Itertools;
 
@@ -212,10 +213,12 @@ impl PhysicalPlanBuilder {
     pub async fn build_aggregate(
         &mut self,
         s_expr: &PExpr,
-        agg: &Aggregate,
+        physical: &PhysicalAggregate,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
+        let mode = physical.mode;
+        let agg = &physical.aggregate;
         // 1. Prune unused Columns.
         let mut used = vec![];
         for item in &agg.aggregate_functions {
@@ -244,7 +247,6 @@ impl PhysicalPlanBuilder {
             group_items: agg.group_items.clone(),
             aggregate_functions: used,
             from_distinct: agg.from_distinct,
-            mode: agg.mode,
             rank_limit: agg.rank_limit.clone(),
             grouping_sets: agg.grouping_sets.clone(),
         };
@@ -254,7 +256,7 @@ impl PhysicalPlanBuilder {
         let input_schema = input.output_schema()?;
         let group_items = agg.group_items.iter().map(|v| v.index).collect::<Vec<_>>();
 
-        let result: PhysicalPlan = match &agg.mode {
+        let result: PhysicalPlan = match mode {
             AggregateMode::Partial => {
                 let group_by_display = agg
                     .group_items
@@ -475,9 +477,6 @@ impl PhysicalPlanBuilder {
                         shuffle_mode,
                     })
                 }
-            }
-            AggregateMode::Initial => {
-                return Err(ErrorCode::Internal("Invalid aggregate mode: Initial"));
             }
         };
 

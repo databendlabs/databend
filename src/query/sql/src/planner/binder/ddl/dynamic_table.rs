@@ -84,8 +84,6 @@ impl Binder {
                 )?;
             }
 
-            Self::inherit_database_storage_class(&mut options, db.options());
-
             let config = GlobalConfig::instance();
             let is_blocking_fs = matches!(&config.storage.params, StorageParams::Fs(_));
             // we should persist the storage format and compression type instead of using the default value

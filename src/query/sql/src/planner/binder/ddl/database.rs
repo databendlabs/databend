@@ -601,7 +601,7 @@ impl Binder {
         Ok(())
     }
 
-    /// Copy the database default at creation time, without replacing an explicit table option.
+    /// Copy the database default when creating an external table, without replacing its option.
     /// Later changes to the database default do not affect existing tables.
     pub(in crate::planner::binder) fn inherit_database_storage_class(
         options: &mut BTreeMap<String, String>,

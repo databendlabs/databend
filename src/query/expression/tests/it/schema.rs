@@ -19,6 +19,8 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use databend_common_expression::ColumnId;
+use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -278,6 +280,51 @@ fn test_schema_from_simple_type() -> anyhow::Result<()> {
         schema.to_leaf_column_ids()
     );
 
+    Ok(())
+}
+
+#[test]
+fn test_internal_column_ids_do_not_overflow() -> anyhow::Result<()> {
+    let row_id = TableField::new_from_column_id(
+        ROW_ID_COL_NAME,
+        TableDataType::Number(NumberDataType::UInt64),
+        ROW_ID_COLUMN_ID,
+    );
+    assert_eq!(row_id.column_ids(), vec![ROW_ID_COLUMN_ID]);
+    assert_eq!(row_id.leaf_column_ids(), vec![ROW_ID_COLUMN_ID]);
+
+    let mut next_column_id = ROW_ID_COLUMN_ID;
+    let field = row_id.build_column_id(&mut next_column_id);
+    assert_eq!(field.column_id(), ROW_ID_COLUMN_ID);
+    assert_eq!(next_column_id, ROW_ID_COLUMN_ID);
+
+    let mut schema = TableSchema::new(vec![TableField::new("a", TableDataType::Boolean)]);
+    schema.add_internal_field(
+        ROW_ID_COL_NAME,
+        row_id.data_type().clone(),
+        ROW_ID_COLUMN_ID,
+    );
+    assert_eq!(schema.next_column_id(), 1);
+    assert!(!schema.is_column_deleted(ROW_ID_COLUMN_ID));
+    // A missing ID makes the lookup walk past the internal column.
+    assert!(schema.is_column_deleted(1));
+
+    schema.add_columns(&[TableField::new("b", TableDataType::String)])?;
+    assert_eq!(schema.column_id_of("b")?, 1);
+    assert_eq!(schema.next_column_id(), 2);
+    assert!(!schema.is_column_deleted(1));
+    assert_eq!(schema.leaf_fields().len(), 2);
+
+    let defaults = [
+        Scalar::Boolean(true),
+        Scalar::Null,
+        Scalar::String("value".to_string()),
+    ];
+    let leaf_defaults = schema.field_leaf_default_values(&defaults);
+    assert_eq!(leaf_defaults.len(), 2);
+    assert_eq!(leaf_defaults.get(&0), Some(&defaults[0]));
+    assert_eq!(leaf_defaults.get(&1), Some(&defaults[2]));
+    assert!(!leaf_defaults.contains_key(&ROW_ID_COLUMN_ID));
     Ok(())
 }
 

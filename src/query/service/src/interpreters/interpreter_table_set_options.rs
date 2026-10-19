@@ -26,7 +26,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
-use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_sql::plans::MaintenanceTarget;
 use databend_common_sql::plans::SetOptionsPlan;
 use databend_common_storages_factory::Table;
@@ -54,7 +53,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
-use databend_storages_common_table_meta::table::OPT_KEY_S3_STORAGE_CLASS;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
@@ -86,6 +84,7 @@ use crate::interpreters::common::table_option_validation::is_valid_fuse_virtual_
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
+use crate::interpreters::common::table_option_validation::is_valid_s3_storage_class;
 use crate::interpreters::common::table_option_validation::is_valid_virtual_column_layout_options;
 use crate::interpreters::hook::analyze_hook::execute_analyze;
 use crate::interpreters::interpreter_table_add_column::update_table_meta;
@@ -121,10 +120,6 @@ impl Interpreter for SetOptionsInterpreter {
         Box::pin(async move {
             // valid_options_check and do request to meta_srv
             let mut options_map = HashMap::new();
-            is_valid_option_of_type::<S3StorageClass>(
-                &self.plan.set_options,
-                OPT_KEY_S3_STORAGE_CLASS,
-            )?;
             // check block_per_segment
             is_valid_block_per_segment(&self.plan.set_options)?;
             // check row_per_block
@@ -213,6 +208,10 @@ impl Interpreter for SetOptionsInterpreter {
                 .get_table(&self.ctx.get_tenant(), database, table_name)
                 .await?;
             check_maintenance_target(table.as_ref(), &self.plan.target)?;
+            is_valid_s3_storage_class(
+                &self.plan.set_options,
+                table.get_table_info().meta.storage_params.as_ref(),
+            )?;
 
             if let Some(mode) = self.plan.set_options.get(OPT_KEY_WRITE_DISTRIBUTION_MODE) {
                 let mode = mode.parse::<WriteDistributionMode>()?;

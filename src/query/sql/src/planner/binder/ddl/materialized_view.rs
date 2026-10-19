@@ -685,7 +685,6 @@ impl Binder {
                 value.clone(),
             )?;
         }
-        Self::inherit_database_storage_class(&mut options, target_database.options());
         if let Some(compression) = options.get(OPT_KEY_TABLE_COMPRESSION) {
             let _: TableCompression = compression.as_str().try_into()?;
         }

@@ -108,7 +108,7 @@ mod real_s3 {
         observed: &Mutex<Option<String>>,
         paths: impl IntoIterator<Item = &'a String>,
         expected: &str,
-    ) -> anyhow::Result<usize> {
+    ) -> anyhow::Result<()> {
         let mut count = 0;
         for path in paths {
             *observed.lock().unwrap() = None;
@@ -128,7 +128,7 @@ mod real_s3 {
             count += 1;
         }
         anyhow::ensure!(count > 0, "no objects checked");
-        Ok(count)
+        Ok(())
     }
 
     async fn check_data(
@@ -161,13 +161,19 @@ mod real_s3 {
         // Local filesystem regression for the same session setup as the AWS test.
         let fixture = setup_sql_fixture(EESetup::new()).await?;
         for sql in [
-            "CREATE DATABASE storage_class",
-            "SET s3_storage_class = 'intelligent_tiering'",
-            "CREATE TEMPORARY TABLE storage_class.temp(id INT) S3_STORAGE_CLASS = 'intelligent_tiering'",
+            "CREATE DATABASE storage_class OPTIONS(DEFAULT_S3_STORAGE_CLASS = 'intelligent_tiering')",
+            "SET experimental_s3_storage_class = 'intelligent_tiering'",
+            "CREATE TEMPORARY TABLE storage_class.temp(id INT)",
             "INSERT INTO storage_class.temp VALUES (13)",
         ] {
             fixture.execute_command(sql).await?;
         }
+        let error = fixture.execute_command("CREATE TEMPORARY TABLE storage_class.invalid(id INT) S3_STORAGE_CLASS = 'standard'")
+            .await.expect_err("internal temporary tables must reject a storage class");
+        anyhow::ensure!(
+            error.code() == databend_common_exception::ErrorCode::TABLE_OPTION_INVALID,
+            "unexpected CREATE error: {error}"
+        );
         check_data(&fixture, "temp", &[13]).await?;
         anyhow::ensure!(
             table_objects(&fixture, "temp").await?.len() == 3,
@@ -191,38 +197,27 @@ mod real_s3 {
         setup.config_mut().storage.params = StorageParams::S3(storage.clone());
         setup.config_mut().storage.allow_insecure = false;
         let fixture = setup_sql_fixture(setup).await?;
+        // Users cannot move operator-owned internal objects into Intelligent-Tiering.
         for sql in [
-            // Keep original objects intact when checking that ALTER is not retroactive.
-            "SET auto_compaction_imperfect_blocks_threshold = 0",
             "CREATE DATABASE storage_class OPTIONS(DEFAULT_S3_STORAGE_CLASS = 'intelligent_tiering')",
-            "SET s3_storage_class = 'standard'",
-            "CREATE TABLE storage_class.inherited(id INT)",
-            "INSERT INTO storage_class.inherited VALUES (1)",
+            "SET experimental_s3_storage_class = 'intelligent_tiering'",
+            "CREATE TABLE storage_class.internal(id INT)",
+            "INSERT INTO storage_class.internal VALUES (1)",
         ] {
             fixture.execute_command(sql).await?;
         }
-        let before = table_objects(&fixture, "inherited").await?;
-        check_objects(operator, observed, &before, "INTELLIGENT_TIERING").await?;
-        check_data(&fixture, "inherited", &[1]).await?;
+        check_objects(
+            operator,
+            observed,
+            &table_objects(&fixture, "internal").await?,
+            "STANDARD",
+        )
+        .await?;
+        check_data(&fixture, "internal", &[1]).await?;
 
-        // Table STANDARD overrides both database and session defaults for new objects.
+        // Internal temporary tables cannot inherit the database option either.
         for sql in [
-            "SET s3_storage_class = 'intelligent_tiering'",
-            "ALTER TABLE storage_class.inherited SET OPTIONS(S3_STORAGE_CLASS = 'standard')",
-            "INSERT INTO storage_class.inherited VALUES (3)",
-        ] {
-            fixture.execute_command(sql).await?;
-        }
-        let after = table_objects(&fixture, "inherited").await?;
-        let count =
-            check_objects(operator, observed, after.difference(&before), "STANDARD").await?;
-        anyhow::ensure!(count == 3, "expected new snapshot, segment and block");
-        check_objects(operator, observed, &before, "INTELLIGENT_TIERING").await?;
-        check_data(&fixture, "inherited", &[1, 3]).await?;
-
-        // Temporary tables force STANDARD even with an explicit INTELLIGENT_TIERING.
-        for sql in [
-            "CREATE TEMPORARY TABLE storage_class.temp(id INT) S3_STORAGE_CLASS = 'intelligent_tiering'",
+            "CREATE TEMPORARY TABLE storage_class.temp(id INT)",
             "INSERT INTO storage_class.temp VALUES (13)",
         ] {
             fixture.execute_command(sql).await?;
@@ -246,36 +241,46 @@ mod real_s3 {
             format!("{}/external/", external_storage.root.trim_end_matches('/'));
         let ctx = fixture.new_query_ctx().await?;
         let table = ctx
-            .get_table("default", "storage_class", "inherited")
+            .get_table("default", "storage_class", "internal")
             .await?;
         let mut info = table.get_table_info().clone();
-        info.meta.storage_params = Some(StorageParams::S3(external_storage));
-        info.meta.options.insert(
-            OPT_KEY_S3_STORAGE_CLASS.to_owned(),
-            "intelligent_tiering".to_owned(),
-        );
-        let external = FuseTable::create_storage_operator(&info, Some(S3StorageClass::Standard))?;
-        external
-            .write("storage-class-probe", "external data")
-            .await?;
         anyhow::ensure!(
-            external.read("storage-class-probe").await?.to_vec() == b"external data",
-            "external operator data readback mismatch"
+            !info.options().contains_key(OPT_KEY_S3_STORAGE_CLASS),
+            "internal table inherited a database storage class"
         );
-        check_objects(
-            operator,
-            observed,
-            &["external/storage-class-probe".to_owned()],
-            "INTELLIGENT_TIERING",
-        )
-        .await?;
+        info.meta.storage_params = Some(StorageParams::S3(external_storage));
+        for (key, value, session, expected) in [
+            (
+                "tiered",
+                "intelligent_tiering",
+                S3StorageClass::Standard,
+                "INTELLIGENT_TIERING",
+            ),
+            (
+                "standard",
+                "standard",
+                S3StorageClass::IntelligentTiering,
+                "STANDARD",
+            ),
+        ] {
+            info.meta
+                .options
+                .insert(OPT_KEY_S3_STORAGE_CLASS.to_owned(), value.to_owned());
+            let external = FuseTable::create_storage_operator(&info, Some(session))?;
+            external.write(key, "external data").await?;
+            anyhow::ensure!(
+                external.read(key).await?.to_vec() == b"external data",
+                "external operator data readback mismatch"
+            );
+            check_objects(operator, observed, &[format!("external/{key}")], expected).await?;
+        }
         fixture
             .execute_command("DROP DATABASE storage_class")
             .await?;
         Ok(())
     }
 
-    /// SQL -> FUSE -> real AWS S3, plus an external-operator probe.
+    /// Internal SQL writes ignore user classes; external operators honor table overrides.
     /// Requires DATABEND_TEST_S3_BUCKET/REGION, optional DATABEND_TEST_S3_ROOT,
     /// and runner credentials with list/get/put/delete access to the test prefix.
     /// Run: cargo test -p databend-enterprise-query --lib real_s3::storage_class_sql_roundtrip -- --ignored

@@ -90,6 +90,7 @@ impl SyncSystemTable for CachesTable {
             cache_manager.get_inverted_index_full_payload_cache();
         let vector_index_meta_cache = cache_manager.get_vector_index_meta_cache();
         let vector_index_file_cache = cache_manager.get_vector_index_file_cache();
+        let vector_index_cache = cache_manager.get_vector_index_cache();
         let spatial_index_meta_cache = cache_manager.get_spatial_index_meta_cache();
         let spatial_index_file_cache = cache_manager.get_spatial_index_file_cache();
         let virtual_column_meta_cache = cache_manager.get_virtual_column_meta_cache();
@@ -184,6 +185,15 @@ impl SyncSystemTable for CachesTable {
             Self::append_rows_of_hybrid_cache(&vector_index_file_cache, &local_node, &mut columns);
         }
 
+        if let Some(vector_index_cache) = vector_index_cache {
+            Self::append_memory_cache_row(
+                &vector_index_cache,
+                Unit::Bytes,
+                &local_node,
+                &mut columns,
+            );
+        }
+
         if let Some(spatial_index_meta_cache) = spatial_index_meta_cache {
             Self::append_rows_of_hybrid_cache(&spatial_index_meta_cache, &local_node, &mut columns);
         }
@@ -264,18 +274,27 @@ impl CachesTable {
         local_node: &str,
         columns: &mut CachesTableColumns,
     ) {
+        Self::append_memory_cache_row(cache, cache.unit(), local_node, columns);
+    }
+
+    fn append_memory_cache_row(
+        cache: &impl CacheAccessor,
+        unit: Unit,
+        local_node: &str,
+        columns: &mut CachesTableColumns,
+    ) {
         columns.nodes.push(local_node.to_string());
         columns.names.push(cache.name().to_string());
         columns.num_items.push(cache.len() as u64);
         columns.size.push(cache.bytes_size());
 
-        match cache.unit() {
+        match unit {
             Unit::Bytes => {
-                columns.unit.push(cache.unit().to_string());
+                columns.unit.push(unit.to_string());
                 columns.capacity.push(cache.bytes_capacity());
             }
             Unit::Count => {
-                columns.unit.push(cache.unit().to_string());
+                columns.unit.push(unit.to_string());
                 columns.capacity.push(cache.items_capacity());
             }
         }

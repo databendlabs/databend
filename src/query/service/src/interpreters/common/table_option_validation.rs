@@ -23,6 +23,8 @@ use databend_common_ast::ast::Engine;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
+use databend_common_meta_app::storage::S3StorageClass;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_settings::Settings;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
@@ -462,6 +464,19 @@ pub fn is_valid_random_seed(
     is_valid_option_of_type::<u64>(options, OPT_KEY_RANDOM_SEED)
 }
 
+/// User-selected storage classes must not affect the operator-owned internal bucket.
+pub fn is_valid_s3_storage_class(
+    options: &BTreeMap<String, String>,
+    storage_params: Option<&StorageParams>,
+) -> databend_common_exception::Result<()> {
+    if options.contains_key(OPT_KEY_S3_STORAGE_CLASS) && storage_params.is_none() {
+        return Err(ErrorCode::TableOptionInvalid(format!(
+            "{OPT_KEY_S3_STORAGE_CLASS} is only supported for tables with an external location"
+        )));
+    }
+    is_valid_option_of_type::<S3StorageClass>(options, OPT_KEY_S3_STORAGE_CLASS)
+}
+
 pub fn is_valid_option_of_type<T: FromStr>(
     options: &BTreeMap<String, String>,
     option_name: &str,
@@ -546,4 +561,37 @@ fn is_valid_bool_opt(
         value.parse::<bool>()?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use databend_common_meta_app::storage::StorageParams;
+    use databend_storages_common_table_meta::table::OPT_KEY_S3_STORAGE_CLASS;
+
+    use super::is_valid_s3_storage_class;
+
+    #[test]
+    fn test_s3_storage_class_requires_external_location() {
+        for (value, external, valid) in [
+            (None, false, true),
+            (Some("standard"), false, false),
+            (Some("intelligent_tiering"), false, false),
+            (Some("standard"), true, true),
+            (Some("intelligent_tiering"), true, true),
+            (Some("glacier"), true, false),
+        ] {
+            let options: BTreeMap<_, _> = value
+                .into_iter()
+                .map(|value| (OPT_KEY_S3_STORAGE_CLASS.to_owned(), value.to_owned()))
+                .collect();
+            let storage = external.then_some(StorageParams::Memory);
+            assert_eq!(
+                is_valid_s3_storage_class(&options, storage.as_ref()).is_ok(),
+                valid,
+                "value={value:?}, external={external}"
+            );
+        }
+    }
 }

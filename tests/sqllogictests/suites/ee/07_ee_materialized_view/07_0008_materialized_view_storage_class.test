@@ -12,6 +12,8 @@
 ## See the License for the specific language governing permissions and
 ## limitations under the License.
 
+# Materialized views currently use internal storage. They must not inherit the
+# database's storage-class default or accept an explicit user class.
 statement ok
 CREATE OR REPLACE DATABASE test_mv_storage_class OPTIONS(DEFAULT_S3_STORAGE_CLASS = 'INTELLIGENT_TIERING')
 
@@ -19,24 +21,16 @@ statement ok
 USE test_mv_storage_class
 
 statement ok
-CREATE TABLE source(id INT) S3_STORAGE_CLASS = 'STANDARD'
+CREATE TABLE source(id INT)
 
 statement ok
 INSERT INTO source VALUES (1)
 
-# The inherited INTELLIGENT_TIERING view stays metadata-only for MinIO compatibility.
 statement ok
 CREATE MATERIALIZED VIEW inherited_mv AS SELECT id FROM source
 
-statement ok
-CREATE MATERIALIZED VIEW explicit_mv S3_STORAGE_CLASS = 'STANDARD' AS SELECT id FROM source
-
-query TBB rowsort
-SELECT name, table_option LIKE '%S3_STORAGE_CLASS=''INTELLIGENT_TIERING''%', table_option LIKE '%S3_STORAGE_CLASS=''STANDARD''%'
-FROM system.tables WHERE database = 'test_mv_storage_class' AND engine = 'MATERIALIZED_VIEW'
-----
-explicit_mv 0 1
-inherited_mv 1 0
+statement error 1301
+CREATE MATERIALIZED VIEW invalid_mv S3_STORAGE_CLASS = 'STANDARD' AS SELECT id FROM source
 
 statement ok
 ALTER DATABASE test_mv_storage_class SET OPTIONS(DEFAULT_S3_STORAGE_CLASS = 'STANDARD')
@@ -44,27 +38,16 @@ ALTER DATABASE test_mv_storage_class SET OPTIONS(DEFAULT_S3_STORAGE_CLASS = 'STA
 statement ok
 CREATE MATERIALIZED VIEW after_alter_mv AS SELECT id FROM source
 
-query TBB rowsort
-SELECT name, table_option LIKE '%S3_STORAGE_CLASS=''INTELLIGENT_TIERING''%', table_option LIKE '%S3_STORAGE_CLASS=''STANDARD''%'
-FROM system.tables WHERE database = 'test_mv_storage_class' AND engine = 'MATERIALIZED_VIEW'
+query TB rowsort
+SELECT name, table_option LIKE '%S3_STORAGE_CLASS=%'
+FROM system.tables WHERE database = 'test_mv_storage_class'
 ----
-after_alter_mv 0 1
-explicit_mv 0 1
-inherited_mv 1 0
+after_alter_mv 0
+inherited_mv 0
+source 0
 
 statement ok
-SET s3_storage_class = 'intelligent_tiering'
-
-statement ok
-REFRESH MATERIALIZED VIEW explicit_mv
-
-query I
-SELECT id FROM explicit_mv
-----
-1
-
-statement ok
-ALTER MATERIALIZED VIEW inherited_mv SET OPTIONS(s3_storage_class = 'STANDARD')
+SET experimental_s3_storage_class = 'intelligent_tiering'
 
 statement ok
 REFRESH MATERIALIZED VIEW inherited_mv
@@ -74,20 +57,14 @@ SELECT id FROM inherited_mv
 ----
 1
 
-statement ok
-UNSET s3_storage_class
+statement error 1301
+ALTER MATERIALIZED VIEW inherited_mv SET OPTIONS(s3_storage_class = 'STANDARD')
 
 statement ok
 ALTER MATERIALIZED VIEW inherited_mv UNSET OPTIONS(s3_storage_class)
 
-query B
-SELECT table_option LIKE '%S3_STORAGE_CLASS=%'
-FROM system.tables WHERE database = 'test_mv_storage_class' AND name = 'inherited_mv'
-----
-0
-
-statement error 1301
-ALTER MATERIALIZED VIEW explicit_mv SET OPTIONS(s3_storage_class = 'glacier')
+statement ok
+UNSET experimental_s3_storage_class
 
 statement ok
 DROP DATABASE test_mv_storage_class

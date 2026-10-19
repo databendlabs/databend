@@ -17,8 +17,11 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::sync::Arc;
 
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataBlock;
 use databend_common_expression::Domain;
+use databend_common_expression::Evaluator;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionDomain;
@@ -38,16 +41,22 @@ use databend_common_expression::expr::Expr;
 use databend_common_expression::expr::FunctionCall;
 use databend_common_expression::scalar_evaluator;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalScalar;
+use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::F32;
+use databend_common_expression::types::F64;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberDomain;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::SimpleDomain;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::string::StringDomain;
 use databend_common_expression_test_support::parse_raw_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
+use itertools::Itertools;
 
 fn bool_column(id: usize, display_name: &str) -> Expr<usize> {
     Expr::ColumnRef(ColumnRef {
@@ -453,6 +462,323 @@ fn test_range_constraint_unwraps_only_nullable_constant_cast() {
     assert!(
         RangeConstraint::try_from_expr(&comparison_expr("gte", column, try_cast_constant))
             .is_none()
+    );
+}
+
+fn builtin_call(name: &str, args: &[Expr<usize>]) -> Expr<usize> {
+    databend_common_expression::type_check::check_function(
+        None,
+        name,
+        &[],
+        args,
+        &BUILTIN_FUNCTIONS,
+    )
+    .unwrap()
+}
+
+fn range_comparison(
+    data_type: &DataType,
+    operator: &str,
+    value: &Scalar,
+    flipped: bool,
+) -> Expr<usize> {
+    let column = Expr::ColumnRef(ColumnRef {
+        span: None,
+        id: 0,
+        data_type: data_type.clone(),
+        display_name: "x".to_string(),
+    });
+    let constant = Expr::Constant(Constant {
+        span: None,
+        scalar: value.clone(),
+        data_type: value.as_ref().infer_data_type(),
+    });
+    if flipped {
+        let operator = match operator {
+            "gt" => "lt",
+            "gte" => "lte",
+            "lt" => "gt",
+            "lte" => "gte",
+            operator => operator,
+        };
+        builtin_call(operator, &[constant, column])
+    } else {
+        builtin_call(operator, &[column, constant])
+    }
+}
+
+fn assert_range_fold(
+    conjunction: &str,
+    data_type: &DataType,
+    constraints: &[(&str, Scalar)],
+    candidates: &[Scalar],
+    mutually_exclusive: bool,
+) {
+    let context = FunctionContext::default();
+    // Check exclusions before/after bounds and equalities, and constants on
+    // either side of the comparisons, using actual registered SQL functions.
+    for permutation in constraints.iter().permutations(constraints.len()) {
+        for flipped in [false, true] {
+            let args = permutation
+                .iter()
+                .map(|(operator, value)| range_comparison(data_type, operator, value, flipped))
+                .collect::<Vec<_>>();
+            let expr = if conjunction == "and" {
+                args.into_iter()
+                    .reduce(|left, right| builtin_call("and", &[left, right]))
+                    .unwrap()
+            } else {
+                builtin_call(conjunction, &args)
+            };
+            let folded = fold_with_registry(&expr, &BUILTIN_FUNCTIONS);
+            assert_eq!(
+                folded
+                    .as_constant()
+                    .is_some_and(|constant| constant.scalar == Scalar::Boolean(false)),
+                mutually_exclusive,
+                "{data_type:?}: {} -> {}",
+                expr.sql_display(),
+                folded.sql_display(),
+            );
+            for candidate in candidates {
+                let block = DataBlock::new(
+                    vec![BlockEntry::new_const_column(
+                        data_type.clone(),
+                        candidate.clone(),
+                        1,
+                    )],
+                    1,
+                );
+                let evaluator = Evaluator::new(&block, &context, &BUILTIN_FUNCTIONS);
+                let original = evaluator.run(&expr).unwrap();
+                let optimized = evaluator.run(&folded).unwrap();
+                assert_eq!(
+                    original.convert_to_full_column(expr.data_type(), 1),
+                    optimized.convert_to_full_column(folded.data_type(), 1),
+                    "{} at {candidate:?}",
+                    expr.sql_display(),
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn test_range_constraints_bounds_equality_and_decimals() {
+    let decimal64 = DecimalSize::new_unchecked(9, 2);
+    let decimal128 = DecimalSize::new_unchecked(25, 4);
+    let decimal256 = DecimalSize::new_unchecked(50, 6);
+    let values = [0, 5, 10];
+    let scalar_sets = [
+        values.map(|value| Scalar::Number(NumberScalar::UInt64(value))),
+        values.map(|value| Scalar::Decimal(DecimalScalar::Decimal64(value as i64, decimal64))),
+        values.map(|value| Scalar::Decimal(DecimalScalar::Decimal128(value as i128, decimal128))),
+        values.map(|value| {
+            Scalar::Decimal(DecimalScalar::Decimal256(
+                i256::from(value as i64),
+                decimal256,
+            ))
+        }),
+    ];
+    // Values are indices into each typed scalar set: 1 = 5, 2 = 10.
+    let cases: &[(&[(&str, usize)], bool)] = &[
+        (&[("gte", 1), ("lte", 1)], false),
+        (&[("gt", 1), ("lte", 1)], true),
+        (&[("gte", 1), ("lt", 1)], true),
+        (&[("gt", 1), ("lt", 1)], true),
+        (&[("gte", 2), ("lte", 1)], true),
+        (&[("gte", 1), ("gte", 2), ("lte", 1)], true),
+        (&[("gte", 1), ("gt", 1), ("lte", 1)], true),
+        (&[("lte", 2), ("lt", 2), ("gte", 2)], true),
+        (&[("eq", 1), ("gte", 1), ("lte", 1)], false),
+        (&[("eq", 1), ("gt", 1)], true),
+        (&[("eq", 1), ("lt", 1)], true),
+        (&[("eq", 1), ("gte", 2)], true),
+        (&[("eq", 2), ("lte", 1)], true),
+        (&[("eq", 1), ("eq", 2)], true),
+        (&[("eq", 1), ("eq", 1)], false),
+        (&[("noteq", 1), ("eq", 1)], true),
+        (&[("noteq", 2), ("eq", 1)], false),
+        (&[("noteq", 1), ("gte", 1), ("lte", 1)], true),
+        (&[("noteq", 2), ("gte", 1), ("lte", 1)], false),
+        (&[("noteq", 1), ("gte", 1), ("lte", 2)], false),
+    ];
+    for scalars in scalar_sets {
+        let data_type = scalars[0].as_ref().infer_data_type();
+        for &(case, mutually_exclusive) in cases {
+            let constraints = case
+                .iter()
+                .map(|&(operator, index)| (operator, scalars[index].clone()))
+                .collect::<Vec<_>>();
+            assert_range_fold(
+                "and_filters",
+                &data_type,
+                &constraints,
+                &scalars,
+                mutually_exclusive,
+            );
+            if constraints.len() == 2 {
+                assert_range_fold(
+                    "and",
+                    &data_type,
+                    &constraints,
+                    &scalars,
+                    mutually_exclusive,
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn test_range_constraints_float_nan_infinity_and_signed_zero() {
+    // SQL comparisons use OrderedFloat: NaN equals NaN and sorts above infinity.
+    for scalars in [
+        [f64::NEG_INFINITY, -0.0, 0.0, 5.0, f64::INFINITY, f64::NAN]
+            .map(|value| Scalar::Number(NumberScalar::Float64(F64::from(value)))),
+        [f32::NEG_INFINITY, -0.0, 0.0, 5.0, f32::INFINITY, f32::NAN]
+            .map(|value| Scalar::Number(NumberScalar::Float32(F32::from(value)))),
+    ] {
+        let data_type = scalars[0].as_ref().infer_data_type();
+        let cases: &[(&[(&str, usize)], bool)] = &[
+            (&[("gte", 5), ("lte", 5)], false),
+            (&[("gte", 5), ("lte", 4)], true),
+            (&[("gte", 4), ("lte", 5)], false),
+            (&[("eq", 5), ("eq", 5)], false),
+            (&[("eq", 5), ("eq", 3)], true),
+            // Domain folding removes x <= NaN as always true, so the remaining
+            // lower bound/exclusion do not prove a singleton in this rule.
+            (&[("noteq", 5), ("gte", 5), ("lte", 5)], false),
+            (&[("noteq", 3), ("gte", 5), ("lte", 5)], false),
+            (&[("gt", 0), ("lte", 0)], true),
+            (&[("gte", 4), ("lte", 4)], false),
+            (&[("eq", 1), ("eq", 2)], false),
+            (&[("gte", 1), ("lt", 2)], true),
+            (&[("noteq", 1), ("gte", 2), ("lte", 2)], true),
+        ];
+        for &(case, mutually_exclusive) in cases {
+            let constraints = case
+                .iter()
+                .map(|&(operator, index)| (operator, scalars[index].clone()))
+                .collect::<Vec<_>>();
+            assert_range_fold(
+                "and_filters",
+                &data_type,
+                &constraints,
+                &scalars,
+                mutually_exclusive,
+            );
+        }
+    }
+}
+
+#[test]
+fn test_range_constraints_preserve_nullable_and() {
+    let data_type = DataType::Number(NumberDataType::UInt64).wrap_nullable();
+    let value = Scalar::Number(NumberScalar::UInt64(5));
+    let candidates = [Scalar::Null, value.clone()];
+    for constraints in [vec![("gte", value.clone()), ("lt", value.clone())], vec![
+        ("noteq", value.clone()),
+        ("gte", value.clone()),
+        ("lte", value.clone()),
+    ]] {
+        assert_range_fold("and_filters", &data_type, &constraints, &candidates, true);
+        assert_range_fold("and", &data_type, &constraints, &candidates, false);
+    }
+    let constraints = [("gte", value), ("lte", Scalar::Null)];
+    assert_range_fold("and_filters", &data_type, &constraints, &candidates, true);
+    assert_range_fold("and", &data_type, &constraints, &candidates, false);
+}
+
+#[test]
+fn test_range_constraints_keep_columns_and_types_separate() {
+    // Identical values/bounds on different columns must not be merged.
+    for data_type in [
+        DataType::Number(NumberDataType::UInt64),
+        DataType::Number(NumberDataType::UInt64).wrap_nullable(),
+    ] {
+        let column = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: 1,
+            data_type,
+            display_name: "other".to_string(),
+        });
+        let args = [
+            range_comparison(
+                &DataType::Number(NumberDataType::UInt64),
+                "gte",
+                &Scalar::Number(NumberScalar::UInt64(10)),
+                false,
+            ),
+            builtin_call("lte", &[column, uint_constant(5)]),
+        ];
+        assert!(
+            fold_with_registry(&builtin_call("and_filters", &args), &BUILTIN_FUNCTIONS)
+                .as_constant()
+                .is_none()
+        );
+    }
+
+    // String/number comparison functions use SQL conversion semantics, not
+    // Scalar ordering. In particular, these two equalities are compatible.
+    let columns = [("x", DataType::String)];
+    for text in [
+        "and_filters(eq(x, 1), eq(x, '1'))",
+        "and_filters(eq(x, '1'), eq(x, 1))",
+    ] {
+        let raw = parse_raw_expr(text, &columns, &BUILTIN_FUNCTIONS);
+        let expr = databend_common_expression::type_check::check(&raw, &BUILTIN_FUNCTIONS).unwrap();
+        let folded = fold_with_registry(&expr, &BUILTIN_FUNCTIONS);
+        assert!(folded.as_constant().is_none(), "{text}");
+        let block = DataBlock::new(
+            vec![BlockEntry::new_const_column(
+                DataType::String,
+                Scalar::String("1".to_string()),
+                1,
+            )],
+            1,
+        );
+        let context = FunctionContext::default();
+        let evaluator = Evaluator::new(&block, &context, &BUILTIN_FUNCTIONS);
+        assert_eq!(
+            evaluator.run(&folded).unwrap(),
+            Value::Scalar(Scalar::Boolean(true))
+        );
+    }
+}
+
+#[test]
+fn test_range_constraints_many_conditions() {
+    let data_type = DataType::Number(NumberDataType::UInt64);
+    let args = (0..3000)
+        .map(|value| {
+            range_comparison(
+                &data_type,
+                "noteq",
+                &Scalar::Number(NumberScalar::UInt64(value)),
+                false,
+            )
+        })
+        .collect::<Vec<_>>();
+    let satisfiable = builtin_call("and_filters", &args);
+    assert!(
+        fold_with_registry(&satisfiable, &BUILTIN_FUNCTIONS)
+            .as_constant()
+            .is_none()
+    );
+
+    // The excluded value is encountered well before the final singleton bounds.
+    let value = Scalar::Number(NumberScalar::UInt64(1500));
+    let mut args = args;
+    args.push(range_comparison(&data_type, "gte", &value, false));
+    args.push(range_comparison(&data_type, "lte", &value, false));
+    let contradictory = builtin_call("and_filters", &args);
+    assert_eq!(
+        fold_with_registry(&contradictory, &BUILTIN_FUNCTIONS)
+            .as_constant()
+            .unwrap()
+            .scalar,
+        Scalar::Boolean(false),
     );
 }
 

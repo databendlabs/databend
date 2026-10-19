@@ -1102,7 +1102,7 @@ impl Binder {
                 .await?;
             let db_id = db.get_db_info().database_id.db_id;
             options.insert(OPT_KEY_DATABASE_ID.to_owned(), db_id.to_string());
-            if !matches!(table_type, TableType::Temporary) {
+            if storage_params.is_some() && !matches!(table_type, TableType::Temporary) {
                 Self::inherit_database_storage_class(&mut options, db.options());
             }
 
