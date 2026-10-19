@@ -540,7 +540,12 @@ opentelemetry-otlp = { version = "0.31", default-features = false, features = [
     "grpc-tonic",
     "gzip-tonic",
     "http-proto",
-    "reqwest-client",
+    # otlp drives the log exporter with futures_executor::block_on, outside any tokio
+    # runtime, so the async reqwest client panics there ("no reactor running"). The
+    # blocking client is the combination the sdk documents for logs, and the two
+    # client features are mutually exclusive, so it has to be this one everywhere.
+    "reqwest-blocking-client",
+    "reqwest-rustls",
 ] }
 opentelemetry_sdk = { version = "0.31", features = ["trace", "logs", "rt-tokio"] }
 prometheus-client = "0.22"
