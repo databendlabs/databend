@@ -313,7 +313,12 @@ impl FuseTable {
                 match storage_params {
                     // External or attached table.
                     Some(sp) => {
-                        let sp = apply_storage_class(table_info, sp, storage_class_specs);
+                        let sp = apply_storage_class(
+                            table_info,
+                            sp,
+                            storage_class_specs,
+                            TableStorageKind::External,
+                        );
                         // Special handling for history tables. Since history
                         // table storage params are fully generated from server
                         // config, we both allow the credential chain and treat
@@ -344,6 +349,7 @@ impl FuseTable {
                                 table_info,
                                 default_storage_params,
                                 storage_class_specs,
+                                TableStorageKind::Internal,
                             )
                         };
                         Ok(init_operator(&storage_params)?)
@@ -1679,16 +1685,50 @@ impl Table for FuseTable {
     }
 }
 
+/// Whether a fuse table's data lives in the server-wide default storage
+/// (internal) or in a user-specified location (external / attached).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TableStorageKind {
+    /// Data is stored in the bucket configured by `[storage]` of the server.
+    Internal,
+    /// Data is stored in a location supplied by the user, i.e.
+    /// `CREATE TABLE ... 's3://bucket/path' CONNECTION = (...)`.
+    ///
+    /// Attached tables share this code path since they also carry their own
+    /// storage params, but they are read-only and never write new objects,
+    /// so the storage class is effectively irrelevant for them.
+    External,
+}
+
+/// Resolve the S3 storage class that should be used when writing new objects
+/// for `table_info`.
+///
+/// - Temporary tables always use `STANDARD`: their data rarely lives long
+///   enough to amortize the monitoring fee of `INTELLIGENT_TIERING`.
+/// - Internal tables ignore the user-provided `storage_class_specs` (e.g. the
+///   `experimental_s3_storage_class` session setting) and keep whatever `storage_params`
+///   already carries, i.e. the value from the server `[storage.s3]` config.
+///   The default bucket is owned by the operator of the deployment, so only
+///   the operator should decide its storage class; letting end users flip it
+///   per session could silently add cost to a bucket they do not own.
+/// - External tables honor `storage_class_specs`: the bucket is supplied by
+///   the user, who can judge from their own access patterns whether
+///   `INTELLIGENT_TIERING` pays off.
 fn apply_storage_class(
     table_info: &TableInfo,
     storage_params: StorageParams,
     storage_class_specs: Option<S3StorageClass>,
+    storage_kind: TableStorageKind,
 ) -> StorageParams {
     let mut sp = storage_params;
     if is_temp_table_by_table_info(table_info) {
-        // For temporary tables, always use the standard storage class
         set_s3_storage_class(&mut sp, S3StorageClass::Standard);
-    } else if let Some(s3storage_class) = storage_class_specs {
+        return sp;
+    }
+    if storage_kind == TableStorageKind::Internal {
+        return sp;
+    }
+    if let Some(s3storage_class) = storage_class_specs {
         set_s3_storage_class(&mut sp, s3storage_class);
     }
     sp
@@ -1740,11 +1780,17 @@ mod tests {
     use databend_common_meta_app::schema::TableIdent;
     use databend_common_meta_app::schema::TableInfo;
     use databend_common_meta_app::schema::TableMeta;
+    use databend_common_meta_app::storage::S3StorageClass;
     use databend_common_meta_app::storage::StorageParams;
+    use databend_common_meta_app::storage::StorageS3Config;
+    use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+    use databend_storages_common_table_meta::table_id_ranges::TEMP_TBL_ID_BEGIN;
 
     use super::ApproxDistinctColumns;
     use super::FuseTable;
+    use super::TableStorageKind;
     use super::allow_credential_chain_for_s3;
+    use super::apply_storage_class;
     use super::is_system_history_table;
 
     fn table_info_with_db(db_name: &str) -> TableInfo {
@@ -1785,6 +1831,112 @@ mod tests {
                 "db '{db}' must not be treated as system_history"
             );
         }
+    }
+
+    fn s3_params(storage_class: S3StorageClass) -> StorageParams {
+        StorageParams::S3(StorageS3Config {
+            storage_class,
+            ..Default::default()
+        })
+    }
+
+    fn s3_storage_class_of(sp: &StorageParams) -> S3StorageClass {
+        match sp {
+            StorageParams::S3(cfg) => cfg.storage_class,
+            other => panic!("expected S3 storage params, got {other:?}"),
+        }
+    }
+
+    fn temp_table_info() -> TableInfo {
+        let mut info = table_info_with_db("default");
+        info.ident = TableIdent::new(TEMP_TBL_ID_BEGIN, 0);
+        info.meta
+            .options
+            .insert(OPT_KEY_TEMP_PREFIX.to_string(), "tmp".to_string());
+        info
+    }
+
+    #[test]
+    fn test_apply_storage_class_external_table_honors_specs() {
+        let info = table_info_with_db("default");
+        let sp = apply_storage_class(
+            &info,
+            s3_params(S3StorageClass::Standard),
+            Some(S3StorageClass::IntelligentTiering),
+            TableStorageKind::External,
+        );
+        assert_eq!(s3_storage_class_of(&sp), S3StorageClass::IntelligentTiering);
+
+        // Specs can also downgrade back to STANDARD.
+        let sp = apply_storage_class(
+            &info,
+            s3_params(S3StorageClass::IntelligentTiering),
+            Some(S3StorageClass::Standard),
+            TableStorageKind::External,
+        );
+        assert_eq!(s3_storage_class_of(&sp), S3StorageClass::Standard);
+
+        // Without specs, the table's own params are left untouched.
+        let sp = apply_storage_class(
+            &info,
+            s3_params(S3StorageClass::IntelligentTiering),
+            None,
+            TableStorageKind::External,
+        );
+        assert_eq!(s3_storage_class_of(&sp), S3StorageClass::IntelligentTiering);
+    }
+
+    #[test]
+    fn test_apply_storage_class_internal_table_ignores_specs() {
+        let info = table_info_with_db("default");
+
+        // Session-level specs must not be able to upgrade the default bucket.
+        let sp = apply_storage_class(
+            &info,
+            s3_params(S3StorageClass::Standard),
+            Some(S3StorageClass::IntelligentTiering),
+            TableStorageKind::Internal,
+        );
+        assert_eq!(s3_storage_class_of(&sp), S3StorageClass::Standard);
+
+        // ... nor downgrade what the server config asked for.
+        let sp = apply_storage_class(
+            &info,
+            s3_params(S3StorageClass::IntelligentTiering),
+            Some(S3StorageClass::Standard),
+            TableStorageKind::Internal,
+        );
+        assert_eq!(s3_storage_class_of(&sp), S3StorageClass::IntelligentTiering);
+    }
+
+    #[test]
+    fn test_apply_storage_class_temp_table_always_standard() {
+        let info = temp_table_info();
+        for kind in [TableStorageKind::Internal, TableStorageKind::External] {
+            let sp = apply_storage_class(
+                &info,
+                s3_params(S3StorageClass::IntelligentTiering),
+                Some(S3StorageClass::IntelligentTiering),
+                kind,
+            );
+            assert_eq!(
+                s3_storage_class_of(&sp),
+                S3StorageClass::Standard,
+                "temp table with {kind:?} storage must stay STANDARD"
+            );
+        }
+    }
+
+    #[test]
+    fn test_apply_storage_class_is_noop_for_non_s3() {
+        let info = table_info_with_db("default");
+        let sp = apply_storage_class(
+            &info,
+            StorageParams::Memory,
+            Some(S3StorageClass::IntelligentTiering),
+            TableStorageKind::External,
+        );
+        assert_eq!(sp, StorageParams::Memory);
     }
 
     #[test]
