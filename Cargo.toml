@@ -504,7 +504,6 @@ zstd = "0.13.3"
 # AST needed
 cargo_metadata = "0.19"
 fast-float2 = "0.2.3"
-gix = "0.71.0"
 indent = "0.1.1"
 inventory = "0.3.15"
 logos = "0.12.1"
@@ -515,7 +514,7 @@ rspack-codespan-reporting = "0.11"
 rustc-demangle = "0.1"
 strsim = "0.10"
 strum_macros = "0.24"
-vergen-gix = { version = "1", features = ["build", "cargo", "rustc"] }
+vergen-gitcl = { version = "1.0.8", features = ["build", "cargo", "rustc"] }
 
 # Observability
 env_logger = "0.11"
@@ -577,9 +576,16 @@ databend-query = { codegen-units = 4 }
 databend-binaries = { codegen-units = 4 }
 
 [profile.dev]
+# Full debuginfo roughly doubles codegen and link time of the big crates and adds ~13GB to
+# target/. Line tables keep file:line in backtraces and profilers; for full variable/type info
+# in a debugger, build with `CARGO_PROFILE_DEV_DEBUG=true`. `cargo test` uses [profile.test].
+debug = "line-tables-only"
 split-debuginfo = "unpacked"
 overflow-checks = true
-# Report to https://github.com/rust-lang/rust/issues/100142 if incremental works well
+# Report to https://github.com/rust-lang/rust/issues/100142 if incremental works well.
+# Incremental only pays off for repeated rebuilds. For a from-scratch build (fresh clone, branch
+# switch, CI) use `CARGO_INCREMENTAL=0`: on 24 cores that is 165s instead of 211s and 14GB
+# instead of 24GB of target/.
 incremental = true
 
 [profile.dev.package]
@@ -646,3 +652,11 @@ iceberg-catalog-glue = { path = "../forks/iceberg-rust/crates/catalog/glue" }
 iceberg-catalog-hms = { path = "../forks/iceberg-rust/crates/catalog/hms" }
 iceberg-catalog-rest = { path = "../forks/iceberg-rust/crates/catalog/rest" }
 iceberg-catalog-s3tables = { path = "../forks/iceberg-rust/crates/catalog/s3tables" }
+
+# TODO(local fork): push /workspace/forks/opensrv (branch databend-mysql-common-037) and bump the tag.
+[patch."https://github.com/databendlabs/opensrv.git"]
+opensrv-mysql = { path = "../forks/opensrv/mysql" }
+
+# TODO(local fork): push /workspace/forks/pprof-rs (branch databend-pregen-protobuf) and bump the rev.
+[patch."https://github.com/datafuse-extras/pprof-rs"]
+pprof = { path = "../forks/pprof-rs" }
