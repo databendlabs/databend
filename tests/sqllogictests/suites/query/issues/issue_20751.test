@@ -1,0 +1,58 @@
+# Float DEFAULT values must survive SQL serialization without decimal rounding.
+# Compare values rather than their display so a formatter cannot hide corruption.
+statement ok
+CREATE OR REPLACE TABLE issue_20751 (
+    id INT,
+    d DOUBLE DEFAULT 0.30000000000000004,
+    d_small DOUBLE DEFAULT 1.5e-16,
+    f FLOAT DEFAULT 0.30000004,
+    f_small FLOAT DEFAULT 1.5e-16,
+    folded DOUBLE DEFAULT (CAST('0.1' AS DOUBLE) + CAST('0.2' AS DOUBLE))
+)
+
+# Omitted columns, explicit DEFAULT, and INSERT SELECT all use stored defaults.
+statement ok
+INSERT INTO issue_20751 (id) VALUES (1)
+
+statement ok
+INSERT INTO issue_20751 VALUES (2, DEFAULT, DEFAULT, DEFAULT, DEFAULT, DEFAULT)
+
+statement ok
+INSERT INTO issue_20751 (id) SELECT 3
+
+query ITTTTT
+SELECT id,
+       d = CAST('0.30000000000000004' AS DOUBLE),
+       d_small = CAST('1.5e-16' AS DOUBLE),
+       f = CAST('0.30000004' AS FLOAT),
+       f_small = CAST('1.5e-16' AS FLOAT),
+       folded = CAST('0.30000000000000004' AS DOUBLE)
+FROM issue_20751 ORDER BY id
+----
+1 1 1 1 1 1
+2 1 1 1 1 1
+3 1 1 1 1 1
+
+# Old blocks and newly inserted rows must agree on added-column defaults.
+statement ok
+ALTER TABLE issue_20751 ADD COLUMN added_d DOUBLE DEFAULT 0.30000000000000004
+
+statement ok
+ALTER TABLE issue_20751 ADD COLUMN added_f FLOAT DEFAULT 1.5e-16
+
+statement ok
+INSERT INTO issue_20751 (id) VALUES (4)
+
+query ITT
+SELECT id,
+       added_d = CAST('0.30000000000000004' AS DOUBLE),
+       added_f = CAST('1.5e-16' AS FLOAT)
+FROM issue_20751 ORDER BY id
+----
+1 1 1
+2 1 1
+3 1 1
+4 1 1
+
+statement ok
+DROP TABLE issue_20751

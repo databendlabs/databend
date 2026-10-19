@@ -1039,24 +1039,28 @@ impl<Index: ColumnIndex> Expr<Index> {
             match expr {
                 Expr::Constant(Constant { scalar, .. }) => match scalar {
                     s @ Scalar::Binary(_) => format!("from_hex('{s}')::string"),
-                    Scalar::Number(NumberScalar::Float32(f)) if f.is_nan() => {
-                        "'nan'::Float32".to_string()
-                    }
-                    Scalar::Number(NumberScalar::Float64(f)) if f.is_nan() => {
-                        "'nan'::Float64".to_string()
-                    }
-                    Scalar::Number(NumberScalar::Float32(f)) if f.is_infinite() => {
-                        if *f != f32::NEG_INFINITY {
+                    // SQL text is reparsed (e.g. for DEFAULT values), so floats must
+                    // bypass the precision-limited formatting used for display.
+                    Scalar::Number(NumberScalar::Float32(f)) => {
+                        if f.is_nan() {
+                            "'nan'::Float32".to_string()
+                        } else if *f == f32::INFINITY {
                             "'inf'::Float32".to_string()
-                        } else {
+                        } else if *f == f32::NEG_INFINITY {
                             "'-inf'::Float32".to_string()
+                        } else {
+                            f.to_string()
                         }
                     }
-                    Scalar::Number(NumberScalar::Float64(f)) if f.is_infinite() => {
-                        if *f != f64::NEG_INFINITY {
+                    Scalar::Number(NumberScalar::Float64(f)) => {
+                        if f.is_nan() {
+                            "'nan'::Float64".to_string()
+                        } else if *f == f64::INFINITY {
                             "'inf'::Float64".to_string()
-                        } else {
+                        } else if *f == f64::NEG_INFINITY {
                             "'-inf'::Float64".to_string()
+                        } else {
+                            f.to_string()
                         }
                     }
                     other => other.as_ref().to_string(),
