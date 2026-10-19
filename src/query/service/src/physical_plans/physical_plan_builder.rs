@@ -111,23 +111,9 @@ impl PhysicalPlanBuilder {
         if is_root_build {
             plan = optimize_distributed_fuse_pruning(&plan, &self.distributed_fuse_pruning_scans);
             plan.adjust_plan_id(&mut 0);
-            self.publish_synchronous_pruning_stats(&plan);
         }
 
         Ok(plan)
-    }
-
-    /// Runs once per query, on the coordinator, after plan ids are final.
-    /// Fragments derived from this plan for other nodes carry copies of the
-    /// same statistics, so publishing anywhere later would count them once
-    /// per executor.
-    fn publish_synchronous_pruning_stats(&self, plan: &PhysicalPlan) {
-        let mut stats = Vec::new();
-        plan.collect_planned_pruning_stats(&mut stats);
-
-        for (plan_id, stat) in stats {
-            self.ctx.set_pruned_partitions_stats(plan_id, stat);
-        }
     }
 
     #[async_recursion::async_recursion(#[recursive::recursive])]
@@ -495,6 +481,24 @@ pub struct MutationBuildInfo {
     pub partitions: Partitions,
     pub statistics: PartStatistics,
     pub table_meta_timestamps: TableMetaTimestamps,
+}
+
+/// Publishes the partition statistics a plan already knows before it runs:
+/// everything for eagerly pruned sources, `partitions_total` for lazy ones
+/// (their `partitions_scanned` comes from the prune pipeline on each node).
+///
+/// Call this exactly once per root `PhysicalPlan`, on the node that owns the
+/// query, after plan ids are final. Fragments derived from the plan carry
+/// copies of the same statistics, so a per-fragment or per-node call would
+/// count them once per executor. The callers are the coordinator-side
+/// pipeline entry points (`build_local_pipeline`, `build_distributed_pipeline`)
+/// and plain `EXPLAIN`, which formats the plan without building a pipeline.
+pub fn publish_planned_pruning_stats(ctx: &dyn TableContext, plan: &PhysicalPlan) {
+    let mut stats = Vec::new();
+    plan.collect_planned_pruning_stats(&mut stats);
+    for (plan_id, stat) in stats {
+        ctx.set_pruned_partitions_stats(plan_id, stat);
+    }
 }
 
 #[cfg(test)]

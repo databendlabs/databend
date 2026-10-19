@@ -37,6 +37,13 @@ use databend_common_storage::FaultKind;
 use databend_common_storage::FaultOp;
 use databend_common_storage::FaultRule;
 use databend_query::interpreters::InterpreterFactory;
+use databend_query::physical_plans::PhysicalPlan;
+use databend_query::physical_plans::PhysicalPlanMeta;
+use databend_query::physical_plans::TableScan;
+use databend_query::physical_plans::publish_planned_pruning_stats;
+use databend_query::pipelines::executor::ExecutorSettings;
+use databend_query::pipelines::executor::PipelinePullingExecutor;
+use databend_query::schedulers::build_local_pipeline;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextPartitionStats;
 use databend_query::sessions::TableContextProgress;
@@ -45,6 +52,7 @@ use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::sql::Planner;
 use databend_query::storages::fuse::FuseTable;
+use databend_query::stream::PullingExecutorStream;
 use databend_query::stream::ReadDataBlockStream;
 use databend_query::test_kits::ClusterDescriptor;
 use databend_query::test_kits::TestFixture;
@@ -807,6 +815,92 @@ async fn read_data_block_stream_prunes_lazy_parts() -> Result<()> {
     Ok(())
 }
 
+/// Some code assembles a `TableScan` by hand and runs it through
+/// `build_local_pipeline` without `PhysicalPlanBuilder` (`GET_LINEAGE`'s
+/// `edge_reader.rs` does this). Planned statistics are published by the
+/// pipeline entry points, not the planner, so such scans count too. Covers
+/// an eager and a lazy table in both lazy modes.
+#[tokio::test(flavor = "multi_thread")]
+async fn hand_built_table_scan_publishes_partition_stats() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    // 1 segment -> eager; 2 segments -> lazy once distributed pruning is on
+    for (table_name, segments, scanned_expected) in [("hand_eager", 1, 3), ("hand_lazy", 2, 6)] {
+        fixture
+            .execute_command(&format!(
+                "create table {db}.{table_name} (a int) row_per_block=100 block_per_segment=10"
+            ))
+            .await?;
+        for _ in 0..segments {
+            fixture
+                .execute_command(&format!(
+                    "insert into {db}.{table_name} select number from numbers(300)"
+                ))
+                .await?;
+        }
+        for enable_prune_pipeline in ["1", "0"] {
+            let ctx = fixture.new_query_ctx().await?;
+            ctx.get_settings()
+                .set_setting("enable_distributed_pruning".into(), "1".into())?;
+            ctx.get_settings()
+                .set_setting("enable_prune_pipeline".into(), enable_prune_pipeline.into())?;
+            let table = ctx
+                .get_table(&fixture.default_catalog_name(), &db, table_name)
+                .await?;
+            let source = table
+                .read_plan(ctx.clone(), None, None, false, true)
+                .await?;
+            let is_lazy = source.parts.partitions_type() == PartInfoType::LazyLevel;
+            assert_eq!(
+                is_lazy,
+                segments > 1,
+                "{table_name}: unexpected pruning path"
+            );
+            let name_mapping = source
+                .output_schema
+                .fields()
+                .iter()
+                .map(|f| (f.name().to_string(), f.name().to_string()))
+                .collect();
+            let plan = PhysicalPlan::new(TableScan {
+                meta: PhysicalPlanMeta::new("HandBuiltScan"),
+                scan_id: 0,
+                name_mapping,
+                source: Box::new(source),
+                internal_column: None,
+                table_index: None,
+                stat_info: None,
+            });
+
+            let build_res = build_local_pipeline(&ctx, &plan).await?;
+            let settings = ExecutorSettings::try_create(ctx.clone())?;
+            let executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+            let rows: usize = PullingExecutorStream::create(executor)?
+                .try_collect::<Vec<DataBlock>>()
+                .await?
+                .iter()
+                .map(|b| b.num_rows())
+                .sum();
+            assert_eq!(rows, 300 * segments, "{table_name}: all rows read");
+
+            let stats = ctx.get_partition_stats();
+            let per_plan = ctx.get_pruned_partitions_stats();
+            assert_eq!(
+                (stats.total, stats.scanned),
+                (scanned_expected, scanned_expected),
+                "{table_name}, enable_prune_pipeline = {enable_prune_pipeline}"
+            );
+            assert_eq!(
+                per_plan.keys().copied().collect::<Vec<_>>(),
+                vec![plan.get_id()],
+                "{table_name}: exactly one per-plan entry, under the scan's id"
+            );
+        }
+    }
+    Ok(())
+}
+
 // No single-node test for `explain analyze delete` on a lazy `MutationSource`
 // (`MutationSource::set_pruning_stats`): a `DELETE` is lazy only on a cluster
 // with `segments >= nodes`, or on a column-oriented table — and the latter
@@ -1007,6 +1101,10 @@ async fn init_query_fragments_counts_preparation_reads() -> Result<()> {
         mutation.metadata.clone(),
     )?;
     let physical_plan = interpreter.build_physical_plan(&mutation, false).await?;
+    // The coordinator publishes the planned statistics (the whole-table
+    // `partitions_total` for this lazy source) when it enters pipeline
+    // building; `init_query_fragments` below is the worker side and must not.
+    publish_planned_pruning_stats(ctx.as_ref(), &physical_plan);
     assert_eq!(
         ctx.get_io_stats().read_bytes,
         0,
@@ -1055,7 +1153,7 @@ async fn init_query_fragments_counts_preparation_reads() -> Result<()> {
     assert_eq!(io_stats.write_bytes, 0, "nothing executed yet");
 
     // `partitions_total` is the whole-table block count, published once by
-    // `build_physical_plan` above on the coordinator. The lazy pruning
+    // `publish_planned_pruning_stats` above on the coordinator. The lazy pruning
     // publishes only what this node scanned under the same plan id: the two
     // segments are reshuffled across the two nodes, so one segment of one
     // block; `b like '%99%'` cannot be range-pruned. A whole-table total
