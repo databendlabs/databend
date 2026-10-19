@@ -94,6 +94,15 @@ impl HNSWIndex {
         })
     }
 
+    /// Memory retained by this index, including the maximum retained visited-list pool.
+    /// Reserving the pool up front keeps cache accounting stable as searches reuse it.
+    pub fn memory_size(&self) -> usize {
+        std::mem::size_of::<Self>() + self.graph_layers.memory_size()
+            - std::mem::size_of::<GraphLayers>()
+            + self.encoded_vectors.memory_size()
+            - std::mem::size_of::<EncodedVectorsU8<Vec<u8>>>()
+    }
+
     pub fn search(&self, limit: usize, query_values: &[f32]) -> Result<Vec<ScoredPointOffset>> {
         let query_encode = self.encoded_vectors.encode_query(query_values);
 

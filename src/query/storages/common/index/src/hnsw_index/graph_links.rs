@@ -79,6 +79,15 @@ impl GraphLinks {
         Self::try_new(data.to_vec(), |x| GraphLinksView::load(x, format))
     }
 
+    pub(crate) fn memory_size(&self) -> usize {
+        // self_cell allocates the owner and its dependent view together on the heap.
+        std::mem::size_of::<Self>()
+            + std::mem::size_of::<Vec<u8>>()
+            + std::mem::size_of::<GraphLinksView<'_>>()
+            + self.borrow_owner().capacity()
+            + self.view().level_offsets.capacity() * std::mem::size_of::<u64>()
+    }
+
     fn view(&self) -> &GraphLinksView<'_> {
         self.borrow_dependent()
     }
