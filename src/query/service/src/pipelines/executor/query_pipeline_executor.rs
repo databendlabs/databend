@@ -422,7 +422,8 @@ impl QueryPipelineExecutor {
                 let this_clone = this.clone();
                 let try_result = catch_unwind(|| this_clone.execute_single_thread(thread_num));
 
-                // finish the pipeline executor when has error or panic
+                // Save the original error before interrupting other processors. Workers must
+                // not interrupt the graph first, or a secondary abort can win finished_error.
                 if let Err(cause) = try_result.flatten() {
                     span.with_property(|| ("error", "true")).add_properties(|| {
                         [
@@ -477,7 +478,6 @@ impl QueryPipelineExecutor {
                                             executed_pid,
                                             NodeErrorType::ScheduleEventError(cause.clone()),
                                         );
-                                        graph.should_finish(Err(cause.clone()))?;
                                         return Err(cause);
                                     }
                                 }
@@ -487,7 +487,6 @@ impl QueryPipelineExecutor {
                             let cause = error_type.get_error_code();
                             if let Some((graph, node_index)) = task_info {
                                 graph.record_node_error(node_index, *error_type);
-                                graph.should_finish(Err(cause.clone()))?;
                             }
                             return Err(cause);
                         }
@@ -538,6 +537,116 @@ impl Drop for QueryPipelineExecutor {
         let info = ExecutionInfo::create(Err(cause), profiling);
         if let Err(cause) = on_finished_chain.apply(info) {
             warn!("Shutdown failure: {:?}", cause);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::any::Any;
+    use std::sync::Arc;
+
+    use databend_common_base::runtime::Thread;
+    use databend_common_base::runtime::ThreadTracker;
+    use databend_common_exception::ErrorCode;
+    use databend_common_exception::Result;
+    use databend_common_pipeline::core::Event;
+    use databend_common_pipeline::core::Pipe;
+    use databend_common_pipeline::core::PipeItem;
+    use databend_common_pipeline::core::Pipeline;
+    use databend_common_pipeline::core::Processor;
+    use databend_common_pipeline::core::ProcessorPtr;
+    use databend_common_pipeline::core::check_interrupt;
+    use petgraph::graph::NodeIndex;
+
+    use super::QueryPipelineExecutor;
+    use crate::pipelines::executor::ExecutorSettings;
+    use crate::test_kits::TestFixture;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_worker_error_precedes_interrupt() -> anyhow::Result<()> {
+        let _fixture = TestFixture::setup().await?;
+
+        // Exercise errors from both process() and the subsequent event() call.
+        for fail_in_process in [true, false] {
+            let mut pipeline = Pipeline::create();
+            pipeline.add_pipe(Pipe::create(0, 0, vec![PipeItem::create(
+                ProcessorPtr::create(Box::new(FailingProcessor {
+                    fail_in_process,
+                    processed: false,
+                })),
+                vec![],
+                vec![],
+            )]));
+            pipeline.set_max_threads(1);
+            let settings = ExecutorSettings {
+                query_id: Arc::new("test-worker-error-precedes-interrupt".to_string()),
+                max_threads: 1,
+                enable_queries_executor: false,
+                max_execute_time_in_seconds: Default::default(),
+                executor_node_id: String::new(),
+                perf_event_groups: vec![],
+            };
+            let executor = QueryPipelineExecutor::create(pipeline, settings)?;
+            executor.init(executor.graph.clone())?;
+            let cause = unsafe { executor.execute_single_thread(0) }.unwrap_err();
+            assert_eq!(cause.code(), ErrorCode::UNRESOLVABLE_CONFLICT);
+
+            // Pause the failing worker before its outer finish() call and let a sibling
+            // observe interruption. This interleaving used to save ABORTED_QUERY first.
+            let sibling = executor.clone();
+            let payload = executor
+                .graph
+                .get_node_tracking_payload(NodeIndex::new(0))
+                .clone();
+            Thread::spawn(move || {
+                let _guard = ThreadTracker::tracking(payload);
+                if let Err(cause) = check_interrupt() {
+                    sibling.finish(Some(cause));
+                }
+            })
+            .join()
+            .unwrap();
+
+            executor.finish(Some(cause));
+            assert!(executor.graph.is_should_finish());
+            executor.finish(Some(ErrorCode::aborting()));
+            assert_eq!(
+                executor.finished_error.lock().as_ref().unwrap().code(),
+                ErrorCode::UNRESOLVABLE_CONFLICT,
+            );
+        }
+
+        Ok(())
+    }
+
+    struct FailingProcessor {
+        fail_in_process: bool,
+        processed: bool,
+    }
+
+    impl Processor for FailingProcessor {
+        fn name(&self) -> String {
+            "FailingProcessor".to_string()
+        }
+
+        fn as_any(&mut self) -> &mut dyn Any {
+            self
+        }
+
+        fn event(&mut self) -> Result<Event> {
+            if self.processed {
+                return Err(ErrorCode::UnresolvableConflict("test conflict"));
+            }
+            Ok(Event::Sync)
+        }
+
+        fn process(&mut self) -> Result<()> {
+            self.processed = true;
+            if self.fail_in_process {
+                return Err(ErrorCode::UnresolvableConflict("test conflict"));
+            }
+            Ok(())
         }
     }
 }
