@@ -59,7 +59,9 @@ use crate::pruning_pipeline::block_prune_result_meta::BlockPruneResult;
 /// Counters of the deletion pruning pipeline, shared by all of its processors.
 #[derive(Default)]
 pub struct MutationPruneStats {
-    pub num_parts: AtomicUsize,
+    /// Blocks left by the pruning, like `partitions_scanned` of `read_partitions_with_metas`;
+    /// the segments deleted as a whole are not scanned.
+    pub partitions_scanned: AtomicUsize,
     pub num_whole_block_mutation: AtomicUsize,
     pub num_whole_segment_mutation: AtomicUsize,
 }
@@ -132,7 +134,6 @@ impl BlockMetaAccumulatingTransform<PrunedCompactSegmentMeta> for MutationSegmen
                 self.stats
                     .num_whole_block_mutation
                     .fetch_add(info.summary.block_count as usize, Ordering::Relaxed);
-                self.stats.num_parts.fetch_add(1, Ordering::Relaxed);
                 let part: PartInfoPtr = Arc::new(Box::new(Mutation::MutationDeletedSegment(
                     DeletedSegmentInfo {
                         index: segment_location.segment_idx,
@@ -289,7 +290,7 @@ impl MutationBlockPruneTransform {
             parts.push(part);
         }
         self.stats
-            .num_parts
+            .partitions_scanned
             .fetch_add(parts.len(), Ordering::Relaxed);
         vec![DataBlock::empty_with_meta(MutationPartsMeta::create(parts))]
     }

@@ -418,11 +418,11 @@ impl FuseTable {
         let data_metrics = self.data_metrics.clone();
         prune_pipeline.set_on_finished(move |info: &ExecutionInfo| {
             if info.res.is_ok() {
-                let num_parts = stats.num_parts.load(Ordering::Relaxed);
+                let partitions_scanned = stats.partitions_scanned.load(Ordering::Relaxed);
                 let num_whole_block_mutation = stats.num_whole_block_mutation.load(Ordering::Relaxed);
                 let num_whole_segment_mutation =
                     stats.num_whole_segment_mutation.load(Ordering::Relaxed);
-                data_metrics.inc_partitions_scanned(num_parts as u64);
+                data_metrics.inc_partitions_scanned(partitions_scanned as u64);
                 metrics_inc_deletion_block_range_pruned_whole_block_nums(
                     num_whole_block_mutation as u64,
                 );
