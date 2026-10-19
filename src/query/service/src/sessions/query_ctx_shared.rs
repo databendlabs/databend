@@ -895,7 +895,21 @@ impl QueryContextShared {
         self.pruned_partitions_stats.read().clone()
     }
 
-    pub fn set_pruned_partitions_stats(&self, plan_id: u32, stats: PartStatistics) {
+    /// See `TableContextPartitionStats::publish_planned_pruning_stats`.
+    pub fn publish_planned_pruning_stats(&self, plan_id: u32, stats: PartStatistics) {
+        self.record_pruning_stats(plan_id, stats);
+    }
+
+    /// See `TableContextPartitionStats::publish_pruned_partitions`. This is
+    /// where the invariant lives: a node-side publication never contributes
+    /// to `partitions_total`, which is counted exactly once by
+    /// `publish_planned_pruning_stats`, whatever the caller's `stats` says.
+    pub fn publish_pruned_partitions(&self, plan_id: u32, mut stats: PartStatistics) {
+        stats.partitions_total = 0;
+        self.record_pruning_stats(plan_id, stats);
+    }
+
+    fn record_pruning_stats(&self, plan_id: u32, stats: PartStatistics) {
         self.add_query_partition_stats(&stats);
         self.pruned_partitions_stats
             .write()

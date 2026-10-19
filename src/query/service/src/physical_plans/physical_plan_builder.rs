@@ -497,7 +497,7 @@ pub fn publish_planned_pruning_stats(ctx: &dyn TableContext, plan: &PhysicalPlan
     let mut stats = Vec::new();
     plan.collect_planned_pruning_stats(&mut stats);
     for (plan_id, stat) in stats {
-        ctx.set_pruned_partitions_stats(plan_id, stat);
+        ctx.publish_planned_pruning_stats(plan_id, stat);
     }
 }
 

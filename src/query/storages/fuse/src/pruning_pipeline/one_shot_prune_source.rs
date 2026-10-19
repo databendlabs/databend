@@ -67,16 +67,14 @@ impl OneShotPrune {
                 PruneCacheScope::Lazy,
             )
             .await;
-        let (mut statistics, partitions, _) = match pruned {
+        let (statistics, partitions, _) = match pruned {
             Ok(pruned) => pruned,
             Err(err) => {
                 let _ = self.part_info_tx.send(Err(err.clone())).await;
                 return Err(err);
             }
         };
-        statistics.partitions_total = 0;
-        self.ctx
-            .set_pruned_partitions_stats(self.plan_id, statistics);
+        self.ctx.publish_pruned_partitions(self.plan_id, statistics);
         for part in partitions.partitions {
             // the query may be killed or finished early; stop quietly
             if self.part_info_tx.send(Ok(part)).await.is_err() {

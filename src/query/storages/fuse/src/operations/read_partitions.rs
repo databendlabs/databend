@@ -182,12 +182,12 @@ fn same_segment_locations(left: &[SegmentLocation], right: &[SegmentLocation]) -
 
 /// Which pruning path a prune-cache entry belongs to.
 ///
-/// Eager pruning (planner side) caches the real `partitions_total`. Lazy
-/// pruning (pipeline side, either streaming or one-shot) caches
-/// `partitions_total = 0`, because the planner publishes the total for lazy
-/// scans. The two must not hit each other's entries: an eager entry hit from
-/// the lazy path doubles the total, a lazy entry hit from the eager path
-/// zeroes it. The scope is part of the key.
+/// Eager pruning (planner side) caches a `PartStatistics` whose
+/// `partitions_total` is the real total and uses it as the plan's statistics.
+/// Lazy pruning (pipeline side, streaming or one-shot) runs against its
+/// node's share of the segments and only ever publishes `partitions_scanned`,
+/// so the `partitions_total` in its entries is meaningless (0). An eager run
+/// must not be served such an entry, hence the scope is part of the key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PruneCacheScope {
     Eager,
@@ -401,7 +401,7 @@ impl FuseTable {
         let enable_prune_cache = enable_prune_cache_for_query(&ctx)?;
         if enable_prune_cache {
             if let Some((stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
-                ctx.set_pruned_partitions_stats(plan_id, stat);
+                ctx.publish_pruned_partitions(plan_id, stat);
                 let sender = part_info_tx.clone();
                 info!("Retrieved pruning result from cache");
                 source_pipeline.set_on_init(move || {
@@ -837,7 +837,7 @@ impl FuseTable {
             if let Ok(()) = info.res {
                 // only populating cache when the pipeline is finished successfully
                 let pruned_part_stats = send_part_state.get_pruned_stats();
-                ctx.set_pruned_partitions_stats(plan_id, pruned_part_stats);
+                ctx.publish_pruned_partitions(plan_id, pruned_part_stats);
                 if enable_prune_cache {
                     info!("Prune cache enabled");
                     send_part_state.populating_cache();
@@ -1012,13 +1012,12 @@ impl FuseTable {
             )
         })?;
         // Like the row-oriented pipeline: publish what this node scanned.
-        // `partitions_total` was published once by the planner.
         prune_pipeline.set_on_finished(move |info: &ExecutionInfo| {
             if info.res.is_ok() {
                 let mut statistics = PartStatistics::default_exact();
                 statistics.partitions_scanned = partitions_scanned.load(Ordering::Relaxed);
                 statistics.pruning_stats = pruner.pruning_stats();
-                ctx.set_pruned_partitions_stats(plan_id, statistics);
+                ctx.publish_pruned_partitions(plan_id, statistics);
             }
             Ok(())
         });

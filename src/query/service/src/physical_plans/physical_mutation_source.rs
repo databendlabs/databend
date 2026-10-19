@@ -205,7 +205,7 @@ impl IPhysicalPlan for MutationSource {
                             true,
                         )
                         .await?;
-                    ctx.set_pruned_partitions_stats(plan_id, statistics);
+                    ctx.publish_pruned_partitions(plan_id, statistics);
                     ctx.set_partitions(partitions)?;
                     Ok(())
                 })?;

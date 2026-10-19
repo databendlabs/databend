@@ -252,9 +252,9 @@ impl FuseTable {
             .collect::<Vec<_>>();
 
         // Partition counters are in blocks. `block_count` is the whole-table
-        // total when pruning in the planner, and `None` for lazy pruning
-        // where the coordinator publishes the total separately. The scanned
-        // count is finalised below once whole deleted segments are added.
+        // total when pruning in the planner and `None` for lazy pruning, whose
+        // publisher does not take a total. The scanned count is finalised
+        // below once whole deleted segments are added.
         let (mut statistics, inner_parts) = self.read_partitions_with_metas(
             self.schema_with_stream(),
             None,
