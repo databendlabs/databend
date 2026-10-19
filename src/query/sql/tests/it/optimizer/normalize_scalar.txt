@@ -116,3 +116,610 @@ input: a = 3 or true or a = 5
 changed: true
 output[0]: true
 
+=== redundant_upper_1 ===
+description: Only the tightest upper bound remains.
+sql: SELECT x FROM infer_bounds WHERE x > 0 AND x < 10 AND x < 5
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.x (#0) AS (#0)]
+└── Filter
+    ├── filters: [gt(infer_bounds.x (#0), 0), lt(infer_bounds.x (#0), 10), lt(infer_bounds.x (#0), 5)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.infer_bounds (#0)
+├── filters: [gt(infer_bounds.x (#0), 0), lt(infer_bounds.x (#0), 5)]
+├── order by: []
+└── limit: NONE
+
+
+=== redundant_upper_2 ===
+description: Reordering bounds must not affect the optimized filter.
+sql: SELECT x FROM infer_bounds WHERE x < 10 AND x < 5 AND x > 0
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.x (#0) AS (#0)]
+└── Filter
+    ├── filters: [lt(infer_bounds.x (#0), 10), lt(infer_bounds.x (#0), 5), gt(infer_bounds.x (#0), 0)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.infer_bounds (#0)
+├── filters: [gt(infer_bounds.x (#0), 0), lt(infer_bounds.x (#0), 5)]
+├── order by: []
+└── limit: NONE
+
+
+=== redundant_upper_3 ===
+description: Reordering bounds must not affect the optimized filter.
+sql: SELECT x FROM infer_bounds WHERE x < 5 AND x > 0 AND x < 10
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.x (#0) AS (#0)]
+└── Filter
+    ├── filters: [lt(infer_bounds.x (#0), 5), gt(infer_bounds.x (#0), 0), lt(infer_bounds.x (#0), 10)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.infer_bounds (#0)
+├── filters: [gt(infer_bounds.x (#0), 0), lt(infer_bounds.x (#0), 5)]
+├── order by: []
+└── limit: NONE
+
+
+=== contradiction_1 ===
+description: The tightest bounds contradict, even with an earlier weaker bound.
+sql: SELECT x FROM infer_bounds WHERE x > 0 AND x < 5 AND x >= 5
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.x (#0) AS (#0)]
+└── Filter
+    ├── filters: [gt(infer_bounds.x (#0), 0), lt(infer_bounds.x (#0), 5), gte(infer_bounds.x (#0), 5)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EmptyResultScan
+
+
+=== contradiction_2 ===
+description: Reordering contradictory bounds still eliminates the scan.
+sql: SELECT x FROM infer_bounds WHERE x < 5 AND x >= 5 AND x > 0
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.x (#0) AS (#0)]
+└── Filter
+    ├── filters: [lt(infer_bounds.x (#0), 5), gte(infer_bounds.x (#0), 5), gt(infer_bounds.x (#0), 0)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EmptyResultScan
+
+
+=== contradiction_3 ===
+description: Reordering contradictory bounds still eliminates the scan.
+sql: SELECT x FROM infer_bounds WHERE x >= 5 AND x > 0 AND x < 5
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.x (#0) AS (#0)]
+└── Filter
+    ├── filters: [gte(infer_bounds.x (#0), 5), gt(infer_bounds.x (#0), 0), lt(infer_bounds.x (#0), 5)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EmptyResultScan
+
+
+=== excluded_endpoints ===
+description: Endpoint exclusions open both bounds; irrelevant and duplicate exclusions disappear.
+sql: SELECT x FROM infer_bounds WHERE x >= 0 AND x <= 10 AND x != 0 AND x != 10 AND x != 5 AND x != 5 AND x != 20
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.x (#0) AS (#0)]
+└── Filter
+    ├── filters: [gte(infer_bounds.x (#0), 0), lte(infer_bounds.x (#0), 10), noteq(infer_bounds.x (#0), 0), noteq(infer_bounds.x (#0), 10), noteq(infer_bounds.x (#0), 5), noteq(infer_bounds.x (#0), 5), noteq(infer_bounds.x (#0), 20)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.infer_bounds (#0)
+├── filters: [gt(infer_bounds.x (#0), 0), lt(infer_bounds.x (#0), 10), noteq(infer_bounds.x (#0), 5)]
+├── order by: []
+└── limit: NONE
+
+
+=== excluded_singleton ===
+description: Closed coincident bounds plus an exclusion are contradictory.
+sql: SELECT x FROM infer_bounds WHERE x != 5 AND x >= 5 AND x <= 5
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.x (#0) AS (#0)]
+└── Filter
+    ├── filters: [noteq(infer_bounds.x (#0), 5), gte(infer_bounds.x (#0), 5), lte(infer_bounds.x (#0), 5)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EmptyResultScan
+
+
+=== equality ===
+description: An equality absorbs compatible bounds and exclusions.
+sql: SELECT x FROM infer_bounds WHERE x > 0 AND x < 10 AND x != 1 AND x = 5
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.x (#0) AS (#0)]
+└── Filter
+    ├── filters: [gt(infer_bounds.x (#0), 0), lt(infer_bounds.x (#0), 10), noteq(infer_bounds.x (#0), 1), eq(infer_bounds.x (#0), 5)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.infer_bounds (#0)
+├── filters: [eq(infer_bounds.x (#0), 5)]
+├── order by: []
+└── limit: NONE
+
+
+=== equivalent_columns ===
+description: Contradictory bounds are merged across a lossless Int32/Int64 equality.
+sql: SELECT x FROM infer_bounds WHERE x = y AND x > 0 AND x < 5 AND y >= 5
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.x (#0) AS (#0)]
+└── Filter
+    ├── filters: [eq(infer_bounds.x (#0), infer_bounds.y (#1)), gt(infer_bounds.x (#0), 0), lt(infer_bounds.x (#0), 5), gte(infer_bounds.y (#1), 5)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EmptyResultScan
+
+
+=== join_and_aggregate ===
+description: A propagated contradiction eliminates the join inputs but preserves COUNT on empty input.
+sql: SELECT count(*) FROM infer_bounds AS l JOIN infer_right AS r ON l.x = r.x WHERE l.x > 0 AND l.x < 5 AND r.x >= 5
+raw_plan:
+EvalScalar
+├── scalars: [COUNT(*) (#8) AS (#8)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#8)]
+    └── Filter
+        ├── filters: [gt(infer_bounds.x (#0), 0), lt(infer_bounds.x (#0), 5), gte(infer_right.x (#7), 5)]
+        └── Join(Inner)
+            ├── build keys: [infer_right.x (#7)]
+            ├── probe keys: [infer_bounds.x (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.infer_right (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.infer_bounds (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [0 AS (#8)]
+└── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+
+
+=== nullable_singleton ===
+description: Collapsing bounds to equality must still reject NULL rows.
+sql: SELECT x FROM infer_bounds WHERE x >= 5 AND x <= 5
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.x (#0) AS (#0)]
+└── Filter
+    ├── filters: [gte(infer_bounds.x (#0), 5), lte(infer_bounds.x (#0), 5)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.infer_bounds (#0)
+├── filters: [eq(infer_bounds.x (#0), 5)]
+├── order by: []
+└── limit: NONE
+
+
+=== null_comparison ===
+description: Comparison with NULL cannot be true in a WHERE clause.
+sql: SELECT x FROM infer_bounds WHERE x > 0 AND x != NULL
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.x (#0) AS (#0)]
+└── Filter
+    ├── filters: [gt(infer_bounds.x (#0), 0), NULL]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EmptyResultScan
+
+
+=== null_typed_equivalence_bridge ===
+description: A NULL-typed expression cannot connect exact and floating numeric equivalence classes.
+sql: SELECT x FROM infer_bounds CROSS JOIN (SELECT NULL AS n) AS nulls WHERE x = nulls.n AND nulls.n = f AND x > 0 AND f > 0
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.x (#0) AS (#0)]
+└── Filter
+    ├── filters: [NULL, gt(infer_bounds.x (#0), 0), gt(infer_bounds.f (#2), 0)]
+    └── Join(Cross)
+        ├── build keys: []
+        ├── probe keys: []
+        ├── other filters: []
+        ├── EvalScalar
+        │   ├── scalars: [NULL AS (#7)]
+        │   └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+        └── Scan
+            ├── table: default.infer_bounds (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+EmptyResultScan
+
+
+=== nullable_reflexive ===
+description: Reflexive equality is retained to reject NULL rows.
+sql: SELECT x FROM infer_bounds WHERE x = x
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.x (#0) AS (#0)]
+└── Filter
+    ├── filters: [eq(infer_bounds.x (#0), infer_bounds.x (#0))]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.infer_bounds (#0)
+├── filters: [eq(infer_bounds.x (#0), infer_bounds.x (#0))]
+├── order by: []
+└── limit: NONE
+
+
+=== lossless_cast ===
+description: Integer widening allows constraint inference.
+sql: SELECT y FROM infer_bounds WHERE CAST(y AS BIGINT) > 0 AND y < 5 AND y >= 5
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.y (#1) AS (#1)]
+└── Filter
+    ├── filters: [gt(CAST(infer_bounds.y (#1) AS Int64 NULL), 0), lt(infer_bounds.y (#1), 5), gte(infer_bounds.y (#1), 5)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EmptyResultScan
+
+
+=== lossy_integer_float_cast ===
+description: Integer-to-float equality must not propagate a rounded constant to the integer column.
+sql: SELECT x FROM infer_bounds WHERE CAST(x AS FLOAT64) = 9007199254740992::FLOAT64 AND x = 9007199254740993
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.x (#0) AS (#0)]
+└── Filter
+    ├── filters: [eq(CAST(infer_bounds.x (#0) AS Float64 NULL), 9007199254740992), eq(infer_bounds.x (#0), 9007199254740993)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.infer_bounds (#0)
+├── filters: [eq(CAST(infer_bounds.x (#0) AS Float64 NULL), 9007199254740992), eq(infer_bounds.x (#0), 9007199254740993)]
+├── order by: []
+└── limit: NONE
+
+
+=== mixed_integer_float_equality ===
+description: Equal widened Float64 values must not make different exact integer constants contradictory.
+sql: SELECT l.x FROM infer_bounds AS l JOIN infer_right AS r ON CAST(l.x AS FLOAT64) = CAST(r.x AS FLOAT64) WHERE l.x = 9007199254740993 AND r.x = 9007199254740992
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.x (#0) AS (#0)]
+└── Filter
+    ├── filters: [eq(infer_bounds.x (#0), 9007199254740993), eq(infer_right.x (#7), 9007199254740992)]
+    └── Join(Inner)
+        ├── build keys: [CAST(infer_right.x (#7) AS Float64 NULL)]
+        ├── probe keys: [CAST(infer_bounds.x (#0) AS Float64 NULL)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.infer_right (#1)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.infer_bounds (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [infer_bounds.x (#0) AS (#0), infer_right.x (#7) AS (#8)]
+└── Join(Inner)
+    ├── build keys: [CAST(infer_right.x (#7) AS Float64 NULL)]
+    ├── probe keys: [CAST(infer_bounds.x (#0) AS Float64 NULL)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.infer_right (#1)
+    │   ├── filters: [eq(infer_right.x (#7), 9007199254740992)]
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: [eq(infer_bounds.x (#0), 9007199254740993)]
+        ├── order by: []
+        └── limit: NONE
+
+
+=== float32_narrowing ===
+description: A Float64 endpoint that is not exactly Float32 must not be rounded while removing a cast.
+sql: SELECT f FROM infer_bounds WHERE CAST(f AS FLOAT64) > 0.1::FLOAT64 AND CAST(f AS FLOAT64) < 0.100000002::FLOAT64
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.f (#2) AS (#2)]
+└── Filter
+    ├── filters: [gt(CAST(infer_bounds.f (#2) AS Float64 NULL), 0.1), lt(CAST(infer_bounds.f (#2) AS Float64 NULL), 0.100000002)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.infer_bounds (#0)
+├── filters: [gt(CAST(infer_bounds.f (#2) AS Float64 NULL), 0.1), lt(CAST(infer_bounds.f (#2) AS Float64 NULL), 0.100000002)]
+├── order by: []
+└── limit: NONE
+
+
+=== float_signed_zero ===
+description: Signed zeros compare equal; excluding that singleton is contradictory.
+sql: SELECT f FROM infer_bounds WHERE f >= (-0.0)::FLOAT32 AND f <= 0.0::FLOAT32 AND f != 0.0::FLOAT32
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.f (#2) AS (#2)]
+└── Filter
+    ├── filters: [gte(infer_bounds.f (#2), 0), lte(infer_bounds.f (#2), 0), noteq(infer_bounds.f (#2), 0)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EmptyResultScan
+
+
+=== float_nonfinite ===
+description: Non-finite constants retain their SQL comparison semantics.
+sql: SELECT f FROM infer_bounds WHERE f > '-inf'::FLOAT32 AND f < 'nan'::FLOAT32
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.f (#2) AS (#2)]
+└── Filter
+    ├── filters: [gt(infer_bounds.f (#2), -inf), lt(infer_bounds.f (#2), NaN)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.infer_bounds (#0)
+├── filters: [gt(infer_bounds.f (#2), -inf), lt(infer_bounds.f (#2), NaN)]
+├── order by: []
+└── limit: NONE
+
+
+=== decimal64 ===
+description: Exact Decimal64 bounds collapse to equality.
+sql: SELECT d FROM infer_bounds WHERE d >= 9999999999999999.99::DECIMAL(18,2) AND d <= 9999999999999999.99::DECIMAL(18,2)
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.d (#3) AS (#3)]
+└── Filter
+    ├── filters: [gte(infer_bounds.d (#3), 9999999999999999.99), lte(infer_bounds.d (#3), 9999999999999999.99)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.infer_bounds (#0)
+├── filters: [eq(infer_bounds.d (#3), 9999999999999999.99)]
+├── order by: []
+└── limit: NONE
+
+
+=== decimal128 ===
+description: An excluded Decimal128 boundary is contradictory without floating-point conversion.
+sql: SELECT d38 FROM infer_bounds WHERE d38 >= 999999999999999999999999999999999999.99::DECIMAL(38,2) AND d38 <= 999999999999999999999999999999999999.99::DECIMAL(38,2) AND d38 != 999999999999999999999999999999999999.99::DECIMAL(38,2)
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.d38 (#4) AS (#4)]
+└── Filter
+    ├── filters: [gte(infer_bounds.d38 (#4), 999999999999999999999999999999999999.99), lte(infer_bounds.d38 (#4), 999999999999999999999999999999999999.99), noteq(infer_bounds.d38 (#4), 999999999999999999999999999999999999.99)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EmptyResultScan
+
+
+=== decimal256 ===
+description: An excluded Decimal256 singleton is contradictory at full precision.
+sql: SELECT d76 FROM infer_bounds WHERE d76 >= CAST(CONCAT(REPEAT('9',74),'.99') AS DECIMAL(76,2)) AND d76 <= CAST(CONCAT(REPEAT('9',74),'.99') AS DECIMAL(76,2)) AND d76 != CAST(CONCAT(REPEAT('9',74),'.99') AS DECIMAL(76,2))
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.d76 (#5) AS (#5)]
+└── Filter
+    ├── filters: [gte(infer_bounds.d76 (#5), 99999999999999999999999999999999999999999999999999999999999999999999999999.99), lte(infer_bounds.d76 (#5), 99999999999999999999999999999999999999999999999999999999999999999999999999.99), noteq(infer_bounds.d76 (#5), 99999999999999999999999999999999999999999999999999999999999999999999999999.99)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EmptyResultScan
+
+
+=== decimal_equivalent_scales ===
+description: Exact comparison across losslessly comparable Decimal types catches propagated contradictions.
+sql: SELECT d FROM infer_bounds WHERE d = e AND d < 5.00::DECIMAL(18,2) AND e >= 5.000::DECIMAL(38,3)
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.d (#3) AS (#3)]
+└── Filter
+    ├── filters: [eq(infer_bounds.d (#3), infer_bounds.e (#6)), lt(infer_bounds.d (#3), 5.00), gte(infer_bounds.e (#6), 5.000)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EmptyResultScan
+
+
+=== decimal_transitive_unsafe_common_type ===
+description: A safe equality chain must not introduce direct comparisons whose common Decimal precision would overflow.
+sql: SELECT a FROM infer_decimal_chain WHERE a = b AND b = c AND c >= 5.00::DECIMAL(38,2) AND a < 8::DECIMAL(37,0)
+raw_plan:
+EvalScalar
+├── scalars: [infer_decimal_chain.a (#0) AS (#0)]
+└── Filter
+    ├── filters: [eq(infer_decimal_chain.a (#0), infer_decimal_chain.b (#1)), eq(infer_decimal_chain.b (#1), infer_decimal_chain.c (#2)), gte(infer_decimal_chain.c (#2), 5.00), lt(infer_decimal_chain.a (#0), 8)]
+    └── Scan
+        ├── table: default.infer_decimal_chain (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [infer_decimal_chain.a (#0) AS (#0), infer_decimal_chain.b (#1) AS (#3), infer_decimal_chain.c (#2) AS (#4)]
+└── Scan
+    ├── table: default.infer_decimal_chain (#0)
+    ├── filters: [lt(infer_decimal_chain.a (#0), 8), gte(infer_decimal_chain.b (#1), 5.00), lt(infer_decimal_chain.b (#1), 8), gte(infer_decimal_chain.c (#2), 5.00), lt(infer_decimal_chain.c (#2), 8), eq(infer_decimal_chain.a (#0), infer_decimal_chain.b (#1)), eq(infer_decimal_chain.b (#1), infer_decimal_chain.c (#2))]
+    ├── order by: []
+    └── limit: NONE
+
+
+=== integer_out_of_range ===
+description: An out-of-range constant is retained rather than truncated to the column type.
+sql: SELECT y FROM infer_bounds WHERE y > 0 AND y < 10 AND y < 2147483648
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.y (#1) AS (#1)]
+└── Filter
+    ├── filters: [gt(infer_bounds.y (#1), 0), lt(infer_bounds.y (#1), 10), lt(infer_bounds.y (#1), 2147483648)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.infer_bounds (#0)
+├── filters: [gt(infer_bounds.y (#1), 0), lt(infer_bounds.y (#1), 10), lt(infer_bounds.y (#1), 2147483648)]
+├── order by: []
+└── limit: NONE
+
+
+=== decimal_rounding_cast ===
+description: Constraints on differently scaled casts cannot be applied to the uncast column.
+sql: SELECT d FROM infer_bounds WHERE CAST(d AS DECIMAL(18,1)) = 1.0::DECIMAL(18,1) AND d > 1.0::DECIMAL(18,2)
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.d (#3) AS (#3)]
+└── Filter
+    ├── filters: [eq(CAST(infer_bounds.d (#3) AS Decimal(18, 1) NULL), 1.0), gt(infer_bounds.d (#3), 1.00)]
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Scan
+├── table: default.infer_bounds (#0)
+├── filters: [eq(CAST(infer_bounds.d (#3) AS Decimal(18, 1) NULL), 1.0), gt(infer_bounds.d (#3), 1.00)]
+├── order by: []
+└── limit: NONE
+
+

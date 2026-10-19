@@ -19,6 +19,7 @@ pub use temp_table::TempTblMgrRef;
 pub use transaction::TxnManager;
 pub use transaction::TxnManagerRef;
 pub use transaction::TxnState;
+pub use transaction::TxnTableDelta;
 mod session_state;
 pub use session_state::SessionState;
 pub use temp_table::abort_staged_temp_table;

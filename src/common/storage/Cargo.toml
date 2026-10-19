@@ -34,6 +34,7 @@ iceberg = { workspace = true }
 log = { workspace = true }
 lru = { workspace = true }
 opendal = { workspace = true }
+parking_lot = { workspace = true }
 parquet = { workspace = true }
 prometheus-client = { workspace = true }
 rand = { workspace = true }
@@ -48,6 +49,7 @@ url = { workspace = true }
 
 [dev-dependencies]
 reqwest = { workspace = true, features = ["gzip"] }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

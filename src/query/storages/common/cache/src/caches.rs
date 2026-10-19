@@ -224,6 +224,10 @@ impl<T> CacheValue<T> {
     pub fn get_inner(&self) -> Arc<T> {
         self.inner.clone()
     }
+
+    pub(crate) fn is_shared(&self) -> bool {
+        Arc::strong_count(&self.inner) > 1
+    }
 }
 
 impl From<CompactSegmentInfo> for CacheValue<CompactSegmentInfo> {

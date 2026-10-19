@@ -34,6 +34,7 @@ use crate::plans::JoinType;
 use crate::plans::MatchedEvaluator;
 use crate::plans::Mutation;
 use crate::plans::Operator;
+use crate::plans::PhysicalRelOperator;
 use crate::plans::Plan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
@@ -108,7 +109,7 @@ pub(super) async fn optimize_mutation(
 
     // Apply the mutation consumer policy until requirements are part of
     // physical search: discard the query-root Exchange and retry locally if necessary.
-    if matches!(planned_input.plan(), RelOperator::Exchange(_)) {
+    if matches!(planned_input.plan(), PhysicalRelOperator::Exchange(_)) {
         planned_input = planned_input.child(0)?.clone();
     }
     if planned_input.has_merge_exchange() {
@@ -151,7 +152,7 @@ pub(super) async fn optimize_mutation(
     Ok(Plan::DataMutation {
         schema,
         s_expr: Box::new(MutationPlan::Planned(PExpr::create_unary(
-            Arc::new(RelOperator::Mutation(mutation)),
+            Arc::new(PhysicalRelOperator::Mutation(mutation)),
             Arc::new(planned_input),
         ))),
         metadata: opt_ctx.get_metadata(),
@@ -215,12 +216,12 @@ fn prepare_direct_source(s_expr: &SExpr, mutation: &mut Mutation) -> Result<Opti
 }
 
 fn target_probe(s_expr: &PExpr, target_table_index: usize) -> Result<bool> {
-    if !matches!(s_expr.plan(), RelOperator::Join(_)) {
+    if !matches!(s_expr.plan(), PhysicalRelOperator::Join(_)) {
         return Ok(false);
     }
 
     fn contains_target_table(s_expr: &PExpr, target_table_index: usize) -> bool {
-        if let RelOperator::Scan(scan) = s_expr.plan() {
+        if let PhysicalRelOperator::Scan(scan) = s_expr.plan() {
             scan.table_index == target_table_index
         } else {
             s_expr

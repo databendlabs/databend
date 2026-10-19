@@ -217,10 +217,7 @@ impl CoordinationManager {
                     revision,
                 ))))
             }
-            Err(error) => {
-                holder.shutdown();
-                Err(error)
-            }
+            Err(error) => Err(error),
         }
     }
 }

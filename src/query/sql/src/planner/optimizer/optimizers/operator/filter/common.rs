@@ -14,6 +14,7 @@
 
 use databend_common_base::base::OrderedFloat;
 use databend_common_expression::Scalar;
+use databend_common_expression::conversion::classify_conversion;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
@@ -63,21 +64,33 @@ pub fn check_float_range(min: f64, max: f64, value: &Scalar) -> (bool, f64) {
 }
 
 pub fn remove_trivial_type_cast(left: ScalarExpr, right: ScalarExpr) -> (ScalarExpr, ScalarExpr) {
-    let (argument, span, value, cast_on_left) = match (&left, &right) {
-        (
-            ScalarExpr::CastExpr(CastExpr { argument, .. }),
-            ScalarExpr::ConstantExpr(ConstantExpr { span, value }),
-        ) => (argument, span, value, true),
-        (
-            ScalarExpr::ConstantExpr(ConstantExpr { span, value }),
-            ScalarExpr::CastExpr(CastExpr { argument, .. }),
-        ) => (argument, span, value, false),
+    let (cast, span, value, cast_on_left) = match (&left, &right) {
+        (ScalarExpr::CastExpr(cast), ScalarExpr::ConstantExpr(ConstantExpr { span, value })) => {
+            (cast, span, value, true)
+        }
+        (ScalarExpr::ConstantExpr(ConstantExpr { span, value }), ScalarExpr::CastExpr(cast)) => {
+            (cast, span, value, false)
+        }
         _ => return (left, right),
     };
 
+    let CastExpr {
+        argument,
+        target_type,
+        is_try,
+        ..
+    } = cast;
     let ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) = &**argument else {
         return (left, right);
     };
+    // Removing a cast must preserve both equality and ordering. Narrowing and
+    // integer-to-float casts can merge distinct values even if the constant fits.
+    if *is_try
+        || !matches!(target_type.remove_nullable(), DataType::Number(_))
+        || !classify_conversion(&column.data_type, target_type).is_lossless_injective()
+    {
+        return (left, right);
+    }
 
     let converted_value = match *column.data_type {
         DataType::Number(NumberDataType::UInt8)
@@ -123,7 +136,8 @@ pub fn remove_trivial_type_cast(left: ScalarExpr, right: ScalarExpr) -> (ScalarE
         DataType::Number(NumberDataType::Float32)
         | DataType::Nullable(deref!(DataType::Number(NumberDataType::Float32))) => {
             let (is_trivial, value) = check_float_range(f32::MIN as f64, f32::MAX as f64, value);
-            is_trivial.then(|| Scalar::Number(NumberScalar::Float32(OrderedFloat(value as f32))))
+            (is_trivial && (value as f32) as f64 == value)
+                .then(|| Scalar::Number(NumberScalar::Float32(OrderedFloat(value as f32))))
         }
         DataType::Number(NumberDataType::Float64)
         | DataType::Nullable(deref!(DataType::Number(NumberDataType::Float64))) => {

@@ -89,7 +89,6 @@ impl FuseTable {
                         ctx,
                         self.operator.clone(),
                         block_reader.schema(),
-                        plan,
                         virtual_column.clone(),
                         self.table_compression,
                     )

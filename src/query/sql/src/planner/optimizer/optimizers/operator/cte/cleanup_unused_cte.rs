@@ -19,7 +19,7 @@ use databend_common_exception::Result;
 
 use crate::optimizer::Optimizer;
 use crate::optimizer::ir::PExpr;
-use crate::plans::RelOperator;
+use crate::plans::PhysicalRelOperator;
 
 /// Optimizer that removes unused CTEs from the query plan.
 /// This optimizer should be applied at the end of the optimization pipeline
@@ -41,7 +41,7 @@ impl CleanupUnusedCTEOptimizer {
         referenced_ctes: &mut HashMap<String, usize>,
     ) -> Result<()> {
         // Check if current node is a MaterializeCTERef
-        if let RelOperator::MaterializedCTERef(consumer) = s_expr.plan() {
+        if let PhysicalRelOperator::MaterializedCTERef(consumer) = s_expr.plan() {
             *referenced_ctes
                 .entry(consumer.cte_name.clone())
                 .or_insert(0) += 1;
@@ -61,13 +61,17 @@ impl CleanupUnusedCTEOptimizer {
         mut s_expr: PExpr,
         referenced_ctes: &HashMap<String, usize>,
     ) -> Result<PExpr> {
-        if let RelOperator::Sequence(_) = s_expr.plan()
-            && matches!(s_expr.left_child().plan(), RelOperator::MaterializedCTE(_))
+        if let PhysicalRelOperator::Sequence(_) = s_expr.plan()
+            && matches!(
+                s_expr.left_child().plan(),
+                PhysicalRelOperator::MaterializedCTE(_)
+            )
         {
             assert_eq!(s_expr.children.len(), 2);
             let right_child = Arc::unwrap_or_clone(s_expr.children.pop().unwrap());
             let mut left_child = Arc::unwrap_or_clone(s_expr.children.pop().unwrap());
-            let RelOperator::MaterializedCTE(mut cte) = Arc::unwrap_or_clone(left_child.plan)
+            let PhysicalRelOperator::MaterializedCTE(mut cte) =
+                Arc::unwrap_or_clone(left_child.plan)
             else {
                 unreachable!()
             };
@@ -131,7 +135,7 @@ mod tests {
     use crate::plans::DummyTableScan;
     use crate::plans::MaterializedCTE;
     use crate::plans::MaterializedCTERef;
-    use crate::plans::RelOperator;
+    use crate::plans::PhysicalRelOperator;
     use crate::plans::Sequence;
     use crate::plans::UnionAll;
 
@@ -140,13 +144,15 @@ mod tests {
     }
 
     fn cte_ref(cte_name: &str) -> PExpr {
-        PExpr::create_leaf(RelOperator::MaterializedCTERef(MaterializedCTERef {
-            cte_name: cte_name.to_string(),
-            output_columns: vec![],
-            def: crate::optimizer::ir::SExpr::create_leaf(DummyTableScan::new()),
-            column_mapping: HashMap::new(),
-            stat_info: None,
-        }))
+        PExpr::create_leaf(PhysicalRelOperator::MaterializedCTERef(
+            MaterializedCTERef {
+                cte_name: cte_name.to_string(),
+                output_columns: vec![],
+                def: crate::optimizer::ir::SExpr::create_leaf(DummyTableScan::new()),
+                column_mapping: HashMap::new(),
+                stat_info: None,
+            },
+        ))
     }
 
     fn union_all(left: PExpr, right: PExpr) -> PExpr {
@@ -164,7 +170,7 @@ mod tests {
     }
 
     fn materialized_cte_ref_count(s_expr: &PExpr, cte_name: &str) -> Option<usize> {
-        if let RelOperator::MaterializedCTE(cte) = s_expr.plan()
+        if let PhysicalRelOperator::MaterializedCTE(cte) = s_expr.plan()
             && cte.cte_name == cte_name
         {
             return Some(cte.ref_count);

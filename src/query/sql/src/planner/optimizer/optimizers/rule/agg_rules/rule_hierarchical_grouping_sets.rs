@@ -38,7 +38,6 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::planner::binder::is_grouping_id_item;
 use crate::plans::Aggregate;
-use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
@@ -892,10 +891,6 @@ impl Rule for RuleHierarchicalGroupingSetsToUnion {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let eval_scalar: EvalScalar = s_expr.plan().clone().try_into()?;
         let agg: Aggregate = s_expr.child(0)?.plan().clone().try_into()?;
-
-        if agg.mode != AggregateMode::Initial {
-            return Ok(());
-        }
 
         let Some(grouping_sets) = &agg.grouping_sets else {
             return Ok(());

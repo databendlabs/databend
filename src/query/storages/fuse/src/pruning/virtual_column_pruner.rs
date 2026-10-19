@@ -47,7 +47,8 @@ use crate::io::read::load_virtual_column_file_meta;
 
 pub struct VirtualColumnPruner {
     dal: Operator,
-    source_column_ids: HashSet<ColumnId>,
+    // Source columns that the scan does not need for their own values.
+    ignorable_source_column_ids: HashSet<ColumnId>,
     // Cache path matching info once to avoid repeated parsing per block.
     virtual_column_fields: Vec<VirtualColumnFieldMatch>,
     // Query-time column ID of the typed virtual field used by single-column ORDER BY ... LIMIT.
@@ -86,7 +87,7 @@ impl VirtualColumnPruner {
         }
         Ok(Some(Arc::new(VirtualColumnPruner {
             dal,
-            source_column_ids: virtual_column.source_column_ids.clone(),
+            ignorable_source_column_ids: virtual_column.ignorable_source_column_ids.clone(),
             virtual_column_fields,
             top_n_query_column_id,
         })))
@@ -251,7 +252,7 @@ impl VirtualColumnPruner {
         // Source columns are ignored only when every requested virtual path from the source has a
         // virtual read plan. Unresolved indexed paths keep the source column for fallback.
         let ignored_source_column_ids = self
-            .source_column_ids
+            .ignorable_source_column_ids
             .difference(&fallback_source_column_ids)
             .copied()
             .collect();
@@ -325,7 +326,7 @@ impl VirtualColumnPruner {
             virtual_block_location: virtual_block_meta.virtual_location.0.clone(),
             fields,
             read_slots: slot_builder.into_slots(),
-            ignored_source_column_ids: self.source_column_ids.clone(),
+            ignored_source_column_ids: self.ignorable_source_column_ids.clone(),
             virtual_column_stats,
         })
     }

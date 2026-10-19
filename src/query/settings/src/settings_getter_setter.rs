@@ -1257,10 +1257,10 @@ impl Settings {
     }
 
     pub fn get_s3_storage_class(&self) -> Result<S3StorageClass> {
-        let s3_storage_class_setting = self.try_get_string("s3_storage_class")?;
+        let s3_storage_class_setting = self.try_get_string("experimental_s3_storage_class")?;
         S3StorageClass::from_str(&s3_storage_class_setting).map_err(|e| {
             ErrorCode::InvalidConfig(format!(
-                "Invalid s3_storage_class setting '{}': {}. Valid values are 'standard' or 'intelligent_tiering'.",
+                "Invalid experimental_s3_storage_class setting '{}': {}. Valid values are 'standard' or 'intelligent_tiering'.",
                 s3_storage_class_setting, e
             ))
         })

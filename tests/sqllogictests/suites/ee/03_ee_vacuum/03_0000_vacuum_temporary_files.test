@@ -13,68 +13,176 @@
 ## limitations under the License.
 
 statement ok
-set max_threads = 8;
+SET max_threads = 8;
 
 statement ok
 SET force_aggregate_data_spill = 1;
 
 query ?
-SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) group by number::string order by 1 desc);
+SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) GROUP BY number::string ORDER BY 1 DESC);
 ----
 100000
 
+statement ok
+SET force_aggregate_data_spill = 0;
+
 query ?
-SELECT COUNT() > 0 as c FROM system.temp_files
+SELECT COUNT() FROM system.temp_files;
 ----
 0
 
+# A small query-hook budget leaves work for a later vacuum.
 statement ok
-set max_vacuum_temp_files_after_query = 1;
+SET max_vacuum_temp_files_after_query = 1;
+
+statement ok
+SET force_aggregate_data_spill = 1;
 
 query ?
-SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) group by number::string order by 1 desc);
+SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) GROUP BY number::string ORDER BY 1 DESC);
 ----
 100000
 
+statement ok
+SET force_aggregate_data_spill = 0;
+
 query ?
-SELECT COUNT() > 0 as c FROM system.temp_files
+SELECT COUNT() > 0 FROM system.temp_files;
 ----
 1
 
+statement ok
+VACUUM TEMPORARY FILES RETAIN 0 SECONDS;
+
 query ?
-SELECT sleep(2) from numbers(1);
+SELECT COUNT() FROM system.temp_files;
 ----
 0
 
+# Leave query A's spill files untouched. Control queries must not spill themselves.
+statement ok
+SET max_threads = 1;
+
+statement ok
+SET max_vacuum_temp_files_after_query = 0;
+
+statement ok
+SET force_aggregate_data_spill = 1;
+
+query ?
+SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) GROUP BY number::string ORDER BY 1 DESC);
+----
+100000
+
+statement ok
+SET force_aggregate_data_spill = 0;
+
+# A spill data file and its manifest ensure LIMIT 1 cannot finish the whole prefix.
+query ?
+SELECT COUNT() > 1 FROM system.temp_files;
+----
+1
+
+statement ok
+CREATE TABLE vacuum_spill_before ENGINE = Memory AS SELECT file_name FROM system.temp_files;
+
+# Retention must protect every path, not merely leave a nonempty prefix.
 statement ok
 VACUUM TEMPORARY FILES;
 
 query ?
-SELECT COUNT() > 0 as c FROM system.temp_files
+SELECT
+    (SELECT COUNT() FROM (SELECT file_name FROM system.temp_files EXCEPT SELECT file_name FROM vacuum_spill_before)) +
+    (SELECT COUNT() FROM (SELECT file_name FROM vacuum_spill_before EXCEPT SELECT file_name FROM system.temp_files));
 ----
-1
+0
 
 statement ok
 VACUUM TEMPORARY FILES RETAIN 1 DAYS;
 
 query ?
-SELECT COUNT() > 0 as c FROM system.temp_files
+SELECT
+    (SELECT COUNT() FROM (SELECT file_name FROM system.temp_files EXCEPT SELECT file_name FROM vacuum_spill_before)) +
+    (SELECT COUNT() FROM (SELECT file_name FROM vacuum_spill_before EXCEPT SELECT file_name FROM system.temp_files));
 ----
-1
+0
 
+# Even with zero retention, a zero budget must not touch any selected path.
 statement ok
-VACUUM TEMPORARY FILES RETAIN 2 SECONDS;
+VACUUM TEMPORARY FILES RETAIN 0 SECONDS LIMIT 0;
 
 query ?
-SELECT COUNT() FROM (SELECT COUNT() as c FROM system.temp_files) WHERE c > 0;
+SELECT
+    (SELECT COUNT() FROM (SELECT file_name FROM system.temp_files EXCEPT SELECT file_name FROM vacuum_spill_before)) +
+    (SELECT COUNT() FROM (SELECT file_name FROM vacuum_spill_before EXCEPT SELECT file_name FROM system.temp_files));
+----
+0
+
+# Query B's hook must remove B's files without touching A's retained files.
+statement ok
+SET max_vacuum_temp_files_after_query = 1000000;
+
+statement ok
+SET force_aggregate_data_spill = 1;
+
+query ?
+SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) GROUP BY number::string ORDER BY 1 DESC);
+----
+100000
+
+statement ok
+SET force_aggregate_data_spill = 0;
+
+query ?
+SELECT
+    (SELECT COUNT() FROM (SELECT file_name FROM system.temp_files EXCEPT SELECT file_name FROM vacuum_spill_before)) +
+    (SELECT COUNT() FROM (SELECT file_name FROM vacuum_spill_before EXCEPT SELECT file_name FROM system.temp_files));
 ----
 0
 
 statement ok
-unset max_threads;
+SET max_vacuum_temp_files_after_query = 0;
+
+# LIMIT is soft across directories: assert progress and remaining work, not a global count.
+statement ok
+VACUUM TEMPORARY FILES RETAIN 0 SECONDS LIMIT 1;
+
+query ?
+SELECT (SELECT COUNT() FROM system.temp_files) < (SELECT COUNT() FROM vacuum_spill_before);
+----
+1
+
+query ?
+SELECT COUNT() > 0 FROM system.temp_files;
+----
+1
+
+# The rewritten manifest must allow a later run to finish, with no orphaned data files.
+statement ok
+VACUUM TEMPORARY FILES RETAIN 0 SECONDS;
+
+query ?
+SELECT COUNT() FROM system.temp_files;
+----
+0
+
+# Repeating cleanup on an empty prefix is safe.
+statement ok
+VACUUM TEMPORARY FILES RETAIN 0 SECONDS LIMIT 1;
+
+query ?
+SELECT COUNT() FROM system.temp_files;
+----
+0
 
 statement ok
-set max_vacuum_temp_files_after_query = 0;
+DROP TABLE vacuum_spill_before;
 
 statement ok
-unset force_aggregate_data_spill;
+UNSET max_threads;
+
+statement ok
+UNSET max_vacuum_temp_files_after_query;
+
+statement ok
+UNSET force_aggregate_data_spill;

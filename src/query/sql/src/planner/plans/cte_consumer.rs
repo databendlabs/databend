@@ -33,6 +33,7 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 
 #[derive(Clone)]
@@ -101,7 +102,9 @@ impl Operator for MaterializedCTERef {
     fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         RelExpr::with_s_expr(&self.def).derive_relational_prop()
     }
+}
 
+impl PhysicalOperator for MaterializedCTERef {
     /// Derive physical property
     fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         Ok(PhysicalProperty {

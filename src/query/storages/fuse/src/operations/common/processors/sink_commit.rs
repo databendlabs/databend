@@ -780,10 +780,12 @@ where F: SnapshotGenerator + Send + Sync + 'static
 
                 match commit_result {
                     Ok(_) => {
-                        self.ctx
-                            .txn_mgr()
-                            .lock()
-                            .add_logical_change_delta(table_info.ident.table_id, logical_delta);
+                        self.ctx.txn_mgr().lock().add_table_delta(
+                            table_info.ident.table_id,
+                            logical_delta,
+                            &self.statistics_hll,
+                            self.statistics_rows,
+                        );
                         set_compaction_num_block_hint(
                             self.ctx.as_ref(),
                             &table_info,

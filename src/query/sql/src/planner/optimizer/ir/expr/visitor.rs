@@ -20,7 +20,6 @@ use databend_common_exception::Result;
 
 use super::node::Expr;
 use super::node::ExprKind;
-use super::node::RewriteExprKind;
 use crate::optimizer::ir::Logical;
 
 /// Action to take after visiting a node
@@ -53,7 +52,7 @@ pub trait ExprVisitor<K: ExprKind = Logical> {
 
 /// Traverse an expression tree using a synchronous visitor
 #[recursive::recursive]
-pub fn visit_expr<K: RewriteExprKind, V: ExprVisitor<K>>(
+pub fn visit_expr<K: ExprKind, V: ExprVisitor<K>>(
     visitor: &mut V,
     expr: &Expr<K>,
 ) -> Result<Option<Expr<K>>> {
@@ -119,13 +118,10 @@ pub trait AsyncExprVisitor<K: ExprKind = Logical> {
 }
 
 /// Traverse an expression tree using an async visitor
-#[allow(clippy::multiple_bound_locations)]
 #[async_recursion::async_recursion(# [recursive::recursive])]
 pub async fn visit_expr_async<K, T>(visitor: &mut T, expr: &Expr<K>) -> Result<Option<Expr<K>>>
 where
-    K: RewriteExprKind + Send + Sync,
-    K::Operator: Send + Sync,
-    K::State: Send + Sync,
+    K: ExprKind,
     T: AsyncExprVisitor<K> + Send,
 {
     // Pre-order visit
@@ -175,7 +171,7 @@ where
 }
 
 /// Extension methods for Expr<K>
-impl<K: RewriteExprKind> Expr<K> {
+impl<K: ExprKind> Expr<K> {
     /// Apply a synchronous visitor to this expression
     pub fn accept<V: ExprVisitor<K>>(&self, visitor: &mut V) -> Result<Option<Expr<K>>> {
         visit_expr(visitor, self)
@@ -185,12 +181,7 @@ impl<K: RewriteExprKind> Expr<K> {
     pub async fn accept_async<T: AsyncExprVisitor<K> + Send>(
         &self,
         visitor: &mut T,
-    ) -> Result<Option<Expr<K>>>
-    where
-        K: Send + Sync,
-        K::Operator: Send + Sync,
-        K::State: Send + Sync,
-    {
+    ) -> Result<Option<Expr<K>>> {
         visit_expr_async(visitor, self).await
     }
 }

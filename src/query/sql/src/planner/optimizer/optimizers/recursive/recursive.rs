@@ -185,10 +185,8 @@ impl RecursiveRuleOptimizer {
                 rule_name,
                 self.name(),
                 duration,
-                before_expr,
-                result_expr,
-                metadata,
-                self.ctx.get_stat_context(),
+                &before_expr.pretty_format(metadata, self.ctx.get_stat_context())?,
+                &result_expr.pretty_format(metadata, self.ctx.get_stat_context())?,
             )?;
         }
 

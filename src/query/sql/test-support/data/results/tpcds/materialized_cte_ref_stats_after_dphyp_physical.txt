@@ -395,7 +395,7 @@ Exchange
     │                                               │       │       │       ├── read size: 0
     │                                               │       │       │       ├── partitions total: 0
     │                                               │       │       │       ├── partitions scanned: 0
-    │                                               │       │       │       ├── push downs: [filters: [contains(['blanched', 'medium', 'brown', 'chocolate', 'burlywood', 'drab'], item.i_color (#334)) and item.i_current_price (#322) >= 23 and item.i_current_price (#322) <= 33 and item.i_current_price (#322) >= 24 and item.i_current_price (#322) <= 38], limit: NONE]
+    │                                               │       │       │       ├── push downs: [filters: [item.i_current_price (#322) >= 24 and item.i_current_price (#322) <= 33 and contains(['blanched', 'medium', 'brown', 'chocolate', 'burlywood', 'drab'], item.i_color (#334))], limit: NONE]
     │                                               │       │       │       └── estimated rows: 18150.03
     │                                               │       │       └── Exchange(Probe)
     │                                               │       │           ├── output columns: [catalog_sales.cs_item_sk (#58)]

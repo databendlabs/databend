@@ -12,19 +12,62 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableSchema;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use iceberg::expr::Predicate;
 use iceberg::expr::Reference;
 use iceberg::spec::Datum;
+use iceberg::spec::Schema as IcebergSchema;
 use log::debug;
 
-pub struct PredicateBuilder;
+pub struct PredicateBuilder {
+    references: HashMap<String, Option<String>>,
+}
 
 impl PredicateBuilder {
-    pub fn build(expr: &RemoteExpr<String>) -> (bool, Predicate) {
+    pub fn new(schema: &TableSchema) -> Self {
+        let mut references = HashMap::new();
+        for field in schema.fields() {
+            collect_references(
+                field.data_type(),
+                field.name(),
+                field.name(),
+                &mut references,
+            );
+        }
+        Self { references }
+    }
+
+    fn reference(&self, name: &str) -> Option<Reference> {
+        self.references.get(name)?.as_ref().map(Reference::new)
+    }
+
+    /// iceberg-rust binds predicates against the scanned snapshot's schema,
+    /// which can differ from the current schema after renames, added columns or
+    /// type promotion. Translate each current reference through its field ID.
+    /// Fields absent from the snapshot, or whose type changed, are left
+    /// unpushed so binding can never fail or compare against a different type.
+    pub fn bind_to_snapshot(mut self, current: &IcebergSchema, snapshot: &IcebergSchema) -> Self {
+        for reference in self.references.values_mut() {
+            *reference = reference.take().and_then(|name| {
+                let id = current.field_id_by_name(&name)?;
+                let current_field = current.field_by_id(id)?;
+                let snapshot_field = snapshot.field_by_id(id)?;
+                (current_field.field_type == snapshot_field.field_type)
+                    .then(|| snapshot.name_by_field_id(id).map(str::to_owned))
+                    .flatten()
+            });
+        }
+        self
+    }
+
+    pub fn build(&self, expr: &RemoteExpr<String>) -> (bool, Predicate) {
         match expr {
             RemoteExpr::Constant {
                 span: _,
@@ -47,7 +90,7 @@ impl PredicateBuilder {
                 generics: _,
                 args,
                 return_type: _,
-            } if args.len() == 1 && id.name().as_ref() == "is_true" => Self::build(&args[0]),
+            } if args.len() == 1 && id.name().as_ref() == "is_true" => self.build(&args[0]),
 
             // unary
             RemoteExpr::FunctionCall {
@@ -58,7 +101,9 @@ impl PredicateBuilder {
                 return_type: _,
             } if args.len() == 1 && matches!(args[0], RemoteExpr::ColumnRef { .. }) => {
                 let (_, name, _, _) = args[0].as_column_ref().unwrap();
-                let r = Reference::new(name);
+                let Some(r) = self.reference(name) else {
+                    return (true, Predicate::AlwaysTrue);
+                };
                 if let Some(op) = build_unary(r, id.name().as_ref()) {
                     return (false, op);
                 }
@@ -73,7 +118,7 @@ impl PredicateBuilder {
                 args,
                 return_type: _,
             } if args.len() == 1 && id.name().as_ref() == "not" => {
-                let (uncertain, predicate) = Self::build(&args[0]);
+                let (uncertain, predicate) = self.build(&args[0]);
                 if uncertain {
                     return (true, Predicate::AlwaysTrue);
                 }
@@ -107,7 +152,7 @@ impl PredicateBuilder {
                 let mut uncertain = false;
                 let mut predicate = initial;
                 for arg in args {
-                    let (arg_uncertain, arg_predicate) = Self::build(arg);
+                    let (arg_uncertain, arg_predicate) = self.build(arg);
                     if !is_and && arg_uncertain {
                         return (true, Predicate::AlwaysTrue);
                     }
@@ -137,7 +182,9 @@ impl PredicateBuilder {
                 let val = scalar_to_datatum(val.1);
                 if let Some(datum) = val {
                     let (_, name, _, _) = args[0].as_column_ref().unwrap();
-                    let r = Reference::new(name);
+                    let Some(r) = self.reference(name) else {
+                        return (true, Predicate::AlwaysTrue);
+                    };
                     let p = build_binary(r, id.name().as_ref(), datum);
                     if let Some(op) = p {
                         return (false, op);
@@ -161,7 +208,9 @@ impl PredicateBuilder {
                 let val = scalar_to_datatum(val.1);
                 if let Some(datum) = val {
                     let (_, name, _, _) = args[1].as_column_ref().unwrap();
-                    let r = Reference::new(name);
+                    let Some(r) = self.reference(name) else {
+                        return (true, Predicate::AlwaysTrue);
+                    };
                     let p = build_reverse_binary(r, id.name().as_ref(), datum);
                     if let Some(op) = p {
                         return (false, op);
@@ -175,6 +224,44 @@ impl PredicateBuilder {
                 (true, Predicate::AlwaysTrue)
             }
         }
+    }
+}
+
+/// Construct paths from actual field boundaries, not separator replacement.
+/// Literal ':' characters belong to field names. If flattened names collide,
+/// omit pruning rather than binding a predicate to a different column.
+fn collect_references(
+    data_type: &TableDataType,
+    flat_name: &str,
+    reference: &str,
+    references: &mut HashMap<String, Option<String>>,
+) {
+    references
+        .entry(flat_name.to_owned())
+        .and_modify(|existing| {
+            if existing.as_deref() != Some(reference) {
+                *existing = None;
+            }
+        })
+        .or_insert_with(|| Some(reference.to_owned()));
+    match data_type {
+        TableDataType::Nullable(inner) => {
+            collect_references(inner, flat_name, reference, references)
+        }
+        TableDataType::Tuple {
+            fields_name,
+            fields_type,
+        } => {
+            for (name, ty) in fields_name.iter().zip(fields_type) {
+                collect_references(
+                    ty,
+                    &format!("{flat_name}:{name}"),
+                    &format!("{reference}.{name}"),
+                    references,
+                );
+            }
+        }
+        _ => (),
     }
 }
 
@@ -242,9 +329,27 @@ fn scalar_to_datatum(scalar: &Scalar) -> Option<Datum> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use databend_common_expression::FunctionID;
+    use databend_common_expression::types::NumberDataType;
+    use iceberg::expr::Bind;
 
     use super::*;
+
+    fn builder() -> PredicateBuilder {
+        use databend_common_expression::TableField;
+        PredicateBuilder::new(&TableSchema::new(vec![
+            TableField::new("report_time", TableDataType::Timestamp),
+            TableField::new("event_name", TableDataType::String),
+            TableField::new("source_flag", TableDataType::String),
+            TableField::new("page", TableDataType::String),
+            TableField::new("item", TableDataType::Tuple {
+                fields_name: vec!["value".to_owned()],
+                fields_type: vec![TableDataType::String],
+            }),
+        ]))
+    }
 
     fn column(name: &str, data_type: DataType) -> RemoteExpr<String> {
         RemoteExpr::ColumnRef {
@@ -291,7 +396,7 @@ mod tests {
             constant(Scalar::Timestamp(timestamp), DataType::Timestamp),
         ]);
 
-        let (uncertain, predicate) = PredicateBuilder::build(&expr);
+        let (uncertain, predicate) = builder().build(&expr);
 
         assert!(!uncertain);
         assert_eq!(
@@ -299,6 +404,142 @@ mod tests {
             Reference::new("report_time")
                 .greater_than_or_equal_to(Datum::timestamp_micros(timestamp))
         );
+    }
+
+    #[test]
+    fn test_nested_field_paths_use_iceberg_separator() {
+        let (uncertain, predicate) = builder().build(&string_eq("item:value", "test"));
+        assert!(!uncertain);
+        assert_eq!(
+            predicate,
+            Reference::new("item.value").equal_to(Datum::string("test"))
+        );
+    }
+
+    #[test]
+    fn literal_colons_in_field_names_are_not_path_separators() {
+        use databend_common_expression::TableField;
+        let schema = TableSchema::new(vec![
+            TableField::new("a:b", TableDataType::String),
+            TableField::new("parent:x", TableDataType::Tuple {
+                fields_name: vec!["child:y".to_owned()],
+                fields_type: vec![TableDataType::String],
+            }),
+        ]);
+        let builder = PredicateBuilder::new(&schema);
+        for (name, reference) in [("a:b", "a:b"), ("parent:x:child:y", "parent:x.child:y")] {
+            let (uncertain, predicate) = builder.build(&string_eq(name, "test"));
+            assert!(!uncertain);
+            assert_eq!(
+                predicate,
+                Reference::new(reference).equal_to(Datum::string("test"))
+            );
+        }
+        let (_, unary) = builder.build(&function("is_null", vec![column("a:b", DataType::String)]));
+        assert_eq!(unary, Reference::new("a:b").is_null());
+        let (_, reverse) = builder.build(&function("eq", vec![
+            constant(Scalar::String("test".to_owned()), DataType::String),
+            column("a:b", DataType::String),
+        ]));
+        assert_eq!(
+            reverse,
+            Reference::new("a:b").equal_to(Datum::string("test"))
+        );
+    }
+
+    #[test]
+    fn ambiguous_flattened_paths_do_not_prune_a_different_field() {
+        use databend_common_expression::TableField;
+        let schema = TableSchema::new(vec![
+            TableField::new("item:value", TableDataType::String),
+            TableField::new("item", TableDataType::Tuple {
+                fields_name: vec!["value".to_owned()],
+                fields_type: vec![TableDataType::String],
+            }),
+        ]);
+        let (uncertain, predicate) =
+            PredicateBuilder::new(&schema).build(&string_eq("item:value", "test"));
+        assert!(uncertain);
+        assert_eq!(predicate, Predicate::AlwaysTrue);
+    }
+
+    #[test]
+    fn snapshot_binding_follows_field_ids_and_skips_unbindable_fields() {
+        use databend_common_expression::TableField;
+        use iceberg::spec::NestedField;
+        use iceberg::spec::PrimitiveType;
+        use iceberg::spec::StructType;
+        use iceberg::spec::Type;
+
+        let iceberg_schema = |fields: Vec<NestedField>| {
+            IcebergSchema::builder()
+                .with_fields(fields.into_iter().map(Arc::new))
+                .build()
+                .unwrap()
+        };
+        let long = || Type::Primitive(PrimitiveType::Long);
+        let string = || Type::Primitive(PrimitiveType::String);
+        let nested = |child: &str| {
+            Type::Struct(StructType::new(vec![Arc::new(NestedField::optional(
+                5,
+                child,
+                string(),
+            ))]))
+        };
+        // Snapshot: old_k long, s {old_v string}, p int. Current schema renamed
+        // old_k -> k and old_v -> v, promoted p to long and added new_c.
+        let snapshot = iceberg_schema(vec![
+            NestedField::optional(1, "old_k", long()),
+            NestedField::optional(2, "p", Type::Primitive(PrimitiveType::Int)),
+            NestedField::optional(4, "s", nested("old_v")),
+        ]);
+        let current = iceberg_schema(vec![
+            NestedField::optional(1, "k", long()),
+            NestedField::optional(2, "p", long()),
+            NestedField::optional(3, "new_c", long()),
+            NestedField::optional(4, "s", nested("v")),
+        ]);
+        let table = TableSchema::new(vec![
+            TableField::new("k", TableDataType::Number(NumberDataType::Int64)),
+            TableField::new("p", TableDataType::Number(NumberDataType::Int64)),
+            TableField::new("new_c", TableDataType::Number(NumberDataType::Int64)),
+            TableField::new("s", TableDataType::Tuple {
+                fields_name: vec!["v".to_owned()],
+                fields_type: vec![TableDataType::String],
+            }),
+        ]);
+        let builder = PredicateBuilder::new(&table).bind_to_snapshot(&current, &snapshot);
+        let int_eq = |name: &str| {
+            function("eq", vec![
+                column(name, DataType::Number(NumberDataType::Int64)),
+                constant(
+                    Scalar::Number(NumberScalar::Int64(1)),
+                    DataType::Number(NumberDataType::Int64),
+                ),
+            ])
+        };
+
+        let (uncertain, predicate) = builder.build(&int_eq("k"));
+        assert!(!uncertain);
+        assert_eq!(predicate, Reference::new("old_k").equal_to(Datum::long(1)));
+        let (uncertain, predicate) = builder.build(&string_eq("s:v", "x"));
+        assert!(!uncertain);
+        assert_eq!(
+            predicate,
+            Reference::new("s.old_v").equal_to(Datum::string("x"))
+        );
+        // Added after the snapshot, or promoted since: never bound.
+        for name in ["new_c", "p"] {
+            let (uncertain, predicate) = builder.build(&int_eq(name));
+            assert!(uncertain, "{name}");
+            assert_eq!(predicate, Predicate::AlwaysTrue);
+        }
+        // Unbindable conjuncts drop out of AND without losing the others.
+        let (uncertain, predicate) =
+            builder.build(&function("and_filters", vec![int_eq("new_c"), int_eq("k")]));
+        assert!(uncertain);
+        assert_eq!(predicate, Reference::new("old_k").equal_to(Datum::long(1)));
+        assert!(predicate.bind(Arc::new(snapshot), true).is_ok());
     }
 
     #[test]
@@ -313,7 +554,7 @@ mod tests {
             event_name,
         ])]);
 
-        let (uncertain, predicate) = PredicateBuilder::build(&expr);
+        let (uncertain, predicate) = builder().build(&expr);
 
         assert!(uncertain);
         assert_eq!(
@@ -330,7 +571,7 @@ mod tests {
             string_eq("page", "home"),
         ])]);
 
-        let (uncertain, predicate) = PredicateBuilder::build(&expr);
+        let (uncertain, predicate) = builder().build(&expr);
 
         assert!(!uncertain);
         assert_ne!(predicate, Predicate::AlwaysTrue);
@@ -345,7 +586,7 @@ mod tests {
         let event_name = string_eq("event_name", "game_end");
         let expr = function("or_filters", vec![unsupported, event_name]);
 
-        let (uncertain, predicate) = PredicateBuilder::build(&expr);
+        let (uncertain, predicate) = builder().build(&expr);
 
         assert!(uncertain);
         assert_eq!(predicate, Predicate::AlwaysTrue);

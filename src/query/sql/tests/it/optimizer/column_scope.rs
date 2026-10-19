@@ -17,6 +17,8 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::plans::AggregateMode;
+use databend_common_sql::plans::PhysicalRelOperator;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::ScalarExpr;
@@ -150,6 +152,73 @@ async fn test_optimizer_accepts_correlated_and_lateral_scopes() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_final_aggregate_scope_checks_raw_arguments() -> Result<()> {
+    let case = SqlTestCase {
+        name: "final_aggregate_raw_argument_scope",
+        description: "Final validates raw arguments against the actual Partial input.",
+        setup_sqls: &[TABLE],
+        sql: "SELECT a, sum(b) FROM scope_t GROUP BY a",
+    };
+    let ctx = setup_context(&case).await?;
+    let plan = ctx.optimize_plan(ctx.bind_sql(case.sql).await?).await?;
+    let Plan::Query {
+        s_expr, metadata, ..
+    } = plan
+    else {
+        unreachable!()
+    };
+    let mut final_node = s_expr.planned()?.expr();
+    while !matches!(final_node.plan(), PhysicalRelOperator::Aggregate(agg) if agg.mode == AggregateMode::Final)
+    {
+        final_node = final_node.child(0)?;
+    }
+    final_node.validate_types(&metadata)?;
+    final_node.validate_column_scope(&metadata)?;
+    let mut invalid = final_node.plan().as_aggregate().unwrap().clone();
+    let ScalarExpr::AggregateFunction(function) =
+        &mut invalid.aggregate.aggregate_functions[0].scalar
+    else {
+        unreachable!()
+    };
+    let ScalarExpr::BoundColumnRef(argument) = &mut function.args[0] else {
+        unreachable!()
+    };
+    // The raw SUM argument is not a state/group output: look-through is required.
+    assert!(
+        !final_node
+            .child(0)?
+            .derive_relational_prop()?
+            .output_columns
+            .contains(&argument.column.index)
+    );
+    let mut partial = final_node.child(0)?;
+    while partial.plan().is_exchange() {
+        partial = partial.child(0)?;
+    }
+    assert_eq!(
+        partial.plan().as_aggregate().unwrap().mode,
+        AggregateMode::Partial
+    );
+    assert!(
+        partial
+            .child(0)?
+            .derive_relational_prop()?
+            .output_columns
+            .contains(&argument.column.index)
+    );
+    argument.column.index = metadata.write().add_derived_column(
+        "missing_final_argument".to_string(),
+        *argument.column.data_type.clone(),
+    );
+    let invalid = final_node.replace_plan(invalid);
+    invalid.validate_types(&metadata)?;
+    let error = invalid.validate_column_scope(&metadata).unwrap_err();
+    assert!(error.message().contains("PExpr column scope violation"));
+    assert!(error.message().contains("missing_final_argument"));
+    Ok(())
+}
+
 /// Collects `EvalScalar` items that project a column their own child does not produce,
 /// and counts the expression scans so a test can prove it exercised the lateral `VALUES`
 /// path rather than passing vacuously.
@@ -167,8 +236,8 @@ impl databend_common_sql::optimizer::ir::ExprVisitor<databend_common_sql::optimi
         s_expr: &databend_common_sql::optimizer::ir::PExpr,
     ) -> Result<databend_common_sql::optimizer::ir::PVisitAction> {
         match s_expr.plan() {
-            RelOperator::ExpressionScan(_) => self.expression_scans += 1,
-            RelOperator::EvalScalar(eval_scalar) => {
+            PhysicalRelOperator::ExpressionScan(_) => self.expression_scans += 1,
+            PhysicalRelOperator::EvalScalar(eval_scalar) => {
                 let child_outputs = s_expr
                     .child(0)?
                     .derive_relational_prop()?

@@ -27,15 +27,11 @@ use crate::optimizer::cost::CostContext;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::DistributionEnforcer;
 use crate::optimizer::ir::Enforcer;
-use crate::optimizer::ir::Matcher;
-use crate::optimizer::ir::PatternExtractor;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RequiredProperty;
-use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::cascades::CascadesOptimizer;
 use crate::optimizer::optimizers::cascades::tasks::SharedCounter;
 use crate::optimizer::optimizers::cascades::tasks::TaskManager;
-use crate::plans::RelOperator;
 
 #[derive(Clone, Copy, Debug)]
 pub enum OptimizeExprState {
@@ -188,7 +184,7 @@ impl OptimizeExprTask {
             .group(self.group_index)?
             .m_expr(self.m_expr_index)?;
 
-        if matches!(m_expr.plan.as_ref(), RelOperator::Exchange(_),)
+        if m_expr.plan.physical().is_some_and(|op| op.is_exchange())
             && matches!(self.required_prop.distribution, Distribution::Any)
         {
             return Ok(OptimizeExprEvent::OptimizedSelf);
@@ -400,20 +396,12 @@ impl OptimizeExprTask {
             return Ok(OptimizeExprEvent::OptimizingSelf);
         }
 
-        let mut extractor = PatternExtractor::new();
-        let enforcer_child = Arc::new(
-            extractor
-                .extract(&optimizer.memo, m_expr, &Matcher::Leaf)?
-                .pop()
-                .ok_or_else(|| {
-                    ErrorCode::Internal(format!("Cannot find child of m_expr: {:?}", m_expr.plan))
-                })?,
-        );
-
         for enforcer in enforcers.iter() {
-            let operator = enforcer.enforce()?;
-            let s_expr = SExpr::create_unary(Arc::new(operator), enforcer_child.clone());
-            optimizer.memo.insert(Some(self.group_index), s_expr)?;
+            optimizer
+                .memo
+                .insert_physical(self.group_index, enforcer.enforce()?, vec![
+                    self.group_index,
+                ])?;
         }
 
         Ok(OptimizeExprEvent::OptimizedSelf)

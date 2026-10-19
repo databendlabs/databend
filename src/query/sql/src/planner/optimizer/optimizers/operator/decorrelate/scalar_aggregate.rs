@@ -49,7 +49,6 @@ use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
-use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
@@ -166,8 +165,7 @@ pub(crate) fn match_scalar_aggregate(
         }
         current = current.unary_child();
     };
-    if aggregate.mode != AggregateMode::Initial
-        || !aggregate.group_items.is_empty()
+    if !aggregate.group_items.is_empty()
         || aggregate.grouping_sets.is_some()
         || aggregate.rank_limit.is_some()
     {
@@ -702,7 +700,6 @@ fn has_correlated_scalar_aggregate(s_expr: &SExpr) -> Result<bool> {
 /// own indexes, so dropping it doesn't change the columns seen above it.
 fn is_passthrough_distinct(aggregate: &Aggregate) -> bool {
     aggregate.from_distinct
-        && aggregate.mode == AggregateMode::Initial
         && aggregate.aggregate_functions.is_empty()
         && aggregate.grouping_sets.is_none()
         && aggregate.rank_limit.is_none()
