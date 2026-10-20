@@ -12,9 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
+use anyhow::Context;
+use databend_common_catalog::lock::LockTableOption;
+use databend_common_meta_app::schema::DeleteLockRevReq;
+use databend_common_meta_app::schema::ListLockRevReq;
+use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
+use databend_common_meta_store::MetaStore;
+use databend_meta_client::kvapi::KvApiExt;
+use databend_meta_client::kvapi::StructKey;
+use databend_meta_runtime::DatabendRuntime;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
@@ -129,5 +140,133 @@ async fn test_query_created_time_propagation() -> anyhow::Result<()> {
         next.get_function_context()?.now,
         chrono::DateTime::<chrono::Utc>::from(next_time)
     );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_external_timeout_releases_table_lock_revision() -> anyhow::Result<()> {
+    let ttl = Duration::from_secs(3);
+    let cleanup_timeout = ttl * 2 + Duration::from_secs(1);
+    // Catalog lists revisions while UserApiProvider watches them. Both must connect to the
+    // same Meta; the default fixture gives each a separate embedded Meta instance.
+    let meta = MetaStore::new_local_testing::<DatabendRuntime>().await;
+    let mut config = ConfigBuilder::create().build();
+    config.meta.endpoints = meta.inner().get_cached_endpoints().await?;
+    config.meta.auto_sync_interval = 0;
+    let fixture = TestFixture::setup_with_config(&config).await?;
+    let settings = fixture.default_session().get_settings();
+    settings.set_setting(
+        "table_lock_expire_secs".to_string(),
+        ttl.as_secs().to_string(),
+    )?;
+    settings.set_setting("acquire_lock_timeout".to_string(), "60".to_string())?;
+    fixture.create_default_database().await?;
+    fixture.create_default_table().await?;
+    let catalog_name = fixture.default_catalog_name();
+    let owner_ctx = fixture.new_query_ctx().await?;
+    let catalog = owner_ctx.get_catalog(&catalog_name).await?;
+    let table_id = fixture.latest_default_table().await?.get_id();
+    let lock_key = LockKey::Table {
+        tenant: fixture.default_tenant(),
+        table_id,
+    };
+    let wait_for_revisions = |count| {
+        let catalog = &catalog;
+        let lock_key = lock_key.clone();
+        async move {
+            tokio::time::timeout(cleanup_timeout, async {
+                loop {
+                    let revisions = catalog
+                        .list_lock_revisions(ListLockRevReq::new(lock_key.clone()))
+                        .await?;
+                    if revisions.len() == count {
+                        return Ok::<_, anyhow::Error>(revisions);
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .with_context(|| format!("expected {count} lock revisions"))?
+        }
+    };
+    let owner = owner_ctx
+        .acquire_table_lock_by_id(&catalog_name, table_id, &LockTableOption::LockWithRetry)
+        .await?
+        .context("the first writer must acquire the lock")?;
+    let owner_revision = wait_for_revisions(1).await?[0].0;
+    let waiter_ctx = fixture.new_query_ctx().await?;
+    let mut acquisition = Box::pin(waiter_ctx.clone().acquire_table_lock_by_id(
+        &catalog_name,
+        table_id,
+        &LockTableOption::LockWithRetry,
+    ));
+    // Poll on the initialized test thread: Databend's test globals are thread-name scoped.
+    let queued = tokio::select! {
+        result = &mut acquisition => {
+            match result {
+                Ok(_) => anyhow::bail!("the second writer acquired an already held lock"),
+                Err(error) => anyhow::bail!("waiting failed before cancellation: {error}"),
+            }
+        }
+        result = wait_for_revisions(2) => result?,
+    };
+    let waiting_revision = queued
+        .iter()
+        .find(|(_, meta)| meta.acquired_on.is_none())
+        .context("the second writer must have a queued revision")?
+        .0;
+    let key = lock_key.gen_v2_key(waiting_revision).to_string_key();
+    let initial_seq = meta
+        .get_kv(&key)
+        .await?
+        .context("queued lease must exist")?
+        .seq;
+    let renewal = async {
+        loop {
+            let lease = meta.get_kv(&key).await?.context("queued lease expired")?;
+            if lease.seq > initial_seq {
+                return Ok::<_, anyhow::Error>(());
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    };
+    // Observing Create alone can race its reply. A renewal proves the keeper has started.
+    tokio::select! {
+        result = &mut acquisition => {
+            match result {
+                Ok(_) => anyhow::bail!("the second writer acquired an already held lock"),
+                Err(error) => anyhow::bail!("waiting failed before cancellation: {error}"),
+            }
+        }
+        result = tokio::time::timeout(ttl * 2, renewal) => {
+            result.context("the queued lease must renew before cancellation")??;
+        }
+    }
+    // This owns and drops the future, well before the 60s internal acquire timeout.
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), acquisition)
+            .await
+            .is_err()
+    );
+    let cleanup = wait_for_revisions(1).await;
+    if cleanup.is_err() {
+        // If the regression returns, do not leave its detached keeper renewing forever after
+        // the test globals are torn down. Delete only the abandoned waiter and let it stop.
+        catalog
+            .delete_lock_revision(DeleteLockRevReq::new(lock_key.clone(), waiting_revision))
+            .await?;
+        tokio::time::sleep(ttl).await;
+    }
+    let remaining = cleanup.context("cancelled acquisition kept renewing its revision")?;
+    assert_eq!(remaining[0].0, owner_revision, "the owner must stay locked");
+    assert!(remaining[0].1.acquired_on.is_some());
+    drop(owner);
+    wait_for_revisions(0).await?;
+    let guard = waiter_ctx
+        .acquire_table_lock_by_id(&catalog_name, table_id, &LockTableOption::LockNoRetry)
+        .await?
+        .context("a subsequent writer must acquire the table lock")?;
+    drop(guard);
+    wait_for_revisions(0).await?;
     Ok(())
 }

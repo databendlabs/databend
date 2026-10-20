@@ -178,7 +178,7 @@ Exchange(Merge)
     │                                                   │       │       │   ├── Exchange(Hash): keys: [item.i_item_sk (#317)]
     │                                                   │       │       │   └── Scan
     │                                                   │       │       │       ├── table: default.item (#18)
-    │                                                   │       │       │       ├── filters: [contains(['blanched', 'medium', 'brown', 'chocolate', 'burlywood', 'drab'], item.i_color (#334)), gte(item.i_current_price (#322), 23), lte(item.i_current_price (#322), 33), gte(item.i_current_price (#322), 24), lte(item.i_current_price (#322), 38)]
+    │                                                   │       │       │       ├── filters: [gte(item.i_current_price (#322), 24), lte(item.i_current_price (#322), 33), contains(['blanched', 'medium', 'brown', 'chocolate', 'burlywood', 'drab'], item.i_color (#334))]
     │                                                   │       │       │       ├── order by: []
     │                                                   │       │       │       └── limit: NONE
     │                                                   │       │       └── Exchange(Hash)

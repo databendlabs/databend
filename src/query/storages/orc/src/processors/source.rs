@@ -138,6 +138,7 @@ impl ORCSource {
             operator,
             size: file.size as u64,
             path: path.to_string(),
+            read_bytes: Default::default(),
         };
         let builder = ArrowReaderBuilder::try_new_async(file)
             .await
