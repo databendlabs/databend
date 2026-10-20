@@ -168,15 +168,9 @@ impl Binder {
                         address,
                         &UdfValidationConfig::from_inner_config(GlobalConfig::instance().as_ref()),
                     )?;
-                    for name in &integrations {
-                        self.ctx
-                            .validate_privilege(
-                                &GrantObject::Integration(name.clone()),
-                                UserPrivilegeType::Usage,
-                                false,
-                            )
-                            .await?;
-                    }
+                    self.ctx
+                        .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super, true)
+                        .await?;
                     UserApiProvider::instance()
                         .validate_external_access(&self.ctx.get_tenant(), address, &integrations)
                         .await?;

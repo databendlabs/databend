@@ -328,14 +328,7 @@ async fn external_access_creation_authorization_and_schema() -> Result<()> {
         fixture.execute_command(&create).await.unwrap_err().code(),
         ErrorCode::PERMISSION_DENIED
     );
-    session.set_authed_user(admin.clone(), None).await?;
-    session.set_current_role_checked("account_admin").await?;
-    fixture
-        .execute_command("GRANT USAGE ON INTEGRATION auth_access TO ROLE udf_developer")
-        .await?;
-    session.set_authed_user(developer.clone(), None).await?;
-    session.set_current_role_checked("udf_developer").await?;
-    // CREATE and integration USAGE do not authorize policy management.
+    // CREATE alone does not authorize policy management.
     for sql in [
         "CREATE NETWORK RULE denied_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('denied.example.com:443')",
         "ALTER NETWORK RULE auth_rule SET VALUE_LIST = ('denied.example.com:443')",
@@ -343,6 +336,11 @@ async fn external_access_creation_authorization_and_schema() -> Result<()> {
         "CREATE EXTERNAL ACCESS INTEGRATION denied_access ALLOWED_NETWORK_RULES = (auth_rule) ENABLED = TRUE",
         "ALTER EXTERNAL ACCESS INTEGRATION auth_access SET ENABLED = FALSE",
         "DROP EXTERNAL ACCESS INTEGRATION auth_access",
+        "CREATE OR REPLACE NETWORK RULE auth_rule TYPE = HOST_PORT VALUE_LIST = ('denied.example.com:443') MODE = EGRESS",
+        "CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION auth_access ALLOWED_NETWORK_RULES = (auth_rule) ENABLED = TRUE",
+        "ALTER NETWORK RULE IF EXISTS missing_rule SET VALUE_LIST = ('example.com:443')",
+        "ALTER EXTERNAL ACCESS INTEGRATION IF EXISTS missing_access SET ENABLED = TRUE",
+        "DROP INTEGRATION IF EXISTS auth_access",
     ] {
         assert_eq!(
             fixture.execute_command(sql).await.unwrap_err().code(),
@@ -350,36 +348,15 @@ async fn external_access_creation_authorization_and_schema() -> Result<()> {
             "{sql}",
         );
     }
-    // Integration USAGE is additional authorization, not a replacement for
-    // the existing SUPER requirement to create any UDF.
-    assert_eq!(
-        fixture.execute_command(&create).await.unwrap_err().code(),
-        ErrorCode::PERMISSION_DENIED
-    );
     session.set_authed_user(admin.clone(), None).await?;
     session.set_current_role_checked("account_admin").await?;
     fixture
         .execute_command("GRANT SUPER ON *.* TO ROLE udf_developer")
         .await?;
-    fixture
-        .execute_command("REVOKE USAGE ON INTEGRATION auth_access FROM ROLE udf_developer")
-        .await?;
-    session.set_authed_user(developer.clone(), None).await?;
-    session.set_current_role_checked("udf_developer").await?;
-    // Having SUPER does not remove the integration USAGE check either.
-    assert_eq!(
-        fixture.execute_command(&create).await.unwrap_err().code(),
-        ErrorCode::PERMISSION_DENIED
-    );
-    session.set_authed_user(admin.clone(), None).await?;
-    session.set_current_role_checked("account_admin").await?;
-    fixture
-        .execute_command("GRANT USAGE ON INTEGRATION auth_access TO ROLE udf_developer")
-        .await?;
     session.set_authed_user(developer.clone(), None).await?;
     session.set_current_role_checked("udf_developer").await?;
     fixture.execute_command(&create).await?;
-    // Integration authorization does not skip the original Flight schema check.
+    // SQL-managed policies do not skip the original Flight schema check.
     let bad_schema = create.replace("managed_echo(STRING)", "bad_schema(INT)");
     assert!(
         fixture
@@ -404,19 +381,11 @@ async fn external_access_creation_authorization_and_schema() -> Result<()> {
     session.set_authed_user(admin.clone(), None).await?;
     session.set_current_role_checked("account_admin").await?;
     fixture
-        .execute_command("REVOKE USAGE ON INTEGRATION auth_access FROM ROLE udf_developer")
+        .execute_command("REVOKE SUPER ON *.* FROM ROLE udf_developer")
         .await?;
     session.set_authed_user(developer, None).await?;
     session.set_current_role_checked("udf_developer").await?;
-    assert_eq!(
-        fixture
-            .execute_command(&create.replace("managed_echo", "revoked_echo"))
-            .await
-            .unwrap_err()
-            .code(),
-        ErrorCode::PERMISSION_DENIED
-    );
-    // Revoking integration USAGE does not revoke UDF invocation rights.
+    // Invoking an existing UDF does not require SUPER.
     fixture
         .execute_command("SELECT managed_echo('hello')")
         .await?;
@@ -446,54 +415,83 @@ async fn external_access_creation_authorization_and_schema() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn external_access_show_grants_preserves_identifiers() -> Result<()> {
+async fn external_access_snowflake_ddl() -> Result<()> {
     let fixture = TestFixture::setup().await?;
-    fixture.execute_command("CREATE NETWORK RULE quoted_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('example.com:443')").await?;
-    fixture
-        .execute_command("CREATE ROLE grant_roundtrip")
-        .await?;
-    for quoted in [
-        r#""QuotedAccess""#,
-        r#""access with space""#,
-        r#""access/r""#,
-        r#""access""r""#,
-        r#""select""#,
+    let tenant = fixture.new_query_ctx().await?.get_tenant();
+    let provider = UserApiProvider::instance();
+    let rules = provider.network_rule_api(&tenant);
+    let integrations = provider.external_access_integration_api(&tenant);
+    fixture.execute_command("CREATE NETWORK RULE quoted_rule MODE = EGRESS TYPE = HOST_PORT VALUE_LIST = ('example.com:443')").await?;
+    fixture.execute_command("CREATE OR REPLACE NETWORK RULE quoted_rule TYPE = HOST_PORT VALUE_LIST = ('example.com:8443') MODE = EGRESS").await?;
+    assert_eq!(
+        rules
+            .get("quoted_rule", MatchSeq::GE(1))
+            .await?
+            .data
+            .value_list,
+        vec!["example.com:8443"]
+    );
+    fixture.execute_command("CREATE NETWORK RULE IF NOT EXISTS quoted_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('ignored.example.com')").await?;
+    assert_eq!(
+        rules
+            .get("quoted_rule", MatchSeq::GE(1))
+            .await?
+            .data
+            .value_list,
+        vec!["example.com:8443"]
+    );
+    for (name, quoted) in [
+        ("QuotedAccess", r#""QuotedAccess""#),
+        ("access with space", r#""access with space""#),
+        ("access/r", r#""access/r""#),
+        ("access\"r", r#""access""r""#),
+        ("select", r#""select""#),
     ] {
         fixture.execute_command(&format!("CREATE EXTERNAL ACCESS INTEGRATION {quoted} ALLOWED_NETWORK_RULES = (quoted_rule) ENABLED = TRUE")).await?;
+        fixture.execute_command(&format!("CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION {quoted} ENABLED = FALSE ALLOWED_NETWORK_RULES = (quoted_rule)")).await?;
+        assert!(!integrations.get(name, MatchSeq::GE(1)).await?.data.enabled);
+        fixture.execute_command(&format!("CREATE EXTERNAL ACCESS INTEGRATION IF NOT EXISTS {quoted} ALLOWED_NETWORK_RULES = (quoted_rule) ENABLED = TRUE")).await?;
+        assert!(!integrations.get(name, MatchSeq::GE(1)).await?.data.enabled);
+        fixture.execute_command(&format!("ALTER EXTERNAL ACCESS INTEGRATION IF EXISTS {quoted} SET ENABLED = TRUE ALLOWED_NETWORK_RULES = (quoted_rule)")).await?;
+        assert!(integrations.get(name, MatchSeq::GE(1)).await?.data.enabled);
+        fixture
+            .execute_command(&format!("DROP INTEGRATION {quoted}"))
+            .await?;
+        assert!(integrations.get(name, MatchSeq::GE(1)).await.is_err());
         fixture
             .execute_command(&format!(
-                "GRANT USAGE ON INTEGRATION {quoted} TO ROLE grant_roundtrip"
+                "DROP EXTERNAL ACCESS INTEGRATION IF EXISTS {quoted}"
             ))
-            .await?;
-        let blocks = fixture
-            .execute_query("SHOW GRANTS FOR ROLE grant_roundtrip")
-            .await?
-            .try_collect::<Vec<_>>()
-            .await?;
-        assert_eq!(blocks.iter().map(DataBlock::num_rows).sum::<usize>(), 1);
-        for block in &blocks {
-            let Column::String(grants) = block.get_by_offset(5).to_column() else {
-                panic!("expected SHOW GRANTS SQL column");
-            };
-            for grant in grants.iter() {
-                assert_eq!(
-                    grant,
-                    format!("GRANT ALL ON INTEGRATION {quoted} TO ROLE `grant_roundtrip`")
-                );
-                // Execute the displayed SQL: losing case/escaping would target
-                // a different integration or fail to parse.
-                fixture.execute_command(grant).await?;
-            }
-        }
-        fixture
-            .execute_command(&format!(
-                "REVOKE USAGE ON INTEGRATION {quoted} FROM ROLE grant_roundtrip"
-            ))
-            .await?;
-        fixture
-            .execute_command(&format!("DROP EXTERNAL ACCESS INTEGRATION {quoted}"))
             .await?;
     }
+    fixture
+        .execute_command(
+            "ALTER NETWORK RULE IF EXISTS quoted_rule SET VALUE_LIST = ('example.com:443')",
+        )
+        .await?;
+    assert_eq!(
+        rules
+            .get("quoted_rule", MatchSeq::GE(1))
+            .await?
+            .data
+            .value_list,
+        vec!["example.com:443"]
+    );
+    fixture
+        .execute_command(
+            "ALTER NETWORK RULE IF EXISTS missing_rule SET VALUE_LIST = ('example.com:443')",
+        )
+        .await?;
+    fixture.execute_command("ALTER EXTERNAL ACCESS INTEGRATION IF EXISTS missing_access SET ALLOWED_NETWORK_RULES = (missing_rule) ENABLED = FALSE").await?;
+    fixture
+        .execute_command("DROP INTEGRATION IF EXISTS missing_access")
+        .await?;
+    assert!(
+        fixture
+            .execute_command("ALTER EXTERNAL ACCESS INTEGRATION missing_access SET ENABLED = FALSE")
+            .await
+            .is_err()
+    );
     Ok(())
 }
 
@@ -553,7 +551,7 @@ async fn external_access_rechecks_already_built_transform() -> Result<()> {
     // Reuse exactly the same transform/endpoints: binding-time checks cannot
     // protect a plan that is already built when an administrator changes policy.
     fixture
-        .execute_command("ALTER EXTERNAL ACCESS INTEGRATION live_access SET ENABLED = FALSE")
+        .execute_command("CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION live_access ALLOWED_NETWORK_RULES = (live_rule) ENABLED = FALSE")
         .await?;
     let err = run().await?.unwrap_err();
     assert!(err.message().contains("disabled"), "{err}");
@@ -567,7 +565,7 @@ async fn external_access_rechecks_already_built_transform() -> Result<()> {
     assert!(err.message().contains("not allowed"), "{err}");
     fixture
         .execute_command(&format!(
-            "ALTER NETWORK RULE live_rule SET VALUE_LIST = ('{address}')"
+            "CREATE OR REPLACE NETWORK RULE live_rule TYPE = HOST_PORT VALUE_LIST = ('{address}') MODE = EGRESS"
         ))
         .await?;
     assert_eq!(run().await??.num_columns(), 2);

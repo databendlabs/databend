@@ -25,7 +25,6 @@ use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_sql::binder::StageResolver;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
-use databend_meta_client::types::MatchSeq;
 
 use crate::meta_service_error;
 use crate::sessions::QueryContext;
@@ -123,12 +122,6 @@ pub async fn validate_grant_object_exists(
                     format!("warehouse {w} not exists"),
                 ))
             };
-        }
-        GrantObject::Integration(name) => {
-            UserApiProvider::instance()
-                .external_access_integration_api(&tenant)
-                .get(name, MatchSeq::GE(1))
-                .await?;
         }
         GrantObject::Connection(c) => {
             return match StageResolver::from_table_context(

@@ -8,7 +8,7 @@ statement ok
 DROP FUNCTION IF EXISTS legacy_gcd_access;
 
 statement ok
-DROP EXTERNAL ACCESS INTEGRATION IF EXISTS flight_access;
+DROP INTEGRATION IF EXISTS flight_access;
 
 statement ok
 DROP NETWORK RULE IF EXISTS flight_rule;
@@ -50,7 +50,7 @@ statement error arg types mismatch
 CREATE FUNCTION wrong_gcd_schema(STRING, STRING) RETURNS INT LANGUAGE python HANDLER = 'gcd' ADDRESS = 'http://0.0.0.0:8815' EXTERNAL_ACCESS_INTEGRATIONS = (flight_access);
 
 statement ok
-ALTER EXTERNAL ACCESS INTEGRATION flight_access SET ENABLED = FALSE;
+CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION flight_access ALLOWED_NETWORK_RULES = (unrelated_rule, flight_rule) ENABLED = FALSE;
 
 statement error disabled
 SELECT managed_gcd(6, 4);
@@ -66,10 +66,10 @@ SELECT legacy_gcd_access(6, 4);
 2
 
 statement ok
-ALTER EXTERNAL ACCESS INTEGRATION flight_access SET ENABLED = TRUE;
+ALTER EXTERNAL ACCESS INTEGRATION IF EXISTS flight_access SET ENABLED = TRUE;
 
 statement ok
-ALTER NETWORK RULE flight_rule SET VALUE_LIST = ('0.0.0.0:8816');
+CREATE OR REPLACE NETWORK RULE flight_rule TYPE = HOST_PORT VALUE_LIST = ('0.0.0.0:8816') MODE = EGRESS;
 
 statement error not allowed by external access integrations
 SELECT managed_gcd(6, 4);
@@ -89,7 +89,7 @@ statement error not allowed by external access integrations
 SELECT managed_gcd(6, 4);
 
 statement ok
-DROP EXTERNAL ACCESS INTEGRATION flight_access;
+DROP INTEGRATION flight_access;
 
 statement error ExternalAccessIntegration
 SELECT managed_gcd(6, 4);

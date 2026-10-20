@@ -19,7 +19,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::ExternalAccessIntegration;
 use databend_common_meta_app::principal::NetworkRule;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_users::UserApiProvider;
 use databend_common_users::network_rule_endpoint;
 use databend_meta_client::types::MatchSeq;
@@ -57,17 +56,10 @@ impl Interpreter for ExternalAccessInterpreter {
             let provider = UserApiProvider::instance();
             let rules_api = provider.network_rule_api(&tenant);
             let integrations_api = provider.external_access_integration_api(&tenant);
-            let create_option = |if_not_exists| {
-                if if_not_exists {
-                    CreateOption::CreateIfNotExists
-                } else {
-                    CreateOption::Create
-                }
-            };
             match &self.stmt {
                 CreateNetworkRule {
                     name,
-                    if_not_exists,
+                    create_option,
                     rule_type,
                     mode,
                     values,
@@ -88,15 +80,19 @@ impl Interpreter for ExternalAccessInterpreter {
                                 name: name.name.clone(),
                                 value_list: values.clone(),
                             },
-                            &create_option(*if_not_exists),
+                            &create_option.clone().into(),
                         )
                         .await?;
                 }
-                AlterNetworkRule { name, values } => {
+                AlterNetworkRule {
+                    name,
+                    if_exists,
+                    values,
+                } => {
                     for value in values {
                         network_rule_endpoint(value)?;
                     }
-                    rules_api
+                    if let Err(e) = rules_api
                         .update(
                             NetworkRule {
                                 name: name.name.clone(),
@@ -104,7 +100,12 @@ impl Interpreter for ExternalAccessInterpreter {
                             },
                             MatchSeq::GE(1),
                         )
-                        .await?;
+                        .await
+                    {
+                        if !(*if_exists && e.is_business_error()) {
+                            return Err(e.into());
+                        }
+                    }
                 }
                 DropNetworkRule { name, if_exists } => {
                     if let Err(e) = rules_api.remove(&name.name, MatchSeq::GE(1)).await {
@@ -115,7 +116,7 @@ impl Interpreter for ExternalAccessInterpreter {
                 }
                 CreateIntegration {
                     name,
-                    if_not_exists,
+                    create_option,
                     rules,
                     enabled,
                 } => {
@@ -132,21 +133,30 @@ impl Interpreter for ExternalAccessInterpreter {
                                     .collect(),
                                 enabled: *enabled,
                             },
-                            &create_option(*if_not_exists),
+                            &create_option.clone().into(),
                         )
                         .await?;
                 }
                 AlterIntegration {
                     name,
+                    if_exists,
                     rules,
                     enabled,
                 } => {
+                    if *if_exists {
+                        if let Err(e) = integrations_api.get(&name.name, MatchSeq::GE(1)).await {
+                            if e.is_business_error() {
+                                return Ok(PipelineBuildResult::create());
+                            }
+                            return Err(e.into());
+                        }
+                    }
                     if let Some(rules) = rules {
                         for rule in rules {
                             rules_api.get(&rule.name, MatchSeq::GE(1)).await?;
                         }
                     }
-                    integrations_api
+                    if let Err(e) = integrations_api
                         .cas_with(&name.name, MatchSeq::GE(1), |old| {
                             let mut integration = old.data;
                             if let Some(rules) = rules {
@@ -158,7 +168,12 @@ impl Interpreter for ExternalAccessInterpreter {
                             }
                             integration
                         })
-                        .await?;
+                        .await
+                    {
+                        if !(*if_exists && e.is_business_error()) {
+                            return Err(e.into());
+                        }
+                    }
                 }
                 DropIntegration { name, if_exists } => {
                     if let Err(e) = integrations_api.remove(&name.name, MatchSeq::GE(1)).await {

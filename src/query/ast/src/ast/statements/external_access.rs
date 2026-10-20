@@ -17,6 +17,7 @@ use std::fmt;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
+use crate::ast::CreateOption;
 use crate::ast::Identifier;
 use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
@@ -30,13 +31,14 @@ use crate::visit::WalkMut;
 pub enum ExternalAccessStmt {
     CreateNetworkRule {
         name: Identifier,
-        if_not_exists: bool,
+        create_option: CreateOption,
         rule_type: Identifier,
         mode: Identifier,
         values: Vec<String>,
     },
     AlterNetworkRule {
         name: Identifier,
+        if_exists: bool,
         values: Vec<String>,
     },
     DropNetworkRule {
@@ -45,12 +47,13 @@ pub enum ExternalAccessStmt {
     },
     CreateIntegration {
         name: Identifier,
-        if_not_exists: bool,
+        create_option: CreateOption,
         rules: Vec<Identifier>,
         enabled: bool,
     },
     AlterIntegration {
         name: Identifier,
+        if_exists: bool,
         rules: Option<Vec<Identifier>>,
         enabled: Option<bool>,
     },
@@ -115,21 +118,38 @@ impl fmt::Display for ExternalAccessStmt {
         match self {
             Self::CreateNetworkRule {
                 name,
-                if_not_exists,
+                create_option,
                 rule_type,
                 mode,
                 values,
             } => {
                 write!(
                     f,
-                    "CREATE NETWORK RULE {}{name} TYPE = {rule_type} MODE = {mode} VALUE_LIST = (",
-                    if *if_not_exists { "IF NOT EXISTS " } else { "" }
+                    "CREATE {}NETWORK RULE {}{name} TYPE = {rule_type} MODE = {mode} VALUE_LIST = (",
+                    if matches!(create_option, CreateOption::CreateOrReplace) {
+                        "OR REPLACE "
+                    } else {
+                        ""
+                    },
+                    if matches!(create_option, CreateOption::CreateIfNotExists) {
+                        "IF NOT EXISTS "
+                    } else {
+                        ""
+                    }
                 )?;
                 write_comma_separated_list(f, values.iter().map(|v| QuotedString(v, '\'')))?;
                 write!(f, ")")
             }
-            Self::AlterNetworkRule { name, values } => {
-                write!(f, "ALTER NETWORK RULE {name} SET VALUE_LIST = (")?;
+            Self::AlterNetworkRule {
+                name,
+                if_exists,
+                values,
+            } => {
+                write!(
+                    f,
+                    "ALTER NETWORK RULE {}{name} SET VALUE_LIST = (",
+                    if *if_exists { "IF EXISTS " } else { "" }
+                )?;
                 write_comma_separated_list(f, values.iter().map(|v| QuotedString(v, '\'')))?;
                 write!(f, ")")
             }
@@ -140,24 +160,38 @@ impl fmt::Display for ExternalAccessStmt {
             ),
             Self::CreateIntegration {
                 name,
-                if_not_exists,
+                create_option,
                 rules,
                 enabled,
             } => {
                 write!(
                     f,
-                    "CREATE EXTERNAL ACCESS INTEGRATION {}{name} ALLOWED_NETWORK_RULES = (",
-                    if *if_not_exists { "IF NOT EXISTS " } else { "" }
+                    "CREATE {}EXTERNAL ACCESS INTEGRATION {}{name} ALLOWED_NETWORK_RULES = (",
+                    if matches!(create_option, CreateOption::CreateOrReplace) {
+                        "OR REPLACE "
+                    } else {
+                        ""
+                    },
+                    if matches!(create_option, CreateOption::CreateIfNotExists) {
+                        "IF NOT EXISTS "
+                    } else {
+                        ""
+                    }
                 )?;
                 write_comma_separated_list(f, rules)?;
                 write!(f, ") ENABLED = {enabled}")
             }
             Self::AlterIntegration {
                 name,
+                if_exists,
                 rules,
                 enabled,
             } => {
-                write!(f, "ALTER EXTERNAL ACCESS INTEGRATION {name} SET")?;
+                write!(
+                    f,
+                    "ALTER EXTERNAL ACCESS INTEGRATION {}{name} SET",
+                    if *if_exists { "IF EXISTS " } else { "" }
+                )?;
                 if let Some(rules) = rules {
                     write!(f, " ALLOWED_NETWORK_RULES = (")?;
                     write_comma_separated_list(f, rules)?;

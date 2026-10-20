@@ -124,7 +124,6 @@ message GrantObject {
     GrantProcedureObject procedure = 11;
     GrantMaskingPolicyObject maskingpolicy = 12;
     GrantRowAccessPolicyObject row_access_policy = 13;
-    string integration = 14;
   }
 }
 

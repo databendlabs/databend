@@ -17,6 +17,7 @@ use std::time::Duration;
 
 use educe::Educe;
 use nom::Parser;
+use nom::branch::permutation;
 use nom_rule::rule;
 
 use super::sequence::sequence;
@@ -2462,24 +2463,36 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let create_network_rule = map(
-        rule! { CREATE ~ NETWORK ~ RULE ~ (IF ~ NOT ~ EXISTS)? ~ #ident
-        ~ TYPE ~ "=" ~ #ident ~ MODE ~ "=" ~ #ident
-        ~ VALUE_LIST ~ "=" ~ "(" ~ #comma_separated_list1(literal_string) ~ ")" },
-        |(_, _, _, exists, name, _, _, rule_type, _, _, mode, _, _, _, values, _)| {
-            Statement::ExternalAccess(ExternalAccessStmt::CreateNetworkRule {
-                name,
-                if_not_exists: exists.is_some(),
-                rule_type,
-                mode,
-                values,
-            })
+    let network_rule_options = permutation((
+        map(rule! { TYPE ~ "=" ~ #ident }, |(_, _, rule_type)| rule_type),
+        map(rule! { MODE ~ "=" ~ #ident }, |(_, _, mode)| mode),
+        map(
+            rule! { VALUE_LIST ~ "=" ~ "(" ~ #comma_separated_list1(literal_string) ~ ")" },
+            |(_, _, _, values, _)| values,
+        ),
+    ));
+    let create_network_rule = map_res(
+        rule! { CREATE ~ (OR ~ REPLACE)? ~ NETWORK ~ RULE ~ (IF ~ NOT ~ EXISTS)? ~ #ident ~ #network_rule_options },
+        |(_, replace, _, _, exists, name, (rule_type, mode, values))| {
+            Ok(Statement::ExternalAccess(
+                ExternalAccessStmt::CreateNetworkRule {
+                    name,
+                    create_option: parse_create_option(replace.is_some(), exists.is_some())?,
+                    rule_type,
+                    mode,
+                    values,
+                },
+            ))
         },
     );
     let alter_network_rule = map(
-        rule! { ALTER ~ NETWORK ~ RULE ~ #ident ~ SET ~ VALUE_LIST ~ "=" ~ "(" ~ #comma_separated_list1(literal_string) ~ ")" },
-        |(_, _, _, name, _, _, _, _, values, _)| {
-            Statement::ExternalAccess(ExternalAccessStmt::AlterNetworkRule { name, values })
+        rule! { ALTER ~ NETWORK ~ RULE ~ (IF ~ EXISTS)? ~ #ident ~ SET ~ VALUE_LIST ~ "=" ~ "(" ~ #comma_separated_list1(literal_string) ~ ")" },
+        |(_, _, _, exists, name, _, _, _, _, values, _)| {
+            Statement::ExternalAccess(ExternalAccessStmt::AlterNetworkRule {
+                name,
+                if_exists: exists.is_some(),
+                values,
+            })
         },
     );
     let drop_network_rule = map(
@@ -2491,41 +2504,38 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
-    let create_external_access = map(
-        rule! { CREATE ~ EXTERNAL ~ ACCESS ~ INTEGRATION ~ (IF ~ NOT ~ EXISTS)? ~ #ident
-        ~ ALLOWED_NETWORK_RULES ~ "=" ~ "(" ~ #comma_separated_list1(ident) ~ ")"
-        ~ ENABLED ~ "=" ~ #literal_bool },
-        |(_, _, _, _, exists, name, _, _, _, rules, _, _, _, enabled)| {
-            Statement::ExternalAccess(ExternalAccessStmt::CreateIntegration {
+    let create_external_access = map_res(
+        rule! { CREATE ~ (OR ~ REPLACE)? ~ EXTERNAL ~ ACCESS ~ INTEGRATION ~ (IF ~ NOT ~ EXISTS)? ~ #ident ~ #external_access_options },
+        |(_, replace, _, _, _, exists, name, (rules, enabled))| {
+            let (Some(rules), Some(enabled)) = (rules, enabled) else {
+                return Err(nom::Err::Failure(ErrorKind::other(
+                    "Expected ALLOWED_NETWORK_RULES and ENABLED",
+                )));
+            };
+            Ok(Statement::ExternalAccess(
+                ExternalAccessStmt::CreateIntegration {
+                    name,
+                    create_option: parse_create_option(replace.is_some(), exists.is_some())?,
+                    rules,
+                    enabled,
+                },
+            ))
+        },
+    );
+    let alter_external_access = map(
+        rule! { ALTER ~ EXTERNAL ~ ACCESS ~ INTEGRATION ~ (IF ~ EXISTS)? ~ #ident ~ SET ~ #external_access_options },
+        |(_, _, _, _, exists, name, _, (rules, enabled))| {
+            Statement::ExternalAccess(ExternalAccessStmt::AlterIntegration {
                 name,
-                if_not_exists: exists.is_some(),
+                if_exists: exists.is_some(),
                 rules,
                 enabled,
             })
         },
     );
-    let alter_external_access = map_res(
-        rule! { ALTER ~ EXTERNAL ~ ACCESS ~ INTEGRATION ~ #ident ~ SET
-        ~ (ALLOWED_NETWORK_RULES ~ "=" ~ "(" ~ #comma_separated_list1(ident) ~ ")")?
-        ~ (ENABLED ~ "=" ~ #literal_bool)? },
-        |(_, _, _, _, name, _, rules, enabled)| {
-            if rules.is_none() && enabled.is_none() {
-                return Err(nom::Err::Failure(ErrorKind::other(
-                    "Expected ALLOWED_NETWORK_RULES or ENABLED",
-                )));
-            }
-            Ok(Statement::ExternalAccess(
-                ExternalAccessStmt::AlterIntegration {
-                    name,
-                    rules: rules.map(|(_, _, _, rules, _)| rules),
-                    enabled: enabled.map(|(_, _, enabled)| enabled),
-                },
-            ))
-        },
-    );
     let drop_external_access = map(
-        rule! { DROP ~ EXTERNAL ~ ACCESS ~ INTEGRATION ~ (IF ~ EXISTS)? ~ #ident },
-        |(_, _, _, _, exists, name)| {
+        rule! { DROP ~ (EXTERNAL ~ ACCESS)? ~ INTEGRATION ~ (IF ~ EXISTS)? ~ #ident },
+        |(_, _, _, exists, name)| {
             Statement::ExternalAccess(ExternalAccessStmt::DropIntegration {
                 name,
                 if_exists: exists.is_some(),
@@ -3512,6 +3522,34 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
     .parse(i)
 }
 
+fn external_access_options(i: Input) -> IResult<(Option<Vec<Identifier>>, Option<bool>)> {
+    let rules = map(
+        rule! { ALLOWED_NETWORK_RULES ~ "=" ~ "(" ~ #comma_separated_list1(ident) ~ ")" },
+        |(_, _, _, rules, _)| (Some(rules), None),
+    );
+    let enabled = map(
+        rule! { ENABLED ~ "=" ~ #literal_bool },
+        |(_, _, enabled)| (None, Some(enabled)),
+    );
+    map_res(rule! { (#rules | #enabled)+ }, |options| {
+        let mut rules = None;
+        let mut enabled = None;
+        for (new_rules, new_enabled) in options {
+            if (rules.is_some() && new_rules.is_some())
+                || (enabled.is_some() && new_enabled.is_some())
+            {
+                return Err(nom::Err::Failure(ErrorKind::other(
+                    "Duplicate external access integration option",
+                )));
+            }
+            rules = rules.or(new_rules);
+            enabled = enabled.or(new_enabled);
+        }
+        Ok((rules, enabled))
+    })
+    .parse(i)
+}
+
 pub fn parse_create_option(
     opt_or_replace: bool,
     opt_if_not_exists: bool,
@@ -4208,20 +4246,6 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         |(_, _, _, level)| AccountMgrSource::ALL { level },
     );
 
-    let integration_all_privs = map(
-        rule! { ALL ~ PRIVILEGES? ~ ON ~ INTEGRATION ~ #ident },
-        |(_, _, _, _, name)| AccountMgrSource::Privs {
-            privileges: vec![UserPrivilegeType::Usage],
-            level: AccountMgrLevel::Integration(name),
-        },
-    );
-    let integration_privs = map(
-        rule! { USAGE ~ ON ~ INTEGRATION ~ #ident },
-        |(_, _, _, name)| AccountMgrSource::Privs {
-            privileges: vec![UserPrivilegeType::Usage],
-            level: AccountMgrLevel::Integration(name),
-        },
-    );
     let udf_privs = map(
         rule! {
             USAGE ~ ON ~ UDF ~ #ident
@@ -4383,8 +4407,6 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         | #warehouse_all_privs: "ALL [ PRIVILEGES ] ON WAREHOUSE <warehouse_name>"
         | #connection_all_privs: "ALL [ PRIVILEGES ] ON CONNECTION <connection_name>"
         | #seq_all_privs: "ALL [ PRIVILEGES ] ON SEQUENCE <seq_name>"
-        | #integration_all_privs: "ALL [ PRIVILEGES ] ON INTEGRATION <name>"
-        | #integration_privs: "USAGE ON INTEGRATION <name>"
         | #udf_privs: "USAGE ON UDF <udf_name>"
         | #warehouse_privs: "USAGE ON WAREHOUSE <warehouse_name>"
         | #connection_privs: "ACCESS CONNECTION ON CONNECTION <connection_name>"

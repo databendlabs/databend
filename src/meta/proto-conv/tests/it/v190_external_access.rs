@@ -14,7 +14,6 @@
 
 use databend_common_expression::TableDataType;
 use databend_common_meta_app::principal::ExternalAccessIntegration;
-use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::NetworkRule;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_proto_conv::FromToProto;
@@ -43,10 +42,6 @@ fn test_decode_v190_external_access() -> anyhow::Result<()> {
     let integration_bytes = vec![10, 1, 105, 18, 1, 114, 24, 1, 160, 6, 190, 1, 168, 6, 24];
     common::test_load_old(func_name!(), &integration_bytes, 190, integration.clone())?;
     common::test_pb_from_to(func_name!(), integration)?;
-    let grant = GrantObject::Integration("i".into());
-    let grant_bytes = vec![114, 1, 105, 160, 6, 190, 1, 168, 6, 190, 1];
-    common::test_load_old(func_name!(), &grant_bytes, 190, grant.clone())?;
-    common::test_pb_from_to(func_name!(), grant)?;
     let udf = UDFServer {
         address: "https://example.com".into(),
         handler: "f".into(),
