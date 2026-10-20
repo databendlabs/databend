@@ -1,0 +1,57 @@
+# No UDF server needed: policy errors must be rejected before a Flight connection.
+statement ok
+DROP EXTERNAL ACCESS INTEGRATION IF EXISTS ddl_udf_access;
+
+statement ok
+DROP NETWORK RULE IF EXISTS ddl_udf_rule;
+
+statement error Only TYPE = HOST_PORT and MODE = EGRESS are supported
+CREATE NETWORK RULE ddl_udf_rule TYPE = IPV4 MODE = EGRESS VALUE_LIST = ('example.com:443');
+
+statement error Only TYPE = HOST_PORT and MODE = EGRESS are supported
+CREATE NETWORK RULE ddl_udf_rule TYPE = HOST_PORT MODE = INGRESS VALUE_LIST = ('example.com:443');
+
+statement error Invalid HOST_PORT value
+CREATE NETWORK RULE ddl_udf_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('https://example.com');
+
+statement error Invalid HOST_PORT value
+CREATE NETWORK RULE ddl_udf_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('*.example.com:443');
+
+statement ok
+CREATE NETWORK RULE ddl_udf_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('example.com:443', 'other.example.com:8443');
+
+statement ok
+CREATE NETWORK RULE IF NOT EXISTS ddl_udf_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('ignored.example.com');
+
+statement ok
+CREATE EXTERNAL ACCESS INTEGRATION ddl_udf_access ALLOWED_NETWORK_RULES = (ddl_udf_rule) ENABLED = FALSE;
+
+statement ok
+CREATE EXTERNAL ACCESS INTEGRATION IF NOT EXISTS ddl_udf_access ALLOWED_NETWORK_RULES = (ddl_udf_rule) ENABLED = TRUE;
+
+statement ok
+CREATE ROLE ddl_udf_developer;
+
+statement ok
+GRANT USAGE ON INTEGRATION ddl_udf_access TO ROLE ddl_udf_developer;
+
+statement ok
+REVOKE USAGE ON INTEGRATION ddl_udf_access FROM ROLE ddl_udf_developer;
+
+statement ok
+ALTER NETWORK RULE ddl_udf_rule SET VALUE_LIST = ('example.com:8443');
+
+statement ok
+ALTER EXTERNAL ACCESS INTEGRATION ddl_udf_access SET ALLOWED_NETWORK_RULES = (ddl_udf_rule) ENABLED = TRUE;
+
+statement ok
+ALTER EXTERNAL ACCESS INTEGRATION ddl_udf_access SET ENABLED = FALSE;
+
+statement ok
+DROP EXTERNAL ACCESS INTEGRATION ddl_udf_access;
+
+statement ok
+DROP NETWORK RULE ddl_udf_rule;
+
+statement ok
+DROP ROLE ddl_udf_developer;

@@ -20,7 +20,9 @@ use databend_common_meta_app::data_mask::MaskPolicyTableId;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::data_share::DataShareMeta;
 use databend_common_meta_app::data_share::ShareId;
+use databend_common_meta_app::principal::ExternalAccessIntegration;
 use databend_common_meta_app::principal::NetworkPolicy;
+use databend_common_meta_app::principal::NetworkRule;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::PasswordPolicy;
 use databend_common_meta_app::principal::ProcedureIdentity;
@@ -150,6 +152,8 @@ pub fn decode_pb_value(key: &str, bytes: &[u8]) -> String {
         "__fd_udfs/"                => UserDefinedFunction,
         "__fd_file_formats/"        => UserDefinedFileFormat,
         "__fd_connection/"          => UserDefinedConnection,
+        "__fd_network_rule/"         => NetworkRule,
+        "__fd_external_access_integration/" => ExternalAccessIntegration,
 
         // principal - procedure
         "__fd_procedure_by_id/"     => ProcedureMeta,

@@ -29,6 +29,7 @@ use databend_common_functions::is_builtin_function;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use unicase::Ascii;
+use url::Url;
 
 use crate::plans::UDFLanguage;
 
@@ -203,16 +204,34 @@ impl UDFValidator {
         address: &str,
         config: &UdfValidationConfig,
     ) -> Result<()> {
+        Self::is_udf_server_transport_allowed_with_config(address, config)?;
+        let url_addr =
+            Url::parse(address).map_err(|e| ErrorCode::InvalidArgument(e.to_string()))?;
+        if config.udf_server_allow_list.iter().all(|allow_url| {
+            Url::parse(allow_url)
+                .map(|allowed| allowed.host_str() != url_addr.host_str())
+                .unwrap_or(true)
+        }) {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "Unallowed UDF server address, '{address}' is not in udf_server_allow_list"
+            )));
+        }
+        Ok(())
+    }
+
+    pub fn is_udf_server_transport_allowed_with_config(
+        address: &str,
+        config: &UdfValidationConfig,
+    ) -> Result<()> {
         if !config.enable_udf_server {
             return Err(ErrorCode::Unimplemented(
                 "UDF server is not allowed, you can enable it by setting 'enable_udf_server = true' in query node config",
             ));
         }
 
-        let url_addr = url::Url::parse(address)
-            .map_err_to_code(ErrorCode::InvalidArgument, || {
-                format!("udf server address '{address}' is invalid, please check the address",)
-            })?;
+        let url_addr = Url::parse(address).map_err_to_code(ErrorCode::InvalidArgument, || {
+            format!("udf server address '{address}' is invalid, please check the address",)
+        })?;
 
         if !config.udf_server_allow_insecure && url_addr.scheme() != "https" {
             return Err(ErrorCode::Unimplemented(
@@ -220,17 +239,6 @@ impl UDFValidator {
             ));
         }
 
-        if config.udf_server_allow_list.iter().all(|allow_url| {
-            if let Ok(allow_url) = url::Url::parse(allow_url) {
-                allow_url.host_str() != url_addr.host_str()
-            } else {
-                true
-            }
-        }) {
-            return Err(ErrorCode::InvalidArgument(format!(
-                "Unallowed UDF server address, '{address}' is not in udf_server_allow_list"
-            )));
-        }
         Ok(())
     }
 }
@@ -246,6 +254,55 @@ mod tests {
     fn parse(sql: &str) -> Expr {
         let tokens = tokenize_sql(sql).unwrap();
         parse_expr(&tokens, Dialect::PostgreSQL).unwrap()
+    }
+
+    #[test]
+    fn remote_udf_transport_and_legacy_allow_list() {
+        let mut config = UdfValidationConfig {
+            enable_udf_server: true,
+            udf_server_allow_insecure: false,
+            udf_server_allow_list: vec!["https://video.example.com:8815".into()],
+            ..Default::default()
+        };
+        // Keep the legacy host-only comparison, even when ports differ.
+        UDFValidator::is_udf_server_allowed_with_config("https://video.example.com", &config)
+            .unwrap();
+        assert!(
+            UDFValidator::is_udf_server_allowed_with_config("https://other.example.com", &config)
+                .is_err()
+        );
+        config.udf_server_allow_list.clear();
+        assert!(
+            UDFValidator::is_udf_server_allowed_with_config("https://video.example.com", &config)
+                .is_err()
+        );
+        // SQL-managed policies replace the list, not transport security flags.
+        UDFValidator::is_udf_server_transport_allowed_with_config(
+            "https://video.example.com",
+            &config,
+        )
+        .unwrap();
+        assert!(
+            UDFValidator::is_udf_server_transport_allowed_with_config(
+                "http://video.example.com",
+                &config
+            )
+            .is_err()
+        );
+        config.udf_server_allow_insecure = true;
+        UDFValidator::is_udf_server_transport_allowed_with_config(
+            "http://video.example.com",
+            &config,
+        )
+        .unwrap();
+        config.enable_udf_server = false;
+        assert!(
+            UDFValidator::is_udf_server_transport_allowed_with_config(
+                "https://video.example.com",
+                &config
+            )
+            .is_err()
+        );
     }
 
     #[test]

@@ -60,9 +60,12 @@ impl Interpreter for CreateUserUDFScript {
             let plan = self.plan.clone();
             let tenant = self.ctx.get_tenant();
             let udf = plan.udf;
-            UserApiProvider::instance()
+            let changed = UserApiProvider::instance()
                 .add_udf(&tenant, udf, &plan.create_option)
                 .await?;
+            if !changed {
+                return Ok(PipelineBuildResult::create());
+            }
 
             // Grant ownership as the current role
             if let Some(current_role) = self.ctx.get_current_role() {

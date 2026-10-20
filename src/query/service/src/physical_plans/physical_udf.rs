@@ -152,6 +152,8 @@ impl IPhysicalPlan for Udf {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct UdfFunctionDesc {
+    #[serde(default)]
+    pub external_access_integrations: Vec<String>,
     pub name: String,
     pub func_name: String,
     pub output_column: Symbol,
@@ -240,6 +242,7 @@ impl PhysicalPlanBuilder {
                         .collect::<Result<Vec<_>>>()?;
 
                     let udf_func = UdfFunctionDesc {
+                        external_access_integrations: func.external_access_integrations.clone(),
                         name: func.name.clone(),
                         func_name: func.handler.clone(),
                         output_column: item.index,

@@ -22,6 +22,7 @@ use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UDAFStateField;
 use databend_common_ast::ast::UDFArgs;
 use databend_common_ast::ast::UDFDefinition;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableDataType;
@@ -31,6 +32,7 @@ use databend_common_expression::types::decimal::ARROW_UDF_DECIMAL_MAX_PRECISION;
 use databend_common_expression::types::decimal::ARROW_UDF_DECIMAL_MAX_SCALE;
 use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_functions::is_builtin_function;
+use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::ScalarUDF;
 use databend_common_meta_app::principal::UDAFScript;
@@ -40,6 +42,7 @@ use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UDTF;
 use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_users::UserApiProvider;
 
 use crate::BindContext;
@@ -48,6 +51,7 @@ use crate::UdfRewriter;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::planner::expression::UDFValidator;
+use crate::planner::expression::UdfValidationConfig;
 use crate::planner::resolve_type_name_udf;
 use crate::plans::AlterUDFPlan;
 use crate::plans::CreateUDFPlan;
@@ -144,6 +148,7 @@ impl Binder {
                 })
             }
             UDFDefinition::UDFServer {
+                external_access_integrations,
                 arg_types,
                 return_type,
                 address,
@@ -152,7 +157,30 @@ impl Binder {
                 language,
                 immutable,
             } => {
-                UDFValidator::is_udf_server_allowed(address.as_str())?;
+                let integrations: Vec<String> = external_access_integrations
+                    .iter()
+                    .map(|name| normalize_identifier(name, &self.name_resolution_ctx).name)
+                    .collect();
+                if integrations.is_empty() {
+                    UDFValidator::is_udf_server_allowed(address.as_str())?;
+                } else {
+                    UDFValidator::is_udf_server_transport_allowed_with_config(
+                        address,
+                        &UdfValidationConfig::from_inner_config(GlobalConfig::instance().as_ref()),
+                    )?;
+                    for name in &integrations {
+                        self.ctx
+                            .validate_privilege(
+                                &GrantObject::Integration(name.clone()),
+                                UserPrivilegeType::Usage,
+                                false,
+                            )
+                            .await?;
+                    }
+                    UserApiProvider::instance()
+                        .validate_external_access(&self.ctx.get_tenant(), address, &integrations)
+                        .await?;
+                }
 
                 let mut arg_datatypes = Vec::with_capacity(arg_types.len());
                 let mut arg_names = Vec::with_capacity(arg_types.len());
@@ -216,6 +244,7 @@ impl Binder {
                     name,
                     description,
                     definition: PlanUDFDefinition::UDFServer(UDFServer {
+                        external_access_integrations: integrations,
                         address: address.clone(),
                         arg_names,
                         arg_types: arg_datatypes,

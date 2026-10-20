@@ -53,6 +53,7 @@ use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::init_stage_operator;
+use databend_common_users::UserApiProvider;
 use itertools::Itertools;
 use parking_lot::RwLock;
 use serde_json::json;
@@ -604,6 +605,23 @@ impl UdfAdapter for FullTypeCheckAdapter {
         })
     }
 
+    fn validate_udf_server(&self, definition: &UDFServer) -> Result<()> {
+        let config = self.validation_config()?;
+        if definition.external_access_integrations.is_empty() {
+            UDFValidator::is_udf_server_allowed_with_config(&definition.address, &config)
+        } else {
+            UDFValidator::is_udf_server_transport_allowed_with_config(
+                &definition.address,
+                &config,
+            )?;
+            self.block_on(UserApiProvider::instance().validate_external_access(
+                &self.ctx.get_tenant(),
+                &definition.address,
+                &definition.external_access_integrations,
+            ))
+        }
+    }
+
     fn validation_config(&self) -> Result<crate::planner::expression::UdfValidationConfig> {
         Ok(
             crate::planner::expression::UdfValidationConfig::from_inner_config(
@@ -647,6 +665,7 @@ impl UdfAdapter for FullTypeCheckAdapter {
         )?;
         let (endpoint, headers) = self.apply_udf_cloud_resource(resource_name, "udf", script)?;
         Ok(UDFServer {
+            external_access_integrations: Vec::new(),
             address: endpoint,
             handler,
             headers,
@@ -942,8 +961,7 @@ where A: UdfAdapter
         validate_address: bool,
     ) -> Result<UdfResolveResult> {
         if validate_address {
-            let config = self.udf_adapter.validation_config()?;
-            UDFValidator::is_udf_server_allowed_with_config(&udf_definition.address, &config)?;
+            self.udf_adapter.validate_udf_server(&udf_definition)?;
         }
         if arguments.len() != udf_definition.arg_types.len() {
             return Err(ErrorCode::InvalidArgument(format!(
@@ -1034,7 +1052,9 @@ where A: UdfAdapter
                 .insert("databend-stage-mapping".to_string(), stage_location_value);
         }
         let immutable = udf_definition.immutable.unwrap_or_default();
-        if immutable && all_args_const {
+        // Keep policy-controlled calls in the execution plan so a cached plan
+        // cannot bypass subsequent integration/rule changes.
+        if immutable && all_args_const && udf_definition.external_access_integrations.is_empty() {
             let mut arg_scalars = Vec::with_capacity(args.len());
             for arg in &args {
                 let arg_scalar = match arg {
@@ -1074,6 +1094,7 @@ where A: UdfAdapter
                 handler: udf_definition.handler,
                 headers: udf_definition.headers,
                 display_name,
+                external_access_integrations: udf_definition.external_access_integrations.clone(),
                 udf_type: UDFType::Server(udf_definition.address.clone()),
                 arg_types,
                 return_type: Box::new(return_type.clone()),
@@ -1150,6 +1171,7 @@ where A: UdfAdapter
                 name,
                 handler,
                 headers: BTreeMap::default(),
+                external_access_integrations: Vec::new(),
                 display_name,
                 arg_types,
                 return_type: Box::new(return_type.clone()),

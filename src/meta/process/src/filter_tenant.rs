@@ -763,6 +763,9 @@ impl TenantDump {
                     out,
                 );
             }
+            GrantObject::Integration(name) => {
+                out.required(format!("__fd_external_access_integration/{tenant}/{name}"));
+            }
             GrantObject::Connection(name) => {
                 out.required(format!("__fd_connection/{tenant}/{name}"));
             }
@@ -1195,6 +1198,8 @@ const TENANT_SCOPED_PREFIXES: &[&str] = &[
     "__fd_materialized_view_by_source",
     "__fd_materialized_view_definition",
     "__fd_network_policies",
+    "__fd_network_rule",
+    "__fd_external_access_integration",
     "__fd_object_owners",
     "__fd_object_tag_ref",
     "__fd_password_policies",

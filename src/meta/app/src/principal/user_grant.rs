@@ -63,6 +63,7 @@ pub enum GrantObject {
     Stage(String),
     Warehouse(String),
     Connection(String),
+    Integration(String),
     Sequence(String),
     Procedure(u64),
     MaskingPolicy(u64),
@@ -101,6 +102,7 @@ impl GrantObject {
             (GrantObject::UDF(udf), GrantObject::UDF(rudf)) => udf == rudf,
             (GrantObject::Warehouse(w), GrantObject::Warehouse(rw)) => w == rw,
             (GrantObject::Connection(c), GrantObject::Connection(rc)) => c == rc,
+            (GrantObject::Integration(c), GrantObject::Integration(rc)) => c == rc,
             (GrantObject::Sequence(s), GrantObject::Sequence(rs)) => s == rs,
             (GrantObject::Procedure(p), GrantObject::Procedure(rp)) => p == rp,
             (GrantObject::MaskingPolicy(lp), GrantObject::MaskingPolicy(rp)) => lp == rp,
@@ -119,6 +121,7 @@ impl GrantObject {
             GrantObject::Table(_, _, _) | GrantObject::TableById(_, _, _) => {
                 UserPrivilegeSet::available_privileges_on_table(available_ownership)
             }
+            GrantObject::Integration(_) => UserPrivilegeType::Usage.into(),
             GrantObject::UDF(_) => {
                 UserPrivilegeSet::available_privileges_on_udf(available_ownership)
             }
@@ -156,6 +159,7 @@ impl GrantObject {
             | GrantObject::Procedure(_)
             | GrantObject::MaskingPolicy(_)
             | GrantObject::RowAccessPolicy(_)
+            | GrantObject::Integration(_)
             | GrantObject::Connection(_) => None,
             GrantObject::Database(cat, _) | GrantObject::DatabaseById(cat, _) => Some(cat.clone()),
             GrantObject::Table(cat, _, _) | GrantObject::TableById(cat, _, _) => Some(cat.clone()),
@@ -179,6 +183,7 @@ impl fmt::Display for GrantObject {
             GrantObject::Stage(stage) => write!(f, "STAGE {stage}"),
             GrantObject::Warehouse(w) => write!(f, "WAREHOUSE {w}"),
             GrantObject::Connection(c) => write!(f, "CONNECTION {c}"),
+            GrantObject::Integration(c) => write!(f, "INTEGRATION {c}"),
             GrantObject::Sequence(s) => write!(f, "SEQUENCE {s}"),
             GrantObject::Procedure(p) => write!(f, "PROCEDURE {p}"),
             GrantObject::MaskingPolicy(policy_id) => write!(f, "MASKING POLICY {policy_id}"),

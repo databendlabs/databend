@@ -36,9 +36,12 @@ use databend_common_management::UserApi;
 use databend_common_management::UserMgr;
 use databend_common_management::task::TaskMgr;
 use databend_common_management::udf::UdfMgr;
+use databend_common_meta_api::crud::CrudMgr;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_meta_app::principal::external_access_integration_ident::Resource as ExternalAccessIntegrationResource;
+use databend_common_meta_app::principal::network_rule_ident::Resource as NetworkRuleResource;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
@@ -187,6 +190,17 @@ impl UserApiProvider {
 
     pub fn file_format_api(&self, tenant: &Tenant) -> FileFormatMgr {
         FileFormatMgr::create(self.client.clone(), tenant)
+    }
+
+    pub fn network_rule_api(&self, tenant: &Tenant) -> CrudMgr<NetworkRuleResource> {
+        CrudMgr::create(self.client.clone(), tenant)
+    }
+
+    pub fn external_access_integration_api(
+        &self,
+        tenant: &Tenant,
+    ) -> CrudMgr<ExternalAccessIntegrationResource> {
+        CrudMgr::create(self.client.clone(), tenant)
     }
 
     pub fn connection_api(&self, tenant: &Tenant) -> ConnectionMgr {

@@ -36,6 +36,47 @@ use nom::Parser;
 use nom_rule::rule;
 
 #[test]
+fn test_external_access_sql() {
+    for sql in [
+        "CREATE NETWORK RULE video_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('video.example.com:443', 'other.example.com')",
+        "CREATE NETWORK RULE IF NOT EXISTS video_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('video.example.com:443')",
+        "ALTER NETWORK RULE video_rule SET VALUE_LIST = ('other.example.com:8443')",
+        "DROP NETWORK RULE IF EXISTS video_rule",
+        "CREATE EXTERNAL ACCESS INTEGRATION video_access ALLOWED_NETWORK_RULES = (video_rule, other_rule) ENABLED = TRUE",
+        "CREATE EXTERNAL ACCESS INTEGRATION IF NOT EXISTS video_access ALLOWED_NETWORK_RULES = (video_rule) ENABLED = FALSE",
+        "ALTER EXTERNAL ACCESS INTEGRATION video_access SET ENABLED = FALSE",
+        "ALTER EXTERNAL ACCESS INTEGRATION video_access SET ALLOWED_NETWORK_RULES = (other_rule) ENABLED = TRUE",
+        "DROP EXTERNAL ACCESS INTEGRATION IF EXISTS video_access",
+        "GRANT USAGE ON INTEGRATION video_access TO ROLE developer",
+        "REVOKE USAGE ON INTEGRATION video_access FROM ROLE developer",
+        "GRANT ALL PRIVILEGES ON INTEGRATION video_access TO ROLE developer",
+        "GRANT USAGE ON INTEGRATION \"QuotedAccess\" TO ROLE developer",
+        "CREATE NETWORK RULE \"QuotedRule\" TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('video.example.com')",
+        "CREATE EXTERNAL ACCESS INTEGRATION \"QuotedAccess\" ALLOWED_NETWORK_RULES = (\"QuotedRule\") ENABLED = TRUE",
+        "CREATE FUNCTION parse_video(STRING) RETURNS VARIANT LANGUAGE python HANDLER = 'parse_video' ADDRESS = 'https://video.example.com' EXTERNAL_ACCESS_INTEGRATIONS = (video_access, other_access)",
+        "ALTER FUNCTION parse_video(STRING) RETURNS VARIANT LANGUAGE python HANDLER = 'parse_video' ADDRESS = 'https://video.example.com' EXTERNAL_ACCESS_INTEGRATIONS = (video_access)",
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) =
+            parse_sql(&tokens, Dialect::PostgreSQL).unwrap_or_else(|e| panic!("{sql}: {e}"));
+        let displayed = stmt.to_string();
+        let tokens = tokenize_sql(&displayed).unwrap();
+        let (reparsed, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        assert_eq!(displayed, reparsed.to_string());
+    }
+    for sql in [
+        "CREATE NETWORK RULE r TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ()",
+        "CREATE EXTERNAL ACCESS INTEGRATION i ALLOWED_NETWORK_RULES = () ENABLED = TRUE",
+        "ALTER EXTERNAL ACCESS INTEGRATION i SET",
+        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' ADDRESS = 'https://example.com' EXTERNAL_ACCESS_INTEGRATIONS = ()",
+        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' AS $$return 1$$ EXTERNAL_ACCESS_INTEGRATIONS = (i)",
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err(), "{sql}");
+    }
+}
+
+#[test]
 fn test_set_ttl_and_modify_column_are_distinct() {
     use databend_common_ast::ast::AlterTableAction;
     use databend_common_ast::ast::Statement;
