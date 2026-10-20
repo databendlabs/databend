@@ -1,0 +1,39 @@
+# Run on an isolated cluster: the unfixed version can panic in the exchange sink.
+statement ok
+create or replace table bad_shuffle_probe(k string)
+
+statement ok
+create or replace table bad_shuffle_build(k bigint)
+
+statement ok
+insert into bad_shuffle_probe values ('invalid-7')
+
+# Both sides are nonempty; force shuffle and disable runtime-filter shortcuts.
+statement ok
+insert into bad_shuffle_build values (7)
+
+statement error invalid digit
+settings(enforce_shuffle_join=1, enable_join_runtime_filter=0)
+select count(*) from bad_shuffle_probe p join bad_shuffle_build b on to_int64(p.k)=b.k
+
+# An ordinary query must still succeed after the expression error.
+query I
+select 1
+----
+1
+
+statement ok
+update bad_shuffle_probe set k='7'
+
+# The same distributed join succeeds for a valid numeric key.
+query I
+settings(enforce_shuffle_join=1, enable_join_runtime_filter=0)
+select count(*) from bad_shuffle_probe p join bad_shuffle_build b on to_int64(p.k)=b.k
+----
+1
+
+statement ok
+drop table bad_shuffle_probe
+
+statement ok
+drop table bad_shuffle_build

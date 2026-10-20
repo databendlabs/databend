@@ -129,7 +129,7 @@ impl FlightScatter for OneHashKeyFlightScatter {
         let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let num = data_block.num_rows();
 
-        let indices = evaluator.run(&self.indices_scalar).unwrap();
+        let indices = evaluator.run(&self.indices_scalar)?;
         let indices = get_hash_values(indices, num, self.default_scatter_index)?;
         let data_blocks = DataBlock::scatter(&data_block, &indices, self.scatter_size)?;
 
@@ -145,7 +145,7 @@ impl FlightScatter for OneHashKeyFlightScatter {
     fn scatter_indices(&self, data_block: &DataBlock) -> Result<Option<Vec<u64>>> {
         let evaluator = Evaluator::new(data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let num = data_block.num_rows();
-        let indices = evaluator.run(&self.indices_scalar).unwrap();
+        let indices = evaluator.run(&self.indices_scalar)?;
         let indices = get_hash_values(indices, num, self.default_scatter_index)?;
         Ok(Some(indices.to_vec()))
     }
@@ -283,6 +283,7 @@ fn get_hash_values(
 mod tests {
     use databend_common_expression::ColumnRef;
     use databend_common_expression::FromData;
+    use databend_common_expression::types::Int64Type;
     use databend_common_expression::types::StringType;
     use databend_common_expression::types::UInt64Type;
 
@@ -332,6 +333,100 @@ mod tests {
             max_partition * partitions * 20 <= indices.len() * 21,
             "partition counts are imbalanced: {counts:?}"
         );
+    }
+
+    fn numeric_shuffle_key(data_type: DataType) -> Result<Expr> {
+        check_function(
+            None,
+            "to_int64",
+            &[],
+            &[column_expr(0, data_type)],
+            &BUILTIN_FUNCTIONS,
+        )
+    }
+
+    #[test]
+    fn invalid_single_shuffle_key_returns_error_from_indices() -> Result<()> {
+        let block = DataBlock::new_from_columns(vec![StringType::from_data(vec!["invalid-7"])]);
+        let scatter = scatter(vec![numeric_shuffle_key(DataType::String)?], 3)?;
+        assert_eq!(scatter.name(), "OneHashKey");
+        let error = scatter.scatter_indices(&block).unwrap_err();
+        assert!(error.message().contains("invalid digit"), "{error}");
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_single_shuffle_key_returns_error_from_execute() -> Result<()> {
+        let block = DataBlock::new_from_columns(vec![StringType::from_data(vec!["invalid-7"])]);
+        let scatter = scatter(vec![numeric_shuffle_key(DataType::String)?], 3)?;
+        assert_eq!(scatter.name(), "OneHashKey");
+        // Separate tests ensure a baseline panic in one entry cannot hide the other.
+        let error = scatter
+            .execute(block)
+            .map(|_| ())
+            .expect_err("invalid key must fail");
+        assert!(error.message().contains("invalid digit"), "{error}");
+        Ok(())
+    }
+
+    #[test]
+    fn single_numeric_shuffle_key_valid_null_and_empty_controls() -> Result<()> {
+        let cases = [
+            (
+                StringType::from_data(vec!["7", "-2", "7"]),
+                Int64Type::from_data(vec![7, -2, 7]),
+            ),
+            (
+                StringType::from_data_with_validity(vec!["7", "99", "-2"], vec![true, false, true]),
+                Int64Type::from_data_with_validity(vec![7, 99, -2], vec![true, false, true]),
+            ),
+            (
+                StringType::from_data_with_validity(vec!["99"], vec![false]),
+                Int64Type::from_data_with_validity(vec![99], vec![false]),
+            ),
+            (
+                StringType::from_data(Vec::<String>::new()),
+                Int64Type::from_data(Vec::<i64>::new()),
+            ),
+        ];
+        for (text, numbers) in cases {
+            let block = DataBlock::new_from_columns(vec![text]);
+            let materialized = DataBlock::new_from_columns(vec![numbers]);
+            for partitions in [1, 3, 8] {
+                let scatter = scatter(
+                    vec![numeric_shuffle_key(block.get_by_offset(0).data_type())?],
+                    partitions,
+                )?;
+                assert_eq!(scatter.name(), "OneHashKey");
+                let indices = scatter.scatter_indices(&block)?.unwrap();
+                assert_eq!(indices.len(), block.num_rows());
+                assert!(indices.iter().all(|&index| index < partitions as u64));
+                assert_eq!(
+                    indices,
+                    scatter_indices(block_hash_keys(&materialized), partitions, &materialized)?
+                );
+                if block.num_rows() == 3 && block.get_by_offset(0).data_type().is_nullable() {
+                    assert_eq!(indices[1], 0);
+                } else if block.num_rows() == 1 {
+                    assert_eq!(indices, vec![0]);
+                }
+                let blocks = scatter.execute(block.clone())?;
+                assert_eq!(blocks.len(), partitions);
+                for (partition, output) in blocks.iter().enumerate() {
+                    let rows = indices
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(row, &index)| {
+                            (index == partition as u64).then_some(row as u32)
+                        })
+                        .collect::<Vec<_>>();
+                    let expected = block.take(rows.as_slice())?;
+                    assert_eq!(output.num_rows(), rows.len());
+                    assert_eq!(output.columns(), expected.columns());
+                }
+            }
+        }
+        Ok(())
     }
 
     #[test]
