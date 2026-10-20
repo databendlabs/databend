@@ -1,0 +1,111 @@
+# Synthetic scalar-subquery cardinality checks must survive parent RF pushdown.
+# The parent probes the preserved base key, not a derived subquery-output alias.
+# Builder tests separately assert rewritten Inner markers and physical targets.
+statement ok
+set disable_join_reorder = 1;
+
+statement ok
+drop table if exists rf_single_input;
+
+statement ok
+drop table if exists rf_single_values;
+
+statement ok
+drop table if exists rf_single_keep;
+
+statement ok
+create table rf_single_input(k int);
+
+statement ok
+create table rf_single_values(k int, v int);
+
+statement ok
+create table rf_single_keep(k int);
+
+statement ok
+insert into rf_single_input values (1), (2), (3), (4);
+
+statement ok
+insert into rf_single_values values (1, 10), (1, 20), (2, 30), (3, 40), (4, 50);
+
+# Min/max includes the bad key 1, but membership excludes it.
+statement ok
+insert into rf_single_keep values (0), (2), (3);
+
+statement ok
+set enable_join_runtime_filter = 0;
+
+# The null-rejecting nonconstant predicate retains both conflicting values.
+query error 1001.*Scalar subquery can't return more than one row
+select q.k, q.v
+from (
+    select a.k, (select b.v from rf_single_values b where b.k = a.k) v
+    from rf_single_input a
+) q
+inner join rf_single_keep c on q.k = c.k
+where q.v is not null and q.v <= 45
+order by q.k;
+
+statement ok
+set enable_join_runtime_filter = 1;
+
+# RF membership must not remove key 1 before the planned cardinality check.
+query error 1001.*Scalar subquery can't return more than one row
+select q.k, q.v
+from (
+    select a.k, (select b.v from rf_single_values b where b.k = a.k) v
+    from rf_single_input a
+) q
+inner join rf_single_keep c on q.k = c.k
+where q.v is not null and q.v <= 45
+order by q.k;
+
+statement ok
+delete from rf_single_values where k = 1 and v = 20;
+
+statement ok
+set enable_join_runtime_filter = 0;
+
+query II
+select q.k, q.v
+from (
+    select a.k, (select b.v from rf_single_values b where b.k = a.k) v
+    from rf_single_input a
+) q
+inner join rf_single_keep c on q.k = c.k
+where q.v is not null and q.v <= 45
+order by q.k;
+----
+2 30
+3 40
+
+statement ok
+set enable_join_runtime_filter = 1;
+
+query II
+select q.k, q.v
+from (
+    select a.k, (select b.v from rf_single_values b where b.k = a.k) v
+    from rf_single_input a
+) q
+inner join rf_single_keep c on q.k = c.k
+where q.v is not null and q.v <= 45
+order by q.k;
+----
+2 30
+3 40
+
+statement ok
+drop table rf_single_keep;
+
+statement ok
+drop table rf_single_values;
+
+statement ok
+drop table rf_single_input;
+
+statement ok
+unset enable_join_runtime_filter;
+
+statement ok
+unset disable_join_reorder;

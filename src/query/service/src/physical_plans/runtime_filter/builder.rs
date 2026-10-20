@@ -356,7 +356,10 @@ fn row_preserving_probe_operator(plan: &PhysicalRelOperator) -> bool {
             aggregate.aggregate.grouping_sets.is_none() && aggregate.aggregate.rank_limit.is_none()
         }
         PhysicalRelOperator::Join(join) => {
-            matches!(join.join_type, JoinType::Inner | JoinType::Cross)
+            // A rewritten scalar join can look like Inner while still enforcing
+            // single-row cardinality. Filtering its inputs can hide duplicates.
+            join.single_to_inner.is_none()
+                && matches!(join.join_type, JoinType::Inner | JoinType::Cross)
         }
         _ => false,
     }
@@ -1122,6 +1125,285 @@ mod tests {
             path_scan(),
         );
         assert!(super::collect_equi_conditions(&outer).unwrap().is_empty());
+    }
+
+    fn single_cardinality_fixture(
+        original: Option<databend_common_sql::plans::JoinType>,
+    ) -> (
+        databend_common_sql::MetadataRef,
+        databend_common_sql::optimizer::ir::PExpr,
+    ) {
+        use databend_common_expression::TableDataType;
+        use databend_common_sql::optimizer::ir::PExpr;
+        use databend_common_sql::plans::*;
+        let metadata = databend_common_sql::MetadataRef::default();
+        for index in 0..3 {
+            let symbol = metadata.write().add_base_table_column(
+                format!("single{index}"),
+                TableDataType::Number(NumberDataType::Int32),
+                0,
+                Some(vec![index]),
+                index as u32,
+                None,
+                None,
+            );
+            assert_eq!(symbol, Symbol::new(index));
+        }
+        metadata.write().add_base_column_scan_id(
+            [
+                (Symbol::new(0), 7),
+                (Symbol::new(1), 8),
+                (Symbol::new(2), 8),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        let scalar = |index| {
+            let mut scalar = path_column();
+            let ScalarExpr::BoundColumnRef(reference) = &mut scalar else {
+                unreachable!()
+            };
+            reference.column.index = Symbol::new(index);
+            reference.column.column_name = format!("single{index}");
+            scalar
+        };
+        // The scalar side has both its correlation key and a distinct payload.
+        // A parent predicate on the payload could otherwise hide a second match.
+        let outer = PExpr::create_leaf(Scan {
+            scan_id: 7,
+            columns: [Symbol::new(0)].into_iter().collect(),
+            ..Default::default()
+        });
+        let scalar_side = PExpr::create_leaf(Scan {
+            scan_id: 8,
+            columns: [Symbol::new(1), Symbol::new(2)].into_iter().collect(),
+            ..Default::default()
+        });
+        let reversed = original == Some(JoinType::RightSingle);
+        let (left, right, left_key, right_key) = if reversed {
+            (scalar_side, outer, scalar(1), scalar(0))
+        } else {
+            (outer, scalar_side, scalar(0), scalar(1))
+        };
+        (
+            metadata,
+            PExpr::create_binary(
+                Join {
+                    join_type: JoinType::Inner,
+                    single_to_inner: original,
+                    equi_conditions: vec![JoinEquiCondition::new(left_key, right_key, false)],
+                    ..Default::default()
+                },
+                left,
+                right,
+            ),
+        )
+    }
+
+    #[test]
+    fn test_converted_single_joins_are_probe_barriers() {
+        use databend_common_sql::plans::JoinType;
+        for original in [JoinType::LeftSingle, JoinType::RightSingle] {
+            let (metadata, converted) = single_cardinality_fixture(Some(original));
+            let (plain_metadata, plain) = single_cardinality_fixture(None);
+            // Exercise the unsafe scalar payload before the preserved-side key.
+            for (index, scan_id) in [(2, 8), (0, 7)] {
+                for connector in [true, false] {
+                    let name = format!("single{index}");
+                    let key = column(&name, DataType::Number(NumberDataType::Int32));
+                    let key = if connector {
+                        key
+                    } else {
+                        check_function(None, "plus", &[], &[key, int32(1)], &BUILTIN_FUNCTIONS)
+                            .unwrap()
+                    };
+                    let targets = |metadata, plan| {
+                        super::find_probe_targets(
+                            metadata,
+                            plan,
+                            key.as_remote_expr(),
+                            scan_id,
+                            Symbol::new(index),
+                            connector,
+                            &FunctionContext::default(),
+                        )
+                        .unwrap()
+                    };
+                    assert!(
+                        targets(&metadata, &converted).is_empty(),
+                        "converted {original:?}, column {index}, connector={connector}"
+                    );
+                    assert_eq!(
+                        targets(&plain_metadata, &plain).len(),
+                        if connector && index == 0 { 2 } else { 1 },
+                        "ordinary Inner must retain its safe targets"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_converted_single_joins_hide_input_equalities() {
+        use databend_common_sql::plans::JoinType;
+        for original in [JoinType::LeftSingle, JoinType::RightSingle] {
+            let (_, converted) = single_cardinality_fixture(Some(original));
+            assert!(
+                super::collect_equi_conditions(&converted)
+                    .unwrap()
+                    .is_empty()
+            );
+        }
+        let (_, plain) = single_cardinality_fixture(None);
+        assert_eq!(super::collect_equi_conditions(&plain).unwrap().len(), 1);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_converted_single_sql_preserves_duplicate_error()
+    -> databend_common_exception::Result<()> {
+        use databend_common_expression::DataBlock;
+        use databend_common_sql::Planner;
+        use databend_common_sql::optimizer::ir::PExpr;
+        use databend_common_sql::plans::JoinType;
+        use databend_common_sql::plans::PhysicalRelOperator;
+        use databend_common_sql::plans::Plan;
+        use futures::TryStreamExt;
+
+        fn marked_inner_count(expr: &PExpr) -> usize {
+            let current = usize::from(matches!(expr.plan(), PhysicalRelOperator::Join(join)
+                if join.join_type == JoinType::Inner
+                    && matches!(join.single_to_inner, Some(JoinType::LeftSingle | JoinType::RightSingle))));
+            current + expr.children().map(marked_inner_count).sum::<usize>()
+        }
+        fn has_parent_join(expr: &PExpr, metadata: &databend_common_sql::MetadataRef) -> bool {
+            let is_parent = matches!(expr.plan(), PhysicalRelOperator::Join(join)
+                if join.single_to_inner.is_none() && join.join_type == JoinType::Inner);
+            if is_parent && marked_inner_count(expr.probe_side_child()) > 0 {
+                let PhysicalRelOperator::Join(join) = expr.plan() else {
+                    unreachable!()
+                };
+                assert_eq!(join.equi_conditions.len(), 1);
+                assert!(
+                    super::scalar_to_probe_target(
+                        metadata,
+                        &join.equi_conditions[0].left,
+                        &FunctionContext::default(),
+                    )
+                    .unwrap()
+                    .is_some(),
+                    "SQL must expose an RF-capable base-column probe expression"
+                );
+                return true;
+            }
+            expr.children()
+                .any(|child| has_parent_join(child, metadata))
+        }
+        fn physical_marked_count(plan: &crate::physical_plans::PhysicalPlan) -> usize {
+            let current = usize::from(
+                plan.as_any()
+                    .downcast_ref::<crate::physical_plans::HashJoin>()
+                    .is_some_and(|join| join.single_to_inner.is_some()),
+            );
+            current + plan.children().map(physical_marked_count).sum::<usize>()
+        }
+        fn check_parent_targets(plan: &crate::physical_plans::PhysicalPlan) -> usize {
+            let mut current = 0;
+            if let Some(join) = plan
+                .as_any()
+                .downcast_ref::<crate::physical_plans::HashJoin>()
+                && join.single_to_inner.is_none()
+                && physical_marked_count(&join.probe) > 0
+            {
+                assert!(
+                    join.runtime_filter.filters.is_empty(),
+                    "parent RF must not enter the cardinality-checking scalar join"
+                );
+                current = 1;
+            }
+            current + plan.children().map(check_parent_targets).sum::<usize>()
+        }
+
+        let fixture = crate::test_kits::TestFixture::setup().await?;
+        for sql in [
+            "set disable_join_reorder = 1",
+            "create table rf_single_input(k int)",
+            "create table rf_single_values(k int, v int)",
+            "create table rf_single_keep(k int)",
+            "insert into rf_single_input values (1), (2), (3), (4)",
+            "insert into rf_single_values values (1, 10), (1, 20), (2, 30), (3, 40), (4, 50)",
+            // The keep-side range includes the bad key, but membership excludes it.
+            // Static min/max filtering cannot remove the duplicate-check case.
+            "insert into rf_single_keep values (0), (2), (3)",
+        ] {
+            fixture.execute_command(sql).await?;
+        }
+        let sql = "select q.k, q.v from \
+                   (select a.k, (select b.v from rf_single_values b where b.k = a.k) v \
+                    from rf_single_input a) q \
+                   inner join rf_single_keep c on q.k = c.k \
+                   where q.v is not null and q.v <= 45 order by q.k";
+        for enabled in [0, 1] {
+            fixture
+                .execute_command(&format!("set enable_join_runtime_filter = {enabled}"))
+                .await?;
+            let ctx = fixture.new_query_ctx().await?;
+            let mut planner = Planner::new(ctx.clone());
+            let (plan, _) = planner.plan_sql(sql).await?;
+            let Plan::Query {
+                s_expr,
+                metadata,
+                bind_context,
+                ..
+            } = &plan
+            else {
+                unreachable!("synthetic SELECT must produce a query plan")
+            };
+            let expr = s_expr.planned()?.expr();
+            assert!(
+                marked_inner_count(expr) > 0,
+                "SQL must reach the rewritten Single form"
+            );
+            assert!(
+                has_parent_join(expr, metadata),
+                "the converted check must be inside a parent's probe subtree"
+            );
+            let mut builder =
+                crate::physical_plans::PhysicalPlanBuilder::new(metadata.clone(), ctx, false);
+            let physical = builder
+                .build_query(s_expr.planned()?, bind_context.column_set())
+                .await?;
+            assert!(physical_marked_count(&physical) > 0);
+            assert!(check_parent_targets(&physical) > 0);
+            // Execute on a fresh context, without reusing plan-build side effects.
+            let result = match fixture.execute_query(sql).await {
+                Ok(stream) => stream.try_collect::<Vec<DataBlock>>().await.map(|_| ()),
+                Err(error) => Err(error),
+            };
+            let error = result.expect_err("the second scalar row must not be hidden by RF");
+            assert!(
+                error
+                    .message()
+                    .contains("Scalar subquery can't return more than one row")
+            );
+        }
+        fixture
+            .execute_command("delete from rf_single_values where v = 20")
+            .await?;
+        let blocks: Vec<DataBlock> = fixture.execute_query(sql).await?.try_collect().await?;
+        let mut rows = Vec::new();
+        for block in blocks {
+            for row in 0..block.num_rows() {
+                rows.push((
+                    block.get_by_offset(0).index(row).unwrap().to_string(),
+                    block.get_by_offset(1).index(row).unwrap().to_string(),
+                ));
+            }
+        }
+        assert_eq!(rows, vec![
+            ("2".to_string(), "30".to_string()),
+            ("3".to_string(), "40".to_string())
+        ]);
+        Ok(())
     }
 
     #[test]
