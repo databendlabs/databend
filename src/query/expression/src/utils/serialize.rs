@@ -30,6 +30,8 @@ pub fn uniform_date(date: NaiveDate) -> i32 {
 
 /// Parse a decimal at a known precision and scale, optionally rounding half away from zero.
 /// In prefix mode (`exact = false`), return the number of bytes consumed before the delimiter.
+/// An exponent marker must be followed by digits, even in prefix mode. Exponents must fit
+/// in `i32`, including for zero mantissas or values that would otherwise round to zero.
 // Used in function, so we don't want to return ErrorCode with backtrace
 pub fn read_decimal_with_size<T: Decimal>(
     buf: &[u8],
@@ -122,9 +124,10 @@ pub fn read_decimal_with_size<T: Decimal>(
         .skip_while(|&digit| digit == b'0');
     let mut n = T::zero();
     let mut retained = 0;
+    let ten = T::e(1);
     for digit in significant.by_ref().take(coefficient_digits as usize) {
         n = n
-            .checked_mul(T::from_i64(10))
+            .checked_mul(ten)
             .and_then(|n| n.checked_add(T::from_i64((digit - b'0') as i64)))
             .ok_or_else(decimal_overflow_error)?;
         retained += 1;

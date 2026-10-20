@@ -35,8 +35,11 @@ fn test_decimal_with_size_modes() {
             ("-.0005", 0, -1),
             ("0.", 0, 0),
             ("12.345E-1", 1234, 1235),
+            (".0210e3", 21000, 21000),
+            ("0120.0210e-1", 12002, 12002),
             ("1.5e+1", 15000, 15000),
             ("1e-2147483648", 0, 0),
+            ("0e2147483647", 0, 0),
         ] {
             for rounding_mode in [false, true] {
                 let expected = T::from_i64(if rounding_mode { rounded } else { truncated });
@@ -67,6 +70,12 @@ fn test_decimal_with_size_modes() {
             );
             assert!(read_decimal_with_size::<T>(text.as_bytes(), size, true, true).is_err());
         }
+        for text in ["1e10,", "1e-2147483649,", "0e9999999999,"] {
+            assert!(
+                read_decimal_with_size::<T>(text.as_bytes(), size, false, true).is_err(),
+                "{text}"
+            );
+        }
     }
     check::<i64>();
     check::<i128>();
@@ -76,7 +85,9 @@ fn test_decimal_with_size_modes() {
 #[test]
 fn test_decimal_with_size_invalid_text() {
     let size = DecimalSize::new_unchecked(18, 4);
-    for text in ["", ".", "+", "-", ".e1", "a", "1e", "1e+", "1e-", "1ee2"] {
+    for text in [
+        "", ".", "+", "-", ".e1", "a", "1e", "1e+", "1e-", "1ee2", "1e,", "1.5e)",
+    ] {
         for exact in [false, true] {
             for rounding_mode in [false, true] {
                 assert!(
