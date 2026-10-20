@@ -1,0 +1,101 @@
+## Copyright 2026 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+CREATE DATABASE vacuum_idle_snapshot
+
+statement ok
+USE vacuum_idle_snapshot
+
+statement ok
+SET enable_auto_vacuum = 0
+
+statement ok
+SET data_retention_time_in_days = 0
+
+statement ok
+CREATE TABLE t(c INT) AS SELECT 1
+
+statement ok
+CREATE TABLE previous_head ENGINE = MEMORY AS
+SELECT snapshot_id FROM fuse_snapshot('vacuum_idle_snapshot', 't') ORDER BY timestamp DESC LIMIT 1
+
+# An empty probe must preserve the head.
+statement ok
+VACUUM TABLE t
+
+query I
+SELECT count(*) FROM fuse_snapshot('vacuum_idle_snapshot', 't')
+----
+1
+
+query I
+SELECT count(*) FROM fuse_snapshot('vacuum_idle_snapshot', 't')
+WHERE snapshot_id IN (SELECT snapshot_id FROM previous_head)
+----
+1
+
+# Rollback leaves an uncommitted block newer than the head.
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO t VALUES (2)
+
+statement ok
+ROLLBACK
+
+statement ok
+SELECT sleep(0.01)
+
+# A single vacuum must advance the head and collect the orphan.
+statement ok
+VACUUM TABLE t
+
+query I
+SELECT count(*) FROM fuse_snapshot('vacuum_idle_snapshot', 't')
+----
+1
+
+query I
+SELECT count(*) FROM
+    (SELECT snapshot_id FROM fuse_snapshot('vacuum_idle_snapshot', 't') ORDER BY timestamp DESC LIMIT 1)
+WHERE snapshot_id IN (SELECT snapshot_id FROM previous_head)
+----
+0
+
+statement ok
+TRUNCATE TABLE previous_head
+
+statement ok
+INSERT INTO previous_head
+SELECT snapshot_id FROM fuse_snapshot('vacuum_idle_snapshot', 't')
+
+# An already cleaned table must not advance again.
+statement ok
+VACUUM TABLE t
+
+query I
+SELECT count(*) FROM fuse_snapshot('vacuum_idle_snapshot', 't')
+WHERE snapshot_id IN (SELECT snapshot_id FROM previous_head)
+----
+1
+
+query I
+SELECT c FROM t
+----
+1
+
+statement ok
+DROP DATABASE vacuum_idle_snapshot

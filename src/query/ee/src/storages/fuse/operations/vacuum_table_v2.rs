@@ -29,6 +29,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::RetentionPolicy;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::is_gc_candidate_segment_block;
@@ -39,6 +40,8 @@ use databend_storages_common_index::ExternalFile;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::meta::try_extract_uuid_v7_timestamp_from_path;
 use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION;
@@ -57,7 +60,7 @@ struct BlockGcStats {
     /// Number of candidate block objects before protected-block filtering.
     ///
     /// This excludes directory entries and entries that are not eligible by the
-    /// vacuum2 cutoff/safety rule, but includes blocks that are later kept
+    /// sweep/probe cutoff and safety rule, but includes blocks that are later kept
     /// because they are still referenced by the protected block set.
     scanned_blocks: usize,
     /// Number of data block objects successfully removed.
@@ -65,6 +68,8 @@ struct BlockGcStats {
     /// Number of objects successfully removed, including data blocks and their
     /// derived index files.
     removed_files: usize,
+    /// An unprotected block after the current GC root was found by the zero-retention probe.
+    needs_new_gc_root: bool,
 }
 
 /// Shared context for block-level GC.
@@ -83,6 +88,8 @@ struct BlockGcContext<'a> {
     /// Timestamp-derived vacuum2 object-key cutoff. Objects at or after this
     /// prefix must not be vacuumed.
     until: String,
+    /// Optional upper bound for a read-only probe after an empty block sweep.
+    probe_until: Option<String>,
     /// GC-root snapshot timestamp used to build `until` and for status reporting.
     gc_root_timestamp: DateTime<Utc>,
     /// GC-root object metadata timestamp used by the common vacuum safety helper
@@ -113,6 +120,22 @@ pub async fn do_vacuum2(
     ctx: Arc<dyn TableContext>,
     respect_flash_back: bool,
 ) -> Result<()> {
+    if vacuum_once(table, ctx.clone(), respect_flash_back, true).await? {
+        // Rebuild protection roots and publish LVTs for the new head. Limit this invocation
+        // to one extra pass, even if concurrent writes leave more unreferenced blocks.
+        vacuum_once(table, ctx, respect_flash_back, false).await?;
+    }
+    Ok(())
+}
+
+/// Returns whether a new GC root was committed and needs another vacuum pass.
+#[async_backtrace::framed]
+async fn vacuum_once(
+    table: &dyn Table,
+    ctx: Arc<dyn TableContext>,
+    respect_flash_back: bool,
+    allow_new_gc_root: bool,
+) -> Result<bool> {
     let table_info = table.get_table_info();
     {
         if ctx.txn_mgr().lock().is_active() {
@@ -120,7 +143,7 @@ pub async fn do_vacuum2(
                 "Transaction is active, skipping vacuum, target table {}",
                 table_info.desc
             );
-            return Ok(());
+            return Ok(false);
         }
     }
 
@@ -134,7 +157,7 @@ pub async fn do_vacuum2(
     }) = vacuum_base_snapshot_phase(fuse_table, &ctx, respect_flash_back).await?
     else {
         info!("Table {} has no snapshot, stopping vacuum", table_info.desc);
-        return Ok(());
+        return Ok(false);
     };
     let fuse_table = FuseTable::try_from_table(owner.as_ref())?;
     let table_info = fuse_table.get_table_info();
@@ -309,12 +332,19 @@ pub async fn do_vacuum2(
     // by the reference-aware scan above. Historical `_i_i` objects stay on the old block-addressed
     // path: they are not vacuumed here.
     let block_location_prefix = fuse_table.meta_location_generator().block_location_prefix();
+    let probe_until = (allow_new_gc_root
+        && matches!(
+            fuse_table.get_data_retention_policy(ctx.as_ref())?,
+            RetentionPolicy::ByTimePeriod(retention) if retention.is_zero()
+        ))
+    .then(|| FuseTable::vacuum2_until_prefix(block_location_prefix, Utc::now()));
     let block_gc_ctx = BlockGcContext {
         dal: fuse_table.get_operator_ref(),
         ctx: &ctx,
         table_desc: table_info.desc.as_str(),
         block_location_prefix,
         until: FuseTable::vacuum2_until_prefix(block_location_prefix, gc_root_timestamp),
+        probe_until,
         gc_root_timestamp,
         gc_root_meta_ts,
         gc_root_blocks: &gc_root_blocks,
@@ -377,7 +407,59 @@ pub async fn do_vacuum2(
         removed_files,
     ));
 
-    Ok(())
+    if block_gc_stats.needs_new_gc_root {
+        return advance_gc_root(fuse_table, &ctx).await;
+    }
+
+    Ok(false)
+}
+
+/// Advance the head only after a zero-retention probe finds an unprotected block.
+async fn advance_gc_root(table: &FuseTable, ctx: &Arc<dyn TableContext>) -> Result<bool> {
+    let Some(previous) = table.read_table_snapshot().await? else {
+        return Ok(false);
+    };
+
+    ctx.check_aborting()
+        .map_err(|err| err.with_context("aborted before advancing GC root after vacuum"))?;
+    // Auto vacuum can share the writing query's cached timestamps. Use fresh timestamps here:
+    // this commit writes no blocks and must advance beyond the current head.
+    let timestamps = TableMetaTimestamps::new(Some(previous.clone()), chrono::Duration::zero());
+    let snapshot = TableSnapshot::try_from_previous(
+        previous,
+        table.cluster_key_info(),
+        Some(table.get_table_info().ident.seq),
+        timestamps,
+    )?;
+    match table
+        .commit_to_meta_server(
+            ctx.as_ref(),
+            table.get_table_info(),
+            table.meta_location_generator(),
+            snapshot,
+            None,
+            &None,
+            table.get_operator_ref(),
+        )
+        .await
+    {
+        Ok(()) => {
+            info!(
+                "Advanced GC root after vacuum for table {}",
+                table.get_table_info().desc
+            );
+            Ok(true)
+        }
+        // Another writer already changed the table. Leave its head intact and do not retry.
+        Err(err) if err.code() == ErrorCode::TABLE_VERSION_MISMATCHED => {
+            info!(
+                "Skipping GC root advancement after concurrent update of table {}",
+                table.get_table_info().desc
+            );
+            Ok(false)
+        }
+        Err(err) => Err(err),
+    }
 }
 
 /// Removes user dictionary objects under `prefix` that no current index definition references.
@@ -517,68 +599,32 @@ fn block_path_hash(path: &str) -> u128 {
 async fn purge_blocks_before_gc_root(block_gc: &BlockGcContext<'_>) -> Result<BlockGcStats> {
     info!("Listing block files until prefix: {}", block_gc.until);
 
-    match block_gc.dal.info().scheme() {
-        scheme if scheme == opendal::Scheme::Fs.into_static() => {
-            purge_blocks_before_gc_root_fs(block_gc).await
-        }
-        _ => purge_blocks_before_gc_root_object_store_streaming(block_gc).await,
+    let lister = block_gc.dal.lister(block_gc.block_location_prefix).await?;
+    if block_gc.dal.info().scheme() == opendal::Scheme::Fs.into_static() {
+        // FS listings are unordered. Sort once, then use the same sweep and probe as object stores.
+        let mut entries = lister.try_collect::<Vec<_>>().await?;
+        entries.sort_by(|l, r| l.path().cmp(r.path()));
+        purge_blocks_from_stream(
+            block_gc,
+            futures_util::stream::iter(entries.into_iter().map(Ok)),
+        )
+        .await
+    } else {
+        purge_blocks_from_stream(block_gc, lister).await
     }
 }
 
-async fn purge_blocks_before_gc_root_fs(block_gc: &BlockGcContext<'_>) -> Result<BlockGcStats> {
-    let file_remover = Files::create(Arc::clone(block_gc.ctx), block_gc.dal.clone());
-    let blocks_before_gc_root = list_gc_candidate_paths_until_prefix_fs(
-        block_gc.dal,
-        block_gc.block_location_prefix,
-        &block_gc.until,
-        block_gc.gc_root_meta_ts,
-    )
-    .await?;
-    let scanned_blocks = blocks_before_gc_root.len();
-    block_gc.ctx.set_status_info(&format!(
-        "Listed block paths before gc_root for table {}, elapsed: {:?}, block_location_prefix: {:?}, gc_root_timestamp: {:?}, blocks: {:?}",
-        block_gc.table_desc,
-        block_gc.start.elapsed(),
-        block_gc.block_location_prefix,
-        block_gc.gc_root_timestamp,
-        slice_summary(&blocks_before_gc_root)
-    ));
-
-    let mut stats = BlockGcStats {
-        scanned_blocks,
-        removed_blocks: 0,
-        removed_files: 0,
-    };
-    let mut block_chunk = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
-    for block_path in blocks_before_gc_root {
-        if !block_gc
-            .gc_root_blocks
-            .contains(&block_path_hash(&block_path))
-        {
-            block_chunk.push(block_path);
-            if block_chunk.len() == VACUUM2_BLOCK_DELETE_CHUNK_SIZE {
-                purge_block_chunk(&file_remover, block_gc, &block_chunk, &mut stats).await?;
-                block_chunk.clear();
-            }
-        }
-    }
-    if !block_chunk.is_empty() {
-        purge_block_chunk(&file_remover, block_gc, &block_chunk, &mut stats).await?;
-    }
-
-    Ok(stats)
-}
-
-async fn purge_blocks_before_gc_root_object_store_streaming(
+async fn purge_blocks_from_stream(
     block_gc: &BlockGcContext<'_>,
+    mut lister: impl futures_util::Stream<Item = opendal::Result<opendal::Entry>> + Unpin,
 ) -> Result<BlockGcStats> {
     let file_remover = Files::create(Arc::clone(block_gc.ctx), block_gc.dal.clone());
-    let mut lister = block_gc.dal.lister(block_gc.block_location_prefix).await?;
     let mut block_chunk = Vec::with_capacity(VACUUM2_BLOCK_DELETE_CHUNK_SIZE);
     let mut stats = BlockGcStats {
         scanned_blocks: 0,
         removed_blocks: 0,
         removed_files: 0,
+        needs_new_gc_root: false,
     };
 
     block_gc.ctx.set_status_info(&format!(
@@ -587,14 +633,29 @@ async fn purge_blocks_before_gc_root_object_store_streaming(
     ));
 
     while let Some(entry) = lister.try_next().await? {
+        block_gc.ctx.check_aborting().map_err(|err| {
+            err.with_context(format!(
+                "aborted while scanning blocks for table {}",
+                block_gc.table_desc
+            ))
+        })?;
         if entry.metadata().is_dir() {
             continue;
         }
 
         let path = entry.path();
-        if path >= block_gc.until.as_str() {
-            info!("entry path: {} >= until: {}", path, block_gc.until);
-            break;
+        let after_gc_root = path >= block_gc.until.as_str();
+        if after_gc_root {
+            // Include pending deletions: fewer than a full chunk may have been found.
+            if stats.removed_blocks != 0 || !block_chunk.is_empty() {
+                break;
+            }
+            let Some(probe_until) = block_gc.probe_until.as_deref() else {
+                break;
+            };
+            if path >= probe_until {
+                break;
+            }
         }
 
         if !is_gc_candidate_segment_block(&entry, block_gc.dal, block_gc.gc_root_meta_ts).await? {
@@ -606,6 +667,11 @@ async fn purge_blocks_before_gc_root_object_store_streaming(
             continue;
         }
 
+        if after_gc_root {
+            // Reuse the lister and full protection set. Never delete beyond the current root.
+            stats.needs_new_gc_root = true;
+            break;
+        }
         block_chunk.push(path.to_owned());
         if block_chunk.len() == VACUUM2_BLOCK_DELETE_CHUNK_SIZE {
             purge_block_chunk(&file_remover, block_gc, &block_chunk, &mut stats).await?;
@@ -618,34 +684,6 @@ async fn purge_blocks_before_gc_root_object_store_streaming(
     }
 
     Ok(stats)
-}
-
-async fn list_gc_candidate_paths_until_prefix_fs(
-    dal: &Operator,
-    path: &str,
-    until: &str,
-    gc_root_meta_ts: DateTime<Utc>,
-) -> Result<Vec<String>> {
-    let mut lister = dal.lister(path).await?;
-    let mut entries = Vec::new();
-    while let Some(item) = lister.try_next().await? {
-        if item.metadata().is_file() {
-            entries.push(item);
-        }
-    }
-    entries.sort_by(|l, r| l.path().cmp(r.path()));
-
-    let mut res = Vec::new();
-    for entry in entries {
-        if entry.path() >= until {
-            info!("entry path: {} >= until: {}", entry.path(), until);
-            break;
-        }
-        if is_gc_candidate_segment_block(&entry, dal, gc_root_meta_ts).await? {
-            res.push(entry.path().to_owned());
-        }
-    }
-    Ok(res)
 }
 
 async fn purge_block_chunk(
@@ -844,6 +882,38 @@ mod tests {
     use super::*;
     use crate::test_kits::context::EESetup;
 
+    #[tokio::test(flavor = "multi_thread")]
+    async fn advance_gc_root_skips_concurrent_update() -> anyhow::Result<()> {
+        let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+        fixture
+            .default_session()
+            .get_settings()
+            .set_data_retention_time_in_days(0)?;
+        fixture.create_default_database().await?;
+        let db = fixture.default_db_name();
+        fixture
+            .execute_command(&format!("CREATE TABLE {db}.idle(c INT) AS SELECT 1"))
+            .await?;
+        let ctx: Arc<dyn TableContext> = fixture.new_query_ctx().await?;
+        let catalog = ctx.get_default_catalog()?;
+        let tenant = ctx.get_tenant();
+        let stale = catalog.get_table(&tenant, &db, "idle").await?;
+        fixture
+            .execute_command(&format!("INSERT INTO {db}.idle VALUES (2)"))
+            .await?;
+        let current = catalog.get_table(&tenant, &db, "idle").await?;
+
+        assert!(!advance_gc_root(FuseTable::try_from_table(stale.as_ref())?, &ctx).await?);
+
+        let after = catalog.get_table(&tenant, &db, "idle").await?;
+        assert_eq!(after.get_table_info().ident, current.get_table_info().ident);
+        assert_eq!(
+            FuseTable::try_from_table(after.as_ref())?.snapshot_loc(),
+            FuseTable::try_from_table(current.as_ref())?.snapshot_loc()
+        );
+        Ok(())
+    }
+
     #[test]
     fn test_collect_block_index_locations_keeps_per_block_order() {
         let blocks = vec![
@@ -1012,12 +1082,16 @@ mod tests {
                 block_path_hash(&protected_block),
                 block_path_hash(&protected_other_version),
             ]);
-            let block_gc = BlockGcContext {
+            let mut block_gc = BlockGcContext {
                 dal: &dal,
                 ctx: &ctx,
                 table_desc: "streaming-gc-test",
                 block_location_prefix: BLOCK_PREFIX,
                 until: FuseTable::vacuum2_until_prefix(BLOCK_PREFIX, gc_root_timestamp),
+                probe_until: Some(FuseTable::vacuum2_until_prefix(
+                    BLOCK_PREFIX,
+                    gc_root_timestamp + chrono::Duration::seconds(2),
+                )),
                 gc_root_timestamp,
                 gc_root_meta_ts: gc_root_timestamp,
                 gc_root_blocks: &protected_blocks,
@@ -1029,6 +1103,7 @@ mod tests {
 
             assert_eq!(stats.scanned_blocks, CANDIDATE_BLOCKS + 1);
             assert_eq!(stats.removed_blocks, CANDIDATE_BLOCKS - 1);
+            assert!(!stats.needs_new_gc_root);
             // Each removed block also contributes its derived bloom-index path.
             assert_eq!(stats.removed_files, (CANDIDATE_BLOCKS - 1) * 2);
             assert!(dal.exists(&protected_block).await?);
@@ -1037,6 +1112,37 @@ mod tests {
             for path in candidates.iter().skip(1) {
                 assert!(!dal.exists(path).await?, "garbage block survived: {path}");
             }
+
+            // With no old garbage left, continue the same listing beyond the root.
+            let stats = purge_blocks_before_gc_root(&block_gc).await?;
+            assert_eq!(stats.removed_blocks, 0);
+            assert!(stats.needs_new_gc_root);
+            assert!(dal.exists(&after_cutoff_block).await?);
+
+            // The probe's upper bound is exclusive, just like the sweep's cutoff.
+            block_gc.probe_until = Some(FuseTable::vacuum2_until_prefix(
+                BLOCK_PREFIX,
+                gc_root_timestamp + chrono::Duration::seconds(1),
+            ));
+            assert!(
+                !purge_blocks_before_gc_root(&block_gc)
+                    .await?
+                    .needs_new_gc_root
+            );
+
+            // A block protected by any root must not trigger snapshot advancement.
+            let mut protected_blocks = protected_blocks.clone();
+            protected_blocks.insert(block_path_hash(&after_cutoff_block));
+            block_gc.gc_root_blocks = &protected_blocks;
+            block_gc.probe_until = Some(FuseTable::vacuum2_until_prefix(
+                BLOCK_PREFIX,
+                gc_root_timestamp + chrono::Duration::seconds(2),
+            ));
+            assert!(
+                !purge_blocks_before_gc_root(&block_gc)
+                    .await?
+                    .needs_new_gc_root
+            );
 
             Ok(())
         }
@@ -1123,6 +1229,7 @@ mod tests {
                     table_desc: "real-s3-streaming-gc-test",
                     block_location_prefix: BLOCK_PREFIX,
                     until: FuseTable::vacuum2_until_prefix(BLOCK_PREFIX, gc_root_timestamp),
+                    probe_until: None,
                     gc_root_timestamp,
                     gc_root_meta_ts: gc_root_timestamp,
                     gc_root_blocks: &protected_blocks,
