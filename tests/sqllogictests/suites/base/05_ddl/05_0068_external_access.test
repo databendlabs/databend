@@ -38,6 +38,47 @@ GRANT USAGE ON INTEGRATION ddl_udf_access TO ROLE ddl_udf_developer;
 statement ok
 REVOKE USAGE ON INTEGRATION ddl_udf_access FROM ROLE ddl_udf_developer;
 
+# SHOW GRANTS must preserve case and quote/escape stored integration names.
+statement ok
+CREATE EXTERNAL ACCESS INTEGRATION "QuotedAccess" ALLOWED_NETWORK_RULES = (ddl_udf_rule) ENABLED = TRUE;
+
+statement ok
+GRANT USAGE ON INTEGRATION "QuotedAccess" TO ROLE ddl_udf_developer;
+
+query TTTTTT
+SHOW GRANTS FOR ROLE ddl_udf_developer;
+----
+ALL QuotedAccess NULL ROLE ddl_udf_developer GRANT ALL ON INTEGRATION "QuotedAccess" TO ROLE `ddl_udf_developer`
+
+statement ok
+GRANT ALL ON INTEGRATION "QuotedAccess" TO ROLE `ddl_udf_developer`;
+
+statement ok
+REVOKE USAGE ON INTEGRATION "QuotedAccess" FROM ROLE ddl_udf_developer;
+
+statement ok
+DROP EXTERNAL ACCESS INTEGRATION "QuotedAccess";
+
+statement ok
+CREATE EXTERNAL ACCESS INTEGRATION "Quoted access/r""x" ALLOWED_NETWORK_RULES = (ddl_udf_rule) ENABLED = TRUE;
+
+statement ok
+GRANT USAGE ON INTEGRATION "Quoted access/r""x" TO ROLE ddl_udf_developer;
+
+query TTTTTT
+SHOW GRANTS FOR ROLE ddl_udf_developer;
+----
+ALL Quoted access/r"x NULL ROLE ddl_udf_developer GRANT ALL ON INTEGRATION "Quoted access/r""x" TO ROLE `ddl_udf_developer`
+
+statement ok
+GRANT ALL ON INTEGRATION "Quoted access/r""x" TO ROLE `ddl_udf_developer`;
+
+statement ok
+REVOKE USAGE ON INTEGRATION "Quoted access/r""x" FROM ROLE ddl_udf_developer;
+
+statement ok
+DROP EXTERNAL ACCESS INTEGRATION "Quoted access/r""x";
+
 statement ok
 ALTER NETWORK RULE ddl_udf_rule SET VALUE_LIST = ('example.com:8443');
 

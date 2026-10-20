@@ -290,6 +290,7 @@ async fn external_access_creation_authorization_and_schema() -> Result<()> {
     config.query.common.enable_udf_server = true;
     config.query.common.udf_server_allow_insecure = true;
     config.query.common.udf_server_allow_list.clear();
+    assert!(!config.query.common.management_mode);
     let fixture = TestFixture::setup_with_config(&config).await?;
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let address = listener.local_addr()?;
@@ -327,14 +328,6 @@ async fn external_access_creation_authorization_and_schema() -> Result<()> {
         fixture.execute_command(&create).await.unwrap_err().code(),
         ErrorCode::PERMISSION_DENIED
     );
-    assert_eq!(
-        fixture
-            .execute_command("ALTER EXTERNAL ACCESS INTEGRATION auth_access SET ENABLED = FALSE")
-            .await
-            .unwrap_err()
-            .code(),
-        ErrorCode::PERMISSION_DENIED
-    );
     session.set_authed_user(admin.clone(), None).await?;
     session.set_current_role_checked("account_admin").await?;
     fixture
@@ -342,6 +335,21 @@ async fn external_access_creation_authorization_and_schema() -> Result<()> {
         .await?;
     session.set_authed_user(developer.clone(), None).await?;
     session.set_current_role_checked("udf_developer").await?;
+    // CREATE and integration USAGE do not authorize policy management.
+    for sql in [
+        "CREATE NETWORK RULE denied_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('denied.example.com:443')",
+        "ALTER NETWORK RULE auth_rule SET VALUE_LIST = ('denied.example.com:443')",
+        "DROP NETWORK RULE auth_rule",
+        "CREATE EXTERNAL ACCESS INTEGRATION denied_access ALLOWED_NETWORK_RULES = (auth_rule) ENABLED = TRUE",
+        "ALTER EXTERNAL ACCESS INTEGRATION auth_access SET ENABLED = FALSE",
+        "DROP EXTERNAL ACCESS INTEGRATION auth_access",
+    ] {
+        assert_eq!(
+            fixture.execute_command(sql).await.unwrap_err().code(),
+            ErrorCode::PERMISSION_DENIED,
+            "{sql}",
+        );
+    }
     // Integration USAGE is additional authorization, not a replacement for
     // the existing SUPER requirement to create any UDF.
     assert_eq!(
@@ -434,6 +442,58 @@ async fn external_access_creation_authorization_and_schema() -> Result<()> {
     assert!(result.unwrap_err().message().contains("disabled"));
     let _ = shutdown_tx.send(());
     server.await.unwrap().unwrap();
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn external_access_show_grants_preserves_identifiers() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.execute_command("CREATE NETWORK RULE quoted_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('example.com:443')").await?;
+    fixture
+        .execute_command("CREATE ROLE grant_roundtrip")
+        .await?;
+    for quoted in [
+        r#""QuotedAccess""#,
+        r#""access with space""#,
+        r#""access/r""#,
+        r#""access""r""#,
+        r#""select""#,
+    ] {
+        fixture.execute_command(&format!("CREATE EXTERNAL ACCESS INTEGRATION {quoted} ALLOWED_NETWORK_RULES = (quoted_rule) ENABLED = TRUE")).await?;
+        fixture
+            .execute_command(&format!(
+                "GRANT USAGE ON INTEGRATION {quoted} TO ROLE grant_roundtrip"
+            ))
+            .await?;
+        let blocks = fixture
+            .execute_query("SHOW GRANTS FOR ROLE grant_roundtrip")
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        assert_eq!(blocks.iter().map(DataBlock::num_rows).sum::<usize>(), 1);
+        for block in &blocks {
+            let Column::String(grants) = block.get_by_offset(5).to_column() else {
+                panic!("expected SHOW GRANTS SQL column");
+            };
+            for grant in grants.iter() {
+                assert_eq!(
+                    grant,
+                    format!("GRANT ALL ON INTEGRATION {quoted} TO ROLE `grant_roundtrip`")
+                );
+                // Execute the displayed SQL: losing case/escaping would target
+                // a different integration or fail to parse.
+                fixture.execute_command(grant).await?;
+            }
+        }
+        fixture
+            .execute_command(&format!(
+                "REVOKE USAGE ON INTEGRATION {quoted} FROM ROLE grant_roundtrip"
+            ))
+            .await?;
+        fixture
+            .execute_command(&format!("DROP EXTERNAL ACCESS INTEGRATION {quoted}"))
+            .await?;
+    }
     Ok(())
 }
 

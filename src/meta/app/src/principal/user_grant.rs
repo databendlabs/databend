@@ -16,6 +16,7 @@ use std::collections::HashSet;
 use std::fmt;
 use std::ops;
 
+use databend_common_ast::ast::quote::QuotedIdent;
 use enumflags2::BitFlags;
 
 use crate::principal::UserPrivilegeSet;
@@ -183,7 +184,7 @@ impl fmt::Display for GrantObject {
             GrantObject::Stage(stage) => write!(f, "STAGE {stage}"),
             GrantObject::Warehouse(w) => write!(f, "WAREHOUSE {w}"),
             GrantObject::Connection(c) => write!(f, "CONNECTION {c}"),
-            GrantObject::Integration(c) => write!(f, "INTEGRATION {c}"),
+            GrantObject::Integration(c) => write!(f, "INTEGRATION {}", QuotedIdent(c, '"')),
             GrantObject::Sequence(s) => write!(f, "SEQUENCE {s}"),
             GrantObject::Procedure(p) => write!(f, "PROCEDURE {p}"),
             GrantObject::MaskingPolicy(policy_id) => write!(f, "MASKING POLICY {policy_id}"),

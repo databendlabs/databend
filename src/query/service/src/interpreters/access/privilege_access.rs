@@ -2576,6 +2576,10 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_tag_object_access(&plan.object, &tenant)
                     .await?;
             }
+            Plan::ExternalAccess(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    .await?;
+            }
             Plan::ShowCreateCatalog(_)
             | Plan::CreateCatalog(_)
             | Plan::DropCatalog(_)
@@ -2585,7 +2589,6 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::ShowFileFormats(_)
             | Plan::CreateTag(_)
             | Plan::DropTag(_)
-            | Plan::ExternalAccess(_)
             | Plan::CreateNetworkPolicy(_)
             | Plan::AlterNetworkPolicy(_)
             | Plan::DropNetworkPolicy(_)
