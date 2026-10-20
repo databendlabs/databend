@@ -257,6 +257,12 @@ impl DataExchangeManager {
             .collect()
     }
 
+    /// Holds the coordinator lock like `shutdown_query` does, for lock-order tests.
+    #[cfg(test)]
+    pub(crate) fn lock_queries_coordinator_for_test(&self) -> impl Sized + '_ {
+        self.queries_coordinator.lock()
+    }
+
     pub fn get_query_ctx(&self, query_id: &str) -> Result<Arc<QueryContext>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
