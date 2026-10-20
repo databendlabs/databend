@@ -16,14 +16,22 @@ use std::sync::Arc;
 use std::vec;
 
 use bumpalo::Bump;
+use databend_common_catalog::table_context::TableContextSettings;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::HashTableConfig;
+use databend_common_expression::PartialAggregateController;
+use databend_common_expression::PartialAggregateMode;
+use databend_common_expression::PartialEnvironment;
+use databend_common_expression::PartialState;
+use databend_common_expression::PartitionMask;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
+use databend_common_expression::group_hash_entries;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
@@ -38,6 +46,7 @@ use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregateSpiller;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::PartitionedData;
+use crate::pipelines::processors::transforms::aggregator::RawPayload;
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
 use crate::sessions::QueryContext;
@@ -111,9 +120,50 @@ impl Spiller {
     }
 }
 
+/// Parse the `partial_aggregate_mode` setting. `None` means the legacy strategy.
+pub fn parse_partial_aggregate_mode(mode: &str) -> Result<Option<PartialAggregateMode>> {
+    Ok(match mode.to_lowercase().as_str() {
+        "legacy" => None,
+        "auto" => Some(PartialAggregateMode::Auto),
+        "bypass" => Some(PartialAggregateMode::Bypass),
+        other => {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "Invalid partial_aggregate_mode: {other}"
+            )));
+        }
+    })
+}
+
+enum PartialStrategy {
+    /// Fixed cache-sized table that is cleared when full.
+    Legacy,
+    /// Runtime-adaptive table, see `PartialAggregateController`.
+    Adaptive(Box<AdaptiveState>),
+}
+
+struct AdaptiveState {
+    controller: PartialAggregateController,
+    /// Routes raw rows to the same buckets as the payload of the table.
+    partition_mask: PartitionMask,
+    partition_count: usize,
+    /// The index restarted since the table was last emitted: the payload is no longer bounded
+    /// by the index, so emit it once it holds `flush_bytes`.
+    windowed: bool,
+    flush_bytes: usize,
+    concurrency: usize,
+    /// Bytes per group of the table, updated once the table holds enough groups that page
+    /// preallocation does not dominate.
+    bytes_per_group: usize,
+    group_hashes: Vec<u64>,
+    output_rows: usize,
+}
+
 /// TransformPartialAggregate combine partial aggregation and spilling logic
 /// When memory exceeds threshold, it will spill out current hash table into a buffer
 /// and real spill out will happen when the buffer is full.
+///
+/// In adaptive mode, the table is emitted downstream whenever the controller asks for it, and
+/// rows that are not aggregated are forwarded as raw rows for the final aggregate to aggregate.
 pub struct TransformPartialAggregate {
     hash_table: HashTable,
     probe_state: ProbeState,
@@ -122,6 +172,7 @@ pub struct TransformPartialAggregate {
     settings: MemorySettings,
     spillers: Spiller,
     is_row_shuffle: bool,
+    strategy: PartialStrategy,
 }
 
 impl TransformPartialAggregate {
@@ -134,7 +185,31 @@ impl TransformPartialAggregate {
         partition_stream: SharedPartitionStream,
         bucket_num: usize,
         is_row_shuffle: bool,
+        partial_mode: Option<PartialAggregateMode>,
     ) -> Result<Box<dyn Processor>> {
+        let strategy = match partial_mode {
+            None => PartialStrategy::Legacy,
+            Some(mode) => {
+                debug_assert!(config.partial_adaptive);
+                let concurrency = ctx.get_settings().get_max_threads()?.max(1) as usize;
+                let partition_count = 1_usize << config.initial_radix_bits;
+                PartialStrategy::Adaptive(Box::new(AdaptiveState {
+                    controller: PartialAggregateController::new(mode),
+                    partition_mask: PartitionMask::with_start_bit(
+                        partition_count as u64,
+                        config.partition_start_bit,
+                    ),
+                    partition_count,
+                    windowed: false,
+                    flush_bytes: params.max_block_bytes,
+                    concurrency,
+                    bytes_per_group: 64,
+                    group_hashes: vec![],
+                    output_rows: 0,
+                }))
+            }
+        };
+
         let spill_schema = params.spill_schema();
         let spillers = Spiller::create(ctx.clone(), spill_schema, partition_stream, bucket_num)?;
 
@@ -158,6 +233,7 @@ impl TransformPartialAggregate {
                 statistics: AggregationStatistics::new("PartialAggregate"),
                 spillers,
                 is_row_shuffle,
+                strategy,
             },
         ))
     }
@@ -206,6 +282,121 @@ impl TransformPartialAggregate {
         }
     }
 
+    fn transform_adaptive(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
+        let rows_num = block.num_rows();
+        self.statistics.record_block(rows_num, block.memory_size());
+
+        let HashTable::AggregateHashTable(hashtable) = &mut self.hash_table else {
+            unreachable!("[TRANSFORM-AGGREGATOR] Hash table already moved out")
+        };
+        let PartialStrategy::Adaptive(adaptive) = &mut self.strategy else {
+            unreachable!("[TRANSFORM-AGGREGATOR] Adaptive partial aggregate expected")
+        };
+        let group_columns = ProjectedBlock::project(&self.params.group_columns, &block);
+
+        if adaptive.controller.state() == PartialState::Bypass {
+            adaptive.output_rows += rows_num;
+            if adaptive.partition_count > 1 {
+                adaptive.group_hashes.resize(rows_num, 0);
+                group_hash_entries(group_columns, &mut adaptive.group_hashes);
+            }
+            return Ok(vec![Self::raw_block(block, adaptive)?]);
+        }
+
+        let params_columns =
+            Self::aggregate_arguments(&block, &self.params.aggregate_functions_arguments);
+        let capacity = adaptive.controller.capacity();
+        let stats = hashtable.add_groups_partial(
+            &mut self.probe_state,
+            group_columns,
+            &params_columns,
+            rows_num,
+            capacity,
+            adaptive.controller.sampler(),
+        )?;
+        adaptive.windowed |= stats.windows > 0;
+
+        // An index entry costs a control byte and a row pointer at the index load factor.
+        const INDEX_BYTES_PER_GROUP: usize = 13;
+        if hashtable.len() >= 16 * 1024 {
+            adaptive.bytes_per_group =
+                hashtable.partial_hot_bytes() / hashtable.len() + INDEX_BYTES_PER_GROUP;
+        }
+        let env = PartialEnvironment {
+            headroom_bytes: self
+                .settings
+                .check_spill_remain()
+                .map(|remain| remain.max(0) as usize),
+            bytes_per_group: adaptive.bytes_per_group,
+            concurrency: adaptive.concurrency,
+        };
+        let decision = adaptive.controller.observe(&stats, &env);
+
+        let mut blocks = vec![];
+        if self.settings.check_spill() {
+            // Memory pressure: spill the table like any other operator, then learn again.
+            let hot = hashtable.take_partial_hot();
+            adaptive.windowed = false;
+            self.spillers.spill(hot, self.is_row_shuffle)?;
+            adaptive.controller.on_hot_spilled();
+        } else if decision.flush_hot
+            || (adaptive.windowed && hashtable.partial_hot_bytes() >= adaptive.flush_bytes)
+        {
+            let hot = hashtable.take_partial_hot();
+            adaptive.windowed = false;
+            adaptive.output_rows += hot.len();
+            blocks.extend(Self::partitioned_block(hot));
+        }
+        Ok(blocks)
+    }
+
+    /// The rows of `block`, split into the buckets of the table by their group hashes.
+    fn raw_block(block: DataBlock, adaptive: &AdaptiveState) -> Result<DataBlock> {
+        let payload = RawPayload {
+            bucket: 0,
+            data_block: block,
+        };
+
+        let payloads = if adaptive.partition_count == 1 {
+            vec![payload]
+        } else {
+            let mask = adaptive.partition_mask;
+            payload
+                .scatter(&adaptive.group_hashes, adaptive.partition_count, |hash| {
+                    mask.index(hash)
+                })?
+                .into_iter()
+                .enumerate()
+                .filter(|(_, payload)| payload.data_block.num_rows() != 0)
+                .map(|(bucket, payload)| RawPayload {
+                    bucket: bucket as isize,
+                    data_block: payload.data_block,
+                })
+                .collect()
+        };
+        Ok(DataBlock::empty_with_meta(
+            AggregateMeta::create_partitioned(None, PartitionedData::Raw(payloads)),
+        ))
+    }
+
+    /// Wrap the non-empty buckets of `payload` into a block for the final aggregate.
+    fn partitioned_block(payload: PartitionedPayload) -> Option<DataBlock> {
+        let payloads = payload
+            .into_non_empty_bucket_payloads()
+            .map(|(bucket, payload)| AggregatePayload {
+                bucket: bucket as isize,
+                payload,
+                max_partition_count: 0,
+            })
+            .collect::<Vec<_>>();
+        (!payloads.is_empty()).then(|| {
+            DataBlock::empty_with_meta(AggregateMeta::create_partitioned(
+                None,
+                PartitionedData::AggregatePayload(payloads),
+            ))
+        })
+    }
+
     fn spill_out(&mut self) -> Result<()> {
         if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
             let config = v.config.clone();
@@ -230,6 +421,10 @@ impl AccumulatingTransform for TransformPartialAggregate {
     const NAME: &'static str = "TransformPartialAggregate";
 
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
+        if matches!(self.strategy, PartialStrategy::Adaptive(_)) {
+            return self.transform_adaptive(block);
+        }
+
         self.execute_one_block(block)?;
 
         if self.settings.check_spill() {
@@ -250,7 +445,25 @@ impl AccumulatingTransform for TransformPartialAggregate {
             HashTable::AggregateHashTable(hashtable) => {
                 let mut blocks = self.spillers.finish()?;
 
-                self.statistics.log_finish_statistics(&hashtable);
+                match &self.strategy {
+                    PartialStrategy::Legacy => self.statistics.log_finish_statistics(&hashtable),
+                    PartialStrategy::Adaptive(adaptive) => {
+                        self.statistics.log_partial_finish_statistics(
+                            adaptive.output_rows + hashtable.len(),
+                            hashtable.hash_index_resize_count(),
+                        );
+                        let controller = &adaptive.controller;
+                        let total = controller.total();
+                        log::info!(
+                            "[PartialAggregate] Adaptive: final_state={:?}, rows={}, new_groups={}, windows={}, grows={}",
+                            controller.state(),
+                            total.rows,
+                            total.new_groups,
+                            total.windows,
+                            controller.grows(),
+                        );
+                    }
+                }
 
                 let payloads = hashtable
                     .payload

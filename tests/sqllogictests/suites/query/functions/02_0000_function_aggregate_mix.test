@@ -1,3 +1,5 @@
+# run-with-settings: partial_aggregate_mode=bypass
+
 query I
 SELECT sum(number) from numbers_mt(10000)
 ----

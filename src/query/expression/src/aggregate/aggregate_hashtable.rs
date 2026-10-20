@@ -21,6 +21,7 @@ use bumpalo::Bump;
 use databend_common_exception::Result;
 
 use super::BATCH_SIZE;
+use super::HASH_INDEX_LOAD_FACTOR;
 use super::HashIndex;
 use super::HashTableConfig;
 use super::LOAD_FACTOR;
@@ -28,6 +29,8 @@ use super::MAX_PAGE_SIZE;
 use super::Payload;
 use super::group_hash_entries;
 use super::hash_index_adapter::AdapterImpl;
+use super::partial_controller::DistinctSampler;
+use super::partial_controller::PartialAddStats;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
@@ -175,10 +178,82 @@ impl AggregateHashTable {
         agg_states: ProjectedBlock,
         row_count: usize,
     ) -> Result<usize> {
+        let mut new_count = 0;
+        Self::for_each_batch(
+            group_columns,
+            params,
+            agg_states,
+            row_count,
+            |group_columns, params, agg_states, rows| {
+                new_count +=
+                    self.add_groups_inner(state, group_columns, params, agg_states, rows)?;
+                Ok(())
+            },
+        )?;
+        Ok(new_count)
+    }
+
+    /// Aggregate raw input rows, reusing the probe state of `flush_state`.
+    pub fn add_raw_groups(
+        &mut self,
+        flush_state: &mut PayloadFlushState,
+        group_columns: ProjectedBlock,
+        params: &[ProjectedBlock],
+        row_count: usize,
+    ) -> Result<usize> {
+        self.add_groups(
+            &mut flush_state.probe_state,
+            group_columns,
+            params,
+            (&[]).into(),
+            row_count,
+        )
+    }
+
+    /// Adaptive partial aggregation entry point. When the index is full it grows at once to
+    /// `capacity`, or restarts in place once it is that large; the group hashes are fed to
+    /// `sampler` once it has started.
+    pub fn add_groups_partial(
+        &mut self,
+        state: &mut ProbeState,
+        group_columns: ProjectedBlock,
+        params: &[ProjectedBlock],
+        row_count: usize,
+        capacity: usize,
+        mut sampler: Option<&mut DistinctSampler>,
+    ) -> Result<PartialAddStats> {
+        debug_assert!(self.config.partial_agg && self.config.partial_adaptive);
+        let mut stats = PartialAddStats::default();
+        Self::for_each_batch(
+            group_columns,
+            params,
+            (&[]).into(),
+            row_count,
+            |group_columns, params, _, rows| {
+                self.add_groups_partial_inner(
+                    state,
+                    group_columns,
+                    params,
+                    rows,
+                    capacity,
+                    sampler.as_deref_mut(),
+                    &mut stats,
+                )
+            },
+        )?;
+        Ok(stats)
+    }
+
+    fn for_each_batch(
+        group_columns: ProjectedBlock,
+        params: &[ProjectedBlock],
+        agg_states: ProjectedBlock,
+        row_count: usize,
+        mut f: impl FnMut(ProjectedBlock, &[ProjectedBlock], ProjectedBlock, usize) -> Result<()>,
+    ) -> Result<()> {
         if row_count <= BATCH_SIZE {
-            self.add_groups_inner(state, group_columns, params, agg_states, row_count)
+            f(group_columns, params, agg_states, row_count)
         } else {
-            let mut new_count = 0;
             for start in (0..row_count).step_by(BATCH_SIZE) {
                 let end = (start + BATCH_SIZE).min(row_count);
                 let step_group_columns = group_columns
@@ -196,15 +271,14 @@ impl AggregateHashTable {
                     .map(|c| c.slice(start..end))
                     .collect::<Vec<_>>();
 
-                new_count += self.add_groups_inner(
-                    state,
+                f(
                     (&step_group_columns).into(),
                     &step_params,
                     (&agg_states).into(),
                     end - start,
                 )?;
             }
-            Ok(new_count)
+            Ok(())
         }
     }
 
@@ -246,6 +320,76 @@ impl AggregateHashTable {
             self.probe_and_create(state, group_columns, row_count)
         };
 
+        self.accumulate_states(state, params, agg_states, row_count)?;
+
+        if self.config.partial_agg && !self.config.partial_adaptive {
+            // check size
+            if self.hash_index.count() + BATCH_SIZE > self.hash_index.resize_threshold()
+                && self.hash_index.capacity() >= self.config.max_partial_capacity
+            {
+                self.clear_ht();
+            }
+
+            // check maybe_repartition
+            if self.maybe_repartition() {
+                self.clear_ht();
+            }
+        }
+
+        Ok(new_group_count)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn add_groups_partial_inner(
+        &mut self,
+        state: &mut ProbeState,
+        group_columns: ProjectedBlock,
+        params: &[ProjectedBlock],
+        row_count: usize,
+        capacity: usize,
+        mut sampler: Option<&mut DistinctSampler>,
+        stats: &mut PartialAddStats,
+    ) -> Result<()> {
+        state.row_count = row_count;
+        group_hash_entries(group_columns, &mut state.group_hashes[..row_count]);
+        stats.rows += row_count;
+
+        if row_count + self.hash_index.count() > self.hash_index.resize_threshold() {
+            if capacity > self.hash_index.capacity() {
+                // Grow at once. The index was not restarted since the payload was emitted, so
+                // the payload holds one row per key and can rebuild it.
+                self.resize(capacity);
+            } else {
+                // The first window holds exactly the distinct groups seen so far.
+                if let Some(sampler) = sampler.as_deref_mut() {
+                    sampler.start(self.hash_index.count());
+                }
+                // Restart the index in place and keep appending to the payload.
+                self.hash_index.reset();
+                stats.windows += 1;
+            }
+        }
+        if let Some(sampler) = sampler.filter(|sampler| sampler.is_started()) {
+            sampler.observe(&state.group_hashes[..row_count]);
+        }
+
+        let mut adapter = AdapterImpl {
+            payload: &mut self.payload,
+            group_columns,
+        };
+        stats.new_groups += self
+            .hash_index
+            .probe_and_create(state, row_count, &mut adapter);
+        self.accumulate_states(state, params, (&[]).into(), row_count)
+    }
+
+    fn accumulate_states(
+        &self,
+        state: &mut ProbeState,
+        params: &[ProjectedBlock],
+        agg_states: ProjectedBlock,
+        row_count: usize,
+    ) -> Result<()> {
         if !self.payload.aggrs.is_empty() {
             for i in 0..row_count {
                 state.state_places[i] = state.addresses[i].state_addr(&self.payload.row_layout);
@@ -275,22 +419,41 @@ impl AggregateHashTable {
                 }
             }
         }
+        Ok(())
+    }
 
-        if self.config.partial_agg {
-            // check size
-            if self.hash_index.count() + BATCH_SIZE > self.hash_index.resize_threshold()
-                && self.hash_index.capacity() >= self.config.max_partial_capacity
-            {
-                self.clear_ht();
-            }
+    /// Index capacity that holds `groups` groups without growing.
+    pub fn capacity_for_groups(groups: usize) -> usize {
+        ((groups as f64 * HASH_INDEX_LOAD_FACTOR) as usize + 1)
+            .next_power_of_two()
+            .max(Self::initial_capacity())
+    }
 
-            // check maybe_repartition
-            if self.maybe_repartition() {
-                self.clear_ht();
-            }
-        }
+    /// Bytes held by the groups of the partial table, excluding the index.
+    pub fn partial_hot_bytes(&self) -> usize {
+        self.payload.memory_size() + self.arena_allocated_bytes()
+    }
 
-        Ok(new_group_count)
+    /// Move the groups out and restart with an empty index of the initial capacity.
+    pub fn take_partial_hot(&mut self) -> PartitionedPayload {
+        let fresh = PartitionedPayload::new_with_start_bit(
+            self.payload.group_types.clone(),
+            self.payload.aggrs.clone(),
+            self.payload.partition_count() as u64,
+            self.config.partition_start_bit,
+            vec![Arc::new(Bump::new())],
+        );
+        let payload = std::mem::replace(&mut self.payload, fresh);
+        self.hash_index = HashIndex::with_capacity(Self::initial_capacity());
+        payload
+    }
+
+    fn arena_allocated_bytes(&self) -> usize {
+        self.payload
+            .arenas
+            .iter()
+            .map(|arena| arena.allocated_bytes())
+            .sum::<usize>()
     }
 
     fn probe_and_create(
@@ -463,7 +626,7 @@ impl AggregateHashTable {
 
     // scan payload to reconstruct PointArray
     fn resize(&mut self, new_capacity: usize) {
-        if self.config.partial_agg {
+        if self.config.partial_agg && !self.config.partial_adaptive {
             let target = new_capacity.min(self.config.max_partial_capacity);
             if target == self.hash_index.capacity() {
                 return;

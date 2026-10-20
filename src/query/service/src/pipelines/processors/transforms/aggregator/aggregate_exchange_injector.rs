@@ -130,7 +130,12 @@ impl ExchangeInjector for AggregateInjector {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
-            TransformAggregateDeserializer::try_create(input, output, &params.schema)
+            TransformAggregateDeserializer::try_create(
+                input,
+                output,
+                &params.schema,
+                &self.aggregator_params.input_schema,
+            )
         })
     }
 
@@ -140,7 +145,12 @@ impl ExchangeInjector for AggregateInjector {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
-            TransformAggregateDeserializer::try_create(input, output, &params.schema)
+            TransformAggregateDeserializer::try_create(
+                input,
+                output,
+                &params.schema,
+                &self.aggregator_params.input_schema,
+            )
         })?;
         Ok(())
     }
