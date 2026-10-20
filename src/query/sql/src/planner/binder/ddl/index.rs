@@ -47,6 +47,12 @@ use databend_storages_common_table_meta::table::NGRAM_INDEX_OPT_HASH_ALGORITHM;
 use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_DISTANCE;
 use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_EF_CONSTRUCT;
 use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_M;
+use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_REFINE_FACTOR;
+use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_REFINE_PAGE_ROWS;
+use databend_storages_common_table_meta::table::VECTOR_INDEX_OPT_SEARCH_EF;
+use databend_storages_common_table_meta::table::VECTOR_REFINE_FACTOR_MAX;
+use databend_storages_common_table_meta::table::VECTOR_REFINE_PAGE_ROWS_MAX;
+use databend_storages_common_table_meta::table::VECTOR_REFINE_PAGE_ROWS_MIN;
 use databend_storages_common_table_meta::table::is_internal_table_index_option;
 use itertools::Itertools;
 
@@ -661,6 +667,36 @@ impl Binder {
                         distances.into_iter().join(",").to_string(),
                     );
                 }
+                VECTOR_INDEX_OPT_REFINE_FACTOR => {
+                    if !value
+                        .parse::<usize>()
+                        .ok()
+                        .is_some_and(|factor| (1..=VECTOR_REFINE_FACTOR_MAX).contains(&factor))
+                    {
+                        return Err(ErrorCode::IndexOptionInvalid(format!(
+                            "`refine_factor` must be an integer in [1, {VECTOR_REFINE_FACTOR_MAX}]"
+                        )));
+                    }
+                    options.insert(key, value);
+                }
+                VECTOR_INDEX_OPT_REFINE_PAGE_ROWS => {
+                    if !value.parse::<usize>().ok().is_some_and(|rows| {
+                        (VECTOR_REFINE_PAGE_ROWS_MIN..=VECTOR_REFINE_PAGE_ROWS_MAX).contains(&rows)
+                    }) {
+                        return Err(ErrorCode::IndexOptionInvalid(format!(
+                            "`refine_page_rows` must be an integer in [{VECTOR_REFINE_PAGE_ROWS_MIN}, {VECTOR_REFINE_PAGE_ROWS_MAX}]"
+                        )));
+                    }
+                    options.insert(key, value);
+                }
+                VECTOR_INDEX_OPT_SEARCH_EF => {
+                    if !value.parse::<usize>().ok().is_some_and(|ef| ef > 0) {
+                        return Err(ErrorCode::IndexOptionInvalid(
+                            "`search_ef` must be a positive integer",
+                        ));
+                    }
+                    options.insert(key, value);
+                }
                 _ => {
                     return Err(ErrorCode::IndexOptionInvalid(format!(
                         "index option `{key}` is invalid key for create vector index statement",
@@ -672,6 +708,13 @@ impl Binder {
             return Err(ErrorCode::IndexOptionInvalid(
                 "must specify `distance` option, valid values are: `cosine`, `l1` and `l2`"
                     .to_string(),
+            ));
+        }
+        if options.contains_key(VECTOR_INDEX_OPT_REFINE_PAGE_ROWS)
+            && !options.contains_key(VECTOR_INDEX_OPT_REFINE_FACTOR)
+        {
+            return Err(ErrorCode::IndexOptionInvalid(
+                "`refine_page_rows` requires `refine_factor`",
             ));
         }
         Ok(options)

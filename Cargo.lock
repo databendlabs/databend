@@ -5931,6 +5931,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
+ "arrow-buffer",
  "arrow-ipc",
  "arrow-schema",
  "async-trait",
@@ -5941,8 +5942,10 @@ dependencies = [
  "bytes",
  "cbordata",
  "cc",
+ "crc32fast",
  "databend-common-ast",
  "databend-common-base",
+ "databend-common-column",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-expression-test-support",
@@ -5956,6 +5959,7 @@ dependencies = [
  "feistel-permutation-rs",
  "geo",
  "goldenfile",
+ "half",
  "itertools 0.13.0",
  "jsonb",
  "log",
@@ -5978,6 +5982,7 @@ dependencies = [
  "xorf",
  "xorfilter-rs",
  "zerocopy",
+ "zstd",
 ]
 
 [[package]]
@@ -10665,6 +10670,7 @@ version = "5.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f4779c6901a562440c3786d08192c6fbda7c1c2060edd10006b05ee35d10f2d"
 dependencies = [
+ "bytemuck",
  "num-traits",
 ]
 

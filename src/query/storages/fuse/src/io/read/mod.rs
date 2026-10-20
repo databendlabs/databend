@@ -55,6 +55,7 @@ pub use spatial_index::load_spatial_index_files;
 pub use spatial_index::load_spatial_index_meta;
 pub use statistics::*;
 pub use utils::build_columns_meta;
+pub use vector_index::VectorIndexIdentity;
 pub use vector_index::VectorIndexReader;
 pub use vector_index::load_vector_index_files;
 pub use vector_index::load_vector_index_meta;

@@ -12,10 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Layers: `vector_index_bundle_loader` reads the bundle container (no vector
+// semantics); `vector_index_loader` reads legacy Parquet files and dispatches on
+// the file format; the object loader and reader sit on top.
+mod vector_index_bundle_loader;
 mod vector_index_loader;
 mod vector_index_object_loader;
 mod vector_index_reader;
 
+use databend_common_expression::ColumnId;
 pub use vector_index_loader::load_vector_index_files;
 pub use vector_index_loader::load_vector_index_meta;
 pub use vector_index_reader::VectorIndexReader;
+
+/// The vector index a reader expects, checked against the file it reads.
+#[derive(Clone, Debug)]
+pub struct VectorIndexIdentity {
+    pub name: String,
+    pub version: String,
+    pub column_id: ColumnId,
+}

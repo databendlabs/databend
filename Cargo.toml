@@ -284,6 +284,7 @@ glob = "0.3.0"
 globiter = "0.1"
 goldenfile = "1.4"
 h3o = "0.9.4"
+half = "2.7.1"
 hashbrown = { version = "0.15.2", default-features = false }
 hashlink = "0.10"
 headers = "0.4.0"

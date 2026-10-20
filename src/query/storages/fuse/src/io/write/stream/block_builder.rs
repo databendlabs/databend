@@ -231,7 +231,7 @@ impl StreamBlockBuilder {
             &properties.table_indexes,
             properties.source_schema.clone(),
             true,
-        );
+        )?;
         let spatial_index_builder = SpatialIndexBuilder::try_create(
             &properties.table_indexes,
             properties.source_schema.clone(),
@@ -391,19 +391,16 @@ impl StreamBlockBuilder {
         let (vector_index_state, vector_stats) = if let Some(ref mut vector_index_builder) =
             self.vector_index_builder
         {
-            let vector_index_location =
-                self.properties.meta_locations.block_vector_index_location();
-            let vector_index_state = vector_index_builder.finalize_block(&vector_index_location)?;
-            (
-                vector_index_state.index_state,
-                vector_index_state.vector_stats,
-            )
+            let result = vector_index_builder.finalize_block(&self.properties.meta_locations)?;
+            (result.files, result.statistics)
         } else {
-            (None, None)
+            (Vec::new(), None)
         };
 
-        let vector_index_size = vector_index_state.as_ref().map(|v| v.size);
-        let vector_index_location = vector_index_state.as_ref().map(|v| v.location.clone());
+        let vector_index_size = (!vector_index_state.is_empty())
+            .then(|| vector_index_state.iter().map(|(meta, _)| meta.size).sum());
+        let vector_index_metas =
+            collect_inverted_index_metas(vector_index_state.iter().map(|(meta, _)| meta.clone()));
 
         let (spatial_index_state, spatial_stats) =
             if let Some(ref mut spatial_index_builder) = self.spatial_index_builder {
@@ -450,7 +447,8 @@ impl StreamBlockBuilder {
             inverted_index_size,
             inverted_index_metas: Some(inverted_index_metas),
             vector_index_size,
-            vector_index_location,
+            vector_index_location: None,
+            vector_index_metas: Some(vector_index_metas),
             spatial_index_size,
             spatial_index_location,
             spatial_stats,
@@ -468,11 +466,8 @@ impl StreamBlockBuilder {
         let block_indexes = PendingBlockIndexOutput {
             bloom: bloom_index_state.map(BloomIndexState::into_pending),
             inverted: written_inverted,
-            vector: vector_index_state.map(|state| PendingVectorIndex {
-                file: Some(PendingIndexFile {
-                    location: state.location,
-                    data: state.data,
-                }),
+            vector: Some(PendingVectorIndex {
+                files: vector_index_state,
                 statistics: None,
             }),
             spatial: spatial_index_state.map(|state| PendingSpatialIndex {

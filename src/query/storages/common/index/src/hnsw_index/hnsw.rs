@@ -15,6 +15,7 @@
 
 use std::sync::atomic::AtomicBool;
 
+use databend_common_column::bitmap::TrueIdxIter;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -23,6 +24,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::F32;
@@ -52,25 +54,54 @@ use crate::hnsw_index::quantization::encoded_vectors::EncodedVectors;
 
 pub const SINGLE_THREADED_HNSW_BUILD_THRESHOLD: usize = 256;
 
+/// Name suffixes of the four HNSW components, in the order `HNSWIndex::build`
+/// produces and `HNSWIndex::open` expects them.
+pub const HNSW_GRAPH_LINKS_SUFFIX: &str = "_graph_links";
+pub const HNSW_GRAPH_DATA_SUFFIX: &str = "_graph_data";
+pub const HNSW_ENCODED_U8_META_SUFFIX: &str = "_encoded_u8_meta";
+pub const HNSW_ENCODED_U8_DATA_SUFFIX: &str = "_encoded_u8_data";
+pub const HNSW_COMPONENT_SUFFIXES: [&str; 4] = [
+    HNSW_GRAPH_LINKS_SUFFIX,
+    HNSW_GRAPH_DATA_SUFFIX,
+    HNSW_ENCODED_U8_META_SUFFIX,
+    HNSW_ENCODED_U8_DATA_SUFFIX,
+];
+
+/// Component name: `{column_id}-{distance_type}{suffix}`.
+fn hnsw_component_name(column_id: ColumnId, distance_type: DistanceType, suffix: &str) -> String {
+    format!("{column_id}-{distance_type}{suffix}")
+}
+
+/// Names of the four HNSW components of one column and distance, in `open` order.
+pub fn hnsw_component_names(column_id: ColumnId, distance_type: DistanceType) -> Vec<String> {
+    HNSW_COMPONENT_SUFFIXES
+        .iter()
+        .map(|suffix| hnsw_component_name(column_id, distance_type, suffix))
+        .collect()
+}
+
 pub struct HNSWIndex {
     graph_layers: GraphLayers,
     distance_type: DistanceType,
     encoded_vectors: EncodedVectorsU8<Vec<u8>>,
+    // Column validity, present only when the column has NULLs (none in old files).
+    // Only `generate_scores` needs it: NULL rows are not linked into the graph.
+    validity: Option<Bitmap>,
 }
 
 impl HNSWIndex {
+    /// Opens the four serialized components in `HNSW_COMPONENT_SUFFIXES` order.
     pub fn open(
         distance_type: DistanceType,
         dim: usize,
         count: usize,
-        binary_columns: Vec<Column>,
+        components: &[impl AsRef<[u8]>],
+        validity: Option<&[u8]>,
     ) -> Result<HNSWIndex> {
-        let graph_links = unsafe { binary_columns[0].as_binary().unwrap().index_unchecked(0) };
-        let graph_data = unsafe { binary_columns[1].as_binary().unwrap().index_unchecked(0) };
-        let encoded_meta = unsafe { binary_columns[2].as_binary().unwrap().index_unchecked(0) };
-        let encoded_data = unsafe { binary_columns[3].as_binary().unwrap().index_unchecked(0) };
-
-        let graph_layers = GraphLayers::open(graph_links, graph_data)?;
+        let [graph_links, graph_data, encoded_meta, encoded_data] = components else {
+            return Err(ErrorCode::StorageOther("Expected four HNSW components"));
+        };
+        let graph_layers = GraphLayers::open(graph_links.as_ref(), graph_data.as_ref())?;
 
         let invert = match distance_type {
             DistanceType::Dot => false,
@@ -85,13 +116,27 @@ impl HNSWIndex {
         };
 
         let encoded_vectors: EncodedVectorsU8<Vec<u8>> =
-            EncodedVectorsU8::load(encoded_data, encoded_meta, &params)?;
+            EncodedVectorsU8::load(encoded_data.as_ref(), encoded_meta.as_ref(), &params)?;
+
+        let validity = validity
+            .map(|bytes| {
+                Bitmap::try_new(bytes.to_vec(), count).map_err(|error| {
+                    ErrorCode::StorageOther(format!("Invalid vector validity: {error}"))
+                })
+            })
+            .transpose()?;
 
         Ok(Self {
             graph_layers,
             distance_type,
             encoded_vectors,
+            validity,
         })
+    }
+
+    /// Column validity; `None` when every row is valid.
+    pub fn validity(&self) -> Option<&Bitmap> {
+        self.validity.as_ref()
     }
 
     /// Memory retained by this index, including the maximum retained visited-list pool.
@@ -101,9 +146,22 @@ impl HNSWIndex {
             - std::mem::size_of::<GraphLayers>()
             + self.encoded_vectors.memory_size()
             - std::mem::size_of::<EncodedVectorsU8<Vec<u8>>>()
+            + self
+                .validity
+                .as_ref()
+                .map_or(0, |bitmap| bitmap.as_slice().0.len())
     }
 
     pub fn search(&self, limit: usize, query_values: &[f32]) -> Result<Vec<ScoredPointOffset>> {
+        self.search_with_ef(limit, None, query_values)
+    }
+
+    pub fn search_with_ef(
+        &self,
+        limit: usize,
+        search_ef: Option<usize>,
+        query_values: &[f32],
+    ) -> Result<Vec<ScoredPointOffset>> {
         let query_encode = self.encoded_vectors.encode_query(query_values);
 
         let raw_scorer = RawScorer::Quantized(QuantizedRawScorer {
@@ -114,7 +172,9 @@ impl HNSWIndex {
         // ef is used to maintain the size of the set of candidate points in the search process,
         // the larger the search precision is higher, the smaller the speed is faster,
         // take 4 times the limit is a more balanced parameter.
-        let ef = limit * 4;
+        let ef = search_ef
+            .unwrap_or_else(|| limit.saturating_mul(4))
+            .max(limit);
         let query_filter_scorer = FilteredScorer::new(&raw_scorer);
 
         let is_stopped = AtomicBool::new(false);
@@ -138,11 +198,19 @@ impl HNSWIndex {
             vector: &self.encoded_vectors,
         });
 
-        let mut values = Vec::with_capacity(row_nums as usize);
-        for idx in 0..row_nums {
-            let score = raw_scorer.score_point(idx);
-            values.push(ScoredPointOffset { idx, score });
-        }
+        let score = |idx: u32| ScoredPointOffset {
+            idx,
+            score: raw_scorer.score_point(idx),
+        };
+        // NULL rows keep their slot, so `idx` is the block row; skip them here as
+        // this path does not go through the graph. The bitmap covers the whole
+        // block, which is exactly `row_nums` rows.
+        let values = match &self.validity {
+            Some(bitmap) => TrueIdxIter::new(row_nums as usize, Some(bitmap))
+                .map(|idx| score(idx as u32))
+                .collect(),
+            None => (0..row_nums).map(score).collect(),
+        };
 
         let values = Self::postprocess_score(self.distance_type, values);
         Ok(values)
@@ -159,6 +227,10 @@ impl HNSWIndex {
         let entry_points_num = 2;
         let use_heuristic = true;
         let num_vectors = column.len();
+        let validity = column
+            .as_nullable()
+            .map(|nullable| nullable.validity.clone())
+            .filter(|bitmap| bitmap.null_count() != 0);
 
         let column = column.remove_nullable();
         let vector_column = column.as_vector().unwrap();
@@ -176,7 +248,13 @@ impl HNSWIndex {
 
         for i in 0..column.len() {
             let vector_id = i as PointOffsetType;
-            let level = graph_layers_builder.get_random_layer(&mut rng);
+            // NULL rows keep an empty level-0 slot so point ids stay block rows; they
+            // are never inserted below, so they are not reachable in the graph.
+            let level = if validity.as_ref().is_none_or(|bitmap| bitmap.get_bit(i)) {
+                graph_layers_builder.get_random_layer(&mut rng)
+            } else {
+                0
+            };
             graph_layers_builder.set_levels(vector_id, level);
         }
 
@@ -197,21 +275,10 @@ impl HNSWIndex {
             .build()
             .expect("failed to build hnsw build thread pool");
 
-        let first_few_num = std::cmp::min(SINGLE_THREADED_HNSW_BUILD_THRESHOLD, column.len());
-        let left_num = if column.len() > first_few_num {
-            column.len() - first_few_num
-        } else {
-            0
-        };
-
-        let mut first_few_ids = Vec::with_capacity(first_few_num);
-        let mut ids = Vec::with_capacity(left_num);
-        for i in 0..first_few_num {
-            first_few_ids.push(i);
-        }
-        for i in first_few_num..column.len() {
-            ids.push(i);
-        }
+        let mut ids: Vec<usize> = TrueIdxIter::new(column.len(), validity.as_ref()).collect();
+        let first_few_ids: Vec<usize> = ids
+            .drain(..SINGLE_THREADED_HNSW_BUILD_THRESHOLD.min(ids.len()))
+            .collect();
 
         let (data, dim) = vector_column.as_float32().unwrap();
         let data = unsafe { std::mem::transmute::<Buffer<F32>, Buffer<f32>>(data.clone()) };
@@ -242,7 +309,6 @@ impl HNSWIndex {
             pool.install(|| ids.into_par_iter().try_for_each(insert_point))?;
         }
 
-        // let graph_layers = graph_layers_builder.into_graph_layers_ram(GraphLinksFormat::Compressed);
         let (graph_links, graph_data) =
             graph_layers_builder.into_graph_data(GraphLinksFormat::Compressed)?;
 
@@ -258,11 +324,11 @@ impl HNSWIndex {
         ));
 
         index_fields.push(TableField::new(
-            &format!("{}-{}_graph_links", column_id, distance_type),
+            &hnsw_component_name(column_id, distance_type, HNSW_GRAPH_LINKS_SUFFIX),
             TableDataType::Binary,
         ));
         index_fields.push(TableField::new(
-            &format!("{}-{}_graph_data", column_id, distance_type),
+            &hnsw_component_name(column_id, distance_type, HNSW_GRAPH_DATA_SUFFIX),
             TableDataType::Binary,
         ));
 
@@ -305,11 +371,11 @@ impl HNSWIndex {
             1,
         ));
         index_fields.push(TableField::new(
-            &format!("{}-{}_encoded_u8_meta", column_id, distance_type),
+            &hnsw_component_name(column_id, distance_type, HNSW_ENCODED_U8_META_SUFFIX),
             TableDataType::Binary,
         ));
         index_fields.push(TableField::new(
-            &format!("{}-{}_encoded_u8_data", column_id, distance_type),
+            &hnsw_component_name(column_id, distance_type, HNSW_ENCODED_U8_DATA_SUFFIX),
             TableDataType::Binary,
         ));
 
