@@ -568,7 +568,22 @@ impl QueryContextShared {
                                 &source_database_name,
                                 &source_table_name,
                             )
-                            .await?;
+                            .await
+                            .map_err(|err| {
+                                if matches!(
+                                    err.code(),
+                                    ErrorCode::LICENSE_KEY_INVALID | ErrorCode::LICENSE_KEY_EXPIRED
+                                ) {
+                                    return err;
+                                }
+                                ErrorCode::IllegalStream(format!(
+                                    "Cannot get base table '{}'.'{}' from stream {}, cause: {}",
+                                    source_database_name,
+                                    source_table_name,
+                                    stream_desc,
+                                    err.message()
+                                ))
+                            })?;
                         // Only the full source belongs in the ordinary table cache.
                         self.tables_refs
                             .lock()
