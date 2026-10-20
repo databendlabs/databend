@@ -132,6 +132,24 @@ pub fn is_fuse_backed_engine(engine: &str) -> bool {
         || engine.eq_ignore_ascii_case(DYNAMIC_TABLE_ENGINE)
 }
 
+/// Table engines that have been removed from Databend but may still be
+/// referenced by table metadata created by older versions.
+///
+/// Every engine listed here must be a read-only external engine, i.e.
+/// Databend never owned any data files of such tables. Dropped tables with
+/// these engines can therefore be reclaimed by removing their metadata only,
+/// without instantiating the (no longer available) table engine.
+pub const RETIRED_TABLE_ENGINES: &[&str] = &[
+    // Removed in #20558, used to read external Delta Lake tables.
+    "DELTA",
+];
+
+pub fn is_retired_engine(engine: &str) -> bool {
+    RETIRED_TABLE_ENGINES
+        .iter()
+        .any(|retired| engine.eq_ignore_ascii_case(retired))
+}
+
 /// Table option keys that reserved for internal usage only
 /// - Users are not allowed to specify this option keys in DDL
 /// - Should not be shown in `show create table` statement

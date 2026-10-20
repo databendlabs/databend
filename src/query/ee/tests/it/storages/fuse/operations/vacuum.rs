@@ -1503,6 +1503,84 @@ async fn test_vacuum_dropped_tables_isolates_initialization_failures() -> anyhow
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_dropped_tables_reclaims_retired_engine_metadata() -> anyhow::Result<()> {
+    let meta = new_local_meta().await;
+    let mut ee_setup = EESetup::new();
+    ee_setup.config_mut().meta.endpoints = meta.inner().endpoints.clone();
+    let fixture = TestFixture::setup_with_custom(ee_setup).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+
+    let db_name = "test_vacuum_retired_engine";
+    fixture
+        .execute_command(&format!("create database {db_name}"))
+        .await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let tenant = ctx.get_tenant();
+    let catalog = ctx.get_default_catalog()?;
+    let db_id = catalog
+        .get_database(&tenant, db_name)
+        .await?
+        .get_db_info()
+        .database_id;
+    let mut tables = Vec::new();
+    for name in ["retired_engine", "unknown_engine"] {
+        fixture
+            .execute_command(&format!("create table {db_name}.{name} (a int)"))
+            .await?;
+        let table = catalog.get_table(&tenant, db_name, name).await?;
+        let operator = FuseTable::try_from_table(table.as_ref())?.get_operator();
+        let path = format!(
+            "{}/vacuum-test-data",
+            FuseTable::parse_storage_prefix_from_table_info(table.get_table_info())?
+        );
+        operator.write(&path, vec![1, 2]).await?;
+        tables.push((table.get_table_info().clone(), operator, path));
+    }
+    fixture
+        .execute_command(&format!("drop database {db_name}"))
+        .await?;
+
+    // Simulate metadata left behind by a removed engine (DELTA) and by an engine
+    // this binary does not know about.
+    for (info, _, _) in &tables {
+        let key = TableId::new(info.ident.table_id);
+        let mut seq_meta = meta.get_pb(&key).await?.unwrap();
+        seq_meta.engine = match info.name.as_str() {
+            "retired_engine" => "DELTA".to_owned(),
+            _ => "UNKNOWN_ENGINE".to_owned(),
+        };
+        let mut txn = TxnRequest::default();
+        txn_replace_exact(&mut txn, &key, seq_meta.seq, &seq_meta.data)?;
+        assert!(send_txn(&meta, txn).await?.0);
+    }
+
+    execute_command(ctx.clone(), "vacuum dropped objects").await?;
+    let warnings = ctx.pop_warnings().join("\n");
+    // The unknown-engine table is retained, so its database must be retained too.
+    assert!(meta.get_pb(&db_id).await?.is_some());
+    for (info, operator, path) in &tables {
+        let key = TableId::new(info.ident.table_id);
+        if info.name == "retired_engine" {
+            // Metadata-only reclaim: meta is removed and storage is not touched.
+            assert!(meta.get_pb(&key).await?.is_none());
+            assert!(operator.exists(path).await?);
+            assert!(!warnings.contains(&info.desc));
+        } else {
+            assert!(meta.get_pb(&key).await?.is_some());
+            assert!(operator.exists(path).await?);
+            assert!(warnings.contains(&format!(
+                "Unknown table engine UNKNOWN_ENGINE for table {} (id: {})",
+                info.desc, info.ident.table_id
+            )));
+        }
+    }
+    Ok(())
+}
+
 async fn new_local_meta() -> MetaStore {
     let meta_config = MetaConfig::default();
     let config = meta_config.to_meta_grpc_client_conf();

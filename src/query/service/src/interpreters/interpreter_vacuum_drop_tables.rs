@@ -32,6 +32,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_storages_common_table_meta::table::is_fuse_backed_engine;
+use databend_storages_common_table_meta::table::is_retired_engine;
 use log::info;
 use log::warn;
 
@@ -226,6 +227,16 @@ impl Interpreter for VacuumDropTablesInterpreter {
                     // Physical GC needs storage parameters, not a fully initialized
                     // reader/writer that can reject old or invalid table options.
                     fuse_tables.push(table_info);
+                } else if is_retired_engine(table_info.engine()) {
+                    // Retired engines are read-only external engines whose implementation
+                    // has been removed. Databend owns no data files for them, so metadata GC
+                    // is sufficient and the engine does not need to be instantiated.
+                    info!(
+                        "reclaim metadata only for dropped table {} (id:{}) with retired engine {}",
+                        table_info.desc,
+                        table_info.ident.table_id,
+                        table_info.engine()
+                    );
                 } else if let Err(err) = catalog.get_table_by_info(&table_info) {
                     // Known non-Fuse engines only need metadata GC. Do not silently
                     // remove metadata for an unknown or uninitializable engine.
