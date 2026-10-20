@@ -87,7 +87,10 @@ pub fn set_env_config() -> Result<()> {
 pub fn add_env_version() {
     println!("cargo:rerun-if-env-changed=DATABEND_RELEASE_VERSION");
     let version = discover_version().expect(VERSION_ERROR_MESSAGE);
-    println!("cargo:rustc-env=DATABEND_GIT_SEMVER={}", version);
+    println!(
+        "cargo:rustc-env=DATABEND_GIT_SEMVER={}",
+        normalize_version(&version)
+    );
 }
 
 fn discover_version() -> Result<String> {
@@ -100,6 +103,11 @@ fn discover_version() -> Result<String> {
             Ok(tag)
         }
     }
+}
+
+// Keep the release tag unchanged, but omit its nightly suffix from binary versions.
+fn normalize_version(version: &str) -> &str {
+    version.strip_suffix("-nightly").unwrap_or(version)
 }
 
 pub fn add_env_license() {
@@ -218,4 +226,23 @@ pub fn add_opt_level() {
             println!("cargo:rustc-env=DATABEND_OPT_LEVEL=unknown");
         }
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_version;
+
+    #[test]
+    fn test_normalize_version() {
+        for (version, expected) in [
+            ("v1.2.952-nightly", "v1.2.952"),
+            ("1.2.952-nightly", "1.2.952"),
+            ("v1.2.952", "v1.2.952"),
+            ("1.2.952", "1.2.952"),
+            ("v1.2.952-p2", "v1.2.952-p2"),
+            ("v1.2.952-rc.1", "v1.2.952-rc.1"),
+        ] {
+            assert_eq!(normalize_version(version), expected);
+        }
+    }
 }
