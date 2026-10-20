@@ -26,49 +26,74 @@ pub struct ExternalAccessIntegration {
     pub enabled: bool,
 }
 
-macro_rules! resource {
-    ($module:ident, $value:ident, $prefix:literal) => {
-        pub mod $module {
-            use databend_common_exception::ErrorCode;
-            use databend_meta_client::kvapi::ValueWithName;
+pub mod network_rule_ident {
+    use databend_common_exception::ErrorCode;
+    use databend_meta_client::kvapi::ValueWithName;
 
-            use super::$value;
-            use crate::tenant_key::errors::ExistError;
-            use crate::tenant_key::errors::UnknownError;
-            use crate::tenant_key::resource::TenantResource;
+    use super::NetworkRule;
+    use crate::tenant_key::errors::ExistError;
+    use crate::tenant_key::errors::UnknownError;
+    use crate::tenant_key::resource::TenantResource;
 
-            pub struct Resource;
-            impl TenantResource for Resource {
-                const PREFIX: &'static str = $prefix;
-                const TYPE: &'static str = stringify!($value);
-                const HAS_TENANT: bool = true;
-                type ValueType = $value;
-            }
+    pub struct Resource;
+    impl TenantResource for Resource {
+        const PREFIX: &'static str = "__fd_network_rule";
+        const TYPE: &'static str = "NetworkRule";
+        const HAS_TENANT: bool = true;
+        type ValueType = NetworkRule;
+    }
 
-            impl ValueWithName for $value {
-                fn name(&self) -> &str {
-                    &self.name
-                }
-            }
-
-            impl From<ExistError<Resource>> for ErrorCode {
-                fn from(err: ExistError<Resource>) -> Self {
-                    ErrorCode::InvalidArgument(err.to_string())
-                }
-            }
-
-            impl From<UnknownError<Resource>> for ErrorCode {
-                fn from(err: UnknownError<Resource>) -> Self {
-                    ErrorCode::InvalidArgument(err.to_string())
-                }
-            }
+    impl ValueWithName for NetworkRule {
+        fn name(&self) -> &str {
+            &self.name
         }
-    };
+    }
+
+    impl From<ExistError<Resource>> for ErrorCode {
+        fn from(err: ExistError<Resource>) -> Self {
+            ErrorCode::InvalidArgument(err.to_string())
+        }
+    }
+
+    impl From<UnknownError<Resource>> for ErrorCode {
+        fn from(err: UnknownError<Resource>) -> Self {
+            ErrorCode::InvalidArgument(err.to_string())
+        }
+    }
 }
 
-resource!(network_rule_ident, NetworkRule, "__fd_network_rule");
-resource!(
-    external_access_integration_ident,
-    ExternalAccessIntegration,
-    "__fd_external_access_integration"
-);
+pub mod external_access_integration_ident {
+    use databend_common_exception::ErrorCode;
+    use databend_meta_client::kvapi::ValueWithName;
+
+    use super::ExternalAccessIntegration;
+    use crate::tenant_key::errors::ExistError;
+    use crate::tenant_key::errors::UnknownError;
+    use crate::tenant_key::resource::TenantResource;
+
+    pub struct Resource;
+    impl TenantResource for Resource {
+        const PREFIX: &'static str = "__fd_external_access_integration";
+        const TYPE: &'static str = "ExternalAccessIntegration";
+        const HAS_TENANT: bool = true;
+        type ValueType = ExternalAccessIntegration;
+    }
+
+    impl ValueWithName for ExternalAccessIntegration {
+        fn name(&self) -> &str {
+            &self.name
+        }
+    }
+
+    impl From<ExistError<Resource>> for ErrorCode {
+        fn from(err: ExistError<Resource>) -> Self {
+            ErrorCode::InvalidArgument(err.to_string())
+        }
+    }
+
+    impl From<UnknownError<Resource>> for ErrorCode {
+        fn from(err: UnknownError<Resource>) -> Self {
+            ErrorCode::InvalidArgument(err.to_string())
+        }
+    }
+}
