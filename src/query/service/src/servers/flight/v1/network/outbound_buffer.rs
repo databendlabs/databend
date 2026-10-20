@@ -740,6 +740,33 @@ mod tests {
         .expect("the last response should release the remaining quota");
     }
 
+    /// An item is charged for its metadata and header as well as its body, so items
+    /// with an empty body still take quota.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_buffer_charges_metadata_and_header() {
+        let rt = test_runtime();
+        let (exchange, send_rx, _pong_tx) = create_mock_exchange(1);
+        let buffer = ExchangeSinkBuffer::create(
+            vec![exchange],
+            ExchangeBufferConfig {
+                max_queued_bytes: 1024,
+                ..Default::default()
+            },
+            &rt,
+        )
+        .unwrap();
+
+        let mut item = make_flight_data_with_tid(0, &[0x01; 6], 0);
+        item.data_header = Bytes::from(vec![0u8; 100]);
+        let size = flight_data_size(&item);
+        assert_eq!(size, 108);
+
+        // Sent right away, the frame in flight keeps its quota.
+        buffer.add_data(0, item).await.unwrap();
+        let _ = send_rx.recv().await.unwrap();
+        assert_eq!(buffer.semaphore.available_permits(), 1024 - size);
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn test_buffer_oversized_item_does_not_deadlock() {
         let rt = test_runtime();

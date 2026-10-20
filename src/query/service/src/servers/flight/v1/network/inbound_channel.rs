@@ -232,9 +232,10 @@ impl InboundChannel for NetworkInboundReceiver {
     }
 }
 
-/// Compute the byte size of a FlightData for quota accounting.
+/// Bytes a FlightData holds, charged against send and receive quotas. Metadata and
+/// header count too, so items with a small or empty body still take quota.
 pub fn flight_data_size(data: &FlightData) -> usize {
-    data.data_body.len()
+    data.app_metadata.len() + data.data_header.len() + data.data_body.len()
 }
 
 /// Extract tid from FlightData app_metadata (first 2 bytes, little-endian u16).

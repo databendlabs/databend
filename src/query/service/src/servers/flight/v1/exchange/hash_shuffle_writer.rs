@@ -141,6 +141,10 @@ impl HashShuffleWriter {
             return Ok(false);
         }
 
+        // The partition builders store constants row by row, so count them expanded:
+        // a constant's memory size is a single value.
+        let block = block.consume_convert_to_full();
+
         let Some(partition_ids) = self.scatter.scatter_indices(&block)? else {
             return Err(ErrorCode::Internal(format!(
                 "Logical error, {} scatter cannot be used for hash shuffle",
@@ -596,6 +600,41 @@ mod tests {
                 .sum::<usize>();
             assert_eq!(rows, 20);
         }
+        Ok(())
+    }
+
+    /// Constant columns count at the size the partition builders receive, not the
+    /// size of their single value, so they still reach the budget.
+    #[test]
+    fn test_writer_counts_constants_expanded() -> Result<()> {
+        let block = || {
+            DataBlock::new(
+                vec![BlockEntry::new_const_column(
+                    DataType::String,
+                    Scalar::String("x".repeat(64)),
+                    1000,
+                )],
+                1000,
+            )
+        };
+        let expanded = block().convert_to_full().memory_size();
+        assert!(block().memory_size() * 100 < expanded);
+
+        let (nodes, collectors) = local_nodes(1, 4);
+        let scatter: Arc<Box<dyn FlightScatter>> =
+            Arc::new(Box::new(RowScatter { num_partitions: 4 }));
+        let mut writer =
+            HashShuffleWriter::create(0, ExecutorWaker::create(), scatter, nodes, expanded);
+
+        assert!(writer.add_block(block())?);
+        assert_eq!(writer.buffered_bytes, expanded);
+        writer.flush(None)?;
+
+        let rows = collectors
+            .iter()
+            .map(|x| x.blocks.lock().iter().map(|x| x.num_rows()).sum::<usize>())
+            .sum::<usize>();
+        assert_eq!(rows, 1000);
         Ok(())
     }
 
