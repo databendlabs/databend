@@ -51,7 +51,7 @@ runs:
           --hide-progress-bar \
           --run-ignored only \
           --workspace \
-          real_s3::storage_class_sql_roundtrip
+          storage_class_tests::real_s3::
       env:
         DATABEND_TEST_S3_BUCKET: databend-ci
         DATABEND_TEST_S3_REGION: us-east-2
