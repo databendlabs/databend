@@ -38,6 +38,20 @@ CREATE EXTERNAL ACCESS INTEGRATION IF NOT EXISTS ddl_udf_access ALLOWED_NETWORK_
 statement ok
 CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION ddl_udf_access ENABLED = TRUE ALLOWED_NETWORK_RULES = (ddl_udf_rule);
 
+statement ok
+CREATE ROLE ddl_udf_developer;
+
+statement ok
+GRANT USAGE ON INTEGRATION ddl_udf_access TO ROLE ddl_udf_developer;
+
+query TTTTTT
+SHOW GRANTS FOR ROLE ddl_udf_developer;
+----
+ALL ddl_udf_access NULL ROLE ddl_udf_developer GRANT ALL ON INTEGRATION "ddl_udf_access" TO ROLE `ddl_udf_developer`
+
+statement ok
+REVOKE USAGE ON INTEGRATION ddl_udf_access FROM ROLE ddl_udf_developer;
+
 statement error option IF NOT EXISTS and OR REPLACE are incompatible
 CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION IF NOT EXISTS ddl_udf_access ALLOWED_NETWORK_RULES = (ddl_udf_rule) ENABLED = TRUE;
 
@@ -50,6 +64,20 @@ CREATE EXTERNAL ACCESS INTEGRATION "Quoted access/r""x" ALLOWED_NETWORK_RULES = 
 
 statement ok
 ALTER EXTERNAL ACCESS INTEGRATION IF EXISTS "Quoted access/r""x" SET ENABLED = FALSE ALLOWED_NETWORK_RULES = (ddl_udf_rule);
+
+statement ok
+GRANT USAGE ON INTEGRATION "Quoted access/r""x" TO ROLE ddl_udf_developer;
+
+query TTTTTT
+SHOW GRANTS FOR ROLE ddl_udf_developer;
+----
+ALL Quoted access/r"x NULL ROLE ddl_udf_developer GRANT ALL ON INTEGRATION "Quoted access/r""x" TO ROLE `ddl_udf_developer`
+
+statement ok
+GRANT ALL ON INTEGRATION "Quoted access/r""x" TO ROLE `ddl_udf_developer`;
+
+statement ok
+REVOKE USAGE ON INTEGRATION "Quoted access/r""x" FROM ROLE ddl_udf_developer;
 
 statement ok
 DROP INTEGRATION "Quoted access/r""x";
@@ -80,3 +108,6 @@ ALTER EXTERNAL ACCESS INTEGRATION IF EXISTS ddl_udf_access SET ALLOWED_NETWORK_R
 
 statement ok
 DROP INTEGRATION IF EXISTS ddl_udf_access;
+
+statement ok
+DROP ROLE ddl_udf_developer;

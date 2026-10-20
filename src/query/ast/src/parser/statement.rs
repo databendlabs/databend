@@ -4246,6 +4246,20 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         |(_, _, _, level)| AccountMgrSource::ALL { level },
     );
 
+    let integration_all_privs = map(
+        rule! { ALL ~ PRIVILEGES? ~ ON ~ INTEGRATION ~ #ident },
+        |(_, _, _, _, name)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::Usage],
+            level: AccountMgrLevel::Integration(name),
+        },
+    );
+    let integration_privs = map(
+        rule! { USAGE ~ ON ~ INTEGRATION ~ #ident },
+        |(_, _, _, name)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::Usage],
+            level: AccountMgrLevel::Integration(name),
+        },
+    );
     let udf_privs = map(
         rule! {
             USAGE ~ ON ~ UDF ~ #ident
@@ -4407,6 +4421,8 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         | #warehouse_all_privs: "ALL [ PRIVILEGES ] ON WAREHOUSE <warehouse_name>"
         | #connection_all_privs: "ALL [ PRIVILEGES ] ON CONNECTION <connection_name>"
         | #seq_all_privs: "ALL [ PRIVILEGES ] ON SEQUENCE <seq_name>"
+        | #integration_all_privs: "ALL [ PRIVILEGES ] ON INTEGRATION <name>"
+        | #integration_privs: "USAGE ON INTEGRATION <name>"
         | #udf_privs: "USAGE ON UDF <udf_name>"
         | #warehouse_privs: "USAGE ON WAREHOUSE <warehouse_name>"
         | #connection_privs: "ACCESS CONNECTION ON CONNECTION <connection_name>"

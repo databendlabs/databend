@@ -171,6 +171,15 @@ impl Binder {
                     self.ctx
                         .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super, true)
                         .await?;
+                    for name in &integrations {
+                        self.ctx
+                            .validate_privilege(
+                                &GrantObject::Integration(name.clone()),
+                                UserPrivilegeType::Usage,
+                                false,
+                            )
+                            .await?;
+                    }
                     UserApiProvider::instance()
                         .validate_external_access(&self.ctx.get_tenant(), address, &integrations)
                         .await?;

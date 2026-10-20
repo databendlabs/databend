@@ -763,6 +763,12 @@ impl TenantDump {
                     out,
                 );
             }
+            GrantObject::Integration(name) => {
+                out.optional(
+                    format!("__fd_external_access_integration/{tenant}/{name}"),
+                    "integration grants can outlive a dropped integration",
+                );
+            }
             GrantObject::Connection(name) => {
                 out.required(format!("__fd_connection/{tenant}/{name}"));
             }
@@ -1234,6 +1240,7 @@ const TENANT_SCOPED_PREFIXES: &[&str] = &[
 mod tests {
     use databend_common_meta_api::kv_pb_api;
     use databend_common_meta_app::data_share::DataShareMeta;
+    use databend_common_meta_app::principal::ExternalAccessIntegration;
     use databend_common_meta_app::schema::DatabaseMeta;
     use databend_common_meta_app::schema::EmptyProto;
     use databend_common_meta_app::schema::IndexNameIdentRaw;
@@ -1649,6 +1656,38 @@ mod tests {
             err.to_string()
                 .contains("required key not found: __fd_sequence/tenant_a/s1")
         );
+    }
+
+    #[test]
+    fn test_integration_grants_survive_drop_and_export() -> anyhow::Result<()> {
+        let user_key = "__fd_users/tenant_a/u1";
+        let role_key = "__fd_roles/tenant_a/r1";
+        let integration_key = "__fd_external_access_integration/tenant_a/access";
+        let user = user_with_grant(GrantObject::Integration("access".to_string()));
+        let mut role = RoleInfo::new("r1", None);
+        role.grants = user.grants.clone();
+        let integration = ExternalAccessIntegration {
+            name: "access".to_string(),
+            allowed_network_rules: vec![],
+            enabled: true,
+        };
+        let mut input = vec![
+            generic_kv_line(user_key, encode_pb(&user)),
+            generic_kv_line(role_key, encode_pb(&role)),
+            generic_kv_line(integration_key, encode_pb(&integration)),
+        ];
+        let (report, output) = filter(input.clone(), "tenant_a")?;
+        assert_eq!(report.kept_state_machine_lines, 3);
+        assert!(output.contains(integration_key));
+
+        // DROP leaves the user/role grants in metadata. Exporting that
+        // snapshot must not require the deleted integration to exist.
+        input.pop();
+        let (report, output) = filter(input, "tenant_a")?;
+        assert_eq!(report.kept_state_machine_lines, 2);
+        assert!(output.contains(user_key));
+        assert!(output.contains(role_key));
+        Ok(())
     }
 
     #[test]

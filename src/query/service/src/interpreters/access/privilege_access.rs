@@ -37,6 +37,7 @@ use databend_common_meta_app::principal::SENSITIVE_SYSTEM_RESOURCE;
 use databend_common_meta_app::principal::SYSTEM_TABLES_ALLOW_LIST;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
+use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
@@ -256,7 +257,7 @@ impl PrivilegeAccess {
             GrantObject::RowAccessPolicy(policy_id) => OwnershipObject::RowAccessPolicy {
                 policy_id: *policy_id,
             },
-            GrantObject::Global => return Ok(None),
+            GrantObject::Global | GrantObject::Integration(_) => return Ok(None),
         };
 
         Ok(Some(object))
@@ -1123,6 +1124,7 @@ impl PrivilegeAccess {
             | GrantObject::Procedure(_)
             | GrantObject::TableById(_, _, _)
             | GrantObject::MaskingPolicy(_)
+            | GrantObject::Integration(_)
             | GrantObject::RowAccessPolicy(_) => true,
             GrantObject::Global => false,
         };
@@ -1189,6 +1191,7 @@ impl PrivilegeAccess {
                     | GrantObject::Database(_, _)
                     | GrantObject::Table(_, _, _)
                     | GrantObject::MaskingPolicy(_)
+                    | GrantObject::Integration(_)
                     | GrantObject::RowAccessPolicy(_) => Err(ErrorCode::PermissionDenied(format!(
                         "Permission denied: privilege [{:?}] is required on {} for user {} with roles [{}]. \
                         Note: Please ensure that your current role have the appropriate permissions to create a new Object",
@@ -1859,7 +1862,12 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, true, false)
                     .await?;
             }
-            Plan::CreateUDF(_) => {
+            Plan::CreateUDF(plan) => {
+                if let UDFDefinition::UDFServer(server) = &plan.udf.definition {
+                    for name in &server.external_access_integrations {
+                        self.ctx.validate_privilege(&GrantObject::Integration(name.clone()), UserPrivilegeType::Usage, false).await?;
+                    }
+                }
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, true, false)
                     .await?;
             }

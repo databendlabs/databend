@@ -60,7 +60,8 @@ fn endpoint(url: &Url) -> Result<(String, u16)> {
 impl UserApiProvider {
     /// Read directly from meta, not a warehouse-local cache. Explicit integrations
     /// never fall back to the legacy allow list, even when it allows this address.
-    /// Creation requires SUPER; invocation uses the existing UDF privileges.
+    /// Creation checks SUPER and integration USAGE; invocation uses the existing
+    /// UDF privileges and does not require integration USAGE.
     pub async fn validate_external_access(
         &self,
         tenant: &Tenant,
