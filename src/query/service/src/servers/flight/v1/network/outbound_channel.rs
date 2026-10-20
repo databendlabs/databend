@@ -223,6 +223,31 @@ fn serialize_block_for_thread(
 /// Its metadata is the same as a plain fragment (0x01).
 pub const LZ4_BODY_MARKER: u8 = 0x06;
 
+/// Marker of a block whose whole IPC body is one ZSTD frame, prepended by the
+/// uncompressed size as a little-endian u32. Its metadata is the same as a plain
+/// fragment (0x01).
+pub const ZSTD_BODY_MARKER: u8 = 0x07;
+
+/// Compress a whole IPC body. Returns the compressed body and its marker.
+fn compress_body(compression: FlightCompression, body: &[u8]) -> Result<(Vec<u8>, u8)> {
+    match compression {
+        FlightCompression::Lz4 => Ok((
+            lz4_flex::block::compress_prepend_size(body),
+            LZ4_BODY_MARKER,
+        )),
+        FlightCompression::Zstd => {
+            let size = u32::try_from(body.len()).map_err(|_| {
+                ErrorCode::Internal(format!("IPC body of {} bytes is too large", body.len()))
+            })?;
+            let compressed = zstd::bulk::compress(body, zstd::DEFAULT_COMPRESSION_LEVEL)?;
+            let mut data = Vec::with_capacity(4 + compressed.len());
+            data.extend_from_slice(&size.to_le_bytes());
+            data.extend_from_slice(&compressed);
+            Ok((data, ZSTD_BODY_MARKER))
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // RemoteNodeChannel — sends blocks for many threads of one remote node together
 // ---------------------------------------------------------------------------
@@ -233,10 +258,10 @@ pub struct RemoteNodeChannel {
     dest_idx: usize,
     buffer: Arc<ExchangeSinkBuffer>,
     ipc_options: IpcWriteOptions,
-    /// Compress the whole IPC body as one LZ4 block instead of one LZ4 frame per
-    /// buffer: a frame costs a fresh encoder and its buffers, which dominates when
-    /// the blocks sent to each thread are small.
-    lz4_body: bool,
+    /// Compresses the whole IPC body at once instead of each buffer: a per-buffer
+    /// compressor costs a fresh encoder and its buffers, which dominates when the
+    /// blocks sent to each thread are small.
+    compression: Option<FlightCompression>,
     /// Schema of the exchange, built once instead of for every block.
     arrow_schema: Arc<ArrowSchema>,
 }
@@ -248,17 +273,11 @@ impl RemoteNodeChannel {
         compression: Option<FlightCompression>,
         arrow_schema: Arc<ArrowSchema>,
     ) -> Result<Arc<RemoteNodeChannel>> {
-        let lz4_body = matches!(compression, Some(FlightCompression::Lz4));
-        let ipc_compression = match lz4_body {
-            true => None,
-            false => compression,
-        };
-
         Ok(Arc::new(Self {
             dest_idx,
             buffer,
-            ipc_options: make_ipc_options(ipc_compression)?,
-            lz4_body,
+            ipc_options: make_ipc_options(None)?,
+            compression,
             arrow_schema,
         }))
     }
@@ -286,12 +305,13 @@ impl RemoteNodeChannel {
             ));
         }
 
-        match self.lz4_body {
-            true => {
-                data.data_body = lz4_flex::block::compress_prepend_size(&data.data_body).into();
-                app_metadata.push(LZ4_BODY_MARKER);
+        match self.compression {
+            Some(compression) => {
+                let (body, marker) = compress_body(compression, &data.data_body)?;
+                data.data_body = body.into();
+                app_metadata.push(marker);
             }
-            false => app_metadata.push(0x01),
+            None => app_metadata.push(0x01),
         }
 
         Ok(FlightData {

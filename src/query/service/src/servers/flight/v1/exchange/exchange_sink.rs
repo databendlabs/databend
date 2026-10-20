@@ -33,7 +33,7 @@ use super::exchange_sink_writer::create_writer_item;
 use super::exchange_sorting::ExchangeSorting;
 use super::exchange_sorting::TransformExchangeSorting;
 use super::exchange_transform_shuffle::exchange_shuffle;
-use super::hash_send_sink::HashSendSink;
+use super::hash_send_transform::HashSendTransform;
 use super::hash_shuffle_writer::ShuffleNode;
 use super::hash_shuffle_writer::ShuffleTarget;
 use super::hash_shuffle_writer::hash_shuffle_send_budget;
@@ -183,7 +183,7 @@ impl ExchangeSink {
 
         let mut items = Vec::with_capacity(local_threads);
         for idx in 0..local_threads {
-            items.push(HashSendSink::create_item(
+            items.push(HashSendTransform::create_sink_item(
                 idx,
                 scatter.clone(),
                 nodes.clone(),

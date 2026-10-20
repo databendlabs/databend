@@ -184,6 +184,7 @@ typetag = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }
+zstd = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

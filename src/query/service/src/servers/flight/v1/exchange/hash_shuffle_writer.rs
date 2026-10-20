@@ -661,7 +661,11 @@ mod tests {
         ];
 
         for block in blocks {
-            for compression in [None, Some(FlightCompression::Lz4)] {
+            for compression in [
+                None,
+                Some(FlightCompression::Lz4),
+                Some(FlightCompression::Zstd),
+            ] {
                 let (exchange, _send_rx, _pong_tx) = create_mock_exchange(1);
                 let buffer = Arc::new(ExchangeSinkBuffer::create(
                     vec![exchange],
@@ -684,10 +688,14 @@ mod tests {
     }
 
     /// The rows of all threads of a remote node travel in one frame, each item
-    /// tagged with its destination thread, with and without LZ4 body compression.
+    /// tagged with its destination thread, uncompressed or with a compressed body.
     #[tokio::test(flavor = "multi_thread")]
     async fn test_writer_sends_one_frame_per_remote_node() -> Result<()> {
-        for compression in [None, Some(FlightCompression::Lz4)] {
+        for compression in [
+            None,
+            Some(FlightCompression::Lz4),
+            Some(FlightCompression::Zstd),
+        ] {
             let runtime = Runtime::with_worker_threads(2, None)?;
             let (exchange, send_rx, _pong_tx) = create_mock_exchange(4);
             let buffer = Arc::new(ExchangeSinkBuffer::create(

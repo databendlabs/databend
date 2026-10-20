@@ -36,6 +36,7 @@ use super::inbound_quota::QueueItem;
 use super::inbound_quota::SubQueue;
 use super::outbound_buffer::BATCH_MARKER;
 use super::outbound_channel::LZ4_BODY_MARKER;
+use super::outbound_channel::ZSTD_BODY_MARKER;
 
 pub struct NetworkInboundChannel {
     pub sender: Sender<QueueItem>,
@@ -323,6 +324,8 @@ fn copy_flight_data(data: FlightData) -> FlightData {
 ///
 /// Format of `app_metadata`:
 /// - Fragment (last byte 0x01): `[row_count: u32][block_meta: bincode][0x01]`
+/// - Fragment with a compressed body (last byte 0x06 for LZ4, 0x07 for ZSTD): same
+///   metadata as 0x01, see [`decode_compressed_body`]
 /// - Dictionary (last byte 0x05): dictionary IPC data (currently unsupported)
 pub(crate) fn deserialize_flight_data(
     flight_data: FlightData,
@@ -341,7 +344,7 @@ pub(crate) fn deserialize_flight_data(
         ));
     }
 
-    if marker != 0x01 && marker != LZ4_BODY_MARKER {
+    if !matches!(marker, 0x01 | LZ4_BODY_MARKER | ZSTD_BODY_MARKER) {
         return Err(ErrorCode::BadBytes(format!(
             "unknown FlightData marker: 0x{:02x}",
             marker
@@ -376,10 +379,10 @@ pub(crate) fn deserialize_flight_data(
         }
     }
 
-    let batch = match marker == LZ4_BODY_MARKER {
-        true => decode_lz4_body(&flight_data, arrow_schema)?,
-        false => flight_data_to_arrow_batch(&flight_data, arrow_schema, &HashMap::new())
+    let batch = match marker {
+        0x01 => flight_data_to_arrow_batch(&flight_data, arrow_schema, &HashMap::new())
             .map_err(|e| ErrorCode::BadBytes(format!("failed to decode arrow batch: {}", e)))?,
+        _ => decode_compressed_body(&flight_data, marker, arrow_schema)?,
     };
 
     let block = DataBlock::from_record_batch(&schema, &batch)?;
@@ -395,16 +398,29 @@ pub(crate) fn deserialize_flight_data(
     block.add_meta(block_meta)
 }
 
-/// Decode a record batch whose IPC body is one size-prepended LZ4 block.
+/// Decode a record batch whose whole IPC body is compressed as one block
+/// ([`LZ4_BODY_MARKER`] or [`ZSTD_BODY_MARKER`]).
 ///
 /// The decompressed body is handed to the IPC reader without another copy, and
 /// is owned by this batch alone.
-fn decode_lz4_body(
+fn decode_compressed_body(
     flight_data: &FlightData,
+    marker: u8,
     arrow_schema: Arc<ArrowSchema>,
 ) -> Result<arrow_array::RecordBatch, ErrorCode> {
-    let body = lz4_flex::block::decompress_size_prepended(&flight_data.data_body)
-        .map_err(|e| ErrorCode::BadBytes(format!("failed to decompress arrow batch: {}", e)))?;
+    let data = &flight_data.data_body;
+    let body = match marker {
+        LZ4_BODY_MARKER => lz4_flex::block::decompress_size_prepended(data)
+            .map_err(|e| ErrorCode::BadBytes(format!("failed to decompress arrow batch: {}", e)))?,
+        _ => {
+            let Some((size, frame)) = data.split_first_chunk::<4>() else {
+                return Err(ErrorCode::BadBytes("truncated ZSTD arrow batch"));
+            };
+            zstd::bulk::decompress(frame, u32::from_le_bytes(*size) as usize).map_err(|e| {
+                ErrorCode::BadBytes(format!("failed to decompress arrow batch: {}", e))
+            })?
+        }
+    };
 
     let message = arrow_ipc::root_as_message(&flight_data.data_header)
         .map_err(|e| ErrorCode::BadBytes(format!("invalid arrow message header: {:?}", e)))?;
