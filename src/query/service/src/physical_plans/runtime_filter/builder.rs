@@ -157,6 +157,12 @@ pub async fn build_runtime_filter(
             &func_ctx,
         )?;
 
+        // A valid expression can have no legal scan target (e.g. a window
+        // output). Do not publish an inert filter or allocate an id for it.
+        if probe_targets.is_empty() {
+            continue;
+        }
+
         let build_table_rows =
             get_build_table_rows(ctx.clone(), metadata, build_table_index).await?;
 
@@ -217,6 +223,12 @@ fn find_probe_targets(
     probe_key_is_connector: bool,
     func_ctx: &FunctionContext,
 ) -> Result<Vec<(RemoteExpr<String>, usize)>> {
+    // Expression roots obey the same path barriers as column roots. This
+    // check must precede the nonconnector early return below.
+    if !probe_path_is_safe(s_expr, probe_scan_id, probe_key_col_idx) {
+        return Ok(vec![]);
+    }
+
     // A value-changing expression is a leaf in the equivalence graph. Its
     // underlying column is not equivalent to the expression result, so the
     // root expression can only be installed on its own scan.
@@ -230,7 +242,13 @@ fn find_probe_targets(
             scalar_to_probe_target(metadata, &cond.left, func_ctx)?,
             scalar_to_probe_target(metadata, &cond.right, func_ctx)?,
         ) {
-            relations.push((left, right));
+            // Check both connector and leaf endpoints before they enter the
+            // graph: an unsafe endpoint must not become an equivalence bridge.
+            if probe_path_is_safe(s_expr, left.scan_id, left.column_idx)
+                && probe_path_is_safe(s_expr, right.scan_id, right.column_idx)
+            {
+                relations.push((left, right));
+            }
         }
     }
 
@@ -319,7 +337,81 @@ fn propagate_probe_targets(
     Ok(result)
 }
 
+/// Allowlist for commuting a scan predicate through an intermediate operator.
+/// Only inner/cross joins are transparent on both sides. Support for creating
+/// a filter *at* an outer/semi/anti/mark/single/ANY/asof join does not imply that
+/// it is safe to push a different join's filter through it. Unknown operators,
+/// shared CTE producers, windows, TopN and UnionAll (which needs explicit column
+/// remapping) are conservative barriers.
+fn row_preserving_probe_operator(plan: &PhysicalRelOperator) -> bool {
+    match plan {
+        PhysicalRelOperator::Scan(scan) => {
+            scan.limit.is_none() && scan.sample.is_none() && scan.vector_index.is_none()
+        }
+        PhysicalRelOperator::EvalScalar(_)
+        | PhysicalRelOperator::Filter(_)
+        | PhysicalRelOperator::Exchange(_) => true,
+        PhysicalRelOperator::Sort(sort) => sort.limit.is_none() && sort.window_partition.is_none(),
+        PhysicalRelOperator::Aggregate(aggregate) => {
+            aggregate.aggregate.grouping_sets.is_none() && aggregate.aggregate.rank_limit.is_none()
+        }
+        PhysicalRelOperator::Join(join) => {
+            matches!(join.join_type, JoinType::Inner | JoinType::Cross)
+        }
+        _ => false,
+    }
+}
+
+/// Verify the complete path to a scan *column*, not just scan reachability.
+/// Plain aggregation is transparent only for an unchanged grouping column in
+/// either physical phase. Computed/renamed group keys and aggregate outputs
+/// are intentionally not inferred from metadata's scan reachability.
+/// If an id occurs more than once, every occurrence must be safe: filtering a
+/// shared scan on behalf of just one consumer can change another consumer.
+fn probe_path_is_safe(s_expr: &PExpr, scan_id: usize, column: Symbol) -> bool {
+    fn visit(s_expr: &PExpr, scan_id: usize, column: Symbol, safe: bool) -> Option<bool> {
+        let plan = s_expr.plan();
+        let mut safe = safe && row_preserving_probe_operator(plan);
+        if let PhysicalRelOperator::Aggregate(aggregate) = plan {
+            safe &= aggregate.aggregate.group_items.iter().any(|item| {
+                item.index == column
+                    && matches!(&item.scalar, ScalarExpr::BoundColumnRef(reference)
+                        if reference.column.index == column)
+            });
+        }
+        if let PhysicalRelOperator::EvalScalar(eval) = plan {
+            // EvalScalar normally introduces fresh symbols. Do not assume a
+            // redefinition preserves the base column used by the filter.
+            safe &= eval.items.iter().all(|item| {
+                item.index != column
+                    || matches!(&item.scalar, ScalarExpr::BoundColumnRef(reference)
+                        if reference.column.index == column)
+            });
+        }
+        if let PhysicalRelOperator::Scan(scan) = plan {
+            return (scan.scan_id == scan_id).then_some(safe && scan.columns.contains(&column));
+        }
+        let mut result = None;
+        // Visit even below barriers to detect unsafe duplicate occurrences.
+        for child in s_expr.children() {
+            if let Some(child_safe) = visit(child, scan_id, column, safe) {
+                result = Some(result.unwrap_or(true) && child_safe);
+            }
+        }
+        result
+    }
+    visit(s_expr, scan_id, column, true).unwrap_or(false)
+}
+
 fn collect_equi_conditions(s_expr: &PExpr) -> Result<Vec<JoinEquiCondition>> {
+    // Equivalences below row-sensitive nodes do not necessarily hold for the
+    // outputs above them. Even for a plain aggregate we conservatively avoid
+    // harvesting input equalities; key-specific target paths remain supported.
+    if !row_preserving_probe_operator(s_expr.plan())
+        || matches!(s_expr.plan(), PhysicalRelOperator::Aggregate(_))
+    {
+        return Ok(vec![]);
+    }
     let mut conditions = Vec::new();
 
     if let PhysicalRelOperator::Join(join) = s_expr.plan() {
@@ -549,6 +641,487 @@ mod tests {
             column_idx: Symbol::new(column_idx),
             is_connector,
         }
+    }
+
+    fn path_scan() -> databend_common_sql::optimizer::ir::PExpr {
+        databend_common_sql::optimizer::ir::PExpr::create_leaf(databend_common_sql::plans::Scan {
+            scan_id: 7,
+            columns: [Symbol::new(0)].into_iter().collect(),
+            ..Default::default()
+        })
+    }
+
+    fn path_column() -> databend_common_sql::ScalarExpr {
+        use databend_common_sql::ColumnBindingBuilder;
+        use databend_common_sql::Visibility;
+        use databend_common_sql::plans::BoundColumnRef;
+        databend_common_sql::ScalarExpr::BoundColumnRef(BoundColumnRef {
+            span: None,
+            column: ColumnBindingBuilder::new(
+                "a".to_string(),
+                Symbol::new(0),
+                Box::new(DataType::Number(NumberDataType::Int32)),
+                Visibility::Visible,
+            )
+            .build(),
+        })
+    }
+
+    fn path_targets(
+        plan: &databend_common_sql::optimizer::ir::PExpr,
+        connector: bool,
+    ) -> Vec<(RemoteExpr<String>, usize)> {
+        let key = if connector {
+            column("a", DataType::Number(NumberDataType::Int32))
+        } else {
+            check_function(
+                None,
+                "plus",
+                &[],
+                &[
+                    column("a", DataType::Number(NumberDataType::Int32)),
+                    int32(1),
+                ],
+                &BUILTIN_FUNCTIONS,
+            )
+            .unwrap()
+        };
+        super::find_probe_targets(
+            &Default::default(),
+            plan,
+            key.as_remote_expr(),
+            7,
+            Symbol::new(0),
+            connector,
+            &FunctionContext::default(),
+        )
+        .unwrap()
+    }
+
+    // Target-level assertions are deterministic even when asynchronous runtime
+    // filters arrive too late for an end-to-end result test to expose the bug.
+    #[test]
+    fn test_row_sensitive_probe_paths_reject_connectors_and_expression_roots() {
+        use databend_common_sql::optimizer::ir::PExpr;
+        use databend_common_sql::plans::*;
+
+        let sort = Sort {
+            items: vec![],
+            limit: Some(1),
+            after_exchange: None,
+            pre_projection: None,
+            window_partition: None,
+        };
+        let window = Window {
+            span: None,
+            index: Symbol::new(1),
+            function: WindowFuncType::RowNumber,
+            arguments: vec![],
+            partition_by: vec![],
+            order_by: vec![],
+            frame: Default::default(),
+            limit: None,
+            top: None,
+        };
+        let grouping = Aggregate {
+            group_items: vec![ScalarItem {
+                index: Symbol::new(0),
+                scalar: path_column(),
+            }],
+            ..Default::default()
+        };
+        let mut grouping_sets = grouping.clone();
+        grouping_sets.grouping_sets = Some(GroupingSets {
+            grouping_id_index: Symbol::new(2),
+            sets: vec![vec![Symbol::new(0)], vec![]],
+            dup_group_items: vec![],
+        });
+        let mut ranked = grouping;
+        ranked.rank_limit = Some((vec![], 1));
+        let barriers = vec![
+            PExpr::create_unary(
+                Limit {
+                    before_exchange: false,
+                    limit: Some(1),
+                    offset: 0,
+                    lazy_columns: Default::default(),
+                },
+                path_scan(),
+            ),
+            // OFFSET alone is row-sensitive too.
+            PExpr::create_unary(
+                Limit {
+                    before_exchange: false,
+                    limit: None,
+                    offset: 1,
+                    lazy_columns: Default::default(),
+                },
+                path_scan(),
+            ),
+            PExpr::create_unary(sort, path_scan()),
+            PExpr::create_unary(
+                TopN {
+                    items: vec![],
+                    limit: 1,
+                    offset: 0,
+                    lazy_columns: Default::default(),
+                    after_exchange: None,
+                },
+                path_scan(),
+            ),
+            PExpr::create_unary(window.clone(), path_scan()),
+            PExpr::create_unary(
+                WindowGroup {
+                    windows: vec![window],
+                    scalar_items: vec![],
+                },
+                path_scan(),
+            ),
+            PExpr::create_unary(
+                PhysicalAggregate::new(grouping_sets, AggregateMode::Final),
+                path_scan(),
+            ),
+            PExpr::create_unary(
+                PhysicalAggregate::new(ranked, AggregateMode::Partial),
+                path_scan(),
+            ),
+            PExpr::create_unary(
+                MaterializedCTE::new("shared".to_string(), None),
+                path_scan(),
+            ),
+            PExpr::create_leaf(Scan {
+                limit: Some(1),
+                scan_id: 7,
+                columns: [Symbol::new(0)].into_iter().collect(),
+                ..Default::default()
+            }),
+        ];
+        for (index, plan) in barriers.iter().enumerate() {
+            for connector in [true, false] {
+                assert!(
+                    path_targets(plan, connector).is_empty(),
+                    "barrier {index}, connector={connector}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_safe_grouping_sort_and_unknown_join_paths() {
+        use databend_common_sql::optimizer::ir::PExpr;
+        use databend_common_sql::plans::*;
+        let sort = Sort {
+            items: vec![],
+            limit: None,
+            after_exchange: None,
+            pre_projection: None,
+            window_partition: None,
+        };
+        let group = Aggregate {
+            group_items: vec![ScalarItem {
+                index: Symbol::new(0),
+                scalar: path_column(),
+            }],
+            ..Default::default()
+        };
+        for mode in [AggregateMode::Partial, AggregateMode::Final] {
+            let plan = PExpr::create_unary(
+                PhysicalAggregate::new(group.clone(), mode),
+                PExpr::create_unary(sort.clone(), path_scan()),
+            );
+            assert_eq!(path_targets(&plan, true).len(), 1);
+            assert_eq!(path_targets(&plan, false).len(), 1);
+        }
+        // Not a grouping key: do not apply an aggregate-output predicate to
+        // an arbitrary input column merely because its scan is reachable.
+        let global = PExpr::create_unary(
+            PhysicalAggregate::new(Aggregate::default(), AggregateMode::Final),
+            path_scan(),
+        );
+        assert!(path_targets(&global, true).is_empty());
+        for join_type in [
+            JoinType::Inner,
+            JoinType::Cross,
+            JoinType::Left,
+            JoinType::Right,
+            JoinType::Full,
+            JoinType::LeftSemi,
+            JoinType::RightSemi,
+            JoinType::LeftAnti,
+            JoinType::RightAnti,
+            JoinType::LeftMark,
+            JoinType::RightMark,
+            JoinType::LeftSingle,
+            JoinType::RightSingle,
+            JoinType::InnerAny,
+            JoinType::LeftAny,
+            JoinType::RightAny,
+            JoinType::Asof,
+            JoinType::LeftAsof,
+            JoinType::RightAsof,
+            JoinType::FullAsof,
+        ] {
+            let join = Join {
+                join_type,
+                ..Default::default()
+            };
+            let plan =
+                PExpr::create_binary(join, path_scan(), PExpr::create_leaf(DummyTableScan::new()));
+            assert_eq!(
+                path_targets(&plan, true).len(),
+                usize::from(matches!(join_type, JoinType::Inner | JoinType::Cross)),
+                "{join_type:?}"
+            );
+        }
+        let mut renamed_group = group.clone();
+        renamed_group.group_items[0].index = Symbol::new(3);
+        let renamed = PExpr::create_unary(
+            PhysicalAggregate::new(renamed_group, AggregateMode::Final),
+            path_scan(),
+        );
+        assert!(path_targets(&renamed, true).is_empty());
+        assert!(path_targets(&renamed, false).is_empty());
+        let partitioned_sort = PExpr::create_unary(
+            Sort {
+                window_partition: Some(WindowPartition {
+                    partition_by: vec![],
+                    top: Some(1),
+                    func: WindowFuncType::RowNumber,
+                }),
+                ..sort
+            },
+            path_scan(),
+        );
+        assert!(path_targets(&partitioned_sort, true).is_empty());
+        assert!(path_targets(&partitioned_sort, false).is_empty());
+        // A stale/foreign scan id must not manufacture a target.
+        assert!(path_targets(&PExpr::create_leaf(DummyTableScan::new()), true).is_empty());
+        assert!(path_targets(&PExpr::create_leaf(DummyTableScan::new()), false).is_empty());
+    }
+
+    #[test]
+    fn test_mixed_branch_filters_connector_and_expression_leaf_targets() {
+        use databend_common_expression::TableDataType;
+        use databend_common_sql::MetadataRef;
+        use databend_common_sql::optimizer::ir::PExpr;
+        use databend_common_sql::plans::*;
+
+        let metadata = MetadataRef::default();
+        for index in 0..3 {
+            let data_type = if index == 1 {
+                NumberDataType::Int32
+            } else {
+                NumberDataType::Int64
+            };
+            let symbol = metadata.write().add_base_table_column(
+                format!("c{index}"),
+                TableDataType::Number(data_type),
+                0,
+                // A nested-column name avoids needing a catalog table fixture.
+                Some(vec![index]),
+                index as u32,
+                None,
+                None,
+            );
+            assert_eq!(symbol, Symbol::new(index));
+        }
+        metadata
+            .write()
+            .add_base_column_scan_id((0..3).map(|i| (Symbol::new(i), i)).collect());
+        let scalar = |index| {
+            let mut scalar = path_column();
+            let ScalarExpr::BoundColumnRef(reference) = &mut scalar else {
+                unreachable!()
+            };
+            reference.column.index = Symbol::new(index);
+            reference.column.column_name = format!("c{index}");
+            *reference.column.data_type = DataType::Number(if index == 1 {
+                NumberDataType::Int32
+            } else {
+                NumberDataType::Int64
+            });
+            scalar
+        };
+        let leaf = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "plus".to_string(),
+            params: vec![],
+            arguments: vec![
+                scalar(1),
+                ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: None,
+                    value: Scalar::Number(NumberScalar::Int32(1)),
+                }),
+            ],
+            // plus(Int32, Int32) widens to Int64. A narrower root would
+            // intentionally reject this target as an unsafe conversion.
+            return_type: Box::new(DataType::Number(NumberDataType::Int64)),
+        });
+        let resolved_leaf =
+            super::scalar_to_probe_target(&metadata, &leaf, &FunctionContext::default())
+                .unwrap()
+                .unwrap();
+        assert!(!resolved_leaf.is_connector);
+        assert_eq!(
+            resolved_leaf
+                .remote_expr
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .data_type(),
+            &DataType::Number(NumberDataType::Int64)
+        );
+        assert!(
+            super::normalize_probe_target(
+                &resolved_leaf.remote_expr,
+                &DataType::Number(NumberDataType::Int64),
+                &FunctionContext::default(),
+            )
+            .unwrap()
+            .is_some()
+        );
+        assert!(
+            super::normalize_probe_target(
+                &resolved_leaf.remote_expr,
+                &DataType::Number(NumberDataType::Int32),
+                &FunctionContext::default(),
+            )
+            .unwrap()
+            .is_none()
+        );
+        let scan = |index| {
+            PExpr::create_leaf(Scan {
+                scan_id: index,
+                columns: [Symbol::new(index)].into_iter().collect(),
+                ..Default::default()
+            })
+        };
+        for expression_leaf in [false, true] {
+            let condition = JoinEquiCondition::new(
+                scalar(0),
+                if expression_leaf {
+                    leaf.clone()
+                } else {
+                    scalar(1)
+                },
+                false,
+            );
+            for barrier in [false, true] {
+                let branch = if barrier {
+                    PExpr::create_unary(
+                        TopN {
+                            items: vec![],
+                            limit: 1,
+                            offset: 0,
+                            lazy_columns: Default::default(),
+                            after_exchange: None,
+                        },
+                        scan(1),
+                    )
+                } else {
+                    scan(1)
+                };
+                let plan = PExpr::create_binary(
+                    Join {
+                        join_type: JoinType::Inner,
+                        equi_conditions: vec![condition.clone()],
+                        ..Default::default()
+                    },
+                    scan(0),
+                    branch,
+                );
+                let targets = super::find_probe_targets(
+                    &metadata,
+                    &plan,
+                    column("c0", DataType::Number(NumberDataType::Int64)).as_remote_expr(),
+                    0,
+                    Symbol::new(0),
+                    true,
+                    &FunctionContext::default(),
+                )
+                .unwrap();
+                let mut ids: Vec<_> = targets.iter().map(|(_, id)| *id).collect();
+                ids.sort_unstable();
+                assert_eq!(
+                    ids,
+                    if barrier { vec![0] } else { vec![0, 1] },
+                    "leaf={expression_leaf}, barrier={barrier}"
+                );
+                if expression_leaf && !barrier {
+                    let leaf_target = targets.iter().find(|(_, scan_id)| *scan_id == 1).unwrap();
+                    assert!(matches!(leaf_target.0, RemoteExpr::FunctionCall { .. }));
+                }
+            }
+        }
+        // An equality local to a truncated branch must not connect two scans
+        // outside that branch, even if column ids also occur in a safe sibling.
+        let hidden = PExpr::create_binary(
+            Join {
+                join_type: JoinType::Inner,
+                equi_conditions: vec![JoinEquiCondition::new(scalar(0), scalar(2), false)],
+                ..Default::default()
+            },
+            scan(0),
+            scan(2),
+        );
+        let plan = PExpr::create_binary(
+            Join {
+                join_type: JoinType::Cross,
+                ..Default::default()
+            },
+            PExpr::create_binary(
+                Join {
+                    join_type: JoinType::Cross,
+                    ..Default::default()
+                },
+                scan(0),
+                scan(2),
+            ),
+            PExpr::create_unary(
+                TopN {
+                    items: vec![],
+                    limit: 1,
+                    offset: 0,
+                    lazy_columns: Default::default(),
+                    after_exchange: None,
+                },
+                hidden,
+            ),
+        );
+        assert!(super::collect_equi_conditions(&plan).unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_equi_collection_does_not_cross_barriers() {
+        use databend_common_sql::optimizer::ir::PExpr;
+        use databend_common_sql::plans::*;
+        let nested = PExpr::create_binary(
+            Join {
+                join_type: JoinType::Inner,
+                equi_conditions: vec![JoinEquiCondition::new(path_column(), path_column(), false)],
+                ..Default::default()
+            },
+            path_scan(),
+            path_scan(),
+        );
+        assert_eq!(super::collect_equi_conditions(&nested).unwrap().len(), 1);
+        let limited = PExpr::create_unary(
+            Limit {
+                before_exchange: false,
+                limit: Some(1),
+                offset: 0,
+                lazy_columns: Default::default(),
+            },
+            nested.clone(),
+        );
+        assert!(super::collect_equi_conditions(&limited).unwrap().is_empty());
+        let outer = PExpr::create_binary(
+            Join {
+                join_type: JoinType::Left,
+                ..Default::default()
+            },
+            nested,
+            path_scan(),
+        );
+        assert!(super::collect_equi_conditions(&outer).unwrap().is_empty());
     }
 
     #[test]
