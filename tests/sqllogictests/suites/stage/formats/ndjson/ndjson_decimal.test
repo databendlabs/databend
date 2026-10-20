@@ -1,0 +1,204 @@
+# Regression for #20748: unquoted JSON numbers must retain DECIMAL precision.
+# Include Float64 in the same rows to exercise the unchanged floating-point path.
+statement ok
+create or replace stage ndjson_decimal_roundtrip
+
+statement ok
+create or replace table ndjson_decimal_src (id int, d decimal(18, 4), f float64)
+
+statement ok
+insert into ndjson_decimal_src values
+    (1, 165.6263, 165.6263),
+    (2, -0.0003, -0.0003),
+    (3, 99999999999999.9999, 99999999999999.9999),
+    (4, 12345678901234.5678, 12345678901234.5678)
+
+statement ok
+copy into @ndjson_decimal_roundtrip/numbers/ from ndjson_decimal_src
+file_format = (type = ndjson compression = none)
+
+statement ok
+create or replace table ndjson_decimal_dst like ndjson_decimal_src
+
+statement ok
+copy into ndjson_decimal_dst from @ndjson_decimal_roundtrip/numbers/
+file_format = (type = ndjson)
+
+query IT
+select id, d::string from ndjson_decimal_dst order by id
+----
+1 165.6263
+2 -0.0003
+3 99999999999999.9999
+4 12345678901234.5678
+
+query II
+select count(*), count_if(s.f != d.f)
+from ndjson_decimal_src s join ndjson_decimal_dst d on s.id = d.id
+----
+4 0
+
+# Exercise the Decimal128 and Decimal256 decoding paths as well.
+statement ok
+create or replace table ndjson_decimal_wide_src (d128 decimal(38, 18), d256 decimal(76, 36))
+
+statement ok
+insert into ndjson_decimal_wide_src values
+    (12345678901234567890.123456789012345678,
+     9999999999999999999999999999999999999999.999999999999999999999999999999999999)
+
+statement ok
+copy into @ndjson_decimal_roundtrip/wide/ from ndjson_decimal_wide_src
+file_format = (type = ndjson compression = none)
+
+statement ok
+create or replace table ndjson_decimal_wide_dst like ndjson_decimal_wide_src
+
+statement ok
+copy into ndjson_decimal_wide_dst from @ndjson_decimal_roundtrip/wide/
+file_format = (type = ndjson)
+
+query TT
+select d128::string, d256::string from ndjson_decimal_wide_dst
+----
+12345678901234567890.123456789012345678 9999999999999999999999999999999999999999.999999999999999999999999999999999999
+
+# Write raw JSON via minimally quoted, single-column CSV so the input spelling
+# reaches the NDJSON decoder unchanged (no decimal cast or JSONB conversion).
+statement ok
+copy into @ndjson_decimal_roundtrip/edge/ from (
+    select concat('{"id":1,"d64":95000000000000.00001,"d128":', repeat('9', 34),
+        '.99991,"d256":', repeat('9', 72), '.99991,"tiny":0.', repeat('0', 18), '1}')
+    union all
+    select concat('{"id":2,"d64":-99999999999999.99985,"d128":-', repeat('9', 34),
+        '.99985,"d256":-', repeat('9', 72), '.99985,"tiny":-5e-19}')
+    union all
+    select concat('{"id":3,"d64":10000000000000000000e-19,"d128":1', repeat('0', 39),
+        'e-39,"d256":1', repeat('0', 77), 'e-77,"tiny":5e-19}')
+)
+file_format = (type = csv field_delimiter = '|' quote = '`' quote_style = 'quote_minimal' compression = none)
+
+statement ok
+create or replace table ndjson_decimal_edge (
+    id int, d64 decimal(18, 4), d128 decimal(38, 4), d256 decimal(76, 4), tiny decimal(18, 18))
+
+statement ok
+copy into ndjson_decimal_edge from @ndjson_decimal_roundtrip/edge/
+file_format = (type = ndjson)
+
+query ITIIT
+select id, d64::string,
+    to_uint8(d128::string = if(id = 3, '1.0000', concat(if(id = 2, '-', ''), repeat('9', 34), '.9999'))),
+    to_uint8(d256::string = if(id = 3, '1.0000', concat(if(id = 2, '-', ''), repeat('9', 72), '.9999'))),
+    tiny::string
+from ndjson_decimal_edge order by id
+----
+1 95000000000000.0000 1 1 0.000000000000000000
+2 -99999999999999.9999 1 1 -0.000000000000000001
+3 1.0000 1 1 0.000000000000000001
+
+# Native integer parser boundaries, including fallback beyond i64/u64 and quoted input.
+statement ok
+copy into @ndjson_decimal_roundtrip/integers/ from (
+    select '{"id":1,"d":9223372036854775807}'
+    union all select '{"id":2,"d":9223372036854775808}'
+    union all select '{"id":3,"d":-9223372036854775808}'
+    union all select '{"id":4,"d":-9223372036854775809}'
+    union all select '{"id":5,"d":18446744073709551615}'
+    union all select '{"id":6,"d":18446744073709551616}'
+    union all select '{"id":7,"d":"18446744073709551616"}'
+)
+file_format = (type = csv field_delimiter = '|' quote = '`' quote_style = 'quote_minimal' compression = none)
+
+statement ok
+create or replace table ndjson_decimal_integers (id int, d decimal(20, 0))
+
+statement ok
+copy into ndjson_decimal_integers from @ndjson_decimal_roundtrip/integers/
+file_format = (type = ndjson)
+
+query IT
+select id, d::string from ndjson_decimal_integers order by id
+----
+1 9223372036854775807
+2 9223372036854775808
+3 -9223372036854775808
+4 -9223372036854775809
+5 18446744073709551615
+6 18446744073709551616
+7 18446744073709551616
+
+# Every nonzero id must be rejected: rounding carry at all three widths,
+# integers exceeding the declared precision (native and fallback paths), and
+# exponents that overflow either the destination or the exponent parser itself.
+# A valid control row distinguishes rejected records from silently imported zeros.
+statement ok
+copy into @ndjson_decimal_roundtrip/overflow/ from (
+    select '{"id":0,"d64":1,"d128":1,"d256":1}'
+    union all select '{"id":1,"d64":99999999999999.99995,"d128":0,"d256":0}'
+    union all select '{"id":2,"d64":-99999999999999.99995,"d128":0,"d256":0}'
+    union all select concat('{"id":3,"d64":0,"d128":', repeat('9', 34), '.99995,"d256":0}')
+    union all select concat('{"id":4,"d64":0,"d128":-', repeat('9', 34), '.99995,"d256":0}')
+    union all select concat('{"id":5,"d64":0,"d128":0,"d256":', repeat('9', 72), '.99995}')
+    union all select concat('{"id":6,"d64":0,"d128":0,"d256":-', repeat('9', 72), '.99995}')
+    union all select '{"id":7,"d64":9223372036854775807,"d128":0,"d256":0}'
+    union all select '{"id":8,"d64":-9223372036854775808,"d128":0,"d256":0}'
+    union all select '{"id":9,"d64":18446744073709551615,"d128":0,"d256":0}'
+    union all select '{"id":10,"d64":18446744073709551616,"d128":0,"d256":0}'
+    union all select '{"id":11,"d64":1e2147483647,"d128":0,"d256":0}'
+    union all select '{"id":12,"d64":1e2147483648,"d128":0,"d256":0}'
+    union all select '{"id":13,"d64":1e-2147483649,"d128":0,"d256":0}'
+)
+file_format = (type = csv field_delimiter = '|' quote = '`' quote_style = 'quote_minimal' compression = none)
+
+statement ok
+create or replace table ndjson_decimal_overflow (
+    id int, d64 decimal(18, 4), d128 decimal(38, 4), d256 decimal(76, 4))
+
+statement error Decimal overflow
+copy into ndjson_decimal_overflow from @ndjson_decimal_roundtrip/overflow/
+file_format = (type = ndjson)
+
+statement ok
+truncate table ndjson_decimal_overflow
+
+statement ok
+copy into ndjson_decimal_overflow from @ndjson_decimal_roundtrip/overflow/
+file_format = (type = ndjson) on_error = continue force = true
+
+query ITTT
+select id, d64::string, d128::string, d256::string from ndjson_decimal_overflow order by id
+----
+0 1.0000 1.0000 1.0000
+
+# The same parser also serves string casts, independently of JSON decoding.
+query TIT
+select cast('10000000000000000000e-19' as decimal(1, 0))::string,
+    to_uint8(try_cast('99.995' as decimal(4, 2)) is null),
+    cast('1e-256' as decimal(18, 4))::string
+----
+1 1 0.0000
+
+statement ok
+drop table ndjson_decimal_integers
+
+statement ok
+drop table ndjson_decimal_overflow
+
+statement ok
+drop table ndjson_decimal_edge
+
+statement ok
+drop table ndjson_decimal_src
+
+statement ok
+drop table ndjson_decimal_dst
+
+statement ok
+drop table ndjson_decimal_wide_src
+
+statement ok
+drop table ndjson_decimal_wide_dst
+
+statement ok
+drop stage ndjson_decimal_roundtrip
