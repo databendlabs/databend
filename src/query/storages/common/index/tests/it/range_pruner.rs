@@ -1003,3 +1003,77 @@ fn build_spatial_stats(
     };
     [(column_id, stats)].into_iter().collect()
 }
+
+#[test]
+fn test_range_index_prunes_or_filters_over_nullable_columns() {
+    fn string(s: &str) -> Scalar {
+        Scalar::String(s.to_string())
+    }
+
+    let func_ctx = FunctionContext::default();
+    let schema = Arc::new(TableSchema::new(vec![
+        TableField::new(
+            "a",
+            TableDataType::Nullable(Box::new(TableDataType::String)),
+        ),
+        TableField::new(
+            "b",
+            TableDataType::Nullable(Box::new(TableDataType::String)),
+        ),
+        TableField::new(
+            "c",
+            TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int32))),
+        ),
+    ]));
+    let mut stats = create_stats(
+        &[
+            ("a", string("k1-1000"), string("k1-1999")),
+            ("b", string("k2-1000"), string("k2-1999")),
+            ("c", Scalar::Number(1.into()), Scalar::Number(9.into())),
+        ],
+        &schema,
+    );
+    // Every column contains NULLs, so each comparison folds to `{FALSE} ∪ {NULL}`
+    // rather than a plain constant. `or_filters` treats NULL as false and must
+    // still prune the block.
+    for stat in stats.values_mut() {
+        stat.null_count = 3;
+    }
+
+    let columns = [
+        ("a", DataType::String.wrap_nullable()),
+        ("b", DataType::String.wrap_nullable()),
+        ("c", Int32Type::data_type().wrap_nullable()),
+    ];
+    let pruned = [
+        "or_filters(a = 'k1-99', b = 'k2-88')",
+        "or_filters(a = 'k1-99', a = 'k1-88', a = 'k1-77')",
+        "or_filters(a = 'k1-99', and_filters(b = 'k2-88', c > 5, c < 8))",
+        "or_filters(a = 'k1-99', and_filters(b = 'k2-1500', c > 50))",
+    ];
+    for text in pruned {
+        let expr = parse_expr(text, &columns);
+        let index =
+            RangeIndex::try_create(func_ctx.clone(), &expr, schema.clone(), Default::default())
+                .unwrap();
+        assert!(
+            !index.apply(&stats, None, None, |_| false).unwrap(),
+            "expected `{text}` to prune the block"
+        );
+    }
+
+    let kept = [
+        "or_filters(a = 'k1-99', b = 'k2-1500')",
+        "or_filters(a = 'k1-99', and_filters(b = 'k2-1500', c > 5))",
+    ];
+    for text in kept {
+        let expr = parse_expr(text, &columns);
+        let index =
+            RangeIndex::try_create(func_ctx.clone(), &expr, schema.clone(), Default::default())
+                .unwrap();
+        assert!(
+            index.apply(&stats, None, None, |_| false).unwrap(),
+            "expected `{text}` to keep the block"
+        );
+    }
+}

@@ -810,12 +810,64 @@ fn test_cast(file: &mut impl Write) {
     );
 }
 
+#[test]
+fn test_bloom_prunes_or_filters_over_nullable_columns() {
+    let columns = [
+        (
+            "x",
+            TableDataType::Nullable(Box::new(TableDataType::String)),
+            StringType::from_opt_data(vec![Some("k1-1"), None, Some("k1-3")]),
+        ),
+        (
+            "y",
+            TableDataType::Nullable(Box::new(TableDataType::String)),
+            StringType::from_opt_data(vec![Some("k2-1"), Some("k2-3"), None]),
+        ),
+        (
+            "z",
+            TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int32))),
+            Int32Type::from_opt_data(vec![Some(1), None, Some(3)]),
+        ),
+    ];
+
+    // The missing strings lie inside min/max, so only bloom membership can
+    // exclude them. NULL-bearing comparisons stay {FALSE} union {NULL} until
+    // or_filters combines their domains.
+    for text in [
+        "or_filters(x = 'k1-2', y = 'k2-2')",
+        "or_filters(x = 'k1-2', x = 'k1-25', x = 'k1-28')",
+        "or_filters(x = 'k1-2', and_filters(y = 'k2-2', z > 1, z < 3))",
+    ] {
+        let mut output = Vec::new();
+        let result = eval_text(&mut output, text, &columns, &[0, 1]);
+        assert!(
+            matches!(result, FilterEvalResult::MustFalse),
+            "{text}: {}",
+            String::from_utf8_lossy(&output)
+        );
+    }
+    for text in [
+        "or_filters(x = 'k1-2', y = 'k2-3')",
+        "or_filters(x = 'k1-1', y = 'k2-2')",
+        "or_filters(x = 'k1-2', and_filters(y = 'k2-3', z > 1, z < 3))",
+        "or_filters(x = 'k1-2', z > 1)",
+    ] {
+        let mut output = Vec::new();
+        let result = eval_text(&mut output, text, &columns, &[0, 1]);
+        assert!(
+            matches!(result, FilterEvalResult::Uncertain),
+            "{text}: {}",
+            String::from_utf8_lossy(&output)
+        );
+    }
+}
+
 fn eval_text(
     file: &mut impl Write,
     text: &str,
     columns: &[(&str, TableDataType, Column)],
     cols: &[usize],
-) {
+) -> FilterEvalResult {
     let fields: Vec<_> = columns
         .iter()
         .map(|(name, data_type, _)| TableField::new(name, data_type.to_owned()))
@@ -839,7 +891,7 @@ fn eval_text(
         .project_column_ref(|i| Ok(columns[*i].0.to_string()))
         .unwrap();
 
-    eval_index_expr(file, &block, &bloom_columns, &ngram_args, schema, expr);
+    eval_index_expr(file, &block, &bloom_columns, &ngram_args, schema, expr)
 }
 
 fn eval_index_expr(
@@ -849,7 +901,7 @@ fn eval_index_expr(
     ngram_args: &[NgramArgs],
     schema: Arc<TableSchema>,
     expr: Expr<String>,
-) {
+) -> FilterEvalResult {
     writeln!(file, "{block:?}").unwrap();
     writeln!(file, "expr     : {expr}").unwrap();
 
@@ -913,11 +965,23 @@ fn eval_index_expr(
         .filter_map(|(i, entry)| {
             let field = bloom_columns.get(&i)?;
             let column = entry.as_column().unwrap();
-            let null_count = column
-                .as_nullable()
-                .map(|nullable| nullable.validity.null_count())
-                .unwrap_or_default() as u64;
-            let (min, max) = column.domain().to_minmax();
+            // Fuse records min/max over non-NULL values; NULLs only contribute
+            // to null_count. Nullable Domain::to_minmax instead uses NULL as max.
+            let (null_count, min, max) = match column.as_nullable() {
+                Some(nullable) => {
+                    let null_count = nullable.validity.null_count() as u64;
+                    let (min, max) = nullable
+                        .column
+                        .filter(&nullable.validity)
+                        .domain()
+                        .to_minmax();
+                    (null_count, min, max)
+                }
+                None => {
+                    let (min, max) = column.domain().to_minmax();
+                    (0, min, max)
+                }
+            };
             Some((field.column_id, ColumnStatistics {
                 min,
                 max,
@@ -959,6 +1023,7 @@ fn eval_index_expr(
     writeln!(file, "domains  : {domains:?}").unwrap();
     writeln!(file, "result   : {result:?}").unwrap();
     write!(file, "\n\n").unwrap();
+    result
 }
 
 fn eval_index(
@@ -993,7 +1058,7 @@ fn eval_index(
     )
     .unwrap();
 
-    eval_index_expr(file, block, bloom_columns, ngram_args, schema, expr)
+    eval_index_expr(file, block, bloom_columns, ngram_args, schema, expr);
 }
 
 #[allow(clippy::too_many_arguments)]
