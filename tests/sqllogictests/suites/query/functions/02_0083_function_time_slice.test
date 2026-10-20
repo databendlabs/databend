@@ -133,3 +133,12 @@ FROM numbers(3) ORDER BY number
 # One row out of range fails the column.
 statement error 1006
 SELECT time_slice(add_seconds('1970-01-01 00:00:01'::timestamp, - number), 9223372036854775807, 'second') FROM numbers(3)
+
+# The same row masked out of an IF branch raises no error.
+query IT
+SELECT number, if(number = 2, NULL, time_slice(add_seconds('1970-01-01 00:00:01'::timestamp, - number), 9223372036854775807, 'second'))
+FROM numbers(3) ORDER BY number
+----
+0 1970-01-01 00:00:00.000000
+1 1970-01-01 00:00:00.000000
+2 NULL
