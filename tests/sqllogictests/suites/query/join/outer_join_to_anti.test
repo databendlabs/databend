@@ -74,6 +74,24 @@ where l.k is null;
 ----
 NULL 90 NULL
 
+# The equi-expression can return NULL on source rows, but maps an unmatched
+# row's null extension to zero. Its NULL test must not become an anti join.
+# The nullable payload branch deliberately avoids a trivially nonnullable IF.
+query III rowsort
+select l.k, r.k, r.payload
+from outer_to_anti_left l
+left join outer_to_anti_right r on l.k = if(r.k is null, 0, r.payload)
+where if(r.k is null, 0, r.payload) is null;
+----
+
+# Right-outer mirror: all unmatched rows also evaluate the expression to zero.
+query III rowsort
+select l.k, l.payload, r.k
+from outer_to_anti_left l
+right join outer_to_anti_right r on if(l.k is null, 0, l.payload) = r.k
+where if(l.k is null, 0, l.payload) is null;
+----
+
 statement ok
 drop table outer_to_anti_left;
 

@@ -1,0 +1,114 @@
+# Non-key NULL tests are deliberately not a new optimization in main.
+# These are preventive regressions: GROUPING SETS/ROLLUP and nested outer joins
+# can synthesize NULL even for a source column declared NOT NULL.
+statement ok
+create or replace table outer_guard_left(k int not null);
+
+statement ok
+create or replace table outer_guard_right(k int not null, marker int not null);
+
+statement ok
+create or replace table outer_guard_nested(k int not null, marker int not null);
+
+statement ok
+insert into outer_guard_left values (1), (2), (3);
+
+statement ok
+insert into outer_guard_right values (1, 10), (2, 20);
+
+statement ok
+insert into outer_guard_nested values (1, 100);
+
+# k=2 matches the grand total, whose marker is synthesized NULL; k=3 is
+# unmatched. Both must survive, not just the unmatched row.
+query II rowsort
+select l.k, r.marker
+from outer_guard_left l
+left join (
+    select marker, count(*) as n
+    from outer_guard_right
+    group by grouping sets ((marker), ())
+) r on l.k = r.n
+where r.marker is null;
+----
+2 NULL
+3 NULL
+
+# The ROLLUP right-outer mirror has the same matched-NULL grand total.
+query II rowsort
+select l.k, r.marker
+from (
+    select marker, count(*) as n
+    from outer_guard_right
+    group by rollup(marker)
+) r right join outer_guard_left l on l.k = r.n
+where r.marker is null;
+----
+2 NULL
+3 NULL
+
+# The inner left join null-extends marker for k=2, even though the base
+# marker is NOT NULL. The enclosing join must retain that matched row.
+query II rowsort
+select l.k, d.marker
+from outer_guard_left l
+left join (
+    select r.k, n.marker
+    from outer_guard_right r
+    left join outer_guard_nested n on r.k = n.k
+) d on l.k = d.k
+where d.marker is null;
+----
+2 NULL
+3 NULL
+
+# Mirror the enclosing outer join without changing its nullable subtree.
+query II rowsort
+select l.k, d.marker
+from (
+    select r.k, n.marker
+    from outer_guard_right r
+    left join outer_guard_nested n on r.k = n.k
+) d right join outer_guard_left l on l.k = d.k
+where d.marker is null;
+----
+2 NULL
+3 NULL
+
+statement ok
+create or replace table outer_guard_payload(k int, marker int);
+
+statement ok
+insert into outer_guard_payload values (1, null), (1, 9), (2, 20);
+
+# Matched nullable payloads and unmatched rows both survive. The duplicate
+# match with marker=9 is filtered independently; NULL schema is preserved.
+query III rowsort
+select l.k, p.k, p.marker
+from outer_guard_left l
+left join outer_guard_payload p on l.k = p.k
+where p.marker is null;
+----
+1 1 NULL
+3 NULL NULL
+
+query III rowsort
+select l.k, p.k, p.marker
+from outer_guard_payload p
+right join outer_guard_left l on p.k = l.k
+where p.marker is null;
+----
+1 1 NULL
+3 NULL NULL
+
+statement ok
+drop table outer_guard_payload;
+
+statement ok
+drop table outer_guard_nested;
+
+statement ok
+drop table outer_guard_right;
+
+statement ok
+drop table outer_guard_left;
