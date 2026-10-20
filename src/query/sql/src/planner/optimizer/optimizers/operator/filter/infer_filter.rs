@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use databend_common_base::base::OrderedFloat;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::conversion::common_super_type_with_conversion;
@@ -172,7 +173,7 @@ impl<'a> InferFilterOptimizer<'a> {
         let mut new_predicates = vec![];
         if !self.is_falsy {
             // Derive new predicates from existing predicates, `derive_predicates` may change is_falsy to true.
-            let Some(derived) = self.derive_predicates() else {
+            let Some(derived) = self.derive_predicates()? else {
                 return Ok(predicates);
             };
             new_predicates = derived;
@@ -298,7 +299,7 @@ impl<'a> InferFilterOptimizer<'a> {
     }
 
     // None disables this inference pass; the caller retains all original inputs.
-    fn derive_predicates(&mut self) -> Option<Vec<ScalarExpr>> {
+    fn derive_predicates(&mut self) -> Result<Option<Vec<ScalarExpr>>> {
         let mut result = vec![];
         let num_exprs = self.exprs.len();
 
@@ -310,7 +311,9 @@ impl<'a> InferFilterOptimizer<'a> {
         }
         for (left_index, expr_equal_to) in self.expr_equal_to.iter().enumerate() {
             for expr in expr_equal_to.iter() {
-                let right_index = self.expr_index.get(expr).unwrap();
+                let right_index = self.expr_index.get(expr).ok_or_else(|| {
+                    ErrorCode::Internal("InferFilterOptimizer has inconsistent expression indexes")
+                })?;
                 Self::union(&mut parents, left_index, *right_index);
             }
         }
@@ -328,7 +331,7 @@ impl<'a> InferFilterOptimizer<'a> {
             .flatten()
             {
                 if class_domains[parent_index].is_some_and(|existing| existing != domain) {
-                    return None;
+                    return Ok(None);
                 }
                 class_domains[parent_index] = Some(domain);
             }
@@ -347,9 +350,13 @@ impl<'a> InferFilterOptimizer<'a> {
                 // Merge each member's normalized constraints into its equivalence class.
                 let constraints = std::mem::take(&mut self.expr_predicates[index]);
                 for predicate in constraints.into_predicates() {
-                    if !self.expr_predicates[parent_index].try_add(predicate)? {
+                    let Some(satisfiable) = self.expr_predicates[parent_index].try_add(predicate)
+                    else {
+                        return Ok(None);
+                    };
+                    if !satisfiable {
                         self.is_falsy = true;
-                        return Some(vec![]);
+                        return Ok(Some(vec![]));
                     }
                 }
             }
@@ -432,7 +439,7 @@ impl<'a> InferFilterOptimizer<'a> {
             }
         }
 
-        Some(result)
+        Ok(Some(result))
     }
 
     fn derive_remaining_predicates(&self, predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {
@@ -1075,6 +1082,34 @@ mod tests {
             op,
             ConstantExpr { span: None, value }.into(),
         )
+    }
+
+    #[test]
+    fn test_infer_filter_missing_lookup_returns_internal_error() {
+        let left = column(0, DataType::Number(NumberDataType::Int64));
+        let right = column(1, DataType::Number(NumberDataType::Int64));
+        let mut optimizer = InferFilterOptimizer::new(None);
+        assert!(optimizer.add_equal_expr(&left, &right));
+        // Local invariant fault injection: retain the equality edge and all
+        // positional arrays, but remove its target from the expression index.
+        // Typed-constant Eq is already fixed; SQL alone cannot reach this state.
+        assert!(optimizer.expr_index.remove(&right).is_some());
+        let error = optimizer.optimize(vec![]).unwrap_err();
+        assert_eq!(
+            error.code(),
+            databend_common_exception::ErrorCode::Internal("").code()
+        );
+        assert!(error.message().contains("inconsistent expression indexes"));
+    }
+
+    #[test]
+    fn test_infer_filter_valid_lookup_preserves_equality() -> Result<()> {
+        let left = column(0, DataType::Number(NumberDataType::Int64));
+        let right = column(1, DataType::Number(NumberDataType::Int64));
+        let equality = comparison(left, ComparisonOp::Equal, right);
+        let mut optimizer = InferFilterOptimizer::new(None);
+        assert_eq!(optimizer.optimize(vec![equality.clone()])?, vec![equality]);
+        Ok(())
     }
 
     #[test]
