@@ -18,7 +18,6 @@ use std::collections::hash_map::Entry;
 use std::iter::once;
 
 use ahash::HashSet;
-use ahash::HashSetExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -519,6 +518,7 @@ fn on_conflict_key_column_values(
 
 #[cfg(test)]
 mod tests {
+    use ahash::HashSetExt;
     use databend_common_expression::BlockEntry;
     use databend_common_expression::FromData;
     use databend_common_expression::TableDataType;
