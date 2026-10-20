@@ -38,8 +38,8 @@ use super::vector_index_loader::load_vector_index_files;
 
 // OpenDAL's scheme/name/root do not identify the endpoint (e.g. S3 name is just the bucket).
 // Assign a non-reused identity to each live backend info instead. Unlike the outer accessor,
-// this identity survives per-table StorageMetricsLayer wrappers. Replacing a backend cannot
-// accidentally reuse an old cache namespace.
+// this identity survives the layers wrapped around the backend (logging, retry, timeout, ...).
+// Replacing a backend cannot accidentally reuse an old cache namespace.
 type StorageNamespace = (Weak<AccessorInfo>, Uuid);
 static STORAGE_NAMESPACES: LazyLock<Mutex<Vec<StorageNamespace>>> =
     LazyLock::new(|| Mutex::new(Vec::new()));

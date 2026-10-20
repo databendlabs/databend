@@ -89,8 +89,6 @@ use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::plans::TruncateMode;
 use databend_common_storage::EndpointPolicyScope;
-use databend_common_storage::StorageMetrics;
-use databend_common_storage::StorageMetricsLayer;
 use databend_common_storage::init_operator;
 use databend_common_storage::init_operator_with_policy_scope;
 use databend_storages_common_cache::LoadParams;
@@ -181,7 +179,6 @@ pub struct FuseTable {
     pub(crate) approx_distinct_cols: ApproxDistinctColumns,
 
     pub(crate) operator: Operator,
-    pub(crate) data_metrics: Arc<StorageMetrics>,
 
     table_type: FuseTableType,
 
@@ -222,7 +219,7 @@ impl FuseTable {
         disable_refresh: bool,
     ) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix_from_table_info(&table_info)?;
-        let mut operator = Self::create_storage_operator(&table_info, storage_class_specs)?;
+        let operator = Self::create_storage_operator(&table_info, storage_class_specs)?;
         let table_type = if table_info.meta.storage_params.is_none() {
             FuseTableType::Standard
         } else if Self::is_table_attached(table_info.options()) {
@@ -233,9 +230,6 @@ impl FuseTable {
         } else {
             FuseTableType::External
         };
-
-        let data_metrics = Arc::new(StorageMetrics::default());
-        operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
 
         let storage_format = table_info
             .options()
@@ -281,7 +275,6 @@ impl FuseTable {
             bloom_index_type,
             approx_distinct_cols,
             operator,
-            data_metrics,
             storage_format: FuseStorageFormat::from_table_option(storage_format.as_str()),
             segment_format: FuseSegmentFormat::from_str(segment_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
@@ -1112,10 +1105,6 @@ impl Table for FuseTable {
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
-    }
-
-    fn get_data_metrics(&self) -> Option<Arc<StorageMetrics>> {
-        Some(self.data_metrics.clone())
     }
 
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {

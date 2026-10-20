@@ -57,6 +57,7 @@ use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::physical_plans::planned_pruning_stats;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextSettings;
@@ -95,6 +96,19 @@ impl IPhysicalPlan for MutationSource {
     #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
+    }
+
+    fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {
+        if let Some(stat) = stats.remove(&self.get_id()) {
+            self.statistics = stat;
+        }
+    }
+
+    fn collect_planned_pruning_stats(&self, stats: &mut Vec<(u32, PartStatistics)>) {
+        stats.push((
+            self.get_id(),
+            planned_pruning_stats(&self.partitions, &self.statistics),
+        ));
     }
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
@@ -179,9 +193,10 @@ impl IPhysicalPlan for MutationSource {
                 segment_locations,
                 block_count: None,
             };
+            let plan_id = self.get_id();
             Runtime::with_worker_threads(2, Some("do_mutation_block_pruning".to_string()))?
                 .block_on(async move {
-                    let (_, partitions) = table_clone
+                    let (statistics, partitions) = table_clone
                         .do_mutation_block_pruning(
                             ctx_clone,
                             filters_clone,
@@ -190,6 +205,7 @@ impl IPhysicalPlan for MutationSource {
                             true,
                         )
                         .await?;
+                    ctx.publish_pruned_partitions(plan_id, statistics);
                     ctx.set_partitions(partitions)?;
                     Ok(())
                 })?;

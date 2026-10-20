@@ -38,7 +38,6 @@ use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_statistics::Histogram;
-use databend_common_storage::StorageMetrics;
 use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ColumnCountMinSketch;
@@ -120,11 +119,6 @@ pub trait Table: Sync + Send {
 
     fn get_data_source_info(&self) -> DataSourceInfo {
         DataSourceInfo::TableSource(self.get_table_info().clone())
-    }
-
-    /// get_data_metrics will get data metrics from table.
-    fn get_data_metrics(&self) -> Option<Arc<StorageMetrics>> {
-        None
     }
 
     /// whether column prune(projection) can help in table read

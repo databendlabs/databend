@@ -14,12 +14,10 @@
 
 use std::sync::Arc;
 
-use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
-use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -27,9 +25,7 @@ use databend_common_exception::Result;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::EmptySource;
 
-use crate::FuseLazyPartInfo;
 use crate::FuseTable;
-use crate::SegmentLocation;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::build_fuse_source_pipeline;
@@ -164,77 +160,19 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         put_cache: bool,
     ) -> Result<()> {
-        let snapshot_loc = plan.statistics.snapshot.clone();
-        let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
-
-        for part in &plan.parts.partitions {
-            if let Some(lazy_part_info) = part.as_any().downcast_ref::<FuseLazyPartInfo>() {
-                lazy_init_segments.push(SegmentLocation {
-                    segment_idx: lazy_part_info.segment_index,
-                    location: lazy_part_info.segment_location.clone(),
-                    snapshot_loc: snapshot_loc.clone(),
-                });
-            }
-        }
-
         let (block_reader, virtual_reader) =
             self.build_data_readers(ctx.clone(), plan, put_cache)?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
 
-        let enable_prune_pipeline = ctx.get_settings().get_enable_prune_pipeline()?;
-        let rx = if !enable_prune_pipeline && !lazy_init_segments.is_empty() {
-            // If the prune pipeline is disabled and is lazy init segments, we need to fallback
-            let table = self.clone();
-            let table_schema = self.schema_with_stream();
-            let push_downs = plan.push_downs.clone();
-            let ctx = ctx.clone();
-            let (tx, rx) = async_channel::bounded(max_io_requests);
-            pipeline.set_on_init(move || {
-                // We cannot use the runtime associated with the query to avoid increasing its lifetime.
-                GlobalIORuntime::instance().spawn(async move {
-                    // avoid block global io runtime
-                    let runtime =
-                        Runtime::with_worker_threads(2, Some("prune-snap-blk".to_string()))?;
-                    let handler = runtime.spawn(async move {
-                        match table
-                            .prune_snapshot_blocks(
-                                ctx,
-                                push_downs,
-                                table_schema,
-                                lazy_init_segments,
-                                0,
-                                ReadPartitionsPruningMode::Normal,
-                                None,
-                            )
-                            .await
-                        {
-                            Ok((_, partitions, _)) => {
-                                for part in partitions.partitions {
-                                    // the sql may be killed or early stop, ignore the error
-                                    if let Err(_e) = tx.send(Ok(part)).await {
-                                        break;
-                                    }
-                                }
-                            }
-                            Err(err) => {
-                                let _ = tx.send(Err(err)).await;
-                            }
-                        }
-                    });
-
-                    if let Err(cause) = handler.await {
-                        log::warn!("Join error while in prune pipeline, cause: {:?}", cause);
-                    }
-
-                    Result::Ok(())
-                });
-
-                Ok(())
-            });
-            Some(rx)
-        } else {
-            self.pruned_result_receiver.lock().take()
-        };
+        // Lazy parts are pruned by `build_prune_pipeline`, which runs before
+        // `read_data` and leaves the pruned parts in `pruned_result_receiver`.
+        // Without it a lazy plan has nothing to dispatch and would read nothing.
+        let rx = self.pruned_result_receiver.lock().take();
+        if rx.is_none() && plan.parts.partitions_type() == PartInfoType::LazyLevel {
+            return Err(ErrorCode::Internal(
+                "lazy fuse parts require build_prune_pipeline to run before read_data",
+            ));
+        }
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let table_schema = self.schema_with_stream();

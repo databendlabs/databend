@@ -27,6 +27,7 @@ mod internal_column;
 mod mutation;
 mod navigate;
 mod optimize;
+mod partition_stats;
 mod prewhere;
 mod purge_drop;
 mod read_plan;

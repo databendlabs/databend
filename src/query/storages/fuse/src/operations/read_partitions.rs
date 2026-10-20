@@ -19,6 +19,8 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use async_channel::Receiver;
@@ -53,6 +55,8 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sinks::EmptySink;
 use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
@@ -108,6 +112,8 @@ use crate::pruning_pipeline::AsyncBlockPruneTransform;
 use crate::pruning_pipeline::ColumnOrientedBlockPruneSink;
 use crate::pruning_pipeline::ExtractSegmentTransform;
 use crate::pruning_pipeline::LazySegmentReceiverSource;
+use crate::pruning_pipeline::OneShotPrune;
+use crate::pruning_pipeline::OneShotPruneSource;
 use crate::pruning_pipeline::PrunedColumnOrientedSegmentMeta;
 use crate::pruning_pipeline::PrunedCompactSegmentMeta;
 use crate::pruning_pipeline::PrunedSegmentMeta;
@@ -174,10 +180,25 @@ fn same_segment_locations(left: &[SegmentLocation], right: &[SegmentLocation]) -
         })
 }
 
+/// Which pruning path a prune-cache entry belongs to.
+///
+/// Eager pruning (planner side) caches a `PartStatistics` whose
+/// `partitions_total` is the real total and uses it as the plan's statistics.
+/// Lazy pruning (pipeline side, streaming or one-shot) runs against its
+/// node's share of the segments and only ever publishes `partitions_scanned`,
+/// so the `partitions_total` in its entries is meaningless (0). An eager run
+/// must not be served such an entry, hence the scope is part of the key.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PruneCacheScope {
+    Eager,
+    Lazy,
+}
+
 fn deterministic_prune_cache_key(
     segments_location: &[SegmentLocation],
     push_downs: &Option<PushDownInfo>,
     pruning_mode: ReadPartitionsPruningMode,
+    scope: PruneCacheScope,
 ) -> Option<String> {
     let mut push_downs = push_downs.as_ref()?.clone();
     if !push_downs.is_deterministic {
@@ -186,7 +207,10 @@ fn deterministic_prune_cache_key(
     push_downs.read_partitions_pruning_mode = pruning_mode;
     Some(format!(
         "{:x}",
-        Sha256::digest(format!("{:?}_{:?}", segments_location, push_downs))
+        Sha256::digest(format!(
+            "{:?}_{:?}_{:?}",
+            scope, segments_location, push_downs
+        ))
     ))
 }
 
@@ -277,13 +301,17 @@ impl FuseTable {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location))
                     }
 
+                    // `partitions_total` is in blocks: the whole-table count
+                    // from the snapshot. It is published once by the
+                    // coordinator; the per-node pruning reports only
+                    // `partitions_scanned`.
                     return Ok((
                         PartStatistics::new_estimated(
                             Some(snapshot_location),
                             read_info.row_count,
                             read_info.compressed_byte_size,
-                            segment_len,
-                            segment_len,
+                            read_info.block_count,
+                            read_info.block_count,
                         ),
                         Partitions::create(PartitionsShuffleKind::Mod, segments),
                         None,
@@ -302,6 +330,7 @@ impl FuseTable {
                     summary,
                     pruning_mode,
                     reusable_pruned_metas,
+                    PruneCacheScope::Eager,
                 )
                 .await
             }
@@ -351,23 +380,28 @@ impl FuseTable {
         let (part_info_tx, part_info_rx) = async_channel::bounded(max_io_requests);
         self.pruned_result_receiver.lock().replace(part_info_rx);
 
-        // If we can get the pruning result from cache, we don't need to prune again, but need sent
-        // the parts to the next pipeline
-        let derterministic_cache_key =
-            push_downs
-                .as_ref()
-                .filter(|p| p.is_deterministic)
-                .map(|push_downs| {
-                    format!(
-                        "{:x}",
-                        Sha256::digest(format!("{:?}_{:?}", lazy_init_segments, push_downs))
-                    )
-                });
+        if !ctx.get_settings().get_enable_prune_pipeline()? {
+            return Ok(Some(self.build_one_shot_prune_pipeline(
+                ctx,
+                plan_id,
+                push_downs,
+                lazy_init_segments,
+                part_info_tx,
+            )?));
+        }
 
+        // If we can get the pruning result from cache, we don't need to prune again, but need sent
+        // the parts to the next pipeline.
+        let derterministic_cache_key = deterministic_prune_cache_key(
+            &lazy_init_segments,
+            &push_downs,
+            read_partitions_pruning_mode(&push_downs),
+            PruneCacheScope::Lazy,
+        );
         let enable_prune_cache = enable_prune_cache_for_query(&ctx)?;
         if enable_prune_cache {
             if let Some((stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
-                ctx.set_pruned_partitions_stats(plan_id, stat);
+                ctx.publish_pruned_partitions(plan_id, stat);
                 let sender = part_info_tx.clone();
                 info!("Retrieved pruning result from cache");
                 source_pipeline.set_on_init(move || {
@@ -415,7 +449,6 @@ impl FuseTable {
                     segment_rx,
                     part_info_tx,
                     derterministic_cache_key.clone(),
-                    lazy_init_segments.len(),
                     plan_id,
                 )?;
             }
@@ -427,7 +460,7 @@ impl FuseTable {
                     plan.scan_id,
                     segment_rx,
                     part_info_tx,
-                    derterministic_cache_key.clone(),
+                    plan_id,
                     table_schema.clone(),
                     internal_column_names.clone(),
                 )?;
@@ -470,6 +503,7 @@ impl FuseTable {
         summary: usize,
         pruning_mode: ReadPartitionsPruningMode,
         reusable_pruned_metas: Option<ReusablePrunedMetas>,
+        cache_scope: PruneCacheScope,
     ) -> Result<(PartStatistics, Partitions, Option<ReusablePrunedMetas>)> {
         let num_segments_to_prune = segments_location.len();
         let start = Instant::now();
@@ -483,8 +517,12 @@ impl FuseTable {
 
         type CacheItem = (PartStatistics, Partitions);
 
-        let derterministic_cache_key =
-            deterministic_prune_cache_key(&segments_location, &push_downs, pruning_mode);
+        let derterministic_cache_key = deterministic_prune_cache_key(
+            &segments_location,
+            &push_downs,
+            pruning_mode,
+            cache_scope,
+        );
         let enable_prune_cache = enable_prune_cache_for_query(&ctx)?;
         if enable_prune_cache
             && let Some(cached_result) = Self::check_prune_cache(&derterministic_cache_key)
@@ -603,6 +641,37 @@ impl FuseTable {
             .collect()
     }
 
+    /// `enable_prune_pipeline = 0`: a one-processor pipeline that prunes
+    /// this node's share of the lazy segments (`plan.parts` after fragment
+    /// redistribution; the planner did not read them) in a single
+    /// `prune_snapshot_blocks` pass and feeds the parts to `part_info_tx`,
+    /// instead of streaming them through `SegmentPruner` / `BlockPruner`.
+    /// See `OneShotPruneSource`.
+    fn build_one_shot_prune_pipeline(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        plan_id: u32,
+        push_downs: Option<PushDownInfo>,
+        lazy_init_segments: Vec<SegmentLocation>,
+        part_info_tx: Sender<Result<PartInfoPtr>>,
+    ) -> Result<Pipeline> {
+        let prune = OneShotPrune {
+            ctx,
+            table: self.clone(),
+            push_downs,
+            lazy_init_segments,
+            part_info_tx,
+            plan_id,
+        };
+        let mut pipeline = Pipeline::create();
+        pipeline.add_source(
+            |output| OneShotPruneSource::create(prune.clone(), output),
+            1,
+        )?;
+        pipeline.add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
+        Ok(pipeline)
+    }
+
     pub fn prune_segments_with_pipeline(
         &self,
         pruner: Arc<FusePruner>,
@@ -612,7 +681,6 @@ impl FuseTable {
         segment_rx: Receiver<SegmentLocation>,
         part_info_tx: Sender<Result<PartInfoPtr>>,
         derterministic_cache_key: Option<String>,
-        partitions_total: usize,
         plan_id: u32,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -750,8 +818,6 @@ impl FuseTable {
             derterministic_cache_key,
             limit,
             pruner.clone(),
-            self.data_metrics.clone(),
-            partitions_total,
         ));
         prune_pipeline.add_sink(|input| {
             SendPartInfoSink::create(
@@ -771,7 +837,7 @@ impl FuseTable {
             if let Ok(()) = info.res {
                 // only populating cache when the pipeline is finished successfully
                 let pruned_part_stats = send_part_state.get_pruned_stats();
-                ctx.set_pruned_partitions_stats(plan_id, pruned_part_stats);
+                ctx.publish_pruned_partitions(plan_id, pruned_part_stats);
                 if enable_prune_cache {
                     info!("Prune cache enabled");
                     send_part_state.populating_cache();
@@ -808,7 +874,7 @@ impl FuseTable {
         scan_id: usize,
         segment_rx: Receiver<SegmentLocation>,
         part_info_tx: Sender<Result<PartInfoPtr>>,
-        _derterministic_cache_key: Option<String>,
+        plan_id: u32,
         table_schema: TableSchemaRef,
         internal_column_names: HashSet<String>,
     ) -> Result<()> {
@@ -932,6 +998,7 @@ impl FuseTable {
         )?;
         // TODO(Sky): deal with sample
         let dry_run = matches!(ctx.get_query_kind(), QueryKind::Explain);
+        let partitions_scanned = Arc::new(AtomicUsize::new(0));
         prune_pipeline.add_sink(|input| {
             ColumnOrientedBlockPruneSink::create(
                 input,
@@ -941,8 +1008,19 @@ impl FuseTable {
                 runtime_filter_prune_context.clone(),
                 runtime_scan_filters.clone(),
                 dry_run,
+                partitions_scanned.clone(),
             )
         })?;
+        // Like the row-oriented pipeline: publish what this node scanned.
+        prune_pipeline.set_on_finished(move |info: &ExecutionInfo| {
+            if info.res.is_ok() {
+                let mut statistics = PartStatistics::default_exact();
+                statistics.partitions_scanned = partitions_scanned.load(Ordering::Relaxed);
+                statistics.pruning_stats = pruner.pruning_stats();
+                ctx.publish_pruned_partitions(plan_id, statistics);
+            }
+            Ok(())
+        });
         // TODO(Sky): populate prune cache , deal with topn prune
         Ok(())
     }
@@ -1102,12 +1180,6 @@ impl FuseTable {
             partitions_scanned,
             pruning_stats,
         );
-
-        // Update context statistics.
-        self.data_metrics
-            .inc_partitions_total(partitions_total as u64);
-        self.data_metrics
-            .inc_partitions_scanned(partitions_scanned as u64);
 
         Ok((statistics, parts))
     }

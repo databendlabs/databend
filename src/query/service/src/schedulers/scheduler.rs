@@ -25,6 +25,7 @@ use crate::interpreters::InterpreterFactory;
 use crate::interpreters::common::QueryFinishHooks;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::build_broadcast_plans;
+use crate::physical_plans::publish_planned_pruning_stats;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::attach_runtime_filter_logger;
@@ -87,6 +88,7 @@ pub async fn build_local_pipeline(
     ctx: &Arc<QueryContext>,
     plan: &PhysicalPlan,
 ) -> Result<PipelineBuildResult> {
+    publish_planned_pruning_stats(ctx.as_ref(), plan);
     let pipeline =
         PipelineBuilder::create(ctx.get_function_context()?, ctx.get_settings(), ctx.clone());
     let mut build_res = pipeline.finalize(plan)?;
@@ -102,6 +104,7 @@ pub async fn build_distributed_pipeline(
     ctx: &Arc<QueryContext>,
     plan: &PhysicalPlan,
 ) -> Result<PipelineBuildResult> {
+    publish_planned_pruning_stats(ctx.as_ref(), plan);
     let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
     for plan in build_broadcast_plans(ctx.as_ref())?
         .iter()

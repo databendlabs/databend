@@ -19,9 +19,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_expression::Column;
 use databend_common_expression::types::F32;
 use databend_common_expression::types::VectorColumn;
-use databend_common_storage::StorageMetrics;
-use databend_common_storage::StorageMetricsLayer;
 use futures::future::join_all;
+use opendal::layers::LoggingLayer;
 use opendal::services::Memory;
 use tokio::sync::oneshot;
 
@@ -297,10 +296,10 @@ fn test_cache_key_includes_storage_and_index_identity() -> Result<()> {
         loader.columns.clone(),
     );
     assert_eq!(original, same_operator.cache_key(8, "index_v1.parquet")?);
+    // The same backend seen through an extra layer (as `init_operator` adds
+    // logging/retry/timeout layers) must share the cache namespace.
     let another_table_instance = VectorIndexLoader::new(
-        operator.layer(StorageMetricsLayer::new(
-            Arc::new(StorageMetrics::default()),
-        )),
+        operator.layer(LoggingLayer::default()),
         settings,
         DistanceType::L2,
         8,

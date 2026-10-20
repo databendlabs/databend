@@ -96,10 +96,6 @@ mod operator_cache;
 mod retry_stats;
 pub use retry_stats::RetryStats;
 
-pub mod metrics;
-pub use crate::metrics::StorageMetrics;
-pub use crate::metrics::StorageMetricsLayer;
-
 mod runtime_layer;
 
 mod column_node;
