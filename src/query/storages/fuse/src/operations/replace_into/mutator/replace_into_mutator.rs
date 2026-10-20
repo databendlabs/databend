@@ -35,6 +35,7 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -92,21 +93,31 @@ impl ReplaceIntoMutator {
     }
 }
 
+// digest of the on-conflict key of each row; None if any of the key columns is null
+type RowKeyDigests = Vec<Option<UniqueKeyDigest>>;
+
 enum ColumnHash {
-    // no conflict, the hash set contains all the unique key digests
-    NoConflict(HashSet<UniqueKeyDigest>),
-    // the first row index that has conflict
+    // no conflict, the digests of each row
+    NoConflict(RowKeyDigests),
+    // the first row index whose key has been seen
     Conflict(usize),
 }
 
 impl ReplaceIntoMutator {
     pub fn process_input_block(&mut self, data_block: &DataBlock) -> Result<ReplaceIntoOperation> {
+        let num_rows = data_block.num_rows();
+        metrics_inc_replace_original_row_number(num_rows as u64);
+
+        // Duplicated on-conflict keys must be detected among *all* the source rows, so this has
+        // to happen before any pruning: rows removed by the table level pruning below, or rows
+        // handled by the partitioner, are still appended to the table.
+        let row_digests = self.check_duplicated_keys(data_block)?;
+
         // pruning rows by using table level range index
         // rows that definitely have no conflict will be removed
-        metrics_inc_replace_original_row_number(data_block.num_rows() as u64);
-        let data_block_may_have_conflicts = self.table_level_row_prune(data_block)?;
+        let may_have_conflicts = self.table_level_row_prune(data_block)?;
 
-        let row_number_after_pruning = data_block_may_have_conflicts.num_rows();
+        let row_number_after_pruning = may_have_conflicts.true_count();
         metrics_inc_replace_row_number_after_table_level_pruning(row_number_after_pruning as u64);
 
         if row_number_after_pruning == 0 {
@@ -116,7 +127,7 @@ impl ReplaceIntoMutator {
 
         let replace_into_operation = if let Some(partitioner) = &self.partitioner {
             // if table has cluster keys; we partition the input data block by left most column of cluster keys
-            let partitions = partitioner.partition(data_block)?;
+            let partitions = partitioner.partition(data_block, &row_digests)?;
             metrics_inc_replace_partition_number(partitions.len() as u64);
             let vs = partitions
                 .into_iter()
@@ -140,13 +151,68 @@ impl ReplaceIntoMutator {
             ReplaceIntoOperation::Delete(vs)
         } else {
             // otherwise, we just build a single delete action
-            self.build_replace_into_operation(&data_block_may_have_conflicts)?
+            self.build_replace_into_operation(data_block, may_have_conflicts, &row_digests)?
         };
         Ok(replace_into_operation)
     }
 
-    // filter out rows that definitely have no conflict, by using table level range index
-    fn table_level_row_prune(&self, data_block: &DataBlock) -> Result<DataBlock> {
+    // Records the on-conflict key digest of every row into `key_saw`, failing on the first key
+    // that has already been seen in this statement. Returns the per-row digests.
+    fn check_duplicated_keys(&mut self, data_block: &DataBlock) -> Result<RowKeyDigests> {
+        let column_values = on_conflict_key_column_values(&self.on_conflict_fields, data_block);
+        let column_values: Vec<_> = column_values.iter().collect();
+        let num_rows = data_block.num_rows();
+        match Self::build_column_hash(&column_values, &mut self.key_saw, num_rows)? {
+            ColumnHash::NoConflict(row_digests) => Ok(row_digests),
+            ColumnHash::Conflict(conflict_row_idx) => {
+                Err(self.duplicated_key_error(&column_values, conflict_row_idx))
+            }
+        }
+    }
+
+    fn build_column_hash(
+        column_values: &[&Value<AnyType>],
+        saw: &mut HashSet<UniqueKeyDigest>,
+        num_rows: usize,
+    ) -> Result<ColumnHash> {
+        let mut digests = Vec::with_capacity(num_rows);
+        for row_idx in 0..num_rows {
+            let digest = row_hash_of_columns(column_values, row_idx)?;
+            if let Some(hash) = digest {
+                if !saw.insert(hash) {
+                    return Ok(ColumnHash::Conflict(row_idx));
+                }
+            }
+            digests.push(digest);
+        }
+        Ok(ColumnHash::NoConflict(digests))
+    }
+
+    fn duplicated_key_error(
+        &self,
+        column_values: &[&Value<AnyType>],
+        conflict_row_idx: usize,
+    ) -> ErrorCode {
+        let conflicts = column_values
+            .iter()
+            .zip(self.on_conflict_fields.iter())
+            .map(|(col, field)| {
+                let col_name = &field.table_field.name;
+                // the row index has been validated by `row_hash_of_columns`
+                let row_value = col.index(conflict_row_idx).unwrap();
+                let row_value_message = Self::extract_col_value_for_err_message(row_value);
+                format!("\"{}\":{}", col_name, row_value_message)
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        ErrorCode::StorageOther(format!(
+            "duplicated data detected in the values being replaced into (only the first one will be described): at row {}, [{}]",
+            conflict_row_idx, conflicts
+        ))
+    }
+
+    // rows that definitely have no conflict are unset in the returned bitmap, by using table level range index
+    fn table_level_row_prune(&self, data_block: &DataBlock) -> Result<Bitmap> {
         let column_stats: &HashMap<ColumnId, ColumnStatistics> = &self.table_range_index;
         let mut bitmap = MutableBitmap::new();
         // for each row, check if it may have conflict
@@ -167,70 +233,32 @@ impl ReplaceIntoMutator {
             }
             bitmap.push(should_keep);
         }
-        let bitmap = bitmap.into();
-        data_block.clone().filter_with_bitmap(&bitmap)
+        Ok(bitmap.into())
     }
 
     fn build_replace_into_operation(
-        &mut self,
+        &self,
         data_block: &DataBlock,
+        may_have_conflicts: Bitmap,
+        row_digests: &[Option<UniqueKeyDigest>],
     ) -> Result<ReplaceIntoOperation> {
+        let key_hashes = row_digests
+            .iter()
+            .zip(may_have_conflicts.iter())
+            .filter_map(|(digest, keep)| if keep { *digest } else { None })
+            .collect();
+
+        let data_block = data_block.clone().filter_with_bitmap(&may_have_conflicts)?;
         let num_rows = data_block.num_rows();
-        let column_values = on_conflict_key_column_values(&self.on_conflict_fields, data_block);
+        let column_values = on_conflict_key_column_values(&self.on_conflict_fields, &data_block);
         let column_values: Vec<_> = column_values.iter().collect();
-
-        match Self::build_column_hash(&column_values, &mut self.key_saw, num_rows)? {
-            ColumnHash::NoConflict(key_hashes) => {
-                let columns_min_max = Self::columns_min_max(&column_values, num_rows)?;
-                let delete_action = DeletionByColumn {
-                    columns_min_max,
-                    key_hashes,
-                    bloom_hashes: vec![],
-                };
-                Ok(ReplaceIntoOperation::Delete(vec![delete_action]))
-            }
-            ColumnHash::Conflict(conflict_row_idx) => {
-                let conflict_description = {
-                    let conflicts = column_values
-                        .iter()
-                        .zip(self.on_conflict_fields.iter())
-                        .map(|(col, field)| {
-                            let col_name = &field.table_field.name;
-                            // if col.index(conflict_row_idx) is None, an exception will already be thrown in build_column_hash
-                            let row_value = col.index(conflict_row_idx).unwrap();
-                            let row_value_message =
-                                Self::extract_col_value_for_err_message(row_value);
-                            format!("\"{}\":{}", col_name, row_value_message)
-                        })
-                        .collect::<Vec<_>>()
-                        .join(", ");
-
-                    format!("at row {}, [{}]", conflict_row_idx, conflicts)
-                };
-                Err(ErrorCode::StorageOther(format!(
-                    "duplicated data detected in the values being replaced into (only the first one will be described): {}",
-                    conflict_description
-                )))
-            }
-        }
-    }
-
-    fn build_column_hash(
-        column_values: &[&Value<AnyType>],
-        saw: &mut HashSet<UniqueKeyDigest>,
-        num_rows: usize,
-    ) -> Result<ColumnHash> {
-        let mut digests = HashSet::new();
-        for row_idx in 0..num_rows {
-            if let Some(hash) = row_hash_of_columns(column_values, row_idx)? {
-                if saw.contains(&hash) {
-                    return Ok(ColumnHash::Conflict(row_idx));
-                }
-                saw.insert(hash);
-                digests.insert(hash);
-            }
-        }
-        Ok(ColumnHash::NoConflict(digests))
+        let columns_min_max = Self::columns_min_max(&column_values, num_rows)?;
+        let delete_action = DeletionByColumn {
+            columns_min_max,
+            key_hashes,
+            bloom_hashes: vec![],
+        };
+        Ok(ReplaceIntoOperation::Delete(vec![delete_action]))
     }
 
     fn eval(column: Column, num_rows: usize, aggr_func_name: &str) -> Result<Scalar> {
@@ -409,7 +437,11 @@ impl Partitioner {
         })
     }
 
-    fn partition(&self, data_block: &DataBlock) -> Result<Vec<Partition>> {
+    fn partition(
+        &self,
+        data_block: &DataBlock,
+        row_digests: &[Option<UniqueKeyDigest>],
+    ) -> Result<Vec<Partition>> {
         let evaluator = Evaluator::new(data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let cluster_key_values = evaluator.run(&self.left_most_cluster_key)?;
 
@@ -434,8 +466,9 @@ impl Partitioner {
             .collect::<Result<Vec<_>>>()?;
 
         // partition the input block by the left-most cluster key expression
-        for row_idx in 0..data_block.num_rows() {
-            if let Some(row_digest) = row_hash_of_columns(&on_conflict_column_values, row_idx)? {
+        debug_assert_eq!(row_digests.len(), data_block.num_rows());
+        for (row_idx, row_digest) in row_digests.iter().enumerate() {
+            if let Some(row_digest) = *row_digest {
                 // collect the bloom hashes of the columns being pruned with
                 let row_bloom_hashes: Vec<Option<&u64>> = column_bloom_hashes
                     .iter()
@@ -600,8 +633,8 @@ mod tests {
             UInt64Type::from_data(vec![20, 21]),
         ]);
 
-        let scalar_partition = partitioner.partition(&scalar_block)?.pop().unwrap();
-        let materialized_partition = partitioner.partition(&materialized_block)?.pop().unwrap();
+        let scalar_partition = partition_block(&partitioner, &scalar_block)?;
+        let materialized_partition = partition_block(&partitioner, &materialized_block)?;
 
         let mut accumulator = DeletionAccumulator::default();
         accumulator.add_block_deletion(
@@ -622,6 +655,126 @@ mod tests {
             scalar_partition.bloom_hashes,
             materialized_partition.bloom_hashes
         );
+        Ok(())
+    }
+
+    fn partition_block(partitioner: &Partitioner, block: &DataBlock) -> Result<Partition> {
+        let column_values = on_conflict_key_column_values(&partitioner.on_conflict_fields, block);
+        let column_values: Vec<_> = column_values.iter().collect();
+        let row_digests = (0..block.num_rows())
+            .map(|row_idx| row_hash_of_columns(&column_values, row_idx))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(partitioner.partition(block, &row_digests)?.pop().unwrap())
+    }
+
+    // single on-conflict key `id UInt64`; `table_range` is the table level (min, max) of `id`
+    fn new_mutator(table_range: Option<(u64, u64)>, clustered: bool) -> ReplaceIntoMutator {
+        let data_type = DataType::Number(NumberDataType::UInt64);
+        let on_conflict_fields = vec![OnConflictField {
+            table_field: TableField::new("id", TableDataType::Number(NumberDataType::UInt64)),
+            field_index: 0,
+        }];
+        let table_range_index = table_range
+            .into_iter()
+            .map(|(min, max)| {
+                let stats = ColumnStatistics::new(
+                    Scalar::Number(NumberScalar::UInt64(min)),
+                    Scalar::Number(NumberScalar::UInt64(max)),
+                    0,
+                    0,
+                    None,
+                );
+                (on_conflict_fields[0].table_field.column_id, stats)
+            })
+            .collect();
+        let partitioner = clustered.then(|| Partitioner {
+            on_conflict_fields: on_conflict_fields.clone(),
+            func_ctx: FunctionContext::default(),
+            left_most_cluster_key: Expr::constant(
+                Scalar::Number(NumberScalar::UInt64(0)),
+                Some(data_type.clone()),
+            ),
+            bloom_filter_column_info: vec![(0, data_type)],
+        });
+        ReplaceIntoMutator {
+            on_conflict_fields,
+            table_range_index,
+            key_saw: Default::default(),
+            partitioner,
+        }
+    }
+
+    fn id_block(ids: Vec<u64>) -> DataBlock {
+        DataBlock::new_from_columns(vec![UInt64Type::from_data(ids)])
+    }
+
+    fn assert_duplicated(r: Result<ReplaceIntoOperation>) {
+        match r {
+            Err(e) => assert!(
+                e.message().contains("duplicated data detected"),
+                "unexpected error: {e}"
+            ),
+            Ok(_) => panic!("duplicated on-conflict keys should be rejected"),
+        }
+    }
+
+    // https://github.com/databendlabs/databend/issues/20795
+    // duplicated keys must be rejected no matter whether the rows are pruned by the table level
+    // range index, or handled by the partitioner (table with cluster keys).
+    #[test]
+    fn test_duplicated_keys_detected_regardless_of_pruning() -> Result<()> {
+        for clustered in [false, true] {
+            // empty table, nothing can be pruned
+            assert_duplicated(
+                new_mutator(None, clustered).process_input_block(&id_block(vec![1, 1])),
+            );
+            // keys outside the table range: all rows are pruned
+            assert_duplicated(
+                new_mutator(Some((1, 5)), clustered).process_input_block(&id_block(vec![10, 10])),
+            );
+            // keys inside the table range (no matter whether they exist or not)
+            assert_duplicated(
+                new_mutator(Some((1, 5)), clustered).process_input_block(&id_block(vec![3, 3])),
+            );
+            // the duplicated row is pruned, while another row is not
+            assert_duplicated(
+                new_mutator(Some((1, 5)), clustered)
+                    .process_input_block(&id_block(vec![10, 3, 10])),
+            );
+
+            // duplicated keys across input blocks of the same statement
+            let mut mutator = new_mutator(Some((1, 5)), clustered);
+            assert!(matches!(
+                mutator.process_input_block(&id_block(vec![10]))?,
+                ReplaceIntoOperation::None
+            ));
+            assert_duplicated(mutator.process_input_block(&id_block(vec![11, 10])));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_pruned_rows_excluded_from_deletion() -> Result<()> {
+        let mut mutator = new_mutator(Some((1, 5)), false);
+        let block = id_block(vec![10, 3, 4, 20]);
+        let ReplaceIntoOperation::Delete(deletions) = mutator.process_input_block(&block)? else {
+            panic!("expect a deletion");
+        };
+        assert_eq!(deletions.len(), 1);
+        let deletion = &deletions[0];
+
+        let column_values = on_conflict_key_column_values(&mutator.on_conflict_fields, &block);
+        let column_values: Vec<_> = column_values.iter().collect();
+        let expected: HashSet<_> = [1, 2]
+            .into_iter()
+            .map(|row_idx| row_hash_of_columns(&column_values, row_idx).map(Option::unwrap))
+            .collect::<Result<_>>()?;
+        assert_eq!(deletion.key_hashes, expected);
+        let (min, max) = &deletion.columns_min_max[0];
+        assert_eq!(min.to_string(), "3");
+        assert_eq!(max.to_string(), "4");
+        // every source row has been recorded for duplicate detection
+        assert_eq!(mutator.key_saw.len(), 4);
         Ok(())
     }
 }

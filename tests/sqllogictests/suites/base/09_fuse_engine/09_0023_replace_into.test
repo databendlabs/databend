@@ -85,6 +85,63 @@ REPLACE INTO test ON CONFLICT(a,b) values(1, 1, 1), (1, 1, 2), (3, 1, 3)
 statement ok
 DROP TABLE test;
 
+# https://github.com/databendlabs/databend/issues/20795
+# duplicated keys must be detected even if the rows are pruned by the table level range index,
+# or the table has cluster keys (rows are partitioned).
+statement ok
+CREATE TABLE test(id int not null, v varchar);
+
+statement ok
+INSERT INTO test values(1, 'a'), (5, 'b');
+
+# keys outside the table range
+statement error 4000
+REPLACE INTO test ON(id) values(100, 'x'), (100, 'y')
+
+# keys inside the table range, but not existing
+statement error 4000
+REPLACE INTO test ON(id) values(1, 'x'), (3, 'y'), (3, 'z')
+
+statement error 4000
+REPLACE INTO test ON(id) values(3, 'x'), (100, 'y'), (100, 'z')
+
+query IT
+SELECT * FROM test ORDER BY id;
+----
+1 a
+5 b
+
+statement ok
+DROP TABLE test;
+
+statement ok
+CREATE TABLE test(id int not null, v varchar) CLUSTER BY(id);
+
+# empty table with cluster keys
+statement error 4000
+REPLACE INTO test ON(id) values(1, 'x'), (1, 'y')
+
+statement ok
+INSERT INTO test values(1, 'a'), (2, 'b'), (3, 'c');
+
+# existing key
+statement error 4000
+REPLACE INTO test ON(id) values(1, 'x'), (1, 'y')
+
+# keys outside the table range
+statement error 4000
+REPLACE INTO test ON(id) values(100, 'x'), (100, 'y')
+
+query IT
+SELECT * FROM test ORDER BY id;
+----
+1 a
+2 b
+3 c
+
+statement ok
+DROP TABLE test;
+
 ###################
 # non-empty table #
 ###################
