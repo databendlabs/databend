@@ -22,13 +22,12 @@ use std::env;
 use std::path::Path;
 
 use anyhow::Result;
-use gix::Repository;
 use log::error;
-use vergen_gix::BuildBuilder;
-use vergen_gix::CargoBuilder;
-use vergen_gix::Emitter;
-use vergen_gix::GixBuilder;
-use vergen_gix::RustcBuilder;
+use vergen_gitcl::BuildBuilder;
+use vergen_gitcl::CargoBuilder;
+use vergen_gitcl::Emitter;
+use vergen_gitcl::GitclBuilder;
+use vergen_gitcl::RustcBuilder;
 
 const VERSION_ERROR_MESSAGE: &str = "A valid version is required for MetaClient handshaking, you could either set the `DATABEND_RELEASE_VERSION` env var or use `git fetch` to get the latest tag";
 
@@ -44,7 +43,7 @@ pub fn setup() {
 }
 
 pub fn setup_commit_authors() {
-    match gix::discover(".") {
+    match git::discover(Path::new(".")) {
         Ok(repo) => {
             add_env_commit_authors(&repo);
         }
@@ -73,7 +72,7 @@ pub fn set_env_config() -> Result<()> {
     let cargo = CargoBuilder::default().features(true).build()?;
     let build = BuildBuilder::default().build_timestamp(true).build()?;
     let rustc = RustcBuilder::default().semver(true).build()?;
-    let git = GixBuilder::default().sha(true).build()?;
+    let git = GitclBuilder::default().sha(true).build()?;
 
     Emitter::default()
         .fail_on_error()
@@ -95,7 +94,7 @@ fn discover_version() -> Result<String> {
         Ok(ver) => Ok(ver),
         Err(_) => {
             // env var not set, try to get the latest git tag
-            let repo = gix::discover(".")?;
+            let repo = git::discover(Path::new("."))?;
             let tag = git::get_latest_tag(&repo)?;
             Ok(tag)
         }
@@ -132,7 +131,7 @@ pub fn add_env_telemetry() {
     println!("cargo:rustc-env=DATABEND_TELEMETRY_SOURCE={source}");
 }
 
-pub fn add_env_commit_authors(repo: &Repository) {
+pub fn add_env_commit_authors(repo: &Path) {
     match git::get_commit_authors(repo) {
         Ok(authors) => println!("cargo:rustc-env=DATABEND_COMMIT_AUTHORS={}", authors),
         Err(e) => println!("cargo:rustc-env=DATABEND_COMMIT_AUTHORS={}", e),
