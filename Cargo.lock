@@ -4428,6 +4428,7 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-pipeline",
  "databend-common-sql",
+ "databend-common-storage",
  "databend-common-storages-fuse",
  "databend-storages-common-table-meta",
  "fastrace",
