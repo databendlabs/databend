@@ -389,8 +389,9 @@ TableScan
 ├── push downs: [filters: [is_true(bloom_test_nullable_t2.c0 (#0))], limit: NONE]
 └── estimated rows: 1.00
 
-# `OR` predicates over nullable columns: each branch may evaluate to NULL, which
-# `or_filters` treats as false. Both range and bloom pruning must still apply.
+# Nullable comparisons may be FALSE or NULL; neither passes WHERE.
+# Two INSERTs create two blocks. The absent strings are inside min/max ranges,
+# so the first OR/IN cases need bloom membership to exclude both blocks.
 statement ok
 drop table if exists bloom_test_nullable_or_t
 
@@ -418,6 +419,7 @@ TableScan
 ├── push downs: [filters: [bloom_test_nullable_or_t.c1 (#0) = 'a2' or bloom_test_nullable_or_t.c2 (#1) = 'b5'], limit: NONE]
 └── estimated rows: <slt:ignore>
 
+# IN uses OR conditions on the same nullable column; both values are absent.
 query T
 explain select * from bloom_test_nullable_or_t where c1 in ('a2', 'a5')
 ----
@@ -433,6 +435,7 @@ TableScan
 ├── push downs: [filters: [bloom_test_nullable_or_t.c1 (#0) = 'a2' or bloom_test_nullable_or_t.c1 (#0) = 'a5'], limit: NONE]
 └── estimated rows: <slt:ignore>
 
+# A matching AND branch must keep the second block, not prune everything.
 query T
 explain select * from bloom_test_nullable_or_t where c1 = 'a2' or (c2 = 'b4' and c3 > 1)
 ----
@@ -448,6 +451,7 @@ TableScan
 ├── push downs: [filters: [bloom_test_nullable_or_t.c1 (#0) = 'a2' or bloom_test_nullable_or_t.c2 (#1) = 'b4' and bloom_test_nullable_or_t.c3 (#2) > 1], limit: NONE]
 └── estimated rows: <slt:ignore>
 
+# Check actual rows too, including matches involving NULL-bearing columns.
 query TTI
 select * from bloom_test_nullable_or_t where c1 = 'a2' or c2 = 'b5'
 ----
