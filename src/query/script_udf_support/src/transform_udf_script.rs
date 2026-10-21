@@ -113,26 +113,31 @@ impl ScriptRuntime {
             UDFLanguage::Python => {
                 let user_code = String::from_utf8(code.to_vec())?;
                 let code = if let Some(temp_dir) = &_temp_dir {
-                    let import_dir = temp_dir.path().display();
-                    let mut script = String::from("import sys\n");
-                    script.push_str(&format!(
-                        r#"sys._xoptions['databend_import_directory'] = '{dir}'
-if '{dir}' not in sys.path:
-    sys.path.append('{dir}')
-"#,
-                        dir = import_dir,
-                    ));
+                    // Each worker executes in its own dependency copy. Do not
+                    // bake the parent's template directory into sys.path.
+                    let mut script = String::from(
+                        "import os, sys\n\
+                         _databend_import_dir = os.getcwd()\n\
+                         sys._xoptions['databend_import_directory'] = _databend_import_dir\n\
+                         if _databend_import_dir not in sys.path:\n    sys.path.append(_databend_import_dir)\n",
+                    );
 
                     let stage_paths = Self::collect_stage_sys_paths(func, temp_dir);
                     if !stage_paths.is_empty() {
-                        script.push_str("for _databend_zip in (");
+                        script.push_str("for _databend_zip in [");
                         for (idx, path) in stage_paths.iter().enumerate() {
                             if idx > 0 {
                                 script.push_str(", ");
                             }
-                            script.push_str(&format!("{path:?}"));
+                            let relative = std::path::Path::new(path)
+                                .strip_prefix(temp_dir.path())
+                                .map_err(|err| ErrorCode::UDFRuntimeError(err.to_string()))?;
+                            script.push_str(&format!(
+                                "os.path.join(_databend_import_dir, {:?})",
+                                relative.to_string_lossy(),
+                            ));
                         }
-                        script.push_str("):\n    if _databend_zip not in sys.path:\n        sys.path.append(_databend_zip)\ndel _databend_zip\n");
+                        script.push_str("]:\n    if _databend_zip not in sys.path:\n        sys.path.append(_databend_zip)\ndel _databend_zip\n");
                     }
 
                     script.push_str(&user_code);
@@ -763,7 +768,7 @@ impl TransformUdfScript {
         Self::init_runtime_inner(
             funcs,
             #[cfg(feature = "python-udf")]
-            PythonWorkerManager::instance().query("default"),
+            PythonWorkerManager::instance().query("default", 1),
         )
     }
 
@@ -1132,6 +1137,32 @@ pub(super) mod venv {
 
         pub fn path(&self) -> &Path {
             &self.inner.path
+        }
+
+        /// Copy executable dependencies, never writable hardlinks or live
+        /// directories. Archive extraction already materializes regular files.
+        #[cfg(any(feature = "python-udf", test))]
+        pub fn private_copy(&self) -> Result<Self, String> {
+            let copy = Self::new()?;
+            for entry in WalkDir::new(self.path()).min_depth(1) {
+                let entry = entry.map_err(|err| err.to_string())?;
+                let relative = entry
+                    .path()
+                    .strip_prefix(self.path())
+                    .map_err(|err| err.to_string())?;
+                let target = copy.path().join(relative);
+                if entry.file_type().is_dir() {
+                    fs::create_dir_all(target).map_err(|err| err.to_string())?;
+                } else if entry.file_type().is_file() {
+                    fs::copy(entry.path(), target).map_err(|err| err.to_string())?;
+                } else {
+                    return Err(format!(
+                        "Unexpected Python dependency file: {:?}",
+                        entry.path()
+                    ));
+                }
+            }
+            Ok(copy)
         }
 
         fn downgrade(&self) -> WeakTempDir {

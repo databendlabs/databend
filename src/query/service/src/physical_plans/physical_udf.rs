@@ -136,7 +136,7 @@ impl IPhysicalPlan for Udf {
             }) {
                 let runtimes = TransformUdfScript::init_runtime_for_query(
                     &udf_funcs,
-                    builder.ctx.python_udf_workers(),
+                    builder.ctx.python_udf_workers()?,
                 )?;
                 return builder.main_pipeline.try_add_async_transformer(|| {
                     Ok(TransformUdfScript::new(

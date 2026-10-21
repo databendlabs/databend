@@ -1048,7 +1048,8 @@ impl QueryContext {
     #[cfg(feature = "python-udf")]
     pub(crate) fn python_udf_workers(
         &self,
-    ) -> Arc<databend_query_script_udf_support::PythonQueryWorkers> {
+    ) -> Result<Arc<databend_query_script_udf_support::PythonQueryWorkers>> {
+        let max_threads = self.get_settings().get_max_threads()? as usize;
         let mut workers = self.shared.python_udf_workers.lock();
         if workers
             .as_ref()
@@ -1058,12 +1059,12 @@ impl QueryContext {
             // An ended execution must not donate its interpreter or sealed budget.
             *workers = None;
         }
-        workers
+        Ok(workers
             .get_or_insert_with(|| {
                 databend_query_script_udf_support::PythonWorkerManager::instance()
-                    .query(self.shared.get_tenant().tenant_name())
+                    .query(self.shared.get_tenant().tenant_name(), max_threads)
             })
-            .clone()
+            .clone())
     }
 
     pub(crate) fn get_row_fetch_io_semaphore(&self, max_threads: usize) -> Arc<Semaphore> {

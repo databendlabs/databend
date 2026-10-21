@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -81,7 +82,7 @@ async fn parent_loss_probe() {
     use std::io::Write;
     let query = PythonWorkerManager::new(PythonWorkerConfig::default())
         .unwrap()
-        .query("probe");
+        .query("probe", 1);
     let mut udf = transform(
         query,
         "parent_loss",
@@ -140,6 +141,136 @@ async fn parent_loss_test() {
     .expect("worker survived loss of its parent");
 }
 
+fn transforms(
+    query: Arc<PythonQueryWorkers>,
+    name: &str,
+    code: &str,
+    count: usize,
+) -> Vec<TransformUdfScript> {
+    let functions = vec![function(name, code)];
+    let runtimes = TransformUdfScript::init_runtime_for_query(&functions, query).unwrap();
+    (0..count)
+        .map(|_| {
+            TransformUdfScript::new(
+                FunctionContext::default(),
+                functions.clone(),
+                runtimes.clone(),
+            )
+        })
+        .collect()
+}
+
+async fn pids(transforms: &mut [TransformUdfScript]) -> BTreeSet<String> {
+    futures::future::join_all(transforms.iter_mut().map(|udf| udf.transform(input(0))))
+        .await
+        .into_iter()
+        .map(|result| {
+            result
+                .unwrap()
+                .get_by_offset(1)
+                .index(0)
+                .unwrap()
+                .to_string()
+        })
+        .collect()
+}
+
+async fn parallel_pool_tests() {
+    let manager = PythonWorkerManager::new(PythonWorkerConfig {
+        max_workers: 8,
+        ..Default::default()
+    })
+    .unwrap();
+    let code = "import os, time\ndef handler(x):\n    time.sleep(0.05)\n    return os.getpid()\n";
+    for threads in [1, 4, 8] {
+        let query = manager.query("parallel", threads);
+        let mut batch = transforms(query.clone(), "pid", code, 8);
+        assert_eq!(pids(&mut batch).await.len(), threads);
+        // Same workers are reused, rather than fresh processes per batch.
+        assert_eq!(pids(&mut batch).await.len(), threads);
+        query.finish();
+    }
+    // Growth is demand-driven: max_threads=8 does not preallocate 8 workers.
+    let query = manager.query("small", 8);
+    let mut small = transforms(query.clone(), "small", code, 1);
+    let first = pids(&mut small).await;
+    assert_eq!(pids(&mut small).await, first);
+    query.finish();
+
+    // Two operators reserve their minima together. Extra capacity must be able
+    // to move from an idle upstream pool to a busy downstream pool and back.
+    let manager = PythonWorkerManager::new(PythonWorkerConfig {
+        max_workers: 4,
+        ..Default::default()
+    })
+    .unwrap();
+    let query = manager.query("operators", 4);
+    let mut upstream = transforms(query.clone(), "upstream", code, 3);
+    let mut downstream = transforms(query.clone(), "downstream", code, 3);
+    assert_eq!(pids(&mut upstream).await.len(), 3);
+    assert_eq!(pids(&mut downstream).await.len(), 3);
+    assert_eq!(pids(&mut upstream).await.len(), 3);
+    query.finish();
+
+    // Idle extras in an unfinished query must yield to another query's minimum
+    // budget, including when its operators need multiple guaranteed workers.
+    let first = manager.query("fair", 4);
+    let mut first_batch = transforms(first.clone(), "first", code, 4);
+    assert_eq!(pids(&mut first_batch).await.len(), 4);
+    let second = manager.query("fair", 4);
+    let mut left = transforms(second.clone(), "left", code, 1);
+    let mut right = transforms(second.clone(), "right", code, 1);
+    let (left_ids, right_ids) = tokio::join!(pids(&mut left), pids(&mut right));
+    assert_eq!(left_ids.len(), 1);
+    assert_eq!(right_ids.len(), 1);
+    second.finish();
+    assert!(!pids(&mut first_batch).await.is_empty());
+    first.finish();
+
+    // Cancelling a multi-worker query must kill all in-flight workers and wake
+    // both pool and CPU-slot waiters. The next query must regain all capacity.
+    let query = manager.query("cancel-pool", 4);
+    let mut batch = transforms(
+        query.clone(),
+        "slow",
+        "import time\ndef handler(x):\n    time.sleep(60)\n    return x\n",
+        8,
+    );
+    let cancel = async {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        query.finish();
+    };
+    let calls = futures::future::join_all(batch.iter_mut().map(|udf| udf.transform(input(0))));
+    let (results, ()) = tokio::join!(calls, cancel);
+    assert!(results.iter().all(Result::is_err));
+    let next = manager.query("after-cancel", 4);
+    let mut batch = transforms(next.clone(), "healthy", code, 4);
+    assert_eq!(pids(&mut batch).await.len(), 4);
+    next.finish();
+
+    // A failing worker poisons the whole pool, not just its own connection.
+    let query = manager.query("failure-pool", 4);
+    let mut batch = transforms(
+        query.clone(),
+        "crash-pool",
+        "import os, time\ndef handler(x):\n    if x == 0:\n        os._exit(17)\n    time.sleep(60)\n    return x\n",
+        4,
+    );
+    let results = futures::future::join_all(
+        batch
+            .iter_mut()
+            .enumerate()
+            .map(|(index, udf)| udf.transform(input(index as i64))),
+    )
+    .await;
+    assert!(results.iter().all(Result::is_err));
+    query.finish();
+    let next = manager.query("after-failure", 4);
+    let mut batch = transforms(next.clone(), "healthy", code, 4);
+    assert_eq!(pids(&mut batch).await.len(), 4);
+    next.finish();
+}
+
 async fn process_tests() {
     let manager = PythonWorkerManager::new(PythonWorkerConfig {
         max_workers: 2,
@@ -171,8 +302,8 @@ def handler(x):
     print('this must not corrupt IPC')
     return x
 "#;
-    let a = manager.query("tenant");
-    let b = manager.query("tenant");
+    let a = manager.query("tenant", 1);
+    let b = manager.query("tenant", 1);
     let mut ta = transform(a.clone(), "same_udf", code);
     let mut tb = transform(b.clone(), "same_udf", code);
     let (ra, rb) = tokio::join!(call(&mut ta, 11), call(&mut tb, 22));
@@ -183,7 +314,7 @@ def handler(x):
     call(&mut ta, 11).await.unwrap();
     a.finish();
     b.finish();
-    let fresh = manager.query("tenant");
+    let fresh = manager.query("tenant", 1);
     let mut tf = transform(fresh.clone(), "same_udf", code);
     call(&mut tf, 33).await.unwrap();
     assert!(call(&mut ta, 11).await.is_err());
@@ -191,7 +322,7 @@ def handler(x):
 
     // Reserve both UDF slots atomically; one query must never deadlock while
     // holding its first worker and waiting for its second.
-    let query = manager.query("tenant");
+    let query = manager.query("tenant", 1);
     let mut first = transform(query.clone(), "first", "def handler(x):\n    return x\n");
     let mut second = transform(query.clone(), "second", "def handler(x):\n    return x\n");
     call(&mut first, 1).await.unwrap();
@@ -199,7 +330,7 @@ def handler(x):
     query.finish();
 
     // Native/process exit must fail only this UDF, without replaying the batch.
-    let crashing = manager.query("tenant");
+    let crashing = manager.query("tenant", 1);
     let mut tc = transform(
         crashing.clone(),
         "crash",
@@ -218,7 +349,7 @@ def handler(x):
         ..Default::default()
     })
     .unwrap();
-    let hanging = manager.query("tenant");
+    let hanging = manager.query("tenant", 1);
     let mut th = transform(
         hanging.clone(),
         "hang",
@@ -232,7 +363,7 @@ def handler(x):
             .contains("timed out")
     );
     hanging.finish();
-    let healthy = manager.query("tenant");
+    let healthy = manager.query("tenant", 1);
     let mut healthy_transform = transform(
         healthy.clone(),
         "healthy",
@@ -242,7 +373,7 @@ def handler(x):
     healthy.finish();
 
     // Cancellation during an in-flight request must also unblock a queued query.
-    let cancelled = manager.query("tenant");
+    let cancelled = manager.query("tenant", 1);
     let mut slow = transform(
         cancelled.clone(),
         "cancel",
@@ -254,10 +385,11 @@ def handler(x):
     };
     let (result, ()) = tokio::join!(call(&mut slow, 1), cancel);
     assert!(result.is_err());
-    let last = manager.query("tenant");
+    let last = manager.query("tenant", 1);
     let mut tl = transform(last.clone(), "last", "def handler(x):\n    return x\n");
     call(&mut tl, 9).await.unwrap();
     last.finish();
+    parallel_pool_tests().await;
     #[cfg(target_os = "linux")]
     parent_loss_test().await;
 }
@@ -280,7 +412,7 @@ fn main() {
                 parent_loss_probe().await;
                 return;
             }
-            tokio::time::timeout(Duration::from_secs(45), process_tests())
+            tokio::time::timeout(Duration::from_secs(90), process_tests())
                 .await
                 .unwrap();
         });

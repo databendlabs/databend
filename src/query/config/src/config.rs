@@ -1914,16 +1914,17 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "true")]
     pub enable_udf_python_script: bool,
 
-    /// Maximum number of Python scalar UDF worker processes on this query node.
-    #[clap(long, value_name = "VALUE", default_value = "16")]
+    /// Maximum Python scalar UDF processes on this node (0 = effective CPU count).
+    #[clap(long, value_name = "VALUE", default_value = "0")]
     pub python_udf_max_workers: usize,
 
-    /// Python worker budget shared by all queries of a tenant on this node.
-    #[clap(long, value_name = "VALUE", default_value = "8")]
+    /// Python worker budget shared by a tenant (0 = inherit the node limit).
+    #[clap(long, value_name = "VALUE", default_value = "0")]
     pub python_udf_max_workers_per_tenant: usize,
 
-    /// Maximum Python scalar UDF runtimes admitted together for one query.
-    #[clap(long, value_name = "VALUE", default_value = "4")]
+    /// Maximum resident Python workers per query (0 = minimum runtimes plus
+    /// max_threads - 1). Concurrent execution always respects max_threads.
+    #[clap(long, value_name = "VALUE", default_value = "0")]
     pub python_udf_max_workers_per_query: usize,
 
     /// Bound Python worker admission waiters independently of running queries.

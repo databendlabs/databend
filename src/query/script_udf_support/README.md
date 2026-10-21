@@ -9,15 +9,20 @@ initialization; workers do not start query servers or load service configuration
 
 - A Python runtime belongs to one local query execution and one UDF definition.
   It is not cached by function name across SQL executions.
-- Each runtime has one worker. Pipeline transforms share that worker through an
-  asynchronous mutex, rather than spawning one process per pipeline or batch.
-  Python parallelism is deliberately independent of `max_threads` in this first
-  implementation. No sharing of Python globals between parallel workers is
-  promised.
+- Each runtime owns a worker pool. Parallel pipeline transforms can check out
+  different workers, bounded by the query's current `max_threads` and node/tenant
+  capacities. Pools grow only when concurrent batches need them: a scalar query
+  does not start `max_threads` processes. Workers are reused within the execution;
+  no sharing of Python globals between workers is promised.
 - Pipeline construction registers all local Python runtimes with the shared
-  query context. Before starting any worker, the query asynchronously reserves
-  its entire worker budget, tenant quota first and node quota second. This avoids
-  holding a worker while waiting for a second worker needed by the same query.
+  query context. Before starting any worker, the query reserves one minimum
+  worker per runtime together, tenant quota first and node quota second. Every
+  admitted operator can therefore make progress even when expansion is blocked.
+- Additional workers use nonblocking quota acquisition. If extra capacity is
+  unavailable, batches wait for an existing worker, not for incremental quota.
+  Idle extras can be retired to serve another operator or query; busy extras
+  yield on completion when minimum admissions are waiting. Reclaimed workers
+  are killed and reaped, never handed to another SQL execution.
 - The admission queue is bounded. Full queues, queue timeouts, excessive query
   budgets, and attempts to add runtimes after admission return errors. They never
   cause unbounded process creation or an impossible resource wait. A repeated
@@ -44,18 +49,38 @@ The normal query timeout still controls total SQL execution time.
 All values are under `[query]` in the query service configuration:
 
 ```toml
-python_udf_max_workers = 16
-python_udf_max_workers_per_tenant = 8
-python_udf_max_workers_per_query = 4
+python_udf_max_workers = 0
+python_udf_max_workers_per_tenant = 0
+python_udf_max_workers_per_query = 0
 python_udf_max_queued_queries = 128
 python_udf_queue_timeout_secs = 60
 python_udf_execution_timeout_secs = 300
 ```
 
-Require `0 < query <= tenant <= node`, positive queue capacity and timeouts. These
-are local-node limits, not warehouse-wide limits. Query budgets larger than the
-configured limit fail during pipeline construction. Set the tenant and query
-limits explicitly when lowering the node limit below their defaults.
+Zero selects automatic sizing:
+
+- Node: configured `query.num_cpus`, or the process's available CPU parallelism
+  when `num_cpus=0`. This respects CPU allocation rather than assuming host cores.
+- Tenant: inherit the node worker capacity.
+- Query: if `M` runtimes are registered and effective parallelism is `P`, allow
+  at most `M + P - 1` resident workers. `P` follows the SQL's `max_threads`, bounded
+  by node/tenant capacity. Only `M` minimum slots are reserved up front; the rest
+  are acquired on demand. A shared execution semaphore limits all operators
+  together to `P` in-flight calls, not `P` calls per operator.
+
+An explicit nonzero query limit caps total resident workers, including minima,
+starting workers, and extras; it also caps execution parallelism. Nonzero limits
+must satisfy `query <= tenant <= node`. Queue capacity and timeouts must be
+positive. These are local-node limits, not warehouse-wide limits. A minimum
+budget that cannot fit fails during pipeline construction rather than waiting
+forever. Runtime count is not limited to `max_threads`: multiple UDF operators
+can still execute sequentially when `max_threads=1`.
+
+For example, one UDF on a 128-CPU allocation with `max_threads=64` can lazily use
+up to 64 workers. Multiple queries share the same 128-worker node ceiling; they
+cannot each create an independent 128-worker allocation. CPU-based sizing does
+not imply a safe memory budget: use explicit smaller capacities for
+memory-heavy packages until OS-enforced worker memory limits are available.
 
 ## IPC and dependency files
 
@@ -65,10 +90,12 @@ larger payloads. User stdout/stderr are discarded, not used as protocol channels
 Python exceptions are returned through the response protocol.
 
 Dependency installation and stage artifact archives are cached. Every Python
-runtime receives a separate extraction of the cached archive, never the shared
-live directory or writable hardlinks. Workers without dependencies also receive
-a private working directory. Python state such as `sys.path`, `sys.modules`,
-`builtins`, OS environment variables, and working-directory changes cannot leak
+runtime receives a private, unexecuted template, and each worker gets a separate
+copy, never a shared writable directory or hardlinks. Dependency copying runs on
+the blocking runtime and retains startup quota even if its awaiting task is
+cancelled. Workers without dependencies also receive a private working directory.
+Python state such as `sys.path`, `sys.modules`, `builtins`, OS environment
+variables, and working-directory changes cannot leak
 through a shared interpreter into another query.
 
 ## Boundaries
@@ -98,11 +125,14 @@ PYO3_PYTHON=python3.12 cargo clippy -p databend-query-script-udf-support --featu
 ```
 
 `tests/python_worker_process.rs` uses a custom test main so child processes execute
-exactly the same worker entrypoint as the query binary. It requires no pip,
+the same worker protocol as the query binary. It requires no pip,
 metastore, license, or network access. It covers concurrent same-definition SQL
-isolation, reuse within a query, whole-query admission, process failure, timeout,
-cancellation, and quota recovery. SQL service coverage lives in
-`tests/suites/5_ee/08_udf_python/08_0002_process_isolation.sh`.
+isolation, lazy pools at parallelism 1/4/8, reuse and reclamation within/between
+queries, minimum admission, process failure, timeout, multi-worker cancellation,
+and quota recovery. Unit tests also simulate 64/128-CPU capacities without
+starting that many processes. SQL service coverage lives in
+`tests/suites/5_ee/08_udf_python/08_0002_process_isolation.sh` and
+`08_0003_worker_pool.sh`.
 
 ## Performance comparison
 
@@ -123,6 +153,11 @@ python3 scripts/benchmark/query/python_udf_isolation.py \
 python3 scripts/benchmark/query/python_udf_isolation.py \
   --compare /tmp/python-udf-main.json /tmp/python-udf-isolated.json
 ```
+
+For a single-query scaling comparison, use `--workload gcd-scaling --threads N`
+for `N=1,4,8` (and a sufficiently large explicit node capacity), optionally with
+`--gcd-rows` to adjust input size. This uses one concurrent SQL query, not eight
+independent queries, and validates results outside the timed region.
 
 For actual greatest-common-divisor workloads, pass `--workload gcd` to each
 measurement command. This runs a two-argument Euclidean Python UDF and a

@@ -96,7 +96,7 @@ impl PipelineBuilder {
 
         #[cfg(feature = "python-udf")]
         {
-            let lease = self.ctx.python_udf_workers().pipeline();
+            let lease = self.ctx.python_udf_workers()?.pipeline();
             self.main_pipeline
                 .set_on_finished(always_callback(move |_info: &ExecutionInfo| {
                     drop(lease);

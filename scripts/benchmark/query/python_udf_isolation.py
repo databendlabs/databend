@@ -147,7 +147,7 @@ def benchmark(args):
             ),
         ),
     ]
-    if args.workload == "gcd":
+    if args.workload in ("gcd", "gcd-scaling"):
         definitions = [
             (
                 "bench_py_gcd",
@@ -196,7 +196,7 @@ def benchmark(args):
         ("concurrent_batch", "bench_py_add", 100000, 8, args.repetitions),
     ]
     expected_gcd = {}
-    if args.workload == "gcd":
+    if args.workload in ("gcd", "gcd-scaling"):
         workloads = [
             ("gcd_cold_first", "bench_py_gcd", 1, 1, 1),
             ("gcd_scalar", "bench_py_gcd", 1, 1, args.repetitions),
@@ -219,6 +219,12 @@ def benchmark(args):
                 args.repetitions,
             ),
         ]
+        if args.workload == "gcd-scaling":
+            workloads = [
+                ("gcd_cold_first", "bench_py_gcd", 1, 1, 1),
+                ("gcd_scalar", "bench_py_gcd", 1, 1, args.repetitions),
+                ("gcd_scaling", "bench_py_gcd", args.gcd_rows, 1, args.repetitions),
+            ]
         # Independent oracle, outside the measured SQL region. Both inputs vary
         # per row; this is not a constant expression or an artificial busy loop.
         for rows in {workload[2] for workload in workloads}:
@@ -235,7 +241,7 @@ def benchmark(args):
         for name, function, rows, concurrency, repetitions in workloads:
             arguments = "to_int64(number)"
             expected = rows * (rows + 1) // 2 if function == "bench_py_add" else None
-            if args.workload == "gcd":
+            if args.workload in ("gcd", "gcd-scaling"):
                 arguments = (
                     "to_int64(1000000007 + 104729 * number), "
                     "to_int64(1000000009 + 130363 * number)"
@@ -321,7 +327,15 @@ def main():
     parser.add_argument("--password", default="")
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--repetitions", type=int, default=10)
-    parser.add_argument("--workload", choices=("basic", "gcd"), default="basic")
+    parser.add_argument(
+        "--workload", choices=("basic", "gcd", "gcd-scaling"), default="basic"
+    )
+    parser.add_argument(
+        "--gcd-rows",
+        type=int,
+        default=5000000,
+        help="Rows in the single-query gcd-scaling workload",
+    )
     parser.add_argument("--pid", type=int)
     parser.add_argument("--label", default="isolated")
     parser.add_argument("--revision", default="unknown")
@@ -330,8 +344,8 @@ def main():
     if args.compare:
         compare(args.compare)
     else:
-        if args.repetitions < 1 or args.threads < 1:
-            parser.error("--repetitions and --threads must be positive")
+        if args.repetitions < 1 or args.threads < 1 or args.gcd_rows < 1:
+            parser.error("--repetitions, --threads and --gcd-rows must be positive")
         benchmark(args)
 
 

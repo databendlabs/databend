@@ -19,6 +19,7 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::LazyLock;
+use std::sync::OnceLock;
 use std::sync::Weak;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
@@ -68,9 +69,9 @@ pub struct PythonWorkerConfig {
 impl Default for PythonWorkerConfig {
     fn default() -> Self {
         Self {
-            max_workers: 16,
-            max_workers_per_tenant: 8,
-            max_workers_per_query: 4,
+            max_workers: 0,
+            max_workers_per_tenant: 0,
+            max_workers_per_query: 0,
             max_queued_queries: 128,
             queue_timeout: Duration::from_secs(60),
             execution_timeout: Duration::from_secs(300),
@@ -78,12 +79,40 @@ impl Default for PythonWorkerConfig {
     }
 }
 
+impl PythonWorkerConfig {
+    /// Resolve node/tenant capacities, leaving a zero query limit automatic.
+    pub fn resolve_limits(mut self, num_cpus: usize) -> Result<Self> {
+        if self.max_workers == 0 {
+            self.max_workers = num_cpus.max(1);
+        }
+        if self.max_workers_per_tenant == 0 {
+            self.max_workers_per_tenant = self.max_workers;
+        }
+        if self.max_workers > u32::MAX as usize
+            || self.max_workers > Semaphore::MAX_PERMITS
+            || self.max_workers_per_tenant > self.max_workers
+            || self.max_workers_per_query > self.max_workers_per_tenant
+            || self.max_queued_queries == 0
+            || self.max_queued_queries > Semaphore::MAX_PERMITS
+            || self.queue_timeout.is_zero()
+            || self.execution_timeout.is_zero()
+        {
+            return Err(ErrorCode::InvalidConfig(
+                "Python worker limits must satisfy query <= tenant <= node <= u32::MAX (0 = automatic); queue capacity and timeouts must be positive",
+            ));
+        }
+        Ok(self)
+    }
+}
+
 pub struct PythonWorkerManager {
     config: PythonWorkerConfig,
     slots: Arc<Semaphore>,
     queued: Arc<Semaphore>,
+    capacity_changed: Arc<tokio::sync::Notify>,
     reaper_runtime: Option<tokio::runtime::Handle>,
     tenants: Mutex<HashMap<String, Weak<Semaphore>>>,
+    queries: Mutex<Vec<Weak<PythonQueryWorkers>>>,
 }
 
 static DEFAULT_MANAGER: LazyLock<Arc<PythonWorkerManager>> = LazyLock::new(|| {
@@ -92,27 +121,16 @@ static DEFAULT_MANAGER: LazyLock<Arc<PythonWorkerManager>> = LazyLock::new(|| {
 
 impl PythonWorkerManager {
     pub fn new(config: PythonWorkerConfig) -> Result<Arc<Self>> {
-        if config.max_workers == 0
-            || config.max_workers > u32::MAX as usize
-            || config.max_workers_per_tenant == 0
-            || config.max_workers_per_query == 0
-            || config.max_workers_per_query > config.max_workers_per_tenant
-            || config.max_workers_per_tenant > config.max_workers
-            || config.max_queued_queries == 0
-            || config.max_queued_queries > Semaphore::MAX_PERMITS
-            || config.queue_timeout.is_zero()
-            || config.execution_timeout.is_zero()
-        {
-            return Err(ErrorCode::InvalidConfig(
-                "Python worker limits must satisfy 0 < query <= tenant <= node <= u32::MAX; queue size and timeouts must be positive",
-            ));
-        }
+        let config =
+            config.resolve_limits(std::thread::available_parallelism().map_or(1, usize::from))?;
         Ok(Arc::new(Self {
             slots: Arc::new(Semaphore::new(config.max_workers)),
             queued: Arc::new(Semaphore::new(config.max_queued_queries)),
+            capacity_changed: Arc::new(tokio::sync::Notify::new()),
             config,
             reaper_runtime: tokio::runtime::Handle::try_current().ok(),
             tenants: Mutex::new(HashMap::new()),
+            queries: Mutex::new(Vec::new()),
         }))
     }
 
@@ -126,7 +144,7 @@ impl PythonWorkerManager {
         GlobalInstance::try_get().unwrap_or_else(|| DEFAULT_MANAGER.clone())
     }
 
-    pub fn query(self: &Arc<Self>, tenant: &str) -> Arc<PythonQueryWorkers> {
+    pub fn query(self: &Arc<Self>, tenant: &str, max_threads: usize) -> Arc<PythonQueryWorkers> {
         let mut tenants = self.tenants.lock();
         tenants.retain(|_, slots| slots.strong_count() > 0);
         let tenant_slots = tenants
@@ -138,8 +156,18 @@ impl PythonWorkerManager {
                 tenants.insert(tenant.to_owned(), Arc::downgrade(&slots));
                 slots
             });
+        let mut parallelism = max_threads
+            .max(1)
+            .min(self.config.max_workers)
+            .min(self.config.max_workers_per_tenant);
+        if self.config.max_workers_per_query != 0 {
+            parallelism = parallelism.min(self.config.max_workers_per_query);
+        }
         Arc::new(PythonQueryWorkers {
             manager: self.clone(),
+            parallelism,
+            execution_slots: Arc::new(Semaphore::new(parallelism)),
+            extra_slots: OnceLock::new(),
             tenant_slots,
             registration: Mutex::new((0, false)),
             admission: OnceCell::new(),
@@ -150,13 +178,39 @@ impl PythonWorkerManager {
             pipelines: AtomicUsize::new(0),
         })
     }
+
+    fn has_waiting_admission(&self) -> bool {
+        self.queued.available_permits() < self.config.max_queued_queries
+    }
+
+    fn reclaim_idle_extras(&self, tenant: &Arc<Semaphore>, count: usize) {
+        let mut node_needed = count.saturating_sub(self.slots.available_permits());
+        let mut tenant_needed = count.saturating_sub(tenant.available_permits());
+        for query in self.queries.lock().iter().filter_map(Weak::upgrade) {
+            let same_tenant = Arc::ptr_eq(tenant, &query.tenant_slots);
+            for runtime in query.runtimes.lock().iter().filter_map(Weak::upgrade) {
+                while node_needed > 0 || (same_tenant && tenant_needed > 0) {
+                    if !runtime.retire_idle_extra() {
+                        break;
+                    }
+                    node_needed = node_needed.saturating_sub(1);
+                    if same_tenant {
+                        tenant_needed = tenant_needed.saturating_sub(1);
+                    }
+                }
+            }
+        }
+    }
 }
 
-/// Shared across every local pipeline of one query. Register all runtimes during
-/// pipeline construction, then reserve the COMPLETE budget before starting any
-/// worker. Never incrementally acquire slots while holding live workers.
+/// Shared across local pipelines. Reserve one minimum worker per runtime as a
+/// single admission, then grow pools opportunistically without waiting for extra
+/// quota. max_threads bounds execution, not the number of UDF operators.
 pub struct PythonQueryWorkers {
     manager: Arc<PythonWorkerManager>,
+    parallelism: usize,
+    execution_slots: Arc<Semaphore>,
+    extra_slots: OnceLock<Arc<Semaphore>>,
     tenant_slots: Arc<Semaphore>,
     registration: Mutex<(u32, bool)>,
     admission: OnceCell<()>,
@@ -181,10 +235,34 @@ impl Drop for PythonPipelineLease {
     }
 }
 
+struct AdmissionWake(Arc<tokio::sync::Notify>);
+
+impl Drop for AdmissionWake {
+    fn drop(&mut self) {
+        self.0.notify_waiters();
+    }
+}
+
 #[derive(Debug)]
 struct Reservation {
+    // Drop permits before waking waiters, not after the Drop body has returned.
+    permits: Option<ReservationPermits>,
+    extra: bool,
+    capacity_changed: Arc<tokio::sync::Notify>,
+}
+
+#[derive(Debug)]
+struct ReservationPermits {
     _tenant: OwnedSemaphorePermit,
     _node: OwnedSemaphorePermit,
+    _extra: Option<OwnedSemaphorePermit>,
+}
+
+impl Drop for Reservation {
+    fn drop(&mut self) {
+        self.permits.take();
+        self.capacity_changed.notify_waiters();
+    }
 }
 
 impl PythonQueryWorkers {
@@ -199,20 +277,34 @@ impl PythonQueryWorkers {
         }
     }
 
-    pub fn register(&self) -> Result<()> {
+    pub fn register(self: &Arc<Self>) -> Result<()> {
         let mut registration = self.registration.lock();
         if registration.1 || self.finished.load(Ordering::Acquire) {
             return Err(udf_error(
                 "cannot add Python runtimes after query admission",
             ));
         }
-        if registration.0 as usize >= self.manager.config.max_workers_per_query {
+        let config = &self.manager.config;
+        let minimum_limit = if config.max_workers_per_query == 0 {
+            config.max_workers_per_tenant
+        } else {
+            config.max_workers_per_query
+        };
+        if registration.0 as usize >= minimum_limit {
             return Err(udf_error(format!(
-                "query requires more than {} Python workers; increase python_udf_max_workers_per_query",
-                self.manager.config.max_workers_per_query
+                "query minimum Python worker budget exceeds {minimum_limit}; increase Python worker capacity",
             )));
         }
+        let first = registration.0 == 0;
         registration.0 += 1;
+        drop(registration);
+        if first {
+            // Most query pipelines never execute Python. Do not grow a global
+            // reclamation registry with ordinary SQL or completed HTTP contexts.
+            let mut queries = self.manager.queries.lock();
+            queries.retain(|query| query.upgrade().is_some_and(|query| !query.is_finished()));
+            queries.push(Arc::downgrade(self));
+        }
         Ok(())
     }
 
@@ -220,17 +312,41 @@ impl PythonQueryWorkers {
         self.finished.store(true, Ordering::Release);
         self.cancel.notify_waiters();
         for runtime in self.runtimes.lock().iter().filter_map(Weak::upgrade) {
-            if let Ok(mut state) = runtime.state.try_lock() {
-                *state = RuntimeState::Failed;
-            }
+            runtime.fail();
         }
         // Reapers hold their own Arc<Reservation> until wait() completes.
         self.reservation.lock().take();
     }
 
+    fn try_extra(&self) -> Option<Arc<Reservation>> {
+        let query = self.extra_slots.get()?.clone().try_acquire_owned().ok()?;
+        let tenant = self.tenant_slots.clone().try_acquire_owned().ok()?;
+        let node = self.manager.slots.clone().try_acquire_owned().ok()?;
+        Some(Arc::new(Reservation {
+            permits: Some(ReservationPermits {
+                _tenant: tenant,
+                _node: node,
+                _extra: Some(query),
+            }),
+            extra: true,
+            capacity_changed: self.manager.capacity_changed.clone(),
+        }))
+    }
+
+    fn reclaim_idle_extra(&self, requester: &PythonRuntime) {
+        for runtime in self.runtimes.lock().iter().filter_map(Weak::upgrade) {
+            if !std::ptr::eq(runtime.as_ref(), requester) && runtime.retire_idle_extra() {
+                break;
+            }
+        }
+    }
+
     async fn admit(&self) -> Result<Arc<Reservation>> {
         self.admission
             .get_or_try_init(|| async {
+                // Declare before permits: cancellation must release semaphore
+                // wait tickets and tenant quota BEFORE waking pool expanders.
+                let _wake = AdmissionWake(self.manager.capacity_changed.clone());
                 let _queued = self
                     .manager
                     .queued
@@ -242,6 +358,10 @@ impl PythonQueryWorkers {
                     registration.1 = true;
                     registration.0
                 };
+                // Minima take priority over idle speculative capacity. Busy
+                // extras yield on completion, without interrupting user code.
+                self.manager
+                    .reclaim_idle_extras(&self.tenant_slots, count as usize);
                 tokio::time::timeout(self.manager.config.queue_timeout, async {
                     // All queries acquire in the same order. A tenant waiting for
                     // its own quota must not occupy node quota.
@@ -262,9 +382,21 @@ impl PythonQueryWorkers {
                     if self.finished.load(Ordering::Acquire) {
                         return Err(udf_error("query has finished"));
                     }
+                    let extra = if self.manager.config.max_workers_per_query == 0 {
+                        self.parallelism.saturating_sub(1)
+                    } else {
+                        self.manager.config.max_workers_per_query - count as usize
+                    };
+                    self.extra_slots
+                        .get_or_init(|| Arc::new(Semaphore::new(extra)));
                     *reservation = Some(Arc::new(Reservation {
-                        _tenant: tenant,
-                        _node: node,
+                        permits: Some(ReservationPermits {
+                            _tenant: tenant,
+                            _node: node,
+                            _extra: None,
+                        }),
+                        extra: false,
+                        capacity_changed: self.manager.capacity_changed.clone(),
                     }));
                     Ok(())
                 })
@@ -287,89 +419,7 @@ pub(crate) struct PythonFunction {
     pub return_field: Field,
 }
 
-/// One worker per runtime, shared by pipeline transforms only within this query.
-/// A cancelled or failed request poisons the runtime: never retry user code.
-pub struct PythonRuntime {
-    function: PythonFunction,
-    query: Arc<PythonQueryWorkers>,
-    directory: Option<TempDir>,
-    state: tokio::sync::Mutex<RuntimeState>,
-}
-
-enum RuntimeState {
-    New,
-    Running(Box<Worker>),
-    Failed,
-}
-
-impl PythonRuntime {
-    pub(crate) fn new(
-        function: PythonFunction,
-        query: Arc<PythonQueryWorkers>,
-        directory: Option<TempDir>,
-    ) -> Result<Arc<Self>> {
-        query.register()?;
-        let runtime = Arc::new(Self {
-            function,
-            query: query.clone(),
-            directory,
-            state: tokio::sync::Mutex::new(RuntimeState::New),
-        });
-        query.runtimes.lock().push(Arc::downgrade(&runtime));
-        Ok(runtime)
-    }
-
-    pub async fn call(&self, batch: &RecordBatch) -> Result<RecordBatch> {
-        let cancelled = self.query.cancel.notified();
-        tokio::pin!(cancelled);
-        cancelled.as_mut().enable();
-        let reservation = tokio::select! {
-            _ = &mut cancelled => return Err(udf_error("query has finished")),
-            result = self.query.admit() => result?,
-        };
-        if self.query.finished.load(Ordering::Acquire) {
-            return Err(udf_error("query has finished"));
-        }
-        let mut state = self.state.lock().await;
-        let previous = std::mem::replace(&mut *state, RuntimeState::Failed);
-        // Own the worker across every await. Cancellation drops/kills it rather
-        // than leaving a partially consumed response in a reusable connection.
-        let operation = async {
-            let mut worker = match previous {
-                RuntimeState::New => Worker::start(
-                    reservation,
-                    self.directory.clone(),
-                    &self.function,
-                    self.query
-                        .manager
-                        .reaper_runtime
-                        .clone()
-                        .unwrap_or_else(tokio::runtime::Handle::current),
-                )
-                .await
-                .map(Box::new)?,
-                RuntimeState::Running(worker) => worker,
-                RuntimeState::Failed => return Err(udf_error("runtime failed or was cancelled")),
-            };
-            let input = encode_batch(batch)?;
-            worker.write_frame(&input).await?;
-            let output = worker.read_response().await?;
-            let batch = decode_batch(&output)?;
-            Ok((worker, batch))
-        };
-        let (worker, result) = tokio::select! {
-            _ = &mut cancelled => return Err(udf_error("query has finished")),
-            result = tokio::time::timeout(self.query.manager.config.execution_timeout, operation) => {
-                result.map_err(|_| udf_error("execution timed out"))??
-            }
-        };
-        if self.query.finished.load(Ordering::Acquire) {
-            return Err(udf_error("query has finished"));
-        }
-        *state = RuntimeState::Running(worker);
-        Ok(result)
-    }
-}
+include!("python_worker_pool.rs");
 
 struct Worker {
     child: Option<Child>,
@@ -389,7 +439,18 @@ impl Worker {
         runtime: tokio::runtime::Handle,
     ) -> Result<Self> {
         let directory = Some(match directory {
-            Some(dir) => dir,
+            Some(template) => {
+                let quota = reservation.clone();
+                databend_common_base::runtime::spawn_blocking(move || {
+                    // A cancelled startup must not admit unlimited background
+                    // dependency copies after dropping its process reservation.
+                    let _quota = quota;
+                    template.private_copy()
+                })
+                .await
+                .map_err(udf_error)?
+                .map_err(udf_error)?
+            }
             None => TempDir::new().map_err(udf_error)?,
         });
         let ipc_dir = TempDir::new().map_err(udf_error)?;
@@ -681,176 +742,4 @@ pub fn run_python_udf_worker(socket_path: PathBuf) -> Result<()> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn reserves_complete_query_budget_and_releases_on_drop() {
-        let manager = PythonWorkerManager::new(PythonWorkerConfig {
-            max_workers: 2,
-            max_workers_per_tenant: 2,
-            max_workers_per_query: 2,
-            ..Default::default()
-        })
-        .unwrap();
-        let first = manager.query("a");
-        first.register().unwrap();
-        first.register().unwrap();
-        assert!(first.register().is_err());
-        first.admit().await.unwrap();
-        assert_eq!(manager.slots.available_permits(), 0);
-        assert!(first.register().is_err());
-        let second = manager.query("b");
-        second.register().unwrap();
-        assert!(
-            tokio::time::timeout(Duration::from_millis(10), second.admit())
-                .await
-                .is_err()
-        );
-        // A cancelled admission cannot leak a partially acquired permit.
-        assert_eq!(second.tenant_slots.available_permits(), 2);
-        drop(first);
-        second.admit().await.unwrap();
-        assert_eq!(manager.slots.available_permits(), 1);
-        drop(second);
-        assert_eq!(manager.slots.available_permits(), 2);
-    }
-
-    #[tokio::test]
-    async fn tenant_quota_is_shared_without_blocking_other_tenants() {
-        let manager = PythonWorkerManager::new(PythonWorkerConfig {
-            max_workers: 2,
-            max_workers_per_tenant: 1,
-            max_workers_per_query: 1,
-            ..Default::default()
-        })
-        .unwrap();
-        let first = manager.query("a");
-        let second = manager.query("a");
-        let other = manager.query("b");
-        for query in [&first, &second, &other] {
-            query.register().unwrap();
-        }
-        first.admit().await.unwrap();
-        assert!(
-            tokio::time::timeout(Duration::from_millis(10), second.admit())
-                .await
-                .is_err()
-        );
-        other.admit().await.unwrap();
-        assert_eq!(manager.slots.available_permits(), 0);
-    }
-
-    #[tokio::test]
-    async fn fragment_completion_does_not_finish_other_pipelines() {
-        let manager = PythonWorkerManager::new(PythonWorkerConfig::default()).unwrap();
-        let query = manager.query("a");
-        let first = query.pipeline();
-        let second = query.pipeline();
-        query.register().unwrap();
-        query.admit().await.unwrap();
-        drop(first);
-        assert!(!query.finished.load(Ordering::Acquire));
-        assert_eq!(manager.slots.available_permits(), 15);
-        drop(second);
-        assert!(query.finished.load(Ordering::Acquire));
-        assert_eq!(manager.slots.available_permits(), 16);
-    }
-
-    #[tokio::test]
-    async fn finish_keeps_quota_until_worker_reservations_are_dropped() {
-        let manager = PythonWorkerManager::new(PythonWorkerConfig::default()).unwrap();
-        let query = manager.query("a");
-        query.register().unwrap();
-        let worker_reservation = query.admit().await.unwrap();
-        query.finish();
-        assert!(query.admit().await.is_err());
-        assert!(query.register().is_err());
-        assert_eq!(manager.slots.available_permits(), 15);
-        drop(worker_reservation);
-        assert_eq!(manager.slots.available_permits(), 16);
-    }
-
-    #[tokio::test]
-    async fn admission_queue_is_bounded_and_times_out() {
-        let manager = PythonWorkerManager::new(PythonWorkerConfig {
-            max_workers: 1,
-            max_workers_per_tenant: 1,
-            max_workers_per_query: 1,
-            max_queued_queries: 1,
-            queue_timeout: Duration::from_millis(20),
-            ..Default::default()
-        })
-        .unwrap();
-        let first = manager.query("a");
-        first.register().unwrap();
-        first.admit().await.unwrap();
-        let second = manager.query("a");
-        second.register().unwrap();
-        let third = manager.query("b");
-        third.register().unwrap();
-        let waiting = second.admit();
-        tokio::pin!(waiting);
-        assert!(futures::poll!(&mut waiting).is_pending());
-        assert!(
-            third
-                .admit()
-                .await
-                .unwrap_err()
-                .message()
-                .contains("queue is full")
-        );
-        assert!(waiting.await.unwrap_err().message().contains("timed out"));
-        first.finish();
-        third.admit().await.unwrap();
-    }
-
-    #[test]
-    fn arrow_ipc_preserves_zero_argument_row_count_and_nulls() {
-        use arrow_array::Int64Array;
-        use arrow_array::RecordBatchOptions;
-        use arrow_schema::DataType;
-        use arrow_schema::Schema;
-        let empty = RecordBatch::try_new_with_options(
-            Arc::new(Schema::empty()),
-            vec![],
-            &RecordBatchOptions::new().with_row_count(Some(3)),
-        )
-        .unwrap();
-        assert_eq!(
-            decode_batch(&encode_batch(&empty).unwrap())
-                .unwrap()
-                .num_rows(),
-            3
-        );
-        let field = Field::new("x", DataType::Int64, true).with_metadata(HashMap::from([(
-            "extension-key".to_owned(),
-            "extension-value".to_owned(),
-        )]));
-        let batch = RecordBatch::try_new(Arc::new(Schema::new(vec![field])), vec![Arc::new(
-            Int64Array::from(vec![Some(42), None, Some(-1)]),
-        )])
-        .unwrap();
-        assert_eq!(decode_batch(&encode_batch(&batch).unwrap()).unwrap(), batch);
-    }
-
-    #[test]
-    fn validates_config_and_frame_size() {
-        assert!(
-            PythonWorkerManager::new(PythonWorkerConfig {
-                max_workers: 0,
-                ..Default::default()
-            })
-            .is_err()
-        );
-        assert!(
-            PythonWorkerManager::new(PythonWorkerConfig {
-                max_workers_per_query: 17,
-                ..Default::default()
-            })
-            .is_err()
-        );
-        assert!(check_length(MAX_FRAME_BYTES + 1).is_err());
-    }
-}
+include!("python_worker_tests.rs");

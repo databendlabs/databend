@@ -187,6 +187,12 @@ fn test_python_venv_executable_directories_are_private() {
             b"VALUE = 42\n"
         );
     }
+    let worker = second.private_copy().unwrap();
+    std::fs::write(worker.path().join("helper.py"), b"VALUE = 99\n").unwrap();
+    assert_eq!(
+        std::fs::read(second.path().join("helper.py")).unwrap(),
+        b"VALUE = 42\n"
+    );
     let first_path = first.path().to_path_buf();
     drop(first);
     assert!(!first_path.exists());

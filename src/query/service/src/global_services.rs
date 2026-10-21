@@ -103,7 +103,12 @@ impl GlobalServices {
                 execution_timeout: std::time::Duration::from_secs(
                     config.query.common.python_udf_execution_timeout_secs,
                 ),
-            },
+            }
+            .resolve_limits(if config.query.common.num_cpus == 0 {
+                std::thread::available_parallelism().map_or(1, usize::from)
+            } else {
+                config.query.common.num_cpus as usize
+            })?,
         )?;
 
         compress::GLOBAL_ENCODER.set_compress(config.meta.compress_values());
