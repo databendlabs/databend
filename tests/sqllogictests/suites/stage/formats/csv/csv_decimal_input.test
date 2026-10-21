@@ -10,6 +10,15 @@ select d::string from decimal_text_input
 ----
 1
 
+# The fast VALUES decoder must consume an exponent marker/sign even without digits.
+statement ok
+insert into decimal_text_input values (1e), (1e+), (1e-)
+
+query II
+select count(*), sum(d)::int from decimal_text_input
+----
+4 4
+
 statement ok
 drop table decimal_text_input
 
@@ -22,6 +31,9 @@ statement ok
 copy into @csv_decimal_input/ from (
     select '1|10000000000000000000e-19|[10000000000000000000e-19,-10000000000000000000e-19]'
     union all select '2|.0210e3|[.0210e3,0120.0210e-1]'
+    union all select '3|1e|[1e,1.5e]'
+    union all select '4|1e+|[1e+,1e-]'
+    union all select '5|-1e-|[-1.5e,-1e+]'
 )
 file_format = (type = csv field_delimiter = '~' quote = '`' quote_style = 'quote_minimal' compression = none)
 
@@ -37,6 +49,15 @@ select id, d::string, a[1]::string, a[2]::string from decimal_csv_input order by
 ----
 1 1.000 1.000 -1.000
 2 21.000 21.000 12.002
+3 1.000 1.000 1.500
+4 1.000 1.000 1.000
+5 -1.000 -1.500 -1.000
+
+# Exact text parsing also keeps the historical missing-exponent interpretation.
+query TTT
+select '1e'::decimal(6, 3)::string, '1e+'::decimal(6, 3)::string, '1.5e-'::decimal(6, 3)::string
+----
+1.000 1.000 1.500
 
 statement ok
 drop table decimal_csv_input

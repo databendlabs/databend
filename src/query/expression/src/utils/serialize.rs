@@ -30,8 +30,9 @@ pub fn uniform_date(date: NaiveDate) -> i32 {
 
 /// Parse a decimal at a known precision and scale, optionally rounding half away from zero.
 /// In prefix mode (`exact = false`), return the number of bytes consumed before the delimiter.
-/// An exponent marker must be followed by digits, even in prefix mode. Exponents must fit
-/// in `i32`, including for zero mantissas or values that would otherwise round to zero.
+/// For compatibility, an exponent marker with no digits (after an optional sign) means
+/// exponent zero; the marker and sign are consumed. Explicit exponents must fit in `i32`,
+/// including for zero mantissas or values that would otherwise round to zero.
 // Used in function, so we don't want to return ErrorCode with backtrace
 pub fn read_decimal_with_size<T: Decimal>(
     buf: &[u8],
@@ -84,16 +85,12 @@ pub fn read_decimal_with_size<T: Decimal>(
             }
             pos += 1;
         }
-        let exponent_start = pos;
         while pos < buf.len() && buf[pos].is_ascii_digit() {
             exponent = exponent
                 .checked_mul(10)
                 .and_then(|e| e.checked_add((buf[pos] - b'0') as i32 * exponent_sign))
                 .ok_or_else(decimal_overflow_error)?;
             pos += 1;
-        }
-        if pos == exponent_start {
-            return Err(decimal_parse_error("no exponent digits"));
         }
     }
     if exact && pos != buf.len() {
@@ -123,21 +120,45 @@ pub fn read_decimal_with_size<T: Decimal>(
         .filter(u8::is_ascii_digit)
         .skip_while(|&digit| digit == b'0');
     let mut n = T::zero();
-    let mut retained = 0;
-    let ten = T::e(1);
+    let mut retained = 0u8;
+    let mut chunk = 0i64;
+    let mut chunk_digits = 0u8;
     for digit in significant.by_ref().take(coefficient_digits as usize) {
-        n = n
-            .checked_mul(ten)
-            .and_then(|n| n.checked_add(T::from_i64((digit - b'0') as i64)))
-            .ok_or_else(decimal_overflow_error)?;
-        retained += 1;
+        // Any 18 decimal digits fit in i64. Accumulate there to avoid a checked
+        // Decimal128/256 multiply and add for every digit.
+        chunk = chunk * 10 + (digit - b'0') as i64;
+        chunk_digits += 1;
+        if chunk_digits == 18 {
+            n = if retained == 0 {
+                T::from_i64(chunk)
+            } else {
+                n.checked_mul(T::e(18))
+                    .and_then(|n| n.checked_add(T::from_i64(chunk)))
+                    .ok_or_else(decimal_overflow_error)?
+            };
+            retained += chunk_digits;
+            chunk = 0;
+            chunk_digits = 0;
+        }
+    }
+    if chunk_digits != 0 {
+        n = if retained == 0 {
+            T::from_i64(chunk)
+        } else {
+            n.checked_mul(T::e(chunk_digits))
+                .and_then(|n| n.checked_add(T::from_i64(chunk)))
+                .ok_or_else(decimal_overflow_error)?
+        };
+        retained += chunk_digits;
     }
     // This power is bounded by the target precision, not the input's exponent
     // or leading zeros. Only the final coefficient is accumulated in T.
     let padding = coefficient_digits as u8 - retained;
-    n = n
-        .checked_mul(T::e(padding))
-        .ok_or_else(decimal_overflow_error)?;
+    if padding != 0 {
+        n = n
+            .checked_mul(T::e(padding))
+            .ok_or_else(decimal_overflow_error)?;
+    }
     // Keep the rounding digit separate: precision + 1 digits may not fit in T.
     if rounding_mode && significant.next().is_some_and(|digit| digit >= b'5') {
         n = n.checked_add(T::one()).ok_or_else(decimal_overflow_error)?;

@@ -38,6 +38,14 @@ fn test_decimal_with_size_modes() {
             (".0210e3", 21000, 21000),
             ("0120.0210e-1", 12002, 12002),
             ("1.5e+1", 15000, 15000),
+            // Preserve the historical zero-exponent interpretation and consume e/sign.
+            ("1e", 1000, 1000),
+            ("1e+", 1000, 1000),
+            ("1e-", 1000, 1000),
+            ("1.5e", 1500, 1500),
+            ("1.5E+", 1500, 1500),
+            ("-1.5e-", -1500, -1500),
+            ("0e+", 0, 0),
             ("1e-2147483648", 0, 0),
             ("0e2147483647", 0, 0),
         ] {
@@ -76,6 +84,24 @@ fn test_decimal_with_size_modes() {
                 "{text}"
             );
         }
+        // Consume exactly the coefficient across full/partial 18-digit chunks,
+        // including all-zero chunks, without absorbing the next field.
+        let size = DecimalSize::new_unchecked(T::MAX_PRECISION, 0);
+        for digits in [17, 18, 19, 35, 36, 37, 53, 54, 55, 71, 72, 73] {
+            if digits > T::MAX_PRECISION as usize {
+                continue;
+            }
+            for sign in ["", "-"] {
+                let text = format!("{sign}1{}1", "0".repeat(digits - 2));
+                let expected = T::from_bigint(text.parse::<BigInt>().unwrap()).unwrap();
+                let input = format!("{text},2e10");
+                assert_eq!(
+                    read_decimal_with_size::<T>(input.as_bytes(), size, false, true).unwrap(),
+                    (expected, text.len()),
+                    "{input}"
+                );
+            }
+        }
     }
     check::<i64>();
     check::<i128>();
@@ -85,9 +111,7 @@ fn test_decimal_with_size_modes() {
 #[test]
 fn test_decimal_with_size_invalid_text() {
     let size = DecimalSize::new_unchecked(18, 4);
-    for text in [
-        "", ".", "+", "-", ".e1", "a", "1e", "1e+", "1e-", "1ee2", "1e,", "1.5e)",
-    ] {
+    for text in ["", ".", "+", "-", ".e1", "a"] {
         for exact in [false, true] {
             for rounding_mode in [false, true] {
                 assert!(
@@ -99,7 +123,7 @@ fn test_decimal_with_size_invalid_text() {
         }
     }
     // Exact mode validates the suffix even when the result would round to zero.
-    for text in ["0x", "1e-100x", "1.2.3", "1e2e3"] {
+    for text in ["0x", "1e-100x", "1.2.3", "1e2e3", "1ee2", "1e+x", "1e--1"] {
         assert!(
             read_decimal_with_size::<i64>(text.as_bytes(), size, true, true).is_err(),
             "{text}"
