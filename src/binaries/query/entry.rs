@@ -77,7 +77,7 @@ pub async fn run_cmd(cmd: &Cmd) -> Result<bool, MainError> {
     Ok(true)
 }
 
-pub fn init_services(main_entrypoint: impl Future<Output = Result<(), MainError>>) {
+pub fn run_main(main_entrypoint: impl Future<Output = Result<(), MainError>>) {
     // Dispatch internal workers before parsing query-server arguments or starting
     // crash tracking and runtime threads. Workers do not initialize query services.
     python_worker_entry::try_run();
@@ -102,7 +102,7 @@ pub fn init_services(main_entrypoint: impl Future<Output = Result<(), MainError>
     }
 }
 
-pub async fn init_query_services(conf: &InnerConfig, ee_mode: bool) -> Result<(), MainError> {
+pub async fn init_services(conf: &InnerConfig, ee_mode: bool) -> Result<(), MainError> {
     let make_error = || "failed to init services";
 
     let binary_version = DATABEND_COMMIT_VERSION.clone();

@@ -26,16 +26,16 @@ use databend_common_license::license_manager::OssLicenseManager;
 use entry::MainError;
 
 use self::cmd::Cmd;
-use crate::entry::init_query_services;
 use crate::entry::init_services;
 use crate::entry::run_cmd;
+use crate::entry::run_main;
 use crate::entry::start_services;
 
 #[global_allocator]
 pub static GLOBAL_ALLOCATOR: TrackingGlobalAllocator = TrackingGlobalAllocator::create();
 
 fn main() {
-    init_services(main_entrypoint());
+    run_main(main_entrypoint());
 }
 
 async fn main_entrypoint() -> Result<(), MainError> {
@@ -50,7 +50,7 @@ async fn main_entrypoint() -> Result<(), MainError> {
     }
 
     let conf = cmd.init_inner_config(true).await.with_context(make_error)?;
-    init_query_services(&conf, false).await?;
+    init_services(&conf, false).await?;
     // init oss license manager
     OssLicenseManager::init(conf.query.tenant_id.tenant_name().to_string())
         .with_context(make_error)?;

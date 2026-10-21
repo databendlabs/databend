@@ -26,16 +26,16 @@ use databend_enterprise_query::enterprise_services::EnterpriseServices;
 use entry::MainError;
 
 use self::cmd::Cmd;
-use crate::entry::init_query_services;
 use crate::entry::init_services;
 use crate::entry::run_cmd;
+use crate::entry::run_main;
 use crate::entry::start_services;
 
 #[global_allocator]
 pub static GLOBAL_ALLOCATOR: TrackingGlobalAllocator = TrackingGlobalAllocator::create();
 
 fn main() {
-    init_services(main_entrypoint());
+    run_main(main_entrypoint());
 }
 
 pub async fn main_entrypoint() -> Result<(), MainError> {
@@ -50,9 +50,7 @@ pub async fn main_entrypoint() -> Result<(), MainError> {
     }
 
     let conf = cmd.init_inner_config(true).await.with_context(make_error)?;
-    init_query_services(&conf, true)
-        .await
-        .with_context(make_error)?;
+    init_services(&conf, true).await.with_context(make_error)?;
     EnterpriseServices::init(conf.clone(), &BUILD_INFO)
         .await
         .with_context(make_error)?;
