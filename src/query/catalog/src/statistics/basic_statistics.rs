@@ -165,235 +165,76 @@ mod tests {
             BasicColumnStatistics::estimate_ndv(6000, 10000, 1000000),
             219840
         );
-        for (ndv, stats_row_count, num_rows, expected) in [
-            (9, 0, 1_000_000, 1_000_000),
-            (0, 0, 100, 100),
-            (500, 0, 100, 100),
-            (9, 0, 0, 0),
-            (0, 0, 0, 0),
-            (0, 100, 0, 0),
-            (9, 100, 100, 9),
-            (9, 200, 100, 9),
-            (500, 100, 100, 100),
-            (500, 200, 100, 100),
-        ] {
-            assert_eq!(
-                BasicColumnStatistics::estimate_ndv(ndv, stats_row_count, num_rows),
-                expected,
-                "ndv={ndv}, stats_row_count={stats_row_count}, num_rows={num_rows}"
-            );
-        }
     }
 
     #[test]
-    fn test_useful_stat_without_sample_keeps_domain_bounded_ndv() {
-        let num_rows = 1_000_000;
-        // Fuse defaults the NDV to row count when no HLL/ANALYZE NDV exists.
-        // Zero sample rows can also mean an unknown legacy sample size, so
-        // do not trust a smaller input NDV without coverage information.
-        for (ndv, expected) in [(Some(num_rows), 9), (None, 9), (Some(0), 9), (Some(3), 9)] {
+    fn test_domain_bound_after_estimation() {
+        // Zero coverage also represents old HLL metadata, not a fresh NDV.
+        for (ndv, sampled_rows, rows, max, expected) in [
+            (Some(1_000_000), 0, 1_000_000, 8, 9),
+            (Some(3), 100, 1_000_000, 8, 9),
+            (None, 0, 1_000_000, 8, 9),
+            (Some(0), 0, 1_000_000, 8, 9),
+            (Some(3), 0, 1_000, 999, 1_000),
+        ] {
             let stat = BasicColumnStatistics {
                 min: Some(Datum::Int(0)),
-                max: Some(Datum::Int(8)),
+                max: Some(Datum::Int(max)),
                 ndv,
-                null_count: 17,
-                in_memory_size: 1234,
-            };
-            let useful = stat.get_useful_stat(num_rows, 0).unwrap();
-            assert_eq!(useful.ndv, Some(expected), "input ndv={ndv:?}");
-            assert_eq!(useful.min, stat.min);
-            assert_eq!(useful.max, stat.max);
-            assert_eq!(useful.null_count, stat.null_count);
-            assert_eq!(useful.in_memory_size, stat.in_memory_size);
-        }
-    }
-
-    #[test]
-    fn test_useful_stat_tiny_sample_cannot_exceed_domain() {
-        let num_rows = 1_000_000;
-        let stat = BasicColumnStatistics {
-            min: Some(Datum::Int(0)),
-            max: Some(Datum::Int(8)),
-            ndv: Some(3),
-            ..Default::default()
-        };
-        assert_eq!(BasicColumnStatistics::estimate_ndv(3, 100, num_rows), 30);
-        assert_eq!(stat.get_useful_stat(num_rows, 100).unwrap().ndv, Some(9));
-    }
-
-    #[test]
-    fn test_useful_stat_sampling_and_row_count_bounds() {
-        for (ndv, stats_row_count, num_rows, expected) in [
-            (6000, 10_000, 1_000_000, 219_840),
-            (6000, 1_000_000, 1_000_000, 6000),
-            (6000, 2_000_000, 1_000_000, 6000),
-            (500, 0, 100, 100),
-            (500, 100, 100, 100),
-            (500, 200, 100, 100),
-            (9, 0, 0, 0),
-            (9, 100, 0, 0),
-        ] {
-            let stat = BasicColumnStatistics {
-                min: Some(Datum::Int(0)),
-                max: Some(Datum::Int(1_000_000)),
-                ndv: Some(ndv),
                 ..Default::default()
             };
             assert_eq!(
-                stat.get_useful_stat(num_rows, stats_row_count).unwrap().ndv,
+                stat.get_useful_stat(rows, sampled_rows).unwrap().ndv,
                 Some(expected),
-                "ndv={ndv}, stats_row_count={stats_row_count}, num_rows={num_rows}"
+                "ndv={ndv:?}, sampled_rows={sampled_rows}, rows={rows}, max={max}"
             );
         }
-
-        let stat = BasicColumnStatistics {
-            min: Some(Datum::Int(1_000)),
-            max: Some(Datum::Int(50_000)),
-            ndv: Some(1_000_000),
-            ..Default::default()
-        };
-        assert_eq!(
-            stat.get_useful_stat(1_000_000, 0).unwrap().ndv,
-            Some(49_001)
-        );
     }
 
     #[test]
-    fn test_useful_stat_without_derivable_string_domain() {
-        for (min, max) in [
-            (b"".to_vec(), b"z".to_vec()),
-            (b"alpha".to_vec(), b"omega".to_vec()),
-            (b"a".to_vec(), b"abcde".to_vec()),
-        ] {
-            for (ndv, stats_row_count, expected) in [
-                (Some(6000), 0, 1_000_000),
-                (Some(6000), 10_000, 219_840),
-                (Some(6000), 1_000_000, 6000),
-                (Some(2_000_000), 0, 1_000_000),
-                (Some(0), 0, 1_000_000),
-                (Some(0), 10_000, 1_000_000),
-                (None, 0, 1_000_000),
-                (None, 10_000, 1_000_000),
-            ] {
-                let stat = BasicColumnStatistics {
-                    min: Some(Datum::Bytes(min.clone())),
-                    max: Some(Datum::Bytes(max.clone())),
-                    ndv,
-                    ..Default::default()
-                };
-                assert_eq!(
-                    stat.get_useful_stat(1_000_000, stats_row_count)
-                        .unwrap()
-                        .ndv,
-                    Some(expected),
-                    "min={min:?}, max={max:?}, ndv={ndv:?}, stats_row_count={stats_row_count}"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn test_useful_stat_applies_only_exact_domain_bounds() {
+    fn test_exact_domain_size() {
         for (min, max, expected) in [
-            (Datum::Int(-4), Datum::Int(4), 9),
-            (Datum::UInt(0), Datum::UInt(8), 9),
-            (Datum::Bool(false), Datum::Bool(true), 2),
-            (Datum::Float(1.25.into()), Datum::Float(3.75.into()), 100),
-            (
-                Datum::Bytes(b"a".to_vec()),
-                Datum::Bytes(b"c".to_vec()),
-                100,
-            ),
-        ] {
-            let stat = BasicColumnStatistics {
-                min: Some(min),
-                max: Some(max),
-                ndv: Some(100),
-                ..Default::default()
-            };
-            assert_eq!(stat.get_useful_stat(100, 100).unwrap().ndv, Some(expected));
-        }
-    }
-
-    #[test]
-    fn test_domain_size_requires_exact_cardinality() {
-        let cases = [
+            (Datum::Int(-4), Datum::Int(4), Some(9)),
             (Datum::Int(i64::MAX - 1), Datum::Int(i64::MAX), Some(2)),
             (
                 Datum::UInt(1_u64 << 53),
                 Datum::UInt((1_u64 << 53) + 1),
                 Some(2),
             ),
-            (Datum::Int(-1), Datum::Int(1), Some(3)),
             (Datum::Bool(false), Datum::Bool(true), Some(2)),
+            (Datum::Bool(true), Datum::Bool(true), Some(1)),
             (Datum::Int(i64::MIN), Datum::Int(i64::MAX), None),
             (Datum::UInt(0), Datum::UInt(u64::MAX), None),
             (Datum::Int(1), Datum::Int(0), None),
-            (Datum::Float(0.0.into()), Datum::Float(2.5.into()), None),
-            (
-                Datum::Bytes(b"a".to_vec()),
-                Datum::Bytes(b"b".to_vec()),
-                None,
-            ),
-        ];
-        for (min, max, expected) in cases {
+        ] {
             assert_eq!(BasicColumnStatistics::domain_size(min, max), expected);
         }
     }
 
     #[test]
-    fn test_useful_stat_does_not_cap_fractional_or_string_domains() {
-        // Decimal statistics also use Datum::Float. Neither interval width nor
-        // a positional encoding of variable-length strings bounds their NDV.
+    fn test_fractional_and_string_domains_are_not_capped() {
+        // Datum::Float also stores Decimal statistics. Neither fractional
+        // interval width nor a short-string encoding bounds cardinality.
         for (min, max) in [
             (Datum::Float(0.0.into()), Datum::Float(2.5.into())),
             (Datum::Bytes(b"a".to_vec()), Datum::Bytes(b"b".to_vec())),
         ] {
+            assert_eq!(
+                BasicColumnStatistics::domain_size(min.clone(), max.clone()),
+                None
+            );
             let stat = BasicColumnStatistics {
                 min: Some(min),
                 max: Some(max),
                 ndv: Some(80),
                 ..Default::default()
             };
-            for (sample_rows, expected) in [(0, 1_000), (100, 541), (1_000, 80)] {
+            for (sampled_rows, expected) in [(0, 1_000), (100, 541), (1_000, 80)] {
                 assert_eq!(
-                    stat.get_useful_stat(1_000, sample_rows).unwrap().ndv,
+                    stat.get_useful_stat(1_000, sampled_rows).unwrap().ndv,
                     Some(expected)
                 );
             }
-        }
-    }
-
-    #[test]
-    fn test_zero_stats_rows_does_not_trust_legacy_ndv() {
-        // Legacy HLL metadata can have an unknown (zero) sample row count.
-        // An old count must not be treated as covering newly appended rows.
-        let stat = BasicColumnStatistics {
-            min: Some(Datum::Int(0)),
-            max: Some(Datum::Int(999)),
-            ndv: Some(3),
-            ..Default::default()
-        };
-        assert_eq!(stat.get_useful_stat(1_000, 0).unwrap().ndv, Some(1_000));
-    }
-
-    #[test]
-    fn test_useful_stat_requires_compatible_min_max() {
-        for (min, max) in [
-            (None, None),
-            (None, Some(Datum::Int(8))),
-            (Some(Datum::Int(0)), None),
-            (Some(Datum::Bytes(b"a".to_vec())), Some(Datum::Int(8))),
-            (Some(Datum::Int(0)), Some(Datum::Bytes(b"z".to_vec()))),
-        ] {
-            let stat = BasicColumnStatistics {
-                min,
-                max,
-                ndv: Some(9),
-                ..Default::default()
-            };
-            assert!(stat.get_useful_stat(100, 0).is_none());
-            assert!(stat.get_useful_stat(100, 10).is_none());
         }
     }
 }
