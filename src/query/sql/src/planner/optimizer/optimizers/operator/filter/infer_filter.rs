@@ -352,13 +352,13 @@ impl<'a> InferFilterOptimizer<'a> {
                 // Merge each member's normalized constraints into its equivalence class.
                 let constraints = std::mem::take(&mut self.expr_predicates[index]);
                 for predicate in constraints.into_predicates() {
-                    let Some(satisfiable) = self.expr_predicates[parent_index].try_add(predicate)
-                    else {
-                        return Ok(None);
-                    };
-                    if !satisfiable {
-                        self.is_falsy = true;
-                        return Ok(Some(vec![]));
+                    match self.expr_predicates[parent_index].try_add(predicate) {
+                        None => return Ok(None),
+                        Some(false) => {
+                            self.is_falsy = true;
+                            return Ok(Some(vec![]));
+                        }
+                        Some(true) => {}
                     }
                 }
             }
