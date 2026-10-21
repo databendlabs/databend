@@ -365,6 +365,107 @@ impl Display for Scalar {
     }
 }
 
+/// Formats a scalar as SQL text that rebinds to the same value.
+///
+/// `Display` serves block, diagnostic and `Expr::sql_display` output, where floats are
+/// truncated to a fixed number of fractional digits. `Expr::to_sql_string` text is
+/// parsed again, for example as a stored DEFAULT expression, so every float, including
+/// those nested in arrays, maps, tuples and vectors, keeps the shortest digits that
+/// round-trip.
+struct SqlScalar<'a, 'b>(&'b ScalarRef<'a>);
+
+impl Display for SqlScalar<'_, '_> {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self.0 {
+            ScalarRef::Number(NumberScalar::Float32(v)) => write_sql_float(f, **v, "Float32"),
+            ScalarRef::Number(NumberScalar::Float64(v)) => write_sql_float(f, **v, "Float64"),
+            ScalarRef::Binary(_) => write!(f, "from_hex('{}')::string", self.0),
+            ScalarRef::Array(col) => {
+                write!(f, "[")?;
+                for (i, value) in col.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", SqlScalar(&value))?;
+                }
+                write!(f, "]")
+            }
+            ScalarRef::Map(col) => {
+                write!(f, "{{")?;
+                let kv_col = KvPair::<AnyType, AnyType>::try_downcast_column(col).unwrap();
+                for (i, (key, value)) in kv_col.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}:{}", SqlScalar(&key), SqlScalar(&value))?;
+                }
+                write!(f, "}}")
+            }
+            ScalarRef::Tuple(fields) => {
+                write!(f, "(")?;
+                for (i, field) in fields.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", SqlScalar(field))?;
+                }
+                if fields.len() < 2 {
+                    write!(f, ",")?;
+                }
+                write!(f, ")")
+            }
+            ScalarRef::Vector(VectorScalarRef::Float32(vals)) => {
+                write!(f, "[")?;
+                for (i, value) in vals.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write_sql_float(f, **value, "Float32")?;
+                }
+                write!(f, "]")
+            }
+            other => write!(f, "{other}"),
+        }
+    }
+}
+
+/// NaN and infinities have no numeric literal, so they are written as string casts.
+fn write_sql_float_string(value: f64, type_name: &str) -> String {
+    if value.is_nan() {
+        format!("'nan'::{type_name}")
+    } else if value < 0.0 {
+        format!("'-inf'::{type_name}")
+    } else {
+        format!("'inf'::{type_name}")
+    }
+}
+
+/// Writes the shortest digits that parse back to `value`.
+///
+/// Positional notation is used when the decimal exponent is in `-6..=20` (the range
+/// JavaScript prints positionally); outside it, positional text grows to hundreds of
+/// digits, so scientific notation is used instead. NaN and infinities have no numeric
+/// literal and are written as string casts. The sign of zero is not preserved, because
+/// `-0` parses as the integer zero; the zero class compares equal, see
+/// `docs/designs/20260921-float-value-semantics.md`.
+fn write_sql_float<T>(f: &mut Formatter, value: T, type_name: &str) -> std::fmt::Result
+where T: Copy + Display + std::fmt::LowerExp + Into<f64> {
+    let wide: f64 = value.into();
+    if !wide.is_finite() {
+        return f.write_str(&write_sql_float_string(wide, type_name));
+    }
+    let scientific = format!("{value:e}");
+    let exponent = scientific
+        .rsplit_once('e')
+        .and_then(|(_, exp)| exp.parse::<i32>().ok())
+        .unwrap_or_default();
+    if (-6..=20).contains(&exponent) {
+        write!(f, "{value}")
+    } else {
+        f.write_str(&scientific)
+    }
+}
+
 // convert scalar value to string without quotes
 pub fn scalar_ref_to_string(value: &ScalarRef) -> String {
     match value {
@@ -997,18 +1098,45 @@ impl<I: ColumnIndex> ExprVisitor<I> for ExprFormatter<'_, '_> {
     }
 }
 
+/// How `Expr::write_sql` renders constants.
+#[derive(Clone, Copy)]
+enum SqlStyle {
+    /// For people: EXPLAIN, error messages and plan output. Floats are truncated like
+    /// block output so that plans stay stable across platforms.
+    Display,
+    /// For text that is stored and parsed again: every constant rebinds to the same
+    /// value.
+    RoundTrip,
+}
+
 impl<Index: ColumnIndex> Expr<Index> {
+    /// Renders the expression as SQL for people, in EXPLAIN, error messages and plan
+    /// output. Float constants are truncated, so the text may not rebind to the same
+    /// value; use [`Expr::to_sql_string`] for text that is parsed again.
     pub fn sql_display(&self) -> String {
+        self.write_sql(SqlStyle::Display)
+    }
+
+    /// Renders the expression as SQL that parses and binds back to the same constants,
+    /// for text that is persisted and parsed again, such as stored DEFAULT expressions.
+    ///
+    /// The precomputed `lambda_display` of a lambda call is embedded as is.
+    pub fn to_sql_string(&self) -> String {
+        self.write_sql(SqlStyle::RoundTrip)
+    }
+
+    fn write_sql(&self, style: SqlStyle) -> String {
         fn write_unary_op<Index: ColumnIndex>(
             op: &str,
             expr: &Expr<Index>,
             precedence: usize,
             min_precedence: usize,
+            style: SqlStyle,
         ) -> String {
             if precedence < min_precedence {
-                format!("({op} {})", write_expr(expr, precedence))
+                format!("({op} {})", write_expr(expr, precedence, style))
             } else {
-                format!("{op} {}", write_expr(expr, precedence))
+                format!("{op} {}", write_expr(expr, precedence, style))
             }
         }
 
@@ -1018,53 +1146,45 @@ impl<Index: ColumnIndex> Expr<Index> {
             rhs: &Expr<Index>,
             precedence: usize,
             min_precedence: usize,
+            style: SqlStyle,
         ) -> String {
             if precedence < min_precedence || matches!(op, "AND" | "OR") {
                 format!(
                     "({} {op} {})",
-                    write_expr(lhs, precedence),
-                    write_expr(rhs, precedence)
+                    write_expr(lhs, precedence, style),
+                    write_expr(rhs, precedence, style)
                 )
             } else {
                 format!(
                     "{} {op} {}",
-                    write_expr(lhs, precedence),
-                    write_expr(rhs, precedence)
+                    write_expr(lhs, precedence, style),
+                    write_expr(rhs, precedence, style)
                 )
             }
         }
 
+        fn write_constant(scalar: &Scalar, style: SqlStyle) -> String {
+            match (style, scalar) {
+                (SqlStyle::RoundTrip, _) => SqlScalar(&scalar.as_ref()).to_string(),
+                (SqlStyle::Display, s @ Scalar::Binary(_)) => format!("from_hex('{s}')::string"),
+                (SqlStyle::Display, Scalar::Number(NumberScalar::Float32(v))) if !v.is_finite() => {
+                    write_sql_float_string(**v as f64, "Float32")
+                }
+                (SqlStyle::Display, Scalar::Number(NumberScalar::Float64(v))) if !v.is_finite() => {
+                    write_sql_float_string(**v, "Float64")
+                }
+                (SqlStyle::Display, other) => other.as_ref().to_string(),
+            }
+        }
+
         #[recursive::recursive]
-        fn write_expr<Index: ColumnIndex>(expr: &Expr<Index>, min_precedence: usize) -> String {
+        fn write_expr<Index: ColumnIndex>(
+            expr: &Expr<Index>,
+            min_precedence: usize,
+            style: SqlStyle,
+        ) -> String {
             match expr {
-                Expr::Constant(Constant { scalar, .. }) => match scalar {
-                    s @ Scalar::Binary(_) => format!("from_hex('{s}')::string"),
-                    // SQL text is reparsed (e.g. for DEFAULT values), so floats must
-                    // bypass the precision-limited formatting used for display.
-                    Scalar::Number(NumberScalar::Float32(f)) => {
-                        if f.is_nan() {
-                            "'nan'::Float32".to_string()
-                        } else if *f == f32::INFINITY {
-                            "'inf'::Float32".to_string()
-                        } else if *f == f32::NEG_INFINITY {
-                            "'-inf'::Float32".to_string()
-                        } else {
-                            f.to_string()
-                        }
-                    }
-                    Scalar::Number(NumberScalar::Float64(f)) => {
-                        if f.is_nan() {
-                            "'nan'::Float64".to_string()
-                        } else if *f == f64::INFINITY {
-                            "'inf'::Float64".to_string()
-                        } else if *f == f64::NEG_INFINITY {
-                            "'-inf'::Float64".to_string()
-                        } else {
-                            f.to_string()
-                        }
-                    }
-                    other => other.as_ref().to_string(),
-                },
+                Expr::Constant(Constant { scalar, .. }) => write_constant(scalar, style),
                 Expr::ColumnRef(ColumnRef { display_name, .. }) => display_name.clone(),
                 Expr::Cast(Cast {
                     is_try,
@@ -1073,20 +1193,22 @@ impl<Index: ColumnIndex> Expr<Index> {
                     ..
                 }) => {
                     if *is_try {
-                        format!("TRY_CAST({} AS {dest_type})", expr.sql_display())
+                        format!("TRY_CAST({} AS {dest_type})", write_expr(expr, 0, style))
                     } else {
-                        format!("CAST({} AS {dest_type})", expr.sql_display())
+                        format!("CAST({} AS {dest_type})", write_expr(expr, 0, style))
                     }
                 }
                 Expr::FunctionCall(FunctionCall {
                     function, args, id, ..
                 }) => match (function.signature.name.as_str(), args.as_slice()) {
-                    ("and", [lhs, rhs]) => write_binary_op("AND", lhs, rhs, 10, min_precedence),
+                    ("and", [lhs, rhs]) => {
+                        write_binary_op("AND", lhs, rhs, 10, min_precedence, style)
+                    }
                     ("and_filters", args) if !args.is_empty() => {
                         let precedence = 10;
                         let str = args
                             .iter()
-                            .map(|arg| write_expr(arg, precedence))
+                            .map(|arg| write_expr(arg, precedence, style))
                             .collect::<Vec<_>>()
                             .join(" and ");
 
@@ -1096,12 +1218,12 @@ impl<Index: ColumnIndex> Expr<Index> {
                             str
                         }
                     }
-                    ("or", [lhs, rhs]) => write_binary_op("OR", lhs, rhs, 5, min_precedence),
+                    ("or", [lhs, rhs]) => write_binary_op("OR", lhs, rhs, 5, min_precedence, style),
                     ("or_filters", args) if !args.is_empty() => {
                         let precedence = 5;
                         let str = args
                             .iter()
-                            .map(|arg| write_expr(arg, precedence))
+                            .map(|arg| write_expr(arg, precedence, style))
                             .collect::<Vec<_>>()
                             .join(" or ");
 
@@ -1111,21 +1233,39 @@ impl<Index: ColumnIndex> Expr<Index> {
                             str
                         }
                     }
-                    ("not", [expr]) => write_unary_op("NOT", expr, 15, min_precedence),
-                    ("gte", [lhs, rhs]) => write_binary_op(">=", lhs, rhs, 20, min_precedence),
-                    ("gt", [lhs, rhs]) => write_binary_op(">", lhs, rhs, 20, min_precedence),
-                    ("lte", [lhs, rhs]) => write_binary_op("<=", lhs, rhs, 20, min_precedence),
-                    ("lt", [lhs, rhs]) => write_binary_op("<", lhs, rhs, 20, min_precedence),
-                    ("eq", [lhs, rhs]) => write_binary_op("=", lhs, rhs, 20, min_precedence),
-                    ("noteq", [lhs, rhs]) => write_binary_op("<>", lhs, rhs, 20, min_precedence),
-                    ("plus", [expr]) => write_unary_op("+", expr, 50, min_precedence),
-                    ("minus", [expr]) => write_unary_op("-", expr, 50, min_precedence),
-                    ("plus", [lhs, rhs]) => write_binary_op("+", lhs, rhs, 30, min_precedence),
-                    ("minus", [lhs, rhs]) => write_binary_op("-", lhs, rhs, 30, min_precedence),
-                    ("multiply", [lhs, rhs]) => write_binary_op("*", lhs, rhs, 40, min_precedence),
-                    ("divide", [lhs, rhs]) => write_binary_op("/", lhs, rhs, 40, min_precedence),
-                    ("div", [lhs, rhs]) => write_binary_op("DIV", lhs, rhs, 40, min_precedence),
-                    ("modulo", [lhs, rhs]) => write_binary_op("%", lhs, rhs, 40, min_precedence),
+                    ("not", [expr]) => write_unary_op("NOT", expr, 15, min_precedence, style),
+                    ("gte", [lhs, rhs]) => {
+                        write_binary_op(">=", lhs, rhs, 20, min_precedence, style)
+                    }
+                    ("gt", [lhs, rhs]) => write_binary_op(">", lhs, rhs, 20, min_precedence, style),
+                    ("lte", [lhs, rhs]) => {
+                        write_binary_op("<=", lhs, rhs, 20, min_precedence, style)
+                    }
+                    ("lt", [lhs, rhs]) => write_binary_op("<", lhs, rhs, 20, min_precedence, style),
+                    ("eq", [lhs, rhs]) => write_binary_op("=", lhs, rhs, 20, min_precedence, style),
+                    ("noteq", [lhs, rhs]) => {
+                        write_binary_op("<>", lhs, rhs, 20, min_precedence, style)
+                    }
+                    ("plus", [expr]) => write_unary_op("+", expr, 50, min_precedence, style),
+                    ("minus", [expr]) => write_unary_op("-", expr, 50, min_precedence, style),
+                    ("plus", [lhs, rhs]) => {
+                        write_binary_op("+", lhs, rhs, 30, min_precedence, style)
+                    }
+                    ("minus", [lhs, rhs]) => {
+                        write_binary_op("-", lhs, rhs, 30, min_precedence, style)
+                    }
+                    ("multiply", [lhs, rhs]) => {
+                        write_binary_op("*", lhs, rhs, 40, min_precedence, style)
+                    }
+                    ("divide", [lhs, rhs]) => {
+                        write_binary_op("/", lhs, rhs, 40, min_precedence, style)
+                    }
+                    ("div", [lhs, rhs]) => {
+                        write_binary_op("DIV", lhs, rhs, 40, min_precedence, style)
+                    }
+                    ("modulo", [lhs, rhs]) => {
+                        write_binary_op("%", lhs, rhs, 40, min_precedence, style)
+                    }
                     _ => {
                         let mut s = String::new();
                         s += &function.signature.name;
@@ -1147,7 +1287,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                             if i > 0 {
                                 s += ", ";
                             }
-                            s += &arg.sql_display();
+                            s += &write_expr(arg, 0, style);
                         }
                         s += ")";
                         s
@@ -1166,7 +1306,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                         if i > 0 {
                             s += ", ";
                         }
-                        s += &arg.sql_display();
+                        s += &write_expr(arg, 0, style);
                     }
                     s += ", ";
                     s += lambda_display;
@@ -1176,7 +1316,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             }
         }
 
-        write_expr(self, 0)
+        write_expr(self, 0, style)
     }
 }
 
