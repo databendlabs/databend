@@ -26,6 +26,7 @@ use std::time::Duration;
 
 use databend_base::uniq_id::GlobalUniq;
 use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_settings::FlightKeepAliveParams;
 use databend_meta_client::types::NodeInfo;
@@ -49,6 +50,7 @@ struct FaultProxy {
     addr: SocketAddr,
     accepted: Arc<AtomicUsize>,
     close_all: watch::Sender<u64>,
+    accept_loop: tokio::task::JoinHandle<()>,
 }
 
 impl FaultProxy {
@@ -59,7 +61,7 @@ impl FaultProxy {
         let (close_all, close_rx) = watch::channel(0);
 
         let proxy_accepted = accepted.clone();
-        databend_common_base::runtime::spawn(async move {
+        let accept_loop = databend_common_base::runtime::spawn(async move {
             while let Ok((client, _)) = listener.accept().await {
                 proxy_accepted.fetch_add(1, Ordering::SeqCst);
                 databend_common_base::runtime::spawn(forward(client, upstream, close_rx.clone()));
@@ -70,6 +72,7 @@ impl FaultProxy {
             addr,
             accepted,
             close_all,
+            accept_loop,
         })
     }
 
@@ -80,6 +83,13 @@ impl FaultProxy {
     /// Closes every open connection, as a peer restart or reset would.
     fn close_all_connections(&self) {
         self.close_all.send_modify(|generation| *generation += 1);
+    }
+
+    /// Stops listening and closes every open connection, as a peer that went
+    /// down would. New connections to the proxy address are refused.
+    fn shutdown(&self) {
+        self.accept_loop.abort();
+        self.close_all_connections();
     }
 }
 
@@ -206,5 +216,25 @@ async fn test_reconnects_after_peer_closes_connection() -> anyhow::Result<()> {
     peer.request(true).await?;
     peer.request(true).await?;
     assert_eq!(peer.proxy.accepted(), 2);
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_peer_down_reports_cannot_connect() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let peer = Peer::start().await?;
+
+    peer.request(true).await?;
+    assert_eq!(peer.proxy.accepted(), 1);
+
+    peer.proxy.shutdown();
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    // The cached channel reconnects and is refused. The error must carry the
+    // same code as a failed connection on a fresh client, so callers that
+    // retry or report on CANNOT_CONNECT_NODE behave the same with reuse.
+    let error = peer.request(true).await.unwrap_err();
+    assert_eq!(error.code(), ErrorCode::CANNOT_CONNECT_NODE, "{error}");
+    assert_eq!(peer.proxy.accepted(), 1);
     Ok(())
 }
