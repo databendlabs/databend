@@ -12,25 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Encoded in-memory column representations.
-//!
-//! An [`EncodedColumn`] keeps the logical type of a regular column but stores its values in a
-//! compact physical form:
-//!
-//! - [`DictColumn`]: `value = dictionary[key]`. This is the layout of a Parquet
-//!   `RLE_DICTIONARY` column chunk (dictionary page + indices) and of an Arrow
-//!   `DictionaryArray`, with the RLE/bit-packed hybrid index stream expanded to
-//!   the narrowest byte-aligned key width.
-//! - [`ForColumn`]: frame of reference over integer-like values (integers, `Date`, `Timestamp`,
-//!   `Decimal`), `value = base + delta`, deltas stored unsigned in the narrowest byte-aligned
-//!   width.
-//!
-//! Byte-aligned widths are used instead of bit-packing so kernels can index the values directly.
-//!
-//! Consumers that do not understand an encoded column decode it (see
-//! [`EncodedColumn::decode`]), so encoded columns are always safe to pass around; only the
-//! paths that know the encoding avoid materializing the decoded values.
-
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::iter::TrustedLen;

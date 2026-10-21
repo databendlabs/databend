@@ -78,6 +78,11 @@ impl ColumnEncoding {
         if let Some(dict) = array.as_any().downcast_ref::<DictionaryArray<UInt32Type>>()
             && dict.null_count() == 0
         {
+            // A dictionary with more values than half the rows is no smaller than the column
+            // (the dictionary of the column chunk holds the distinct values of the block).
+            if dict.values().len() * 2 > dict.len() {
+                return Column::from_arrow_rs(array, data_type);
+            }
             // The Parquet dictionary, as is.
             let values = Column::from_arrow_rs(dict.values().clone(), data_type)?;
             let max_key = values.len().saturating_sub(1) as u64;
@@ -180,6 +185,17 @@ mod tests {
         let dict = as_dict(&column);
         assert_eq!(dict.values.len(), 4);
         assert_eq!(dict.keys.byte_width(), 1);
+
+        // More dictionary values than half the rows: the regular column is kept.
+        let values = StringArray::from((0..600).map(|i| i.to_string()).collect::<Vec<_>>());
+        let keys = UInt32Array::from((0..1000).map(|i| i % 600).collect::<Vec<u32>>());
+        let array = DictionaryArray::<UInt32Type>::try_new(keys, Arc::new(values)).unwrap();
+        let column = encode_checked(
+            ColumnEncoding::Dictionary,
+            Arc::new(array),
+            &DataType::String,
+        );
+        assert!(matches!(column, Column::String(_)));
     }
 
     #[test]

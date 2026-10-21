@@ -70,7 +70,9 @@ pub fn dictionary_hint_fields(
 /// The returned record batch contains all deserialized columns in the same nested structure as the original schema.
 ///
 /// `hint_fields` overrides the Arrow fields the columns are read as, see
-/// [`dictionary_hint_fields`]; by default they are the fields of `original_schema`.
+/// [`dictionary_hint_fields`]; by default they are the fields of `original_schema`. A dictionary
+/// hint only applies to column chunks that are dictionary encoded: the others are read as their
+/// regular type, as the reader would otherwise rebuild a dictionary row by row.
 pub fn column_chunks_to_record_batch(
     original_schema: &TableSchema,
     num_rows: usize,
@@ -106,6 +108,26 @@ pub fn column_chunks_to_record_batch(
         }
     }
     projection_mask.sort_unstable();
+
+    let mut adjusted_fields: Option<Vec<FieldRef>> = None;
+    for (index, field) in hint_fields.iter().enumerate() {
+        let column_id = original_schema.fields()[index].column_id();
+        if matches!(field.data_type(), ArrowDataType::Dictionary(..))
+            && column_id_to_dfs_id
+                .get(&column_id)
+                // Whether a column chunk is dictionary encoded was decided when writing it, from
+                // its distinct values (dictionary disabled for high NDV, or the arrow-rs writer
+                // falling back to plain once the dictionary page is too large), and shows as a
+                // leading dictionary page. Its header tells whether reading as a dictionary pays.
+                .is_some_and(|dfs_id| !builder.starts_with_dictionary_page(*dfs_id))
+        {
+            adjusted_fields.get_or_insert_with(|| hint_fields.to_vec())[index] =
+                arrow_schema.fields()[index].clone();
+        }
+    }
+    let adjusted_fields = adjusted_fields.map(Fields::from);
+    let hint_fields = adjusted_fields.as_ref().unwrap_or(hint_fields);
+
     let row_group = Box::new(builder.build());
     let field_levels = parquet_to_arrow_field_levels(
         &parquet_schema,
@@ -211,6 +233,66 @@ mod tests {
                 capacity <= expected.len().max(8) * size_of::<i64>(),
                 "{} selected rows retained {capacity} bytes",
                 expected.len(),
+            );
+        }
+        Ok(())
+    }
+
+    /// A dictionary hint keeps the dictionary of a dictionary encoded column chunk, and reads a
+    /// column chunk without a dictionary page as its regular type.
+    #[test]
+    fn test_dictionary_hint_follows_column_chunk() -> databend_common_exception::Result<()> {
+        let num_rows = 1000;
+        let schema = TableSchema::new(vec![TableField::new("s", TableDataType::String)]);
+        let arrow_schema = Arc::new(Schema::from(&schema));
+        let values = (0..num_rows)
+            .map(|i| format!("v{}", i % 3))
+            .collect::<Vec<_>>();
+        let batch = RecordBatch::try_new(arrow_schema.clone(), vec![Arc::new(
+            arrow_array::StringViewArray::from(values.clone()),
+        )])?;
+        let column_id = schema.field(0).column_id();
+        let hint = dictionary_hint_fields(&schema, [column_id]).unwrap();
+
+        for dictionary_enabled in [true, false] {
+            let properties = WriterProperties::builder()
+                .set_dictionary_enabled(dictionary_enabled)
+                .build();
+            let mut bytes = Vec::new();
+            let mut writer =
+                ArrowWriter::try_new(&mut bytes, arrow_schema.clone(), Some(properties))?;
+            writer.write(&batch)?;
+            let metadata = writer.close()?;
+            let (offset, length) = metadata.row_group(0).column(0).byte_range();
+            let bytes = Bytes::from(bytes);
+            let column_chunks = HashMap::from([(
+                column_id,
+                DataItem::RawData(Buffer::from(
+                    bytes.slice(offset as usize..(offset + length) as usize),
+                )),
+            )]);
+
+            let record = column_chunks_to_record_batch(
+                &schema,
+                num_rows,
+                &column_chunks,
+                &Compression::None,
+                None,
+                Some(&hint),
+            )?;
+            let column = record.column(0);
+            assert_eq!(
+                matches!(column.data_type(), ArrowDataType::Dictionary(..)),
+                dictionary_enabled,
+                "dictionary_enabled: {dictionary_enabled}"
+            );
+            let decoded = databend_common_expression::Column::from_arrow_rs(
+                column.clone(),
+                &databend_common_expression::types::DataType::String,
+            )?;
+            assert_eq!(
+                decoded,
+                <databend_common_expression::types::StringType as databend_common_expression::FromData<_>>::from_data(values.clone())
             );
         }
         Ok(())
