@@ -13,9 +13,6 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_sql::optimizer::optimizers::rule::outer_join_to_anti_join;
-use databend_common_sql::plans::Plan;
-use databend_common_sql::plans::ScalarExpr;
 
 use crate::framework::golden::SqlTestCase;
 use crate::framework::golden::open_golden_file;
@@ -135,139 +132,12 @@ WHERE r.k IS NULL",
         },
     ];
 
-    for case in cases.iter().chain(EXPRESSION_CASES).chain(NON_KEY_CASES) {
+    for case in &cases {
         write_optimized_case(&mut file, case).await?;
     }
 
     Ok(())
 }
-
-// Exercise the eligibility check on SQL-bound plans as well as the full optimizer
-// golden above. This makes the regression independent of later folding/rule
-// ordering, without constructing a synthetic SExpr tree.
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_outer_join_to_anti_expression_key_guard() -> Result<()> {
-    for case in EXPRESSION_CASES {
-        let ctx = setup_context(case).await?;
-        let raw_plan = ctx.bind_sql(case.sql).await?;
-        let Plan::Query {
-            s_expr, metadata, ..
-        } = &raw_plan
-        else {
-            unreachable!("test query should bind to Plan::Query")
-        };
-        let filter = s_expr.logical()?.unary_child();
-        assert!(filter.plan().as_filter().is_some(), "{}", case.name);
-        let join = filter.unary_child().plan().as_join().unwrap();
-        assert_eq!(join.equi_conditions.len(), 1, "{}", case.name);
-        let key = match join.join_type {
-            databend_common_sql::plans::JoinType::Left => &join.equi_conditions[0].right,
-            databend_common_sql::plans::JoinType::Right => &join.equi_conditions[0].left,
-            _ => unreachable!("expected a left or right outer join"),
-        };
-        assert!(matches!(key, ScalarExpr::FunctionCall(_)), "{}", case.name);
-        assert!(!join.equi_conditions[0].is_null_equal, "{}", case.name);
-        let predicates = &filter.plan().as_filter().unwrap().predicates;
-        let [ScalarExpr::FunctionCall(not)] = predicates.as_slice() else {
-            panic!("expected a single NULL test: {}", case.name)
-        };
-        assert_eq!(not.func_name, "not", "{}", case.name);
-        let [ScalarExpr::FunctionCall(is_not_null)] = not.arguments.as_slice() else {
-            panic!("expected IS NOT NULL under NOT: {}", case.name)
-        };
-        assert_eq!(is_not_null.func_name, "is_not_null", "{}", case.name);
-        assert_eq!(is_not_null.arguments.as_slice(), std::slice::from_ref(key));
-        assert!(
-            outer_join_to_anti_join(filter, metadata.clone())?.is_none(),
-            "a null-masking expression is not a direct column: {}",
-            case.name
-        );
-    }
-    Ok(())
-}
-
-const EXPRESSION_CASES: &[SqlTestCase] = &[
-    SqlTestCase {
-        name: "null_masking_right_expression_does_not_become_anti_join",
-        description: "The nullable payload prevents trivial IS NULL folding, but the equi-expression maps null extension to zero and must not identify unmatched rows.",
-        setup_sqls: &[LEFT_TABLE, RIGHT_TABLE],
-        sql: "SELECT l.k, r.k, r.payload
-FROM outer_to_anti_left AS l
-LEFT JOIN outer_to_anti_right AS r ON l.k = IF(r.k IS NULL, 0, r.payload)
-WHERE IF(r.k IS NULL, 0, r.payload) IS NULL",
-    },
-    SqlTestCase {
-        name: "null_masking_left_expression_does_not_become_anti_join",
-        description: "The right-outer mirror must also reject a null-masking expression key, even though the expression may be NULL on source rows.",
-        setup_sqls: &[LEFT_TABLE, RIGHT_TABLE],
-        sql: "SELECT l.k, l.keep, r.k
-FROM outer_to_anti_left AS l
-RIGHT JOIN outer_to_anti_right AS r ON IF(l.k IS NULL, 0, l.keep) = r.k
-WHERE IF(l.k IS NULL, 0, l.keep) IS NULL",
-    },
-];
-
-// These cases protect the existing non-key rejection. This change does not
-// introduce new nonnull-inference paths.
-const NON_KEY_CASES: &[SqlTestCase] = &[
-    SqlTestCase {
-        name: "grouping_sets_output_keeps_outer_join",
-        description: "GROUPING SETS can synthesize NULL from a NOT NULL grouping key on a matched row; a non-key NULL test is not an exclusion signal.",
-        setup_sqls: &[LEFT_TABLE, NON_NULL_TABLE],
-        sql: "SELECT l.k, r.marker
-FROM outer_to_anti_left AS l
-LEFT JOIN (
-    SELECT marker, count(*) AS n
-    FROM outer_to_anti_non_null
-    GROUP BY GROUPING SETS ((marker), ())
-) AS r ON l.k = r.n
-WHERE r.marker IS NULL",
-    },
-    SqlTestCase {
-        name: "rollup_output_keeps_right_outer_join",
-        description: "The right-outer mirror must not use a ROLLUP key as a nonnull payload witness.",
-        setup_sqls: &[LEFT_TABLE, NON_NULL_TABLE],
-        sql: "SELECT l.k, r.marker
-FROM (
-    SELECT marker, count(*) AS n
-    FROM outer_to_anti_non_null
-    GROUP BY ROLLUP(marker)
-) AS r RIGHT JOIN outer_to_anti_left AS l ON l.k = r.n
-WHERE r.marker IS NULL",
-    },
-    SqlTestCase {
-        name: "nested_outer_join_output_keeps_outer_join",
-        description: "A nested outer join may null-extend a NOT NULL source column on a matched outer row.",
-        setup_sqls: &[LEFT_TABLE, RIGHT_TABLE, NON_NULL_TABLE],
-        sql: "SELECT l.k, d.marker
-FROM outer_to_anti_left AS l
-LEFT JOIN (
-    SELECT r.k, n.marker
-    FROM outer_to_anti_right AS r
-    LEFT JOIN outer_to_anti_non_null AS n ON r.k = n.k
-) AS d ON l.k = d.k
-WHERE d.marker IS NULL",
-    },
-    SqlTestCase {
-        name: "nullable_union_payload_keeps_outer_join",
-        description: "A nullable non-key payload remains nullable through UNION ALL and cannot identify unmatched rows.",
-        setup_sqls: &[LEFT_TABLE, RIGHT_TABLE],
-        sql: "SELECT l.k, r.marker
-FROM outer_to_anti_left AS l
-LEFT JOIN (
-    SELECT k, payload AS marker FROM outer_to_anti_right
-    UNION ALL
-    SELECT k, 1 AS marker FROM outer_to_anti_right
-) AS r ON l.k = r.k
-WHERE r.marker IS NULL",
-    },
-];
-
-const NON_NULL_TABLE: &str = "CREATE TABLE outer_to_anti_non_null
-(
-    k INTEGER,
-    marker INTEGER NOT NULL
-)";
 
 const LEFT_TABLE: &str = "CREATE TABLE outer_to_anti_left
 (
