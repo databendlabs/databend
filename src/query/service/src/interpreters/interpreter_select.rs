@@ -174,6 +174,8 @@ impl SelectInterpreter {
                 if buffered {
                     return Ok(());
                 }
+                // Preserve existing stream-update error semantics: post-read CAS
+                // races may return UnresolvableConflict; never refresh the seq to retry.
                 GlobalIORuntime::instance().block_on(async move {
                     catalog
                         .update_stream_metas(&tenant, update_stream_metas)
