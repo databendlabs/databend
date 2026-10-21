@@ -14,13 +14,13 @@ python-udf = ["script-udf", "arrow-udf-runtime/python"]
 
 [dependencies]
 anyhow = { workspace = true }
-async-trait = { workspace = true }
 arrow-array = { workspace = true }
 arrow-cast = { workspace = true }
 arrow-ipc = { workspace = true }
 arrow-schema = { workspace = true }
 arrow-select = { workspace = true }
 arrow-udf-runtime = { workspace = true, optional = true }
+async-trait = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-cache = { workspace = true }
 databend-common-exception = { workspace = true }
