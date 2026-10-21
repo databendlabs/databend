@@ -28,6 +28,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
+use databend_common_expression::EvaluateOptions;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
@@ -221,9 +222,12 @@ impl ReadState {
         let evaluator = Evaluator::new(block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         for runtime_filter in &self.runtime_filters {
             let filter_start = Instant::now();
+            // The bloom filter hashes encoded columns without decoding them.
+            let probe_expr = &runtime_filter.probe_expr;
             let probe_column = evaluator
-                .run(&runtime_filter.probe_expr)?
-                .convert_to_full_column(runtime_filter.probe_expr.data_type(), num_rows);
+                .partial_run(probe_expr, None, &mut EvaluateOptions::default(), true)
+                .map_err(|err| Evaluator::map_err(err, probe_expr))?
+                .convert_to_full_column(probe_expr.data_type(), num_rows);
             let bitmap = ExprBloomFilter::new(&runtime_filter.filter).apply(probe_column)?;
             runtime_filter.stats.record_bloom(
                 filter_start.elapsed().as_nanos() as u64,
