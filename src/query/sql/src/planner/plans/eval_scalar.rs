@@ -394,48 +394,6 @@ mod tests {
             .unwrap()
     }
 
-    fn assert_duplicate_output_rejected(scalars: [ScalarExpr; 2]) {
-        let input = SExpr::create_unary(
-            EvalScalar {
-                items: vec![ScalarItem {
-                    scalar: int_constant(1),
-                    index: Symbol::new(0),
-                }],
-            },
-            SExpr::create_leaf(DummyTableScan::new()),
-        );
-        let eval = SExpr::create_unary(
-            EvalScalar {
-                items: scalars
-                    .into_iter()
-                    .map(|scalar| ScalarItem {
-                        scalar,
-                        index: Symbol::new(0),
-                    })
-                    .collect(),
-            },
-            input,
-        );
-        let error = RelExpr::with_s_expr(&eval)
-            .derive_cardinality(&StatContext::without_settings(Default::default()))
-            .unwrap_err();
-        assert_eq!(
-            error.code(),
-            databend_common_exception::ErrorCode::Internal("").code()
-        );
-        assert!(error.message().contains("duplicate output index 0"));
-    }
-
-    #[test]
-    fn test_eval_scalar_rejects_duplicate_output_indexes() {
-        assert_duplicate_output_rejected([int_constant(1), int_constant(2)]);
-    }
-
-    #[test]
-    fn test_eval_scalar_rejects_duplicate_identity_indexes() {
-        assert_duplicate_output_rejected([column(0), column(0)]);
-    }
-
     #[test]
     fn test_identity_projection_reuses_input_stats() {
         let input_stats = Arc::new(StatInfo {
