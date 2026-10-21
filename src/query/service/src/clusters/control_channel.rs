@@ -64,7 +64,7 @@ struct ControlChannelKey {
     address: String,
     // TCP keep-alive is fixed when the connection is created, so channels with
     // different keep-alive settings are not shared.
-    keep_alive: (Option<Duration>, Option<Duration>, Option<u32>),
+    keep_alive: FlightKeepAliveParams,
 }
 
 impl ControlChannelKey {
@@ -72,7 +72,7 @@ impl ControlChannelKey {
         ControlChannelKey {
             node_id: node_id.to_string(),
             address: address.to_string(),
-            keep_alive: (keep_alive.time, keep_alive.interval, keep_alive.retries),
+            keep_alive,
         }
     }
 }

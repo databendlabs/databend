@@ -40,7 +40,7 @@ pub enum FlightCompression {
     Zstd,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct FlightKeepAliveParams {
     pub time: Option<Duration>,
     pub interval: Option<Duration>,
