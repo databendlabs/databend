@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::serialize::read_decimal;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
@@ -23,109 +22,113 @@ use databend_common_expression::types::i256;
 use num_bigint::BigInt;
 use pretty_assertions::assert_eq;
 
+// SQL tests cover decimal values and import failures. Keep direct tests for the
+// parser contracts that SQL imports do not expose: truncation and prefix length.
 #[test]
-fn test_decimal_text_exact() -> anyhow::Result<()> {
-    let cases = vec!["", ".e", ".", ".a", "-", "+", "e1", "a", "1e1e1", "1.1.1"];
-
-    for s in cases {
-        let r = read_decimal::<i128>(s.as_bytes(), 10, 5, true);
-        assert!(r.is_err(), "{s}: {r:?}");
+fn test_decimal_with_size_modes() {
+    fn check<T: Decimal>() {
+        let size = DecimalSize::new_unchecked(6, 3);
+        for (text, truncated, rounded) in [
+            ("+0001.2345", 1234, 1235),
+            ("-0001.2345", -1234, -1235),
+            (".0005", 0, 1),
+            ("-.0005", 0, -1),
+            ("0.", 0, 0),
+            ("12.345E-1", 1234, 1235),
+            (".0210e3", 21000, 21000),
+            ("0120.0210e-1", 12002, 12002),
+            ("1.5e+1", 15000, 15000),
+            // Preserve the historical zero-exponent interpretation and consume e/sign.
+            ("1e", 1000, 1000),
+            ("1e+", 1000, 1000),
+            ("1e-", 1000, 1000),
+            ("1.5e", 1500, 1500),
+            ("1.5E+", 1500, 1500),
+            ("-1.5e-", -1500, -1500),
+            ("0e+", 0, 0),
+            ("1e-2147483648", 0, 0),
+            ("0e2147483647", 0, 0),
+        ] {
+            for rounding_mode in [false, true] {
+                let expected = T::from_i64(if rounding_mode { rounded } else { truncated });
+                // A later field's exponent must not affect the current number.
+                for suffix in ["", ",2e10", ")", "\t3", "\n4"] {
+                    let input = format!("{text}{suffix}");
+                    assert_eq!(
+                        read_decimal_with_size::<T>(input.as_bytes(), size, false, rounding_mode)
+                            .unwrap(),
+                        (expected, text.len()),
+                        "{input:?}, rounding={rounding_mode}"
+                    );
+                    let exact =
+                        read_decimal_with_size::<T>(input.as_bytes(), size, true, rounding_mode);
+                    if suffix.is_empty() {
+                        assert_eq!(exact.unwrap(), (expected, text.len()));
+                    } else {
+                        assert!(exact.is_err(), "{input:?}");
+                    }
+                }
+            }
+        }
+        // Truncation succeeds at the precision limit where rounding would overflow.
+        for (text, coefficient) in [("999.9995", 999999), ("-999.9995", -999999)] {
+            assert_eq!(
+                read_decimal_with_size::<T>(text.as_bytes(), size, true, false).unwrap(),
+                (T::from_i64(coefficient), text.len())
+            );
+            assert!(read_decimal_with_size::<T>(text.as_bytes(), size, true, true).is_err());
+        }
+        for text in ["1e10,", "1e-2147483649,", "0e9999999999,"] {
+            assert!(
+                read_decimal_with_size::<T>(text.as_bytes(), size, false, true).is_err(),
+                "{text}"
+            );
+        }
+        // Consume exactly the coefficient across full/partial 18-digit chunks,
+        // including all-zero chunks, without absorbing the next field.
+        let size = DecimalSize::new_unchecked(T::MAX_PRECISION, 0);
+        for digits in [17, 18, 19, 35, 36, 37, 53, 54, 55, 71, 72, 73] {
+            if digits > T::MAX_PRECISION as usize {
+                continue;
+            }
+            for sign in ["", "-"] {
+                let text = format!("{sign}1{}1", "0".repeat(digits - 2));
+                let expected = T::from_bigint(text.parse::<BigInt>().unwrap()).unwrap();
+                let input = format!("{text},2e10");
+                assert_eq!(
+                    read_decimal_with_size::<T>(input.as_bytes(), size, false, true).unwrap(),
+                    (expected, text.len()),
+                    "{input}"
+                );
+            }
+        }
     }
-    Ok(())
+    check::<i64>();
+    check::<i128>();
+    check::<i256>();
 }
 
 #[test]
-fn test_decimal_text() -> anyhow::Result<()> {
-    let cases = vec![
-        ("0#", (0i128, 0, 0, 1)),
-        ("+0#", (0i128, 0, 0, 2)),
-        ("-0#", (0i128, 0, 0, 2)),
-        ("00#", (0i128, 0, 0, 2)),
-        ("0.0#", (0i128, 0, 0, 3)),
-        ("00.0#", (0i128, 0, 0, 4)),
-        ("00.00#", (0i128, 0, 0, 5)),
-        (".0#", (0i128, 0, 0, 2)),
-        (".00#", (0i128, 0, 0, 3)),
-        ("0.#", (0i128, 0, 0, 2)),
-        ("1#", (1i128, 1, 0, 1)),
-        ("-1#", (-1i128, 1, 0, 2)),
-        ("10#", (10i128, 2, 0, 2)),
-        ("15.0e-1#", (15i128, 2, -1, 7)),
-        ("15.0e1#", (15i128, 2, 1, 6)),
-        ("15.0e-11#", (15i128, 2, -11, 8)),
-        ("010.010#", (1001i128, 4, -2, 7)),
-        ("0120.0210#", (120021i128, 6, -3, 9)),
-        ("0120.0210e3#", (120021i128, 6, 0, 11)),
-        ("0120.0210e-1#", (120021i128, 6, -4, 12)),
-    ];
-
-    for (s, l) in cases {
-        let r = read_decimal::<i128>(s.as_bytes(), 10, 10, false);
-        match r {
-            Ok(r) => assert_eq!(l, r, "{s}: {l:?} != {r:?}"),
-            Err(e) => panic!("{s}: {l:?} != {e:?}"),
+fn test_decimal_with_size_invalid_text() {
+    let size = DecimalSize::new_unchecked(18, 4);
+    for text in ["", ".", "+", "-", ".e1", "a"] {
+        for exact in [false, true] {
+            for rounding_mode in [false, true] {
+                assert!(
+                    read_decimal_with_size::<i64>(text.as_bytes(), size, exact, rounding_mode)
+                        .is_err(),
+                    "{text}, exact={exact}, rounding={rounding_mode}"
+                );
+            }
         }
     }
-
-    let cases = vec!["", "10000000000#"];
-
-    for s in cases {
-        let r = read_decimal::<i128>(s.as_bytes(), 10, 10, false);
-        assert!(r.is_err(), "{s}: {r:?}");
+    // Exact mode validates the suffix even when the result would round to zero.
+    for text in ["0x", "1e-100x", "1.2.3", "1e2e3", "1ee2", "1e+x", "1e--1"] {
+        assert!(
+            read_decimal_with_size::<i64>(text.as_bytes(), size, true, true).is_err(),
+            "{text}"
+        );
     }
-
-    Ok(())
-}
-
-#[test]
-fn test_decimal_with_size_text() -> anyhow::Result<()> {
-    let cases = vec![
-        ("0#", 0i128),
-        ("+0#", 0i128),
-        ("+1.1#", 1100i128),
-        ("-0#", 0i128),
-        ("00#", 0i128),
-        ("0.0#", 0i128),
-        ("00.0#", 0i128),
-        ("00.00#", 0i128),
-        (".0#", 0i128),
-        (".00#", 0i128),
-        ("0.#", 0i128),
-        ("1#", 1000i128),
-        ("-1#", -1000i128),
-        ("10#", 10000i128),
-        ("010.010#", 10010i128),
-        ("0120.0210#", 120021i128),
-        ("0120.0211#", 120021i128),
-        (".0210#", 21i128),
-        (".010#", 10i128),
-        (".001#", 1i128),
-        (".0210e3#", 21000i128),
-        (".010e2#", 1000i128),
-        ("0120.0210e-1#", 12002i128),
-        ("15.0e-1#", 1500i128),
-        ("15.0e1#", 150000i128),
-        ("15.0e-11#", 0i128),
-    ];
-
-    let size = DecimalSize::new_unchecked(6, 3);
-
-    for (s, l) in cases {
-        let r = read_decimal_with_size::<i128>(s.as_bytes(), size, false, true);
-        match r {
-            Ok(r) => assert_eq!((l, s.len() - 1), r, "{s}: {l:?} != {r:?}"),
-            Err(e) => panic!("{s}: {l:?} != {e:?}"),
-        }
-    }
-
-    let cases = vec!["", "10000000000#", "1e10"];
-
-    for s in cases {
-        let r = read_decimal_with_size::<i128>(s.as_bytes(), size, false, true);
-        assert!(r.is_err(), "{s}: {r:?}");
-    }
-
-    Ok(())
 }
 
 #[test]

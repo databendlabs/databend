@@ -261,7 +261,7 @@ impl FieldJsonAstDecoder {
         size: DecimalSize,
         value: &Value,
     ) -> Result<()> {
-        column.push(read_decimal_from_json(value, size)?);
+        column.push(read_decimal_from_json(value, size, self.is_rounding_mode)?);
         Ok(())
     }
 
@@ -620,6 +620,39 @@ mod tests {
     use databend_common_io::prelude::InputFormatSettings;
 
     use super::*;
+
+    #[test]
+    fn test_read_float64() -> Result<()> {
+        let decoder = FieldJsonAstDecoder::create(&InputFormatSettings::default(), false);
+        let data_type = TableDataType::Number(NumberDataType::Float64);
+        let cases = [
+            "0",
+            "-0.0",
+            "165.6263",
+            "-0.0003",
+            "99999999999999.9999",
+            "1.23456789012345678e13",
+            "18446744073709551615",
+            "2.2250738585072014e-308",
+            "5e-324",
+            "1.7976931348623157e308",
+        ];
+        for text in cases {
+            let value = serde_json::from_str(text).unwrap();
+            let mut builder = ColumnBuilder::with_capacity(&DataType::from(&data_type), 1);
+            decoder.read_field_with_data_type(&mut builder, &value, &data_type)?;
+            let column = builder.build();
+            let ScalarRef::Number(NumberScalar::Float64(actual)) = column.index(0).unwrap() else {
+                unreachable!()
+            };
+            assert_eq!(
+                actual.0.to_bits(),
+                text.parse::<f64>().unwrap().to_bits(),
+                "{text}"
+            );
+        }
+        Ok(())
+    }
 
     #[test]
     fn test_read_tuple_object_by_field_name() -> Result<()> {
