@@ -14,11 +14,16 @@
 
 #![allow(clippy::collapsible_if)]
 
+mod python_worker_entry;
+
 use std::env;
+use std::future::Future;
 use std::time::Duration;
 
 use databend_common_base::mem_allocator::TrackingGlobalAllocator;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::set_alloc_error_hook;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -26,6 +31,9 @@ use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_metrics::system::set_system_version;
 use databend_common_storage::DataOperator;
+use databend_common_tracing::SignalListener;
+use databend_common_tracing::pipe_file;
+use databend_common_tracing::set_crash_hook;
 use databend_common_tracing::set_panic_hook;
 use databend_common_version::BUILD_INFO;
 use databend_common_version::DATABEND_COMMIT_VERSION;
@@ -69,7 +77,32 @@ pub async fn run_cmd(cmd: &Cmd) -> Result<bool, MainError> {
     Ok(true)
 }
 
-pub async fn init_services(conf: &InnerConfig, ee_mode: bool) -> Result<(), MainError> {
+pub fn init_services(main_entrypoint: impl Future<Output = Result<(), MainError>>) {
+    // Dispatch internal workers before parsing query-server arguments or starting
+    // crash tracking and runtime threads. Workers do not initialize query services.
+    python_worker_entry::try_run();
+
+    let (input, output) = pipe_file().unwrap();
+    set_crash_hook(output);
+    SignalListener::spawn(input, DATABEND_COMMIT_VERSION.to_string());
+
+    ThreadTracker::init();
+
+    match Runtime::with_default_worker_threads(Some("main-worker".to_string())) {
+        Err(cause) => {
+            eprintln!("Databend Query start failure, cause: {:?}", cause);
+            std::process::exit(cause.code() as i32);
+        }
+        Ok(rt) => {
+            if let Err(cause) = rt.block_on(main_entrypoint) {
+                eprintln!("Databend Query start failure, cause: {:?}", cause);
+                std::process::exit(cause.code() as i32);
+            }
+        }
+    }
+}
+
+pub async fn init_query_services(conf: &InnerConfig, ee_mode: bool) -> Result<(), MainError> {
     let make_error = || "failed to init services";
 
     let binary_version = DATABEND_COMMIT_VERSION.clone();
