@@ -202,31 +202,35 @@ impl UserApiProvider {
         &self,
         tenant: &Tenant,
         cache: &Option<Mutex<Cache>>,
-        keys: &[String],
+        keys: impl Iterator<Item = String>,
     ) -> Result<Vec<Option<SeqV>>> {
-        let mut values = vec![None; keys.len()];
-        if tenant == &self.external_access_cache_tenant
-            && let Some(cache) = cache
-            && let Ok(mut cache) = cache.try_lock()
+        let mut values = Vec::with_capacity(keys.size_hint().0);
+        let mut missing_keys = Vec::new();
         {
-            for (key, value) in keys.iter().zip(&mut values) {
-                *value = cache.try_get_ready(key);
+            let mut cache = cache
+                .as_ref()
+                .filter(|_| tenant == &self.external_access_cache_tenant)
+                .and_then(|cache| cache.try_lock().ok());
+            for key in keys {
+                let value = cache.as_mut().and_then(|cache| cache.try_get_ready(&key));
+                if value.is_none() {
+                    missing_keys.push(key);
+                }
+                values.push(value);
             }
         }
-        let missing = values
-            .iter()
-            .enumerate()
-            .filter_map(|(i, value)| value.is_none().then_some(i))
-            .collect::<Vec<_>>();
-        if !missing.is_empty() {
-            let missing_keys = missing.iter().map(|&i| keys[i].clone()).collect::<Vec<_>>();
+        if !missing_keys.is_empty() {
             let fetched = self
                 .client
                 .mget_kv(&missing_keys)
                 .await
                 .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?;
-            for (i, value) in missing.into_iter().zip(fetched) {
-                values[i] = value;
+            for (value, fetched) in values
+                .iter_mut()
+                .filter(|value| value.is_none())
+                .zip(fetched)
+            {
+                *value = fetched;
             }
         }
         Ok(values)
