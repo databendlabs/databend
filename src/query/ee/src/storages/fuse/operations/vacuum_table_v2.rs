@@ -29,7 +29,6 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::RetentionPolicy;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::is_gc_candidate_segment_block;
@@ -396,13 +395,7 @@ async fn vacuum_once(
         removed_files,
     ));
 
-    if allow_new_gc_root
-        && block_gc_stats.removed_blocks == 0
-        && matches!(
-            fuse_table.get_data_retention_policy(ctx.as_ref())?,
-            RetentionPolicy::ByTimePeriod(retention) if retention.is_zero()
-        )
-    {
+    if allow_new_gc_root && block_gc_stats.removed_blocks == 0 {
         return advance_gc_root(fuse_table, &ctx).await;
     }
 

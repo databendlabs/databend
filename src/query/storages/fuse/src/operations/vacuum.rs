@@ -968,19 +968,17 @@ impl FuseTable {
                     delta_duration
                 };
 
-                // A zero retention period indicates that we should vacuum all the historical snapshots
-                is_vacuum_all = retention_period.is_zero();
-
                 if !is_uuid_v7(&latest_snapshot.snapshot_id) {
                     return Ok(None);
                 }
                 let timestamp = latest_snapshot
                     .timestamp
                     .ok_or_else(|| ErrorCode::Internal("GC head has no timestamp"))?;
-                let lvt = max(
-                    retention_cutoff(Utc::now(), timestamp, retention_period),
-                    observed_lvt.time,
-                );
+                let cutoff = retention_cutoff(Utc::now(), timestamp, retention_period);
+                // The metadata head is known to be committed. Once it is outside retention,
+                // it can be the root directly, including when history traversal is disabled.
+                is_vacuum_all = retention_period.is_zero() || cutoff == timestamp;
+                let lvt = max(cutoff, observed_lvt.time);
 
                 respect_flash_back_with_lvt = respect_flash_back.then_some(lvt);
 
@@ -1020,8 +1018,11 @@ impl FuseTable {
                     )
                     .await?;
                 let len = snapshots.len();
-                if len <= num_snapshots_to_keep {
-                    // Only the current snapshot is there, done
+                // A vacuum2 head remains a valid root even when it is the only snapshot.
+                // Keep the existing no-op for legacy heads and other count-based policies.
+                let can_gc_single_head =
+                    num_snapshots_to_keep == 1 && is_uuid_v7(&latest_snapshot.snapshot_id);
+                if snapshots.is_empty() || (len <= num_snapshots_to_keep && !can_gc_single_head) {
                     return Ok(None);
                 }
                 if num_snapshots_to_keep == 1 {

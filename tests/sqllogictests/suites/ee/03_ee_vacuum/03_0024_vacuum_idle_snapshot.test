@@ -25,12 +25,13 @@ statement ok
 SET data_retention_time_in_days = 0
 
 statement ok
-CREATE TABLE t(c INT) AS SELECT 1
+CREATE TABLE t(c INT) data_retention_num_snapshots_to_keep=1 AS SELECT 1
 
 statement ok
 CREATE TABLE previous_head ENGINE = MEMORY AS
 SELECT snapshot_id FROM fuse_snapshot('vacuum_idle_snapshot', 't') ORDER BY timestamp DESC LIMIT 1
 
+# Count-based retention must also advance a head when it is the only snapshot.
 # The committed block has the same timestamp as the head. The millisecond
 # cutoff cannot include it until the root advances (even though it is live).
 statement ok

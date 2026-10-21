@@ -217,14 +217,105 @@ async fn test_vacuum2_preserves_max_block_timestamp() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_vacuum2_advances_gc_root_to_collect_orphan_blocks() -> anyhow::Result<()> {
+async fn test_vacuum2_advances_idle_head_with_nonzero_retention() -> anyhow::Result<()> {
     for respect_flash_back in [false, true] {
-        check_vacuum2_advances_gc_root(respect_flash_back).await?;
+        check_vacuum2_advances_with_nonzero_retention(respect_flash_back).await?;
     }
     Ok(())
 }
 
-async fn check_vacuum2_advances_gc_root(respect_flash_back: bool) -> anyhow::Result<()> {
+async fn check_vacuum2_advances_with_nonzero_retention(
+    respect_flash_back: bool,
+) -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    let settings = fixture.default_session().get_settings();
+    settings.set_data_retention_time_in_days(0)?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    fixture
+        .execute_command(&format!("CREATE TABLE {db}.idle(c INT) AS SELECT 1"))
+        .await?;
+    settings.set_data_retention_time_in_days(1)?;
+    let ctx: Arc<dyn TableContext> = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let table = catalog.get_table(&tenant, &db, "idle").await?;
+    let fuse = FuseTable::try_from_table(table.as_ref())?;
+    let mut old = (*fuse.read_table_snapshot().await?.unwrap()).clone();
+    let old_time = chrono::Utc::now() - chrono::Duration::days(2);
+    old.timestamp = Some(old_time);
+    old.snapshot_id = uuid_from_date_time(old_time);
+    fuse.commit_to_meta_server(
+        ctx.as_ref(),
+        table.get_table_info(),
+        fuse.meta_location_generator(),
+        old.clone(),
+        None,
+        &None,
+        fuse.get_operator_ref(),
+    )
+    .await?;
+    let table = catalog.get_table(&tenant, &db, "idle").await?;
+    let old_location = FuseTable::try_from_table(table.as_ref())?
+        .snapshot_loc()
+        .unwrap();
+
+    // This unreferenced block is newer than the idle head but still inside retention.
+    let orphan_time = chrono::Utc::now() - chrono::Duration::hours(1);
+    let ((orphan, _), _) = fuse
+        .meta_location_generator()
+        .gen_block_location(TableMetaTimestamps {
+            snapshot_timestamp: orphan_time,
+            segment_block_timestamp: orphan_time,
+            snapshot_timestamp_validation_context: None,
+        });
+    let operator = fuse.get_operator();
+    operator.write(&orphan, "recent orphan").await?;
+
+    do_vacuum2(table.as_ref(), ctx.clone(), respect_flash_back).await?;
+    let table = catalog.get_table(&tenant, &db, "idle").await?;
+    let advanced = FuseTable::try_from_table(table.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+    assert_ne!(advanced.snapshot_id, old.snapshot_id);
+    assert_eq!(advanced.max_block_timestamp, old.max_block_timestamp);
+    // The second pass must select its root through the retention policy. The new head
+    // is not eligible yet, so neither the previous root nor recent garbage can be purged.
+    assert!(operator.exists(&old_location).await?);
+    assert!(operator.exists(&orphan).await?);
+    do_vacuum2(table.as_ref(), ctx, respect_flash_back).await?;
+    let table = catalog.get_table(&tenant, &db, "idle").await?;
+    assert_eq!(
+        FuseTable::try_from_table(table.as_ref())?
+            .read_table_snapshot()
+            .await?
+            .unwrap()
+            .snapshot_id,
+        advanced.snapshot_id
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum2_advances_gc_root_to_collect_orphan_blocks() -> anyhow::Result<()> {
+    for (create_table, options) in [
+        ("TABLE", ""),
+        ("TABLE", "data_retention_num_snapshots_to_keep=1"),
+        ("TRANSIENT TABLE", ""),
+    ] {
+        for respect_flash_back in [false, true] {
+            check_vacuum2_advances_gc_root(respect_flash_back, create_table, options).await?;
+        }
+    }
+    Ok(())
+}
+
+async fn check_vacuum2_advances_gc_root(
+    respect_flash_back: bool,
+    create_table: &str,
+    options: &str,
+) -> anyhow::Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
     fixture
         .default_session()
@@ -233,12 +324,10 @@ async fn check_vacuum2_advances_gc_root(respect_flash_back: bool) -> anyhow::Res
     fixture.create_default_database().await?;
     let db = fixture.default_db_name();
     fixture
-        .execute_command(&format!("CREATE TABLE {db}.idle(c INT) AS SELECT 1"))
+        .execute_command(&format!(
+            "CREATE {create_table} {db}.idle(c INT) {options} AS SELECT 1"
+        ))
         .await?;
-    fixture
-        .default_session()
-        .get_settings()
-        .set_data_retention_time_in_days(1)?;
     let ctx: Arc<dyn TableContext> = fixture.new_query_ctx().await?;
     let catalog = ctx.get_default_catalog()?;
     let tenant = ctx.get_tenant();
@@ -273,23 +362,6 @@ async fn check_vacuum2_advances_gc_root(respect_flash_back: bool) -> anyhow::Res
     let operator = fuse.get_operator();
     operator.write(&orphan, "orphan").await?;
 
-    // A nonzero retention policy must not advance even an expired head.
-    do_vacuum2(table.as_ref(), ctx.clone(), respect_flash_back).await?;
-    let table = catalog.get_table(&tenant, &db, "idle").await?;
-    assert_eq!(
-        FuseTable::try_from_table(table.as_ref())?
-            .read_table_snapshot()
-            .await?
-            .unwrap()
-            .snapshot_id,
-        old.snapshot_id
-    );
-    assert!(operator.exists(&orphan).await?);
-
-    fixture
-        .default_session()
-        .get_settings()
-        .set_data_retention_time_in_days(0)?;
     let before_root = old_time - chrono::Duration::seconds(1);
     let ((older_orphan, _), _) =
         fuse.meta_location_generator()
