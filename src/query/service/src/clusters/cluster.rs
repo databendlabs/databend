@@ -203,6 +203,7 @@ impl ClusterHelper for Cluster {
                                 &flight_address,
                                 &node_secret,
                                 flight_params.keep_alive,
+                                Duration::from_secs(flight_params.timeout),
                             )
                             .await?;
                             let result = channel

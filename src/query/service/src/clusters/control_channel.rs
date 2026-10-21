@@ -56,9 +56,9 @@ const CONTROL_CHANNEL_PING_FRESHNESS: Duration = Duration::from_secs(1);
 /// out only costs a new connection, so this can be short.
 const CONTROL_CHANNEL_PING_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Connect timeout for a control channel when `rpc_client_timeout_secs` is not
-/// set. It also bounds the reconnects tonic performs inside a cached channel.
-const CONTROL_CHANNEL_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// A ping slower than this is logged: the node answered, but late, which is
+/// the signature of an overloaded peer rather than a dead one.
+const CONTROL_CHANNEL_SLOW_PING: Duration = Duration::from_secs(1);
 
 static CONTROL_CHANNELS: LazyLock<ControlChannelCache<Channel>> =
     LazyLock::new(ControlChannelCache::default);
@@ -183,15 +183,21 @@ impl<C: Clone> ControlChannelCache<C> {
     }
 }
 
+/// Creates a channel to `address`. The TCP connect is bounded by
+/// `rpc_client_timeout_secs` when set, otherwise by `connect_timeout`, the
+/// request timeout of the setup request that creates the channel. The bound
+/// stays with the channel and also limits the reconnects tonic performs inside
+/// it while it is cached.
 #[async_backtrace::framed]
 async fn create_control_channel(
     config: &InnerConfig,
     remote_node_id: &str,
     address: &str,
     keep_alive: FlightKeepAliveParams,
+    connect_timeout: Duration,
 ) -> Result<Channel> {
     let (timeout, rpc_tls_config) = rpc_client_options(config);
-    let connect_timeout = timeout.unwrap_or(CONTROL_CHANNEL_CONNECT_TIMEOUT);
+    let connect_timeout = timeout.unwrap_or(connect_timeout);
     let keep_alive_config = build_keep_alive_config(keep_alive);
     let target = address.to_string();
 
@@ -267,12 +273,15 @@ pub(super) struct ControlChannel {
 }
 
 impl ControlChannel {
+    /// `request_timeout` is the timeout of the setup request this channel will
+    /// carry; it also bounds the TCP connect when a channel has to be created.
     pub(super) async fn acquire(
         config: &InnerConfig,
         node_id: &str,
         address: &str,
         node_secret: &str,
         keep_alive: FlightKeepAliveParams,
+        request_timeout: Duration,
     ) -> Result<ControlChannel> {
         let key = ControlChannelKey::new(node_id, address, keep_alive);
         let now = Instant::now();
@@ -286,8 +295,16 @@ impl ControlChannel {
                 });
             }
 
+            let started = Instant::now();
             match ping(&channel, &config.query.node_id, node_id, node_secret).await {
                 Ok(()) => {
+                    let elapsed = started.elapsed();
+                    if elapsed > CONTROL_CHANNEL_SLOW_PING {
+                        warn!(
+                            "Slow flight ping to node {} at {}: {:?}",
+                            key.node_id, key.address, elapsed
+                        );
+                    }
                     CONTROL_CHANNELS.record_success(
                         key.clone(),
                         Some(id),
@@ -312,7 +329,8 @@ impl ControlChannel {
             }
         }
 
-        let channel = create_control_channel(config, node_id, address, keep_alive).await?;
+        let channel =
+            create_control_channel(config, node_id, address, keep_alive, request_timeout).await?;
         Ok(ControlChannel {
             key,
             cached_id: None,
