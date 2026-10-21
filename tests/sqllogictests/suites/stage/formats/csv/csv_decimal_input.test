@@ -22,6 +22,22 @@ select count(*), sum(d)::int from decimal_text_input
 statement ok
 drop table decimal_text_input
 
+# Unlike the compatibility cases above, the old fast VALUES path accepted this
+# rounding carry and stored an out-of-range coefficient instead of falling back.
+statement ok
+create or replace table decimal_values_carry (d decimal(4, 2))
+
+statement error Decimal overflow
+insert into decimal_values_carry values (99.995)
+
+query I
+select count(*) from decimal_values_carry
+----
+0
+
+statement ok
+drop table decimal_values_carry
+
 # Write raw text, not decimal values, so COPY receives the original mantissas.
 # The scalar field uses the CSV decoder; the array elements use the nested decoder.
 statement ok
@@ -61,6 +77,26 @@ select '1e'::decimal(6, 3)::string, '1e+'::decimal(6, 3)::string, '1.5e-'::decim
 
 statement ok
 drop table decimal_csv_input
+
+# Keep the original field text so CSV, not a prior decimal cast, performs rounding.
+statement ok
+copy into @csv_decimal_input/carry/ from (select '99.995')
+file_format = (type = csv compression = none)
+
+statement ok
+create or replace table decimal_csv_carry (d decimal(4, 2))
+
+statement error Decimal overflow
+copy into decimal_csv_carry from @csv_decimal_input/carry/
+file_format = (type = csv)
+
+query I
+select count(*) from decimal_csv_carry
+----
+0
+
+statement ok
+drop table decimal_csv_carry
 
 statement ok
 drop stage csv_decimal_input
