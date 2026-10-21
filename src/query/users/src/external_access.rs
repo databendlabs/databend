@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::kv_pb_api::decode_pb;
+use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_meta_app::principal::ExternalAccessIntegration;
 use databend_common_meta_app::principal::NetworkRule;
 use databend_common_meta_app::principal::external_access_integration_ident::Resource as IntegrationResource;
@@ -22,7 +25,6 @@ use databend_common_meta_app::principal::network_rule_ident::Resource as RuleRes
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::ident::TIdent;
 use databend_meta_client::kvapi::StructKey;
-use databend_meta_client::types::MatchSeq;
 use url::Url;
 
 use crate::UserApiProvider;
@@ -83,55 +85,51 @@ impl UserApiProvider {
         }
         let url = Url::parse(address).map_err(|e| ErrorCode::InvalidArgument(e.to_string()))?;
         let target = endpoint(&url)?;
-        let mut allowed = false;
-        for name in integrations {
-            let key = TIdent::<IntegrationResource>::new(tenant, name).to_string_key();
-            let cached = self
-                .external_access_integration_cache
-                .lock()
-                .await
-                .try_get(&key)
-                .await
-                .ok()
-                .flatten();
-            let integration = match cached {
-                Some(value) => decode_pb::<ExternalAccessIntegration>(&value.data)
-                    .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?,
-                None => {
-                    self.external_access_integration_api(tenant)
-                        .get(name, MatchSeq::GE(1))
-                        .await?
-                        .data
-                }
-            };
+        let integrations = integrations.iter().collect::<BTreeSet<_>>();
+        let idents = integrations
+            .into_iter()
+            .map(|name| TIdent::<IntegrationResource>::new(tenant, name))
+            .collect::<Vec<_>>();
+        let keys = idents
+            .iter()
+            .map(|ident| ident.to_string_key())
+            .collect::<Vec<_>>();
+        let values = self
+            .external_access_values(tenant, &self.external_access_integration_cache, &keys)
+            .await?;
+        let mut rules = BTreeSet::new();
+        for (ident, value) in idents.iter().zip(values) {
+            let value = value
+                .ok_or_else(|| ErrorCode::from(ident.unknown_error("validate external access")))?;
+            let integration = decode_pb::<ExternalAccessIntegration>(&value.data)
+                .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?;
             if !integration.enabled {
                 return Err(ErrorCode::PermissionDenied(format!(
-                    "External access integration '{name}' is disabled"
+                    "External access integration '{}' is disabled",
+                    ident.name()
                 )));
             }
-            for rule_name in &integration.allowed_network_rules {
-                let key = TIdent::<RuleResource>::new(tenant, rule_name).to_string_key();
-                let cached = self
-                    .network_rule_cache
-                    .lock()
-                    .await
-                    .try_get(&key)
-                    .await
-                    .ok()
-                    .flatten();
-                let rule = match cached {
-                    Some(value) => decode_pb::<NetworkRule>(&value.data)
-                        .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?,
-                    None => {
-                        self.network_rule_api(tenant)
-                            .get(rule_name, MatchSeq::GE(1))
-                            .await?
-                            .data
-                    }
-                };
-                for value in &rule.value_list {
-                    allowed |= network_rule_endpoint(value)? == target;
-                }
+            rules.extend(integration.allowed_network_rules);
+        }
+        let idents = rules
+            .into_iter()
+            .map(|name| TIdent::<RuleResource>::new(tenant, name))
+            .collect::<Vec<_>>();
+        let keys = idents
+            .iter()
+            .map(|ident| ident.to_string_key())
+            .collect::<Vec<_>>();
+        let values = self
+            .external_access_values(tenant, &self.network_rule_cache, &keys)
+            .await?;
+        let mut allowed = false;
+        for (ident, value) in idents.iter().zip(values) {
+            let value = value
+                .ok_or_else(|| ErrorCode::from(ident.unknown_error("validate external access")))?;
+            let rule = decode_pb::<NetworkRule>(&value.data)
+                .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?;
+            for value in &rule.value_list {
+                allowed |= network_rule_endpoint(value)? == target;
             }
         }
         if !allowed {

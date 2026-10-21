@@ -33,7 +33,9 @@ use tokio::time::sleep;
 async fn test_external_access_live_policy() -> Result<()> {
     let thread_name = thread::current().name().unwrap().to_string();
     GlobalInstance::init_testing(&thread_name);
-    GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO)?;
+    let mut config = InnerConfig::default();
+    config.query.common.enable_udf_server = true;
+    GlobalConfig::init(&config, &BUILD_INFO)?;
     let tenant = Tenant::new_literal("external_access_test");
     let provider = UserApiProvider::try_create_simple(RpcClientConf::empty(), &tenant).await?;
     let rules = provider.network_rule_api(&tenant);

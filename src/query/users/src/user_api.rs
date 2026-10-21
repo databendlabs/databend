@@ -45,13 +45,17 @@ use databend_common_meta_app::principal::network_rule_ident::Resource as Network
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_meta_app::tenant_key::ident::TIdent;
 use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_meta_client::RpcClientConf;
 use databend_meta_client::kvapi;
+use databend_meta_client::kvapi::KvApiExt;
+use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::MetaError;
+use databend_meta_client::types::SeqV;
 use databend_meta_plugin_cache::Cache;
 use databend_meta_runtime::DatabendRuntime;
 use log::debug;
@@ -59,6 +63,10 @@ use tokio::sync::Mutex;
 
 use crate::BUILTIN_ROLE_PUBLIC;
 use crate::builtin::BuiltIn;
+
+#[cfg(test)]
+#[path = "user_api_external_access_tests.rs"]
+mod external_access_tests;
 
 pub struct UserApiProvider {
     meta: MetaStore,
@@ -74,8 +82,9 @@ pub struct UserApiProvider {
     /// If not, every access returns [`Unsupported`] error.
     ownership_cache: Option<Arc<Mutex<Cache>>>,
 
-    pub(crate) network_rule_cache: Mutex<Cache>,
-    pub(crate) external_access_integration_cache: Mutex<Cache>,
+    external_access_cache_tenant: Tenant,
+    pub(crate) network_rule_cache: Option<Mutex<Cache>>,
+    pub(crate) external_access_integration_cache: Option<Mutex<Cache>>,
 
     builtin: BuiltIn,
 }
@@ -125,25 +134,32 @@ impl UserApiProvider {
             None
         };
 
-        let network_rule_cache = Cache::new(
-            client.clone(),
-            NetworkRuleResource::PREFIX,
-            NetworkRuleResource::TYPE,
-        )
-        .await;
-        let external_access_integration_cache = Cache::new(
-            client,
-            ExternalAccessIntegrationResource::PREFIX,
-            ExternalAccessIntegrationResource::TYPE,
-        )
-        .await;
+        let (network_rule_cache, external_access_integration_cache) =
+            if GlobalConfig::instance().query.common.enable_udf_server {
+                let rules = Cache::new(
+                    client.clone(),
+                    TIdent::<NetworkRuleResource>::new(tenant, "").to_string_key(),
+                    NetworkRuleResource::TYPE,
+                )
+                .await;
+                let integrations = Cache::new(
+                    client,
+                    TIdent::<ExternalAccessIntegrationResource>::new(tenant, "").to_string_key(),
+                    ExternalAccessIntegrationResource::TYPE,
+                )
+                .await;
+                (Some(Mutex::new(rules)), Some(Mutex::new(integrations)))
+            } else {
+                (None, None)
+            };
 
         let user_mgr = UserApiProvider {
             meta: meta_store.clone(),
             client: meta_store.arc(),
             ownership_cache: cache,
-            network_rule_cache: Mutex::new(network_rule_cache),
-            external_access_integration_cache: Mutex::new(external_access_integration_cache),
+            external_access_cache_tenant: tenant.clone(),
+            network_rule_cache,
+            external_access_integration_cache,
             builtin,
         };
 
@@ -177,6 +193,43 @@ impl UserApiProvider {
 
     pub fn instance() -> Arc<UserApiProvider> {
         GlobalInstance::get()
+    }
+
+    /// Cache reads must not queue behind initialization, reconnect, or another
+    /// reader. Fetch all misses together using the ordinary KV client and its
+    /// configured RPC timeout.
+    pub(crate) async fn external_access_values(
+        &self,
+        tenant: &Tenant,
+        cache: &Option<Mutex<Cache>>,
+        keys: &[String],
+    ) -> Result<Vec<Option<SeqV>>> {
+        let mut values = vec![None; keys.len()];
+        if tenant == &self.external_access_cache_tenant
+            && let Some(cache) = cache
+            && let Ok(mut cache) = cache.try_lock()
+        {
+            for (key, value) in keys.iter().zip(&mut values) {
+                *value = cache.try_get_ready(key);
+            }
+        }
+        let missing = values
+            .iter()
+            .enumerate()
+            .filter_map(|(i, value)| value.is_none().then_some(i))
+            .collect::<Vec<_>>();
+        if !missing.is_empty() {
+            let missing_keys = missing.iter().map(|&i| keys[i].clone()).collect::<Vec<_>>();
+            let fetched = self
+                .client
+                .mget_kv(&missing_keys)
+                .await
+                .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?;
+            for (i, value) in missing.into_iter().zip(fetched) {
+                values[i] = value;
+            }
+        }
+        Ok(values)
     }
 
     pub fn udf_api(&self, tenant: &Tenant) -> UdfMgr {
