@@ -157,8 +157,8 @@ pub async fn build_runtime_filter(
             &func_ctx,
         )?;
 
-        // A valid expression can have no legal scan target (e.g. a window
-        // output). Do not publish an inert filter or allocate an id for it.
+        // A valid probe expression may have no safe scan target (e.g. a window
+        // output). Skip filter creation and ID allocation when no targets remain.
         if probe_targets.is_empty() {
             continue;
         }
