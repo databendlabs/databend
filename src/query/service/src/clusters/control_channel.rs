@@ -25,7 +25,6 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
-use databend_common_grpc::Http2KeepAliveConfig;
 use databend_common_settings::FlightKeepAliveParams;
 use log::info;
 use log::warn;
@@ -36,6 +35,7 @@ use crate::servers::flight::FlightClient;
 use crate::servers::flight::FlightOperation;
 use crate::servers::flight::add_flight_error_context;
 use crate::servers::flight::keep_alive::build_keep_alive_config;
+use crate::servers::flight::v1::actions::PING;
 
 /// Distributed query setup sends a few small unary requests to every node.
 /// Sending them over one cached HTTP/2 channel per node avoids a TCP handshake
@@ -45,15 +45,20 @@ use crate::servers::flight::keep_alive::build_keep_alive_config;
 /// a channel idle for longer is replaced instead of being trusted.
 const CONTROL_CHANNEL_MAX_IDLE: Duration = Duration::from_secs(30);
 
-/// PINGs let a cached channel notice a silently dropped connection; tonic then
-/// reconnects on the next request. The interval is the gRPC client minimum and
-/// the timeout the gRPC default (gRFC A8), so a dead connection is found within
-/// about one idle window.
-const CONTROL_CHANNEL_HTTP2_KEEP_ALIVE: Http2KeepAliveConfig = Http2KeepAliveConfig {
-    interval: Duration::from_secs(10),
-    timeout: Duration::from_secs(20),
-    while_idle: true,
-};
+/// A cached channel is verified with a `PING` action before it carries a setup
+/// request, unless a request on it succeeded this recently. The setup requests
+/// of one query follow each other within this window, so a query pays for one
+/// ping per node.
+const CONTROL_CHANNEL_PING_FRESHNESS: Duration = Duration::from_secs(1);
+
+/// Bound for the ping, including the time tonic spends queueing it and
+/// reconnecting a closed connection underneath it. A ping that fails or times
+/// out only costs a new connection, so this can be short.
+const CONTROL_CHANNEL_PING_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Connect timeout for a control channel when `rpc_client_timeout_secs` is not
+/// set. It also bounds the reconnects tonic performs inside a cached channel.
+const CONTROL_CHANNEL_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 static CONTROL_CHANNELS: LazyLock<ControlChannelCache<Channel>> =
     LazyLock::new(ControlChannelCache::default);
@@ -117,15 +122,21 @@ fn drop_idle_channels<C>(
     });
 }
 
+/// Whether a cached channel whose last successful request finished at
+/// `last_success` must be pinged before it carries a setup request.
+fn needs_ping(last_success: Instant, now: Instant) -> bool {
+    now.saturating_duration_since(last_success) > CONTROL_CHANNEL_PING_FRESHNESS
+}
+
 impl<C: Clone> ControlChannelCache<C> {
-    /// Returns the cached channel and its id if a request on it succeeded
-    /// within [`CONTROL_CHANNEL_MAX_IDLE`].
-    fn get(&self, key: &ControlChannelKey, now: Instant) -> Option<(u64, C)> {
+    /// Returns the cached channel, its id and the time of its last successful
+    /// request, if a request on it succeeded within [`CONTROL_CHANNEL_MAX_IDLE`].
+    fn get(&self, key: &ControlChannelKey, now: Instant) -> Option<(u64, C, Instant)> {
         let mut entries = self.entries.lock();
         drop_idle_channels(&mut entries, now);
         entries
             .get(key)
-            .map(|entry| (entry.id, entry.channel.clone()))
+            .map(|entry| (entry.id, entry.channel.clone(), entry.last_success))
     }
 
     /// Records a successful request. `id` is `None` for a newly created channel,
@@ -180,6 +191,7 @@ async fn create_control_channel(
     keep_alive: FlightKeepAliveParams,
 ) -> Result<Channel> {
     let (timeout, rpc_tls_config) = rpc_client_options(config);
+    let connect_timeout = timeout.unwrap_or(CONTROL_CHANNEL_CONNECT_TIMEOUT);
     let keep_alive_config = build_keep_alive_config(keep_alive);
     let target = address.to_string();
 
@@ -187,12 +199,11 @@ async fn create_control_channel(
     // channel outlives this query, so create it on the global runtime.
     let channel = GlobalIORuntime::instance()
         .spawn(async move {
-            ConnectionFactory::create_rpc_channel_with_http2_keep_alive(
+            ConnectionFactory::create_rpc_channel(
                 target,
-                timeout,
+                Some(connect_timeout),
                 rpc_tls_config,
                 keep_alive_config,
-                CONTROL_CHANNEL_HTTP2_KEEP_ALIVE,
             )
             .await
         })
@@ -217,8 +228,38 @@ async fn create_control_channel(
     Ok(channel)
 }
 
+/// Sends a `PING` action over `channel`, bounded by
+/// [`CONTROL_CHANNEL_PING_TIMEOUT`] even while tonic is still queueing it or
+/// reconnecting underneath it.
+#[async_backtrace::framed]
+async fn ping(
+    channel: &Channel,
+    local_node_id: &str,
+    remote_node_id: &str,
+    node_secret: &str,
+) -> Result<()> {
+    let mut client = FlightClient::new(
+        FlightServiceClient::new(channel.clone()),
+        local_node_id,
+        remote_node_id,
+    );
+    let request = client.do_action::<(), ()>(
+        PING,
+        node_secret.to_string(),
+        (),
+        CONTROL_CHANNEL_PING_TIMEOUT.as_secs(),
+    );
+    match tokio::time::timeout(CONTROL_CHANNEL_PING_TIMEOUT, request).await {
+        Ok(result) => result,
+        Err(_) => Err(ErrorCode::CannotConnectNode(format!(
+            "flight ping to node {} did not complete within {:?}",
+            remote_node_id, CONTROL_CHANNEL_PING_TIMEOUT
+        ))),
+    }
+}
+
 /// The channel used for one control-plane request: the cached channel for the
-/// peer, or a newly created one.
+/// peer, verified by a recent success or a ping, or a newly created one.
 pub(super) struct ControlChannel {
     key: ControlChannelKey,
     cached_id: Option<u64>,
@@ -230,19 +271,51 @@ impl ControlChannel {
         config: &InnerConfig,
         node_id: &str,
         address: &str,
+        node_secret: &str,
         keep_alive: FlightKeepAliveParams,
     ) -> Result<ControlChannel> {
         let key = ControlChannelKey::new(node_id, address, keep_alive);
-        let (cached_id, channel) = match CONTROL_CHANNELS.get(&key, Instant::now()) {
-            Some((id, channel)) => (Some(id), channel),
-            None => (
-                None,
-                create_control_channel(config, node_id, address, keep_alive).await?,
-            ),
-        };
+        let now = Instant::now();
+
+        if let Some((id, channel, last_success)) = CONTROL_CHANNELS.get(&key, now) {
+            if !needs_ping(last_success, now) {
+                return Ok(ControlChannel {
+                    key,
+                    cached_id: Some(id),
+                    channel,
+                });
+            }
+
+            match ping(&channel, &config.query.node_id, node_id, node_secret).await {
+                Ok(()) => {
+                    CONTROL_CHANNELS.record_success(
+                        key.clone(),
+                        Some(id),
+                        channel.clone(),
+                        Instant::now(),
+                    );
+                    return Ok(ControlChannel {
+                        key,
+                        cached_id: Some(id),
+                        channel,
+                    });
+                }
+                Err(cause) => {
+                    // The ping has no side effects, so a failed one just means the
+                    // cached channel is not trusted; the request goes over a new one.
+                    warn!(
+                        "Dropped cached flight control channel to node {} at {} after a failed ping: {}",
+                        key.node_id, key.address, cause
+                    );
+                    CONTROL_CHANNELS.evict(&key, id, Instant::now());
+                }
+            }
+        }
+
+        let channel = create_control_channel(config, node_id, address, keep_alive).await?;
         Ok(ControlChannel {
             key,
-            cached_id,
+            cached_id: None,
             channel,
         })
     }
@@ -292,8 +365,9 @@ mod tests {
         assert!(cache.get(&key("n1"), now).is_none());
 
         cache.record_success(key("n1"), None, 7, now);
-        let (_, channel) = cache.get(&key("n1"), now).unwrap();
+        let (_, channel, last_success) = cache.get(&key("n1"), now).unwrap();
         assert_eq!(channel, 7);
+        assert_eq!(last_success, now);
         assert!(cache.get(&key("n2"), now).is_none());
     }
 
@@ -313,7 +387,7 @@ mod tests {
         let cache = ControlChannelCache::<u32>::default();
         let now = Instant::now();
         cache.record_success(key("n1"), None, 7, now);
-        let (id, _) = cache.get(&key("n1"), now).unwrap();
+        let (id, _, _) = cache.get(&key("n1"), now).unwrap();
 
         let refreshed = now + CONTROL_CHANNEL_MAX_IDLE;
         cache.record_success(key("n1"), Some(id), 7, refreshed);
@@ -326,7 +400,7 @@ mod tests {
         let cache = ControlChannelCache::<u32>::default();
         let now = Instant::now();
         cache.record_success(key("n1"), None, 7, now);
-        let (id, _) = cache.get(&key("n1"), now).unwrap();
+        let (id, _, _) = cache.get(&key("n1"), now).unwrap();
 
         cache.evict(&key("n1"), id, now);
         assert!(cache.get(&key("n1"), now).is_none());
@@ -337,13 +411,13 @@ mod tests {
         let cache = ControlChannelCache::<u32>::default();
         let now = Instant::now();
         cache.record_success(key("n1"), None, 7, now);
-        let (old_id, _) = cache.get(&key("n1"), now).unwrap();
+        let (old_id, _, _) = cache.get(&key("n1"), now).unwrap();
         // Another request replaced the channel, e.g. after a concurrent miss.
         cache.record_success(key("n1"), None, 8, now);
 
         // A late failure on the old channel must not drop the new one.
         cache.evict(&key("n1"), old_id, now);
-        let (new_id, channel) = cache.get(&key("n1"), now).unwrap();
+        let (new_id, channel, _) = cache.get(&key("n1"), now).unwrap();
         assert_eq!(channel, 8);
 
         // A late success on the old channel must not refresh the new one.
@@ -385,7 +459,7 @@ mod tests {
         let cache = ControlChannelCache::<u32>::default();
         let now = Instant::now();
         cache.record_success(key("n1"), None, 7, now);
-        let (id, _) = cache.get(&key("n1"), now).unwrap();
+        let (id, _, _) = cache.get(&key("n1"), now).unwrap();
 
         // A request that took longer than the idle window still succeeded on
         // this channel, so the channel stays cached.
@@ -403,5 +477,21 @@ mod tests {
         };
         let with_keep_alive = ControlChannelKey::new("n1", "127.0.0.1:9090", keep_alive);
         assert_ne!(key("n1"), with_keep_alive);
+    }
+
+    #[test]
+    fn test_control_channel_ping_only_after_freshness_window() {
+        let now = Instant::now();
+        // The setup requests of one query follow each other quickly and reuse
+        // the verification done by the first of them.
+        assert!(!needs_ping(now, now));
+        assert!(!needs_ping(now, now + CONTROL_CHANNEL_PING_FRESHNESS));
+        // A channel that was quiet for longer is verified before it is used.
+        assert!(needs_ping(
+            now,
+            now + CONTROL_CHANNEL_PING_FRESHNESS + Duration::from_millis(1)
+        ));
+        // A success recorded "in the future" by a slow clock read never panics.
+        assert!(!needs_ping(now + Duration::from_secs(1), now));
     }
 }

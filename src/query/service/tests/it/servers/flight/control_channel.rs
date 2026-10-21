@@ -15,6 +15,10 @@
 //! Behavior of the reused control-plane connection to a peer node, observed
 //! only through `Cluster::do_action` results and the TCP connections that reach
 //! the peer through a fault-injecting proxy.
+//!
+//! A cached channel that completed a request within the last second is used as
+//! is; one that was quiet for longer is verified with a `PING` action first.
+//! `QUIET` is long enough to make the next request take the ping path.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -177,6 +181,9 @@ impl Peer {
     }
 }
 
+/// Longer than the control channel's ping freshness window.
+const QUIET: Duration = Duration::from_millis(1500);
+
 fn free_local_addr() -> anyhow::Result<SocketAddr> {
     let listener = StdTcpListener::bind("127.0.0.1:0")?;
     Ok(listener.local_addr()?)
@@ -211,9 +218,31 @@ async fn test_reconnects_after_peer_closes_connection() -> anyhow::Result<()> {
     peer.proxy.close_all_connections();
     tokio::time::sleep(Duration::from_millis(500)).await;
 
-    // The connection is gone; the next requests must still succeed, over a
-    // new connection.
+    // Still within the freshness window, so no ping: the request itself goes
+    // over the closed connection and tonic reconnects underneath it.
     peer.request(true).await?;
+    peer.request(true).await?;
+    assert_eq!(peer.proxy.accepted(), 2);
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_ping_verifies_quiet_channel_after_peer_closes_connection() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let peer = Peer::start().await?;
+
+    peer.request(true).await?;
+    assert_eq!(peer.proxy.accepted(), 1);
+
+    peer.proxy.close_all_connections();
+    tokio::time::sleep(QUIET).await;
+
+    // The channel was quiet, so it is pinged first. The ping reconnects the
+    // closed connection; the request then reuses it.
+    peer.request(true).await?;
+    assert_eq!(peer.proxy.accepted(), 2);
+
+    // Verified a moment ago: no further ping or connection for the next one.
     peer.request(true).await?;
     assert_eq!(peer.proxy.accepted(), 2);
     Ok(())
@@ -228,13 +257,21 @@ async fn test_peer_down_reports_cannot_connect() -> anyhow::Result<()> {
     assert_eq!(peer.proxy.accepted(), 1);
 
     peer.proxy.shutdown();
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    tokio::time::sleep(QUIET).await;
 
-    // The cached channel reconnects and is refused. The error must carry the
-    // same code as a failed connection on a fresh client, so callers that
-    // retry or report on CANNOT_CONNECT_NODE behave the same with reuse.
+    // The ping on the cached channel is refused, the channel is dropped, and
+    // the new connection is refused too. The error must carry the same code as
+    // a failed connection on a fresh client, so callers that retry or report
+    // on CANNOT_CONNECT_NODE behave the same with reuse.
+    let started = std::time::Instant::now();
     let error = peer.request(true).await.unwrap_err();
     assert_eq!(error.code(), ErrorCode::CANNOT_CONNECT_NODE, "{error}");
     assert_eq!(peer.proxy.accepted(), 1);
+    // Both attempts are refused immediately; nothing waits for a timeout.
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "{:?}",
+        started.elapsed()
+    );
     Ok(())
 }

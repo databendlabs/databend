@@ -162,17 +162,6 @@ pub struct TcpKeepAliveConfig {
     pub retries: Option<u32>,
 }
 
-/// HTTP/2 PING keep-alive configuration for long-lived gRPC channels.
-#[derive(Clone, Copy, Debug)]
-pub struct Http2KeepAliveConfig {
-    /// Interval between HTTP/2 PING frames.
-    pub interval: Duration,
-    /// Time to wait for a PING acknowledgement before closing the connection.
-    pub timeout: Duration,
-    /// Whether to send PINGs while there are no in-flight requests.
-    pub while_idle: bool,
-}
-
 /// Factory for creating gRPC channels with DNS resolution and TLS support.
 pub struct ConnectionFactory;
 
@@ -187,42 +176,7 @@ impl ConnectionFactory {
         rpc_client_config: Option<RpcClientTlsConfig>,
         keep_alive: Option<TcpKeepAliveConfig>,
     ) -> std::result::Result<Channel, GrpcConnectionError> {
-        Self::connect_rpc_channel(addr, timeout, rpc_client_config, keep_alive, None).await
-    }
-
-    /// Creates a gRPC channel like [`Self::create_rpc_channel`], and also sends
-    /// HTTP/2 PINGs so a channel that is kept and reused notices a dead peer.
-    pub async fn create_rpc_channel_with_http2_keep_alive(
-        addr: impl ToString,
-        timeout: Option<Duration>,
-        rpc_client_config: Option<RpcClientTlsConfig>,
-        keep_alive: Option<TcpKeepAliveConfig>,
-        http2_keep_alive: Http2KeepAliveConfig,
-    ) -> std::result::Result<Channel, GrpcConnectionError> {
-        Self::connect_rpc_channel(
-            addr,
-            timeout,
-            rpc_client_config,
-            keep_alive,
-            Some(http2_keep_alive),
-        )
-        .await
-    }
-
-    async fn connect_rpc_channel(
-        addr: impl ToString,
-        timeout: Option<Duration>,
-        rpc_client_config: Option<RpcClientTlsConfig>,
-        keep_alive: Option<TcpKeepAliveConfig>,
-        http2_keep_alive: Option<Http2KeepAliveConfig>,
-    ) -> std::result::Result<Channel, GrpcConnectionError> {
-        let mut endpoint = Self::create_rpc_endpoint(addr, rpc_client_config)?;
-        if let Some(config) = http2_keep_alive {
-            endpoint = endpoint
-                .http2_keep_alive_interval(config.interval)
-                .keep_alive_timeout(config.timeout)
-                .keep_alive_while_idle(config.while_idle);
-        }
+        let endpoint = Self::create_rpc_endpoint(addr, rpc_client_config)?;
 
         let mut inner_connector = HttpConnector::new_with_resolver(DNSService);
         inner_connector.set_nodelay(true);

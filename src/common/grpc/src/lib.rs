@@ -22,7 +22,6 @@ pub use dns_resolver::ConnectionFactory;
 pub use dns_resolver::DNSResolver;
 pub use dns_resolver::DNSService;
 pub use dns_resolver::GrpcConnectionError;
-pub use dns_resolver::Http2KeepAliveConfig;
 pub use dns_resolver::TcpKeepAliveConfig;
 mod client_conf;
 mod dns_resolver;

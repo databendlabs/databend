@@ -201,6 +201,7 @@ impl ClusterHelper for Cluster {
                                 &config,
                                 &node_id,
                                 &flight_address,
+                                &node_secret,
                                 flight_params.keep_alive,
                             )
                             .await?;
