@@ -151,6 +151,72 @@ async fn test_vacuum_table_command() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum2_preserves_max_block_timestamp() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    let settings = fixture.default_session().get_settings();
+    settings.set_data_retention_time_in_days(0)?;
+    settings.set_max_execute_time_in_seconds(3600)?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    fixture
+        .execute_command(&format!("CREATE TABLE {db}.bound(c INT) AS SELECT 1"))
+        .await?;
+    let ctx: Arc<dyn TableContext> = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let table = catalog.get_table(&tenant, &db, "bound").await?;
+    let initial = FuseTable::try_from_table(table.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+    assert_eq!(
+        initial.max_block_timestamp,
+        initial.timestamp.map(|ts| ts + chrono::Duration::hours(1))
+    );
+
+    settings.set_max_execute_time_in_seconds(7200)?;
+    fixture
+        .execute_command(&format!("UPDATE {db}.bound SET c=2"))
+        .await?;
+    let table = catalog.get_table(&tenant, &db, "bound").await?;
+    let updated = FuseTable::try_from_table(table.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+    assert!(updated.max_block_timestamp > initial.max_block_timestamp);
+    let bound = updated.max_block_timestamp;
+
+    settings.set_max_execute_time_in_seconds(0)?;
+    for sql in [
+        format!("INSERT INTO {db}.bound VALUES (3)"),
+        format!("ANALYZE TABLE {db}.bound"),
+        format!("TRUNCATE TABLE {db}.bound"),
+    ] {
+        fixture.execute_command(&sql).await?;
+        let table = catalog.get_table(&tenant, &db, "bound").await?;
+        let snapshot = FuseTable::try_from_table(table.as_ref())?
+            .read_table_snapshot()
+            .await?
+            .unwrap();
+        assert_eq!(snapshot.max_block_timestamp, bound, "{sql}");
+    }
+
+    let table = catalog.get_table(&tenant, &db, "bound").await?;
+    let before = FuseTable::try_from_table(table.as_ref())?.snapshot_loc();
+    // The first pass can collect the later INSERT's older block; the next sweep is empty.
+    for _ in 0..2 {
+        do_vacuum2(table.as_ref(), ctx.clone(), true).await?;
+    }
+    let table = catalog.get_table(&tenant, &db, "bound").await?;
+    assert_eq!(
+        FuseTable::try_from_table(table.as_ref())?.snapshot_loc(),
+        before,
+        "a future bound must not cause repeated snapshot advancement"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_vacuum2_advances_gc_root_to_collect_orphan_blocks() -> anyhow::Result<()> {
     for respect_flash_back in [false, true] {
         check_vacuum2_advances_gc_root(respect_flash_back).await?;
@@ -163,12 +229,16 @@ async fn check_vacuum2_advances_gc_root(respect_flash_back: bool) -> anyhow::Res
     fixture
         .default_session()
         .get_settings()
-        .set_data_retention_time_in_days(1)?;
+        .set_data_retention_time_in_days(0)?;
     fixture.create_default_database().await?;
     let db = fixture.default_db_name();
     fixture
         .execute_command(&format!("CREATE TABLE {db}.idle(c INT) AS SELECT 1"))
         .await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(1)?;
     let ctx: Arc<dyn TableContext> = fixture.new_query_ctx().await?;
     let catalog = ctx.get_default_catalog()?;
     let tenant = ctx.get_tenant();
@@ -230,7 +300,7 @@ async fn check_vacuum2_advances_gc_root(respect_flash_back: bool) -> anyhow::Res
             });
     operator.write(&older_orphan, "older orphan").await?;
 
-    // A successful block sweep must not probe or advance, even with a partial delete chunk.
+    // A successful block sweep must not advance, even with a partial delete chunk.
     do_vacuum2(table.as_ref(), ctx.clone(), respect_flash_back).await?;
     let table = catalog.get_table(&tenant, &db, "idle").await?;
     assert_eq!(
@@ -269,7 +339,7 @@ async fn check_vacuum2_advances_gc_root(respect_flash_back: bool) -> anyhow::Res
     );
     assert!(!operator.exists(&orphan).await?);
 
-    // An empty probe must not write another snapshot.
+    // The new root is beyond the recorded bound; another vacuum must preserve it.
     do_vacuum2(table.as_ref(), ctx.clone(), respect_flash_back).await?;
     let table = catalog.get_table(&tenant, &db, "idle").await?;
     assert_eq!(
