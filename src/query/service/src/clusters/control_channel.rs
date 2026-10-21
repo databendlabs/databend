@@ -41,9 +41,11 @@ use crate::servers::flight::v1::actions::PING;
 /// Sending them over one cached HTTP/2 channel per node avoids a TCP handshake
 /// and a TIME_WAIT socket per request.
 ///
-/// A channel is reused only if a request on it succeeded within this window, so
-/// a channel idle for longer is replaced instead of being trusted.
-const CONTROL_CHANNEL_MAX_IDLE: Duration = Duration::from_secs(30);
+/// A channel without a successful request for this long is dropped. A quiet
+/// channel is verified with a ping before it is used, so this is not about
+/// trust but about not holding connections to peers that are no longer
+/// contacted.
+const CONTROL_CHANNEL_MAX_IDLE: Duration = Duration::from_secs(300);
 
 /// A cached channel is verified with a `PING` action before it carries a setup
 /// request, unless a request on it succeeded this recently. The setup requests
@@ -52,13 +54,15 @@ const CONTROL_CHANNEL_MAX_IDLE: Duration = Duration::from_secs(30);
 const CONTROL_CHANNEL_PING_FRESHNESS: Duration = Duration::from_secs(1);
 
 /// Bound for the ping, including the time tonic spends queueing it and
-/// reconnecting a closed connection underneath it. A ping that fails or times
-/// out only costs a new connection, so this can be short.
-const CONTROL_CHANNEL_PING_TIMEOUT: Duration = Duration::from_secs(5);
+/// reconnecting a closed connection underneath it. A timed-out ping drops the
+/// channel and dials a new connection to the same, probably overloaded, peer,
+/// so this is generous: a node that cannot answer a no-op within it will not
+/// finish the setup requests either.
+const CONTROL_CHANNEL_PING_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// A ping slower than this is logged: the node answered, but late, which is
 /// the signature of an overloaded peer rather than a dead one.
-const CONTROL_CHANNEL_SLOW_PING: Duration = Duration::from_secs(1);
+const CONTROL_CHANNEL_SLOW_PING: Duration = Duration::from_secs(5);
 
 static CONTROL_CHANNELS: LazyLock<ControlChannelCache<Channel>> =
     LazyLock::new(ControlChannelCache::default);
