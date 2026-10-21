@@ -748,6 +748,58 @@ fn test_range_constraints_keep_columns_and_types_separate() {
 }
 
 #[test]
+fn test_range_constraints_numeric_columns_with_string_bounds() {
+    // Issue #20775: the comparison functions convert strings to numbers, but
+    // Scalar ordering would compare the bounds lexicographically ("9" > "10").
+    // Mixed-type constraints must be left to the registered SQL functions.
+    for scalars in [
+        [2, 9, 10, 20, 50, 100].map(|value| Scalar::Number(NumberScalar::Int32(value))),
+        [2, 9, 10, 20, 50, 100].map(|value| Scalar::Number(NumberScalar::Int64(value))),
+        [2.0, 9.5, 10.0, 20.0, 50.0, 100.0]
+            .map(|value| Scalar::Number(NumberScalar::Float64(F64::from(value)))),
+    ] {
+        let data_type = scalars[0].as_ref().infer_data_type();
+        for data_type in [data_type.clone(), data_type.wrap_nullable()] {
+            let mut candidates = scalars.to_vec();
+            if data_type.is_nullable() {
+                candidates.push(Scalar::Null);
+            }
+            for constraints in [
+                [("gte", "9"), ("lte", "10")],
+                [("gte", "9.5"), ("lte", "10")],
+                [("eq", "10"), ("gt", "2")],
+                [("gt", "2"), ("lt", "20")],
+                [("gte", "10"), ("lte", "2")],
+                [("gte", "100"), ("lte", "20")],
+            ] {
+                let constraints = constraints
+                    .into_iter()
+                    .map(|(operator, value)| (operator, Scalar::String(value.to_string())))
+                    .collect::<Vec<_>>();
+                for conjunction in ["and_filters", "and"] {
+                    assert_range_fold(conjunction, &data_type, &constraints, &candidates, false);
+                }
+            }
+        }
+    }
+
+    // The guard must not disable same-type string range folding.
+    assert_range_fold(
+        "and_filters",
+        &DataType::String,
+        &[
+            ("gte", Scalar::String("9".to_string())),
+            ("lte", Scalar::String("10".to_string())),
+        ],
+        &[
+            Scalar::String("9".to_string()),
+            Scalar::String("10".to_string()),
+        ],
+        true,
+    );
+}
+
+#[test]
 fn test_range_constraints_many_conditions() {
     let data_type = DataType::Number(NumberDataType::UInt64);
     let args = (0..3000)
