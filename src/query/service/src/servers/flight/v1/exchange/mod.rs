@@ -29,6 +29,8 @@ mod exchange_transform_shuffle;
 mod fuse_part_exchange;
 mod hash_send_source;
 mod hash_send_transform;
+#[cfg(test)]
+mod hash_shuffle_tests;
 mod hash_shuffle_writer;
 mod outbound_send_channels;
 mod statistics_receiver;

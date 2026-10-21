@@ -174,7 +174,7 @@ impl CoalesceThreshold {
 
 /// Concatenates small blocks up to a threshold. Blocks of at least half the
 /// threshold, and blocks carrying meta, are passed through without copying.
-struct BlockCoalescer {
+pub(super) struct BlockCoalescer {
     threshold: Option<CoalesceThreshold>,
     blocks: Vec<DataBlock>,
     rows: usize,
@@ -183,7 +183,7 @@ struct BlockCoalescer {
 }
 
 impl BlockCoalescer {
-    fn create(threshold: Option<CoalesceThreshold>) -> BlockCoalescer {
+    pub(super) fn create(threshold: Option<CoalesceThreshold>) -> BlockCoalescer {
         BlockCoalescer {
             threshold,
             blocks: vec![],
@@ -193,7 +193,7 @@ impl BlockCoalescer {
         }
     }
 
-    fn push(&mut self, block: DataBlock) -> Result<()> {
+    pub(super) fn push(&mut self, block: DataBlock) -> Result<()> {
         let Some(threshold) = self.threshold else {
             self.ready.push_back(block);
             return Ok(());
@@ -230,7 +230,7 @@ impl BlockCoalescer {
     }
 
     /// Move the buffered blocks to the output queue. Returns whether any were moved.
-    fn flush(&mut self) -> Result<bool> {
+    pub(super) fn flush(&mut self) -> Result<bool> {
         if self.blocks.is_empty() {
             return Ok(false);
         }
@@ -246,7 +246,7 @@ impl BlockCoalescer {
         Ok(true)
     }
 
-    fn pop(&mut self) -> Option<DataBlock> {
+    pub(super) fn pop(&mut self) -> Option<DataBlock> {
         self.ready.pop_front()
     }
 }
