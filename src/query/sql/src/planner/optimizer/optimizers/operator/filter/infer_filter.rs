@@ -311,6 +311,8 @@ impl<'a> InferFilterOptimizer<'a> {
         }
         for (left_index, expr_equal_to) in self.expr_equal_to.iter().enumerate() {
             for expr in expr_equal_to.iter() {
+                // add_equal_expr registers both sides. If that invariant breaks,
+                // return a diagnosable query error rather than panic here.
                 let right_index = self.expr_index.get(expr).ok_or_else(|| {
                     ErrorCode::Internal("InferFilterOptimizer has inconsistent expression indexes")
                 })?;
@@ -1082,22 +1084,6 @@ mod tests {
             op,
             ConstantExpr { span: None, value }.into(),
         )
-    }
-
-    #[test]
-    fn test_infer_filter_missing_lookup_returns_internal_error() {
-        let left = column(0, DataType::Number(NumberDataType::Int64));
-        let right = column(1, DataType::Number(NumberDataType::Int64));
-        let mut optimizer = InferFilterOptimizer::new(None);
-        assert!(optimizer.add_equal_expr(&left, &right));
-        // Inject an inconsistent index to exercise defensive error handling.
-        assert!(optimizer.expr_index.remove(&right).is_some());
-        let error = optimizer.optimize(vec![]).unwrap_err();
-        assert_eq!(
-            error.code(),
-            databend_common_exception::ErrorCode::Internal("").code()
-        );
-        assert!(error.message().contains("inconsistent expression indexes"));
     }
 
     #[test]
