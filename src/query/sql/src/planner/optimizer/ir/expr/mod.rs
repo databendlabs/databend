@@ -13,26 +13,26 @@
 // limitations under the License.
 
 mod column_scope_validator;
-mod conversion;
 mod extract;
 mod m_expr;
 mod node;
 mod p_expr;
+mod physical_plan;
 mod s_expr;
 mod type_validator;
 mod visitor;
 
 pub use extract::Matcher;
 pub use extract::PatternExtractor;
+pub(crate) use m_expr::ImplementationState;
 pub use m_expr::MExpr;
 pub use node::Expr;
 pub use node::ExprKind;
-pub use node::RelExprKind;
-pub use node::RewriteExprKind;
 pub use node::ScanRequiredColumns;
 pub use node::Side;
 pub use p_expr::PExpr;
 pub use p_expr::Physical;
+pub use physical_plan::DefaultPhysicalPlanner;
 pub use s_expr::Logical;
 pub use s_expr::SExpr;
 pub use visitor::AsyncExprVisitor;

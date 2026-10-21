@@ -19,7 +19,7 @@ AggregateFinal
             ├── filters: [CAST(o.l_quantity (#1) AS Float64 NULL) < scalar_subquery_12 (#12)]
             ├── build join filters:
             │   └── filter id:1, build key:l_partkey (#7), probe targets:[o.l_partkey (#0)@scan0], filter type:bloom,inlist,min_max
-            ├── estimated rows: 15387730769.23
+            ├── estimated rows: 569915954.42
             ├── Exchange(Build)
             │   ├── output columns: [0.2 * (sum(s.l_quantity) / if(count(s.l_quantity) = 0, 1, count(s.l_quantity))) (#12), s.l_partkey (#7)]
             │   ├── exchange type: Broadcast
@@ -32,7 +32,7 @@ AggregateFinal
             │       ├── filters: []
             │       ├── build join filters:
             │       │   └── filter id:0, build key:l_partkey (#7), probe targets:[p_partkey (#3)@scan1], filter type:bloom,inlist,min_max
-            │       ├── estimated rows: 5128.21
+            │       ├── estimated rows: 189.93
             │       ├── Exchange(Build)
             │       │   ├── output columns: [s.l_partkey (#7), 0.2 * (sum(s.l_quantity) / if(count(s.l_quantity) = 0, 1, count(s.l_quantity))) (#12)]
             │       │   ├── exchange type: Broadcast
@@ -72,7 +72,7 @@ AggregateFinal
             │           ├── partitions scanned: 0
             │           ├── push downs: [filters: [part.p_brand (#4) = 'Brand#23' and part.p_container (#5) = 'MED BOX'], limit: NONE]
             │           ├── apply join filters: [#0]
-            │           └── estimated rows: 5128.21
+            │           └── estimated rows: 189.93
             └── TableScan(Probe)
                 ├── table: default.default.lineitem
                 ├── scan id: 0

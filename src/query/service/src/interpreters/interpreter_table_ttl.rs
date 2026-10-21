@@ -127,7 +127,8 @@ impl Interpreter for AlterTableTtlInterpreter {
             let mut meta = table.get_table_info().meta.clone();
             meta.ttl = plan.ttl.clone();
             meta.updated_on = Utc::now();
-            update_table_meta(fuse_table, &meta, catalog, self.ctx.get_tenant()).await?;
+            // Pure metadata change: the snapshot location does not move, so no LVT fence.
+            update_table_meta(fuse_table, &meta, catalog, self.ctx.get_tenant(), None).await?;
             Ok(PipelineBuildResult::create())
         })
     }

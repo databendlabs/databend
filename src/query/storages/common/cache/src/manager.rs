@@ -57,6 +57,8 @@ use crate::caches::VectorIndexMetaCache;
 use crate::caches::VirtualColumnMetaCache;
 use crate::providers::HybridCache;
 use crate::providers::HybridCacheExt;
+use crate::vector_index_cache::MEMORY_CACHE_VECTOR_INDEX;
+use crate::vector_index_cache::VectorIndexCache;
 
 static DEFAULT_PARQUET_META_DATA_CACHE_ITEMS: usize = 3000;
 
@@ -123,6 +125,7 @@ pub struct CacheManager {
     inverted_index_full_payload_cache: CacheSlot<InvertedIndexFullPayloadCache>,
     vector_index_meta_cache: CacheSlot<VectorIndexMetaCache>,
     vector_index_file_cache: CacheSlot<VectorIndexFileCache>,
+    vector_index_cache: CacheSlot<VectorIndexCache>,
     spatial_index_meta_cache: CacheSlot<SpatialIndexMetaCache>,
     spatial_index_file_cache: CacheSlot<SpatialIndexFileCache>,
     virtual_column_meta_cache: CacheSlot<VirtualColumnMetaCache>,
@@ -249,6 +252,7 @@ impl CacheManager {
                 inverted_index_full_payload_cache: CacheSlot::new(None),
                 vector_index_meta_cache: CacheSlot::new(None),
                 vector_index_file_cache: CacheSlot::new(None),
+                vector_index_cache: CacheSlot::new(None),
                 spatial_index_meta_cache: CacheSlot::new(None),
                 spatial_index_file_cache: CacheSlot::new(None),
                 virtual_column_meta_cache: CacheSlot::new(None),
@@ -416,8 +420,9 @@ impl CacheManager {
                 )?
             };
 
-            // setup vector index filter cache
-            let vector_index_file_size = if config.vector_index_filter_memory_ratio != 0 {
+            // Reuse the existing vector-index memory budget for decoded, directly searchable
+            // objects. Keep only the disk tier for serialized files to avoid double budgeting.
+            let vector_index_size = if config.vector_index_filter_memory_ratio != 0 {
                 (*max_server_memory_usage as usize)
                     * config.vector_index_filter_memory_ratio as usize
                     / 100
@@ -431,7 +436,7 @@ impl CacheManager {
                         .join("vector_index_file_v1");
                 Self::new_hybrid_cache_slot(
                     HYBRID_CACHE_VECTOR_INDEX_FILE,
-                    vector_index_file_size,
+                    0,
                     Unit::Bytes,
                     &vector_index_file_on_disk_cache_path,
                     on_disk_cache_queue_size,
@@ -441,6 +446,10 @@ impl CacheManager {
                     ee_mode,
                 )?
             };
+
+            let vector_index_cache = CacheSlot::new(
+                (vector_index_size > 0).then(|| VectorIndexCache::new(vector_index_size)),
+            );
 
             let spatial_index_meta_cache = {
                 let spatial_index_meta_on_disk_cache_path =
@@ -541,6 +550,7 @@ impl CacheManager {
                 inverted_index_full_payload_cache,
                 vector_index_meta_cache,
                 vector_index_file_cache,
+                vector_index_cache,
                 spatial_index_meta_cache,
                 spatial_index_file_cache,
                 virtual_column_meta_cache,
@@ -589,6 +599,7 @@ impl CacheManager {
             // are retained until deep clearance.
             CacheManager::clear_cache(&me.inverted_index_full_payload_cache);
             CacheManager::clear_cache(&me.inverted_index_payload_cache);
+            CacheManager::clear_cache(&me.vector_index_cache);
         }
 
         fn clear_extra_caches(me: &CacheManager) {
@@ -680,12 +691,16 @@ impl CacheManager {
                     name,
                 );
             }
-            HYBRID_CACHE_VECTOR_INDEX_FILE | IN_MEMORY_HYBRID_CACHE_VECTOR_INDEX_FILE => {
-                Self::set_hybrid_cache_bytes_capacity(
-                    &self.vector_index_file_cache,
-                    new_capacity,
-                    name,
-                );
+            HYBRID_CACHE_VECTOR_INDEX_FILE | MEMORY_CACHE_VECTOR_INDEX => {
+                let capacity = usize::try_from(new_capacity).map_err(|_| {
+                    ErrorCode::BadArguments("decoded vector-index cache size exceeds this platform")
+                })?;
+                if let Some(cache) = self.vector_index_cache.get() {
+                    cache.set_bytes_capacity(capacity);
+                } else if capacity > 0 {
+                    self.vector_index_cache
+                        .set(Some(VectorIndexCache::new(capacity)));
+                }
             }
             HYBRID_CACHE_SPATIAL_INDEX_FILE_META_DATA
             | IN_MEMORY_HYBRID_CACHE_SPATIAL_INDEX_FILE_META_DATA => {
@@ -891,6 +906,10 @@ impl CacheManager {
         self.get_hybrid_cache(self.vector_index_file_cache.get())
     }
 
+    pub fn get_vector_index_cache(&self) -> Option<VectorIndexCache> {
+        self.vector_index_cache.get()
+    }
+
     pub fn get_spatial_index_meta_cache(&self) -> Option<SpatialIndexMetaCache> {
         self.get_hybrid_cache(self.spatial_index_meta_cache.get())
     }
@@ -1051,7 +1070,6 @@ const HYBRID_CACHE_INVERTED_INDEX_META: &str = "cache_inverted_index_meta_data";
 const IN_MEMORY_HYBRID_CACHE_INVERTED_INDEX_META: &str = "memory_cache_inverted_index_meta_data";
 
 const HYBRID_CACHE_VECTOR_INDEX_FILE: &str = "cache_vector_index_file";
-const IN_MEMORY_HYBRID_CACHE_VECTOR_INDEX_FILE: &str = "memory_cache_vector_index_file";
 const HYBRID_CACHE_VECTOR_INDEX_FILE_META_DATA: &str = "cache_vector_index_file_meta_data";
 const IN_MEMORY_HYBRID_CACHE_VECTOR_INDEX_FILE_META_DATA: &str =
     "memory_cache_vector_index_file_meta_data";
@@ -1512,6 +1530,200 @@ mod tests {
                 .is_empty()
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_vector_index_cache_reuses_existing_memory_budget() -> Result<()> {
+        let max_server_memory_usage = 4 * 1024 * 1024;
+        let default_config = CacheConfig::default();
+        let default_capacity = default_config.vector_index_filter_size;
+        let cases = [
+            (default_config, Some(default_capacity)),
+            (
+                CacheConfig {
+                    vector_index_filter_size: 54321,
+                    ..Default::default()
+                },
+                Some(54321),
+            ),
+            (
+                CacheConfig {
+                    vector_index_filter_size: 1,
+                    vector_index_filter_memory_ratio: 25,
+                    ..Default::default()
+                },
+                Some(max_server_memory_usage / 4),
+            ),
+            (
+                CacheConfig {
+                    vector_index_filter_size: 0,
+                    vector_index_filter_memory_ratio: 25,
+                    ..Default::default()
+                },
+                Some(max_server_memory_usage / 4),
+            ),
+            (
+                CacheConfig {
+                    vector_index_filter_size: 0,
+                    ..Default::default()
+                },
+                None,
+            ),
+            (
+                CacheConfig {
+                    enable_table_meta_cache: false,
+                    ..Default::default()
+                },
+                None,
+            ),
+        ];
+        for (config, capacity) in cases {
+            let manager = CacheManager::try_new(&config, &max_server_memory_usage, "test", false)?;
+            let cache = manager.get_vector_index_cache();
+            assert_eq!(cache.is_some(), capacity.is_some());
+            assert_eq!(cache.bytes_capacity(), capacity.unwrap_or_default());
+            // The same budget must not also be allocated to serialized files in memory.
+            assert!(
+                manager
+                    .get_vector_index_file_cache()
+                    .in_memory_cache()
+                    .is_none()
+            );
+            assert!(
+                manager
+                    .get_vector_index_file_cache()
+                    .on_disk_cache()
+                    .is_none()
+            );
+            if config.enable_table_meta_cache {
+                assert_eq!(
+                    manager.get_vector_index_meta_cache().items_capacity(),
+                    config.vector_index_meta_count
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_vector_index_capacity_names_resize_the_same_budget() -> Result<()> {
+        let config = CacheConfig {
+            vector_index_filter_size: 0,
+            ..Default::default()
+        };
+        let manager = CacheManager::try_new(&config, &(1024 * 1024), "test", false)?;
+        assert!(manager.get_vector_index_cache().is_none());
+        for name in [HYBRID_CACHE_VECTOR_INDEX_FILE, MEMORY_CACHE_VECTOR_INDEX] {
+            manager.set_cache_capacity(name, 12345)?;
+            let cache = manager.get_vector_index_cache().unwrap();
+            assert_eq!(cache.bytes_capacity(), 12345);
+            assert!(
+                manager
+                    .get_vector_index_file_cache()
+                    .in_memory_cache()
+                    .is_none()
+            );
+            manager.set_cache_capacity(name, 0)?;
+            assert_eq!(cache.bytes_capacity(), 0);
+            assert_eq!(manager.get_vector_index_cache().bytes_capacity(), 0);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_vector_index_cache_memory_clearance() -> Result<()> {
+        use databend_common_expression::Column;
+        use databend_common_expression::types::F32;
+        use databend_common_expression::types::VectorColumn;
+        use databend_storages_common_index::DistanceType;
+        use databend_storages_common_index::HNSWIndex;
+
+        use crate::CachedVectorIndex;
+
+        let config = CacheConfig {
+            vector_index_filter_size: 1024 * 1024,
+            ..Default::default()
+        };
+        let manager = CacheManager::try_new(&config, &(1024 * 1024), "test", false)?;
+        let cache = manager.get_vector_index_cache().unwrap();
+        let values = (0..64)
+            .map(|i| F32::from((i as f32 * 0.17).sin()))
+            .collect::<Vec<_>>();
+        let column = Column::Vector(VectorColumn::Float32((values.into(), 8)));
+        let (_, entries) = HNSWIndex::build(4, 8, 0, column, DistanceType::L2)?;
+        let columns = entries.iter().map(|entry| entry.to_column()).collect();
+        let index = HNSWIndex::open(DistanceType::L2, 8, 8, columns)?;
+        let reader = cache.insert("index".to_string(), CachedVectorIndex::new(index));
+        manager.release_cache_memory(CacheClearanceLevel::Basic);
+        assert!(cache.is_empty());
+        assert!(cache.bytes_size() > 0);
+        drop(reader);
+        assert_eq!(cache.bytes_size(), 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_vector_index_files_remain_disk_only_when_memory_budget_changes() -> Result<()> {
+        use crate::VectorIndexFile;
+
+        let temp_dir = TempDir::new()?;
+        let cache_path = temp_dir.path().to_string_lossy();
+        let mut config = config_with_disk_cache_enabled(&cache_path);
+        config.vector_index_filter_size = 12345;
+        let manager = CacheManager::try_new(&config, &(1024 * 1024), "test", true)?;
+        let files = manager.get_vector_index_file_cache().unwrap();
+        assert!(files.in_memory_cache().is_none());
+        let disk_capacity = config.disk_cache_vector_index_data_size;
+        assert_eq!(
+            files.on_disk_cache().unwrap().bytes_capacity(),
+            disk_capacity
+        );
+        let data = Bytes::from_static(b"persisted vector index");
+        files.insert(
+            "index".to_string(),
+            VectorIndexFile::create("graph_links".to_string(), data.clone()),
+        );
+        // Once the padding item leaves the single-worker queue, the first write has completed.
+        files.insert(
+            "padding".to_string(),
+            VectorIndexFile::create("padding".to_string(), Bytes::new()),
+        );
+        files
+            .on_disk_cache()
+            .unwrap()
+            .till_no_pending_items_in_queue();
+        for name in [HYBRID_CACHE_VECTOR_INDEX_FILE, MEMORY_CACHE_VECTOR_INDEX] {
+            for capacity in [54321, 0] {
+                manager.set_cache_capacity(name, capacity)?;
+                assert_eq!(manager.get_vector_index_cache().bytes_capacity(), capacity);
+                let files = manager.get_vector_index_file_cache().unwrap();
+                assert!(files.in_memory_cache().is_none());
+                assert_eq!(
+                    files.on_disk_cache().unwrap().bytes_capacity(),
+                    disk_capacity
+                );
+                assert_eq!(files.get("index").unwrap().data, data);
+            }
+        }
+        manager.release_cache_memory(CacheClearanceLevel::Basic);
+        assert_eq!(files.get("index").unwrap().data, data);
+        manager.set_allows_disk_cache(false);
+        assert!(
+            manager
+                .get_vector_index_file_cache()
+                .on_disk_cache()
+                .is_none()
+        );
+        manager.set_allows_disk_cache(true);
+        assert_eq!(
+            manager
+                .get_vector_index_file_cache()
+                .get("index")
+                .unwrap()
+                .data,
+            data
+        );
         Ok(())
     }
 

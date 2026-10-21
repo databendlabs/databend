@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -36,6 +37,7 @@ use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::PerfConfig;
 use databend_common_base::runtime::PerfEvent;
 use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::drop_guard;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
@@ -173,7 +175,14 @@ pub struct QueryContextShared {
 
     pub(super) pruned_partitions_stats: Arc<RwLock<HashMap<u32, PartStatistics>>>,
 
-    pub(super) io_stats: Arc<IoStats>,
+    /// Object storage IO of this query on this node. Shared with the
+    /// `TrackingPayload.io_stats` of the threads executing the query, so the
+    /// global storage metrics layer records into it regardless of which
+    /// table instance performed the IO.
+    pub(super) local_io_stats: Arc<IoStats>,
+    /// IO reported by remote nodes for this query. Remote nodes send deltas
+    /// (see `StatisticsSender::send_io_stats`), so they are accumulated here.
+    pub(super) remote_io_stats: Arc<IoStats>,
 
     pub(super) broadcast_registry: BroadcastRegistry,
 
@@ -265,7 +274,8 @@ impl QueryContextShared {
             mem_stat: Arc::new(RwLock::new(None)),
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
             pruned_partitions_stats: Arc::new(RwLock::new(HashMap::new())),
-            io_stats: Default::default(),
+            local_io_stats: ThreadTracker::io_stats().cloned().unwrap_or_default(),
+            remote_io_stats: Default::default(),
             broadcast_registry: Default::default(),
             perf_config: Mutex::new(PerfConfig::default()),
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
@@ -399,19 +409,44 @@ impl QueryContextShared {
         tables.values().cloned().collect()
     }
 
+    /// Data metrics of the whole query.
+    ///
+    /// Byte and cost counters come from the per-query `IoStats` (local node plus
+    /// the latest snapshot of every remote node). Partition counters come from
+    /// the tables attached to this query, which is where pruning records them.
+    /// Partition counters of the tables attached to this context.
+    ///
+    /// Only `partitions_scanned` / `partitions_total` are meaningful here; the
+    /// byte and cost fields of the returned value are not populated. Storage IO
+    /// of the query is accounted per query in `IoStats`, see [`Self::get_io_stats`].
     pub fn get_data_metrics(&self) -> StorageMetrics {
         let tables = self.get_tables_refs();
-        let metrics: Vec<Arc<StorageMetrics>> =
-            tables.iter().filter_map(|v| v.get_data_metrics()).collect();
-        StorageMetrics::merge(&metrics)
+        // A stream and its ordinary source may expose the same metrics instance.
+        let mut seen = HashSet::new();
+        let table_metrics: Vec<Arc<StorageMetrics>> = tables
+            .iter()
+            .filter_map(|table| table.get_data_metrics())
+            .filter(|metrics| seen.insert(Arc::as_ptr(metrics)))
+            .collect();
+        StorageMetrics::merge(&table_metrics)
     }
 
-    pub fn merge_io_stats(&self, stats: &IoStatsSnapshot) {
-        self.io_stats.merge_snapshot(stats);
+    /// The IO counter of this query on this node. Threads executing the query
+    /// must carry it in their `TrackingPayload.io_stats`.
+    pub fn get_local_io_stats(&self) -> Arc<IoStats> {
+        self.local_io_stats.clone()
     }
 
+    /// Add an IO delta reported by a remote node.
+    pub fn merge_remote_io_stats(&self, delta: &IoStatsSnapshot) {
+        self.remote_io_stats.merge_snapshot(delta);
+    }
+
+    /// IO of the whole query: this node plus everything reported by remote nodes.
     pub fn get_io_stats(&self) -> IoStatsSnapshot {
-        self.io_stats.snapshot()
+        let mut stats = self.local_io_stats.snapshot();
+        stats.merge(&self.remote_io_stats.snapshot());
+        stats
     }
 
     pub fn get_tenant(&self) -> Tenant {
@@ -494,7 +529,7 @@ impl QueryContextShared {
         }
     }
 
-    // Cache the source table of a stream table to ensure can get the same table metadata.
+    // Bind streams to their own batch snapshots, separately from ordinary table refs.
     #[async_backtrace::framed]
     async fn cache_stream_source_table(
         &self,
@@ -507,54 +542,72 @@ impl QueryContextShared {
         }
 
         let stream = StreamTable::try_from_table(table.as_ref())?;
+        // Keep the shared-database identity check even when restoring a pinned source.
         let source_database_name = stream
             .source_database_name(catalog.as_ref(), &self.get_tenant())
             .await?;
-        let source_table_name = stream.source_table_name(catalog.as_ref()).await?;
-        let meta_key = (
-            catalog.name(),
-            source_database_name.to_string(),
-            source_table_name.to_string(),
-        );
-        let already_in_cache = { self.tables_refs.lock().contains_key(&meta_key) };
-        let source_table = match already_in_cache {
-            false => {
-                let stream_desc = &stream.get_table_info().desc;
-                let source_table =
-                    match catalog.get_stream_source_table(stream_desc, max_batch_size)? {
-                        Some(source_table) => source_table,
-                        None => {
-                            let source_table = stream
-                                .navigate_within_batch_limit(
-                                    catalog.as_ref(),
-                                    &self.get_tenant(),
-                                    &source_database_name,
-                                    &source_table_name,
-                                    max_batch_size,
-                                    self.get_settings()
-                                        .get_enable_stream_batch_snapshot_forward_scan()?,
-                                    self.get_settings().get_s3_storage_class()?,
-                                )
-                                .await?;
-                            catalog.cache_stream_source_table(
-                                stream.get_table_info().clone(),
-                                source_table.get_table_info().clone(),
-                                max_batch_size,
-                            );
-                            source_table
-                        }
-                    };
-
-                let mut tables_refs = self.tables_refs.lock();
-                tables_refs.entry(meta_key).or_insert(source_table.clone());
+        let stream_desc = &stream.get_table_info().desc;
+        // Always validate and reuse the transaction's stream batch, even when
+        // this query has already referenced the ordinary source table.
+        let source_table = match catalog.get_stream_source_table(stream_desc, max_batch_size)? {
+            Some(source_table) => source_table,
+            None => {
+                let source_table_name = stream.source_table_name(catalog.as_ref()).await?;
+                let meta_key = (
+                    catalog.name(),
+                    source_database_name.to_string(),
+                    source_table_name.to_string(),
+                );
+                let cached_source = self.tables_refs.lock().get(&meta_key).cloned();
+                let source = match cached_source {
+                    Some(source) => source,
+                    None => {
+                        let source = catalog
+                            .get_table(
+                                &self.get_tenant(),
+                                &source_database_name,
+                                &source_table_name,
+                            )
+                            .await
+                            .map_err(|err| {
+                                if matches!(
+                                    err.code(),
+                                    ErrorCode::LICENSE_KEY_INVALID | ErrorCode::LICENSE_KEY_EXPIRED
+                                ) {
+                                    return err;
+                                }
+                                ErrorCode::IllegalStream(format!(
+                                    "Cannot get base table '{}'.'{}' from stream {}, cause: {}",
+                                    source_database_name,
+                                    source_table_name,
+                                    stream_desc,
+                                    err.message()
+                                ))
+                            })?;
+                        // Only the full source belongs in the ordinary table cache.
+                        self.tables_refs
+                            .lock()
+                            .entry(meta_key)
+                            .or_insert(source)
+                            .clone()
+                    }
+                };
+                let source_table = stream
+                    .navigate_within_batch_limit(
+                        source,
+                        max_batch_size,
+                        self.get_settings()
+                            .get_enable_stream_batch_snapshot_forward_scan()?,
+                        self.get_settings().get_s3_storage_class()?,
+                    )
+                    .await?;
+                catalog.cache_stream_source_table(
+                    stream.get_table_info().clone(),
+                    source_table.get_table_info().clone(),
+                    max_batch_size,
+                );
                 source_table
             }
-            true => self
-                .tables_refs
-                .lock()
-                .get(&meta_key)
-                .ok_or_else(|| ErrorCode::Internal("Logical error, it's a bug."))?
-                .clone(),
         };
 
         let mut stream_info = stream.get_table_info().to_owned();

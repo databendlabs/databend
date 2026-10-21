@@ -67,12 +67,11 @@ impl MutationPlan {
     }
 
     pub fn mutation(&self) -> Result<&Mutation> {
-        let plan = match self {
-            Self::Logical(expr) => expr.plan(),
-            Self::Planned(expr) => expr.plan(),
-        };
-        plan.as_mutation()
-            .ok_or_else(|| ErrorCode::Internal("Expected a mutation root"))
+        match self {
+            Self::Logical(expr) => expr.plan().as_mutation(),
+            Self::Planned(expr) => expr.plan().as_mutation(),
+        }
+        .ok_or_else(|| ErrorCode::Internal("Expected a mutation root"))
     }
 
     pub fn input_udfs(&self) -> Result<std::collections::HashSet<&String>> {

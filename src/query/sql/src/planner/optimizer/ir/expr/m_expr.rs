@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -24,7 +22,15 @@ use crate::optimizer::ir::group::Group;
 use crate::optimizer::optimizers::rule::AppliedRules;
 use crate::optimizer::optimizers::rule::RulePtr;
 use crate::optimizer::optimizers::rule::TransformResult;
-use crate::plans::RelOperator;
+use crate::plans::MemoOperator;
+
+/// Enumeration is independent of required properties and completed before costing.
+/// Physical expressions have no logical implementation-enumeration state.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ImplementationState {
+    Pending,
+    Complete,
+}
 
 /// `MExpr` is abbreviation of multiple expression, which is the representation of relational
 /// expressions inside `Memo`.
@@ -35,7 +41,8 @@ pub struct MExpr {
     // index of current `MExpr` within a `Group`
     pub(crate) index: IndexType,
 
-    pub(crate) plan: Arc<RelOperator>,
+    pub(crate) plan: MemoOperator,
+    pub(crate) implementation: Option<ImplementationState>,
     pub(crate) children: Vec<IndexType>,
 
     // Disable rules for current `MExpr`
@@ -46,17 +53,22 @@ impl MExpr {
     pub fn new(
         group_index: IndexType,
         index: IndexType,
-        plan: Arc<RelOperator>,
+        plan: MemoOperator,
         children: Vec<IndexType>,
         applied_rules: AppliedRules,
     ) -> Self {
         MExpr {
             group_index,
+            implementation: plan.is_logical().then_some(ImplementationState::Pending),
             plan,
             children,
             index,
             applied_rules,
         }
+    }
+
+    pub fn plan(&self) -> &MemoOperator {
+        &self.plan
     }
 
     pub fn arity(&self) -> usize {

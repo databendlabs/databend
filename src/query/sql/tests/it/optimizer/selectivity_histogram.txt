@@ -1,90 +1,310 @@
+=== sparse_synthetic_histogram_materialized_false ===
+description: Sparse histograms must not cap range fallbacks, even after materializing counts; coarse bounds still refine.
+expr          : a < 1000
+cardinality   : 1000
+estimated     : 500
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.001, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500000.0, num_distinct: 500000.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500000.0, num_distinct: 500000.0 }] }) }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 500.0, null_count: 0, histogram: None }
+
+expr          : a >= 999000
+cardinality   : 1000
+estimated     : 500
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.001, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500000.0, num_distinct: 500000.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500000.0, num_distinct: 500000.0 }] }) }
+out stats     :
+0 ColumnStat { min: UInt(999000), max: UInt(999999), ndv: 500.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a >= 100, a < 1000)
+cardinality   : 1000
+estimated     : 500
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.001, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500000.0, num_distinct: 500000.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500000.0, num_distinct: 500000.0 }] }) }
+out stats     :
+0 ColumnStat { min: UInt(100), max: UInt(999), ndv: 500.0, null_count: 0, histogram: None }
+
+expr          : true
+cardinality   : 1000
+estimated     : 1000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.001, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500000.0, num_distinct: 500000.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500000.0, num_distinct: 500000.0 }] }) }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: None }
+
+=== sparse_synthetic_histogram_materialized_true ===
+description: Sparse histograms must not cap range fallbacks, even after materializing counts; coarse bounds still refine.
+expr          : a < 1000
+cardinality   : 1000
+estimated     : 500
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.001, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500.0, num_distinct: 500.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500.0, num_distinct: 500.0 }] }) }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 500.0, null_count: 0, histogram: None }
+
+expr          : a >= 999000
+cardinality   : 1000
+estimated     : 500
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.001, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500.0, num_distinct: 500.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500.0, num_distinct: 500.0 }] }) }
+out stats     :
+0 ColumnStat { min: UInt(999000), max: UInt(999999), ndv: 500.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a >= 100, a < 1000)
+cardinality   : 1000
+estimated     : 500
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.001, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500.0, num_distinct: 500.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500.0, num_distinct: 500.0 }] }) }
+out stats     :
+0 ColumnStat { min: UInt(100), max: UInt(999), ndv: 500.0, null_count: 0, histogram: None }
+
+expr          : true
+cardinality   : 1000
+estimated     : 1000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.001, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500.0, num_distinct: 500.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500.0, num_distinct: 500.0 }] }) }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: None }
+
+=== sparse_sampled_histogram_materialized_false ===
+description: Sparse histograms must not cap range fallbacks, even after materializing counts; coarse bounds still refine.
+expr          : a < 1000
+cardinality   : 1000
+estimated     : 500
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.001, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500000.0, num_distinct: 500000.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500000.0, num_distinct: 500000.0 }] }) }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 500.0, null_count: 0, histogram: None }
+
+expr          : a >= 999000
+cardinality   : 1000
+estimated     : 500
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.001, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500000.0, num_distinct: 500000.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500000.0, num_distinct: 500000.0 }] }) }
+out stats     :
+0 ColumnStat { min: UInt(999000), max: UInt(999999), ndv: 500.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a >= 100, a < 1000)
+cardinality   : 1000
+estimated     : 500
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.001, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500000.0, num_distinct: 500000.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500000.0, num_distinct: 500000.0 }] }) }
+out stats     :
+0 ColumnStat { min: UInt(100), max: UInt(999), ndv: 500.0, null_count: 0, histogram: None }
+
+expr          : true
+cardinality   : 1000
+estimated     : 1000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.001, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500000.0, num_distinct: 500000.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500000.0, num_distinct: 500000.0 }] }) }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: None }
+
+=== sparse_sampled_histogram_materialized_true ===
+description: Sparse histograms must not cap range fallbacks, even after materializing counts; coarse bounds still refine.
+expr          : a < 1000
+cardinality   : 1000
+estimated     : 500
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.001, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500.0, num_distinct: 500.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500.0, num_distinct: 500.0 }] }) }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999), ndv: 500.0, null_count: 0, histogram: None }
+
+expr          : a >= 999000
+cardinality   : 1000
+estimated     : 500
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.001, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500.0, num_distinct: 500.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500.0, num_distinct: 500.0 }] }) }
+out stats     :
+0 ColumnStat { min: UInt(999000), max: UInt(999999), ndv: 500.0, null_count: 0, histogram: None }
+
+expr          : and_filters(a >= 100, a < 1000)
+cardinality   : 1000
+estimated     : 500
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.001, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500.0, num_distinct: 500.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500.0, num_distinct: 500.0 }] }) }
+out stats     :
+0 ColumnStat { min: UInt(100), max: UInt(999), ndv: 500.0, null_count: 0, histogram: None }
+
+expr          : true
+cardinality   : 1000
+estimated     : 1000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.001, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500.0, num_distinct: 500.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500.0, num_distinct: 500.0 }] }) }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: None }
+
+=== synthetic_histogram_retention_threshold ===
+description: Filtering another column should discard the histogram below 50% distinct retention, but preserve it at or above the threshold.
+expr          : true
+cardinality   : 1000000
+estimated     : 1000000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000000.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500000.0, num_distinct: 500000.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500000.0, num_distinct: 500000.0 }] }) }
+1 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000000.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500000.0, num_distinct: 500000.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500000.0, num_distinct: 500000.0 }] }) }
+1 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+
+expr          : b < 500
+cardinality   : 1000000
+estimated     : 500000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000000.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500000.0, num_distinct: 500000.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500000.0, num_distinct: 500000.0 }] }) }
+1 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 500000.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500000.0, num_distinct: 500000.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500000.0, num_distinct: 500000.0 }] }) }
+1 ColumnStat { min: UInt(0), max: UInt(499), ndv: 500.0, null_count: 0, histogram: None }
+
+expr          : b < 499
+cardinality   : 1000000
+estimated     : 499000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000000.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500000.0, num_distinct: 500000.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500000.0, num_distinct: 500000.0 }] }) }
+1 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 499000.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(498), ndv: 499.0, null_count: 0, histogram: None }
+
+expr          : b = 0
+cardinality   : 1000000
+estimated     : 1000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000000.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500000.0, num_distinct: 500000.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500000.0, num_distinct: 500000.0 }] }) }
+1 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(0), ndv: 1.0, null_count: 0, histogram: None }
+
+=== sampled_histogram_retention_threshold ===
+description: Filtering another column should discard the histogram below 50% distinct retention, but preserve it at or above the threshold.
+expr          : true
+cardinality   : 1000000
+estimated     : 1000000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000000.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500000.0, num_distinct: 500000.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500000.0, num_distinct: 500000.0 }] }) }
+1 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000000.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500000.0, num_distinct: 500000.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500000.0, num_distinct: 500000.0 }] }) }
+1 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+
+expr          : b < 500
+cardinality   : 1000000
+estimated     : 500000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000000.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500000.0, num_distinct: 500000.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500000.0, num_distinct: 500000.0 }] }) }
+1 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 500000.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500000.0, num_distinct: 500000.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500000.0, num_distinct: 500000.0 }] }) }
+1 ColumnStat { min: UInt(0), max: UInt(499), ndv: 500.0, null_count: 0, histogram: None }
+
+expr          : b < 499
+cardinality   : 1000000
+estimated     : 499000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000000.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500000.0, num_distinct: 500000.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500000.0, num_distinct: 500000.0 }] }) }
+1 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 499000.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(498), ndv: 499.0, null_count: 0, histogram: None }
+
+expr          : b = 0
+cardinality   : 1000000
+estimated     : 1000
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000000.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 499999, num_values: 500000.0, num_distinct: 500000.0 }, TypedHistogramBucket { lower_bound: 500000, upper_bound: 999999, num_values: 500000.0, num_distinct: 500000.0 }] }) }
+1 ColumnStat { min: UInt(0), max: UInt(999), ndv: 1000.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(999999), ndv: 1000.0, null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(0), ndv: 1.0, null_count: 0, histogram: None }
+
 === histogram_comparison_predicates ===
-description: Histogram comparisons should restrict bucket ranges, counts, and accuracy consistently.
+description: Histogram comparisons should restrict bucket ranges and counts consistently.
 expr          : h >= 10
 cardinality   : 100
 estimated     : 10
 in stats      :
-0 ColumnStat { min: Int(1), max: Int(10), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 1, upper_bound: 10, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: Int(1), max: Int(10), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 1, upper_bound: 10, num_values: 100.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: Int(10), max: Int(10), ndv: 1.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 10, upper_bound: 10, num_values: 10.0, num_distinct: 1.0 }], avg_spacing: None }) }
+0 ColumnStat { min: Int(10), max: Int(10), ndv: 1.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 10, upper_bound: 10, num_values: 10.0, num_distinct: 1.0 }] }) }
 
 expr          : h < 10
 cardinality   : 100
 estimated     : 90
 in stats      :
-0 ColumnStat { min: Int(1), max: Int(10), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 1, upper_bound: 10, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: Int(1), max: Int(10), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 1, upper_bound: 10, num_values: 100.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: Int(1), max: Int(9), ndv: 9.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 1, upper_bound: 9, num_values: 90.0, num_distinct: 9.0 }], avg_spacing: None }) }
+0 ColumnStat { min: Int(1), max: Int(9), ndv: 9.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 1, upper_bound: 9, num_values: 90.0, num_distinct: 9.0 }] }) }
 
 expr          : h != 5
 cardinality   : 100
 estimated     : 90
 in stats      :
-0 ColumnStat { min: Int(1), max: Int(10), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 1, upper_bound: 10, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: Int(1), max: Int(10), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 1, upper_bound: 10, num_values: 100.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: Int(1), max: Int(10), ndv: ~9.999999999[..10.0], null_count: 0, histogram: Some(TypedHistogram { accuracy: false, row_scale: 0.9, buckets: [TypedHistogramBucket { lower_bound: 1, upper_bound: 10, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: Int(1), max: Int(10), ndv: ~9.999999999[..10.0], null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.9, buckets: [TypedHistogramBucket { lower_bound: 1, upper_bound: 10, num_values: 100.0, num_distinct: 10.0 }] }) }
 
 expr          : u > 4
 cardinality   : 100
 estimated     : 50
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: UInt(5), max: UInt(9), ndv: 5.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 5, upper_bound: 9, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(5), max: UInt(9), ndv: 5.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 5, upper_bound: 9, num_values: 50.0, num_distinct: 5.0 }] }) }
 
 expr          : m >= 5
 cardinality   : 100
 estimated     : 75
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(19), ndv: 20.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 50.0, num_distinct: 10.0 }, TypedHistogramBucket { lower_bound: 10, upper_bound: 19, num_values: 50.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(19), ndv: 20.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 50.0, num_distinct: 10.0 }, TypedHistogramBucket { lower_bound: 10, upper_bound: 19, num_values: 50.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: UInt(5), max: UInt(19), ndv: 15.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 5, upper_bound: 9, num_values: 25.0, num_distinct: 5.0 }, TypedHistogramBucket { lower_bound: 10, upper_bound: 19, num_values: 50.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(5), max: UInt(19), ndv: 15.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 5, upper_bound: 9, num_values: 25.0, num_distinct: 5.0 }, TypedHistogramBucket { lower_bound: 10, upper_bound: 19, num_values: 50.0, num_distinct: 10.0 }] }) }
 
 expr          : m < 15
 cardinality   : 100
 estimated     : 75
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(19), ndv: 20.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 50.0, num_distinct: 10.0 }, TypedHistogramBucket { lower_bound: 10, upper_bound: 19, num_values: 50.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(19), ndv: 20.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 50.0, num_distinct: 10.0 }, TypedHistogramBucket { lower_bound: 10, upper_bound: 19, num_values: 50.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(14), ndv: 15.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 50.0, num_distinct: 10.0 }, TypedHistogramBucket { lower_bound: 10, upper_bound: 14, num_values: 25.0, num_distinct: 5.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(14), ndv: 15.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 50.0, num_distinct: 10.0 }, TypedHistogramBucket { lower_bound: 10, upper_bound: 14, num_values: 25.0, num_distinct: 5.0 }] }) }
 
 expr          : s >= 2
 cardinality   : 55
 estimated     : 35
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }, TypedHistogramBucket { lower_bound: 5, upper_bound: 9, num_values: 5.0, num_distinct: 5.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }, TypedHistogramBucket { lower_bound: 5, upper_bound: 9, num_values: 5.0, num_distinct: 5.0 }] }) }
 out stats     :
-0 ColumnStat { min: UInt(2), max: UInt(9), ndv: 8.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 2, upper_bound: 4, num_values: 30.0, num_distinct: 3.0 }, TypedHistogramBucket { lower_bound: 5, upper_bound: 9, num_values: 5.0, num_distinct: 5.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(2), max: UInt(9), ndv: 8.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 2, upper_bound: 4, num_values: 30.0, num_distinct: 3.0 }, TypedHistogramBucket { lower_bound: 5, upper_bound: 9, num_values: 5.0, num_distinct: 5.0 }] }) }
 
 expr          : n >= 5
 cardinality   : 100
 estimated     : 35
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 30, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 70.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 30, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 70.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: UInt(5), max: UInt(9), ndv: 5.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 5, upper_bound: 9, num_values: 35.0, num_distinct: 5.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(5), max: UInt(9), ndv: 5.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 5, upper_bound: 9, num_values: 35.0, num_distinct: 5.0 }] }) }
 
 expr          : tail > 731
 cardinality   : 738
 estimated     : 6
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(737), ndv: 738.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 737, num_values: 738.0, num_distinct: 738.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(737), ndv: 738.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 737, num_values: 738.0, num_distinct: 738.0 }] }) }
 out stats     :
-0 ColumnStat { min: UInt(732), max: UInt(737), ndv: 6.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 732, upper_bound: 737, num_values: 6.0, num_distinct: 6.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(732), max: UInt(737), ndv: 6.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 732, upper_bound: 737, num_values: 6.0, num_distinct: 6.0 }] }) }
 
 expr          : tail > 700
 cardinality   : 738
 estimated     : 37
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(737), ndv: 738.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 737, num_values: 738.0, num_distinct: 738.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(737), ndv: 738.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 737, num_values: 738.0, num_distinct: 738.0 }] }) }
 out stats     :
-0 ColumnStat { min: UInt(701), max: UInt(737), ndv: 37.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 701, upper_bound: 737, num_values: 37.0, num_distinct: 37.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(701), max: UInt(737), ndv: 37.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 701, upper_bound: 737, num_values: 37.0, num_distinct: 37.0 }] }) }
 
 expr          : tail > 737
 cardinality   : 738
 estimated     : 0
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(737), ndv: 738.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 737, num_values: 738.0, num_distinct: 738.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(737), ndv: 738.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 737, num_values: 738.0, num_distinct: 738.0 }] }) }
 out stats     :
 0 ColumnStat { min: UInt(0), max: UInt(737), ndv: 0.0, null_count: 0, histogram: None }
 
@@ -94,17 +314,17 @@ expr          : f >= Float64(15)
 cardinality   : 200
 estimated     : 50
 in stats      :
-0 ColumnStat { min: Float(0.0), max: Float(20.0), ndv: 20.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 10.0, num_values: 100.0, num_distinct: 10.0 }, TypedHistogramBucket { lower_bound: 10.0, upper_bound: 20.0, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: Float(0.0), max: Float(20.0), ndv: 20.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 10.0, num_values: 100.0, num_distinct: 10.0 }, TypedHistogramBucket { lower_bound: 10.0, upper_bound: 20.0, num_values: 100.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: Float(15.0), max: Float(20.0), ndv: 5.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 15.0, upper_bound: 20.0, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None }) }
+0 ColumnStat { min: Float(15.0), max: Float(20.0), ndv: 5.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 15.0, upper_bound: 20.0, num_values: 50.0, num_distinct: 5.0 }] }) }
 
 expr          : f >= Float64(15), f <= Float64(19)
 cardinality   : 200
 estimated     : 40
 in stats      :
-0 ColumnStat { min: Float(0.0), max: Float(20.0), ndv: 20.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 10.0, num_values: 100.0, num_distinct: 10.0 }, TypedHistogramBucket { lower_bound: 10.0, upper_bound: 20.0, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: Float(0.0), max: Float(20.0), ndv: 20.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 10.0, num_values: 100.0, num_distinct: 10.0 }, TypedHistogramBucket { lower_bound: 10.0, upper_bound: 20.0, num_values: 100.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: Float(15.0), max: Float(19.0), ndv: 4.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 15.0, upper_bound: 19.0, num_values: 40.0, num_distinct: 4.0 }], avg_spacing: None }) }
+0 ColumnStat { min: Float(15.0), max: Float(19.0), ndv: 4.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 15.0, upper_bound: 19.0, num_values: 40.0, num_distinct: 4.0 }] }) }
 
 === histogram_row_count_mismatch ===
 description: Histograms with row counts above the non-null cardinality should scale output row mass without trusting bucket distincts as exact.
@@ -112,9 +332,9 @@ expr          : mismatch > 3
 cardinality   : 100
 estimated     : 30
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 50, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 50, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: UInt(4), max: UInt(9), ndv: ~5.994140625[..6.0], null_count: 0, histogram: Some(TypedHistogram { accuracy: false, row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: 4, upper_bound: 9, num_values: 60.0, num_distinct: 6.0 }], avg_spacing: None }) }
+0 ColumnStat { min: UInt(4), max: UInt(9), ndv: ~5.994140625[..6.0], null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: 4, upper_bound: 9, num_values: 60.0, num_distinct: 6.0 }] }) }
 
 === distorted_histogram_ranges ===
 description: Distorted histograms should still record precise range constraints while using the lower-bound selectivity fallback.
@@ -122,33 +342,197 @@ expr          : d >= 500
 cardinality   : 100
 estimated     : 50
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(1000), ndv: 100.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: false, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 1000, num_values: 100.0, num_distinct: 100.0 }], avg_spacing: Some(10000000000000.0) }) }
+0 ColumnStat { min: UInt(0), max: UInt(1000), ndv: 100.0, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.0, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 1000, num_values: 100.0, num_distinct: 100.0 }] }) }
 out stats     :
-0 ColumnStat { min: UInt(500), max: UInt(1000), ndv: 50.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: false, row_scale: 0.9990019960079841, buckets: [TypedHistogramBucket { lower_bound: 500, upper_bound: 1000, num_values: 50.04995004995005, num_distinct: 50.04995004995005 }], avg_spacing: Some(10000000000000.0) }) }
+0 ColumnStat { min: UInt(500), max: UInt(1000), ndv: 50.0, null_count: 0, histogram: None }
 
-=== histogram_accuracy_provenance ===
-description: Whole-bucket range pruning may trust ANALYZE distinct counts, but derived bucket distinct values are only estimates.
+=== synthetic_spacing_units_and_threshold ===
+description: Equivalent domain units use one dimensionless score; initial support and later NDV survival share the 50% threshold.
+type: Number(Int64); NDV survival: 1
+expr          : a < normalized limit
+cardinality   : 1000
+estimated     : 99.9990000099999
+in stats      :
+0 ColumnStat { min: Int(0), max: Int(100000), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 49999, num_values: 499.99500004999953, num_distinct: 499.99500004999953 }, TypedHistogramBucket { lower_bound: 50000, upper_bound: 100000, num_values: 500.00499995000047, num_distinct: 500.00499995000047 }] }) }
+out stats     :
+0 ColumnStat { min: Int(0), max: Int(9999), ndv: 99.9990000099999, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9999, num_values: 99.9990000099999, num_distinct: 99.9990000099999 }] }) }
+
+type: Number(Int64); NDV survival: 0.9
+expr          : a < normalized limit
+cardinality   : 900
+estimated     : 89.99910000899992
+in stats      :
+0 ColumnStat { min: Int(0), max: Int(100000), ndv: 900.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.9, distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 49999, num_values: 499.99500004999953, num_distinct: 499.99500004999953 }, TypedHistogramBucket { lower_bound: 50000, upper_bound: 100000, num_values: 500.00499995000047, num_distinct: 500.00499995000047 }] }) }
+out stats     :
+0 ColumnStat { min: Int(0), max: Int(9999), ndv: 89.99910000899992, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.5760000000000001, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9999, num_values: 89.99910000899992, num_distinct: 89.99910000899992 }] }) }
+
+type: Number(Int64); NDV survival: 0.75
+expr          : a < normalized limit
+cardinality   : 750
+estimated     : 375
+in stats      :
+0 ColumnStat { min: Int(0), max: Int(100000), ndv: 750.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.75, distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 49999, num_values: 499.99500004999953, num_distinct: 499.99500004999953 }, TypedHistogramBucket { lower_bound: 50000, upper_bound: 100000, num_values: 500.00499995000047, num_distinct: 500.00499995000047 }] }) }
+out stats     :
+0 ColumnStat { min: Int(0), max: Int(9999), ndv: 375.0, null_count: 0, histogram: None }
+
+type: Date; NDV survival: 1
+expr          : a < normalized limit
+cardinality   : 1000
+estimated     : 99.9990000099999
+in stats      :
+0 ColumnStat { min: Int(0), max: Int(100000), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 49999, num_values: 499.99500004999953, num_distinct: 499.99500004999953 }, TypedHistogramBucket { lower_bound: 50000, upper_bound: 100000, num_values: 500.00499995000047, num_distinct: 500.00499995000047 }] }) }
+out stats     :
+0 ColumnStat { min: Int(0), max: Int(9999), ndv: 99.9990000099999, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9999, num_values: 99.9990000099999, num_distinct: 99.9990000099999 }] }) }
+
+type: Date; NDV survival: 0.9
+expr          : a < normalized limit
+cardinality   : 900
+estimated     : 89.99910000899992
+in stats      :
+0 ColumnStat { min: Int(0), max: Int(100000), ndv: 900.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.9, distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 49999, num_values: 499.99500004999953, num_distinct: 499.99500004999953 }, TypedHistogramBucket { lower_bound: 50000, upper_bound: 100000, num_values: 500.00499995000047, num_distinct: 500.00499995000047 }] }) }
+out stats     :
+0 ColumnStat { min: Int(0), max: Int(9999), ndv: 89.99910000899992, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.5760000000000001, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9999, num_values: 89.99910000899992, num_distinct: 89.99910000899992 }] }) }
+
+type: Date; NDV survival: 0.75
+expr          : a < normalized limit
+cardinality   : 750
+estimated     : 375
+in stats      :
+0 ColumnStat { min: Int(0), max: Int(100000), ndv: 750.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.75, distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 49999, num_values: 499.99500004999953, num_distinct: 499.99500004999953 }, TypedHistogramBucket { lower_bound: 50000, upper_bound: 100000, num_values: 500.00499995000047, num_distinct: 500.00499995000047 }] }) }
+out stats     :
+0 ColumnStat { min: Int(0), max: Int(9999), ndv: 375.0, null_count: 0, histogram: None }
+
+type: Timestamp; NDV survival: 1
+expr          : a < normalized limit
+cardinality   : 1000
+estimated     : 99.99999999999999
+in stats      :
+0 ColumnStat { min: Int(0), max: Int(8640000000000000), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4319999999999999, num_values: 499.99999999999994, num_distinct: 499.99999999999994 }, TypedHistogramBucket { lower_bound: 4320000000000000, upper_bound: 8640000000000000, num_values: 500.0000000000001, num_distinct: 500.0000000000001 }] }) }
+out stats     :
+0 ColumnStat { min: Int(0), max: Int(863999999999999), ndv: 99.99999999999999, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 863999999999999, num_values: 99.99999999999999, num_distinct: 99.99999999999999 }] }) }
+
+type: Timestamp; NDV survival: 0.9
+expr          : a < normalized limit
+cardinality   : 900
+estimated     : 89.99999999999999
+in stats      :
+0 ColumnStat { min: Int(0), max: Int(8640000000000000), ndv: 900.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.9, distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4319999999999999, num_values: 499.99999999999994, num_distinct: 499.99999999999994 }, TypedHistogramBucket { lower_bound: 4320000000000000, upper_bound: 8640000000000000, num_values: 500.0000000000001, num_distinct: 500.0000000000001 }] }) }
+out stats     :
+0 ColumnStat { min: Int(0), max: Int(863999999999999), ndv: 89.99999999999999, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.5760000000000001, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 863999999999999, num_values: 89.99999999999999, num_distinct: 89.99999999999999 }] }) }
+
+type: Timestamp; NDV survival: 0.75
+expr          : a < normalized limit
+cardinality   : 750
+estimated     : 375
+in stats      :
+0 ColumnStat { min: Int(0), max: Int(8640000000000000), ndv: 750.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.75, distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4319999999999999, num_values: 499.99999999999994, num_distinct: 499.99999999999994 }, TypedHistogramBucket { lower_bound: 4320000000000000, upper_bound: 8640000000000000, num_values: 500.0000000000001, num_distinct: 500.0000000000001 }] }) }
+out stats     :
+0 ColumnStat { min: Int(0), max: Int(863999999999999), ndv: 375.0, null_count: 0, histogram: None }
+
+type: Number(Float64); NDV survival: 1
+expr          : a < normalized limit
+cardinality   : 1000
+estimated     : 98.99900000999989
+in stats      :
+0 ColumnStat { min: Float(0.0), max: Float(100000.0), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 50000.5, num_values: 500.0, num_distinct: 500.0 }, TypedHistogramBucket { lower_bound: 50000.5, upper_bound: 100000.0, num_values: 500.0, num_distinct: 500.0 }] }) }
+out stats     :
+0 ColumnStat { min: Float(0.0), max: Float(10000.0), ndv: 98.99900000999989, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.9899999, distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 10000.0, num_values: 99.99900000999989, num_distinct: 99.99900000999989 }] }) }
+
+type: Number(Float64); NDV survival: 0.9
+expr          : a < normalized limit
+cardinality   : 900
+estimated     : 88.9991000089999
+in stats      :
+0 ColumnStat { min: Float(0.0), max: Float(100000.0), ndv: 900.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.9, distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 50000.5, num_values: 500.0, num_distinct: 500.0 }, TypedHistogramBucket { lower_bound: 50000.5, upper_bound: 100000.0, num_values: 500.0, num_distinct: 500.0 }] }) }
+out stats     :
+0 ColumnStat { min: Float(0.0), max: Float(10000.0), ndv: 88.9991000089999, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.9888887777777777, distinct_retention: 0.5760000000000001, buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 10000.0, num_values: 89.9991000089999, num_distinct: 89.9991000089999 }] }) }
+
+type: Number(Float64); NDV survival: 0.75
+expr          : a < normalized limit
+cardinality   : 750
+estimated     : 375
+in stats      :
+0 ColumnStat { min: Float(0.0), max: Float(100000.0), ndv: 750.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.75, distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 50000.5, num_values: 500.0, num_distinct: 500.0 }, TypedHistogramBucket { lower_bound: 50000.5, upper_bound: 100000.0, num_values: 500.0, num_distinct: 500.0 }] }) }
+out stats     :
+0 ColumnStat { min: Float(0.0), max: Float(10000.0), ndv: 375.0, null_count: 0, histogram: None }
+
+type: Decimal(DecimalSize { precision: 28, scale: 2 }); NDV survival: 1
+expr          : a < normalized limit
+cardinality   : 1000
+estimated     : 98.99900000999989
+in stats      :
+0 ColumnStat { min: Float(0.0), max: Float(100000.0), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 50000.5, num_values: 500.0, num_distinct: 500.0 }, TypedHistogramBucket { lower_bound: 50000.5, upper_bound: 100000.0, num_values: 500.0, num_distinct: 500.0 }] }) }
+out stats     :
+0 ColumnStat { min: Float(0.0), max: Float(10000.0), ndv: 98.99900000999989, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.9899999, distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 10000.0, num_values: 99.99900000999989, num_distinct: 99.99900000999989 }] }) }
+
+type: Decimal(DecimalSize { precision: 28, scale: 2 }); NDV survival: 0.9
+expr          : a < normalized limit
+cardinality   : 900
+estimated     : 88.9991000089999
+in stats      :
+0 ColumnStat { min: Float(0.0), max: Float(100000.0), ndv: 900.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.9, distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 50000.5, num_values: 500.0, num_distinct: 500.0 }, TypedHistogramBucket { lower_bound: 50000.5, upper_bound: 100000.0, num_values: 500.0, num_distinct: 500.0 }] }) }
+out stats     :
+0 ColumnStat { min: Float(0.0), max: Float(10000.0), ndv: 88.9991000089999, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.9888887777777777, distinct_retention: 0.5760000000000001, buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 10000.0, num_values: 89.9991000089999, num_distinct: 89.9991000089999 }] }) }
+
+type: Decimal(DecimalSize { precision: 28, scale: 2 }); NDV survival: 0.75
+expr          : a < normalized limit
+cardinality   : 750
+estimated     : 375
+in stats      :
+0 ColumnStat { min: Float(0.0), max: Float(100000.0), ndv: 750.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.75, distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 50000.5, num_values: 500.0, num_distinct: 500.0 }, TypedHistogramBucket { lower_bound: 50000.5, upper_bound: 100000.0, num_values: 500.0, num_distinct: 500.0 }] }) }
+out stats     :
+0 ColumnStat { min: Float(0.0), max: Float(10000.0), ndv: 375.0, null_count: 0, histogram: None }
+
+type: Decimal(DecimalSize { precision: 28, scale: 4 }); NDV survival: 1
+expr          : a < normalized limit
+cardinality   : 1000
+estimated     : 98.99900000999989
+in stats      :
+0 ColumnStat { min: Float(0.0), max: Float(100000.0), ndv: 1000.0, null_count: 0, histogram: Some(TypedHistogram { distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 50000.5, num_values: 500.0, num_distinct: 500.0 }, TypedHistogramBucket { lower_bound: 50000.5, upper_bound: 100000.0, num_values: 500.0, num_distinct: 500.0 }] }) }
+out stats     :
+0 ColumnStat { min: Float(0.0), max: Float(10000.0), ndv: 98.99900000999989, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.9899999, distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 10000.0, num_values: 99.99900000999989, num_distinct: 99.99900000999989 }] }) }
+
+type: Decimal(DecimalSize { precision: 28, scale: 4 }); NDV survival: 0.9
+expr          : a < normalized limit
+cardinality   : 900
+estimated     : 88.9991000089999
+in stats      :
+0 ColumnStat { min: Float(0.0), max: Float(100000.0), ndv: 900.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.9, distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 50000.5, num_values: 500.0, num_distinct: 500.0 }, TypedHistogramBucket { lower_bound: 50000.5, upper_bound: 100000.0, num_values: 500.0, num_distinct: 500.0 }] }) }
+out stats     :
+0 ColumnStat { min: Float(0.0), max: Float(10000.0), ndv: 88.9991000089999, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.9888887777777777, distinct_retention: 0.5760000000000001, buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 10000.0, num_values: 89.9991000089999, num_distinct: 89.9991000089999 }] }) }
+
+type: Decimal(DecimalSize { precision: 28, scale: 4 }); NDV survival: 0.75
+expr          : a < normalized limit
+cardinality   : 750
+estimated     : 375
+in stats      :
+0 ColumnStat { min: Float(0.0), max: Float(100000.0), ndv: 750.0, null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.75, distinct_retention: 0.64, buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 50000.5, num_values: 500.0, num_distinct: 500.0 }, TypedHistogramBucket { lower_bound: 50000.5, upper_bound: 100000.0, num_values: 500.0, num_distinct: 500.0 }] }) }
+out stats     :
+0 ColumnStat { min: Float(0.0), max: Float(10000.0), ndv: 375.0, null_count: 0, histogram: None }
+
+=== histogram_distinct_counts_after_restrict ===
+description: Whole-bucket range pruning keeps the surviving buckets' distinct counts; after an earlier independent filter those counts are only estimates.
 expr          : s >= 'm'
 cardinality   : 100
 estimated     : 40
 in stats      :
-0 ColumnStat { min: Bytes([97]), max: Bytes([122]), ndv: 26.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: [97], upper_bound: [102], num_values: 60.0, num_distinct: 6.0 }, TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 40.0, num_distinct: 20.0 }], avg_spacing: None }) }
+0 ColumnStat { min: Bytes([97]), max: Bytes([122]), ndv: 26.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: [97], upper_bound: [102], num_values: 60.0, num_distinct: 6.0 }, TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 40.0, num_distinct: 20.0 }] }) }
 out stats     :
-0 ColumnStat { min: Bytes([109]), max: Bytes([122]), ndv: 20.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 40.0, num_distinct: 20.0 }], avg_spacing: None }) }
+0 ColumnStat { min: Bytes([109]), max: Bytes([122]), ndv: 20.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 40.0, num_distinct: 20.0 }] }) }
 
 expr          : s >= 'm'
 cardinality   : 50
 estimated     : 20
 in stats      :
-0 ColumnStat { min: Bytes([97]), max: Bytes([122]), ndv: ~13.0[..26.0], null_count: 0, histogram: Some(TypedHistogram { accuracy: false, buckets: [TypedHistogramBucket { lower_bound: [97], upper_bound: [102], num_values: 30.0, num_distinct: 3.0 }, TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 20.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: Bytes([97]), max: Bytes([122]), ndv: ~13.0[..26.0], null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: [97], upper_bound: [102], num_values: 30.0, num_distinct: 3.0 }, TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 20.0, num_distinct: 10.0 }] }) }
 out stats     :
-0 ColumnStat { min: Bytes([109]), max: Bytes([122]), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: false, buckets: [TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 20.0, num_distinct: 10.0 }], avg_spacing: None }) }
+0 ColumnStat { min: Bytes([109]), max: Bytes([122]), ndv: 10.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 20.0, num_distinct: 10.0 }] }) }
 
 expr          : s > 'p'
 cardinality   : 100
 estimated     : 20
 in stats      :
-0 ColumnStat { min: Bytes([97]), max: Bytes([122]), ndv: 26.0, null_count: 0, histogram: Some(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: [97], upper_bound: [102], num_values: 60.0, num_distinct: 6.0 }, TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 40.0, num_distinct: 20.0 }], avg_spacing: None }) }
+0 ColumnStat { min: Bytes([97]), max: Bytes([122]), ndv: 26.0, null_count: 0, histogram: Some(TypedHistogram { buckets: [TypedHistogramBucket { lower_bound: [97], upper_bound: [102], num_values: 60.0, num_distinct: 6.0 }, TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 40.0, num_distinct: 20.0 }] }) }
 out stats     :
-0 ColumnStat { min: Bytes([112]), max: Bytes([122]), ndv: ~15.0[..20.0], null_count: 0, histogram: Some(TypedHistogram { accuracy: false, row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: [112], upper_bound: [122], num_values: 40.0, num_distinct: 20.0 }], avg_spacing: None }) }
+0 ColumnStat { min: Bytes([112]), max: Bytes([122]), ndv: ~15.0[..20.0], null_count: 0, histogram: Some(TypedHistogram { row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: [112], upper_bound: [122], num_values: 40.0, num_distinct: 20.0 }] }) }
 

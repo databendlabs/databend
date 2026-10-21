@@ -195,8 +195,10 @@ impl VirtualColumnReader {
         };
 
         let block_read_res = BlockReadResult::create(merge_io_result, vec![], vec![]);
-        let ignore_column_ids =
-            self.generate_ignore_column_ids(&virtual_block_meta.ignored_source_column_ids);
+        // The planner already excluded source columns that the scan needs for their own
+        // values, so the ignored set from the pruner can be used directly.
+        let ignore_column_ids = (!virtual_block_meta.ignored_source_column_ids.is_empty())
+            .then(|| virtual_block_meta.ignored_source_column_ids.clone());
 
         Some(VirtualBlockReadResult::create(
             virtual_loc.clone(),

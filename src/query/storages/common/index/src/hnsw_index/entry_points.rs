@@ -55,6 +55,13 @@ impl EntryPoints {
         }
     }
 
+    pub(crate) fn memory_size(&self) -> usize {
+        std::mem::size_of::<Self>()
+            + self.entry_points.capacity() * std::mem::size_of::<EntryPoint>()
+            + self.extra_entry_points.memory_size()
+            - std::mem::size_of::<FixedLengthPriorityQueue<EntryPoint>>()
+    }
+
     #[allow(dead_code)]
     pub fn merge_from_other(&mut self, mut other: EntryPoints) {
         self.entry_points.append(&mut other.entry_points);

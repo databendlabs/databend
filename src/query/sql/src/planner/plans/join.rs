@@ -35,6 +35,7 @@ use crate::optimizer::ir::Side;
 use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::SpatialJoinCandidate;
@@ -389,7 +390,7 @@ impl Join {
     ) -> Result<Arc<StatInfo>> {
         let mut estimator =
             JoinStatsEstimator::new(self.join_type, left_stat_info, right_stat_info);
-        estimator.evaluate_join(self, &stat_ctx.function_context)?;
+        estimator.evaluate_join(self, stat_ctx)?;
         estimator.finish()
     }
 
@@ -458,7 +459,7 @@ impl Join {
             return Ok(false);
         }
 
-        let stat_ctx = StatContext::new(ctx.get_function_context()?);
+        let stat_ctx = StatContext::new(ctx.get_function_context()?, &settings);
         let left_cardinality = rel_expr.derive_cardinality_child(0, &stat_ctx)?.cardinality;
         let right_cardinality = rel_expr.derive_cardinality_child(1, &stat_ctx)?.cardinality;
         let broadcast_join_threshold = if settings.get_prefer_broadcast_join()? {
@@ -547,6 +548,15 @@ impl Operator for Join {
         }))
     }
 
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        let left_stat_info = rel_expr.derive_cardinality_child(0, stat_ctx)?;
+        let right_stat_info = rel_expr.derive_cardinality_child(1, stat_ctx)?;
+        let stat_info = self.derive_join_stats(left_stat_info, right_stat_info, stat_ctx)?;
+        Ok(stat_info)
+    }
+}
+
+impl PhysicalOperator for Join {
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         let probe_prop = rel_expr.derive_physical_prop_child(0)?;
         let build_prop = rel_expr.derive_physical_prop_child(1)?;
@@ -600,13 +610,6 @@ impl Operator for Join {
         }
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
-        let left_stat_info = rel_expr.derive_cardinality_child(0, stat_ctx)?;
-        let right_stat_info = rel_expr.derive_cardinality_child(1, stat_ctx)?;
-        let stat_info = self.derive_join_stats(left_stat_info, right_stat_info, stat_ctx)?;
-        Ok(stat_info)
-    }
-
     fn compute_required_prop_child(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -631,7 +634,7 @@ impl Operator for Join {
                 return Ok(required);
             }
 
-            let stat_ctx = StatContext::new(ctx.get_function_context()?);
+            let stat_ctx = StatContext::new(ctx.get_function_context()?, &ctx.get_settings());
             let left_cardinality = rel_expr.derive_cardinality_child(0, &stat_ctx)?.cardinality;
             let right_cardinality = rel_expr.derive_cardinality_child(1, &stat_ctx)?.cardinality;
             let broadcast_child = if left_cardinality <= right_cardinality {
@@ -910,6 +913,7 @@ mod tests {
     use super::*;
     use crate::ColumnBindingBuilder;
     use crate::Visibility;
+    use crate::optimizer::ir::PExpr;
     use crate::optimizer::ir::SExpr;
     use crate::plans::BoundColumnRef;
     use crate::plans::Exchange;
@@ -947,10 +951,10 @@ mod tests {
         indices.iter().copied().map(Symbol::new).collect()
     }
 
-    fn exchanged_scan(exchange: Exchange, columns: &[usize]) -> SExpr {
-        SExpr::create_unary(
+    fn exchanged_scan(exchange: Exchange, columns: &[usize]) -> PExpr {
+        PExpr::create_unary(
             exchange,
-            SExpr::create_leaf(Scan {
+            PExpr::create_leaf(Scan {
                 columns: column_set(columns),
                 ..Default::default()
             }),
@@ -970,7 +974,7 @@ mod tests {
             join_type: JoinType::Inner,
             ..Default::default()
         };
-        let s_expr = SExpr::create_binary(
+        let p_expr = PExpr::create_binary(
             join,
             exchanged_scan(Exchange::Broadcast, &[0]),
             exchanged_scan(
@@ -978,8 +982,7 @@ mod tests {
                 &[1, 2],
             ),
         );
-
-        let physical_prop = RelExpr::with_s_expr(&s_expr).derive_physical_prop()?;
+        let physical_prop = RelExpr::with_p_expr(&p_expr).derive_physical_prop()?;
 
         assert_eq!(physical_prop.distribution, right_distribution);
         Ok(())
@@ -1029,7 +1032,7 @@ mod tests {
             join_type: JoinType::Inner,
             ..Default::default()
         };
-        let s_expr = SExpr::create_binary(
+        let p_expr = PExpr::create_binary(
             join,
             exchanged_scan(Exchange::Broadcast, &[0, 1]),
             exchanged_scan(
@@ -1037,8 +1040,7 @@ mod tests {
                 &[2],
             ),
         );
-
-        let physical_prop = RelExpr::with_s_expr(&s_expr).derive_physical_prop()?;
+        let physical_prop = RelExpr::with_p_expr(&p_expr).derive_physical_prop()?;
 
         assert_eq!(physical_prop.distribution, Distribution::Random);
         Ok(())

@@ -24,7 +24,8 @@ use crate::Symbol;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
+use crate::plans::RelOp;
 
 /// A trait for humanizing IDs.
 pub trait IdHumanizer {
@@ -37,9 +38,21 @@ pub trait IdHumanizer {
     fn stat_context(&self) -> &StatContext;
 }
 
-/// A trait for humanizing operators.
-pub trait OperatorHumanizer<I: IdHumanizer> {
-    fn humanize_operator(&self, id_humanizer: &I, op: &RelOperator) -> FormatTreeNode;
+/// Humanize one operator type without converting it to a cross-stage view.
+/// Logical and physical formatters are independent implementations.
+///
+/// ```compile_fail,E0308
+/// use databend_common_sql::planner::{IdHumanizer, OperatorHumanizer};
+/// use databend_common_sql::plans::{PhysicalRelOperator, RelOperator};
+///
+/// fn physical_with_logical_formatter<I: IdHumanizer, H: OperatorHumanizer<RelOperator>>(
+///     ids: &I, formatter: &H, physical: &PhysicalRelOperator,
+/// ) {
+///     formatter.humanize_operator(ids, physical);
+/// }
+/// ```
+pub trait OperatorHumanizer<O> {
+    fn humanize_operator<I: IdHumanizer>(&self, id_humanizer: &I, op: &O) -> FormatTreeNode;
 }
 
 #[derive(Debug, Clone, Default)]
@@ -54,17 +67,20 @@ pub struct FormatOptions {
 ///
 /// # Example
 /// ```
-/// use databend_query::planner::format::display_rel_operator::DefaultIdHumanizer;
-/// use databend_query::planner::format::display_rel_operator::DefaultOperatorHumanizer;
-/// use databend_query::planner::format::display_rel_operator::Filter;
-/// use databend_query::planner::format::display_rel_operator::IdHumanizer;
-/// use databend_query::planner::format::display_rel_operator::OperatorHumanizer;
-/// use databend_query::planner::format::display_rel_operator::RelOperator;
+/// use databend_common_sql::Metadata;
+/// use databend_common_sql::optimizer::ir::StatContext;
+/// use databend_common_sql::planner::DefaultOperatorHumanizer;
+/// use databend_common_sql::planner::FormatOptions;
+/// use databend_common_sql::planner::MetadataIdHumanizer;
+/// use databend_common_sql::planner::OperatorHumanizer;
+/// use databend_common_sql::plans::Filter;
+/// use databend_common_sql::plans::RelOperator;
 ///
-/// let id_humanizer = DefaultIdHumanizer;
-/// let operator_humanizer = DefaultOperatorHumanizer;
+/// let metadata = Metadata::default();
+/// let stats = StatContext::without_settings(Default::default());
+/// let ids = MetadataIdHumanizer::new(&metadata, FormatOptions::default(), &stats);
 /// let op = RelOperator::Filter(Filter { predicates: vec![] });
-/// let tree = operator_humanizer.humanize_operator(&id_humanizer, &op);
+/// let tree = DefaultOperatorHumanizer.humanize_operator(&ids, &op);
 ///
 /// assert_eq!(tree.payload, "Filter");
 /// assert_eq!(tree.children.len(), 1);
@@ -144,11 +160,7 @@ pub struct TreeHumanizer<'a, I, O> {
     operator_humanizer: &'a O,
 }
 
-impl<'a, I, O> TreeHumanizer<'a, I, O>
-where
-    I: IdHumanizer,
-    O: OperatorHumanizer<I>,
-{
+impl<'a, I: IdHumanizer, O> TreeHumanizer<'a, I, O> {
     pub fn new(id_humanizer: &'a I, operator_humanizer: &'a O) -> Self {
         TreeHumanizer {
             id_humanizer,
@@ -156,10 +168,13 @@ where
         }
     }
 
-    pub fn humanize_expr<K: crate::optimizer::ir::RelExprKind>(
+    pub fn humanize_expr<K: crate::optimizer::ir::ExprKind>(
         &self,
         s_expr: &crate::optimizer::ir::Expr<K>,
-    ) -> Result<FormatTreeNode> {
+    ) -> Result<FormatTreeNode>
+    where
+        O: OperatorHumanizer<K::Operator>,
+    {
         let op = s_expr.plan();
         let mut tree = self
             .operator_humanizer
@@ -175,7 +190,10 @@ where
             tree.children.extend(stats);
         }
 
-        let subquerys = op.collect_subquery();
+        let mut subquerys = Vec::new();
+        for scalar in op.scalar_expr_iter() {
+            scalar.collect_subquery(&mut subquerys);
+        }
         if !subquerys.is_empty() {
             let subquerys = subquerys
                 .into_iter()
@@ -209,10 +227,10 @@ where
             ));
         }
 
-        if let RelOperator::MaterializedCTERef(_) = op {
+        if op.rel_op() == RelOp::MaterializeCTERef {
             // MaterializedCTERef definitions are represented by their producer MaterializedCTE
             // in the surrounding Sequence.
-        } else if s_expr.plan.is_join() {
+        } else if op.rel_op() == RelOp::Join {
             tree.children
                 .push(self.humanize_expr(s_expr.build_side_child())?);
             tree.children

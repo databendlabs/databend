@@ -23,11 +23,13 @@ use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::GetTableTagReq;
 use databend_common_meta_app::schema::ListTableTagsReq;
+use databend_common_meta_app::schema::TableCloneByGroupIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdTagName;
 use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::TableTag;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
 use databend_meta_client::kvapi::ListOptions;
@@ -50,10 +52,11 @@ use crate::txn_put_pb;
 
 async fn build_lvt_condition(
     kv_api: &(impl KVPbApi<Error = MetaError> + ?Sized),
+    tenant: &Tenant,
     table_id: u64,
     lvt_check: &TableLvtCheck,
 ) -> Result<TxnCondition, KVAppError> {
-    let lvt_ident = LeastVisibleTimeIdent::new(&lvt_check.tenant, table_id);
+    let lvt_ident = LeastVisibleTimeIdent::new(tenant, table_id);
     let res = kv_api.get_pb(&lvt_ident).await?;
     let (lvt_seq, current_lvt) = match res {
         Some(v) => (v.seq, Some(v.data)),
@@ -145,8 +148,8 @@ where
                 txn_cond_seq(&key_table_id, Eq, seq_table_meta.seq),
                 // Tag must not already exist.
                 txn_cond_seq(&key_tag, Eq, 0),
-                // Check table lvt.
-                build_lvt_condition(self, table_id, &req.lvt_check).await?,
+                // Check this table's LVT.
+                build_lvt_condition(self, &req.tenant, table_id, &req.lvt_check).await?,
             ];
 
             let txn = TxnRequest::new(conditions, vec![txn_put_pb(&key_tag, &table_tag)]);
@@ -155,6 +158,21 @@ where
                 return Ok(());
             }
         }
+    }
+
+    /// List lightweight direct-source bindings in a zero-copy clone group.
+    #[fastrace::trace]
+    async fn list_clone_group_bindings(
+        &self,
+        clone_group_id: u64,
+    ) -> Result<Vec<(u64, u64)>, KVAppError> {
+        let prefix = DirName::new(TableCloneByGroupIdent::new(clone_group_id, 0));
+        Ok(self
+            .list_pb_vec(ListOptions::unlimited(&prefix))
+            .await?
+            .into_iter()
+            .map(|(ident, binding)| (ident.clone_table_id, binding.data.source_table_id))
+            .collect())
     }
 
     /// Drop a table tag.
@@ -324,14 +342,15 @@ mod tests {
         lvt_time: DateTime<Utc>,
     ) -> CreateTableTagReq {
         CreateTableTagReq {
+            tenant: testing::tenant(TENANT),
             table_id: TABLE_ID,
             seq,
             tag_name: tag_name.to_string(),
             snapshot_loc: snapshot_loc.to_string(),
             expire_at,
             lvt_check: TableLvtCheck {
-                tenant: testing::tenant(TENANT),
                 time: lvt_time,
+                touch: false,
             },
         }
     }

@@ -15,7 +15,6 @@
 use databend_common_exception::Result;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::ScalarExpr;
@@ -116,7 +115,7 @@ async fn bind_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
     let ctx = setup_context(case).await?;
     let outcome = match ctx.bind_sql(case.sql).await {
         Ok(plan) => {
-            SqlTestOutcome::Plan(plan.format_indent(Default::default(), &StatContext::default())?)
+            SqlTestOutcome::Plan(plan.format_indent(Default::default(), &ctx.stat_context()?)?)
         }
         Err(err) => SqlTestOutcome::Error {
             code: err.code(),
@@ -131,7 +130,7 @@ async fn bind_case_with_commercial_license(case: &SqlTestCase) -> Result<SqlTest
     ctx.enable_commercial_license_for_test();
     let outcome = match ctx.bind_sql(case.sql).await {
         Ok(plan) => {
-            SqlTestOutcome::Plan(plan.format_indent(Default::default(), &StatContext::default())?)
+            SqlTestOutcome::Plan(plan.format_indent(Default::default(), &ctx.stat_context()?)?)
         }
         Err(err) => SqlTestOutcome::Error {
             code: err.code(),

@@ -33,6 +33,8 @@ use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::types::MatchSeq;
+use databend_storages_common_table_meta::meta::BlockHLL;
+use databend_storages_common_table_meta::meta::merge_column_hll_mut;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use parking_lot::Mutex;
 use serde::Deserialize;
@@ -65,22 +67,39 @@ pub enum TxnState {
     Fail,
 }
 
+/// Deltas of the writes successfully buffered for one table in a transaction.
+/// Only `TxnManager::add_table_delta` creates entries: a missing entry means the
+/// logical delta is unknown, so there is deliberately no `Default`.
+#[derive(Debug, Clone)]
+pub struct TxnTableDelta {
+    /// Accumulated (updated_rows, deleted_rows) for snapshot change tracking.
+    /// Some((0, 0)) means no logical updates/deletes, including INSERT and ANALYZE;
+    /// None means a counter overflowed and the logical change delta is unknown.
+    pub logical_change_delta: Option<(u64, u64)>,
+    /// Per-column HLLs unioned from successfully buffered statement-local writes.
+    /// Excludes the base snapshot's HLLs and full ANALYZE refreshes; empty means
+    /// no collected HLL statistics to replay.
+    pub column_hlls: BlockHLL,
+    /// Collected row observations accumulated together with column_hlls, not the
+    /// table's current row count. Repeated updates may count a row again, and
+    /// DELETE does not subtract previously collected observations.
+    pub statistics_row_count: u64,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct TxnBuffer {
     tenant: Option<Tenant>,
     table_desc_to_id: HashMap<String, u64>,
     mutated_tables: HashMap<u64, TableInfo>,
     base_snapshot_location: HashMap<u64, Option<String>>,
-    lvt_check: HashMap<u64, Option<TableLvtCheck>>,
+    lvt_check: HashMap<u64, TableLvtCheck>,
     copied_files: HashMap<u64, Vec<UpsertTableCopiedFileReq>>,
     update_stream_meta: HashMap<u64, UpdateStreamMetaReq>,
     deduplicated_labels: HashSet<String>,
     stream_tables: HashMap<u64, StreamSnapshot>,
     need_purge_files: Vec<(StageInfo, Vec<String>)>,
-    multi_table_insert_rows: HashMap<u64, u64>,
-    // Only successfully buffered writes contribute. Some((0, 0)) is a known
-    // insert-only delta; None means the transaction total overflowed.
-    logical_change_deltas: HashMap<u64, Option<(u64, u64)>>,
+    // Only successfully buffered writes contribute.
+    table_deltas: HashMap<u64, TxnTableDelta>,
 
     // TODO doc this
     table_tnx_begin_timestamps: HashMap<u64, DateTime<Utc>>,
@@ -143,7 +162,15 @@ impl TxnBuffer {
                 .entry(table_id)
                 .or_insert(req.base_snapshot_location);
 
-            self.lvt_check.entry(table_id).or_insert(req.lvt_check);
+            if let Some(check) = req.lvt_check {
+                self.lvt_check
+                    .entry(table_id)
+                    .and_modify(|existing| {
+                        existing.time = existing.time.min(check.time);
+                        existing.touch |= check.touch;
+                    })
+                    .or_insert(check);
+            }
         }
 
         for (table_id, file) in std::mem::take(&mut req.copied_files) {
@@ -273,44 +300,53 @@ impl TxnManager {
         true
     }
 
-    pub fn add_multi_table_insert_rows(&mut self, insert_rows: HashMap<u64, u64>) {
-        for (table_id, rows) in insert_rows {
-            match self.txn_buffer.multi_table_insert_rows.get_mut(&table_id) {
-                Some(current_rows) => *current_rows += rows,
-                None => {
-                    self.txn_buffer
-                        .multi_table_insert_rows
-                        .insert(table_id, rows);
-                }
-            }
-        }
-    }
-
-    pub fn multi_table_insert_rows(&self) -> HashMap<u64, u64> {
-        self.txn_buffer.multi_table_insert_rows.clone()
-    }
-
     /// Record one successfully buffered write, never a candidate commit attempt.
-    /// This is independent of persisted counter epochs and snapshot resets.
-    pub fn add_logical_change_delta(&mut self, table_id: u64, delta: (u64, u64)) {
+    /// The logical delta is independent of persisted counter epochs and snapshot
+    /// resets. No HLL means no NDV coverage, even if the write changed rows.
+    pub fn add_table_delta(
+        &mut self,
+        table_id: u64,
+        logical_change_delta: (u64, u64),
+        column_hlls: &BlockHLL,
+        statistics_row_count: u64,
+    ) {
         if !self.is_active() {
             return;
         }
-        let total = self
+        let delta = self
             .txn_buffer
-            .logical_change_deltas
+            .table_deltas
             .entry(table_id)
-            .or_insert(Some((0, 0)));
-        *total = total.and_then(|(updated, deleted)| {
+            .or_insert_with(|| TxnTableDelta {
+                logical_change_delta: Some((0, 0)),
+                column_hlls: BlockHLL::new(),
+                statistics_row_count: 0,
+            });
+        // Change tracking must not trust a wrapped counter: overflow is unknown.
+        delta.logical_change_delta = delta.logical_change_delta.and_then(|(updated, deleted)| {
             updated
-                .checked_add(delta.0)
-                .zip(deleted.checked_add(delta.1))
+                .checked_add(logical_change_delta.0)
+                .zip(deleted.checked_add(logical_change_delta.1))
         });
+        if statistics_row_count > 0 && !column_hlls.is_empty() {
+            delta.statistics_row_count += statistics_row_count;
+            merge_column_hll_mut(&mut delta.column_hlls, column_hlls);
+        }
     }
 
-    /// Freeze these totals before commit retries. Missing is not a known zero.
+    /// Transfer the fixed deltas to COMMIT without cloning their sketches. The
+    /// interpreter has already switched to AutoCommit, but has not cleared the buffer.
+    pub fn take_table_deltas(&mut self) -> HashMap<u64, TxnTableDelta> {
+        std::mem::take(&mut self.txn_buffer.table_deltas)
+    }
+
+    /// Logical totals of the buffered writes. Missing is not a known zero.
     pub fn logical_change_deltas(&self) -> HashMap<u64, Option<(u64, u64)>> {
-        self.txn_buffer.logical_change_deltas.clone()
+        self.txn_buffer
+            .table_deltas
+            .iter()
+            .map(|(&table_id, delta)| (table_id, delta.logical_change_delta))
+            .collect()
     }
 
     pub fn update_stream_metas(&mut self, reqs: &[UpdateStreamMetaReq]) {
@@ -417,7 +453,7 @@ impl TxnManager {
                             seq: MatchSeq::Exact(info.ident.seq),
                             new_table_meta: info.meta.clone(),
                             base_snapshot_location: None,
-                            lvt_check: self.txn_buffer.lvt_check.get(id).cloned().flatten(),
+                            lvt_check: self.txn_buffer.lvt_check.get(id).cloned(),
                         },
                         info.clone(),
                     )
@@ -524,7 +560,15 @@ impl TxnManager {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use chrono::DateTime;
+    use chrono::Utc;
+    use databend_common_meta_app::schema::TableInfo;
+    use databend_common_meta_app::schema::TableLvtCheck;
+    use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+    use databend_common_meta_app::schema::UpdateTableMetaReq;
+    use databend_common_meta_app::tenant::Tenant;
+    use databend_meta_client::types::MatchSeq;
+    use databend_storages_common_table_meta::meta::BlockHLL;
 
     use super::TxnBuffer;
     use super::TxnManager;
@@ -537,62 +581,160 @@ mod tests {
     }
 
     #[test]
-    fn test_logical_deltas_accumulate_freeze_and_clear() {
-        let manager = TxnManager::init();
-        let mut txn = manager.lock();
-        txn.add_logical_change_delta(1, (9, 9));
-        assert!(txn.logical_change_deltas().is_empty());
-        txn.begin();
-        txn.add_logical_change_delta(1, (5, 0));
-        txn.add_logical_change_delta(1, (2, 3));
-        txn.add_logical_change_delta(2, (0, 0));
-        let frozen = txn.logical_change_deltas();
-        assert_eq!(frozen.get(&1), Some(&Some((7, 3))));
-        assert_eq!(frozen.get(&2), Some(&Some((0, 0))));
-        assert_eq!(frozen.get(&3), None);
-        txn.set_auto_commit();
-        assert_eq!(txn.logical_change_deltas(), frozen);
-        txn.clear();
-        assert!(txn.logical_change_deltas().is_empty());
-        assert_eq!(frozen.get(&1), Some(&Some((7, 3))));
+    fn test_transaction_preserves_first_lvt_fence() {
+        let tenant = Tenant::new_literal("tenant");
+        let first_time = DateTime::from_timestamp(1_000, 0).unwrap();
+        let later_time = DateTime::from_timestamp(2_000, 0).unwrap();
+        let mut table_info = TableInfo::default();
+        table_info.ident.table_id = 7;
+        table_info.ident.seq = 1;
 
-        txn.begin();
-        txn.add_logical_change_delta(1, (1, 2));
-        txn.force_set_fail();
-        assert!(txn.logical_change_deltas().is_empty());
-    }
+        let make_req = |time: Option<DateTime<Utc>>, touch| UpdateMultiTableMetaReq {
+            update_table_metas: vec![(
+                UpdateTableMetaReq {
+                    table_id: 7,
+                    seq: MatchSeq::Exact(1),
+                    new_table_meta: table_info.meta.clone(),
+                    base_snapshot_location: Some("snapshot".to_string()),
+                    lvt_check: time.map(|time| TableLvtCheck { time, touch }),
+                },
+                table_info.clone(),
+            )],
+            ..Default::default()
+        };
 
-    #[test]
-    fn test_logical_delta_overflow_stays_unknown() {
-        let manager = TxnManager::init();
-        let mut txn = manager.lock();
-        txn.begin();
-        for (id, initial) in [(1, (u64::MAX, 0)), (2, (0, u64::MAX))] {
-            txn.add_logical_change_delta(id, initial);
-            txn.add_logical_change_delta(id, (1, 1));
-            txn.add_logical_change_delta(id, (0, 0));
-            assert_eq!(txn.logical_change_deltas().get(&id), Some(&None));
-        }
-    }
-
-    #[test]
-    fn test_multi_table_insert_rows_accumulate_and_clear() {
         let txn_mgr = TxnManager::init();
-        {
-            let mut txn_mgr = txn_mgr.lock();
-            txn_mgr.begin();
-            txn_mgr.add_multi_table_insert_rows(HashMap::from([(1, 10), (2, 20)]));
-            txn_mgr.add_multi_table_insert_rows(HashMap::from([(1, 3), (3, 30)]));
-            txn_mgr.set_auto_commit();
+        let mut txn_mgr = txn_mgr.lock();
+        txn_mgr.begin();
+        txn_mgr
+            .update_multi_table_meta(&tenant, make_req(None, false))
+            .unwrap();
+        txn_mgr
+            .update_multi_table_meta(&tenant, make_req(Some(later_time), true))
+            .unwrap();
+        txn_mgr
+            .update_multi_table_meta(&tenant, make_req(Some(first_time), false))
+            .unwrap();
 
-            assert_eq!(
-                txn_mgr.multi_table_insert_rows(),
-                HashMap::from([(1, 13), (2, 20), (3, 30)])
-            );
+        let request = txn_mgr.req();
+        assert_eq!(request.update_table_metas.len(), 1);
+        let check = request.update_table_metas[0].0.lvt_check.as_ref().unwrap();
+        assert_eq!(check.time, first_time);
+        assert!(
+            check.touch,
+            "later requests must not discard a historical publication touch"
+        );
+    }
+
+    fn stats_hll(values: &[u64]) -> BlockHLL {
+        let mut hll = databend_common_storage::MetaHLL::new();
+        for value in values {
+            hll.add_object(value);
         }
+        BlockHLL::from([(0, hll)])
+    }
 
-        txn_mgr.lock().clear();
+    #[test]
+    fn test_table_deltas_accumulate_and_transfer_to_commit() {
+        let txn_mgr = TxnManager::init();
+        let mut txn = txn_mgr.lock();
+        txn.add_table_delta(1, (9, 9), &stats_hll(&[99]), 100);
+        assert!(txn.logical_change_deltas().is_empty());
+        txn.begin();
+        txn.add_table_delta(1, (5, 0), &stats_hll(&[0]), 10);
+        txn.add_table_delta(1, (2, 3), &stats_hll(&[1]), 3);
+        txn.add_table_delta(2, (0, 0), &stats_hll(&[2]), 20);
+        let logical = txn.logical_change_deltas();
+        assert_eq!(logical.get(&1), Some(&Some((7, 3))));
+        assert_eq!(logical.get(&2), Some(&Some((0, 0))));
+        assert!(!logical.contains_key(&3));
+        // COMMIT switches to AutoCommit before taking ownership of both fields.
+        txn.set_auto_commit();
+        assert_eq!(txn.logical_change_deltas(), logical);
+        let frozen = txn.take_table_deltas();
+        assert_eq!(frozen[&1].logical_change_delta, Some((7, 3)));
+        assert_eq!(frozen[&1].statistics_row_count, 13);
+        assert_eq!(frozen[&1].column_hlls, stats_hll(&[0, 1]));
+        assert_eq!(frozen[&2].logical_change_delta, Some((0, 0)));
+        assert_eq!(frozen[&2].statistics_row_count, 20);
+        assert_eq!(frozen[&2].column_hlls, stats_hll(&[2]));
+        assert!(txn.logical_change_deltas().is_empty());
+        assert!(txn.take_table_deltas().is_empty());
+        txn.add_table_delta(1, (9, 9), &stats_hll(&[99]), 100);
+        assert!(txn.take_table_deltas().is_empty());
+        txn.clear();
+        assert_eq!(frozen[&1].logical_change_delta, Some((7, 3)));
+        assert_eq!(frozen[&1].statistics_row_count, 13);
+    }
 
-        assert!(txn_mgr.lock().multi_table_insert_rows().is_empty());
+    #[test]
+    fn test_table_deltas_without_statistics() {
+        let txn_mgr = TxnManager::init();
+        let mut txn = txn_mgr.lock();
+        txn.begin();
+        for (id, logical_change_delta, column_hlls, statistics_row_count) in [
+            (1, (0, 0), BlockHLL::new(), 100), // collection disabled
+            (2, (0, 0), stats_hll(&[99]), 0),  // zero-row statement
+            (3, (0, 0), stats_hll(&[]), 5),    // collected all-NULL column
+            (4, (0, 0), BlockHLL::new(), 0),   // ANALYZE
+            (5, (0, 7), BlockHLL::new(), 7),   // uncollected DELETE
+        ] {
+            txn.add_table_delta(id, logical_change_delta, &column_hlls, statistics_row_count);
+        }
+        // An uncollected statement must not inflate later collected coverage.
+        txn.add_table_delta(1, (0, 0), &stats_hll(&[2]), 1);
+        let frozen = txn.take_table_deltas();
+        assert_eq!(frozen[&1].statistics_row_count, 1);
+        assert_eq!(frozen[&1].column_hlls, stats_hll(&[2]));
+        assert_eq!(frozen[&3].statistics_row_count, 5);
+        assert_eq!(frozen[&3].column_hlls[&0].count(), 0);
+        for id in [2, 4, 5] {
+            assert_eq!(frozen[&id].statistics_row_count, 0);
+            assert!(frozen[&id].column_hlls.is_empty());
+        }
+        for id in [1, 2, 3, 4] {
+            assert_eq!(frozen[&id].logical_change_delta, Some((0, 0)));
+        }
+        assert_eq!(frozen[&5].logical_change_delta, Some((0, 7)));
+        assert!(!frozen.contains_key(&6)); // absent is not a known logical zero
+    }
+
+    #[test]
+    fn test_logical_overflow_stays_unknown_without_dropping_statistics() {
+        for initial in [(u64::MAX, 0), (0, u64::MAX)] {
+            let txn_mgr = TxnManager::init();
+            let mut txn = txn_mgr.lock();
+            txn.begin();
+            txn.add_table_delta(1, initial, &stats_hll(&[0]), 10);
+            txn.add_table_delta(1, (1, 1), &stats_hll(&[1]), 3);
+            txn.add_table_delta(1, (0, 0), &BlockHLL::new(), 0);
+            assert_eq!(txn.logical_change_deltas().get(&1), Some(&None));
+            txn.add_table_delta(1, (1, 1), &stats_hll(&[2]), 2);
+            let frozen = txn.take_table_deltas();
+            assert_eq!(frozen[&1].logical_change_delta, None);
+            assert_eq!(frozen[&1].statistics_row_count, 15);
+            assert_eq!(frozen[&1].column_hlls, stats_hll(&[0, 1, 2]));
+        }
+    }
+
+    #[test]
+    fn test_table_deltas_clear_on_abort_and_failure() {
+        for fail in [false, true] {
+            let txn_mgr = TxnManager::init();
+            let mut txn = txn_mgr.lock();
+            txn.begin();
+            txn.add_table_delta(1, (2, 3), &stats_hll(&[1]), 10);
+            if fail {
+                txn.force_set_fail();
+            } else {
+                txn.clear();
+            }
+            assert!(txn.logical_change_deltas().is_empty());
+            assert!(txn.take_table_deltas().is_empty());
+            txn.clear();
+            txn.begin();
+            assert!(txn.logical_change_deltas().is_empty());
+            assert!(txn.take_table_deltas().is_empty());
+        }
     }
 }

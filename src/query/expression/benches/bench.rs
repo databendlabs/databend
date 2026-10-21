@@ -37,6 +37,74 @@ fn main() {
 }
 
 #[divan::bench_group(max_time = 1)]
+mod range_constraints {
+    use std::borrow::Cow;
+
+    use databend_common_expression::ConstantFolder;
+    use databend_common_expression::FunctionContext;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::expr::ColumnRef;
+    use databend_common_expression::expr::Constant;
+    use databend_common_expression::expr::Expr;
+    use databend_common_expression::type_check::check_function;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
+    use databend_common_functions::BUILTIN_FUNCTIONS;
+
+    fn comparison(operator: &str, value: usize) -> Expr<usize> {
+        let data_type = DataType::Number(NumberDataType::UInt64);
+        let column = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: 0,
+            data_type: data_type.clone(),
+            display_name: "x".to_string(),
+        });
+        let constant = Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::UInt64(value as u64)),
+            data_type,
+        });
+        check_function(None, operator, &[], &[column, constant], &BUILTIN_FUNCTIONS).unwrap()
+    }
+
+    fn bench_constraints(bencher: divan::Bencher, count: usize, operator: &str, singleton: bool) {
+        let mut args = (0..count)
+            .map(|value| comparison(operator, value))
+            .collect::<Vec<_>>();
+        if singleton {
+            args.push(comparison("gte", count / 2));
+            args.push(comparison("lte", count / 2));
+        }
+        // Expression construction/type checking is outside the measured fold.
+        let expr = check_function(None, "and_filters", &[], &args, &BUILTIN_FUNCTIONS).unwrap();
+        let context = FunctionContext::default();
+        bencher.bench(|| {
+            ConstantFolder::fold(
+                Cow::Borrowed(divan::black_box(&expr)),
+                &context,
+                &BUILTIN_FUNCTIONS,
+            )
+        });
+    }
+
+    #[divan::bench(args = [64, 512, 3000])]
+    fn lower_bounds(bencher: divan::Bencher, count: usize) {
+        bench_constraints(bencher, count, "gte", false);
+    }
+
+    #[divan::bench(args = [64, 512, 3000])]
+    fn exclusions(bencher: divan::Bencher, count: usize) {
+        bench_constraints(bencher, count, "noteq", false);
+    }
+
+    #[divan::bench(args = [64, 512, 3000])]
+    fn excluded_singleton(bencher: divan::Bencher, count: usize) {
+        bench_constraints(bencher, count, "noteq", true);
+    }
+}
+
+#[divan::bench_group(max_time = 1)]
 mod escaped_like {
     use std::borrow::Cow;
 

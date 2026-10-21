@@ -37,6 +37,8 @@ pub struct ScalarBinder<'a, A = FullTypeCheckAdapter> {
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
     aliases: &'a [(String, ScalarExpr)],
+    forbid_virtual_computed_column: bool,
+    apply_masking_policy: bool,
 }
 
 impl<'a> ScalarBinder<'a, FullTypeCheckAdapter> {
@@ -53,6 +55,8 @@ impl<'a> ScalarBinder<'a, FullTypeCheckAdapter> {
             name_resolution_ctx,
             metadata,
             aliases,
+            forbid_virtual_computed_column: false,
+            apply_masking_policy: true,
         }
     }
 
@@ -78,7 +82,18 @@ impl<'a, A: TypeCheckAdapter> ScalarBinder<'a, A> {
             name_resolution_ctx,
             metadata,
             aliases,
+            forbid_virtual_computed_column: false,
+            apply_masking_policy: true,
         }
+    }
+
+    pub fn forbid_virtual_computed_column(&mut self) {
+        self.forbid_virtual_computed_column = true;
+    }
+
+    /// Table maintenance predicates evaluate stored values, not user-visible masked values.
+    pub fn without_masking_policy(&mut self) {
+        self.apply_masking_policy = false;
     }
 
     pub fn bind(&mut self, expr: &Expr) -> Result<(ScalarExpr, DataType)> {
@@ -89,6 +104,8 @@ impl<'a, A: TypeCheckAdapter> ScalarBinder<'a, A> {
             self.metadata.clone(),
             self.aliases,
         )?;
+        type_checker.set_apply_masking_policy(self.apply_masking_policy);
+        type_checker.set_forbid_virtual_computed_column(self.forbid_virtual_computed_column);
         Ok(*type_checker.resolve(expr)?)
     }
 

@@ -233,6 +233,10 @@ impl Settings {
         self.try_set_u64("max_threads", val)
     }
 
+    pub fn get_enable_experimental_clone_table(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_clone_table")? != 0)
+    }
+
     pub fn get_max_vacuum_threads(&self) -> Result<u64> {
         self.try_get_u64("max_vacuum_threads")
     }
@@ -408,6 +412,10 @@ impl Settings {
 
     pub fn get_enable_dio(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_dio")? != 0)
+    }
+
+    pub fn get_filter_and_strategy(&self) -> Result<String> {
+        self.try_get_string("filter_and_strategy")
     }
 
     /// # Safety
@@ -1253,10 +1261,10 @@ impl Settings {
     }
 
     pub fn get_s3_storage_class(&self) -> Result<S3StorageClass> {
-        let s3_storage_class_setting = self.try_get_string("s3_storage_class")?;
+        let s3_storage_class_setting = self.try_get_string("experimental_s3_storage_class")?;
         S3StorageClass::from_str(&s3_storage_class_setting).map_err(|e| {
             ErrorCode::InvalidConfig(format!(
-                "Invalid s3_storage_class setting '{}': {}. Valid values are 'standard' or 'intelligent_tiering'.",
+                "Invalid experimental_s3_storage_class setting '{}': {}. Valid values are 'standard' or 'intelligent_tiering'.",
                 s3_storage_class_setting, e
             ))
         })

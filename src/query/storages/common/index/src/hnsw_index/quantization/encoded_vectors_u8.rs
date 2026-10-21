@@ -51,6 +51,12 @@ struct Metadata {
     vector_parameters: VectorParameters,
 }
 
+impl EncodedVectorsU8<Vec<u8>> {
+    pub(crate) fn memory_size(&self) -> usize {
+        std::mem::size_of::<Self>() + self.encoded_vectors.capacity()
+    }
+}
+
 impl<TStorage: EncodedStorage> EncodedVectorsU8<TStorage> {
     pub fn encode<'a>(
         orig_data: impl Iterator<Item = impl AsRef<[f32]> + 'a> + Clone,

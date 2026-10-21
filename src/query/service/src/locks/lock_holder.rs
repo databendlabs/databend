@@ -72,6 +72,14 @@ pub struct LockHolder {
     keeper: Arc<LeaseKeeper>,
 }
 
+impl Drop for LockHolder {
+    fn drop(&mut self) {
+        // The keeper's task outlives this holder. Stop it if acquisition is cancelled before
+        // CoordinationManager takes ownership of the holder.
+        self.shutdown();
+    }
+}
+
 impl LockHolder {
     #[async_backtrace::framed]
     pub(crate) async fn try_acquire_lock(

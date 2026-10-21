@@ -778,6 +778,9 @@ impl TableSchema {
 
         let mut leaf_default_values = HashMap::with_capacity(self.num_fields());
         for (default_value, field) in default_values.iter().zip_eq(self.fields()) {
+            if is_internal_column_id(field.column_id) {
+                continue;
+            }
             let mut index = 0;
             let data_type = field.data_type();
             let column_ids = field.leaf_column_ids();
@@ -1257,6 +1260,10 @@ impl TableField {
         next_column_id: &mut ColumnId,
     ) {
         column_ids.push(*next_column_id);
+        // Internal columns have fixed IDs and do not allocate nested column IDs.
+        if is_internal_column_id(*next_column_id) {
+            return;
+        }
         match data_type.remove_nullable() {
             TableDataType::Tuple {
                 fields_name: _,

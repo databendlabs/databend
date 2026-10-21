@@ -243,7 +243,7 @@ impl PhysicalPlanBuilder {
             )
             .await
         } else {
-            let stat_context = StatContext::new(self.func_ctx.clone());
+            let stat_context = StatContext::new(self.func_ctx.clone(), &self.ctx.get_settings());
             match physical_join(join, s_expr, &stat_context)? {
                 PhysicalJoinType::Hash => {
                     // When a LeftSingle/RightSingle join (scalar subquery) has no

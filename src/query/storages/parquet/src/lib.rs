@@ -29,6 +29,7 @@
 #![allow(deprecated)]
 
 mod parquet_part;
+mod read_schema;
 mod read_settings;
 mod utils;
 
@@ -63,6 +64,8 @@ pub use parquet_table::ParquetTable;
 pub use parquet_variant_table::ParquetVariantTable;
 // for it test
 pub use pruning::ParquetPruner;
+pub use read_schema::ParquetReadSchema;
+pub use read_schema::ParquetSchemaResolver;
 pub use read_settings::ReadSettings;
 pub use row_group_serde::deserialize_row_group_meta;
 pub use row_group_serde::deserialize_row_group_meta_from_bytes;

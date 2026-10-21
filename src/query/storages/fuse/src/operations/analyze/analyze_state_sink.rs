@@ -50,6 +50,7 @@ use databend_common_storage::MetaHLL;
 use databend_storages_common_cache::Partitions;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
+use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -221,10 +222,10 @@ enum HistogramState {
     /// and cannot be extended, so after an append rebase they miss the appended values
     /// while the rest of the statistics cover the latest snapshot. They are still
     /// published, as they would be after any later append: histograms are not gated by
-    /// statistics freshness and the optimizer scales them by row count. They also stay
-    /// flagged accurate, so the optimizer still caps a column's NDV by the histogram NDV
-    /// and may underestimate it by the distinct values only present in appended rows;
-    /// this is the same drift a later append causes and is accepted.
+    /// statistics freshness and the optimizer scales them by row count. The optimizer may
+    /// still cap a column's NDV by the histogram NDV and so underestimate it by the
+    /// distinct values only present in appended rows; this is the same drift a later
+    /// append causes and is accepted.
     Window {
         receivers: HashMap<u32, Receiver<DataBlock>>,
         buckets: HashMap<ColumnId, Vec<HistogramBucket>>,
@@ -256,12 +257,6 @@ impl HistogramState {
 
     fn enabled(&self) -> bool {
         !matches!(self, HistogramState::None)
-    }
-
-    /// Window buckets come from exact SQL; the KLL variants are sketches. Stays true for
-    /// rebased Window buckets, see [`HistogramState::Window`].
-    fn accurate(&self) -> bool {
-        matches!(self, HistogramState::Window { .. })
     }
 }
 
@@ -486,11 +481,12 @@ impl SinkAnalyzeState {
             .await?;
         // ANALYZE bypasses the mutation sinks but still buffers a snapshot in an explicit
         // transaction. Record a known zero so commit retries preserve the source's
-        // cumulative counters instead of treating them as missing.
+        // cumulative counters instead of treating them as missing. Its full refresh
+        // is not a write delta, so it contributes no statistics to replay.
         self.ctx
             .txn_mgr()
             .lock()
-            .add_logical_change_delta(table.get_id(), (0, 0));
+            .add_table_delta(table.get_id(), (0, 0), &BlockHLL::new(), 0);
         Ok(())
     }
 
@@ -560,15 +556,13 @@ impl SinkAnalyzeState {
             return Ok(None);
         }
 
-        let accurate = self.histogram.accurate();
         let histograms = self
             .histogram_buckets()?
             .into_iter()
             .map(|(column_id, buckets)| {
                 Ok((
                     column_id,
-                    Histogram::try_from_buckets(accurate, buckets, None)
-                        .map_err(ErrorCode::Internal)?,
+                    Histogram::try_from_buckets(buckets).map_err(ErrorCode::Internal)?,
                 ))
             })
             .collect::<Result<_>>()?;

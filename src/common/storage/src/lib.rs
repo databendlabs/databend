@@ -57,12 +57,23 @@ pub use endpoint_policy::EndpointUrlPolicyRegistry;
 pub use endpoint_policy::check_storage_endpoint_url;
 pub use endpoint_policy::check_storage_params_endpoints;
 
+mod adaptive_concurrency;
+pub use adaptive_concurrency::AdaptiveConcurrency;
+pub use adaptive_concurrency::AdaptiveConcurrencyConfig;
+pub use adaptive_concurrency::ConcurrencyFeedback;
+
+mod adaptive_deleter;
+pub use adaptive_deleter::AdaptiveDeleter;
+pub use adaptive_deleter::RemoveAllReport;
+pub use adaptive_deleter::RemoveFilesReport;
+
 mod concurrent_limit_layer;
 pub use concurrent_limit_layer::ConcurrentLimitLayer;
 
 mod fault_injection_layer;
 pub use fault_injection_layer::FaultHandle;
 pub use fault_injection_layer::FaultInjection;
+pub use fault_injection_layer::FaultInjectionLayer;
 pub use fault_injection_layer::FaultKind;
 pub use fault_injection_layer::FaultOp;
 pub use fault_injection_layer::FaultRule;
@@ -72,13 +83,18 @@ pub use http_client::StorageHttpClient;
 
 mod operator;
 pub use operator::DataOperator;
+pub use operator::DatabendRetryInterceptor;
 pub use operator::IcebergFileIO;
 pub use operator::OperatorRegistry;
 pub use operator::check_operator;
 pub use operator::init_operator;
+pub use operator::init_operator_observed;
 pub use operator::init_operator_with_policy_scope;
 
 mod operator_cache;
+
+mod retry_stats;
+pub use retry_stats::RetryStats;
 
 pub mod metrics;
 pub use crate::metrics::StorageMetrics;

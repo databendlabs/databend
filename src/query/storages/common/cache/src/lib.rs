@@ -23,6 +23,7 @@ mod manager;
 mod providers;
 mod read;
 mod temp_dir;
+mod vector_index_cache;
 
 pub use cache::*;
 pub use caches::*;
@@ -41,3 +42,5 @@ pub use providers::TableDataCacheKey;
 pub use providers::disk_cache::disk_cache_lru::read_cache_content;
 pub use read::*;
 pub use temp_dir::*;
+pub use vector_index_cache::CachedVectorIndex;
+pub use vector_index_cache::VectorIndexCache;
