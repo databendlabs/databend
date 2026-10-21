@@ -242,7 +242,12 @@ impl FastFieldDecoderValues {
         reader: &mut Cursor<R>,
     ) -> Result<()> {
         let buf = Cursor::split(reader).1;
-        let (n, n_read) = read_decimal_with_size(buf, size, false, true)?;
+        let (n, n_read) = read_decimal_with_size(
+            buf,
+            size,
+            false,
+            self.common_settings.settings.is_rounding_mode,
+        )?;
         column.push(n);
         reader.consume(n_read);
         Ok(())

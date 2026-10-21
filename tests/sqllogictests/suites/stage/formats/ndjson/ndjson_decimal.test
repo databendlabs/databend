@@ -1,6 +1,9 @@
 # Regression for #20748: unquoted JSON numbers must retain DECIMAL precision.
 # Include Float64 in the same rows to exercise the unchanged floating-point path.
 statement ok
+set numeric_cast_option = 'rounding'
+
+statement ok
 create or replace stage ndjson_decimal_roundtrip
 
 statement ok
@@ -163,9 +166,6 @@ copy into ndjson_decimal_overflow from @ndjson_decimal_roundtrip/overflow/
 file_format = (type = ndjson)
 
 statement ok
-truncate table ndjson_decimal_overflow
-
-statement ok
 copy into ndjson_decimal_overflow from @ndjson_decimal_roundtrip/overflow/
 file_format = (type = ndjson) on_error = continue force = true
 
@@ -181,6 +181,81 @@ select cast('10000000000000000000e-19' as decimal(1, 0))::string,
     cast('1e-256' as decimal(18, 4))::string
 ----
 1 1 0.0000
+
+# JSON numbers and strings, including Decimal128/256 array elements, use the
+# same configured policy when reducing scale.
+statement ok
+copy into @ndjson_decimal_roundtrip/rounding/ from (
+    select '{"id":1,"n":1.235,"s":"1.235","a":[1.235,"1.235"],"b":[1.235,"1.235"]}'
+    union all select '{"id":2,"n":-1.235,"s":"-1.235","a":[-1.235,"-1.235"],"b":[-1.235,"-1.235"]}'
+)
+file_format = (type = csv field_delimiter = '|' quote = '`' quote_style = 'quote_minimal' compression = none)
+
+statement ok
+create or replace table ndjson_decimal_rounding (
+    id int, n decimal(4, 2), s decimal(4, 2), a array(decimal(38, 2)), b array(decimal(76, 2)))
+
+statement ok
+copy into ndjson_decimal_rounding from @ndjson_decimal_roundtrip/rounding/
+file_format = (type = ndjson)
+
+query ITTTTTT
+select id, n::string, s::string, a[1]::string, a[2]::string, b[1]::string, b[2]::string
+from ndjson_decimal_rounding order by id
+----
+1 1.24 1.24 1.24 1.24 1.24 1.24
+2 -1.24 -1.24 -1.24 -1.24 -1.24 -1.24
+
+statement ok
+copy into @ndjson_decimal_roundtrip/rounding_carry/ from (select '{"n":99.995,"s":"99.995"}')
+file_format = (type = csv field_delimiter = '|' quote = '`' quote_style = 'quote_minimal' compression = none)
+
+statement ok
+create or replace table ndjson_decimal_rounding_carry (n decimal(4, 2), s decimal(4, 2))
+
+statement error Decimal overflow
+copy into ndjson_decimal_rounding_carry from @ndjson_decimal_roundtrip/rounding_carry/
+file_format = (type = ndjson)
+
+query I
+select count(*) from ndjson_decimal_rounding_carry
+----
+0
+
+statement ok
+set numeric_cast_option = 'truncating'
+
+statement ok
+truncate table ndjson_decimal_rounding
+
+statement ok
+copy into ndjson_decimal_rounding from @ndjson_decimal_roundtrip/rounding/
+file_format = (type = ndjson) force = true
+
+query ITTTTTT
+select id, n::string, s::string, a[1]::string, a[2]::string, b[1]::string, b[2]::string
+from ndjson_decimal_rounding order by id
+----
+1 1.23 1.23 1.23 1.23 1.23 1.23
+2 -1.23 -1.23 -1.23 -1.23 -1.23 -1.23
+
+statement ok
+copy into ndjson_decimal_rounding_carry from @ndjson_decimal_roundtrip/rounding_carry/
+file_format = (type = ndjson) force = true
+
+query TT
+select n::string, s::string from ndjson_decimal_rounding_carry
+----
+99.99 99.99
+
+statement ok
+set numeric_cast_option = 'rounding'
+
+statement ok
+drop table ndjson_decimal_rounding
+
+statement ok
+drop table ndjson_decimal_rounding_carry
 
 statement ok
 drop table ndjson_decimal_integers

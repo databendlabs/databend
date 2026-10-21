@@ -261,7 +261,7 @@ impl FieldJsonAstDecoder {
         size: DecimalSize,
         value: &Value,
     ) -> Result<()> {
-        column.push(read_decimal_from_json(value, size)?);
+        column.push(read_decimal_from_json(value, size, self.is_rounding_mode)?);
         Ok(())
     }
 

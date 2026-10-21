@@ -32,7 +32,8 @@ pub fn uniform_date(date: NaiveDate) -> i32 {
 /// In prefix mode (`exact = false`), return the number of bytes consumed before the delimiter.
 /// For compatibility, an exponent marker with no digits (after an optional sign) means
 /// exponent zero; the marker and sign are consumed. Explicit exponents must fit in `i32`,
-/// including for zero mantissas or values that would otherwise round to zero.
+/// including for zero mantissas or values that would otherwise round to zero. This is
+/// intentional: out-of-range exponents are treated as malformed rather than saturated.
 // Used in function, so we don't want to return ErrorCode with backtrace
 pub fn read_decimal_with_size<T: Decimal>(
     buf: &[u8],
@@ -48,7 +49,6 @@ pub fn read_decimal_with_size<T: Decimal>(
     let start = usize::from(matches!(buf[0], b'+' | b'-'));
     let mut pos = start;
     let mut has_point = false;
-    let mut digits = 0usize;
     let mut significant_digits = 0usize;
     let mut fractional_digits = 0usize;
     // Locate the decimal point and exponent before accumulating a coefficient. A
@@ -56,7 +56,6 @@ pub fn read_decimal_with_size<T: Decimal>(
     while pos < buf.len() {
         match buf[pos] {
             b'0'..=b'9' => {
-                digits += 1;
                 if has_point {
                     fractional_digits += 1;
                 }
@@ -71,7 +70,9 @@ pub fn read_decimal_with_size<T: Decimal>(
         }
         pos += 1;
     }
-    if digits == 0 {
+    // The scan consumed only digits and at most one decimal point.
+    let has_digits = pos - start > usize::from(has_point);
+    if !has_digits {
         return Err(decimal_parse_error("no digits"));
     }
     let mantissa = &buf[start..pos];
@@ -121,6 +122,16 @@ pub fn read_decimal_with_size<T: Decimal>(
         .skip_while(|&digit| digit == b'0');
     let mut n = T::zero();
     let mut retained = 0u8;
+    #[inline(always)]
+    fn append_chunk<D: Decimal>(n: D, retained: u8, chunk: i64, digits: u8) -> Result<D, String> {
+        if retained == 0 {
+            Ok(D::from_i64(chunk))
+        } else {
+            n.checked_mul(D::e(digits))
+                .and_then(|n| n.checked_add(D::from_i64(chunk)))
+                .ok_or_else(decimal_overflow_error)
+        }
+    }
     let mut chunk = 0i64;
     let mut chunk_digits = 0u8;
     for digit in significant.by_ref().take(coefficient_digits as usize) {
@@ -129,26 +140,14 @@ pub fn read_decimal_with_size<T: Decimal>(
         chunk = chunk * 10 + (digit - b'0') as i64;
         chunk_digits += 1;
         if chunk_digits == 18 {
-            n = if retained == 0 {
-                T::from_i64(chunk)
-            } else {
-                n.checked_mul(T::e(18))
-                    .and_then(|n| n.checked_add(T::from_i64(chunk)))
-                    .ok_or_else(decimal_overflow_error)?
-            };
+            n = append_chunk(n, retained, chunk, chunk_digits)?;
             retained += chunk_digits;
             chunk = 0;
             chunk_digits = 0;
         }
     }
     if chunk_digits != 0 {
-        n = if retained == 0 {
-            T::from_i64(chunk)
-        } else {
-            n.checked_mul(T::e(chunk_digits))
-                .and_then(|n| n.checked_add(T::from_i64(chunk)))
-                .ok_or_else(decimal_overflow_error)?
-        };
+        n = append_chunk(n, retained, chunk, chunk_digits)?;
         retained += chunk_digits;
     }
     // This power is bounded by the target precision, not the input's exponent
@@ -178,6 +177,7 @@ pub fn read_decimal_with_size<T: Decimal>(
 pub fn read_decimal_from_json<T: Decimal>(
     value: &serde_json::Value,
     size: DecimalSize,
+    rounding_mode: bool,
 ) -> Result<T, String> {
     let text = match value {
         serde_json::Value::Number(n) => {
@@ -199,7 +199,7 @@ pub fn read_decimal_from_json<T: Decimal>(
         _ => return Err("Incorrect json value for decimal".to_string()),
     };
     // Borrow the exact number text, without allocating or losing digits through f64.
-    let (n, _) = read_decimal_with_size::<T>(text.as_bytes(), size, true, true)?;
+    let (n, _) = read_decimal_with_size::<T>(text.as_bytes(), size, true, rounding_mode)?;
     Ok(n)
 }
 
