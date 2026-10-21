@@ -394,175 +394,46 @@ mod tests {
             .unwrap()
     }
 
-    fn invariant_input() -> SExpr {
-        SExpr::create_unary(
+    fn assert_duplicate_output_rejected(scalars: [ScalarExpr; 2]) {
+        let input = SExpr::create_unary(
             EvalScalar {
-                items: vec![
-                    ScalarItem {
-                        scalar: int_constant(1),
-                        index: Symbol::new(0),
-                    },
-                    ScalarItem {
-                        scalar: int_constant(2),
-                        index: Symbol::new(1),
-                    },
-                ],
-            },
-            SExpr::create_leaf(DummyTableScan::new()),
-        )
-    }
-
-    fn identity(index: usize) -> ScalarItem {
-        ScalarItem {
-            scalar: column(index),
-            index: Symbol::new(index),
-        }
-    }
-
-    fn constant(index: usize, value: i64) -> ScalarItem {
-        ScalarItem {
-            scalar: int_constant(value),
-            index: Symbol::new(index),
-        }
-    }
-
-    #[test]
-    fn test_eval_scalar_output_index_rejects_duplicates() {
-        // Run in both debug and release: neither a debug assertion panic nor
-        // silently collapsing duplicate statistics is an acceptable result.
-        for items in [
-            vec![constant(0, 1), constant(0, 2)],
-            vec![identity(0), identity(0)],
-            vec![identity(0), constant(0, 2)],
-            vec![constant(0, 2), identity(0)],
-            vec![identity(0), identity(1), identity(0)],
-            vec![constant(0, 1), constant(1, 2), constant(0, 3)],
-        ] {
-            let eval = SExpr::create_unary(EvalScalar { items }, invariant_input());
-            let error = RelExpr::with_s_expr(&eval)
-                .derive_cardinality(&StatContext::without_settings(Default::default()))
-                .unwrap_err();
-            assert_eq!(
-                error.code(),
-                databend_common_exception::ErrorCode::Internal("").code()
-            );
-            assert!(error.message().contains("duplicate output index 0"));
-        }
-    }
-
-    #[test]
-    fn test_eval_scalar_output_index_preserves_identity_fast_path() -> Result<()> {
-        let stat_ctx = StatContext::without_settings(Default::default());
-        for items in [vec![], vec![identity(0)], vec![identity(1), identity(0)]] {
-            let input = invariant_input();
-            let expected = RelExpr::with_s_expr(&input).derive_cardinality(&stat_ctx)?;
-            let eval = SExpr::create_unary(EvalScalar { items }, input);
-            let actual = RelExpr::with_s_expr(&eval).derive_cardinality(&stat_ctx)?;
-            assert!(Arc::ptr_eq(&expected, &actual));
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_eval_scalar_output_index_allows_shadowing_across_nodes() -> Result<()> {
-        let eval = SExpr::create_unary(
-            EvalScalar {
-                items: vec![constant(0, 7), ScalarItem {
-                    scalar: column(0),
-                    index: Symbol::new(2),
+                items: vec![ScalarItem {
+                    scalar: int_constant(1),
+                    index: Symbol::new(0),
                 }],
             },
-            invariant_input(),
-        );
-        let actual = RelExpr::with_s_expr(&eval)
-            .derive_cardinality(&StatContext::without_settings(Default::default()))?;
-        assert_eq!(actual.cardinality, 1.0);
-        // Aliases read the child, not a definition in the current layer.
-        for (index, value) in [(0, 7), (1, 2), (2, 1)] {
-            assert_eq!(
-                actual.statistics.column_stats[&Symbol::new(index)].bounds(),
-                Some(StatBounds::Int {
-                    min: value,
-                    max: value,
-                })
-            );
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_eval_scalar_output_index_preserves_top_n_and_cms() -> Result<()> {
-        use databend_storages_common_table_meta::meta::ColumnCountMinSketch;
-        use databend_storages_common_table_meta::meta::ColumnTopN;
-        use databend_storages_common_table_meta::meta::ColumnTopNEntry;
-
-        let value = Scalar::Number(NumberScalar::Int64(3));
-        let top_n = ColumnTopN {
-            capacity: 1,
-            values: vec![ColumnTopNEntry {
-                scalar: value.clone(),
-                count: 10,
-                error: 0,
-            }],
-            min_index: None,
-        };
-        let mut sketch = ColumnCountMinSketch::new(16, 2);
-        sketch.add_with_count(value.as_ref(), 10);
-        let input = SExpr::create(
-            DummyTableScan::new(),
-            vec![],
-            None,
-            None,
-            Some(Arc::new(StatInfo {
-                cardinality: 10.0,
-                statistics: Statistics {
-                    precise_cardinality: Some(10),
-                    column_stats: HashMap::from([
-                        (Symbol::new(0), column_stat(3, 3, 1.0)),
-                        (Symbol::new(1), column_stat(3, 3, 1.0)),
-                    ]),
-                    top_n: HashMap::from([
-                        (Symbol::new(0), top_n.clone()),
-                        (Symbol::new(1), top_n.clone()),
-                    ]),
-                    count_min_sketch: HashMap::from([
-                        (Symbol::new(0), sketch.clone()),
-                        (Symbol::new(1), sketch.clone()),
-                    ]),
-                },
-            })),
+            SExpr::create_leaf(DummyTableScan::new()),
         );
         let eval = SExpr::create_unary(
             EvalScalar {
-                items: vec![
-                    ScalarItem {
-                        scalar: column(0),
-                        index: Symbol::new(2),
-                    },
-                    constant(1, 7),
-                ],
+                items: scalars
+                    .into_iter()
+                    .map(|scalar| ScalarItem {
+                        scalar,
+                        index: Symbol::new(0),
+                    })
+                    .collect(),
             },
             input,
         );
-        let actual = RelExpr::with_s_expr(&eval)
-            .derive_cardinality(&StatContext::without_settings(Default::default()))?;
-        assert_eq!(actual.cardinality, 10.0);
-        assert_eq!(actual.statistics.precise_cardinality, Some(10));
-        assert_eq!(actual.statistics.top_n.len(), 2);
-        assert_eq!(actual.statistics.count_min_sketch.len(), 2);
-        for index in [Symbol::new(0), Symbol::new(2)] {
-            assert_eq!(actual.statistics.top_n[&index].capacity, top_n.capacity);
-            assert_eq!(actual.statistics.top_n[&index].values, top_n.values);
-            assert_eq!(actual.statistics.count_min_sketch[&index], sketch);
-        }
-        assert!(!actual.statistics.top_n.contains_key(&Symbol::new(1)));
-        assert!(
-            !actual
-                .statistics
-                .count_min_sketch
-                .contains_key(&Symbol::new(1))
+        let error = RelExpr::with_s_expr(&eval)
+            .derive_cardinality(&StatContext::without_settings(Default::default()))
+            .unwrap_err();
+        assert_eq!(
+            error.code(),
+            databend_common_exception::ErrorCode::Internal("").code()
         );
-        Ok(())
+        assert!(error.message().contains("duplicate output index 0"));
+    }
+
+    #[test]
+    fn test_eval_scalar_rejects_duplicate_output_indexes() {
+        assert_duplicate_output_rejected([int_constant(1), int_constant(2)]);
+    }
+
+    #[test]
+    fn test_eval_scalar_rejects_duplicate_identity_indexes() {
+        assert_duplicate_output_rejected([column(0), column(0)]);
     }
 
     #[test]

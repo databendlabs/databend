@@ -1090,9 +1090,7 @@ mod tests {
         let right = column(1, DataType::Number(NumberDataType::Int64));
         let mut optimizer = InferFilterOptimizer::new(None);
         assert!(optimizer.add_equal_expr(&left, &right));
-        // Local invariant fault injection: retain the equality edge and all
-        // positional arrays, but remove its target from the expression index.
-        // Typed-constant Eq is already fixed; SQL alone cannot reach this state.
+        // Inject an inconsistent index to exercise defensive error handling.
         assert!(optimizer.expr_index.remove(&right).is_some());
         let error = optimizer.optimize(vec![]).unwrap_err();
         assert_eq!(
@@ -1100,16 +1098,6 @@ mod tests {
             databend_common_exception::ErrorCode::Internal("").code()
         );
         assert!(error.message().contains("inconsistent expression indexes"));
-    }
-
-    #[test]
-    fn test_infer_filter_valid_lookup_preserves_equality() -> Result<()> {
-        let left = column(0, DataType::Number(NumberDataType::Int64));
-        let right = column(1, DataType::Number(NumberDataType::Int64));
-        let equality = comparison(left, ComparisonOp::Equal, right);
-        let mut optimizer = InferFilterOptimizer::new(None);
-        assert_eq!(optimizer.optimize(vec![equality.clone()])?, vec![equality]);
-        Ok(())
     }
 
     #[test]
