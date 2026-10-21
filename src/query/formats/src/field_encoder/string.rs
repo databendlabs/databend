@@ -74,6 +74,9 @@ impl FieldEncoderToString {
 
     pub fn encode<'a>(&self, column: &'a Column, row_index: usize) -> Result<Cow<'a, str>> {
         match column {
+            Column::Encoded(c) => c.with_row(row_index, |column, row| {
+                Ok(Cow::Owned(self.encode(column, row)?.into_owned()))
+            }),
             Column::Null { .. } => Ok(Cow::Borrowed(NULL_BYTES_UPPER)),
             Column::EmptyArray { .. } => Ok(Cow::Borrowed("[]")),
             Column::EmptyMap { .. } => Ok(Cow::Borrowed("{}")),
@@ -135,6 +138,9 @@ impl FieldEncoderToString {
 
     fn write_nested_to(&self, column: &Column, row_index: usize, out: &mut String) -> Result<()> {
         match column {
+            Column::Encoded(c) => {
+                c.with_row(row_index, |column, row| self.write_nested_to(column, row, out))?
+            }
             // simple
             Column::Null { .. } => out.push_str(NULL_BYTES_UPPER),
             Column::EmptyArray { .. } => out.push_str("[]"),

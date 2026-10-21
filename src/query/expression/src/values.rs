@@ -89,6 +89,7 @@ use crate::types::number::NumberColumnBuilder;
 use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
 use crate::types::opaque::OpaqueColumn;
+use crate::types::EncodedColumn;
 use crate::types::opaque::OpaqueColumnBuilder;
 use crate::types::opaque::OpaqueColumnVec;
 use crate::types::opaque::OpaqueScalar;
@@ -217,6 +218,8 @@ pub enum Column {
     Geography(GeographyColumn),
     Vector(VectorColumn),
     Opaque(OpaqueColumn),
+    /// A column kept in a compact encoded form; its logical type is the type of the decoded column.
+    Encoded(Box<EncodedColumn>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1277,6 +1280,7 @@ impl Column {
             Column::Tuple(fields) => fields[0].len(),
             Column::Variant(col) => col.len(),
             Column::Opaque(col) => col.len(),
+            Column::Encoded(col) => col.len(),
             Column::Geometry(col) => col.len(),
             Column::Geography(col) => col.len(),
             Column::Vector(col) => col.len(),
@@ -1312,6 +1316,7 @@ impl Column {
             Column::Geography(col) => Some(ScalarRef::Geography(col.index(index)?)),
             Column::Vector(col) => Some(ScalarRef::Vector(col.index(index)?)),
             Column::Opaque(col) => col.index(index).map(ScalarRef::Opaque),
+            Column::Encoded(col) => col.index(index),
         }
     }
 
@@ -1348,6 +1353,7 @@ impl Column {
                 Column::Geography(col) => ScalarRef::Geography(col.index_unchecked(index)),
                 Column::Vector(col) => ScalarRef::Vector(col.index_unchecked(index)),
                 Column::Opaque(col) => ScalarRef::Opaque(col.index_unchecked(index)),
+                Column::Encoded(col) => col.index_unchecked(index),
             }
         }
     }
@@ -1411,6 +1417,7 @@ impl Column {
             Column::Geography(col) => Column::Geography(col.slice(range)),
             Column::Vector(col) => Column::Vector(col.slice(range)),
             Column::Opaque(col) => Column::Opaque(col.slice(range)),
+            Column::Encoded(col) => Column::Encoded(Box::new(col.slice(range))),
         }
     }
 
@@ -1522,6 +1529,7 @@ impl Column {
             | Column::Geography(_)
             | Column::Vector(_)
             | Column::Opaque(_) => Domain::Undefined,
+            Column::Encoded(col) => col.domain(),
         }
     }
 
@@ -1565,6 +1573,7 @@ impl Column {
             Column::Geography(_) => DataType::Geography,
             Column::Vector(col) => DataType::Vector(col.data_type()),
             Column::Opaque(col) => col.data_type(),
+            Column::Encoded(col) => col.data_type(),
         }
     }
 
@@ -1901,6 +1910,7 @@ impl Column {
             Column::Geography(col) => GeographyType::column_memory_size(col, gc),
             Column::Vector(col) => col.memory_size(),
             Column::Opaque(col) => col.memory_size(),
+            Column::Encoded(col) => col.memory_size(gc),
         }
     }
 
@@ -1937,6 +1947,14 @@ impl Column {
             Column::Tuple(fields) => fields.iter().map(|f| f.serialize_size()).sum(),
             Column::Vector(col) => col.memory_size(),
             Column::Opaque(col) => col.memory_size(), // Same as memory size for opaque types
+            // Encoded columns are decoded before serialization.
+            Column::Encoded(col) => match col.as_ref() {
+                EncodedColumn::For(c) => c.len() * c.decoded_width(),
+                EncodedColumn::Dict(c) => {
+                    let values = c.values.len().max(1);
+                    c.values.serialize_size() * c.len() / values
+                }
+            },
         }
     }
 
@@ -2067,6 +2085,7 @@ impl ColumnBuilder {
             Column::Opaque(col) => {
                 ColumnBuilder::Opaque(crate::types::opaque::OpaqueColumnBuilder::from_column(col))
             }
+            Column::Encoded(col) => ColumnBuilder::from_column(col.decode()),
         }
     }
 
@@ -3017,6 +3036,7 @@ impl ColumnBuilder {
                     _ => unreachable!("Mismatched Opaque types"),
                 })
             }
+            (this, Column::Encoded(other)) => this.append_column(&other.decode()),
             (this, other) => unreachable!(
                 "unable append column(data type: {:?}) into builder(data type: {:?})",
                 other.data_type(),

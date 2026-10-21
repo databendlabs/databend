@@ -70,6 +70,13 @@ impl AccessType for StringType {
     }
 
     fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        if let Column::Encoded(encoded) = col {
+            // Kernels that do not understand the encoding see the decoded values.
+            return match encoded.decode() {
+                Column::String(c) => Ok(c),
+                _ => Err(column_type_error::<Self>(col)),
+            };
+        }
         col.as_string()
             .cloned()
             .ok_or_else(|| column_type_error::<Self>(col))

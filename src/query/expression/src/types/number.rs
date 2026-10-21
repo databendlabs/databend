@@ -354,6 +354,9 @@ impl AccessType for AnyNumberType {
     }
 
     fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        if let Column::Encoded(encoded) = col {
+            return Self::try_downcast_column(&encoded.decode());
+        }
         col.as_number().cloned().ok_or_else(|| {
             ErrorCode::BadDataValueType(format!("failed to downcast column {col:?} into number"))
         })

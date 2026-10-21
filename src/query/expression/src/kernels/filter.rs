@@ -312,9 +312,21 @@ impl ValueVisitor for FilterVisitor<'_> {
         )));
         Ok(())
     }
+
+    /// Filters the encoded values (keys / deltas) and keeps the encoding.
+    fn visit_encoded(&mut self, mut column: Box<EncodedColumn>) -> Result<()> {
+        // Reuses the box of the input column.
+        *column = column.map_codes(|codes| self.filter_narrow(codes));
+        self.result = Some(Value::Column(Column::Encoded(column)));
+        Ok(())
+    }
 }
 
 impl FilterVisitor<'_> {
+    fn filter_narrow(&mut self, buffer: NarrowBuffer) -> NarrowBuffer {
+        crate::map_narrow_buffer!(buffer, |b| self.filter_primitive_types(b))
+    }
+
     fn filter_primitive_types<T: Copy>(&mut self, buffer: Buffer<T>) -> Buffer<T> {
         match self.strategy {
             IterationStrategy::IndexIterator => {

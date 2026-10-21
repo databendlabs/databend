@@ -240,6 +240,7 @@ impl VirtualColumnReader {
                     &columns_chunks,
                     &virtual_data.compression,
                     row_selection,
+                    None,
                 )
             })
             .transpose()?;

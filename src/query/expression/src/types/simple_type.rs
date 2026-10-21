@@ -112,6 +112,11 @@ impl<T: SimpleType> AccessType for SimpleValueType<T> {
     }
 
     fn try_downcast_column(col: &Column) -> Result<Buffer<Self::Scalar>> {
+        if let Column::Encoded(encoded) = col {
+            // Kernels that do not understand the encoding see the decoded values.
+            return T::downcast_column(&encoded.decode())
+                .ok_or_else(|| column_type_error::<Self>(col));
+        }
         T::downcast_column(col).ok_or_else(|| column_type_error::<Self>(col))
     }
 

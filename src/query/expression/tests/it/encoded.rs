@@ -1,0 +1,265 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use databend_common_column::bitmap::Bitmap;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
+use databend_common_expression::SelectOp;
+use databend_common_expression::Value;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
+use databend_common_expression::types::Decimal64Type;
+use databend_common_expression::types::DecimalColumn;
+use databend_common_expression::types::DecimalScalar;
+use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::DictColumn;
+use databend_common_expression::types::EncodedColumn;
+use databend_common_expression::types::ForColumn;
+use databend_common_expression::types::Float64Type;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::NarrowBuffer;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::UInt64Type;
+
+fn decimal_size() -> DecimalSize {
+    DecimalSize::new_unchecked(15, 2)
+}
+
+fn decimal_column(values: &[i64]) -> Column {
+    Column::Decimal(DecimalColumn::Decimal64(values.to_vec().into(), decimal_size()))
+}
+
+fn encode(column: &Column) -> Column {
+    let encoded = ForColumn::try_encode(column).unwrap();
+    Column::Encoded(Box::new(EncodedColumn::For(encoded)))
+}
+
+fn for_column(values: &[i64]) -> Column {
+    encode(&decimal_column(values))
+}
+
+fn dict_column(values: &[&str], keys: &[u32]) -> Column {
+    let values = StringType::from_data(values.to_vec());
+    let max = values.len() as u64 - 1;
+    let keys = NarrowBuffer::pack(keys.iter().map(|k| *k as u64), max);
+    Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(keys, values))))
+}
+
+fn build_dict(column: &Column) -> Column {
+    let dict = DictColumn::try_encode(column, 1 << 16).unwrap();
+    Column::Encoded(Box::new(EncodedColumn::Dict(dict)))
+}
+
+/// Block-level dictionaries keep first-seen order and give up beyond `max_ndv`.
+#[test]
+fn test_dict_column_try_encode() {
+    let column = Int64Type::from_data(vec![30, 10, 30, 20, 10]);
+    let dict = DictColumn::try_encode(&column, 3).unwrap();
+    assert_eq!(dict.values, Int64Type::from_data(vec![30, 10, 20]));
+    assert_eq!(dict.keys, NarrowBuffer::U8(vec![0, 1, 0, 2, 1].into()));
+    assert_eq!(dict.decode(), column);
+
+    assert!(DictColumn::try_encode(&column, 2).is_none());
+    assert!(DictColumn::try_encode(&Int64Type::from_data(Vec::<i64>::new()), 3).is_none());
+
+    let dates = DateType::from_data(vec![5, 5, 9]);
+    assert_eq!(DictColumn::try_encode(&dates, 8).unwrap().decode(), dates);
+}
+
+fn assert_same(encoded: &Column, decoded: &Column) {
+    let Column::Encoded(e) = encoded else {
+        panic!("expected an encoded column, got {encoded:?}");
+    };
+    assert_eq!(&e.decode(), decoded);
+    assert_eq!(encoded.len(), decoded.len());
+    assert_eq!(encoded.data_type(), decoded.data_type());
+    for i in 0..decoded.len() {
+        assert_eq!(encoded.index(i), decoded.index(i));
+    }
+}
+
+#[test]
+fn test_for_column_width() {
+    let values = [100, 105, 355];
+    let Column::Encoded(e) = for_column(&values) else {
+        unreachable!()
+    };
+    let c = e.as_for().unwrap();
+    assert_eq!(c.base(), 100);
+    // range 255 fits in u8
+    assert!(matches!(c.deltas(), NarrowBuffer::U8(_)));
+
+    let c = ForColumn::try_encode(&decimal_column(&[-5, 70_000])).unwrap();
+    assert!(matches!(c.deltas(), NarrowBuffer::U32(_)));
+    assert_eq!(c.decode(), decimal_column(&[-5, 70_000]));
+
+    // the deltas must be narrower than the values
+    assert!(ForColumn::try_encode(&decimal_column(&[0, u32::MAX as i64 + 1])).is_none());
+    assert!(ForColumn::try_encode(&decimal_column(&[i64::MIN, i64::MAX])).is_none());
+    assert!(ForColumn::try_encode(&decimal_column(&[])).is_none());
+    assert!(ForColumn::try_encode(&Int32Type::from_data(vec![0, 70_000])).is_none());
+    assert!(ForColumn::try_encode(&StringType::from_data(vec!["a"])).is_none());
+}
+
+#[test]
+fn test_encoded_column_kernels() {
+    let values = (0..1000).map(|i| 1_000_000 + (i * 37) % 9973).collect::<Vec<i64>>();
+    let keys = (0..1000).map(|i| (i * 7 % 3) as u32).collect::<Vec<_>>();
+    let dict_values = ["A", "N", "R"];
+    let strings = keys.iter().map(|k| dict_values[*k as usize]).collect::<Vec<_>>();
+
+    let dates = (0..1000).map(|i| 8000 + (i * 13) % 2500).collect::<Vec<i32>>();
+    let timestamps = (0..1000)
+        .map(|i| 1_700_000_000_000_000 + (i * 997) % 100_000)
+        .collect::<Vec<i64>>();
+    let large = (0..1000).map(|i| u64::MAX - (i % 300)).collect::<Vec<u64>>();
+    let negative = (0..1000).map(|i| -40_000 + (i * 7) % 300).collect::<Vec<i32>>();
+
+    let cases = [
+        (for_column(&values), decimal_column(&values)),
+        (dict_column(&dict_values, &keys), StringType::from_data(strings)),
+        (encode(&DateType::from_data(dates.clone())), DateType::from_data(dates)),
+        (
+            encode(&TimestampType::from_data(timestamps.clone())),
+            TimestampType::from_data(timestamps),
+        ),
+        (encode(&UInt64Type::from_data(large.clone())), UInt64Type::from_data(large)),
+        (encode(&Int32Type::from_data(negative.clone())), Int32Type::from_data(negative)),
+    ];
+    // Dictionaries built from regular columns of any supported type.
+    let codes = (0..1000).map(|i| [7, 1_000_000_007, -3][i % 3]).collect::<Vec<i64>>();
+    let floats = (0..1000).map(|i| [0.5, -2.25][i % 2]).collect::<Vec<f64>>();
+    let names = (0..1000).map(|i| ["x", "long value"][i % 2]).collect::<Vec<_>>();
+    let prices = (0..1000).map(|i| 100 * (i % 5)).collect::<Vec<i64>>();
+    let cases = cases.into_iter().chain([
+        (build_dict(&Int64Type::from_data(codes.clone())), Int64Type::from_data(codes)),
+        (build_dict(&Float64Type::from_data(floats.clone())), Float64Type::from_data(floats)),
+        (build_dict(&StringType::from_data(names.clone())), StringType::from_data(names)),
+        (build_dict(&decimal_column(&prices)), decimal_column(&prices)),
+    ]);
+
+    for (encoded, decoded) in cases {
+        assert_same(&encoded, &decoded);
+        assert_same(&encoded.slice(10..500), &decoded.slice(10..500));
+
+        // both filter strategies keep the encoding
+        for bitmap in [
+            Bitmap::from_iter((0..1000).map(|i| i % 3 == 0)),
+            Bitmap::from_iter((0..1000).map(|i| i % 50 != 0)),
+        ] {
+            assert_same(&encoded.filter(&bitmap), &decoded.filter(&bitmap));
+        }
+
+        let indices = [999u32, 0, 5, 5, 123];
+        let taken = BlockEntry::from(encoded.clone()).take(&indices[..]).unwrap();
+        let expected = BlockEntry::from(decoded.clone()).take(&indices[..]).unwrap();
+        assert_same(&taken.to_column(), &expected.to_column());
+
+        // generic kernels see the decoded values
+        let concat = DataBlock::concat(&[
+            DataBlock::new(vec![encoded.clone().into()], encoded.len()),
+            DataBlock::new(vec![decoded.clone().into()], decoded.len()),
+        ])
+        .unwrap();
+        let expected = DataBlock::concat(&[
+            DataBlock::new(vec![decoded.clone().into()], decoded.len()),
+            DataBlock::new(vec![decoded.clone().into()], decoded.len()),
+        ])
+        .unwrap();
+        assert_eq!(concat.get_by_offset(0).to_column(), expected.get_by_offset(0).to_column());
+
+        assert_eq!(
+            Value::Column(encoded.clone()).decode_encoded(),
+            Value::Column(decoded.clone())
+        );
+        assert!(encoded.memory_size(false) < decoded.memory_size(false));
+        assert_eq!(encoded.domain(), decoded.domain());
+    }
+}
+
+#[test]
+fn test_encoded_column_downcast() {
+    let values = [7, 8, 9];
+    let encoded = for_column(&values);
+    assert_eq!(
+        Decimal64Type::try_downcast_column(&encoded)
+            .unwrap()
+            .as_slice(),
+        &values
+    );
+
+    let encoded = dict_column(&["x", "yy"], &[1, 0, 1]);
+    let strings = StringType::try_downcast_column(&encoded).unwrap();
+    assert_eq!(strings.iter().collect::<Vec<_>>(), vec!["yy", "x", "yy"]);
+
+    let encoded = encode(&DateType::from_data(vec![10, 20, 15]));
+    let dates = DateType::try_downcast_column(&encoded).unwrap();
+    assert_eq!(dates.as_slice(), &[10, 20, 15]);
+}
+
+/// Comparing the deltas with a constant gives the same result as comparing the values.
+#[test]
+fn test_for_column_compare() {
+    let ops = [
+        SelectOp::Equal,
+        SelectOp::NotEqual,
+        SelectOp::Gt,
+        SelectOp::Gte,
+        SelectOp::Lt,
+        SelectOp::Lte,
+    ];
+    let cmp = |op: &SelectOp, v: i128, c: i128| match op {
+        SelectOp::Equal => v == c,
+        SelectOp::NotEqual => v != c,
+        SelectOp::Gt => v > c,
+        SelectOp::Gte => v >= c,
+        SelectOp::Lt => v < c,
+        SelectOp::Lte => v <= c,
+    };
+
+    let dates = (0..300).map(|i| 9000 + (i * 7) % 200).collect::<Vec<i32>>();
+    let Column::Encoded(encoded) = encode(&DateType::from_data(dates.clone())) else {
+        unreachable!()
+    };
+    let column = encoded.as_for().unwrap();
+    // A filtered column keeps the bounds of the original deltas.
+    let filtered = column.with_deltas(column.deltas().slice(0..3));
+    for constant in [i32::MIN, 0, 8999, 9000, 9001, 9100, 9198, 9199, 9200, i32::MAX] {
+        let raw = column.raw_scalar(&Scalar::Date(constant)).unwrap();
+        for op in &ops {
+            let expected = Bitmap::from_iter(dates.iter().map(|v| cmp(op, *v as i128, raw)));
+            assert_eq!(column.compare_raw(op, raw), expected, "{op:?} {constant}");
+            let expected = Bitmap::from_iter(dates[..3].iter().map(|v| cmp(op, *v as i128, raw)));
+            assert_eq!(filtered.compare_raw(op, raw), expected, "{op:?} {constant}");
+        }
+    }
+
+    // Only scalars of the same logical type compare with the raw values.
+    let Column::Encoded(encoded) = for_column(&[100, 250]) else {
+        unreachable!()
+    };
+    let column = encoded.as_for().unwrap();
+    let same_scale = DecimalScalar::Decimal64(150, DecimalSize::new_unchecked(10, 2));
+    let other_scale = DecimalScalar::Decimal64(150, DecimalSize::new_unchecked(10, 1));
+    assert_eq!(column.raw_scalar(&Scalar::Decimal(same_scale)), Some(150));
+    assert_eq!(column.raw_scalar(&Scalar::Decimal(other_scale)), None);
+    assert_eq!(column.raw_scalar(&Scalar::Date(150)), None);
+    assert_eq!(column.data_type(), &DataType::Decimal(decimal_size()));
+}

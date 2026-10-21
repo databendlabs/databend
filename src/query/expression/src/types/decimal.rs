@@ -1052,6 +1052,9 @@ impl Decimal for i64 {
     }
 
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)> {
+        if let Column::Encoded(encoded) = column {
+            return Self::try_downcast_column(&encoded.decode());
+        }
         let column = column.as_decimal()?;
         match column {
             DecimalColumn::Decimal64(c, size) => Some((c.clone(), *size)),
@@ -1388,6 +1391,9 @@ impl Decimal for i128 {
     }
 
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)> {
+        if let Column::Encoded(encoded) = column {
+            return Self::try_downcast_column(&encoded.decode());
+        }
         let column = column.as_decimal()?;
         match column {
             DecimalColumn::Decimal128(c, size) => Some((c.clone(), *size)),
@@ -1675,6 +1681,9 @@ impl Decimal for i256 {
     }
 
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)> {
+        if let Column::Encoded(encoded) = column {
+            return Self::try_downcast_column(&encoded.decode());
+        }
         let column = column.as_decimal()?;
         match column {
             DecimalColumn::Decimal256(c, size) => Some((c.clone(), *size)),
@@ -1770,6 +1779,10 @@ impl DecimalDataType {
             Value::Column(Column::Decimal(column)) => with_decimal_type!(|T| match column {
                 DecimalColumn::T(_, size) => Some((DecimalDataType::T(*size), false)),
             }),
+            Value::Column(Column::Encoded(column)) => match column.data_type() {
+                DataType::Decimal(size) => Some((DecimalDataType::from(size), false)),
+                _ => None,
+            },
             Value::Column(Column::Nullable(deref!(column))) => {
                 with_decimal_type!(|T| match &column.column {
                     Column::Decimal(DecimalColumn::T(_, size)) =>

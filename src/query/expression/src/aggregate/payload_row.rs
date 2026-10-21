@@ -92,6 +92,16 @@ pub(super) unsafe fn serialize_column_to_rowformat(
     scratch: &mut Vec<u8>,
 ) {
     match column {
+        Column::Encoded(c) => unsafe {
+            serialize_column_to_rowformat(
+                arena,
+                &c.decode(),
+                select_vector,
+                address,
+                offset,
+                scratch,
+            )
+        },
         Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
             NumberColumn::NUM_TYPE(buffer) => {
@@ -416,6 +426,7 @@ impl<'s> CompareState<'s> {
         counts: (usize, usize),
     ) -> (usize, usize) {
         match col {
+            Column::Encoded(c) => self.match_column(&c.decode(), col_offset, validity, counts),
             Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
                 self.match_validity_with(counts, validity, |_, _| true)
             }

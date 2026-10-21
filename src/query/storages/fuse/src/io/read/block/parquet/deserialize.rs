@@ -13,11 +13,16 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use arrow_array::RecordBatch;
 use arrow_array::RecordBatchReader;
+use arrow_schema::DataType as ArrowDataType;
+use arrow_schema::FieldRef;
+use arrow_schema::Fields;
 use arrow_schema::Schema;
 use databend_common_expression::ColumnId;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::Compression;
 use parquet::arrow::ArrowSchemaConverter;
@@ -30,16 +35,53 @@ use parquet::basic::Compression as ParquetCompression;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::read::block::parquet::adapter::RowGroupImplBuilder;
 
+/// Arrow fields of `original_schema` with the top-level string fields in `dictionary_columns`
+/// typed `Dictionary(UInt32, Utf8)`. Passed as the hint of [`column_chunks_to_record_batch`],
+/// it makes the Parquet reader preserve the dictionary encoding of these column chunks instead
+/// of expanding it. `None` if there is no such field.
+pub fn dictionary_hint_fields(
+    original_schema: &TableSchema,
+    dictionary_columns: impl IntoIterator<Item = ColumnId>,
+) -> Option<Fields> {
+    let mut fields: Option<Vec<FieldRef>> = None;
+    for column_id in dictionary_columns {
+        // The type check guards against a nested field sharing the column id of its leaf.
+        let Some(index) = original_schema.fields().iter().position(|field| {
+            field.column_id() == column_id && *field.data_type() == TableDataType::String
+        }) else {
+            continue;
+        };
+        let fields = fields.get_or_insert_with(|| {
+            Schema::from(original_schema)
+                .fields()
+                .iter()
+                .cloned()
+                .collect()
+        });
+        let dictionary = ArrowDataType::Dictionary(
+            Box::new(ArrowDataType::UInt32),
+            Box::new(ArrowDataType::Utf8),
+        );
+        fields[index] = Arc::new(fields[index].as_ref().clone().with_data_type(dictionary));
+    }
+    fields.map(Fields::from)
+}
+
 /// The returned record batch contains all deserialized columns in the same nested structure as the original schema.
+///
+/// `hint_fields` overrides the Arrow fields the columns are read as, see
+/// [`dictionary_hint_fields`]; by default they are the fields of `original_schema`.
 pub fn column_chunks_to_record_batch(
     original_schema: &TableSchema,
     num_rows: usize,
     column_chunks: &HashMap<ColumnId, DataItem>,
     compression: &Compression,
     selection: Option<RowSelection>,
+    hint_fields: Option<&Fields>,
 ) -> databend_common_exception::Result<RecordBatch> {
     let arrow_schema = Schema::from(original_schema);
     let parquet_schema = ArrowSchemaConverter::new().convert(&arrow_schema)?;
+    let hint_fields = hint_fields.unwrap_or(arrow_schema.fields());
 
     let column_id_to_dfs_id = original_schema
         .to_leaf_column_ids()
@@ -68,7 +110,7 @@ pub fn column_chunks_to_record_batch(
     let field_levels = parquet_to_arrow_field_levels(
         &parquet_schema,
         ProjectionMask::leaves(&parquet_schema, projection_mask),
-        Some(arrow_schema.fields()),
+        Some(hint_fields),
     )?;
     // The reader uses batch_size to preallocate column buffers retained by the output.
     let batch_size = selection.as_ref().map_or(num_rows, RowSelection::row_count);
@@ -92,8 +134,6 @@ pub fn column_chunks_to_record_batch(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use arrow_array::Int64Array;
     use bytes::Bytes;
     use databend_common_expression::TableDataType;
@@ -157,6 +197,7 @@ mod tests {
                 &column_chunks,
                 &Compression::None,
                 selection,
+                None,
             )?;
             let values = record
                 .column(0)

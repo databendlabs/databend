@@ -1174,6 +1174,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
+                ("enable_encoded_columns", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Experimental. Fuse scans keep non-nullable columns encoded in memory and in the column array cache: String columns dictionary encoded (reusing the Parquet dictionary), integer, Date, Timestamp and Decimal columns frame-of-reference encoded.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("numeric_cast_option", DefaultSettingValue {
                     value: UserSettingValue::String("rounding".to_string()),
                     desc: "Set numeric cast mode as \"rounding\" or \"truncating\".",
