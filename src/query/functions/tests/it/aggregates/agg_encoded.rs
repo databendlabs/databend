@@ -55,14 +55,16 @@ fn resolve_agg(name: &str, arg_type: DataType) -> AggregateCallRef {
 }
 
 /// Plain group columns: String, Int64, Decimal(15, 2) and Date, with 5 * 3 * 2 * 7 groups.
-fn plain_group_columns(n: usize) -> Vec<Column> {
+/// The two decimal values are `decimal_step` apart, which sets the number of frame of reference
+/// codes of the encoded decimal column.
+fn plain_group_columns(n: usize, decimal_step: i64) -> Vec<Column> {
     let size = DecimalSize::new_unchecked(15, 2);
     vec![
         StringType::from_data((0..n).map(|x| format!("flag-{}", x % 5)).collect_vec()),
         Int64Type::from_data((0..n).map(|x| 1_000_000 + (x % 3) as i64).collect_vec()),
         Column::Decimal(DecimalColumn::Decimal64(
             (0..n)
-                .map(|x| 9_000_00 + (x % 2) as i64 * 37)
+                .map(|x| 9_000_00 + (x % 2) as i64 * decimal_step)
                 .collect_vec()
                 .into(),
             size,
@@ -137,10 +139,9 @@ fn aggregate(batches: &[(Vec<Column>, Column)]) -> DataBlock {
 }
 
 // cargo test --package databend-common-functions --test it -- aggregates::agg_encoded --nocapture
-#[test]
-fn test_group_by_encoded_columns() {
+fn check_group_by_encoded_columns(decimal_step: i64) {
     let n = 1000;
-    let plain = plain_group_columns(n);
+    let plain = plain_group_columns(n, decimal_step);
     let encoded = encode(&plain);
     let arg = Int64Type::from_data((0..n as i64).collect_vec());
 
@@ -165,4 +166,16 @@ fn test_group_by_encoded_columns() {
         }
         assert_block_value_sort_eq(&block, &expected);
     }
+}
+
+/// 5 * 3 * 38 * 7 code combinations for 1000 rows: probes every row.
+#[test]
+fn test_group_by_encoded_columns() {
+    check_group_by_encoded_columns(37);
+}
+
+/// 5 * 3 * 2 * 7 code combinations for 1000 rows: probes once per combination.
+#[test]
+fn test_group_by_encoded_codes() {
+    check_group_by_encoded_columns(1);
 }

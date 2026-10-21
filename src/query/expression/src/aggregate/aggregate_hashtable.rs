@@ -32,6 +32,7 @@ use super::partitioned_payload::PartitionedPayload;
 use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
 use crate::BlockEntry;
+use crate::Column;
 use crate::ColumnBuilder;
 use crate::ProjectedBlock;
 use crate::aggregate::AggrState;
@@ -233,16 +234,21 @@ impl AggregateHashTable {
             }
         }
 
-        state.row_count = row_count;
-        group_hash_entries(group_columns, &mut state.group_hashes[..row_count]);
-
         let new_group_count = if self.direct_append {
+            state.row_count = row_count;
+            group_hash_entries(group_columns, &mut state.group_hashes[..row_count]);
             for (i, entry) in state.empty_vector[..row_count].iter_mut().enumerate() {
                 *entry = i.into();
             }
             self.payload.append_rows(state, row_count, group_columns);
             row_count
+        } else if let Some(new_group_count) =
+            self.probe_and_create_by_codes(state, group_columns, row_count)
+        {
+            new_group_count
         } else {
+            state.row_count = row_count;
+            group_hash_entries(group_columns, &mut state.group_hashes[..row_count]);
             self.probe_and_create(state, group_columns, row_count)
         };
 
@@ -291,6 +297,89 @@ impl AggregateHashTable {
         }
 
         Ok(new_group_count)
+    }
+
+    /// Probes once per distinct combination of codes when every group key is an encoded column
+    /// with few codes (see [`EncodedColumn::codes`]): rows with the same codes have the same
+    /// keys, so a representative row per combination goes through the regular hash and probe,
+    /// and every row takes the address of its combination.
+    ///
+    /// The code of a combination is a mixed radix number (each key a digit whose radix is its
+    /// number of codes, like a row-major array index), used to index a direct-address table of
+    /// ranks. It is the idea of perfect hash aggregation, applied only to deduplicate the rows of
+    /// a batch, so the hash table is still used for the representatives.
+    ///
+    /// For example, grouping by `(flag, status)` with codes `N=0, R=1` and `F=0, O=1`:
+    ///
+    /// ```text
+    /// row:                0     1     2     3     4     5
+    /// keys:             (N,F) (R,O) (N,F) (N,F) (R,O) (N,F)
+    /// flag + status * 2:  0     3     0     0     3     0     1. code of each row
+    /// representatives:   [0, 1]                               2. first row of each code
+    /// probe rows 0 and 1:  (N,F) -> a0, (R,O) -> a1           3. regular hash and probe
+    /// addresses:          a0    a1    a0    a0    a1    a0    4. by code
+    /// ```
+    ///
+    /// `None` if the keys do not qualify (a key is not encoded, or there are not several rows
+    /// per combination); nothing is changed then.
+    fn probe_and_create_by_codes(
+        &mut self,
+        state: &mut ProbeState,
+        group_columns: ProjectedBlock,
+        row_count: usize,
+    ) -> Option<usize> {
+        // Code of a row = mixed radix number of the codes of its keys.
+        let mut row_codes = vec![0u32; row_count];
+        let mut code_space = 1usize;
+        for entry in group_columns.iter() {
+            let BlockEntry::Column(Column::Encoded(encoded)) = entry else {
+                return None;
+            };
+            let (codes, count) = encoded.codes();
+            let stride = code_space;
+            code_space = code_space.checked_mul(usize::try_from(count).ok()?)?;
+            // Only worth it with several rows per combination.
+            if code_space.saturating_mul(4) > row_count {
+                return None;
+            }
+            // `code < count`, so the result is below `code_space <= row_count`.
+            for (row_code, code) in row_codes.iter_mut().zip(codes.iter()) {
+                *row_code += (code as usize * stride) as u32;
+            }
+        }
+
+        // Rank of each combination in first-seen order, and its first row.
+        let mut rank_of_code = vec![u32::MAX; code_space];
+        let mut representatives = Vec::new();
+        for (row, row_code) in row_codes.iter_mut().enumerate() {
+            let rank = &mut rank_of_code[*row_code as usize];
+            if *rank == u32::MAX {
+                *rank = representatives.len() as u32;
+                representatives.push(row as u32);
+            }
+            *row_code = *rank;
+        }
+
+        // The representative rows stay encoded.
+        let keys = group_columns
+            .iter()
+            .map(|entry| entry.take(representatives.as_slice()))
+            .collect::<Result<Vec<_>>>()
+            .ok()?;
+        
+        let distinct = representatives.len();
+        state.row_count = distinct;
+        group_hash_entries((&keys).into(), &mut state.group_hashes[..distinct]);
+        let new_group_count = self.probe_and_create(state, (&keys).into(), distinct);
+
+        // The addresses of the representatives are at the front, by rank. `rank <= row` (ranks
+        // are assigned in first-seen order), so writing from the last row never overwrites an
+        // address that is still to be read.
+        for row in (0..row_count).rev() {
+            state.addresses[row] = state.addresses[row_codes[row] as usize];
+        }
+        state.row_count = row_count;
+        Some(new_group_count)
     }
 
     fn probe_and_create(

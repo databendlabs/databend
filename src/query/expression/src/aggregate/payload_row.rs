@@ -36,11 +36,15 @@ use crate::types::DataType;
 use crate::types::DateType;
 use crate::types::DecimalDataKind;
 use crate::types::DecimalScalar;
+use crate::types::DecimalType;
 use crate::types::DecimalView;
+use crate::types::EncodedColumn;
 use crate::types::IntervalType;
 use crate::types::NumberColumn;
+use crate::types::NumberDataType;
 use crate::types::NumberScalar;
 use crate::types::NumberType;
+use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
@@ -83,6 +87,72 @@ pub(super) fn rowformat_size(data_type: &DataType) -> usize {
 }
 
 /// This serialize column into row format by fixed size
+/// Runs `$body` with `$T` the value type of a frame of reference / dictionary encodable
+/// fixed size type, `$other` for other types.
+macro_rules! with_encoded_fixed_size_type {
+    ($data_type:expr, | $T:ident | $body:expr, $other:expr) => {
+        match $data_type {
+            DataType::Number(ty) => with_number_mapped_type!(|NUM| match ty {
+                NumberDataType::NUM => {
+                    type $T = NumberType<NUM>;
+                    $body
+                }
+            }),
+            DataType::Decimal(size) => with_decimal_mapped_type!(|D| match size.data_kind() {
+                DecimalDataKind::D => {
+                    type $T = DecimalType<D>;
+                    $body
+                }
+            }),
+            DataType::Date => {
+                type $T = DateType;
+                $body
+            }
+            DataType::Timestamp => {
+                type $T = TimestampType;
+                $body
+            }
+            _ => $other,
+        }
+    };
+}
+
+/// Writes the selected rows of an encoded column, reading each value from the encoding.
+/// `false` if the column cannot be read encoded, so it must be decoded.
+unsafe fn serialize_encoded_to_rowformat(
+    arena: &Bump,
+    column: &EncodedColumn,
+    select_vector: &[RowID],
+    address: &mut [RowMut; BATCH_SIZE],
+    offset: usize,
+) -> bool {
+    with_encoded_fixed_size_type!(
+        &column.data_type(),
+        |T| {
+            let Some(view) = T::try_downcast_encoded(column) else {
+                return false;
+            };
+            for row in select_vector {
+                unsafe { address[*row].write(offset, &view.index_unchecked(row.to_usize())) };
+            }
+        },
+        {
+            let view = match column.data_type() {
+                DataType::String => StringType::try_downcast_encoded(column),
+                _ => None,
+            };
+            let Some(view) = view else {
+                return false;
+            };
+            for row in select_vector {
+                let data = arena.alloc_str(unsafe { view.index_unchecked(row.to_usize()) });
+                unsafe { address[*row].write_bytes(offset, data.as_bytes()) };
+            }
+        }
+    );
+    true
+}
+
 pub(super) unsafe fn serialize_column_to_rowformat(
     arena: &Bump,
     column: &Column,
@@ -93,14 +163,16 @@ pub(super) unsafe fn serialize_column_to_rowformat(
 ) {
     match column {
         Column::Encoded(c) => unsafe {
-            serialize_column_to_rowformat(
-                arena,
-                &c.decode(),
-                select_vector,
-                address,
-                offset,
-                scratch,
-            )
+            if !serialize_encoded_to_rowformat(arena, c, select_vector, address, offset) {
+                serialize_column_to_rowformat(
+                    arena,
+                    &c.decode(),
+                    select_vector,
+                    address,
+                    offset,
+                    scratch,
+                )
+            }
         },
         Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
@@ -426,7 +498,10 @@ impl<'s> CompareState<'s> {
         counts: (usize, usize),
     ) -> (usize, usize) {
         match col {
-            Column::Encoded(c) => self.match_column(&c.decode(), col_offset, validity, counts),
+            Column::Encoded(c) => match self.match_encoded(c, col_offset, validity, counts) {
+                Some(counts) => counts,
+                None => self.match_column(&c.decode(), col_offset, validity, counts),
+            },
             Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
                 self.match_validity_with(counts, validity, |_, _| true)
             }
@@ -482,6 +557,38 @@ impl<'s> CompareState<'s> {
                 scalar.as_ref() == value
             }),
         }
+    }
+
+    /// Compares the rows of an encoded column, reading each value from the encoding. `None` if
+    /// the column cannot be read encoded, so it must be decoded.
+    fn match_encoded(
+        &mut self,
+        col: &EncodedColumn,
+        col_offset: usize,
+        validity: Option<(&Bitmap, usize)>,
+        counts: (usize, usize),
+    ) -> Option<(usize, usize)> {
+        Some(with_encoded_fixed_size_type!(
+            &col.data_type(),
+            |T| {
+                let view = T::try_downcast_encoded(col)?;
+                self.match_validity_with(counts, validity, |row, row_ptr| unsafe {
+                    let value = view.index_unchecked(row.to_usize());
+                    let scalar = row_ptr.read::<<T as AccessType>::Scalar>(col_offset);
+                    T::to_scalar_ref(&scalar) == value
+                })
+            },
+            {
+                let view = match col.data_type() {
+                    DataType::String => StringType::try_downcast_encoded(col)?,
+                    _ => return None,
+                };
+                self.match_validity_with(counts, validity, |row, row_ptr| unsafe {
+                    let value = view.index_unchecked(row.to_usize());
+                    row_ptr.is_bytes_eq(col_offset, value.as_bytes())
+                })
+            }
+        ))
     }
 
     fn match_const_column(

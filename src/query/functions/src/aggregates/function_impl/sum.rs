@@ -363,6 +363,40 @@ where R: ArgType
     }
 }
 
+fn sum_selected<T, R>(
+    values: impl Iterator<Item = T>,
+    value_at: impl Fn(usize) -> T,
+    validity: Option<&Bitmap>,
+) -> R
+where
+    T: AsPrimitive<R>,
+    R: Number + std::ops::AddAssign,
+{
+    let mut sum = R::default();
+    match validity {
+        Some(validity)
+            if (validity.true_count() as f64 / validity.len() as f64) < SELECTIVITY_THRESHOLD =>
+        {
+            for index in TrueIdxIter::new(validity.len(), Some(validity)) {
+                sum += value_at(index).as_();
+            }
+        }
+        Some(validity) => {
+            for (value, valid) in values.zip(validity.iter()) {
+                if valid {
+                    sum += value.as_();
+                }
+            }
+        }
+        None => {
+            for value in values {
+                sum += value.as_();
+            }
+        }
+    }
+    sum
+}
+
 impl<T, R> UnaryState<NumberType<T>, NumberType<R>> for AggregateNumberSumState<NumberType<R>>
 where
     T: Number + AsPrimitive<R>,
@@ -394,32 +428,20 @@ where
                 }
             }
             ColumnView::Column(buffer) => {
-                // Keep the v1 accumulation order: reduce each buffer first,
-                // then add its sum to the state. This matters for floats.
-                let mut sum = R::default();
-                match validity {
-                    Some(validity)
-                        if (validity.true_count() as f64 / validity.len() as f64)
-                            < SELECTIVITY_THRESHOLD =>
-                    {
-                        for index in TrueIdxIter::new(validity.len(), Some(validity)) {
-                            sum += unsafe { buffer.get_unchecked(index).as_() };
-                        }
-                    }
-                    Some(validity) => {
-                        for (value, valid) in buffer.iter().zip(validity.iter()) {
-                            if valid {
-                                sum += value.as_();
-                            }
-                        }
-                    }
-                    None => {
-                        for value in buffer.iter() {
-                            sum += value.as_();
-                        }
-                    }
-                }
-                self.value += sum;
+                self.value += sum_selected(
+                    buffer.iter().copied(),
+                    // SAFETY: called with the indices of `validity`, which has the length of the column.
+                    |i| unsafe { *buffer.get_unchecked(i) },
+                    validity,
+                );
+            }
+            ColumnView::Encoded(view) => {
+                self.value += sum_selected(
+                    view.iter(),
+                    // SAFETY: as above.
+                    |i| unsafe { view.index_unchecked(i) },
+                    validity,
+                );
             }
         }
         Ok(())

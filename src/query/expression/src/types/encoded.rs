@@ -40,6 +40,7 @@ use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 
+use super::AccessType;
 use super::AnyType;
 use super::DataType;
 use super::DecimalColumn;
@@ -47,6 +48,7 @@ use super::DecimalDataType;
 use super::DecimalScalar;
 use super::NumberColumn;
 use super::NumberDataType;
+use super::ValueType;
 use super::i256;
 use super::number::Number;
 use crate::BlockEntry;
@@ -277,6 +279,36 @@ impl DictColumn {
             .to_column()
     }
 
+    pub fn compare_scalar(&self, op: &SelectOp, scalar: &Scalar) -> Option<Bitmap> {
+        let scalar = scalar.as_ref();
+        if scalar.infer_data_type() != self.values.data_type() {
+            return None;
+        }
+        // One result per dictionary value; rows look them up by key.
+        let (mut has_true, mut has_false) = (false, false);
+        let matches = self
+            .values
+            .iter()
+            .map(|value| {
+                let m = op_matches(op, value.cmp(&scalar));
+                has_true |= m;
+                has_false |= !m;
+                m
+            })
+            .collect::<Vec<bool>>();
+        let len = self.len();
+        if !(has_true && has_false) {
+            return Some(Bitmap::new_constant(has_true, len));
+        }
+        Some(with_narrow_buffer!(&self.keys, |b| {
+            let keys = b.as_slice();
+            // SAFETY: `i < keys.len()`, and keys are in bounds of the values.
+            Bitmap::collect_bool(len, |i| unsafe {
+                *matches.get_unchecked(*keys.get_unchecked(i) as usize)
+            })
+        }))
+    }
+
     /// Whether dictionary encoding supports columns of `data_type`: non-nullable types whose
     /// values can be hashed.
     pub fn supports(data_type: &DataType) -> bool {
@@ -310,6 +342,17 @@ impl DictColumn {
         let max_key = values.len() as u64 - 1;
         let keys = NarrowBuffer::pack(keys.into_iter().map(|key| key as u64), max_key);
         Some(DictColumn::new(keys, values))
+    }
+}
+
+fn op_matches(op: &SelectOp, ordering: std::cmp::Ordering) -> bool {
+    match op {
+        SelectOp::Equal => ordering.is_eq(),
+        SelectOp::NotEqual => ordering.is_ne(),
+        SelectOp::Gt => ordering.is_gt(),
+        SelectOp::Gte => ordering.is_ge(),
+        SelectOp::Lt => ordering.is_lt(),
+        SelectOp::Lte => ordering.is_le(),
     }
 }
 
@@ -845,10 +888,28 @@ impl EncodedColumn {
         }
     }
 
+    /// Evaluates `value(i) <op> scalar` for every row without decoding. `None` if `scalar`
+    /// cannot be compared with the encoded values directly.
+    pub fn compare_scalar(&self, op: &SelectOp, scalar: &Scalar) -> Option<Bitmap> {
+        match self {
+            EncodedColumn::For(c) => Some(c.compare_raw(op, c.raw_scalar(scalar)?)),
+            EncodedColumn::Dict(c) => c.compare_scalar(op, scalar),
+        }
+    }
+
     pub fn as_for(&self) -> Option<&ForColumn> {
         match self {
             EncodedColumn::For(c) => Some(c),
             _ => None,
+        }
+    }
+
+    /// The code of each row (dictionary keys / frame of reference deltas) and the number of
+    /// possible codes. Rows with the same code have the same value.
+    pub fn codes(&self) -> (&NarrowBuffer, u64) {
+        match self {
+            EncodedColumn::For(c) => (c.deltas(), c.max_delta().saturating_add(1)),
+            EncodedColumn::Dict(c) => (&c.keys, c.values.len() as u64),
         }
     }
 
@@ -860,6 +921,130 @@ impl EncodedColumn {
     }
 }
 
+/// An encoded column read as `T` without decoding it, see [`crate::ColumnView::Encoded`] and
+/// [`AccessType::try_downcast_encoded`].
+#[derive(Debug, Clone)]
+pub enum EncodedView<T: AccessType> {
+    /// Row `i` is `T::for_scalar_ref(raw value i)`.
+    For(ForColumn),
+    /// Row `i` is `values[keys[i]]`.
+    Dict {
+        keys: NarrowBuffer,
+        values: T::Column,
+    },
+}
+
+impl<T: AccessType> EncodedView<T> {
+    /// Reads a dictionary encoded column whose dictionary downcasts to `T`.
+    pub fn try_dict(column: &EncodedColumn) -> Option<Self> {
+        let dict = column.as_dict()?;
+        Some(EncodedView::Dict {
+            keys: dict.keys.clone(),
+            values: T::try_downcast_column(&dict.values).ok()?,
+        })
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            EncodedView::For(c) => c.len(),
+            EncodedView::Dict { keys, .. } => keys.len(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn index(&self, index: usize) -> Option<T::ScalarRef<'_>> {
+        match self {
+            EncodedView::For(c) => c.raw_value(index).map(T::for_scalar_ref),
+            EncodedView::Dict { keys, values } => {
+                T::index_column(values, keys.get(index)? as usize)
+            }
+        }
+    }
+
+    /// # Safety
+    ///
+    /// `index` must be in bounds.
+    pub unsafe fn index_unchecked(&self, index: usize) -> T::ScalarRef<'_> {
+        unsafe {
+            match self {
+                EncodedView::For(c) => T::for_scalar_ref(c.raw_value_unchecked(index)),
+                EncodedView::Dict { keys, values } => {
+                    T::index_column_unchecked(values, keys.get_unchecked(index) as usize)
+                }
+            }
+        }
+    }
+
+    pub fn iter(&self) -> EncodedViewIter<'_, T> {
+        match self {
+            EncodedView::For(c) => EncodedViewIter::For {
+                base: c.base(),
+                deltas: c.deltas().iter(),
+            },
+            EncodedView::Dict { keys, values } => EncodedViewIter::Dict {
+                keys: keys.iter(),
+                values,
+            },
+        }
+    }
+
+    /// The encoded column of `data_type`, see [`crate::ColumnView::upcast`].
+    pub fn upcast(self, data_type: &DataType) -> Column
+    where T: ValueType {
+        let encoded = match self {
+            EncodedView::For(c) => EncodedColumn::For(c),
+            EncodedView::Dict { keys, values } => EncodedColumn::Dict(DictColumn::new(
+                keys,
+                T::upcast_column_with_type(values, data_type),
+            )),
+        };
+        Column::Encoded(Box::new(encoded))
+    }
+}
+
+pub enum EncodedViewIter<'a, T: AccessType> {
+    For {
+        base: i128,
+        deltas: NarrowIter<'a>,
+    },
+    Dict {
+        keys: NarrowIter<'a>,
+        values: &'a T::Column,
+    },
+}
+
+impl<'a, T: AccessType> Iterator for EncodedViewIter<'a, T> {
+    type Item = T::ScalarRef<'a>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            EncodedViewIter::For { base, deltas } => {
+                let delta = deltas.next()?;
+                Some(T::for_scalar_ref(*base + delta as i128))
+            }
+            EncodedViewIter::Dict { keys, values } => {
+                let key = keys.next()?;
+                // SAFETY: the keys of a dictionary are in bounds of its values.
+                Some(unsafe { T::index_column_unchecked(values, key as usize) })
+            }
+        }
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self {
+            EncodedViewIter::For { deltas, .. } => deltas.size_hint(),
+            EncodedViewIter::Dict { keys, .. } => keys.size_hint(),
+        }
+    }
+}
+
+impl<T: AccessType> ExactSizeIterator for EncodedViewIter<'_, T> {}
+
 impl Value<AnyType> {
     /// Decodes an encoded column value; other values are returned unchanged.
     pub fn decode_encoded(self) -> Self {
@@ -869,7 +1054,7 @@ impl Value<AnyType> {
         }
     }
 
-   pub fn decoded(&self) -> Cow<'_, Self> {
+    pub fn decoded(&self) -> Cow<'_, Self> {
         match self {
             Value::Column(Column::Encoded(c)) => Cow::Owned(Value::Column(c.decode())),
             other => Cow::Borrowed(other),

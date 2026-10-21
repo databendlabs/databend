@@ -83,6 +83,7 @@ impl<I> IfEval<I> {
             ColumnView::Const(true, _) => Some(None),
             ColumnView::Const(false, _) => None,
             ColumnView::Column(predicate) => Some(Some(predicate)),
+            ColumnView::Encoded(view) => Some(Some(view.iter().collect())),
         }
     }
 

@@ -15,12 +15,14 @@
 use databend_common_column::bitmap::Bitmap;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnView;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::SelectOp;
 use databend_common_expression::Value;
 use databend_common_expression::types::AccessType;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::Decimal64Type;
@@ -29,8 +31,8 @@ use databend_common_expression::types::DecimalScalar;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::DictColumn;
 use databend_common_expression::types::EncodedColumn;
-use databend_common_expression::types::ForColumn;
 use databend_common_expression::types::Float64Type;
+use databend_common_expression::types::ForColumn;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::NarrowBuffer;
@@ -43,7 +45,10 @@ fn decimal_size() -> DecimalSize {
 }
 
 fn decimal_column(values: &[i64]) -> Column {
-    Column::Decimal(DecimalColumn::Decimal64(values.to_vec().into(), decimal_size()))
+    Column::Decimal(DecimalColumn::Decimal64(
+        values.to_vec().into(),
+        decimal_size(),
+    ))
 }
 
 fn encode(column: &Column) -> Column {
@@ -120,39 +125,78 @@ fn test_for_column_width() {
 
 #[test]
 fn test_encoded_column_kernels() {
-    let values = (0..1000).map(|i| 1_000_000 + (i * 37) % 9973).collect::<Vec<i64>>();
+    let values = (0..1000)
+        .map(|i| 1_000_000 + (i * 37) % 9973)
+        .collect::<Vec<i64>>();
     let keys = (0..1000).map(|i| (i * 7 % 3) as u32).collect::<Vec<_>>();
     let dict_values = ["A", "N", "R"];
-    let strings = keys.iter().map(|k| dict_values[*k as usize]).collect::<Vec<_>>();
+    let strings = keys
+        .iter()
+        .map(|k| dict_values[*k as usize])
+        .collect::<Vec<_>>();
 
-    let dates = (0..1000).map(|i| 8000 + (i * 13) % 2500).collect::<Vec<i32>>();
+    let dates = (0..1000)
+        .map(|i| 8000 + (i * 13) % 2500)
+        .collect::<Vec<i32>>();
     let timestamps = (0..1000)
         .map(|i| 1_700_000_000_000_000 + (i * 997) % 100_000)
         .collect::<Vec<i64>>();
-    let large = (0..1000).map(|i| u64::MAX - (i % 300)).collect::<Vec<u64>>();
-    let negative = (0..1000).map(|i| -40_000 + (i * 7) % 300).collect::<Vec<i32>>();
+    let large = (0..1000)
+        .map(|i| u64::MAX - (i % 300))
+        .collect::<Vec<u64>>();
+    let negative = (0..1000)
+        .map(|i| -40_000 + (i * 7) % 300)
+        .collect::<Vec<i32>>();
 
     let cases = [
         (for_column(&values), decimal_column(&values)),
-        (dict_column(&dict_values, &keys), StringType::from_data(strings)),
-        (encode(&DateType::from_data(dates.clone())), DateType::from_data(dates)),
+        (
+            dict_column(&dict_values, &keys),
+            StringType::from_data(strings),
+        ),
+        (
+            encode(&DateType::from_data(dates.clone())),
+            DateType::from_data(dates),
+        ),
         (
             encode(&TimestampType::from_data(timestamps.clone())),
             TimestampType::from_data(timestamps),
         ),
-        (encode(&UInt64Type::from_data(large.clone())), UInt64Type::from_data(large)),
-        (encode(&Int32Type::from_data(negative.clone())), Int32Type::from_data(negative)),
+        (
+            encode(&UInt64Type::from_data(large.clone())),
+            UInt64Type::from_data(large),
+        ),
+        (
+            encode(&Int32Type::from_data(negative.clone())),
+            Int32Type::from_data(negative),
+        ),
     ];
     // Dictionaries built from regular columns of any supported type.
-    let codes = (0..1000).map(|i| [7, 1_000_000_007, -3][i % 3]).collect::<Vec<i64>>();
+    let codes = (0..1000)
+        .map(|i| [7, 1_000_000_007, -3][i % 3])
+        .collect::<Vec<i64>>();
     let floats = (0..1000).map(|i| [0.5, -2.25][i % 2]).collect::<Vec<f64>>();
-    let names = (0..1000).map(|i| ["x", "long value"][i % 2]).collect::<Vec<_>>();
+    let names = (0..1000)
+        .map(|i| ["x", "long value"][i % 2])
+        .collect::<Vec<_>>();
     let prices = (0..1000).map(|i| 100 * (i % 5)).collect::<Vec<i64>>();
     let cases = cases.into_iter().chain([
-        (build_dict(&Int64Type::from_data(codes.clone())), Int64Type::from_data(codes)),
-        (build_dict(&Float64Type::from_data(floats.clone())), Float64Type::from_data(floats)),
-        (build_dict(&StringType::from_data(names.clone())), StringType::from_data(names)),
-        (build_dict(&decimal_column(&prices)), decimal_column(&prices)),
+        (
+            build_dict(&Int64Type::from_data(codes.clone())),
+            Int64Type::from_data(codes),
+        ),
+        (
+            build_dict(&Float64Type::from_data(floats.clone())),
+            Float64Type::from_data(floats),
+        ),
+        (
+            build_dict(&StringType::from_data(names.clone())),
+            StringType::from_data(names),
+        ),
+        (
+            build_dict(&decimal_column(&prices)),
+            decimal_column(&prices),
+        ),
     ]);
 
     for (encoded, decoded) in cases {
@@ -168,8 +212,12 @@ fn test_encoded_column_kernels() {
         }
 
         let indices = [999u32, 0, 5, 5, 123];
-        let taken = BlockEntry::from(encoded.clone()).take(&indices[..]).unwrap();
-        let expected = BlockEntry::from(decoded.clone()).take(&indices[..]).unwrap();
+        let taken = BlockEntry::from(encoded.clone())
+            .take(&indices[..])
+            .unwrap();
+        let expected = BlockEntry::from(decoded.clone())
+            .take(&indices[..])
+            .unwrap();
         assert_same(&taken.to_column(), &expected.to_column());
 
         // generic kernels see the decoded values
@@ -183,7 +231,10 @@ fn test_encoded_column_kernels() {
             DataBlock::new(vec![decoded.clone().into()], decoded.len()),
         ])
         .unwrap();
-        assert_eq!(concat.get_by_offset(0).to_column(), expected.get_by_offset(0).to_column());
+        assert_eq!(
+            concat.get_by_offset(0).to_column(),
+            expected.get_by_offset(0).to_column()
+        );
 
         assert_eq!(
             Value::Column(encoded.clone()).decode_encoded(),
@@ -214,6 +265,52 @@ fn test_encoded_column_downcast() {
     assert_eq!(dates.as_slice(), &[10, 20, 15]);
 }
 
+#[test]
+fn test_encoded_column_view() {
+    fn check<T: AccessType>(encoded: &Column, encoded_view: bool) {
+        let decoded = BlockEntry::Column(encoded.as_encoded().unwrap().decode())
+            .downcast::<T>()
+            .unwrap();
+        let view = BlockEntry::Column(encoded.clone()).downcast::<T>().unwrap();
+        assert_eq!(matches!(view, ColumnView::Encoded(_)), encoded_view);
+        assert_eq!(view.len(), decoded.len());
+        assert!(view.iter().eq(decoded.iter()));
+        for i in 0..decoded.len() {
+            assert_eq!(view.index(i), decoded.index(i));
+            assert_eq!(
+                unsafe { view.index_unchecked(i) },
+                decoded.index(i).unwrap()
+            );
+        }
+        assert_eq!(view.index(decoded.len()), None);
+    }
+
+    check::<Decimal64Type>(&for_column(&[700, -8, 9_000]), true);
+    check::<Int32Type>(
+        &encode(&Int32Type::from_data(vec![-30_000, 5, 30_000])),
+        true,
+    );
+    check::<DateType>(&encode(&DateType::from_data(vec![10, 20, 15])), true);
+    check::<TimestampType>(
+        &encode(&TimestampType::from_data(vec![
+            1 << 40,
+            (1 << 40) + 3,
+            (1 << 40) + 70_000,
+        ])),
+        true,
+    );
+    check::<StringType>(&dict_column(&["x", "yy", "unused"], &[1, 0, 1]), true);
+    let codes = Int64Type::from_data(vec![5, -1, 1 << 40, 5]);
+    check::<Int64Type>(&build_dict(&codes), true);
+    let floats = Float64Type::from_data(vec![0.5, -2.0, 0.5]);
+    check::<Float64Type>(&build_dict(&floats), true);
+
+    // Types that do not read the encoding get the decoded column.
+    let decimal = for_column(&[1, 2, 3]);
+    let view = BlockEntry::Column(decimal).downcast::<AnyType>().unwrap();
+    assert!(matches!(view, ColumnView::Column(_)));
+}
+
 /// Comparing the deltas with a constant gives the same result as comparing the values.
 #[test]
 fn test_for_column_compare() {
@@ -241,7 +338,18 @@ fn test_for_column_compare() {
     let column = encoded.as_for().unwrap();
     // A filtered column keeps the bounds of the original deltas.
     let filtered = column.with_deltas(column.deltas().slice(0..3));
-    for constant in [i32::MIN, 0, 8999, 9000, 9001, 9100, 9198, 9199, 9200, i32::MAX] {
+    for constant in [
+        i32::MIN,
+        0,
+        8999,
+        9000,
+        9001,
+        9100,
+        9198,
+        9199,
+        9200,
+        i32::MAX,
+    ] {
         let raw = column.raw_scalar(&Scalar::Date(constant)).unwrap();
         for op in &ops {
             let expected = Bitmap::from_iter(dates.iter().map(|v| cmp(op, *v as i128, raw)));
@@ -262,4 +370,73 @@ fn test_for_column_compare() {
     assert_eq!(column.raw_scalar(&Scalar::Decimal(other_scale)), None);
     assert_eq!(column.raw_scalar(&Scalar::Date(150)), None);
     assert_eq!(column.data_type(), &DataType::Decimal(decimal_size()));
+}
+
+/// `value <op> constant` on a dictionary column, evaluated once per dictionary value, gives the
+/// same rows as comparing the decoded values.
+#[test]
+fn test_dict_column_compare() {
+    let ops = [
+        SelectOp::Equal,
+        SelectOp::NotEqual,
+        SelectOp::Gt,
+        SelectOp::Gte,
+        SelectOp::Lt,
+        SelectOp::Lte,
+    ];
+    let matches = |op: &SelectOp, ordering: std::cmp::Ordering| match op {
+        SelectOp::Equal => ordering.is_eq(),
+        SelectOp::NotEqual => ordering.is_ne(),
+        SelectOp::Gt => ordering.is_gt(),
+        SelectOp::Gte => ordering.is_ge(),
+        SelectOp::Lt => ordering.is_lt(),
+        SelectOp::Lte => ordering.is_le(),
+    };
+
+    // Parquet style dictionary with an unreferenced value ("Z"), and a filtered column.
+    let strings = ["N", "R", "N", "A", "N", "R", "A", "N"];
+    let keys = [1, 2, 1, 0, 1, 2, 0, 1];
+    let column = dict_column(&["A", "N", "R", "Z"], &keys);
+    let Column::Encoded(encoded) = &column else {
+        unreachable!()
+    };
+    for constant in ["", "A", "B", "N", "R", "Z", "ZZ"] {
+        let scalar = Scalar::String(constant.to_string());
+        for op in &ops {
+            let expected =
+                Bitmap::from_iter(strings.iter().map(|v| matches(op, (*v).cmp(constant))));
+            assert_eq!(
+                encoded.compare_scalar(op, &scalar),
+                Some(expected),
+                "{op:?} {constant}"
+            );
+        }
+    }
+
+    // Numeric block dictionary.
+    let ints = [5i64, 9_000_000, 5, 5, 9_000_000, -3];
+    let Column::Encoded(encoded) = build_dict(&Int64Type::from_data(ints.to_vec())) else {
+        unreachable!()
+    };
+    for constant in [i64::MIN, -3, 0, 5, 6, 9_000_000, i64::MAX] {
+        let scalar = Scalar::Number(constant.into());
+        for op in &ops {
+            let expected = Bitmap::from_iter(ints.iter().map(|v| matches(op, v.cmp(&constant))));
+            assert_eq!(
+                encoded.compare_scalar(op, &scalar),
+                Some(expected),
+                "{op:?} {constant}"
+            );
+        }
+    }
+
+    // Constants of another type are not compared on the dictionary.
+    assert_eq!(
+        encoded.compare_scalar(&SelectOp::Equal, &Scalar::Null),
+        None
+    );
+    assert_eq!(
+        encoded.compare_scalar(&SelectOp::Equal, &Scalar::Number(5i32.into())),
+        None
+    );
 }

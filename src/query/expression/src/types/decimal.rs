@@ -163,6 +163,11 @@ impl<Num: Decimal> SimpleType for CoreDecimal<Num> {
         Num::try_downcast_column(col).map(|(col, _)| col)
     }
 
+    #[inline]
+    fn from_for_raw(raw: i128) -> Option<Self::Scalar> {
+        Num::from_i128(raw)
+    }
+
     fn downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         Num::try_downcast_domain(domain.as_decimal()?)
     }

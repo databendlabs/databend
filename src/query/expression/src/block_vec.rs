@@ -741,6 +741,7 @@ impl DataBlockVec {
         let has_null = views.iter().any(|view| match view {
             ColumnView::Const(value, num_rows) => value.is_none() && *num_rows > 0,
             ColumnView::Column(column) => column.validity().null_count() > 0,
+            ColumnView::Encoded(view) => view.iter().any(|value| value.is_none()),
         });
 
         if !has_null {
@@ -754,6 +755,9 @@ impl DataBlockVec {
                     bitmap.extend_constant(*num_rows, value.is_some());
                 }
                 ColumnView::Column(column) => bitmap.extend_from_bitmap(column.validity()),
+                ColumnView::Encoded(view) => {
+                    view.iter().for_each(|value| bitmap.push(value.is_some()))
+                }
             }
         }
         Some(bitmap.into())
@@ -771,6 +775,8 @@ impl DataBlockVec {
             ColumnView::Column(nullable) => unsafe {
                 T::index_column_unchecked(nullable.column(), row)
             },
+            ColumnView::Encoded(view) => unsafe { view.index_unchecked(row) }
+                .expect("validity bitmap mismatch for nullable sort encoded value"),
         }
     }
 }

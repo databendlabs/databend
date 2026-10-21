@@ -192,3 +192,142 @@ fn test_layout() {
     };
     assert_eq!(*state_layout, Layout::from_size_align(16, 8).unwrap());
 }
+
+fn aggregate_into_block(
+    group_columns: &[BlockEntry],
+    params: &[Vec<BlockEntry>],
+    aggrs: &[AggregateCallRef],
+    num_rows: usize,
+) -> DataBlock {
+    let group_types = group_columns.iter().map(|c| c.data_type()).collect_vec();
+    let params: Vec<ProjectedBlock> = params.iter().map(|v| v.into()).collect_vec();
+    let mut hashtable = AggregateHashTable::new(
+        group_types,
+        aggrs.to_vec(),
+        HashTableConfig::default(),
+        Arc::new(Bump::new()),
+    );
+    let mut state = ProbeState::default();
+    hashtable
+        .add_groups(
+            &mut state,
+            group_columns.into(),
+            &params,
+            (&[]).into(),
+            num_rows,
+        )
+        .unwrap();
+
+    let mut merge_state = PayloadFlushState::default();
+    let mut blocks = Vec::new();
+    while hashtable.merge_result(&mut merge_state).unwrap() {
+        let mut entries = merge_state.take_group_columns();
+        entries.extend(merge_state.take_aggregate_results());
+        let num_rows = entries[0].len();
+        blocks.push(DataBlock::new(entries, num_rows));
+    }
+    DataBlock::concat(&blocks).unwrap()
+}
+
+/// Group keys that are dictionary encoded (and arguments that are frame of reference encoded)
+/// must aggregate exactly like their decoded columns.
+#[test]
+fn test_agg_hashtable_encoded_columns() {
+    use databend_common_expression::Column;
+    use databend_common_expression::types::DecimalColumn;
+    use databend_common_expression::types::DictColumn;
+    use databend_common_expression::types::EncodedColumn;
+    use databend_common_expression::types::ForColumn;
+    use databend_common_expression::types::NarrowBuffer;
+
+    fn dict(values: &[&str], keys: &[u32]) -> (BlockEntry, BlockEntry) {
+        let plain = StringType::from_data(keys.iter().map(|k| values[*k as usize]).collect_vec());
+        let keys = NarrowBuffer::pack(keys.iter().map(|k| *k as u64), values.len() as u64 - 1);
+        let encoded = Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(
+            keys,
+            StringType::from_data(values.to_vec()),
+        ))));
+        (encoded.into(), plain.into())
+    }
+
+    let size = DecimalSize::new_unchecked(15, 2);
+    // Declared i128, values within i64 (like the result of a decimal multiplication).
+    let wide_size = DecimalSize::new_unchecked(38, 6);
+    // 10 rows takes the decoding fallback (too few rows per key combination).
+    for n in [10usize, 2048, 5000] {
+        let (flag_a, plain_a) = dict(
+            &["A", "N", "R", "unused"],
+            &(0..n).map(|i| (i * 7 % 3) as u32).collect_vec(),
+        );
+        let (flag_b, plain_b) = dict(&["F", "O"], &(0..n).map(|i| (i % 2) as u32).collect_vec());
+        let values = (0..n as i64).map(|i| 100_000 + i * 13 % 5000).collect_vec();
+        let plain_price = Column::Decimal(DecimalColumn::Decimal64(values.clone().into(), size));
+        let price: BlockEntry = Column::Encoded(Box::new(EncodedColumn::For(
+            ForColumn::try_encode(&plain_price).unwrap(),
+        )))
+        .into();
+        let plain_price: BlockEntry = plain_price.into();
+        let wide_values = values.iter().map(|v| *v as i128 * 1_000_000).collect_vec();
+        let plain_wide: BlockEntry =
+            Column::Decimal(DecimalColumn::Decimal128(wide_values.clone().into(), wide_size))
+                .into();
+        let min = *wide_values.iter().min().unwrap();
+        let max = *wide_values.iter().max().unwrap();
+        let deltas = NarrowBuffer::pack(wide_values.iter().map(|v| (v - min) as u64), (max - min) as u64);
+        let wide: BlockEntry = Column::Encoded(Box::new(EncodedColumn::For(ForColumn::new(
+            DataType::Decimal(wide_size),
+            min,
+            (max - min) as u64,
+            deltas,
+        ))))
+        .into();
+        let number: BlockEntry = Int64Type::from_data((0..n as i64).map(|i| i % 4).collect_vec()).into();
+        // numeric dictionary keys
+        let codes = Int64Type::from_data((0..n).map(|i| [5i64, -1, 1 << 40][i % 3]).collect_vec());
+        let code: BlockEntry = Column::Encoded(Box::new(EncodedColumn::Dict(
+            DictColumn::try_encode(&codes, 16).unwrap(),
+        )))
+        .into();
+        let plain_code: BlockEntry = codes.into();
+
+        let aggrs = vec![
+            resolve_agg("sum", DataType::Decimal(size)),
+            resolve_agg("avg", DataType::Decimal(size)),
+            resolve_agg("min", DataType::Decimal(size)),
+            resolve_agg("count", DataType::Decimal(size)),
+            resolve_agg("sum", DataType::Decimal(wide_size)),
+            resolve_agg("avg", DataType::Decimal(wide_size)),
+        ];
+        let encoded_args = [&price, &price, &price, &price, &wide, &wide];
+        let plain_args = [
+            &plain_price,
+            &plain_price,
+            &plain_price,
+            &plain_price,
+            &plain_wide,
+            &plain_wide,
+        ];
+
+        for (encoded_keys, plain_keys) in [
+            (vec![flag_a.clone(), flag_b.clone()], vec![
+                plain_a.clone(),
+                plain_b.clone(),
+            ]),
+            (vec![code.clone(), flag_b.clone()], vec![
+                plain_code.clone(),
+                plain_b.clone(),
+            ]),
+            // mixed keys take the decoding fallback
+            (vec![flag_a.clone(), number.clone()], vec![
+                plain_a.clone(),
+                number.clone(),
+            ]),
+        ] {
+            let encoded_params = encoded_args.iter().map(|arg| vec![(*arg).clone()]).collect_vec();
+            let plain_params = plain_args.iter().map(|arg| vec![(*arg).clone()]).collect_vec();
+            let encoded = aggregate_into_block(&encoded_keys, &encoded_params, &aggrs, n);
+            let plain = aggregate_into_block(&plain_keys, &plain_params, &aggrs, n);
+            assert_block_value_sort_eq(&encoded, &plain);
+        }
+    }
+}

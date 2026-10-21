@@ -39,6 +39,8 @@ use crate::ColumnView;
 use crate::ScalarRef;
 use crate::TakeIndex;
 use crate::property::Domain;
+use crate::types::EncodedColumn;
+use crate::types::EncodedView;
 use crate::types::NullableType;
 use crate::types::nullable::NullableColumnBuilder;
 use crate::values::Column;
@@ -80,6 +82,10 @@ impl AccessType for StringType {
         col.as_string()
             .cloned()
             .ok_or_else(|| column_type_error::<Self>(col))
+    }
+
+    fn try_downcast_encoded(col: &EncodedColumn) -> Option<EncodedView<Self>> {
+        EncodedView::try_dict(col)
     }
 
     fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {

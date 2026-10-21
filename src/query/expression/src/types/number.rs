@@ -119,6 +119,15 @@ impl<Num: Number> SimpleType for CoreNumber<Num> {
         Num::try_downcast_column(col.as_number()?).cloned()
     }
 
+    #[inline]
+    fn from_for_raw(raw: i128) -> Option<Self::Scalar> {
+        if Num::FLOATING {
+            None
+        } else {
+            num_traits::cast(raw)
+        }
+    }
+
     fn downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         Num::try_downcast_domain(domain.as_number()?)
     }
