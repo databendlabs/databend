@@ -112,7 +112,6 @@ use databend_meta_client::RpcClientConf;
 use databend_meta_client::types::MetaId;
 use databend_meta_client::types::NodeInfo;
 use databend_meta_client::types::SeqV;
-use databend_meta_runtime::DatabendRuntime;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManager;
 use databend_storages_common_session::TxnManagerRef;
@@ -949,7 +948,7 @@ impl LiteTableContext {
             rpc_conf.timeout = Some(Duration::from_millis(1));
             let catalog_manager = Arc::new(CatalogManager {
                 meta: MetaStoreProvider::new(rpc_conf)
-                    .create_meta_store::<DatabendRuntime>()
+                    .create_default_meta_store()
                     .await
                     .map_err(|err| ErrorCode::Internal(err.to_string()))?,
                 default_catalog: default_catalog_dyn,

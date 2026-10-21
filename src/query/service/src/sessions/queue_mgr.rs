@@ -58,7 +58,6 @@ use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
 use databend_meta_plugin_semaphore::acquirer::Permit;
 use databend_meta_plugin_semaphore::errors::AcquireError;
-use databend_meta_runtime::DatabendRuntime;
 use futures_util::future::Either;
 use log::info;
 use parking_lot::Mutex;
@@ -124,12 +123,9 @@ impl<Data: QueueData> QueueManager<Data> {
         let metastore = {
             let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
 
-            provider
-                .create_meta_store::<DatabendRuntime>()
-                .await
-                .map_err(|e| {
-                    ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
-                })?
+            provider.create_default_meta_store().await.map_err(|e| {
+                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+            })?
         };
 
         info!("Queue manager initialized with permits: {:?}", permits);
