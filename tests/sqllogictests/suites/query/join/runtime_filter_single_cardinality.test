@@ -1,6 +1,5 @@
-# Synthetic scalar-subquery cardinality checks must survive parent RF pushdown.
-# The parent probes the preserved base key, not a derived subquery-output alias.
-# Builder tests separately assert rewritten Inner markers and physical targets.
+# Keep the scalar result on the parent join's probe side. With reordering,
+# this small fixture swaps the sides and no longer exercises the unsafe path.
 statement ok
 set disable_join_reorder = 1;
 
@@ -22,78 +21,46 @@ create table rf_single_values(k int, v int);
 statement ok
 create table rf_single_keep(k int);
 
+# Separate blocks let an old parent RF remove key 1 before its scalar check.
 statement ok
-insert into rf_single_input values (1), (2), (3), (4);
+insert into rf_single_input values (1);
 
 statement ok
-insert into rf_single_values values (1, 10), (1, 20), (2, 30), (3, 40), (4, 50);
+insert into rf_single_input values (2);
 
-# Min/max includes the bad key 1, but membership excludes it.
 statement ok
-insert into rf_single_keep values (0), (2), (3);
+insert into rf_single_values values (1,10), (1,20), (2,30);
+
+# Membership excludes 1, but the [0,2] range still includes it.
+statement ok
+insert into rf_single_keep values (0), (2);
 
 statement ok
 set enable_join_runtime_filter = 0;
 
-# The null-rejecting nonconstant predicate retains both conflicting values.
+# IS NOT NULL rewrites the scalar join to Inner, but it still checks for
+# multiple matches: both values 10 and 20 survive this predicate.
 query error 1001.*Scalar subquery can't return more than one row
 select q.k, q.v
 from (
     select a.k, (select b.v from rf_single_values b where b.k = a.k) v
     from rf_single_input a
 ) q
-inner join rf_single_keep c on q.k = c.k
-where q.v is not null and q.v <= 45
-order by q.k;
+join rf_single_keep c on q.k = c.k
+where q.v is not null;
 
 statement ok
 set enable_join_runtime_filter = 1;
 
-# RF membership must not remove key 1 before the planned cardinality check.
+# The same error must remain. The old RF hides it and returns (2,30).
 query error 1001.*Scalar subquery can't return more than one row
 select q.k, q.v
 from (
     select a.k, (select b.v from rf_single_values b where b.k = a.k) v
     from rf_single_input a
 ) q
-inner join rf_single_keep c on q.k = c.k
-where q.v is not null and q.v <= 45
-order by q.k;
-
-statement ok
-delete from rf_single_values where k = 1 and v = 20;
-
-statement ok
-set enable_join_runtime_filter = 0;
-
-query II
-select q.k, q.v
-from (
-    select a.k, (select b.v from rf_single_values b where b.k = a.k) v
-    from rf_single_input a
-) q
-inner join rf_single_keep c on q.k = c.k
-where q.v is not null and q.v <= 45
-order by q.k;
-----
-2 30
-3 40
-
-statement ok
-set enable_join_runtime_filter = 1;
-
-query II
-select q.k, q.v
-from (
-    select a.k, (select b.v from rf_single_values b where b.k = a.k) v
-    from rf_single_input a
-) q
-inner join rf_single_keep c on q.k = c.k
-where q.v is not null and q.v <= 45
-order by q.k;
-----
-2 30
-3 40
+join rf_single_keep c on q.k = c.k
+where q.v is not null;
 
 statement ok
 drop table rf_single_keep;

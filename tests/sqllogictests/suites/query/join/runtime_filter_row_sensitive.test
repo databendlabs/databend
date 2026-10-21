@@ -1,9 +1,6 @@
-# Synthetic row-sensitive cases, checked with runtime filtering off and on.
-# Builder unit tests assert target eligibility independently of filter timing.
-
-statement ok
-set disable_join_reorder = 1;
-
+# The same queries run with RF off (baseline) and on (regression).
+# Separate INSERTs put 0 and 1 in separate blocks: an old RF can prune 0.
+# Join reorder is left at its default; these cases do not need it disabled.
 statement ok
 drop table if exists rf_row_probe;
 
@@ -11,174 +8,71 @@ statement ok
 drop table if exists rf_row_build;
 
 statement ok
-create table rf_row_probe(a int, v int);
+create table rf_row_probe(a int);
 
 statement ok
 create table rf_row_build(a int);
 
 statement ok
-insert into rf_row_probe values (1,10),(1,11),(1,12),(2,20),(2,21),(3,30);
+insert into rf_row_probe values (0);
 
 statement ok
-insert into rf_row_build values (2);
+insert into rf_row_probe values (1);
 
 statement ok
-drop table if exists rf_row_probe_large;
-
-statement ok
-drop table if exists rf_row_build_large;
-
-statement ok
-create table rf_row_probe_large(a int);
-
-statement ok
-create table rf_row_build_large(a int);
-
-statement ok
-insert into rf_row_probe_large select number from numbers(1000);
-
-statement ok
-insert into rf_row_build_large values (10), (20);
+insert into rf_row_build values (1);
 
 statement ok
 set enable_join_runtime_filter = 0;
 
-# Synthetic window fixture: rank = 1000 - key, total rows = 1000.
-# Filtering before either window corrupts its output.
-query III
-select p.a, p.rn, p.cnt from (select a, row_number() over (order by a desc) rn, count(*) over () cnt from rf_row_probe_large) p join rf_row_build_large b on p.a=b.a order by p.a;
-----
-10 990 1000
-20 980 1000
-
-# Window: removing a=1 rows changes row_number before the join.
-query III
-select p.a, p.v, p.rn from (select a, v, row_number() over (order by v) rn from rf_row_probe) p join rf_row_build b on p.a=b.a order by p.v;
-----
-2 20 4
-2 21 5
-
-# Expression-root path must obey the same window barrier.
-query III
-select p.a, p.v, p.rn from (select a, v, row_number() over (order by v) rn from rf_row_probe) p join rf_row_build b on p.a+10=b.a+10 order by p.v;
-----
-2 20 4
-2 21 5
-
-# Ordered LIMIT / TopN must choose rows before the join predicate.
+# LIMIT must select 0 before the join; 0 cannot match build key 1: no rows.
 query I
-select count(*) from (select a, v from rf_row_probe order by v limit 1) p join rf_row_build b on p.a=b.a;
+select p.a
+from (select a from rf_row_probe order by a limit 1) p
+join rf_row_build b on p.a = b.a;
 ----
-0
 
-# OFFSET also changes row membership.
-query I
-select count(*) from (select a, v from rf_row_probe order by v limit 2 offset 2) p join rf_row_build b on p.a=b.a;
-----
-1
-
-# Grouping sets are not ordinary group-key pushdown paths.
+# The window must count both input rows, even though only key 1 joins.
 query II
-select p.a, p.s from (select a, sum(v) s from rf_row_probe group by grouping sets ((a), ())) p join rf_row_build b on p.a=b.a;
+select p.a, p.n
+from (select a, count(*) over () n from rf_row_probe) p
+join rf_row_build b on p.a = b.a;
 ----
-2 41
+1 2
 
-# Ranked grouping must not choose the winning group after filtering.
-query I
-select count(*) from (select a, count(*) n from rf_row_probe group by a order by n desc, a limit 1) p join rf_row_build b on p.a=b.a;
-----
-0
-
-# A shared materialized producer must not be filtered for just one consumer.
-query I
-with shared as materialized (select a, v from rf_row_probe) select (select count(*) from shared p join rf_row_build b on p.a=b.a) + (select count(*) from shared);
-----
-8
-
-# Safe control: ordinary grouping by the probe column.
+# A calculated join key must obey the same window barrier as a column key.
 query II
-select p.a, p.s from (select a, sum(v) s from rf_row_probe group by a) p join rf_row_build b on p.a=b.a;
+select p.a, p.n
+from (select a, count(*) over () n from rf_row_probe) p
+join rf_row_build b on p.a + 10 = b.a + 10;
 ----
-2 41
-
-# Safe control: sorting without row truncation.
-query II
-select p.a, p.v from (select a, v from rf_row_probe order by v) p join rf_row_build b on p.a=b.a order by p.v;
-----
-2 20
-2 21
+1 2
 
 statement ok
 set enable_join_runtime_filter = 1;
 
-query III
-select p.a, p.rn, p.cnt from (select a, row_number() over (order by a desc) rn, count(*) over () cnt from rf_row_probe_large) p join rf_row_build_large b on p.a=b.a order by p.a;
-----
-10 990 1000
-20 980 1000
-
-# Window: removing a=1 rows changes row_number before the join.
-query III
-select p.a, p.v, p.rn from (select a, v, row_number() over (order by v) rn from rf_row_probe) p join rf_row_build b on p.a=b.a order by p.v;
-----
-2 20 4
-2 21 5
-
-# Expression-root path must obey the same window barrier.
-query III
-select p.a, p.v, p.rn from (select a, v, row_number() over (order by v) rn from rf_row_probe) p join rf_row_build b on p.a+10=b.a+10 order by p.v;
-----
-2 20 4
-2 21 5
-
-# Ordered LIMIT / TopN must choose rows before the join predicate.
+# Old RF placement can remove 0 before LIMIT and incorrectly return 1.
 query I
-select count(*) from (select a, v from rf_row_probe order by v limit 1) p join rf_row_build b on p.a=b.a;
+select p.a
+from (select a from rf_row_probe order by a limit 1) p
+join rf_row_build b on p.a = b.a;
 ----
-0
 
-# OFFSET also changes row membership.
-query I
-select count(*) from (select a, v from rf_row_probe order by v limit 2 offset 2) p join rf_row_build b on p.a=b.a;
-----
-1
-
-# Grouping sets are not ordinary group-key pushdown paths.
+# Removing 0 before the window would incorrectly change the count to 1.
 query II
-select p.a, p.s from (select a, sum(v) s from rf_row_probe group by grouping sets ((a), ())) p join rf_row_build b on p.a=b.a;
+select p.a, p.n
+from (select a, count(*) over () n from rf_row_probe) p
+join rf_row_build b on p.a = b.a;
 ----
-2 41
+1 2
 
-# Ranked grouping must not choose the winning group after filtering.
-query I
-select count(*) from (select a, count(*) n from rf_row_probe group by a order by n desc, a limit 1) p join rf_row_build b on p.a=b.a;
-----
-0
-
-# A shared materialized producer must not be filtered for just one consumer.
-query I
-with shared as materialized (select a, v from rf_row_probe) select (select count(*) from shared p join rf_row_build b on p.a=b.a) + (select count(*) from shared);
-----
-8
-
-# Safe control: ordinary grouping by the probe column.
+# Guard the non-column probe-key path too; it must not bypass the window.
 query II
-select p.a, p.s from (select a, sum(v) s from rf_row_probe group by a) p join rf_row_build b on p.a=b.a;
+select p.a, p.n
+from (select a, count(*) over () n from rf_row_probe) p
+join rf_row_build b on p.a + 10 = b.a + 10;
 ----
-2 41
-
-# Safe control: sorting without row truncation.
-query II
-select p.a, p.v from (select a, v from rf_row_probe order by v) p join rf_row_build b on p.a=b.a order by p.v;
-----
-2 20
-2 21
-
-statement ok
-drop table rf_row_probe_large;
-
-statement ok
-drop table rf_row_build_large;
+1 2
 
 statement ok
 drop table rf_row_probe;
@@ -188,7 +82,3 @@ drop table rf_row_build;
 
 statement ok
 unset enable_join_runtime_filter;
-
-statement ok
-unset disable_join_reorder;
-
