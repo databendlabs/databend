@@ -16,6 +16,7 @@
 
 mod cmd;
 mod entry;
+mod python_worker_entry;
 
 use clap::Parser;
 use databend_common_base::mem_allocator::TrackingGlobalAllocator;
@@ -40,6 +41,8 @@ use crate::entry::start_services;
 pub static GLOBAL_ALLOCATOR: TrackingGlobalAllocator = TrackingGlobalAllocator::create();
 
 fn main() {
+    python_worker_entry::try_run();
+
     // Crash tracker
     let (input, output) = pipe_file().unwrap();
     set_crash_hook(output);

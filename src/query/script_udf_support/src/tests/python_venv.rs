@@ -171,6 +171,29 @@ fn test_python_venv_concurrent_misses_initialize_once() {
 }
 
 #[test]
+fn test_python_venv_executable_directories_are_private() {
+    let source = venv::TempDir::new().unwrap();
+    std::fs::write(source.path().join("helper.py"), b"VALUE = 42\n").unwrap();
+    let archive = venv::archive_env(source.path()).unwrap();
+    let entry = venv::PyVenvCacheEntry::new(source.clone(), archive);
+    let first = entry.get_private(|| panic!("cache hit")).unwrap();
+    std::fs::write(first.path().join("helper.py"), b"VALUE = -1\n").unwrap();
+    let second = entry.get_private(|| panic!("cache hit")).unwrap();
+    assert_ne!(first.path(), second.path());
+    assert_ne!(first.path(), source.path());
+    for dir in [&source, &second] {
+        assert_eq!(
+            std::fs::read(dir.path().join("helper.py")).unwrap(),
+            b"VALUE = 42\n"
+        );
+    }
+    let first_path = first.path().to_path_buf();
+    drop(first);
+    assert!(!first_path.exists());
+    assert!(second.path().exists());
+}
+
+#[test]
 fn test_python_venv_retries_failure_and_restores_once() {
     let entry = venv::PyVenvCacheEntry::default();
     let err = entry

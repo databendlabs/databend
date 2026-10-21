@@ -90,6 +90,22 @@ impl GlobalServices {
         // 1. global config init.
         GlobalConfig::init(config, version)?;
 
+        #[cfg(feature = "python-udf")]
+        databend_query_script_udf_support::PythonWorkerManager::init(
+            databend_query_script_udf_support::PythonWorkerConfig {
+                max_workers: config.query.common.python_udf_max_workers,
+                max_workers_per_tenant: config.query.common.python_udf_max_workers_per_tenant,
+                max_workers_per_query: config.query.common.python_udf_max_workers_per_query,
+                max_queued_queries: config.query.common.python_udf_max_queued_queries,
+                queue_timeout: std::time::Duration::from_secs(
+                    config.query.common.python_udf_queue_timeout_secs,
+                ),
+                execution_timeout: std::time::Duration::from_secs(
+                    config.query.common.python_udf_execution_timeout_secs,
+                ),
+            },
+        )?;
+
         compress::GLOBAL_ENCODER.set_compress(config.meta.compress_values());
 
         // 2. log init.

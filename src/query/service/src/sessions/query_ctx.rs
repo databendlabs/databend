@@ -1045,6 +1045,27 @@ impl QueryContext {
 }
 
 impl QueryContext {
+    #[cfg(feature = "python-udf")]
+    pub(crate) fn python_udf_workers(
+        &self,
+    ) -> Arc<databend_query_script_udf_support::PythonQueryWorkers> {
+        let mut workers = self.shared.python_udf_workers.lock();
+        if workers
+            .as_ref()
+            .is_some_and(|workers| workers.is_finished())
+        {
+            // Nested SQL executors can reuse a context for sequential executions.
+            // An ended execution must not donate its interpreter or sealed budget.
+            *workers = None;
+        }
+        workers
+            .get_or_insert_with(|| {
+                databend_query_script_udf_support::PythonWorkerManager::instance()
+                    .query(self.shared.get_tenant().tenant_name())
+            })
+            .clone()
+    }
+
     pub(crate) fn get_row_fetch_io_semaphore(&self, max_threads: usize) -> Arc<Semaphore> {
         self.shared.get_row_fetch_io_semaphore(max_threads)
     }

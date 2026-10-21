@@ -14,6 +14,7 @@ python-udf = ["script-udf", "arrow-udf-runtime/python"]
 
 [dependencies]
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 arrow-array = { workspace = true }
 arrow-cast = { workspace = true }
 arrow-ipc = { workspace = true }
@@ -29,13 +30,22 @@ databend-common-pipeline-transforms = { workspace = true }
 databend-common-sql = { workspace = true }
 databend-common-storage = { workspace = true }
 futures = { workspace = true }
+libc = { workspace = true }
 log = { workspace = true }
 parking_lot = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }
 zip = { workspace = true }
+
+[[test]]
+name = "python_worker_process"
+path = "tests/python_worker_process.rs"
+harness = false
+required-features = ["python-udf"]
 
 [lints]
 workspace = true
