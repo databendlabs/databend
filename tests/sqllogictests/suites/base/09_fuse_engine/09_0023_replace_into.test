@@ -87,60 +87,82 @@ DROP TABLE test;
 
 # https://github.com/databendlabs/databend/issues/20795
 # duplicated keys must be detected even if the rows are pruned by the table level range index,
-# or the table has cluster keys (rows are partitioned).
+# or the table has cluster keys (rows are partitioned). Key columns are nullable (the default).
 statement ok
-CREATE TABLE test(id int not null, v varchar);
+CREATE TABLE t20795(id INT, v INT);
 
 statement ok
-INSERT INTO test values(1, 'a'), (5, 'b');
+INSERT INTO t20795 VALUES (1, 1), (5, 5);
 
-# keys outside the table range
-statement error 4000
-REPLACE INTO test ON(id) values(100, 'x'), (100, 'y')
+# existing key inside the table range
+statement error (?s)4000.*duplicated data detected
+REPLACE INTO t20795 ON(id) VALUES (5, 50), (5, 51)
 
-# keys inside the table range, but not existing
-statement error 4000
-REPLACE INTO test ON(id) values(1, 'x'), (3, 'y'), (3, 'z')
+# new key inside the table range [1, 5]
+statement error (?s)4000.*duplicated data detected
+REPLACE INTO t20795 ON(id) VALUES (3, 30), (3, 31)
 
-statement error 4000
-REPLACE INTO test ON(id) values(3, 'x'), (100, 'y'), (100, 'z')
+# new key outside the table range
+statement error (?s)4000.*duplicated data detected
+REPLACE INTO t20795 ON(id) VALUES (7, 70), (7, 71)
 
-query IT
-SELECT * FROM test ORDER BY id;
+# source is a query, the duplicated key is outside the table range
+statement ok
+CREATE TABLE t20795_src(id INT, v INT);
+
+statement ok
+INSERT INTO t20795_src VALUES (8, 80), (8, 81), (1, 11);
+
+statement error (?s)4000.*duplicated data detected
+REPLACE INTO t20795 ON(id) SELECT * FROM t20795_src
+
+# the duplicated rows are pruned, while another row is not
+statement error (?s)4000.*duplicated data detected
+REPLACE INTO t20795 ON(id) VALUES (9, 90), (9, 91), (5, 50)
+
+query II
+SELECT * FROM t20795 ORDER BY id, v;
 ----
-1 a
-5 b
+1 1
+5 5
 
 statement ok
-DROP TABLE test;
+DROP TABLE t20795_src;
 
 statement ok
-CREATE TABLE test(id int not null, v varchar) CLUSTER BY(id);
+DROP TABLE t20795;
+
+statement ok
+CREATE TABLE t20795_c(id INT, v INT) CLUSTER BY(id);
 
 # empty table with cluster keys
-statement error 4000
-REPLACE INTO test ON(id) values(1, 'x'), (1, 'y')
+statement error (?s)4000.*duplicated data detected
+REPLACE INTO t20795_c ON(id) VALUES (1, 1), (1, 2)
 
 statement ok
-INSERT INTO test values(1, 'a'), (2, 'b'), (3, 'c');
+INSERT INTO t20795_c VALUES (1, 100), (2, 200), (3, 300);
 
 # existing key
-statement error 4000
-REPLACE INTO test ON(id) values(1, 'x'), (1, 'y')
+statement error (?s)4000.*duplicated data detected
+REPLACE INTO t20795_c ON(id) VALUES (2, 210), (2, 220)
 
-# keys outside the table range
-statement error 4000
-REPLACE INTO test ON(id) values(100, 'x'), (100, 'y')
+# existing key, source is a query
+statement error (?s)4000.*duplicated data detected
+REPLACE INTO t20795_c ON(id) SELECT * FROM (VALUES (3, 310), (3, 320)) t(id, v)
 
-query IT
-SELECT * FROM test ORDER BY id;
+# new key outside the table range
+statement error (?s)4000.*duplicated data detected
+REPLACE INTO t20795_c ON(id) VALUES (7, 700), (7, 710)
+
+query II
+SELECT * FROM t20795_c ORDER BY id, v;
 ----
-1 a
-2 b
-3 c
+1 100
+2 200
+3 300
 
 statement ok
-DROP TABLE test;
+DROP TABLE t20795_c;
 
 ###################
 # non-empty table #
