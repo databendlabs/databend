@@ -461,11 +461,12 @@ select * from bloom_test_nullable_or_t where c1 = 'a2' or (c2 = 'b4' and c3 > 1)
 ----
 a4 b4 4
 
+# Keep NULL OR TRUE and TRUE OR NULL; (NULL,NULL,5) must not pass.
 query TTI
-select * from bloom_test_nullable_or_t where c1 = 'a1' or c2 = 'b6' order by c1
+select * from bloom_test_nullable_or_t where c1 = 'a3' or c2 = 'b2' order by c1 nulls first
 ----
-a1 b1 1
-a6 b6 NULL
+NULL b2 2
+a3 NULL NULL
 
 query TTI
 select * from bloom_test_nullable_or_t where c1 in ('a3', 'a6') order by c1
