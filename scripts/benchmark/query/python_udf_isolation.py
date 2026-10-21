@@ -152,11 +152,13 @@ def benchmark(args):
             (
                 "bench_py_gcd",
                 "INT64, INT64",
-                "def handler(a, b):\n"
-                "    a, b = abs(a), abs(b)\n"
-                "    while b:\n"
-                "        a, b = b, a % b\n"
-                "    return a",
+                (
+                    "def handler(a, b):\n"
+                    "    a, b = abs(a), abs(b)\n"
+                    "    while b:\n"
+                    "        a, b = b, a % b\n"
+                    "    return a"
+                ),
             ),
             (
                 "bench_py_math_gcd",
@@ -201,6 +203,13 @@ def benchmark(args):
             ("gcd_small_batch", "bench_py_gcd", 1000, 1, args.repetitions),
             ("gcd_large_batch", "bench_py_gcd", 1000000, 1, args.repetitions),
             ("gcd_concurrent_batch", "bench_py_gcd", 100000, 8, args.repetitions),
+            (
+                "gcd_concurrent_large_batch",
+                "bench_py_gcd",
+                1000000,
+                8,
+                args.repetitions,
+            ),
             ("math_gcd_large_batch", "bench_py_math_gcd", 1000000, 1, args.repetitions),
             (
                 "math_gcd_concurrent_batch",
