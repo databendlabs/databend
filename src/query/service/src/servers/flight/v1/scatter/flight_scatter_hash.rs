@@ -21,6 +21,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionID;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::group_hash_entry;
+use databend_common_expression::group_hash_route_index;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::servers::flight::v1::scatter::flight_scatter::FlightScatter;
@@ -114,13 +115,13 @@ impl OneHashKeyFlightScatter {
         match validity {
             None => {
                 for index in &mut indices {
-                    *index %= scatter_size;
+                    *index = group_hash_route_index(*index, scatter_size);
                 }
             }
             Some(validity) => {
                 for (index, valid) in indices.iter_mut().zip(validity.iter()) {
                     *index = if valid {
-                        *index % scatter_size
+                        group_hash_route_index(*index, scatter_size)
                     } else {
                         self.default_scatter_index
                     };
@@ -196,7 +197,7 @@ impl HashFlightScatter {
 
         let scatter_size = self.scatter_size as u64;
         for hash in &mut hashes {
-            *hash %= scatter_size;
+            *hash = group_hash_route_index(*hash, scatter_size);
         }
         Ok(hashes)
     }
@@ -226,6 +227,8 @@ fn shuffle_by_block_id_in_merge_into(expr: &RemoteExpr) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
     use databend_common_expression::ColumnRef;
     use databend_common_expression::FromData;
@@ -694,6 +697,60 @@ mod tests {
                     block,
                 )?;
                 assert_balanced(&indices, partitions);
+            }
+        }
+        Ok(())
+    }
+
+    // Window partitioning and the aggregate hash index read raw bits of the same group
+    // hash, so every scatter target must still cover all of their values.
+    #[test]
+    fn scatter_is_independent_of_local_hash_bits() -> Result<()> {
+        const ROWS: u64 = 1 << 16;
+        const WINDOW_PARTITIONS: u64 = 256;
+
+        let block = DataBlock::new_from_columns(vec![
+            UInt64Type::from_data((0..ROWS).collect::<Vec<_>>()),
+            UInt64Type::from_data((0..ROWS).map(|row| row * 31).collect::<Vec<_>>()),
+        ]);
+
+        for key_count in [1, 2] {
+            let mut hashes = vec![0; ROWS as usize];
+            for (index, entry) in block.columns()[..key_count].iter().enumerate() {
+                group_hash_entry(entry, &mut hashes, index == 0);
+            }
+            let hash_key = block_hash_keys(&block)[..key_count].to_vec();
+
+            for partitions in [32, 48] {
+                let indices = scatter_indices(hash_key.clone(), partitions, &block)?;
+                let mut window_partitions = vec![HashSet::new(); partitions];
+                let mut slots = vec![HashSet::new(); partitions];
+                let mut tags = vec![HashSet::new(); partitions];
+                for (index, hash) in indices.iter().zip(hashes.iter()) {
+                    let target = *index as usize;
+                    window_partitions[target].insert(hash % WINDOW_PARTITIONS);
+                    slots[target].insert(hash & 127);
+                    tags[target].insert(hash >> 57);
+                }
+
+                let coverage = window_partitions.iter().zip(&slots).zip(&tags);
+                for (target, ((window_partitions, slots), tags)) in coverage.enumerate() {
+                    assert!(
+                        window_partitions.len() >= 240,
+                        "target {target} covers {} window partitions",
+                        window_partitions.len()
+                    );
+                    assert!(
+                        slots.len() >= 120,
+                        "target {target} covers {} low-bit slots",
+                        slots.len()
+                    );
+                    assert!(
+                        tags.len() >= 120,
+                        "target {target} covers {} tags",
+                        tags.len()
+                    );
+                }
             }
         }
         Ok(())
