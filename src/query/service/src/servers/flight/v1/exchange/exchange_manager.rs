@@ -1533,7 +1533,10 @@ impl FragmentCoordinator {
 /// a few frames in flight per connection.
 const MIN_RECV_QUEUE_BYTES_PER_CONNECTION: usize = 1024 * 1024;
 
-fn recv_queue_bytes_per_connection(recv_queue_bytes: usize, num_senders: usize) -> usize {
+pub(super) fn recv_queue_bytes_per_connection(
+    recv_queue_bytes: usize,
+    num_senders: usize,
+) -> usize {
     (recv_queue_bytes / num_senders.max(1))
         .max(MIN_RECV_QUEUE_BYTES_PER_CONNECTION)
         .min(u32::MAX as usize)

@@ -34,11 +34,13 @@ use std::time::Instant;
 
 use arrow_flight::FlightData;
 use arrow_schema::Schema as ArrowSchema;
+use bytes::Bytes;
 use databend_common_base::runtime::GlobalStatBuffer;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::MemStatBuffer;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayload;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -60,8 +62,10 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::ExecutorWaker;
 use databend_common_settings::FlightCompression;
+use databend_common_settings::Settings;
 use parking_lot::Mutex;
 use proptest::prelude::*;
 use rand::Rng;
@@ -71,6 +75,8 @@ use tonic::Status;
 
 use super::broadcast_recv_transform::BlockCoalescer;
 use super::broadcast_recv_transform::CoalesceThreshold;
+use super::exchange_manager::recv_queue_bytes_per_connection;
+use super::exchange_sink::exchange_buffer_config;
 use super::hash_shuffle_writer::HashShuffleWriter;
 use super::hash_shuffle_writer::ShuffleNode;
 use super::hash_shuffle_writer::ShuffleTarget;
@@ -139,12 +145,34 @@ fn thread_waker() -> Arc<ExecutorWaker> {
     waker
 }
 
+/// Runs `f` with the memory of the node `payload` tracks.
+fn tracked<R>(payload: &TrackingPayload, f: impl FnOnce() -> R) -> R {
+    let guard = ThreadTracker::tracking(payload.clone());
+    let result = f();
+    flush_mem_stat();
+    drop(guard);
+    result
+}
+
+fn copy_flight_data(data: &FlightData) -> FlightData {
+    FlightData {
+        flight_descriptor: None,
+        data_header: Bytes::copy_from_slice(&data.data_header),
+        app_metadata: Bytes::copy_from_slice(&data.app_metadata),
+        data_body: Bytes::copy_from_slice(&data.data_body),
+    }
+}
+
+/// Carries the frames of one link. With `nodes`, the tracking payloads of the
+/// sending and receiving node, a frame is freed on the sender and copied on the
+/// receiver, as over a real network, so each node is charged its own memory.
 fn network_thread(
     link: Link,
     send_rx: async_channel::Receiver<FlightData>,
     pong_tx: async_channel::Sender<std::result::Result<FlightData, Status>>,
     inbound: NetworkInboundSender,
     run: &ShuffleRun,
+    nodes: Option<(TrackingPayload, TrackingPayload)>,
 ) {
     while let Ok(data) = send_rx.recv_blocking() {
         let bytes = flight_data_size(&data);
@@ -157,7 +185,15 @@ fn network_thread(
             .unwrap_or_default();
         std::thread::sleep(link.rtt / 2 + transfer);
 
-        if futures::executor::block_on(inbound.add_data(data)).is_err() {
+        let added = match &nodes {
+            None => futures::executor::block_on(inbound.add_data(data)),
+            Some((from, to)) => {
+                let copy = tracked(to, || copy_flight_data(&data));
+                tracked(from, move || drop(data));
+                tracked(to, || futures::executor::block_on(inbound.add_data(copy)))
+            }
+        };
+        if added.is_err() {
             break;
         }
         flush_mem_stat();
@@ -306,7 +342,7 @@ where
         for (send_rx, pong_tx, inbound) in links {
             let (link, run) = (setup.link, &run);
             scope.spawn(ThreadTracker::tracking_function(move || {
-                network_thread(link, send_rx, pong_tx, inbound, run)
+                network_thread(link, send_rx, pong_tx, inbound, run, None)
             }));
         }
 
@@ -721,92 +757,261 @@ fn wide_block(rng: &mut StdRng, rows: usize) -> DataBlock {
     ])
 }
 
-/// Shuffle 256 MiB over links slower than the senders, so the buffers fill up,
-/// and check that peak memory stays within the configured buffer sizes.
-fn check_memory_bound(nodes: usize) {
-    const INPUT_BYTES: usize = 256 * MIB;
-    const ROWS: usize = 8192;
-    let threads = 4;
-    let recv_bytes = 8 * MIB;
+/// Threads of each node in the memory test. The `max_threads` default depends on
+/// the machine, so it is fixed here.
+const NODE_THREADS: usize = 16;
 
-    let setup = ShuffleSetup {
-        nodes,
-        threads,
-        node_budget: 16 * MIB,
-        buffer: ExchangeBufferConfig {
-            max_queued_bytes: 8 * MIB,
-            max_batch_bytes: 4 * MIB,
-        },
-        recv_quota: recv_bytes / (nodes - 1),
-        compression: None,
-        // Receivers drop blocks as they arrive: in this process every node's
-        // receivers are counted, a real node only has its own.
-        coalesce: None,
-        // The links carry 64 MiB/s together, whatever the number of nodes.
-        link: Link {
-            rtt: Duration::from_millis(1),
-            bytes_per_sec: Some(64.0 * MIB as f64 / (nodes - 1) as f64),
-        },
+fn node_tracking(name: String) -> (Arc<MemStat>, TrackingPayload) {
+    let mem_stat = MemStat::create(name);
+    let mut payload = ThreadTracker::new_tracking_payload();
+    payload.mem_stat = Some(mem_stat.clone());
+    (mem_stat, payload)
+}
+
+/// Node 0 shuffles with the default settings to `nodes - 1` peers and receives
+/// from all of them, over links slower than its senders, so every buffer fills.
+/// Its peak memory must stay within the bound the settings give, whatever the
+/// number of nodes. Peers only produce and consume load; they are not checked.
+fn check_node_memory(nodes: usize) -> Result<()> {
+    const SEND_BYTES: usize = 1024 * MIB;
+    const RECV_BYTES: usize = 1024 * MIB;
+    const ROWS: usize = 8192;
+    const LINK_BYTES_PER_SEC: f64 = 128.0 * MIB as f64;
+    let threads = NODE_THREADS;
+    let peers = nodes - 1;
+
+    let settings = Settings::create(Tenant::new_literal("test"));
+    let node_budget = settings.get_hash_shuffle_send_buffer_bytes()?;
+    let buffer_config = exchange_buffer_config(&settings)?;
+    let recv_quota =
+        recv_queue_bytes_per_connection(settings.get_exchange_recv_queue_bytes()?, peers);
+    let compression = settings.get_query_flight_compression()?;
+    let coalesce = CoalesceThreshold::create(
+        settings.get_hash_shuffle_rows_threshold()?,
+        settings.get_hash_shuffle_bytes_threshold()?,
+    );
+
+    // Peers split the data they send to node 0 over a few threads each.
+    let peer_threads = threads.div_ceil(peers);
+    let peer_buffer_config = ExchangeBufferConfig {
+        max_queued_bytes: 8 * MIB,
+        max_batch_bytes: MIB,
+    };
+    let link = Link {
+        rtt: Duration::from_millis(1),
+        bytes_per_sec: Some(LINK_BYTES_PER_SEC / peers as f64),
     };
 
     let block_bytes = wide_block(&mut StdRng::seed_from_u64(0), ROWS).memory_size();
-    let blocks_per_thread = INPUT_BYTES / block_bytes / threads;
+    let node0_blocks = SEND_BYTES / block_bytes / threads;
+    let peer_blocks = (RECV_BYTES / block_bytes / (peers * peer_threads)).max(1);
     let schema = Arc::new(wide_block(&mut StdRng::seed_from_u64(0), 1).infer_schema());
+    let arrow_schema = Arc::new(ArrowSchema::from(schema.as_ref()));
 
-    let mem_stat = MemStat::create(format!("hash_shuffle_memory_{nodes}_nodes"));
-    let mut payload = ThreadTracker::new_tracking_payload();
-    payload.mem_stat = Some(mem_stat.clone());
-    let guard = ThreadTracker::tracking(payload);
+    let (node0_stat, node0) = node_tracking("node-0".to_string());
+    let peer_tracking = (1..nodes)
+        .map(|peer| node_tracking(format!("node-{peer}")).1)
+        .collect::<Vec<_>>();
+    let runtime = Runtime::with_worker_threads(4, None)?;
 
-    let received = AtomicUsize::new(0);
-    run_shuffle(
-        &setup,
-        &schema,
-        Box::new(KeyScatter {
-            num_partitions: (nodes * threads) as u64,
-        }),
-        |t| {
-            // Generated on the fly, so the input itself is never held.
-            let mut rng = StdRng::seed_from_u64(t as u64);
-            (0..blocks_per_thread).map(move |_| wide_block(&mut rng, ROWS))
-        },
-        |_, block| {
-            received.fetch_add(block.num_rows(), Ordering::Relaxed);
-        },
-    )
-    .unwrap();
-    drop(guard);
+    let node0_set = NetworkInboundChannelSet::new(threads);
+    let node0_receivers = (0..threads)
+        .map(|t| node0_set.create_receiver(t, &schema))
+        .collect::<Vec<_>>();
+    let local_channels = create_local_channels(&node0_set);
+
+    let mut links = vec![];
+    let mut node0_exchanges = vec![];
+    let mut peer_receivers = vec![];
+    let mut peer_senders = vec![];
+    for (idx, payload) in peer_tracking.iter().enumerate() {
+        let peer = format!("node-{}", idx + 1);
+
+        let (send_tx, send_rx) = async_channel::bounded(1);
+        let (pong_tx, pong_rx) = async_channel::unbounded();
+        node0_exchanges.push(PingPongExchange::from_stream(
+            threads,
+            send_tx,
+            pong_rx,
+            "node-0",
+            peer.clone(),
+        ));
+        let peer_set = NetworkInboundChannelSet::new(threads);
+        peer_receivers
+            .extend((0..threads).map(|t| (payload.clone(), peer_set.create_receiver(t, &schema))));
+        links.push((
+            send_rx,
+            pong_tx,
+            NetworkInboundSender::new(&peer_set, recv_quota),
+            node0.clone(),
+            payload.clone(),
+        ));
+
+        let (send_tx, send_rx) = async_channel::bounded(1);
+        let (pong_tx, pong_rx) = async_channel::unbounded();
+        let exchange = PingPongExchange::from_stream(threads, send_tx, pong_rx, peer, "node-0");
+        let buffer = tracked(payload, || {
+            ExchangeSinkBuffer::create(vec![exchange], peer_buffer_config.clone(), &runtime)
+        })?;
+        links.push((
+            send_rx,
+            pong_tx,
+            NetworkInboundSender::new(&node0_set, recv_quota),
+            payload.clone(),
+            node0.clone(),
+        ));
+        let channel =
+            RemoteNodeChannel::create(0, Arc::new(buffer), compression, arrow_schema.clone())?;
+        peer_senders.push((payload.clone(), vec![ShuffleNode {
+            partitions: 0..threads,
+            target: ShuffleTarget::Remote(Some(channel)),
+        }]));
+    }
+    drop(node0_set);
+
+    let node0_buffer = Arc::new(tracked(&node0, || {
+        ExchangeSinkBuffer::create(node0_exchanges, buffer_config.clone(), &runtime)
+    })?);
+    let mut node0_nodes = vec![ShuffleNode {
+        partitions: 0..threads,
+        target: ShuffleTarget::Local(local_channels.into_iter().map(Some).collect()),
+    }];
+    for peer in 1..nodes {
+        node0_nodes.push(ShuffleNode {
+            partitions: peer * threads..(peer + 1) * threads,
+            target: ShuffleTarget::Remote(Some(RemoteNodeChannel::create(
+                peer - 1,
+                node0_buffer.clone(),
+                compression,
+                arrow_schema.clone(),
+            )?)),
+        });
+    }
+    drop(node0_buffer);
+
+    let node0_scatter: Arc<Box<dyn FlightScatter>> = Arc::new(Box::new(KeyScatter {
+        num_partitions: (nodes * threads) as u64,
+    }));
+    let peer_scatter: Arc<Box<dyn FlightScatter>> = Arc::new(Box::new(KeyScatter {
+        num_partitions: threads as u64,
+    }));
+    let node0_budget = hash_shuffle_send_budget(threads, node_budget);
+    let peer_budget = hash_shuffle_send_budget(peer_threads, 8 * MIB);
+
+    let run = ShuffleRun::default();
+    let node0_rows = AtomicUsize::new(0);
+    let peer_rows = AtomicUsize::new(0);
+    std::thread::scope(|scope| -> Result<()> {
+        for (send_rx, pong_tx, inbound, from, to) in links {
+            let run = &run;
+            scope.spawn(move || {
+                network_thread(link, send_rx, pong_tx, inbound, run, Some((from, to)))
+            });
+        }
+
+        let mut receivers = vec![];
+        for (partition, receiver) in node0_receivers.into_iter().enumerate() {
+            let (node0, rows) = (&node0, &node0_rows);
+            receivers.push(scope.spawn(move || {
+                let _guard = ThreadTracker::tracking(node0.clone());
+                receive(
+                    partition,
+                    receiver,
+                    Some(coalesce),
+                    &|_, block: DataBlock| {
+                        rows.fetch_add(block.num_rows(), Ordering::Relaxed);
+                    },
+                )
+            }));
+        }
+        for (payload, receiver) in peer_receivers {
+            let rows = &peer_rows;
+            receivers.push(scope.spawn(move || {
+                let _guard = ThreadTracker::tracking(payload);
+                receive(0, receiver, None, &|_, block: DataBlock| {
+                    rows.fetch_add(block.num_rows(), Ordering::Relaxed);
+                })
+            }));
+        }
+
+        let mut senders = vec![];
+        for t in 0..threads {
+            let (node0, scatter, nodes) = (&node0, node0_scatter.clone(), node0_nodes.clone());
+            senders.push(scope.spawn(move || {
+                let _guard = ThreadTracker::tracking(node0.clone());
+                // Generated on the fly, so the input itself is never held.
+                let mut rng = StdRng::seed_from_u64(t as u64);
+                let blocks = (0..node0_blocks).map(|_| wide_block(&mut rng, ROWS));
+                send(t, scatter, nodes, node0_budget, blocks)
+            }));
+        }
+        for (peer, (payload, nodes)) in peer_senders.into_iter().enumerate() {
+            for t in 0..peer_threads {
+                let (payload, scatter, nodes) =
+                    (payload.clone(), peer_scatter.clone(), nodes.clone());
+                senders.push(scope.spawn(move || {
+                    let _guard = ThreadTracker::tracking(payload);
+                    let mut rng = StdRng::seed_from_u64(((peer + 1) * threads + t) as u64);
+                    let blocks = (0..peer_blocks).map(|_| wide_block(&mut rng, ROWS));
+                    send(t, scatter, nodes, peer_budget, blocks)
+                }));
+            }
+        }
+        drop(node0_nodes);
+
+        for sender in senders {
+            sender.join().unwrap()?;
+        }
+        for receiver in receivers {
+            receiver.join().unwrap()?;
+        }
+        Ok(())
+    })?;
+    drop(runtime);
 
     assert_eq!(
-        received.load(Ordering::Relaxed),
-        threads * blocks_per_thread * ROWS
+        node0_rows.load(Ordering::Relaxed) + peer_rows.load(Ordering::Relaxed),
+        (threads * node0_blocks + peers * peer_threads * peer_blocks) * ROWS,
+        "every row must arrive exactly once"
     );
 
-    // Senders hold their buffered rows plus the encoded copy waiting for the send
-    // queue; the rest is the send queue, the local channels and the receive quota.
-    // The slack covers unpublished per-thread stats and blocks being generated.
-    let bound = 3 * setup.node_budget
-        + setup.buffer.max_queued_bytes
-        + LOCAL_CHANNEL_MAX_BYTES
-        + recv_bytes
-        + 16 * MIB;
-    let peak = mem_stat.get_peak_memory_usage().max(0) as usize;
+    // Sending: the rows buffered by the senders, the send queue and the local
+    // channels. The budget counts the bytes of the buffered rows, while partition
+    // builders grow their buffers geometrically and reserve the next round's
+    // capacity when flushed, so they may allocate up to about twice the budget.
+    // Receiving: the receive quota of every peer and the blocks each receiver
+    // coalesces, twice while concatenating. The slack covers the block each
+    // thread works on and unpublished per-thread stats.
+    let send_bound = 2 * node_budget + buffer_config.max_queued_bytes + LOCAL_CHANNEL_MAX_BYTES;
+    let recv_bound = peers * recv_quota + 2 * threads * coalesce.bytes;
+    let slack = 64 * MIB;
+    let bound = send_bound + recv_bound + slack;
+    let peak = node0_stat.get_peak_memory_usage().max(0) as usize;
+    eprintln!(
+        "MEMCHECK nodes={nodes} peak_mib={:.1} bound_mib={} send_mib={} recv_mib={} wire_mib={:.0} frames={}",
+        peak as f64 / MIB as f64,
+        bound / MIB,
+        send_bound / MIB,
+        recv_bound / MIB,
+        run.wire_bytes.load(Ordering::Relaxed) as f64 / MIB as f64,
+        run.frames.load(Ordering::Relaxed),
+    );
     assert!(
         peak <= bound,
-        "peak memory {} MiB with {nodes} nodes exceeds the bound of {} MiB",
+        "node 0 peak memory {} MiB with {nodes} nodes exceeds the bound of {} MiB",
         peak / MIB,
         bound / MIB
     );
+    Ok(())
 }
 
 #[test]
-fn test_hash_shuffle_memory_bound_3_nodes() {
-    check_memory_bound(3);
-}
-
-#[test]
-fn test_hash_shuffle_memory_bound_30_nodes() {
-    check_memory_bound(30);
+fn test_hash_shuffle_node_memory_bound() -> Result<()> {
+    // One after another: each run holds about a gigabyte.
+    for nodes in [3, 30] {
+        check_node_memory(nodes)?;
+    }
+    Ok(())
 }
 
 fn env(name: &str, default: u64) -> u64 {
