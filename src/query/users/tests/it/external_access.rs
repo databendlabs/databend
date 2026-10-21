@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::thread;
+use std::time::Duration;
 
 use anyhow::Result;
 use databend_common_base::base::GlobalInstance;
@@ -26,6 +27,7 @@ use databend_common_users::UserApiProvider;
 use databend_common_version::BUILD_INFO;
 use databend_meta_client::RpcClientConf;
 use databend_meta_client::types::MatchSeq;
+use tokio::time::sleep;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_external_access_live_policy() -> Result<()> {
@@ -78,6 +80,7 @@ async fn test_external_access_live_policy() -> Result<()> {
         .await?;
     second.enabled = false;
     integrations.update(second, MatchSeq::GE(1)).await?;
+    sleep(Duration::from_millis(500)).await;
     assert!(
         provider
             .validate_external_access(&tenant, address, &multiple)
@@ -120,6 +123,7 @@ async fn test_external_access_live_policy() -> Result<()> {
     integrations
         .update(integration.clone(), MatchSeq::GE(1))
         .await?;
+    sleep(Duration::from_millis(500)).await;
     assert!(
         provider
             .validate_external_access(&tenant, address, &names)
@@ -130,6 +134,7 @@ async fn test_external_access_live_policy() -> Result<()> {
     integrations
         .update(integration.clone(), MatchSeq::GE(1))
         .await?;
+    sleep(Duration::from_millis(500)).await;
     provider
         .validate_external_access(&tenant, address, &names)
         .await?;
@@ -142,6 +147,7 @@ async fn test_external_access_live_policy() -> Result<()> {
             MatchSeq::GE(1),
         )
         .await?;
+    sleep(Duration::from_millis(500)).await;
     assert!(
         provider
             .validate_external_access(&tenant, address, &names)
@@ -153,6 +159,7 @@ async fn test_external_access_live_policy() -> Result<()> {
         .await?;
     integration.allowed_network_rules = vec!["other".into()];
     integrations.update(integration, MatchSeq::GE(1)).await?;
+    sleep(Duration::from_millis(500)).await;
     assert!(
         provider
             .validate_external_access(&tenant, "https://video.example.com:8443", &names)
@@ -160,6 +167,7 @@ async fn test_external_access_live_policy() -> Result<()> {
             .is_err()
     );
     rules.remove("other", MatchSeq::GE(1)).await?;
+    sleep(Duration::from_millis(500)).await;
     assert!(
         provider
             .validate_external_access(&tenant, "https://other.example.com:8443", &names)
@@ -167,6 +175,7 @@ async fn test_external_access_live_policy() -> Result<()> {
             .is_err()
     );
     integrations.remove("access", MatchSeq::GE(1)).await?;
+    sleep(Duration::from_millis(500)).await;
     assert!(
         provider
             .validate_external_access(&tenant, address, &names)

@@ -52,6 +52,12 @@ CREATE FUNCTION wrong_gcd_schema(STRING, STRING) RETURNS INT LANGUAGE python HAN
 statement ok
 CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION flight_access ALLOWED_NETWORK_RULES = (unrelated_rule, flight_rule) ENABLED = FALSE;
 
+# Allow the existing meta watch cache to receive the policy change.
+query I
+SELECT sleep(0.5);
+----
+0
+
 statement error disabled
 SELECT managed_gcd(6, 4);
 
@@ -71,11 +77,23 @@ ALTER EXTERNAL ACCESS INTEGRATION IF EXISTS flight_access SET ENABLED = TRUE;
 statement ok
 CREATE OR REPLACE NETWORK RULE flight_rule TYPE = HOST_PORT VALUE_LIST = ('0.0.0.0:8816') MODE = EGRESS;
 
+# Allow the existing meta watch cache to receive the policy change.
+query I
+SELECT sleep(0.5);
+----
+0
+
 statement error not allowed by external access integrations
 SELECT managed_gcd(6, 4);
 
 statement ok
 ALTER NETWORK RULE flight_rule SET VALUE_LIST = ('0.0.0.0:8815');
+
+# Allow the existing meta watch cache to receive the policy change.
+query I
+SELECT sleep(0.5);
+----
+0
 
 query I
 SELECT managed_gcd(6, 4);
@@ -85,11 +103,23 @@ SELECT managed_gcd(6, 4);
 statement ok
 ALTER EXTERNAL ACCESS INTEGRATION flight_access SET ALLOWED_NETWORK_RULES = (unrelated_rule);
 
+# Allow the existing meta watch cache to receive the policy change.
+query I
+SELECT sleep(0.5);
+----
+0
+
 statement error not allowed by external access integrations
 SELECT managed_gcd(6, 4);
 
 statement ok
 DROP INTEGRATION flight_access;
+
+# Allow the existing meta watch cache to receive the policy change.
+query I
+SELECT sleep(0.5);
+----
+0
 
 statement error ExternalAccessIntegration
 SELECT managed_gcd(6, 4);

@@ -45,6 +45,7 @@ use databend_common_meta_app::principal::network_rule_ident::Resource as Network
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
+use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_meta_client::RpcClientConf;
@@ -72,6 +73,9 @@ pub struct UserApiProvider {
     /// The `Cache` instance internally stores the status about if databend-meta service supports cache.
     /// If not, every access returns [`Unsupported`] error.
     ownership_cache: Option<Arc<Mutex<Cache>>>,
+
+    pub(crate) network_rule_cache: Mutex<Cache>,
+    pub(crate) external_access_integration_cache: Mutex<Cache>,
 
     builtin: BuiltIn,
 }
@@ -121,10 +125,25 @@ impl UserApiProvider {
             None
         };
 
+        let network_rule_cache = Cache::new(
+            client.clone(),
+            NetworkRuleResource::PREFIX,
+            NetworkRuleResource::TYPE,
+        )
+        .await;
+        let external_access_integration_cache = Cache::new(
+            client,
+            ExternalAccessIntegrationResource::PREFIX,
+            ExternalAccessIntegrationResource::TYPE,
+        )
+        .await;
+
         let user_mgr = UserApiProvider {
             meta: meta_store.clone(),
             client: meta_store.arc(),
             ownership_cache: cache,
+            network_rule_cache: Mutex::new(network_rule_cache),
+            external_access_integration_cache: Mutex::new(external_access_integration_cache),
             builtin,
         };
 

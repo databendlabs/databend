@@ -14,7 +14,14 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::kv_pb_api::decode_pb;
+use databend_common_meta_app::principal::ExternalAccessIntegration;
+use databend_common_meta_app::principal::NetworkRule;
+use databend_common_meta_app::principal::external_access_integration_ident::Resource as IntegrationResource;
+use databend_common_meta_app::principal::network_rule_ident::Resource as RuleResource;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::tenant_key::ident::TIdent;
+use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::MatchSeq;
 use url::Url;
 
@@ -58,8 +65,9 @@ fn endpoint(url: &Url) -> Result<(String, u16)> {
 }
 
 impl UserApiProvider {
-    /// Read directly from meta, not a warehouse-local cache. Explicit integrations
-    /// never fall back to the legacy allow list, even when it allows this address.
+    /// Reuse the node-local meta watch caches, falling back to meta when unavailable.
+    /// Policy changes follow the existing watch cache's asynchronous propagation.
+    /// Explicit integrations never fall back to the legacy allow list.
     /// Creation checks SUPER and integration USAGE; invocation uses the existing
     /// UDF privileges and does not require integration USAGE.
     pub async fn validate_external_access(
@@ -77,22 +85,50 @@ impl UserApiProvider {
         let target = endpoint(&url)?;
         let mut allowed = false;
         for name in integrations {
-            let integration = self
-                .external_access_integration_api(tenant)
-                .get(name, MatchSeq::GE(1))
-                .await?
-                .data;
+            let key = TIdent::<IntegrationResource>::new(tenant, name).to_string_key();
+            let cached = self
+                .external_access_integration_cache
+                .lock()
+                .await
+                .try_get(&key)
+                .await
+                .ok()
+                .flatten();
+            let integration = match cached {
+                Some(value) => decode_pb::<ExternalAccessIntegration>(&value.data)
+                    .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?,
+                None => {
+                    self.external_access_integration_api(tenant)
+                        .get(name, MatchSeq::GE(1))
+                        .await?
+                        .data
+                }
+            };
             if !integration.enabled {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "External access integration '{name}' is disabled"
                 )));
             }
             for rule_name in &integration.allowed_network_rules {
-                let rule = self
-                    .network_rule_api(tenant)
-                    .get(rule_name, MatchSeq::GE(1))
-                    .await?
-                    .data;
+                let key = TIdent::<RuleResource>::new(tenant, rule_name).to_string_key();
+                let cached = self
+                    .network_rule_cache
+                    .lock()
+                    .await
+                    .try_get(&key)
+                    .await
+                    .ok()
+                    .flatten();
+                let rule = match cached {
+                    Some(value) => decode_pb::<NetworkRule>(&value.data)
+                        .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?,
+                    None => {
+                        self.network_rule_api(tenant)
+                            .get(rule_name, MatchSeq::GE(1))
+                            .await?
+                            .data
+                    }
+                };
                 for value in &rule.value_list {
                     allowed |= network_rule_endpoint(value)? == target;
                 }

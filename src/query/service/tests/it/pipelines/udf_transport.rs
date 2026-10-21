@@ -15,6 +15,7 @@
 use std::pin::Pin;
 use std::slice::from_ref;
 use std::sync::Arc;
+use std::time::Duration;
 
 use arrow_array::RecordBatch;
 use arrow_array::StringArray;
@@ -68,6 +69,7 @@ use futures::stream;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tokio::sync::oneshot;
+use tokio::time::sleep;
 use tokio::time::timeout;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::Request;
@@ -428,6 +430,7 @@ async fn external_access_creation_authorization_and_schema() -> Result<()> {
     fixture
         .execute_command("ALTER EXTERNAL ACCESS INTEGRATION auth_access SET ENABLED = FALSE")
         .await?;
+    sleep(Duration::from_millis(500)).await;
     // Even IMMUTABLE calls with constant arguments must not be folded away.
     let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
     let result = async {
@@ -633,6 +636,7 @@ async fn external_access_rechecks_already_built_transform() -> Result<()> {
     fixture
         .execute_command("CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION live_access ALLOWED_NETWORK_RULES = (live_rule) ENABLED = FALSE")
         .await?;
+    sleep(Duration::from_millis(500)).await;
     let err = run().await?.unwrap_err();
     assert!(err.message().contains("disabled"), "{err}");
     fixture
@@ -641,6 +645,7 @@ async fn external_access_rechecks_already_built_transform() -> Result<()> {
     fixture
         .execute_command("ALTER NETWORK RULE live_rule SET VALUE_LIST = ('denied.example.com:443')")
         .await?;
+    sleep(Duration::from_millis(500)).await;
     let err = run().await?.unwrap_err();
     assert!(err.message().contains("not allowed"), "{err}");
     fixture
@@ -648,6 +653,7 @@ async fn external_access_rechecks_already_built_transform() -> Result<()> {
             "CREATE OR REPLACE NETWORK RULE live_rule TYPE = HOST_PORT VALUE_LIST = ('{address}') MODE = EGRESS"
         ))
         .await?;
+    sleep(Duration::from_millis(500)).await;
     assert_eq!(run().await??.num_columns(), 2);
     // Removing metadata is fail-closed as well.
     let tenant = ctx.get_tenant();
@@ -655,6 +661,7 @@ async fn external_access_rechecks_already_built_transform() -> Result<()> {
         .external_access_integration_api(&tenant)
         .remove("live_access", MatchSeq::GE(1))
         .await?;
+    sleep(Duration::from_millis(500)).await;
     assert!(run().await?.is_err());
     let _ = shutdown_tx.send(());
     server.await.unwrap().unwrap();
