@@ -63,7 +63,9 @@ impl Interpreter for AlterUserInterpreter {
                 user_mgr.get_role(&tenant, role.clone()).await?;
                 // Match login and SET ROLE: inherited roles are available too.
                 // PUBLIC is implicit; changing the default never adds a grant.
-                if role != BUILTIN_ROLE_PUBLIC {
+                // Check direct grants from the freshly read user first. The role
+                // cache may lag behind roles created on other nodes.
+                if role != BUILTIN_ROLE_PUBLIC && !plan.user_info.grants.roles().contains(role) {
                     let available_roles = RoleCacheManager::instance()
                         .find_related_roles(&tenant, &plan.user_info.grants.roles_vec())
                         .await?;
