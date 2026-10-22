@@ -366,7 +366,7 @@ impl AggregateHashTable {
             .map(|entry| entry.take(representatives.as_slice()))
             .collect::<Result<Vec<_>>>()
             .ok()?;
-        
+
         let distinct = representatives.len();
         state.row_count = distinct;
         group_hash_entries((&keys).into(), &mut state.group_hashes[..distinct]);

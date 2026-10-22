@@ -1830,10 +1830,7 @@ mod tests {
         while let Some(part) = column.read_min_rows(2).unwrap() {
             parts.push(part);
         }
-        assert_eq!(
-            Column::concat_columns(parts).unwrap(),
-            columns[0]
-        );
+        assert_eq!(Column::concat_columns(parts).unwrap(), columns[0]);
         column.finish().unwrap();
 
         let mut reader = block.read_full_rows().unwrap();
@@ -2081,10 +2078,7 @@ mod tests {
         reader.finish().unwrap().finish().unwrap();
 
         assert_eq!(boundaries, vec![2, 1, 1, 1]);
-        assert_eq!(
-            Column::concat_columns(batches).unwrap(),
-            expected
-        );
+        assert_eq!(Column::concat_columns(batches).unwrap(), expected);
     }
 
     #[test]
@@ -2237,10 +2231,7 @@ mod tests {
         reader.finish().unwrap().finish().unwrap();
 
         assert_eq!(boundaries, vec![2, 1, 2]);
-        assert_eq!(
-            Column::concat_columns(batches).unwrap(),
-            expected
-        );
+        assert_eq!(Column::concat_columns(batches).unwrap(), expected);
     }
 
     #[test]

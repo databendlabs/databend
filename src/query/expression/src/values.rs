@@ -59,6 +59,7 @@ use crate::BlockEntry;
 use crate::ColumnView;
 use crate::bitmap::is_hybrid_encoding;
 use crate::property::Domain;
+use crate::types::EncodedColumn;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
@@ -89,7 +90,6 @@ use crate::types::number::NumberColumnBuilder;
 use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
 use crate::types::opaque::OpaqueColumn;
-use crate::types::EncodedColumn;
 use crate::types::opaque::OpaqueColumnBuilder;
 use crate::types::opaque::OpaqueColumnVec;
 use crate::types::opaque::OpaqueScalar;
@@ -218,7 +218,6 @@ pub enum Column {
     Geography(GeographyColumn),
     Vector(VectorColumn),
     Opaque(OpaqueColumn),
-    /// A column kept in a compact encoded form; its logical type is the type of the decoded column.
     Encoded(Box<EncodedColumn>),
 }
 

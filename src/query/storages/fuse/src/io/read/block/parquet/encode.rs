@@ -307,7 +307,7 @@ mod tests {
 
         // Decimal(15, 2): raw (unscaled) values.
         let size = DecimalSize::new_unchecked(15, 2);
-        let array = Decimal64Array::from_iter_values((0..1000).map(|i| 90_000_00 + i * 37))
+        let array = Decimal64Array::from_iter_values((0..1000).map(|i| 9_000_000 + i * 37))
             .with_precision_and_scale(15, 2)
             .unwrap();
         let data_type = DataType::Decimal(size);
@@ -317,7 +317,7 @@ mod tests {
             &data_type,
         );
         let for_column = as_for(&column);
-        assert_eq!(for_column.base(), 90_000_00);
+        assert_eq!(for_column.base(), 9_000_000);
         assert_eq!(for_column.deltas().byte_width(), 2);
     }
 }

@@ -157,6 +157,8 @@ pub trait ValueVisitor: Sized {
 
     /// Encoded columns are decoded by default; visitors that understand an
     /// encoding can override this to work on the encoded values directly.
+    // Boxed like `Column::Encoded`, so implementations can reuse the box.
+    #[allow(clippy::boxed_local)]
     fn visit_encoded(&mut self, column: Box<EncodedColumn>) -> Result<Self::U, Self::Error> {
         self.visit_column(column.decode())
     }

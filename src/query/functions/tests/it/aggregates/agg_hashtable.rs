@@ -268,12 +268,17 @@ fn test_agg_hashtable_encoded_columns() {
         .into();
         let plain_price: BlockEntry = plain_price.into();
         let wide_values = values.iter().map(|v| *v as i128 * 1_000_000).collect_vec();
-        let plain_wide: BlockEntry =
-            Column::Decimal(DecimalColumn::Decimal128(wide_values.clone().into(), wide_size))
-                .into();
+        let plain_wide: BlockEntry = Column::Decimal(DecimalColumn::Decimal128(
+            wide_values.clone().into(),
+            wide_size,
+        ))
+        .into();
         let min = *wide_values.iter().min().unwrap();
         let max = *wide_values.iter().max().unwrap();
-        let deltas = NarrowBuffer::pack(wide_values.iter().map(|v| (v - min) as u64), (max - min) as u64);
+        let deltas = NarrowBuffer::pack(
+            wide_values.iter().map(|v| (v - min) as u64),
+            (max - min) as u64,
+        );
         let wide: BlockEntry = Column::Encoded(Box::new(EncodedColumn::For(ForColumn::new(
             DataType::Decimal(wide_size),
             min,
@@ -281,7 +286,8 @@ fn test_agg_hashtable_encoded_columns() {
             deltas,
         ))))
         .into();
-        let number: BlockEntry = Int64Type::from_data((0..n as i64).map(|i| i % 4).collect_vec()).into();
+        let number: BlockEntry =
+            Int64Type::from_data((0..n as i64).map(|i| i % 4).collect_vec()).into();
         // numeric dictionary keys
         let codes = Int64Type::from_data((0..n).map(|i| [5i64, -1, 1 << 40][i % 3]).collect_vec());
         let code: BlockEntry = Column::Encoded(Box::new(EncodedColumn::Dict(
@@ -323,8 +329,14 @@ fn test_agg_hashtable_encoded_columns() {
                 number.clone(),
             ]),
         ] {
-            let encoded_params = encoded_args.iter().map(|arg| vec![(*arg).clone()]).collect_vec();
-            let plain_params = plain_args.iter().map(|arg| vec![(*arg).clone()]).collect_vec();
+            let encoded_params = encoded_args
+                .iter()
+                .map(|arg| vec![(*arg).clone()])
+                .collect_vec();
+            let plain_params = plain_args
+                .iter()
+                .map(|arg| vec![(*arg).clone()])
+                .collect_vec();
             let encoded = aggregate_into_block(&encoded_keys, &encoded_params, &aggrs, n);
             let plain = aggregate_into_block(&plain_keys, &plain_params, &aggrs, n);
             assert_block_value_sort_eq(&encoded, &plain);

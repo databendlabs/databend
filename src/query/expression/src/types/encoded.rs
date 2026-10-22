@@ -87,6 +87,13 @@ macro_rules! map_narrow_buffer {
         }
     };
 }
+/// Widens a delta or key of any [`NarrowBuffer`] width. Generic so that the arms of
+/// `with_narrow_buffer!` share the code, the `u64` one included.
+#[inline(always)]
+fn widen<D: Into<u64>>(value: D) -> u64 {
+    value.into()
+}
+
 impl NarrowBuffer {
     /// Byte width needed to hold values up to `max`.
     pub fn width_for(max: u64) -> usize {
@@ -134,7 +141,7 @@ impl NarrowBuffer {
 
     #[inline]
     pub fn get(&self, index: usize) -> Option<u64> {
-        with_narrow_buffer!(self, |b| b.get(index).map(|v| *v as u64))
+        with_narrow_buffer!(self, |b| b.get(index).map(|v| widen(*v)))
     }
 
     /// # Safety
@@ -142,7 +149,7 @@ impl NarrowBuffer {
     /// `index` must be in bounds.
     #[inline]
     pub unsafe fn get_unchecked(&self, index: usize) -> u64 {
-        unsafe { with_narrow_buffer!(self, |b| *b.get_unchecked(index) as u64) }
+        unsafe { with_narrow_buffer!(self, |b| widen(*b.get_unchecked(index))) }
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {
@@ -161,9 +168,9 @@ impl NarrowBuffer {
     pub fn min_max(&self) -> Option<(u64, u64)> {
         with_narrow_buffer!(self, |b| {
             let mut iter = b.iter();
-            let first = *iter.next()? as u64;
+            let first = widen(*iter.next()?);
             Some(iter.fold((first, first), |(min, max), v| {
-                let v = *v as u64;
+                let v = widen(*v);
                 (min.min(v), max.max(v))
             }))
         })
@@ -569,7 +576,7 @@ impl ForColumn {
         let base = T::from_raw(self.base);
         with_narrow_buffer!(&self.deltas, |b| {
             b.iter()
-                .map(|d| base.add_delta(*d as u64))
+                .map(|d| base.add_delta(widen(*d)))
                 .collect::<Vec<_>>()
                 .into()
         })
@@ -833,6 +840,8 @@ impl<T: ForNative> ExactSizeIterator for ForValues<'_, T> {}
 
 unsafe impl<T: ForNative> TrustedLen for ForValues<'_, T> {}
 
+/// A column kept in a compact encoded form (`Column::Encoded`); its logical type is the type of
+/// the decoded column.
 #[derive(Clone, Debug, PartialEq)]
 pub enum EncodedColumn {
     Dict(DictColumn),

@@ -64,7 +64,7 @@ fn plain_group_columns(n: usize, decimal_step: i64) -> Vec<Column> {
         Int64Type::from_data((0..n).map(|x| 1_000_000 + (x % 3) as i64).collect_vec()),
         Column::Decimal(DecimalColumn::Decimal64(
             (0..n)
-                .map(|x| 9_000_00 + (x % 2) as i64 * decimal_step)
+                .map(|x| 900_000 + (x % 2) as i64 * decimal_step)
                 .collect_vec()
                 .into(),
             size,

@@ -1171,6 +1171,8 @@ mod encoded_sum {
                 order_by: &[],
             })
             .unwrap();
+        // Same as the aggregation operators, which share the arena within one thread.
+        #[allow(clippy::arc_with_non_send_sync)]
         bencher.bench(|| {
             let mut table = AggregateHashTable::new(
                 vec![key.data_type()],
@@ -1182,11 +1184,10 @@ mod encoded_sum {
             for start in (0..ROWS).step_by(BATCH) {
                 let range = start..(start + BATCH).min(ROWS);
                 let keys = vec![key.slice(range.clone())];
-                let params = vec![
-                    arg.iter()
-                        .map(|a| a.slice(range.clone()))
-                        .collect::<Vec<_>>(),
-                ];
+                let params = [arg
+                    .iter()
+                    .map(|a| a.slice(range.clone()))
+                    .collect::<Vec<_>>()];
                 let params: Vec<ProjectedBlock> = params.iter().map(|p| p.into()).collect();
                 table
                     .add_groups(
