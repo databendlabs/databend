@@ -126,6 +126,26 @@ impl IPhysicalPlan for Udf {
                 .cloned()
                 .map(Into::into)
                 .collect::<Vec<ScriptUdfFunctionDesc>>();
+            #[cfg(feature = "python-udf")]
+            if udf_funcs.iter().any(|func| {
+                matches!(
+                    &func.udf_type,
+                    UDFType::Script(code)
+                        if code.language == databend_common_sql::plans::UDFLanguage::Python
+                )
+            }) {
+                let runtimes = TransformUdfScript::init_runtime_for_query(
+                    &udf_funcs,
+                    builder.ctx.python_udf_workers()?,
+                )?;
+                return builder.main_pipeline.try_add_async_transformer(|| {
+                    Ok(TransformUdfScript::new(
+                        builder.func_ctx.clone(),
+                        udf_funcs.clone(),
+                        runtimes.clone(),
+                    ))
+                });
+            }
             let runtimes = TransformUdfScript::init_runtime(&udf_funcs)?;
             builder.main_pipeline.try_add_transformer(|| {
                 Ok(TransformUdfScript::new(
