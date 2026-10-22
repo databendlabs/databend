@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod s3_region;
 mod storage_params;
 
 pub use storage_params::*;
