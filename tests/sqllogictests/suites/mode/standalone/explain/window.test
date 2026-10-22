@@ -1085,4 +1085,136 @@ AggregateFinal
                         └── estimated rows: 1000.00
 
 statement ok
+CREATE OR REPLACE TABLE topn_keys(k1 INT NOT NULL, k2 INT NOT NULL, k3 INT NOT NULL, d INT NOT NULL) AS SELECT number % 100, number % 5, number % 3, number FROM numbers(5000)
+
+# A ranking top-n pushed below the window caps the estimated rows by
+# (distinct partition keys x top) instead of passing the input rows through.
+query T
+explain select k1, d from (select k1, d, row_number() over (partition by k1 order by d desc) rn from topn_keys) where rn = 1
+----
+Filter
+├── output columns: [topn_keys.k1 (#0), topn_keys.d (#3)]
+├── filters: [row_number() OVER (PARTITION BY k1 ORDER BY d DESC) (#4) = 1]
+├── estimated rows: 100.00
+└── Window
+    ├── output columns: [topn_keys.k1 (#0), topn_keys.d (#3), row_number() OVER (PARTITION BY k1 ORDER BY d DESC) (#4)]
+    ├── aggregate function: [row_number]
+    ├── partition by: [k1]
+    ├── order by: [d]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── WindowPartition
+        ├── output columns: [topn_keys.k1 (#0), topn_keys.d (#3)]
+        ├── hash keys: [k1]
+        ├── top: 1
+        ├── estimated rows: 100.00
+        └── TableScan
+            ├── table: default.test_explain_window.topn_keys
+            ├── scan id: 0
+            ├── output columns: [k1 (#0), d (#3)]
+            ├── read rows: 5000
+            ├── read size: 11.28 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 5000.00
+
+query T
+explain select k1, d from (select k1, d, row_number() over (partition by k1, k2, k3 order by d desc) rn from topn_keys) where rn <= 2
+----
+Filter
+├── output columns: [topn_keys.k1 (#0), topn_keys.d (#3)]
+├── filters: [row_number() OVER (PARTITION BY k1, k2, k3 ORDER BY d DESC) (#4) <= 2]
+├── estimated rows: 3000.00
+└── Window
+    ├── output columns: [topn_keys.k1 (#0), topn_keys.k2 (#1), topn_keys.k3 (#2), topn_keys.d (#3), row_number() OVER (PARTITION BY k1, k2, k3 ORDER BY d DESC) (#4)]
+    ├── aggregate function: [row_number]
+    ├── partition by: [k1, k2, k3]
+    ├── order by: [d]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── WindowPartition
+        ├── output columns: [topn_keys.k1 (#0), topn_keys.k2 (#1), topn_keys.k3 (#2), topn_keys.d (#3)]
+        ├── hash keys: [k1, k2, k3]
+        ├── top: 2
+        ├── estimated rows: 3000.00
+        └── TableScan
+            ├── table: default.test_explain_window.topn_keys
+            ├── scan id: 0
+            ├── output columns: [k1 (#0), k2 (#1), k3 (#2), d (#3)]
+            ├── read rows: 5000
+            ├── read size: 11.50 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 5000.00
+
+query T
+explain select k1, d from (select k1, d, rank() over (partition by k1 order by d desc) rk from topn_keys) where rk <= 3
+----
+Filter
+├── output columns: [topn_keys.k1 (#0), topn_keys.d (#3)]
+├── filters: [rank() OVER (PARTITION BY k1 ORDER BY d DESC) (#4) <= 3]
+├── estimated rows: 300.00
+└── Window
+    ├── output columns: [topn_keys.k1 (#0), topn_keys.d (#3), rank() OVER (PARTITION BY k1 ORDER BY d DESC) (#4)]
+    ├── aggregate function: [rank]
+    ├── partition by: [k1]
+    ├── order by: [d]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── WindowPartition
+        ├── output columns: [topn_keys.k1 (#0), topn_keys.d (#3)]
+        ├── hash keys: [k1]
+        ├── top: 3
+        ├── estimated rows: 300.00
+        └── TableScan
+            ├── table: default.test_explain_window.topn_keys
+            ├── scan id: 0
+            ├── output columns: [k1 (#0), d (#3)]
+            ├── read rows: 5000
+            ├── read size: 11.28 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 5000.00
+
+query T
+explain select k1, d from (select k1, d, row_number() over (partition by d % 10 order by d desc) rn from topn_keys) where rn = 1
+----
+Filter
+├── output columns: [topn_keys.k1 (#0), topn_keys.d (#3)]
+├── filters: [row_number() OVER (PARTITION BY d % 10 ORDER BY d DESC) (#5) = 1]
+├── estimated rows: 10.00
+└── Window
+    ├── output columns: [topn_keys.k1 (#0), topn_keys.d (#3), row_number_part_0 (#4), row_number() OVER (PARTITION BY d % 10 ORDER BY d DESC) (#5)]
+    ├── aggregate function: [row_number]
+    ├── partition by: [row_number_part_0]
+    ├── order by: [d]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── WindowPartition
+        ├── output columns: [topn_keys.k1 (#0), topn_keys.d (#3), row_number_part_0 (#4)]
+        ├── hash keys: [row_number_part_0]
+        ├── top: 1
+        ├── estimated rows: 10.00
+        └── EvalScalar
+            ├── output columns: [topn_keys.k1 (#0), topn_keys.d (#3), row_number_part_0 (#4)]
+            ├── expressions: [topn_keys.d (#3) % 10]
+            ├── estimated rows: 5000.00
+            └── TableScan
+                ├── table: default.test_explain_window.topn_keys
+                ├── scan id: 0
+                ├── output columns: [k1 (#0), d (#3)]
+                ├── read rows: 5000
+                ├── read size: 11.28 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 5000.00
+
+statement ok
+DROP TABLE topn_keys
+
+statement ok
 DROP DATABASE test_explain_window;

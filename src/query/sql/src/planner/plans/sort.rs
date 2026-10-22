@@ -18,6 +18,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
 use super::WindowPartition;
+use super::window::cap_stat_info_by_top_n;
+use super::window::top_n_row_cap;
 use crate::ColumnSet;
 use crate::Symbol;
 use crate::optimizer::ir::Distribution;
@@ -170,13 +172,21 @@ impl Operator for Sort {
 
     fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         let input = rel_expr.derive_cardinality_child(0, stat_ctx)?;
-        let Some(limit) = self.limit else {
-            return Ok(input);
+        // A window partition with a pushed-down ranking top-n emits at most
+        // `top` rows per partition.
+        let top_n_cap = self
+            .window_partition
+            .as_ref()
+            .and_then(|window| top_n_row_cap(&window.partition_by, window.top, &input));
+        let stat_info = match top_n_cap {
+            Some(cap) => cap_stat_info_by_top_n(input.as_ref().clone(), cap),
+            None if self.limit.is_none() => return Ok(input),
+            None => input.as_ref().clone(),
         };
-        Ok(Arc::new(cap_stat_info_by_rows(
-            input.as_ref().clone(),
-            limit,
-        )))
+        let Some(limit) = self.limit else {
+            return Ok(Arc::new(stat_info));
+        };
+        Ok(Arc::new(cap_stat_info_by_rows(stat_info, limit)))
     }
 }
 

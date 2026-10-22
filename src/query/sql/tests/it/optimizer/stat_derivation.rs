@@ -275,6 +275,18 @@ async fn test_sort_and_window_statistics_golden() -> Result<()> {
             operator: RelOp::Window,
         },
         StatsCase {
+            name: "row_number_top_n_caps_cardinality",
+            description: "A ranking top-n pushed below the window caps the output rows by partitions * top.",
+            sql: "SELECT k FROM (SELECT k, ROW_NUMBER() OVER (PARTITION BY p ORDER BY k) AS w FROM t) WHERE w <= 2",
+            operator: RelOp::Window,
+        },
+        StatsCase {
+            name: "row_number_top_one_filter_cardinality",
+            description: "Filtering ROW_NUMBER() = 1 keeps about one row per partition instead of the whole input.",
+            sql: "SELECT k FROM (SELECT k, ROW_NUMBER() OVER (PARTITION BY p ORDER BY k) AS w FROM t) WHERE w = 1",
+            operator: RelOp::Filter,
+        },
+        StatsCase {
             name: "window_group_statistics",
             description: "WindowGroup derives statistics for every supported output column.",
             sql: "SELECT ROW_NUMBER() OVER (PARTITION BY p ORDER BY k), NTILE(4) OVER (PARTITION BY p ORDER BY k), LAG(k) OVER (PARTITION BY p ORDER BY k) FROM t",

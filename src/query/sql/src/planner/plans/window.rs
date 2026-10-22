@@ -380,26 +380,65 @@ impl Window {
     }
 
     fn estimated_partition_count(&self, stat_info: &StatInfo) -> f64 {
-        if self.partition_by.is_empty() {
-            return 1.0;
-        }
-
-        let cardinality_upper = stat_info.cardinality.max(1.0);
-
-        self.partition_by
-            .iter()
-            .try_fold(1.0, |partitions, item| {
-                let ndv = stat_info
-                    .statistics
-                    .column_stats
-                    .get(&item.index)?
-                    .ndv()
-                    .expected?;
-                Some((partitions * ndv.max(1.0)).min(cardinality_upper))
-            })
-            .unwrap_or(1.0)
-            .clamp(1.0, cardinality_upper)
+        estimate_partition_count(&self.partition_by, stat_info).unwrap_or(1.0)
     }
+
+    /// Rows that survive a per-partition top-n applied to this window: at most
+    /// `top` rows per partition, `None` when `top` is not set or the partition
+    /// count cannot be estimated.
+    fn top_n_row_cap(&self, stat_info: &StatInfo) -> Option<usize> {
+        top_n_row_cap(&self.partition_by, self.top, stat_info)
+    }
+}
+
+/// Estimated number of distinct partitions, bounded by the input cardinality.
+/// Returns `None` when any partition column has no expected ndv.
+pub(crate) fn estimate_partition_count(
+    partition_by: &[ScalarItem],
+    stat_info: &StatInfo,
+) -> Option<f64> {
+    if partition_by.is_empty() {
+        return Some(1.0);
+    }
+
+    let cardinality_upper = stat_info.cardinality.max(1.0);
+
+    partition_by
+        .iter()
+        .try_fold(1.0, |partitions, item| {
+            let ndv = stat_info
+                .statistics
+                .column_stats
+                .get(&item.index)?
+                .ndv()
+                .expected?;
+            Some((partitions * ndv.max(1.0)).min(cardinality_upper))
+        })
+        .map(|partitions| partitions.clamp(1.0, cardinality_upper))
+}
+
+/// Row cap implied by a per-partition top-n: `partitions * top`. Returns
+/// `None` when the cap is unknown or would not reduce the cardinality.
+pub(crate) fn top_n_row_cap(
+    partition_by: &[ScalarItem],
+    top: Option<usize>,
+    stat_info: &StatInfo,
+) -> Option<usize> {
+    let top = top?;
+    let partitions = estimate_partition_count(partition_by, stat_info)?;
+    let cap = (partitions * top as f64).ceil();
+    if cap >= stat_info.cardinality {
+        return None;
+    }
+    Some(cap as usize)
+}
+
+/// Cap the statistics by a per-partition top-n. Unlike a `LIMIT`, the cap is
+/// an estimate, so the result never claims a precise cardinality.
+pub(crate) fn cap_stat_info_by_top_n(mut stat_info: StatInfo, cap: usize) -> StatInfo {
+    stat_info = cap_stat_info_by_rows(stat_info, cap);
+    stat_info.statistics.precise_cardinality = None;
+    stat_info
 }
 
 fn cardinality_upper(cardinality: f64) -> u64 {
@@ -553,6 +592,13 @@ impl Operator for WindowGroup {
                 stat_info.statistics.column_stats.insert(window.index, stat);
             }
         }
+        // A ranking top-n pushed down onto a window keeps at most `top` rows
+        // per partition, so the group's output cannot exceed partitions * top.
+        for window in &self.windows {
+            if let Some(cap) = window.top_n_row_cap(&stat_info) {
+                stat_info = cap_stat_info_by_top_n(stat_info, cap);
+            }
+        }
         Ok(Arc::new(stat_info))
     }
 }
@@ -648,6 +694,9 @@ impl Operator for Window {
         let mut stat_info = input.as_ref().clone();
         if let Some(stat) = self.derive_output_stat(&stat_info, &stat_ctx.function_context)? {
             stat_info.statistics.column_stats.insert(self.index, stat);
+        }
+        if let Some(cap) = self.top_n_row_cap(&stat_info) {
+            stat_info = cap_stat_info_by_top_n(stat_info, cap);
         }
         if let Some(limit) = self.limit {
             stat_info = cap_stat_info_by_rows(stat_info, limit);
