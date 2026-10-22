@@ -1,3 +1,6 @@
+//! `defer_column_folding` keeps column-dependent expressions unfolded, as when
+//! binding the pre-aggregate forms that GROUPING SETS keys are matched against.
+
 use super::*;
 
 fn non_null_context(defer: bool) -> BindContext {
@@ -8,7 +11,7 @@ fn non_null_context(defer: bool) -> BindContext {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_grouping_deferred_folding_preserves_column_predicates() -> Result<()> {
+async fn test_deferred_column_folding_preserves_column_predicates() -> Result<()> {
     init_testing_globals();
     let settings = Settings::create(Tenant::new_literal("default"));
     for name in ["is_null", "is_not_null"] {
@@ -32,7 +35,7 @@ async fn test_grouping_deferred_folding_preserves_column_predicates() -> Result<
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_grouping_deferred_folding_preserves_udf_condition() -> Result<()> {
+async fn test_deferred_column_folding_preserves_udf_condition() -> Result<()> {
     init_testing_globals();
     let settings = Settings::create(Tenant::new_literal("default"));
     let adapter =
@@ -61,7 +64,7 @@ async fn test_grouping_deferred_folding_preserves_udf_condition() -> Result<()> 
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_grouping_deferred_folding_keeps_pure_constant_evaluation() -> Result<()> {
+async fn test_deferred_column_folding_keeps_pure_constant_evaluation() -> Result<()> {
     init_testing_globals();
     let settings = Settings::create(Tenant::new_literal("default"));
     let (scalar, _) = resolve_type_check_sql(

@@ -35,7 +35,6 @@ use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::i256;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
-use itertools::Itertools;
 use unicase::Ascii;
 
 use super::CoreExpr;
@@ -152,17 +151,15 @@ where A: super::TypeCheckAdapter
             }
         }
 
+        // The body is compiled against a schema keyed by symbol, shared by the
+        // parameters and the captured columns. Every symbol of the query is
+        // below `Metadata::next_column_index`, and parameters of this and the
+        // enclosing lambdas are context columns, so numbering parameters past
+        // both keeps them distinct. Parameters are not registered in metadata;
+        // the body must therefore not allocate symbols, which is checked below.
+        let first_symbol = self.metadata.read().next_column_index();
         for (lambda_column, lambda_column_type) in lambda_columns.iter() {
-            // Lambda parameters must not collide with the outputs of grouping
-            // keys, which a lambda body can capture but are not context columns.
-            let column_index = lambda_context
-                .aggregate_info
-                .group_items()
-                .iter()
-                .map(|item| Symbol::new(item.index.as_usize() + 1))
-                .chain(std::iter::once(lambda_context.next_column_index()))
-                .max()
-                .unwrap();
+            let column_index = first_symbol.max(lambda_context.next_column_index());
             lambda_context.add_column_binding(
                 ColumnBindingBuilder::new(
                     lambda_column.clone(),
@@ -182,6 +179,13 @@ where A: super::TypeCheckAdapter
             &[],
         )?;
         let resolved = type_checker.resolve_core(arena, lambda_expr)?;
+        // Only subqueries allocate symbols while binding an expression.
+        if self.metadata.read().next_column_index() != first_symbol {
+            return Err(ErrorCode::SemanticError(format!(
+                "subqueries are not supported in the lambda body of {func_name}"
+            ))
+            .set_span(span));
+        }
         Self::reject_runtime_udf_in_lambda_body(func_name, span, &resolved.0)?;
         Ok(resolved)
     }
@@ -491,7 +495,7 @@ where A: super::TypeCheckAdapter
             _ => {
                 // Collect outer scope columns as arguments first.
                 let (mut lambda_args, mut lambda_fields) =
-                    self.collect_lambda_capture_args(&lambda_expr)?;
+                    self.collect_lambda_capture_args(&lambda_expr, &lambda_context)?;
                 lambda_args.push(arg);
                 // Add lambda columns as arguments at end.
                 for (lambda_column_name, lambda_column_type) in lambda_columns.into_iter() {
@@ -546,14 +550,18 @@ where A: super::TypeCheckAdapter
         }
     }
 
-    /// Collects the outer scope columns referenced by a lambda body; they
-    /// become the lambda function's leading arguments and schema fields.
+    /// Collects the columns of the enclosing scope referenced by a lambda body;
+    /// they become the lambda function's leading arguments and schema fields.
+    /// Every other column of the body must be a parameter of this lambda or of
+    /// a lambda nested in it, i.e. a column of `lambda_context` only.
     fn collect_lambda_capture_args(
         &self,
         lambda_expr: &ScalarExpr,
+        lambda_context: &BindContext,
     ) -> Result<(Vec<ScalarExpr>, Vec<DataField>)> {
         struct LambdaVisitor<'a> {
             bind_context: &'a BindContext,
+            lambda_context: &'a BindContext,
             arg_index: HashSet<Symbol>,
             args: Vec<ScalarExpr>,
             fields: Vec<DataField>,
@@ -561,36 +569,40 @@ where A: super::TypeCheckAdapter
 
         impl<'a> Visitor<'a> for LambdaVisitor<'a> {
             fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) -> Result<()> {
-                if self.arg_index.contains(&col.column.index) {
+                let index = col.column.index;
+                if !self.arg_index.insert(index) {
                     return Ok(());
                 }
-                self.arg_index.insert(col.column.index);
                 // The output of a grouping key is a column of the scope too.
-                let is_outer_column = self
-                    .bind_context
-                    .all_column_bindings()
-                    .iter()
-                    .map(|c| c.index)
-                    .contains(&col.column.index)
-                    || self
-                        .bind_context
-                        .aggregate_info
-                        .is_grouping_key_output(col.column.index);
-                if is_outer_column {
-                    let arg = ScalarExpr::BoundColumnRef(col.clone());
-                    self.args.push(arg);
-                    let field = DataField::new(
-                        &format!("{}", col.column.index),
+                let is_scope_column = |context: &BindContext| {
+                    context.columns.iter().any(|c| c.index == index)
+                        || context.aggregate_info.is_grouping_key_output(index)
+                };
+                if is_scope_column(self.bind_context) {
+                    self.args.push(ScalarExpr::BoundColumnRef(col.clone()));
+                    self.fields.push(DataField::new(
+                        &format!("{index}"),
                         *col.column.data_type.clone(),
-                    );
-                    self.fields.push(field);
+                    ));
+                    return Ok(());
                 }
-                Ok(())
+                if self.lambda_context.columns.iter().any(|c| c.index == index) {
+                    return Ok(());
+                }
+                // TODO: capture columns of outer queries. They would become
+                // correlated arguments of the lambda function, which
+                // decorrelation does not support yet.
+                Err(ErrorCode::SemanticError(format!(
+                    "lambda functions in a subquery can't reference column \"{}\" of an outer query",
+                    col.column.column_name
+                ))
+                .set_span(col.span))
             }
         }
 
         let mut lambda_visitor = LambdaVisitor {
             bind_context: self.bind_context,
+            lambda_context,
             arg_index: HashSet::new(),
             args: Vec::new(),
             fields: Vec::new(),
@@ -671,7 +683,8 @@ where A: super::TypeCheckAdapter
 
         // Argument layout is `[json, path, captures...]` so that EXPLAIN and
         // profile output keep the signature order; the evaluator relies on it.
-        let (capture_args, mut lambda_fields) = self.collect_lambda_capture_args(&lambda_scalar)?;
+        let (capture_args, mut lambda_fields) =
+            self.collect_lambda_capture_args(&lambda_scalar, &lambda_context)?;
         let mut lambda_args = vec![json_arg, path_arg];
         lambda_args.extend(capture_args);
 

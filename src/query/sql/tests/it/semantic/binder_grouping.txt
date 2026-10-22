@@ -138,103 +138,44 @@ EvalScalar
             └── limit: NONE
 
 
-=== rollup_lateral_uses_nullable_output_symbol ===
-description: A lateral reference to a ROLLUP key must use a fresh nullable symbol, not the base column.
-sql: SELECT x.a, q.n FROM (SELECT a FROM t1 GROUP BY ROLLUP(a)) x JOIN LATERAL (SELECT n FROM t3 WHERE n > x.a) q ON true
+=== grouping_sets_key_outputs ===
+description: A ROLLUP key outputs a nullable symbol computed below the aggregate; the aggregate reads the input and expressions over the key read the output.
+sql: SELECT a + 1 AS k, grouping(k), sum(a + 1), coalesce(k, 0) FROM t1 GROUP BY ROLLUP(1)
 status: ok
 EvalScalar
-├── scalars: [a (#1) AS (#1), t3.n (#3) AS (#3)]
-└── Join(Inner)
-    ├── build keys: [a (#5)]
-    ├── probe keys: [a (#1)]
-    ├── other filters: []
-    ├── Filter
-    │   ├── filters: [true]
-    │   └── EvalScalar
-    │       ├── scalars: [t3.n (#3) AS (#3), a (#5) AS (#5)]
-    │       └── Filter
-    │           ├── filters: [gt(t3.n (#3), a (#5))]
-    │           └── Join(Cross)
-    │               ├── build keys: []
-    │               ├── probe keys: []
-    │               ├── other filters: []
-    │               ├── Scan
-    │               │   ├── table: default.t3 (#1)
-    │               │   ├── filters: []
-    │               │   ├── order by: []
-    │               │   └── limit: NONE
-    │               └── Aggregate(Initial)
-    │                   ├── group items: [a (#5) AS (#5)]
-    │                   ├── aggregate functions: []
-    │                   └── Filter
-    │                       ├── filters: [true]
-    │                       └── EvalScalar
-    │                           ├── scalars: [a (#5) AS (#5)]
-    │                           └── Aggregate(Initial)
-    │                               ├── group items: [a (#5) AS (#5), _grouping_id (#6) AS (#6)]
-    │                               ├── aggregate functions: []
-    │                               └── EvalScalar
-    │                                   ├── scalars: [a (#4) AS (#5)]
-    │                                   └── Scan
-    │                                       ├── table: default.t1 (#0)
-    │                                       ├── filters: []
-    │                                       ├── order by: []
-    │                                       └── limit: NONE
-    └── Filter
-        ├── filters: [true]
-        └── EvalScalar
-            ├── scalars: [a (#1) AS (#1)]
-            └── Aggregate(Initial)
-                ├── group items: [a (#1) AS (#1), _grouping_id (#2) AS (#2)]
-                ├── aggregate functions: []
-                └── EvalScalar
-                    ├── scalars: [t1.a (#0) AS (#1)]
-                    └── Scan
-                        ├── table: default.t1 (#0)
-                        ├── filters: []
-                        ├── order by: []
-                        └── limit: NONE
+├── scalars: [k (#1) AS (#1), grouping(0)(_grouping_id (#2)) AS (#5), plus(sum(a) (#3), multiply(1, count(a) (#4))) AS (#6), if(is_not_null(k (#1)), assume_not_null(k (#1)), true, 0, NULL) AS (#7)]
+└── Aggregate(Initial)
+    ├── group items: [k (#1) AS (#1), _grouping_id (#2) AS (#2)]
+    ├── aggregate functions: [sum(t1.a (#0)) AS (#3), count(t1.a (#0)) AS (#4)]
+    └── EvalScalar
+        ├── scalars: [t1.a (#0) AS (#0), CAST(plus(t1.a (#0), 1) AS Int64 NULL) AS (#1)]
+        └── Scan
+            ├── table: default.t1 (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
 
 
-=== rollup_scalar_subquery_uses_nullable_output_symbol ===
-description: Scalar correlation outside a rollup must retain the nullable grouping output type.
-sql: SELECT x.a, (SELECT max(n) FROM t3 WHERE n > x.a) FROM (SELECT a FROM t1 GROUP BY ROLLUP(a)) x
+=== grouping_sets_outermost_key_wins ===
+description: `a + 1` binds to its own key rather than to the key `a` plus one.
+sql: SELECT a, a + 1 FROM t1 GROUP BY GROUPING SETS ((a), (a + 1))
 status: ok
 EvalScalar
-├── scalars: [a (#1) AS (#1), SUBQUERY AS (#4) AS (#5)]
-├── subquerys
-│   └── Subquery (Scalar)
-│       ├── output_column: max(n) (#4)
-│       └── EvalScalar
-│           ├── scalars: [max(n) (#4) AS (#4)]
-│           └── Aggregate(Initial)
-│               ├── group items: []
-│               ├── aggregate functions: [max(t3.n (#3)) AS (#4)]
-│               └── EvalScalar
-│                   ├── scalars: [t3.n (#3) AS (#3)]
-│                   └── Filter
-│                       ├── filters: [gt(t3.n (#3), a (#1))]
-│                       └── Scan
-│                           ├── table: default.t3 (#1)
-│                           ├── filters: []
-│                           ├── order by: []
-│                           └── limit: NONE
-└── EvalScalar
-    ├── scalars: [a (#1) AS (#1)]
-    └── Aggregate(Initial)
-        ├── group items: [a (#1) AS (#1), _grouping_id (#2) AS (#2)]
-        ├── aggregate functions: []
-        └── EvalScalar
-            ├── scalars: [t1.a (#0) AS (#1)]
-            └── Scan
-                ├── table: default.t1 (#0)
-                ├── filters: []
-                ├── order by: []
-                └── limit: NONE
+├── scalars: [a (#1) AS (#1), a + 1 (#2) AS (#2)]
+└── Aggregate(Initial)
+    ├── group items: [a (#1) AS (#1), a + 1 (#2) AS (#2), _grouping_id (#3) AS (#3)]
+    ├── aggregate functions: []
+    └── EvalScalar
+        ├── scalars: [CAST(t1.a (#0) AS Int32 NULL) AS (#1), CAST(plus(t1.a (#0), 1) AS Int64 NULL) AS (#2)]
+        └── Scan
+            ├── table: default.t1 (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
 
 
-=== rollup_outer_query_scalar_subquery ===
-description: A scalar subquery in a grouped SELECT correlates to the key output.
+=== grouping_sets_subquery_reads_key_output ===
+description: A correlated subquery in a grouped SELECT references the key output.
 sql: SELECT a, (SELECT max(n) FROM t3 WHERE n > t1.a) FROM t1 GROUP BY ROLLUP(a)
 status: ok
 EvalScalar
@@ -260,7 +201,7 @@ EvalScalar
     ├── group items: [a (#1) AS (#1), _grouping_id (#2) AS (#2)]
     ├── aggregate functions: []
     └── EvalScalar
-        ├── scalars: [t1.a (#0) AS (#1)]
+        ├── scalars: [CAST(t1.a (#0) AS Int32 NULL) AS (#1)]
         └── Scan
             ├── table: default.t1 (#0)
             ├── filters: []
@@ -268,105 +209,23 @@ EvalScalar
             └── limit: NONE
 
 
-=== rollup_cte_references_have_nullable_schema ===
-description: Repeated CTE consumers must derive nullable key types from metadata.
-sql: WITH x AS (SELECT a FROM t1 GROUP BY ROLLUP(a)) SELECT x1.a, x2.a FROM x x1 JOIN x x2 ON x1.a = x2.a
-status: ok
-Sequence(Sequence)
-├── MaterializedCTE
-│   ├── cte_name: __materialized_cte_0_x
-│   ├── ref_count: 0
-│   ├── channel_size: None
-│   └── EvalScalar
-│       ├── scalars: [a (#1) AS (#1)]
-│       └── Aggregate(Initial)
-│           ├── group items: [a (#1) AS (#1), _grouping_id (#2) AS (#2)]
-│           ├── aggregate functions: []
-│           └── EvalScalar
-│               ├── scalars: [t1.a (#0) AS (#1)]
-│               └── Scan
-│                   ├── table: default.t1 (#0)
-│                   ├── filters: []
-│                   ├── order by: []
-│                   └── limit: NONE
-└── EvalScalar
-    ├── scalars: [a (#4) AS (#4), a (#7) AS (#7)]
-    └── Join(Inner)
-        ├── build keys: [a (#7)]
-        ├── probe keys: [a (#4)]
-        ├── other filters: []
-        ├── MaterializedCTERef
-        │   ├── cte_name: __materialized_cte_0_x
-        │   ├── output columns: [a (#7)]
-        │   └── column mapping: [a (#7) -> a (#1)]
-        └── MaterializedCTERef
-            ├── cte_name: __materialized_cte_0_x
-            ├── output columns: [a (#4)]
-            └── column mapping: [a (#4) -> a (#1)]
-
-
-=== rollup_positional_computed_key ===
-description: Positional computed grouping keys also receive nullable output symbols.
-sql: SELECT a + 1 AS k, grouping(k), sum(a) FROM t1 GROUP BY ROLLUP(1)
+=== grouping_sets_srf_reads_key_output ===
+description: A set-returning function over a key runs after the aggregate over the key output.
+sql: SELECT a, unnest([a, a + 1]) FROM t1 GROUP BY ROLLUP(a)
 status: ok
 EvalScalar
-├── scalars: [k (#1) AS (#1), sum(a) (#3) AS (#3), grouping(0)(_grouping_id (#2)) AS (#4)]
-└── Aggregate(Initial)
-    ├── group items: [k (#1) AS (#1), _grouping_id (#2) AS (#2)]
-    ├── aggregate functions: [sum(t1.a (#0)) AS (#3)]
-    └── EvalScalar
-        ├── scalars: [t1.a (#0) AS (#0), plus(t1.a (#0), 1) AS (#1)]
-        └── Scan
-            ├── table: default.t1 (#0)
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE
-
-
-=== rollup_lazy_srf_uses_nullable_output_symbol ===
-description: A set-returning function over a ROLLUP key runs after the aggregate and must consume the nullable grouping output.
-sql: SELECT a, unnest([a, a + 1]) AS u FROM t1 GROUP BY ROLLUP(a) ORDER BY u
-status: ok
-Sort
-├── sort keys: [u (#5) ASC NULLS LAST]
-├── limit: [NONE]
-└── EvalScalar
-    ├── scalars: [a (#2) AS (#2), get(1)(unnest(array(a (#2), plus(a (#2), 1))) (#4)) AS (#5)]
-    └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(10..28), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(17..27), func_name: "array", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(7..8), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "a", column_name_lower: None, index: 2, data_type: Nullable(Number(Int32)), visibility: Visible, virtual_expr: None, is_srf: false } }), FunctionCall(FunctionCall { span: Some(23..24), func_name: "plus", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(7..8), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "a", column_name_lower: None, index: 2, data_type: Nullable(Number(Int32)), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(25..26), value: Number(1_u8) })] })] })] }), index: 4 }] })
-        └── Aggregate(Initial)
-            ├── group items: [a (#2) AS (#2), _grouping_id (#3) AS (#3)]
-            ├── aggregate functions: []
-            └── EvalScalar
-                ├── scalars: [CAST(t1.a (#0) AS Int32 NULL) AS (#2)]
-                └── Scan
-                    ├── table: default.t1 (#0)
-                    ├── filters: []
-                    ├── order by: []
-                    └── limit: NONE
-
-
-=== rollup_lazy_srf_retypes_nested_output ===
-description: Lazy SRFs over an aggregate and a ROLLUP key are bound over the nullable key output.
-sql: SELECT a, generate_series(a, sum(b)) AS u, json_each(object_construct('k', a)), unnest([(a, 1)]) AS w FROM t1 GROUP BY ROLLUP(a) HAVING max(b) > 0 ORDER BY u
-status: ok
-Sort
-├── sort keys: [u (#11) ASC NULLS LAST]
-├── limit: [NONE]
-└── EvalScalar
-    ├── scalars: [a (#4) AS (#4), json_each(object_construct('k', a (#4))) (#8) AS (#8), get(1)(generate_series(a (#4), sum(b)) (#7)) AS (#11), get(1)(unnest(array(tuple(a (#4), 1))) (#9)) AS (#12)]
-    └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(10..36), func_name: "generate_series", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(7..8), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "a", column_name_lower: None, index: 4, data_type: Nullable(Number(Int32)), visibility: Visible, virtual_expr: None, is_srf: false } }), BoundColumnRef(BoundColumnRef { span: Some(29..35), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum(b)", column_name_lower: None, index: 6, data_type: Nullable(Number(Int64)), visibility: InVisible, virtual_expr: None, is_srf: false } })] }), index: 7 }, ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(43..78), func_name: "json_each", params: [], arguments: [FunctionCall(FunctionCall { span: Some(53..77), func_name: "object_construct", params: [], arguments: [ConstantExpr(ConstantExpr { span: Some(70..73), value: String("k") }), BoundColumnRef(BoundColumnRef { span: Some(7..8), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "a", column_name_lower: None, index: 4, data_type: Nullable(Number(Int32)), visibility: Visible, virtual_expr: None, is_srf: false } })] })] }), index: 8 }, ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(80..96), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(87..95), func_name: "array", params: [], arguments: [FunctionCall(FunctionCall { span: Some(88..94), func_name: "tuple", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(7..8), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "a", column_name_lower: None, index: 4, data_type: Nullable(Number(Int32)), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(92..93), value: Number(1_u8) })] })] })] }), index: 9 }] })
-        └── Filter
-            ├── filters: [gt(max(b) (#10), 0)]
-            └── Aggregate(Initial)
-                ├── group items: [a (#4) AS (#4), _grouping_id (#5) AS (#5)]
-                ├── aggregate functions: [sum(t1.b (#1)) AS (#6), max(t1.b (#1)) AS (#10)]
-                └── EvalScalar
-                    ├── scalars: [t1.b (#1) AS (#1), CAST(t1.a (#0) AS Int32 NULL) AS (#4)]
-                    └── Scan
-                        ├── table: default.t1 (#0)
-                        ├── filters: []
-                        ├── order by: []
-                        └── limit: NONE
+├── scalars: [a (#1) AS (#1), get(1)(unnest(array(a (#1), plus(a (#1), 1))) (#3)) AS (#4)]
+└── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(10..28), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(17..27), func_name: "array", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(7..8), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "a", column_name_lower: None, index: 1, data_type: Nullable(Number(Int32)), visibility: Visible, virtual_expr: None, is_srf: false } }), FunctionCall(FunctionCall { span: Some(23..24), func_name: "plus", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(7..8), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "a", column_name_lower: None, index: 1, data_type: Nullable(Number(Int32)), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(25..26), value: Number(1_u8) })] })] })] }), index: 3 }] })
+    └── Aggregate(Initial)
+        ├── group items: [a (#1) AS (#1), _grouping_id (#2) AS (#2)]
+        ├── aggregate functions: []
+        └── EvalScalar
+            ├── scalars: [CAST(t1.a (#0) AS Int32 NULL) AS (#1)]
+            └── Scan
+                ├── table: default.t1 (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
 
 
 === grouping_outside_grouping_sets_is_rejected ===

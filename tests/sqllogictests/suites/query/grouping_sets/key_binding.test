@@ -1,0 +1,358 @@
+# Which symbol an expression over a GROUPING SETS key reads.
+#
+# Each key outputs a dedicated nullable symbol. After the aggregate, a node
+# whose pre-aggregate form equals a key binds to the key output, the outermost
+# node first; keys are compared as written. Before the aggregate (WHERE,
+# aggregate arguments) expressions read the input. Binding does not depend on
+# the execution strategy, see null_injection.test for that.
+
+statement ok
+CREATE OR REPLACE DATABASE grouping_sets_key_binding
+
+statement ok
+USE grouping_sets_key_binding
+
+statement ok
+CREATE TABLE t(a INT NOT NULL)
+
+statement ok
+INSERT INTO t VALUES (1), (2)
+
+statement ok
+CREATE TABLE u(n INT NOT NULL)
+
+statement ok
+INSERT INTO u VALUES (1), (2), (3)
+
+## Naming a key
+
+# A column, a qualified column and an alias all name the key, so predicates on
+# it are not folded as if it were NOT NULL.
+query IIIII rowsort
+SELECT t.a AS k, coalesce(k, 100), coalesce(t.a, 100), if(k IS NULL, 100, k), if(t.a IS NOT NULL, t.a, 100)
+FROM t GROUP BY ROLLUP(k)
+----
+1 1 1 1 1
+2 2 2 2 2
+NULL 100 100 100 100
+
+# A SELECT item named by position is the key itself: its total row is NULL,
+# and expressions over it read the key output.
+query II rowsort
+SELECT coalesce(a, 100) AS k, grouping(k) FROM t GROUP BY ROLLUP(1)
+----
+1 0
+2 0
+NULL 1
+
+query IIIII rowsort
+SELECT a + 1 AS k, grouping(k), sum(a), coalesce(k, 100), coalesce(k + 1, 100)
+FROM t GROUP BY ROLLUP(1)
+----
+2 0 1 2 3
+3 0 2 3 4
+NULL 1 3 100 100
+
+query I rowsort
+SELECT a + 1 AS K FROM t GROUP BY ROLLUP(k)
+----
+2
+3
+NULL
+
+query I rowsort
+SELECT * FROM t GROUP BY ROLLUP(a)
+----
+1
+2
+NULL
+
+query II rowsort
+SELECT *, coalesce(a, 100) FROM t GROUP BY ROLLUP(1)
+----
+1 1
+2 2
+NULL 100
+
+## Matching expressions to keys
+
+# The outermost key wins: `a + 1` is a key of its own, not the key `a` plus one.
+query II rowsort
+SELECT a, a + 1 FROM t GROUP BY GROUPING SETS ((a), (a + 1))
+----
+1 NULL
+2 NULL
+NULL 2
+NULL 3
+
+query I rowsort
+SELECT coalesce(a + 1, 0) + coalesce(a, 0) * 10 FROM t GROUP BY GROUPING SETS ((a), (a + 1))
+----
+10
+2
+20
+3
+
+query III rowsort
+SELECT a, a + 1 AS b, coalesce(b, 100) FROM t GROUP BY a, ROLLUP(a + 1)
+----
+1 2 2
+1 NULL 100
+2 3 3
+2 NULL 100
+
+# An alias stands for its pre-aggregate form, so `k + 1` is the key `a + 1`.
+query II rowsort
+SELECT a AS k, k + 1 AS j FROM t GROUP BY GROUPING SETS ((a), (a + 1))
+----
+1 NULL
+2 NULL
+NULL 2
+NULL 3
+
+query II rowsort
+SELECT a AS k, count(*) FROM t GROUP BY GROUPING SETS ((a), (a + 1)) HAVING k + 1 = 2
+----
+NULL 1
+
+# A key that would fold on its own, since `a` is NOT NULL, stays a key.
+query BI rowsort
+SELECT a IS NULL, count(*) FROM t GROUP BY ROLLUP(a IS NULL)
+----
+0 2
+NULL 2
+
+# Keys are compared as written, without normalization; columns of different
+# tables are different keys.
+statement error (?s)1065.*column "a" must appear in the GROUP BY clause
+SELECT 1 + a FROM t GROUP BY ROLLUP(a + 1)
+
+statement error (?s)1065.*column "a" must appear in the GROUP BY clause
+SELECT y.a FROM t x JOIN t y ON x.a = y.a GROUP BY ROLLUP(x.a)
+
+# A SQL UDF expands to builtin functions, so a call over a key matches it.
+statement ok
+CREATE OR REPLACE FUNCTION grouping_sets_inc AS (x) -> x + 1
+
+query II rowsort
+SELECT grouping_sets_inc(a), coalesce(grouping_sets_inc(a), 100) FROM t GROUP BY ROLLUP(grouping_sets_inc(a))
+----
+2 2
+3 3
+NULL 100
+
+statement error (?s)1065.*GROUPING SETS key .* must be referenced by its SELECT alias or position
+SELECT grouping_sets_inc(a) FROM t GROUP BY ROLLUP(a + 1)
+
+statement ok
+DROP FUNCTION grouping_sets_inc
+
+# A non-deterministic key can only be named by its alias or position.
+statement error (?s)1065.*GROUPING SETS key .* must be referenced by its SELECT alias or position
+SELECT a + rand() FROM t GROUP BY ROLLUP(a + rand())
+
+query I
+SELECT count(*) FROM (SELECT a + rand() * 0 AS k, grouping(k) AS g FROM t GROUP BY ROLLUP(k)) WHERE g = 1
+----
+1
+
+query I
+SELECT count(*) FROM (SELECT a + rand() * 0, grouping(a) AS g FROM t GROUP BY ROLLUP(1, a)) WHERE g = 1
+----
+3
+
+## Clauses before and after the aggregate
+
+# WHERE reads the input, even through an alias of a key.
+query II rowsort
+SELECT a AS k, count(*) FROM t WHERE k IS NOT NULL GROUP BY ROLLUP(k)
+----
+1 1
+2 1
+NULL 2
+
+# Aggregate arguments, FILTER, WITHIN GROUP and subqueries in arguments read
+# the input.
+query IIIII rowsort
+SELECT a + 1 AS k, sum(a + 1), min(coalesce(a, 100)), count(*) FILTER (WHERE a IS NOT NULL), sum((SELECT t.a * 10))
+FROM t GROUP BY ROLLUP(1)
+----
+2 2 1 1 10
+3 3 2 1 20
+NULL 5 1 2 30
+
+query IT rowsort
+SELECT a + 1 AS k, string_agg(to_string(a), ',') WITHIN GROUP (ORDER BY a + 1) FROM t GROUP BY ROLLUP(1)
+----
+2 1
+3 2
+NULL 1,2
+
+# HAVING, QUALIFY, ORDER BY and window arguments read the key outputs.
+query II
+SELECT a, coalesce(a, 100) FROM t GROUP BY ROLLUP(a) HAVING coalesce(t.a, 100) > 1 ORDER BY t.a NULLS LAST
+----
+2 2
+NULL 100
+
+query II
+SELECT a, coalesce(a, 100) AS k FROM t GROUP BY ROLLUP(a) ORDER BY coalesce(a, 100) DESC
+----
+NULL 100
+2 2
+1 1
+
+query II rowsort
+SELECT a, count(*) OVER (PARTITION BY a IS NULL) FROM t GROUP BY ROLLUP(a)
+----
+1 2
+2 2
+NULL 1
+
+query I
+SELECT a FROM t GROUP BY ROLLUP(a) QUALIFY row_number() OVER (ORDER BY coalesce(a, 100) DESC) = 1
+----
+NULL
+
+# Constant parameters are still evaluated during binding.
+query IRI rowsort
+SELECT a, quantile_cont(1 - 1)(a), 20 + 22 FROM t GROUP BY ROLLUP(a)
+----
+1 1.0 42
+2 2.0 42
+NULL 1.0 42
+
+## grouping()
+
+# grouping() is evaluated after the aggregate and takes keys only.
+statement error (?s)1065.*Aggregate function arguments can't contain grouping functions
+SELECT sum(grouping(a)) FROM t GROUP BY CUBE(a)
+
+statement error (?s)1006.*Arguments of grouping should be group by expressions
+SELECT grouping(a + 1) FROM t GROUP BY ROLLUP(a)
+
+query II rowsort
+SELECT a, sum(grouping(a)) OVER () FROM t GROUP BY CUBE(a)
+----
+1 1
+2 1
+NULL 1
+
+## Nested contexts
+
+# Subqueries and lambda bodies match the keys of the enclosing SELECT.
+query II rowsort
+SELECT a, (SELECT max(m) FROM (SELECT coalesce(t.a, 100) + n AS m FROM u) s) FROM t GROUP BY ROLLUP(a)
+----
+1 4
+2 5
+NULL 103
+
+query II rowsort
+SELECT a, (SELECT max(n) FROM u WHERE n = t.a + 1) FROM t GROUP BY ROLLUP(a + 1), a
+----
+1 2
+1 NULL
+2 3
+2 NULL
+
+query IT rowsort
+SELECT a, array_transform([10], x -> array_transform([20], y -> x + y + a)) FROM t GROUP BY ROLLUP(a)
+----
+1 [[31]]
+2 [[32]]
+NULL [[NULL]]
+
+# A subquery cannot read an input column that no key covers.
+statement error (?s)1065.*column "b" must appear in the GROUP BY clause
+SELECT a, (SELECT t.b) FROM (SELECT a, a * 10 AS b FROM t) t GROUP BY ROLLUP(a)
+
+# TODO: a lambda in a subquery can't capture an outer column yet, see lambda.rs.
+statement error (?s)1065.*lambda functions in a subquery can't reference column "a" of an outer query
+SELECT a, (SELECT array_transform([10], x -> x + t.a)) FROM t GROUP BY ROLLUP(a)
+
+## Set-returning functions
+
+# A set-returning function matches a key over the same function.
+query II rowsort
+SELECT unnest([a, a + 10]), count(*) FROM t GROUP BY ROLLUP(unnest([a, a + 10]))
+----
+1 1
+11 1
+12 1
+2 1
+NULL 4
+
+query II rowsort
+SELECT unnest([a, a + 10]) AS u, count(*) FROM t GROUP BY ROLLUP(u)
+----
+1 1
+11 1
+12 1
+2 1
+NULL 4
+
+# Other set-returning functions run after the aggregate over the key outputs.
+query IT rowsort
+SELECT a, unnest([(a, sum(a))]) FROM t GROUP BY ROLLUP(a)
+----
+1 (1,1)
+2 (2,2)
+NULL (NULL,3)
+
+## The SELECT list before the aggregate
+
+# Only the items that GROUP BY, WHERE or key matching need are bound before
+# the aggregate, together with the earlier items whose aliases they use.
+query III rowsort
+SELECT 10 AS x, a + x AS y, count(*) FROM t GROUP BY ROLLUP(y)
+----
+10 11 1
+10 12 1
+10 NULL 2
+
+query III rowsort
+SELECT (SELECT 10) AS x, a + x AS y, count(*) FROM t GROUP BY ROLLUP(y)
+----
+10 11 1
+10 12 1
+10 NULL 2
+
+query III rowsort
+SELECT a + 1 AS x, x * 2 AS y, count(*) FROM t GROUP BY ROLLUP(x, y)
+----
+2 4 1
+2 NULL 1
+3 6 1
+3 NULL 1
+NULL NULL 2
+
+# A subquery item is bound before the aggregate only if GROUP BY or WHERE
+# refers to it.
+query II rowsort
+SELECT a, (SELECT max(n) FROM u WHERE n <= t.a) AS m FROM t GROUP BY ROLLUP(a) ORDER BY m
+----
+1 1
+2 2
+NULL NULL
+
+query II rowsort
+SELECT (SELECT max(n) FROM u) AS m, a FROM t GROUP BY ROLLUP(1, a)
+----
+3 1
+3 2
+3 NULL
+NULL NULL
+
+query II rowsort
+SELECT (SELECT max(n) FROM u) AS m, a FROM t WHERE a < m GROUP BY ROLLUP(a)
+----
+3 1
+3 2
+3 NULL
+
+statement ok
+USE default
+
+statement ok
+DROP DATABASE grouping_sets_key_binding
