@@ -82,7 +82,7 @@ impl Interpreter for CreateUserInterpreter {
             };
 
             let now = Utc::now();
-            let user_info = UserInfo {
+            let mut user_info = UserInfo {
                 auth_info: plan.auth_info.clone(),
                 name: plan.user.username,
                 hostname: plan.user.hostname,
@@ -97,6 +97,10 @@ impl Interpreter for CreateUserInterpreter {
                 created_on: now,
                 update_on: now,
             };
+            if let Some(role) = user_info.option.default_role() {
+                user_mgr.get_role(&tenant, role.clone()).await?;
+                user_info.grants.grant_role(role.clone());
+            }
             user_mgr
                 .create_user(&tenant, user_info, &plan.create_option)
                 .await?;
