@@ -1317,6 +1317,7 @@ mod tests {
                 table_id,
                 seq: databend_meta_client::types::MatchSeq::Exact(table_meta.seq),
                 action: SetSecurityPolicyAction::Set(10, vec![0]),
+                where_use_unmasked_value: false,
             })
             .await
             .unwrap_err();

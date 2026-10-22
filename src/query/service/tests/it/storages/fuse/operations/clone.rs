@@ -429,6 +429,7 @@ async fn test_clone_rejects_missing_masking_policy_definition() -> anyhow::Resul
             table_id: source.get_id(),
             seq: MatchSeq::Exact(source.get_table_info().ident.seq),
             action: SetSecurityPolicyAction::Set(missing_policy_id, vec![secured_column_id]),
+            where_use_unmasked_value: false,
         })
         .await?;
 

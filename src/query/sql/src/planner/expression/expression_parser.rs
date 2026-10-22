@@ -554,18 +554,27 @@ pub fn bind_normalized_key_exprs(
     let names = NameResolutionContext::preserve_identifier_case();
     // Runtime rebinding of already persisted keys: keep permissive so tables
     // created before the definition-time check stay readable and writable.
-    parse_ast_exprs_with_adapter(
+    let (mut bind_context, metadata) = bind_table(table_meta)?;
+    let mut checker = TypeChecker::try_create_with_adapter(
+        &mut bind_context,
         FullTypeCheckAdapter::new(ctx)?,
-        table_meta,
-        ast_exprs,
         &names,
-    )?
-    .into_iter()
-    .map(|expr| {
-        expr.project_column_ref(|col| schema.index_of(&col.column_name))
-            .and_then(normalize_key_expr)
-    })
-    .collect()
+        metadata,
+        &[],
+    )?;
+    // Physical keys are evaluated on stored values, independently of roles and
+    // SELECT WHERE authorization. Keep the permissive runtime adapter for old keys.
+    checker.set_apply_masking_policy(false);
+    ast_exprs
+        .iter()
+        .map(|ast| {
+            let (scalar, _) = *checker.resolve(ast)?;
+            scalar
+                .as_expr()?
+                .project_column_ref(|col| schema.index_of(&col.column_name))
+                .and_then(normalize_key_expr)
+        })
+        .collect()
 }
 
 /// Bind and normalize cluster-key SQL using the caller-provided name rules.

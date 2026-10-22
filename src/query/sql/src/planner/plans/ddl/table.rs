@@ -375,7 +375,7 @@ impl DropTableColumnPlan {
 #[derive(Debug, Clone)]
 pub enum ModifyColumnAction {
     // (masking policy name, using columns)
-    SetMaskingPolicy(String, Vec<String>),
+    SetMaskingPolicy(String, Vec<String>, bool),
     // column name
     UnsetMaskingPolicy(String),
     // modify column table field, field comments

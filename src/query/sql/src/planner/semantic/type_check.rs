@@ -509,8 +509,15 @@ pub struct TypeChecker<'a, A> {
     // This prevents infinite recursion when a masking policy references the masked column itself.
     in_masking_policy: bool,
     apply_masking_policy: bool,
+    /// Only the ScalarBinder for a SELECT WHERE enables this. New binders used by
+    /// subqueries, JOIN, HAVING, and policy expressions do not inherit it.
+    masking_where_aliases: Option<&'a [(String, Expr)]>,
+    resolving_masking_where_aliases: Vec<String>,
     forbid_virtual_computed_column: bool,
 }
+
+#[cfg(test)]
+mod masking_where_tests;
 
 #[cfg(test)]
 mod diagnostic_tests {

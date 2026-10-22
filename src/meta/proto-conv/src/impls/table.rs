@@ -241,6 +241,10 @@ impl FromToProto for mt::TableMeta {
                 .into_iter()
                 .map(|(k, v)| Ok((k, SecurityPolicyColumnMap::from_pb(v)?)))
                 .collect::<Result<BTreeMap<_, _>, _>>()?,
+            masking_where_use_unmasked_value: p
+                .masking_where_use_unmasked_value
+                .into_iter()
+                .collect(),
             indexes,
             virtual_schema,
             constraints,
@@ -265,9 +269,11 @@ impl FromToProto for mt::TableMeta {
 
         pb::TableMeta {
             ver: VER,
-            // Older queries ignore partition identity and may prune with statistics
-            // from a dropped definition. Do not let them open versioned tables.
-            min_reader_ver: if self.partition_key_id.is_some() || self.partition_key_seq != 0 {
+            // Older queries ignore WHERE authorization and partition identity.
+            // Reject these tables rather than silently executing different semantics.
+            min_reader_ver: if !self.masking_where_use_unmasked_value.is_empty() {
+                190
+            } else if self.partition_key_id.is_some() || self.partition_key_seq != 0 {
                 188
             } else {
                 MIN_READER_VER
@@ -305,6 +311,11 @@ impl FromToProto for mt::TableMeta {
                 .iter()
                 .map(|(k, v)| (*k, v.to_pb()))
                 .collect::<BTreeMap<_, _>>(),
+            masking_where_use_unmasked_value: self
+                .masking_where_use_unmasked_value
+                .iter()
+                .copied()
+                .collect(),
             indexes,
             virtual_schema: self.virtual_schema.to_pb_opt(),
             constraints,

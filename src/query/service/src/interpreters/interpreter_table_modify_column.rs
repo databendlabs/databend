@@ -133,6 +133,7 @@ impl ModifyTableColumnInterpreter {
         table: Arc<dyn Table>,
         using_columns: &[String],
         mask_name: String,
+        where_use_unmasked_value: bool,
     ) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), DataMask)?;
@@ -189,16 +190,30 @@ impl ModifyTableColumnInterpreter {
             )));
         }
 
+        let target_column_id = schema
+            .column_with_name(&using_columns[0])
+            .ok_or_else(|| {
+                ErrorCode::UnknownColumn(format!("Cannot find column {}", using_columns[0]))
+            })?
+            .1
+            .column_id;
         let mut columns_ids = Vec::with_capacity(using_columns.len());
         for (column, policy_data_type) in using_columns.iter().zip(policy_data_types) {
             let (_, data_field) = schema.column_with_name(column).ok_or_else(|| {
                 ErrorCode::UnknownColumn(format!("Cannot find column {}", column))
             })?;
 
-            if table_info
-                .meta
-                .is_column_reference_policy(&data_field.column_id)
-            {
+            let referenced_by_other_policy = (data_field.column_id != target_column_id
+                && table_info
+                    .meta
+                    .column_mask_policy_columns_ids
+                    .contains_key(&data_field.column_id))
+                || table_info
+                    .meta
+                    .row_access_policy_columns_ids
+                    .as_ref()
+                    .is_some_and(|policy| policy.columns_ids.contains(&data_field.column_id));
+            if referenced_by_other_policy {
                 return Err(ErrorCode::AlterTableError(format!(
                     "Column '{}' is already attached to a security policy. A column cannot be attached to multiple security policies",
                     data_field.name
@@ -223,6 +238,7 @@ impl ModifyTableColumnInterpreter {
             seq: MatchSeq::Exact(table_info.ident.seq),
             table_id,
             action: SetSecurityPolicyAction::Set(*policy_id, columns_ids),
+            where_use_unmasked_value,
         };
 
         let _resp = catalog.set_table_column_mask_policy(req).await?;
@@ -818,16 +834,17 @@ impl ModifyTableColumnInterpreter {
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
-        if let Some(policy) = table_info
+        if table_info
             .meta
             .column_mask_policy_columns_ids
-            .get(&column_id)
+            .contains_key(&column_id)
         {
             let req = SetTableColumnMaskPolicyReq {
                 tenant: self.ctx.get_tenant(),
                 seq: MatchSeq::Exact(table_version),
                 table_id,
-                action: SetSecurityPolicyAction::Unset(policy.policy_id),
+                action: SetSecurityPolicyAction::Unset(u64::from(column_id)),
+                where_use_unmasked_value: false,
             };
 
             let _resp = catalog.set_table_column_mask_policy(req).await?;
@@ -932,9 +949,19 @@ impl Interpreter for ModifyTableColumnInterpreter {
             // NOTICE: if we support modify column data type,
             // need to check whether this column is referenced by other computed columns.
             let mut build_res = match &self.plan.action {
-                ModifyColumnAction::SetMaskingPolicy(mask_name, using_columns) => {
-                    self.do_set_data_mask_policy(catalog, table, using_columns, mask_name.clone())
-                        .await?
+                ModifyColumnAction::SetMaskingPolicy(
+                    mask_name,
+                    using_columns,
+                    where_use_unmasked_value,
+                ) => {
+                    self.do_set_data_mask_policy(
+                        catalog,
+                        table,
+                        using_columns,
+                        mask_name.clone(),
+                        *where_use_unmasked_value,
+                    )
+                    .await?
                 }
                 ModifyColumnAction::UnsetMaskingPolicy(column) => {
                     self.do_unset_data_mask_policy(catalog, table, column.to_string())
