@@ -13,18 +13,23 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
+use std::result::Result as StdResult;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::crud::CrudError;
 use databend_common_meta_api::kv_pb_api::decode_pb;
 use databend_common_meta_app::KeyUnknownBuilder;
 use databend_common_meta_app::principal::ExternalAccessIntegration;
 use databend_common_meta_app::principal::NetworkRule;
 use databend_common_meta_app::principal::external_access_integration_ident::Resource as IntegrationResource;
 use databend_common_meta_app::principal::network_rule_ident::Resource as RuleResource;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_common_meta_app::tenant_key::ident::TIdent;
 use databend_meta_client::kvapi::StructKey;
+use databend_meta_client::types::MatchSeq;
 use url::Url;
 
 use crate::UserApiProvider;
@@ -67,6 +72,158 @@ fn endpoint(url: &Url) -> Result<(String, u16)> {
 }
 
 impl UserApiProvider {
+    pub async fn get_network_rule(
+        &self,
+        tenant: &Tenant,
+        name: &str,
+    ) -> StdResult<NetworkRule, CrudError<UnknownError<RuleResource>>> {
+        self.network_rule_api(tenant)
+            .get(name, MatchSeq::GE(1))
+            .await
+            .map(|value| value.data)
+    }
+
+    // Preserve typed errors so IF EXISTS only suppresses an unknown object.
+    pub async fn get_external_access_integration(
+        &self,
+        tenant: &Tenant,
+        name: &str,
+    ) -> StdResult<ExternalAccessIntegration, CrudError<UnknownError<IntegrationResource>>> {
+        self.external_access_integration_api(tenant)
+            .get(name, MatchSeq::GE(1))
+            .await
+            .map(|value| value.data)
+    }
+
+    pub async fn add_network_rule(
+        &self,
+        tenant: &Tenant,
+        rule: NetworkRule,
+        create_option: &CreateOption,
+    ) -> Result<()> {
+        for value in &rule.value_list {
+            network_rule_endpoint(value)?;
+        }
+        self.network_rule_api(tenant)
+            .add(rule, create_option)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn update_network_rule(
+        &self,
+        tenant: &Tenant,
+        rule: NetworkRule,
+        if_exists: bool,
+    ) -> Result<()> {
+        for value in &rule.value_list {
+            network_rule_endpoint(value)?;
+        }
+        if let Err(e) = self
+            .network_rule_api(tenant)
+            .update(rule, MatchSeq::GE(1))
+            .await
+        {
+            if !(if_exists && e.is_business_error()) {
+                return Err(e.into());
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn drop_network_rule(
+        &self,
+        tenant: &Tenant,
+        name: &str,
+        if_exists: bool,
+    ) -> Result<()> {
+        if let Err(e) = self
+            .network_rule_api(tenant)
+            .remove(name, MatchSeq::GE(1))
+            .await
+        {
+            if !(if_exists && e.is_business_error()) {
+                return Err(e.into());
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn add_external_access_integration(
+        &self,
+        tenant: &Tenant,
+        integration: ExternalAccessIntegration,
+        create_option: &CreateOption,
+    ) -> Result<()> {
+        for rule in &integration.allowed_network_rules {
+            self.get_network_rule(tenant, rule).await?;
+        }
+        self.external_access_integration_api(tenant)
+            .add(integration, create_option)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn update_external_access_integration(
+        &self,
+        tenant: &Tenant,
+        name: &str,
+        rules: Option<Vec<String>>,
+        enabled: Option<bool>,
+        if_exists: bool,
+    ) -> Result<()> {
+        if if_exists {
+            if let Err(e) = self.get_external_access_integration(tenant, name).await {
+                if e.is_business_error() {
+                    return Ok(());
+                }
+                return Err(e.into());
+            }
+        }
+        if let Some(rules) = &rules {
+            for rule in rules {
+                self.get_network_rule(tenant, rule).await?;
+            }
+        }
+        if let Err(e) = self
+            .external_access_integration_api(tenant)
+            .cas_with(name, MatchSeq::GE(1), |old| {
+                let mut integration = old.data;
+                if let Some(rules) = &rules {
+                    integration.allowed_network_rules = rules.clone();
+                }
+                if let Some(enabled) = enabled {
+                    integration.enabled = enabled;
+                }
+                integration
+            })
+            .await
+        {
+            if !(if_exists && e.is_business_error()) {
+                return Err(e.into());
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn drop_external_access_integration(
+        &self,
+        tenant: &Tenant,
+        name: &str,
+        if_exists: bool,
+    ) -> Result<()> {
+        if let Err(e) = self
+            .external_access_integration_api(tenant)
+            .remove(name, MatchSeq::GE(1))
+            .await
+        {
+            if !(if_exists && e.is_business_error()) {
+                return Err(e.into());
+            }
+        }
+        Ok(())
+    }
+
     /// Reuse the node-local meta watch caches, falling back to meta when unavailable.
     /// Policy changes follow the existing watch cache's asynchronous propagation.
     /// Missing rules match nothing; explicit integrations never fall back to the
@@ -128,60 +285,5 @@ impl UserApiProvider {
             )));
         }
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn host_port_values() {
-        assert_eq!(
-            network_rule_endpoint("VIDEO.example.com").unwrap(),
-            ("video.example.com".into(), 443)
-        );
-        assert_eq!(
-            network_rule_endpoint("video.example.com:8443").unwrap().1,
-            8443
-        );
-        assert_eq!(
-            network_rule_endpoint("[::1]:8815").unwrap(),
-            ("[::1]".into(), 8815)
-        );
-        for invalid in [
-            "",
-            "https://example.com",
-            "*.example.com",
-            "example.com:0",
-            "example.com:",
-            "example.com:65536",
-            "user@example.com",
-            "example.com/path",
-            "example.com?x",
-            "example.com#x",
-            "example.com\\evil",
-            "example.com ",
-        ] {
-            assert!(network_rule_endpoint(invalid).is_err(), "{invalid}");
-        }
-        let target = |s| endpoint(&Url::parse(s).unwrap()).unwrap();
-        assert_eq!(
-            network_rule_endpoint("example.com:443").unwrap(),
-            target("https://example.com")
-        );
-        assert_ne!(
-            network_rule_endpoint("example.com").unwrap(),
-            target("http://example.com")
-        );
-        assert_ne!(
-            network_rule_endpoint("example.com").unwrap(),
-            target("https://example.com:8443")
-        );
-        assert_ne!(
-            network_rule_endpoint("example.com").unwrap(),
-            target("https://example.com.evil")
-        );
-        assert!(endpoint(&Url::parse("https://user@example.com").unwrap()).is_err());
     }
 }

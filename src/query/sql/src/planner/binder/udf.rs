@@ -27,12 +27,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::decimal::ARROW_UDF_DECIMAL_MAX_PRECISION;
 use databend_common_expression::types::decimal::ARROW_UDF_DECIMAL_MAX_SCALE;
-use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_functions::is_builtin_function;
-use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::ScalarUDF;
 use databend_common_meta_app::principal::UDAFScript;
@@ -42,7 +39,6 @@ use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UDTF;
 use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
-use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_users::UserApiProvider;
 
 use crate::BindContext;
@@ -58,14 +54,6 @@ use crate::plans::CreateUDFPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::Plan;
 use crate::plans::UDFLanguage;
-
-fn table_type_to_data_type(ty: &TableDataType) -> DataType {
-    DataType::from(ty)
-}
-
-fn table_types_to_data_types(tys: &[TableDataType]) -> Vec<DataType> {
-    tys.iter().map(table_type_to_data_type).collect()
-}
 
 fn validate_wasm_udf_type(data_type: &TableDataType) -> Result<()> {
     match data_type {
@@ -168,21 +156,6 @@ impl Binder {
                         address,
                         &UdfValidationConfig::from_inner_config(GlobalConfig::instance().as_ref()),
                     )?;
-                    self.ctx
-                        .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super, true)
-                        .await?;
-                    for name in &integrations {
-                        self.ctx
-                            .validate_privilege(
-                                &GrantObject::Integration(name.clone()),
-                                UserPrivilegeType::Usage,
-                                false,
-                            )
-                            .await?;
-                    }
-                    UserApiProvider::instance()
-                        .validate_external_access(&self.ctx.get_tenant(), address, &integrations)
-                        .await?;
                 }
 
                 let mut arg_datatypes = Vec::with_capacity(arg_types.len());
@@ -209,54 +182,26 @@ impl Binder {
                 }
                 let return_type = resolve_type_name_udf(return_type)?;
 
-                let connect_timeout = self
-                    .ctx
-                    .get_settings()
-                    .get_external_server_connect_timeout_secs()?;
-                let request_timeout = self
-                    .ctx
-                    .get_settings()
-                    .get_external_server_request_timeout_secs()?;
-                let batch_rows =
-                    self.ctx
-                        .get_settings()
-                        .get_external_server_request_batch_rows()? as usize;
-
-                let endpoint = UDFFlightClient::build_endpoint(
-                    address,
-                    connect_timeout,
-                    request_timeout,
-                    &self.ctx.get_version().udf_client_user_agent(),
-                )?;
-
-                let mut client =
-                    UDFFlightClient::connect(handler, endpoint, connect_timeout, batch_rows)
-                        .await?
-                        .with_tenant(self.ctx.get_tenant().tenant_name())?
-                        .with_func_name(&name)?
-                        .with_handler_name(handler)?
-                        .with_query_id(&self.ctx.get_id())?
-                        .with_headers(headers.iter())?;
-                let schema_arg_types = table_types_to_data_types(&arg_datatypes);
-                let schema_return_type = table_type_to_data_type(&return_type);
-                client
-                    .check_schema(handler, &schema_arg_types, &schema_return_type)
-                    .await?;
-
+                let server = UDFServer {
+                    external_access_integrations: integrations,
+                    address: address.clone(),
+                    arg_names,
+                    arg_types: arg_datatypes,
+                    return_type,
+                    handler: handler.clone(),
+                    headers: headers.clone(),
+                    language: language.clone(),
+                    immutable: *immutable,
+                };
+                // Keep legacy schema validation here; policy-bound servers are
+                // verified by the interpreter after SUPER/ALTER and USAGE checks.
+                if server.external_access_integrations.is_empty() {
+                    UDFValidator::verify_server(self.ctx.as_ref(), &name, &server).await?;
+                }
                 Ok(UserDefinedFunction {
                     name,
                     description,
-                    definition: PlanUDFDefinition::UDFServer(UDFServer {
-                        external_access_integrations: integrations,
-                        address: address.clone(),
-                        arg_names,
-                        arg_types: arg_datatypes,
-                        return_type,
-                        handler: handler.clone(),
-                        headers: headers.clone(),
-                        language: language.clone(),
-                        immutable: *immutable,
-                    }),
+                    definition: PlanUDFDefinition::UDFServer(server),
                     created_on: Utc::now(),
                     update_on: Utc::now(),
                 })

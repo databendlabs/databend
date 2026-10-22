@@ -19,13 +19,18 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Lambda;
 use databend_common_ast::ast::LambdaArgument;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
+use databend_common_expression::types::DataType;
+use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::is_builtin_function;
+use databend_common_meta_app::principal::UDFServer;
+use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use unicase::Ascii;
@@ -191,6 +196,56 @@ impl UDFValidator {
             ));
         }
         Ok(())
+    }
+
+    /// For integration-bound UDFs, call only after the interpreter access check.
+    pub async fn verify_server(
+        ctx: &dyn TableContext,
+        name: &str,
+        server: &UDFServer,
+    ) -> Result<()> {
+        if server.external_access_integrations.is_empty() {
+            Self::is_udf_server_allowed(&server.address)?;
+        } else {
+            Self::is_udf_server_policy_allowed(&server.address)?;
+            UserApiProvider::instance()
+                .validate_external_access(
+                    &ctx.get_tenant(),
+                    &server.address,
+                    &server.external_access_integrations,
+                )
+                .await?;
+        }
+        let settings = ctx.get_settings();
+        let connect_timeout = settings.get_external_server_connect_timeout_secs()?;
+        let request_timeout = settings.get_external_server_request_timeout_secs()?;
+        let batch_rows = settings.get_external_server_request_batch_rows()? as usize;
+        let endpoint = UDFFlightClient::build_endpoint(
+            &server.address,
+            connect_timeout,
+            request_timeout,
+            &ctx.get_version().udf_client_user_agent(),
+        )?;
+        let mut client =
+            UDFFlightClient::connect(&server.handler, endpoint, connect_timeout, batch_rows)
+                .await?
+                .with_tenant(ctx.get_tenant().tenant_name())?
+                .with_func_name(name)?
+                .with_handler_name(&server.handler)?
+                .with_query_id(&ctx.get_id())?
+                .with_headers(server.headers.iter())?;
+        let arg_types = server
+            .arg_types
+            .iter()
+            .map(DataType::from)
+            .collect::<Vec<_>>();
+        client
+            .check_schema(
+                &server.handler,
+                &arg_types,
+                &DataType::from(&server.return_type),
+            )
+            .await
     }
 
     pub fn is_udf_server_allowed(address: &str) -> Result<()> {

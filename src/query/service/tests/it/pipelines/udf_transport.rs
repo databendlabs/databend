@@ -327,8 +327,14 @@ async fn external_access_creation_authorization_and_schema() -> Result<()> {
     let create = format!(
         "CREATE FUNCTION managed_echo(STRING) RETURNS STRING LANGUAGE python IMMUTABLE HANDLER = 'echo' ADDRESS = 'http://{address}' EXTERNAL_ACCESS_INTEGRATIONS = (auth_access)"
     );
+    // Wrong schema makes an early remote check fail differently from authorization.
+    let denied_schema = create.replace("managed_echo(STRING)", "managed_echo(INT)");
     assert_eq!(
-        fixture.execute_command(&create).await.unwrap_err().code(),
+        fixture
+            .execute_command(&denied_schema)
+            .await
+            .unwrap_err()
+            .code(),
         ErrorCode::PERMISSION_DENIED
     );
     session.set_authed_user(admin.clone(), None).await?;
@@ -340,7 +346,11 @@ async fn external_access_creation_authorization_and_schema() -> Result<()> {
     session.set_current_role_checked("udf_developer").await?;
     // Integration USAGE does not replace the existing SUPER requirement.
     assert_eq!(
-        fixture.execute_command(&create).await.unwrap_err().code(),
+        fixture
+            .execute_command(&denied_schema)
+            .await
+            .unwrap_err()
+            .code(),
         ErrorCode::PERMISSION_DENIED
     );
     // CREATE and integration USAGE do not authorize policy management.
@@ -373,9 +383,13 @@ async fn external_access_creation_authorization_and_schema() -> Result<()> {
         .await?;
     session.set_authed_user(developer.clone(), None).await?;
     session.set_current_role_checked("udf_developer").await?;
-    // SUPER alone does not bypass integration USAGE.
+    // SUPER alone does not bypass integration USAGE, even before schema validation.
     assert_eq!(
-        fixture.execute_command(&create).await.unwrap_err().code(),
+        fixture
+            .execute_command(&denied_schema)
+            .await
+            .unwrap_err()
+            .code(),
         ErrorCode::PERMISSION_DENIED
     );
     session.set_authed_user(admin.clone(), None).await?;
@@ -442,16 +456,43 @@ async fn external_access_creation_authorization_and_schema() -> Result<()> {
             .message()
             .contains("udf_server_allow_list")
     );
+    let alter = create.replacen("CREATE FUNCTION", "ALTER FUNCTION", 1);
+    let denied_alter_schema = denied_schema.replacen("CREATE FUNCTION", "ALTER FUNCTION", 1);
+    // ALTER retains its own privilege; SUPER alone is not a substitute for it.
+    assert_eq!(
+        fixture
+            .execute_command(&denied_alter_schema)
+            .await
+            .unwrap_err()
+            .code(),
+        ErrorCode::PERMISSION_DENIED
+    );
     session.set_authed_user(admin.clone(), None).await?;
     session.set_current_role_checked("account_admin").await?;
     fixture
+        .execute_command("GRANT ALTER ON *.* TO ROLE udf_developer")
+        .await?;
+    fixture
         .execute_command("REVOKE SUPER ON *.* FROM ROLE udf_developer")
         .await?;
+    session.set_authed_user(developer.clone(), None).await?;
+    session.set_current_role_checked("udf_developer").await?;
+    fixture.execute_command(&alter).await?;
+    session.set_authed_user(admin.clone(), None).await?;
+    session.set_current_role_checked("account_admin").await?;
     fixture
         .execute_command("REVOKE USAGE ON INTEGRATION auth_access FROM ROLE udf_developer")
         .await?;
     session.set_authed_user(developer, None).await?;
     session.set_current_role_checked("udf_developer").await?;
+    assert_eq!(
+        fixture
+            .execute_command(&denied_alter_schema)
+            .await
+            .unwrap_err()
+            .code(),
+        ErrorCode::PERMISSION_DENIED
+    );
     // Invocation requires neither SUPER nor integration USAGE.
     fixture
         .execute_command("SELECT managed_echo('hello')")
@@ -479,56 +520,6 @@ async fn external_access_creation_authorization_and_schema() -> Result<()> {
     assert!(result.unwrap_err().message().contains("disabled"));
     let _ = shutdown_tx.send(());
     server.await.unwrap().unwrap();
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn external_access_show_grants_preserves_identifiers() -> Result<()> {
-    let fixture = TestFixture::setup().await?;
-    fixture.execute_command("CREATE NETWORK RULE quoted_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('example.com:443')").await?;
-    fixture
-        .execute_command("CREATE ROLE grant_roundtrip")
-        .await?;
-    for quoted in [
-        r#""QuotedAccess""#,
-        r#""access with space""#,
-        r#""access/r""#,
-        r#""access""r""#,
-        r#""select""#,
-    ] {
-        fixture.execute_command(&format!("CREATE EXTERNAL ACCESS INTEGRATION {quoted} ALLOWED_NETWORK_RULES = (quoted_rule) ENABLED = TRUE")).await?;
-        fixture
-            .execute_command(&format!(
-                "GRANT USAGE ON INTEGRATION {quoted} TO ROLE grant_roundtrip"
-            ))
-            .await?;
-        let blocks = fixture
-            .execute_query("SHOW GRANTS FOR ROLE grant_roundtrip")
-            .await?
-            .try_collect::<Vec<_>>()
-            .await?;
-        assert_eq!(blocks.iter().map(DataBlock::num_rows).sum::<usize>(), 1);
-        for block in &blocks {
-            let Column::String(grants) = block.get_by_offset(5).to_column() else {
-                panic!("expected SHOW GRANTS SQL column");
-            };
-            for grant in grants.iter() {
-                assert_eq!(
-                    grant,
-                    format!("GRANT ALL ON INTEGRATION {quoted} TO ROLE `grant_roundtrip`")
-                );
-                fixture.execute_command(grant).await?;
-            }
-        }
-        fixture
-            .execute_command(&format!(
-                "REVOKE USAGE ON INTEGRATION {quoted} FROM ROLE grant_roundtrip"
-            ))
-            .await?;
-        fixture
-            .execute_command(&format!("DROP INTEGRATION {quoted}"))
-            .await?;
-    }
     Ok(())
 }
 

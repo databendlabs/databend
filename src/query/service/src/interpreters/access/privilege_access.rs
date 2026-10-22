@@ -1863,13 +1863,22 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::CreateUDF(plan) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, true, false)
+                    .await?;
                 if let UDFDefinition::UDFServer(server) = &plan.udf.definition {
                     for name in &server.external_access_integrations {
                         self.ctx.validate_privilege(&GrantObject::Integration(name.clone()), UserPrivilegeType::Usage, false).await?;
                     }
                 }
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, true, false)
+            }
+            Plan::AlterUDF(plan) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false, false)
                     .await?;
+                if let UDFDefinition::UDFServer(server) = &plan.udf.definition {
+                    for name in &server.external_access_integrations {
+                        self.ctx.validate_privilege(&GrantObject::Integration(name.clone()), UserPrivilegeType::Usage, false).await?;
+                    }
+                }
             }
             Plan::DropUDF(plan) => {
                 let udf_name = &plan.udf;
@@ -2486,7 +2495,6 @@ impl AccessChecker for PrivilegeAccess {
 
             Plan::RenameDatabase(_)
             | Plan::RevertTable(_)
-            | Plan::AlterUDF(_)
             | Plan::AlterRole(_)
             | Plan::AlterUser(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false, false)
@@ -2576,10 +2584,6 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_tag_object_access(&plan.object, &tenant)
                     .await?;
             }
-            Plan::ExternalAccess(_) => {
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
-                    .await?;
-            }
             Plan::ShowCreateCatalog(_)
             | Plan::CreateCatalog(_)
             | Plan::DropCatalog(_)
@@ -2613,6 +2617,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::CreateWorker(_)
             | Plan::AlterWorker(_)
             | Plan::DropWorker(_)
+            | Plan::ExternalAccess(_)
             | Plan::ShowWorkers => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;

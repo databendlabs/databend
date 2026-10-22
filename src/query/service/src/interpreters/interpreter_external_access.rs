@@ -20,8 +20,6 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::ExternalAccessIntegration;
 use databend_common_meta_app::principal::NetworkRule;
 use databend_common_users::UserApiProvider;
-use databend_common_users::network_rule_endpoint;
-use databend_meta_client::types::MatchSeq;
 use futures::future::BoxFuture;
 
 use crate::interpreters::Interpreter;
@@ -54,8 +52,6 @@ impl Interpreter for ExternalAccessInterpreter {
             use ExternalAccessStmt::*;
             let tenant = self.ctx.get_tenant();
             let provider = UserApiProvider::instance();
-            let rules_api = provider.network_rule_api(&tenant);
-            let integrations_api = provider.external_access_integration_api(&tenant);
             match &self.stmt {
                 CreateNetworkRule {
                     name,
@@ -71,11 +67,9 @@ impl Interpreter for ExternalAccessInterpreter {
                             "Only TYPE = HOST_PORT and MODE = EGRESS are supported",
                         ));
                     }
-                    for value in values {
-                        network_rule_endpoint(value)?;
-                    }
-                    rules_api
-                        .add(
+                    provider
+                        .add_network_rule(
+                            &tenant,
                             NetworkRule {
                                 name: name.name.clone(),
                                 value_list: values.clone(),
@@ -89,30 +83,21 @@ impl Interpreter for ExternalAccessInterpreter {
                     if_exists,
                     values,
                 } => {
-                    for value in values {
-                        network_rule_endpoint(value)?;
-                    }
-                    if let Err(e) = rules_api
-                        .update(
+                    provider
+                        .update_network_rule(
+                            &tenant,
                             NetworkRule {
                                 name: name.name.clone(),
                                 value_list: values.clone(),
                             },
-                            MatchSeq::GE(1),
+                            *if_exists,
                         )
-                        .await
-                    {
-                        if !(*if_exists && e.is_business_error()) {
-                            return Err(e.into());
-                        }
-                    }
+                        .await?;
                 }
                 DropNetworkRule { name, if_exists } => {
-                    if let Err(e) = rules_api.remove(&name.name, MatchSeq::GE(1)).await {
-                        if !(*if_exists && e.is_business_error()) {
-                            return Err(e.into());
-                        }
-                    }
+                    provider
+                        .drop_network_rule(&tenant, &name.name, *if_exists)
+                        .await?;
                 }
                 CreateIntegration {
                     name,
@@ -120,11 +105,9 @@ impl Interpreter for ExternalAccessInterpreter {
                     rules,
                     enabled,
                 } => {
-                    for rule in rules {
-                        rules_api.get(&rule.name, MatchSeq::GE(1)).await?;
-                    }
-                    integrations_api
-                        .add(
+                    provider
+                        .add_external_access_integration(
+                            &tenant,
                             ExternalAccessIntegration {
                                 name: name.name.clone(),
                                 allowed_network_rules: rules
@@ -143,44 +126,22 @@ impl Interpreter for ExternalAccessInterpreter {
                     rules,
                     enabled,
                 } => {
-                    if *if_exists {
-                        if let Err(e) = integrations_api.get(&name.name, MatchSeq::GE(1)).await {
-                            if e.is_business_error() {
-                                return Ok(PipelineBuildResult::create());
-                            }
-                            return Err(e.into());
-                        }
-                    }
-                    if let Some(rules) = rules {
-                        for rule in rules {
-                            rules_api.get(&rule.name, MatchSeq::GE(1)).await?;
-                        }
-                    }
-                    if let Err(e) = integrations_api
-                        .cas_with(&name.name, MatchSeq::GE(1), |old| {
-                            let mut integration = old.data;
-                            if let Some(rules) = rules {
-                                integration.allowed_network_rules =
-                                    rules.iter().map(|r| r.name.clone()).collect();
-                            }
-                            if let Some(enabled) = enabled {
-                                integration.enabled = *enabled;
-                            }
-                            integration
-                        })
-                        .await
-                    {
-                        if !(*if_exists && e.is_business_error()) {
-                            return Err(e.into());
-                        }
-                    }
+                    provider
+                        .update_external_access_integration(
+                            &tenant,
+                            &name.name,
+                            rules
+                                .as_ref()
+                                .map(|rules| rules.iter().map(|r| r.name.clone()).collect()),
+                            *enabled,
+                            *if_exists,
+                        )
+                        .await?;
                 }
                 DropIntegration { name, if_exists } => {
-                    if let Err(e) = integrations_api.remove(&name.name, MatchSeq::GE(1)).await {
-                        if !(*if_exists && e.is_business_error()) {
-                            return Err(e.into());
-                        }
-                    }
+                    provider
+                        .drop_external_access_integration(&tenant, &name.name, *if_exists)
+                        .await?;
                 }
             }
             Ok(PipelineBuildResult::create())
