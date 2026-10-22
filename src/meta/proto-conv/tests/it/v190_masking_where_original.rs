@@ -38,24 +38,27 @@ fn table() -> TableMeta {
 fn test_masking_where_original_roundtrip_and_reader_version() -> anyhow::Result<()> {
     let mut meta = table();
     let pb = meta.to_pb();
-    assert_eq!(pb.min_reader_ver, 190);
+    assert_eq!(pb.ver, 190);
     assert_eq!(pb.masking_where_use_unmasked_value, vec![0]);
     common::test_pb_from_to("v190_masking_where_original", meta.clone())?;
     assert_eq!(TableMeta::from_pb(pb.clone())?, meta);
 
-    // The previous reader rejects the *outer* message before it can ignore field 43.
-    assert!(189 < pb.min_reader_ver);
-    let mut future = pb;
-    future.min_reader_ver = databend_common_proto_conv::VER + 1;
-    assert!(TableMeta::from_pb(future).is_err());
+    // WHERE authorization must not lock older readers out of the table. An older
+    // reader ignores field 43 and keeps masked WHERE semantics instead.
+    assert_eq!(pb.min_reader_ver, MIN_READER_VER);
+    let mut without_field_43 = pb;
+    without_field_43.masking_where_use_unmasked_value.clear();
+    let mut expected = meta.clone();
+    expected.masking_where_use_unmasked_value.clear();
+    assert_eq!(TableMeta::from_pb(without_field_43)?, expected);
 
-    // Old tables and unrelated writes retain the old compatibility floor.
-    meta.masking_where_use_unmasked_value.clear();
-    assert_eq!(meta.to_pb().min_reader_ver, MIN_READER_VER);
+    // Only partition identity raises the floor, with or without the authorization.
     meta.partition_key_seq = 7;
     assert_eq!(meta.to_pb().min_reader_ver, 188);
+    meta.masking_where_use_unmasked_value.clear();
+    assert_eq!(meta.to_pb().min_reader_ver, 188);
+    meta.partition_key_seq = 0;
     meta.masking_where_use_unmasked_value.insert(0);
-    assert_eq!(meta.to_pb().min_reader_ver, 190);
     meta.comment = "unrelated metadata update".into();
     assert_eq!(TableMeta::from_pb(meta.to_pb())?, meta);
     Ok(())
@@ -69,12 +72,12 @@ fn test_decode_v190_masking_where_original() -> anyhow::Result<()> {
         10, 7, 160, 6, 188, 1, 168, 6, 24, 64, 0, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
         56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49,
         49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 186, 1, 7, 160, 6, 188,
-        1, 168, 6, 24, 160, 6, 190, 1, 168, 6, 190, 1, 162, 2, 16, 8, 0, 18, 12, 160, 6, 190, 1,
-        168, 6, 24, 8, 7, 18, 1, 0, 218, 2, 1, 0,
+        1, 168, 6, 24, 160, 6, 190, 1, 168, 6, 24, 162, 2, 16, 8, 0, 18, 12, 160, 6, 190, 1, 168,
+        6, 24, 8, 7, 18, 1, 0, 218, 2, 1, 0,
     ];
     let pb = pb::TableMeta::decode(bytes.as_slice())?;
     assert_eq!(pb.ver, 190);
-    assert_eq!(pb.min_reader_ver, 190);
+    assert_eq!(pb.min_reader_ver, MIN_READER_VER);
     assert_eq!(TableMeta::from_pb(pb)?, table());
     Ok(())
 }

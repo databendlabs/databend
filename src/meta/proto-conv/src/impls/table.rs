@@ -269,11 +269,14 @@ impl FromToProto for mt::TableMeta {
 
         pb::TableMeta {
             ver: VER,
-            // Older queries ignore WHERE authorization and partition identity.
-            // Reject these tables rather than silently executing different semantics.
-            min_reader_ver: if !self.masking_where_use_unmasked_value.is_empty() {
-                190
-            } else if self.partition_key_id.is_some() || self.partition_key_seq != 0 {
+            // Older queries ignore partition identity and may prune with statistics
+            // from a dropped definition. Do not let them open versioned tables.
+            //
+            // `masking_where_use_unmasked_value` intentionally does not raise the
+            // floor: an older reader ignores field 43 and falls back to masked WHERE
+            // semantics, which never discloses more than the new behavior. A rewrite
+            // by such a reader drops the authorization until it is SET again.
+            min_reader_ver: if self.partition_key_id.is_some() || self.partition_key_seq != 0 {
                 188
             } else {
                 MIN_READER_VER
