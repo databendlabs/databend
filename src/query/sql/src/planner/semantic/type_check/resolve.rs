@@ -84,6 +84,8 @@ where A: TypeCheckAdapter
             in_window_function: false,
             in_masking_policy: false,
             apply_masking_policy: true,
+            masking_where_aliases: None,
+            resolving_masking_where_aliases: Vec::new(),
             forbid_virtual_computed_column: false,
         })
     }
@@ -91,6 +93,10 @@ where A: TypeCheckAdapter
     /// Only maintenance bindings opt out; normal SELECT and DML use masking policies.
     pub(crate) fn set_apply_masking_policy(&mut self, apply: bool) {
         self.apply_masking_policy = apply;
+    }
+
+    pub(crate) fn set_masking_where_aliases(&mut self, aliases: &'a [(String, Expr)]) {
+        self.masking_where_aliases = Some(aliases);
     }
 
     pub(crate) fn set_forbid_virtual_computed_column(&mut self, forbid: bool) {

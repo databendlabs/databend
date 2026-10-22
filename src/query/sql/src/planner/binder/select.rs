@@ -402,6 +402,42 @@ impl Binder {
         expr: &Expr,
         child: SExpr,
     ) -> Result<(SExpr, ScalarExpr)> {
+        self.bind_where_impl(bind_context, aliases, None, expr, child)
+    }
+
+    pub(crate) fn bind_select_where(
+        &mut self,
+        bind_context: &mut BindContext,
+        aliases: &[(String, ScalarExpr)],
+        alias_exprs: impl Iterator<Item = (String, Expr)>,
+        expr: &Expr,
+        child: SExpr,
+    ) -> Result<(SExpr, ScalarExpr)> {
+        let has_original_where = self.metadata.read().tables().iter().any(|table| {
+            !table
+                .table()
+                .get_table_info()
+                .meta
+                .masking_where_use_unmasked_value
+                .is_empty()
+        });
+        self.bind_where_impl(
+            bind_context,
+            aliases,
+            has_original_where.then(|| alias_exprs.collect()),
+            expr,
+            child,
+        )
+    }
+
+    fn bind_where_impl(
+        &mut self,
+        bind_context: &mut BindContext,
+        aliases: &[(String, ScalarExpr)],
+        alias_exprs: Option<Vec<(String, Expr)>>,
+        expr: &Expr,
+        child: SExpr,
+    ) -> Result<(SExpr, ScalarExpr)> {
         bind_context.with_expr_context(
             ExprContext::WhereClause,
             |bind_context| -> Result<(SExpr, ScalarExpr)> {
@@ -412,6 +448,9 @@ impl Binder {
                     self.metadata.clone(),
                     aliases,
                 );
+                if let Some(alias_exprs) = alias_exprs {
+                    scalar_binder.set_masking_where_aliases(alias_exprs);
+                }
                 let (scalar, _) = scalar_binder.bind(expr)?;
                 let f = |scalar: &ScalarExpr| {
                     scalar.is_aggregate() || matches!(scalar, ScalarExpr::WindowFunction(_))

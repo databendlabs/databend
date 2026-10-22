@@ -1564,7 +1564,12 @@ impl Binder {
             AlterTableAction::ModifyColumn { action } => {
                 let mut lock_guard = None;
                 let action_in_plan = match action {
-                    ModifyColumnAction::SetMaskingPolicy(column, name, using_columns) => {
+                    ModifyColumnAction::SetMaskingPolicy(
+                        column,
+                        name,
+                        using_columns,
+                        where_use_unmasked_value,
+                    ) => {
                         let column = self.normalize_object_identifier(column);
                         if let Some(columns) = using_columns {
                             if columns.len() < 2 {
@@ -1591,11 +1596,17 @@ impl Binder {
                                 .iter()
                                 .map(|col| self.normalize_object_identifier(col))
                                 .collect();
-                            ModifyColumnActionInPlan::SetMaskingPolicy(name.to_string(), cols)
+                            ModifyColumnActionInPlan::SetMaskingPolicy(
+                                name.to_string(),
+                                cols,
+                                where_use_unmasked_value.unwrap_or(false),
+                            )
                         } else {
-                            ModifyColumnActionInPlan::SetMaskingPolicy(name.to_string(), vec![
-                                column,
-                            ])
+                            ModifyColumnActionInPlan::SetMaskingPolicy(
+                                name.to_string(),
+                                vec![column],
+                                where_use_unmasked_value.unwrap_or(false),
+                            )
                         }
                     }
                     ModifyColumnAction::UnsetMaskingPolicy(column) => {

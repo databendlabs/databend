@@ -1,0 +1,193 @@
+# This option is binding-level authorization, not a query/session bypass. A user
+# allowed to inspect raw predicates can infer sensitive values from row counts.
+# run-with-settings: enable_experimental_virtual_column=0
+
+statement ok
+SET enable_planner_cache = 1
+
+statement ok
+SET enable_query_result_cache = 0
+
+statement ok
+DROP TABLE IF EXISTS masking_raw_where
+
+statement ok
+DROP MASKING POLICY IF EXISTS masking_raw_where_policy
+
+statement ok
+CREATE MASKING POLICY masking_raw_where_policy AS (val VARIANT) RETURNS VARIANT -> object_delete(val, 'secret')
+
+statement ok
+CREATE TABLE masking_raw_where(id INT, data VARIANT, other VARIANT) CLUSTER BY (data['secret']::STRING) enable_virtual_column = true
+
+statement ok
+INSERT INTO masking_raw_where SELECT 1, parse_json('{"secret":"alice","public":1}'), parse_json('{"secret":"alice","public":1}')
+
+statement ok
+INSERT INTO masking_raw_where SELECT 2, parse_json('{"secret":"bob","public":2}'), parse_json('{"secret":"bob","public":2}')
+
+statement ok
+ALTER TABLE masking_raw_where MODIFY COLUMN data SET MASKING POLICY masking_raw_where_policy
+
+query I
+SELECT count(*) FROM masking_raw_where WHERE data['secret']::STRING = 'alice'
+----
+0
+
+statement ok
+ALTER TABLE masking_raw_where MODIFY COLUMN data SET MASKING POLICY masking_raw_where_policy OPTIONS (where_use_unmasked_value = true)
+
+query ITI
+SELECT id, data['secret']::STRING, data['public']::INT FROM masking_raw_where WHERE data['secret']::STRING = 'alice'
+----
+1 NULL 1
+
+# Physical maintenance must bind the original cluster key, not the masked value.
+statement ok
+ALTER TABLE masking_raw_where RECLUSTER FINAL
+
+# Repeated SQL must not reuse the pre-option plan.
+query I
+SELECT count(*) FROM masking_raw_where WHERE data['secret']::STRING = 'alice'
+----
+1
+
+query I
+SELECT count(*) FROM masking_raw_where WHERE data['secret']::STRING = 'alice'
+----
+1
+
+# SELECT aliases are rebound only within the current SELECT WHERE.
+query IT
+SELECT id, data['secret']::STRING AS email_alias FROM masking_raw_where WHERE email_alias = 'alice'
+----
+1 NULL
+
+query I
+SELECT count(*) FROM (SELECT data['secret']::STRING AS email FROM masking_raw_where) s WHERE email = 'alice'
+----
+0
+
+query I
+WITH s AS (SELECT data['secret']::STRING AS email FROM masking_raw_where) SELECT count(*) FROM s WHERE email = 'alice'
+----
+0
+
+# An outer WHERE must not make a scalar subquery's SELECT use raw values.
+query I
+SELECT count(*) FROM masking_raw_where WHERE (SELECT data['secret']::STRING FROM masking_raw_where WHERE id = 1) = 'alice'
+----
+0
+
+# Other expression contexts keep masked semantics.
+query I
+SELECT count(*) FROM masking_raw_where t JOIN (SELECT 'alice' AS email) s ON t.data['secret']::STRING = s.email
+----
+0
+
+query TI
+SELECT data['secret']::STRING, count(*) FROM masking_raw_where GROUP BY data['secret']::STRING
+----
+NULL 2
+
+query I
+SELECT count(*) FROM masking_raw_where HAVING max(data['secret']::STRING) = 'alice'
+----
+
+query I
+SELECT id FROM masking_raw_where ORDER BY data['secret']::STRING, id
+----
+1
+2
+
+# Reading the whole JSON still applies the policy.
+query I
+SELECT count(*) FROM (SELECT data FROM masking_raw_where WHERE data['secret']::STRING = 'alice') s WHERE to_string(data) LIKE '%alice%'
+----
+0
+
+# A quoted identifier matching an earlier SELECT expression resolves to its
+# output alias, not an internal raw virtual column. Both outputs must stay masked
+# even though WHERE uses the original sensitive path. Internal-column rejection
+# is covered separately by the masking_where_tests binder regression.
+query TT
+SELECT data['secret'], "data['secret']" FROM masking_raw_where WHERE data['secret']::STRING = 'alice'
+----
+NULL NULL
+
+# Each column has its own option even when both bind the same policy.
+statement ok
+ALTER TABLE masking_raw_where MODIFY COLUMN other SET MASKING POLICY masking_raw_where_policy
+
+query I
+SELECT count(*) FROM masking_raw_where WHERE other['secret']::STRING = 'alice'
+----
+0
+
+statement ok
+ALTER TABLE masking_raw_where MODIFY COLUMN data UNSET MASKING POLICY
+
+query I
+SELECT count(*) FROM masking_raw_where WHERE other['secret']::STRING = 'alice'
+----
+0
+
+# SET without the option resets it, as does UNSET followed by SET.
+statement ok
+ALTER TABLE masking_raw_where MODIFY COLUMN data SET MASKING POLICY masking_raw_where_policy OPTIONS (where_use_unmasked_value = true)
+
+statement ok
+ALTER TABLE masking_raw_where MODIFY COLUMN data SET MASKING POLICY masking_raw_where_policy
+
+query I
+SELECT count(*) FROM masking_raw_where WHERE data['secret']::STRING = 'alice'
+----
+0
+
+statement ok
+ALTER TABLE masking_raw_where MODIFY COLUMN data SET MASKING POLICY masking_raw_where_policy OPTIONS (where_use_unmasked_value = false)
+
+query I
+SELECT count(*) FROM masking_raw_where WHERE data['secret']::STRING = 'alice'
+----
+0
+
+statement ok
+DROP TABLE masking_raw_where
+
+statement ok
+DROP MASKING POLICY masking_raw_where_policy
+
+# The expression rewrite is generic; it is not specific to masking policies.
+# Casting must remain outside the short-circuited conditional. Eager typed leaf
+# reads would fail on the unselected row containing a non-numeric value.
+statement ok
+DROP TABLE IF EXISTS variant_conditional_paths
+
+statement ok
+CREATE TABLE variant_conditional_paths(flag BOOLEAN, v VARIANT) enable_virtual_column = true
+
+statement ok
+INSERT INTO variant_conditional_paths SELECT true, parse_json('{"a":2}')
+
+statement ok
+INSERT INTO variant_conditional_paths SELECT false, parse_json('{"a":"bad"}')
+
+query I
+SELECT (CASE WHEN flag THEN v ELSE parse_json('{"a":1}') END)['a']::INT64 FROM variant_conditional_paths ORDER BY 1
+----
+1
+2
+
+query T
+SELECT object_delete(object_construct('a', v), 'missing')['a']['a']::STRING FROM variant_conditional_paths ORDER BY 1
+----
+2
+bad
+
+# Missing delete keys are ignored, but a non-object source must still raise.
+statement error Invalid json object
+SELECT object_delete(parse_json('42'), 'missing')['a']
+
+statement ok
+DROP TABLE variant_conditional_paths

@@ -304,8 +304,23 @@ impl Binder {
         // Bind WHERE after select-list analysis so aliases are available, but
         // resolve them against the original pre-rewrite select-item semantics.
         let where_scalar = if let Some(expr) = &stmt.selection {
-            let (new_expr, scalar) =
-                self.bind_where(&mut from_context, global_view.where_aliases(), expr, s_expr)?;
+            let alias_exprs =
+                select_list
+                    .items
+                    .iter()
+                    .filter_map(|item| match item.select_target {
+                        SelectTarget::AliasedExpr { expr, .. } => {
+                            Some((item.alias.clone(), expr.as_ref().clone()))
+                        }
+                        _ => None,
+                    });
+            let (new_expr, scalar) = self.bind_select_where(
+                &mut from_context,
+                global_view.where_aliases(),
+                alias_exprs,
+                expr,
+                s_expr,
+            )?;
             s_expr = new_expr;
             Some(scalar)
         } else {
