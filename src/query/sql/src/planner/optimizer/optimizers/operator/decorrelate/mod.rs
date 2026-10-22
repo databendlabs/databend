@@ -83,6 +83,9 @@ impl DerivedColumnScope {
         self.resolve(old).unwrap_or(old)
     }
 
+    // TODO: an outer column referenced only from a doubly nested subquery,
+    // e.g. `SELECT a, (SELECT (SELECT t.a + 1)) FROM t`, is not derived and
+    // fails here with or without GROUP BY. Root cause not investigated.
     pub(crate) fn must_resolve(&self, old: Symbol) -> Result<Symbol> {
         self.resolve(old)
             .ok_or_else(|| ErrorCode::Internal(format!("Missing derived column {old}")))
