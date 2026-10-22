@@ -99,6 +99,7 @@ impl Settings {
             is_rounding_mode,
             disable_variant_check,
             enable_auto_detect_datetime_format,
+            enable_sonic_json_parser: self.get_enable_sonic_json_parser()?,
         })
     }
 

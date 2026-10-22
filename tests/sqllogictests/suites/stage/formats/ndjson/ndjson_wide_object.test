@@ -1,0 +1,23 @@
+# run-with-settings: enable_sonic_json_parser=1
+
+# Reverse-order JSON fields must match the schema by name at both the row and
+# indexed named-tuple levels, not by JSON position. Cover upper/lowercase input.
+statement ok
+create or replace table ndjson_wide_object (
+    k00 int, k01 int, k02 int, k03 int, k04 int, k05 int, k06 int, k07 int,
+    k08 int, k09 int, k10 int, k11 int, k12 int, k13 int, k14 int, k15 int,
+    t tuple(k00 int, k01 int, k02 int, k03 int, k04 int, k05 int, k06 int, k07 int,
+            k08 int, k09 int, k10 int, k11 int, k12 int, k13 int, k14 int, k15 int)
+)
+
+statement ok
+copy into ndjson_wide_object from @data/ndjson/wide_object.ndjson file_format = (type = ndjson)
+
+query IIIIII
+select k00, k07, k15, t:k00, t:k07, t:k15 from ndjson_wide_object order by k00
+----
+0 7 15 0 7 15
+100 107 115 1000 1007 1015
+
+statement ok
+drop table ndjson_wide_object

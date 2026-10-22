@@ -1,3 +1,5 @@
+# run-with-settings: enable_sonic_json_parser=1
+
 statement ok
 drop table if exists v
 

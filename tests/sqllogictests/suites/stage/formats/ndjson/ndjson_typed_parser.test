@@ -1,0 +1,29 @@
+# run-with-settings: enable_sonic_json_parser=1
+
+# Exercise raw numeric precision (#20748), nested types, nulls and case matching.
+# Duplicate-key behavior is backend-dependent and not asserted by this fixture.
+statement ok
+create or replace table ndjson_typed_parser (
+    id int, d decimal(18,4), a array(decimal(18,4)),
+    t tuple(a int, b string), m map(string,string), n nullable(string)
+)
+
+statement ok
+copy into ndjson_typed_parser from @data/ndjson/typed_parser.ndjson
+file_format = (type = ndjson)
+
+query ITTTITT
+select id, d::string, a[1]::string, a[2]::string, t:a, t:b, m['x']
+from ndjson_typed_parser order by id
+----
+1 165.6263 -0.0003 99999999999999.9999 7 hello true
+2 12345678901234.5678 165.6263 -0.0003 8 world 10
+
+query II
+select count_if(n is null), count_if(n = 'text') from ndjson_typed_parser
+----
+1 1
+
+statement ok
+drop table ndjson_typed_parser
+

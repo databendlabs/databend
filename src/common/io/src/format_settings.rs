@@ -123,6 +123,7 @@ pub struct InputFormatSettings {
     pub is_rounding_mode: bool,
     pub disable_variant_check: bool,
     pub enable_auto_detect_datetime_format: bool,
+    pub enable_sonic_json_parser: bool,
 }
 
 // only used for tests
@@ -135,6 +136,7 @@ impl Default for InputFormatSettings {
             is_rounding_mode: true,
             disable_variant_check: false,
             enable_auto_detect_datetime_format: false,
+            enable_sonic_json_parser: false,
         }
     }
 }
