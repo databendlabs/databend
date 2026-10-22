@@ -294,6 +294,33 @@ async fn connect_benchmark(dsn: String) -> Result<Connection> {
     Ok(conn)
 }
 
+fn is_expected_release_version(server_version: &str) -> bool {
+    server_version.starts_with("Databend Query v1.2.954-dfd462acf1(")
+}
+
+#[cfg(test)]
+mod release_guard_tests {
+    use super::is_expected_release_version;
+
+    #[test]
+    fn accepts_the_published_v954_server_format() {
+        assert!(is_expected_release_version(
+            "Databend Query v1.2.954-dfd462acf1(rust-1.100.0-nightly-2026-10-21T18:03:32.619860609Z)"
+        ));
+    }
+
+    #[test]
+    fn rejects_other_versions_and_commits() {
+        for version in [
+            "Databend Query v1.2.953-dfd462acf1(rust-1.100.0-nightly)",
+            "Databend Query v1.2.954-38d782fa13(rust-1.100.0-nightly)",
+            "v1.2.954-nightly",
+        ] {
+            assert!(!is_expected_release_version(version), "{version}");
+        }
+    }
+}
+
 async fn execute_sql(conn: &Connection, sql: &str) -> Result<()> {
     for statement in split_sql_statements(sql) {
         let mut rows = conn.query_iter_ext(&statement).await?;
@@ -750,8 +777,8 @@ async fn main() -> Result<()> {
         .await?
         .context("server version was not returned")?;
     let (server_version,): (String,) = row.try_into().map_err(|err: String| anyhow!(err))?;
-    if !server_version.contains("v1.2.954-nightly") {
-        bail!("Isolation run requires the published v1.2.954-nightly, got {server_version}");
+    if !is_expected_release_version(&server_version) {
+        bail!("Isolation run requires release v1.2.954 at dfd462acf1, got {server_version}");
     }
     println!("Verified server version: {server_version}");
 
