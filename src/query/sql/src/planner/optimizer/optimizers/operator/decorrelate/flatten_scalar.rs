@@ -14,6 +14,7 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::conversion::classify_conversion;
 
 use super::DerivedColumnScope;
 use crate::ColumnSet;
@@ -44,16 +45,32 @@ impl SubqueryDecorrelatorOptimizer {
                     let index = derived_columns.must_resolve(column_binding.index)?;
                     let metadata = self.ctx.metadata_read();
                     let column_entry = metadata.column(index);
-                    return Ok(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    let data_type = column_entry.data_type();
+                    let column = ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: scalar.span(),
                         column: ColumnBindingBuilder::new(
                             column_entry.name(),
                             index,
-                            Box::new(column_entry.data_type()),
+                            Box::new(data_type.clone()),
                             column_binding.visibility,
                         )
                         .build(),
-                    }));
+                    });
+                    // An inner column reused for an outer column via `inner = outer`
+                    // may have a narrower type, e.g. without NULL. Keep the outer
+                    // type so the types of enclosing expressions hold.
+                    let outer_type = *column_binding.data_type;
+                    if outer_type != data_type
+                        && classify_conversion(&data_type, &outer_type).is_lossless_injective()
+                    {
+                        return Ok(ScalarExpr::CastExpr(CastExpr {
+                            span: scalar.span(),
+                            is_try: false,
+                            argument: Box::new(column),
+                            target_type: Box::new(outer_type),
+                        }));
+                    }
+                    return Ok(column);
                 }
                 Ok(scalar.clone())
             }
