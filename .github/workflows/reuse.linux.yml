@@ -156,6 +156,11 @@ jobs:
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v6
+      # Masking-policy compatibility cases need an enterprise license.
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
+          type: ${{ inputs.license_type }}
       - uses: ./.github/actions/test_compat_fuse
         timeout-minutes: 20
 
