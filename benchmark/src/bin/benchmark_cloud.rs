@@ -275,6 +275,25 @@ async fn connect(dsn: String) -> Result<Connection> {
         .context("failed to connect Databend")
 }
 
+// Temporary v954 isolation run: apply to benchmark/history connections only,
+// before ANALYZE or any distributed query can create a cached control channel.
+async fn connect_benchmark(dsn: String) -> Result<Connection> {
+    let conn = connect(dsn).await?;
+    execute_sql(&conn, "SET enable_flight_control_channel_reuse = 0;").await?;
+    let row = conn
+        .query_row(
+            "SELECT value FROM system.settings WHERE name = 'enable_flight_control_channel_reuse'",
+        )
+        .await?
+        .context("flight control channel reuse setting was not returned")?;
+    let (value,): (String,) = row.try_into().map_err(|err: String| anyhow!(err))?;
+    if value != "0" {
+        bail!("Expected enable_flight_control_channel_reuse=0, got {value}");
+    }
+    println!("Verified session: enable_flight_control_channel_reuse=0");
+    Ok(conn)
+}
+
 async fn execute_sql(conn: &Connection, sql: &str) -> Result<()> {
     for statement in split_sql_statements(sql) {
         let mut rows = conn.query_iter_ext(&statement).await?;
@@ -417,7 +436,7 @@ impl HistoryCollector {
         // This benchmark crate is intentionally independent from the main Databend workspace.
         #[allow(clippy::disallowed_methods)]
         let worker = tokio::spawn(async move {
-            match connect(history_dsn).await {
+            match connect_benchmark(history_dsn).await {
                 Ok(conn) => {
                     while let Some(request) = receiver.recv().await {
                         let history = collect_system_history(&conn, &request.query_id).await;
@@ -672,7 +691,11 @@ async fn main() -> Result<()> {
         version: config.version.clone(),
         warehouse: config.warehouse.clone(),
         machine,
-        tags: vec!["s3".to_string(), format!("cache-{}", config.cache_size)],
+        tags: vec![
+            "s3".to_string(),
+            format!("cache-{}", config.cache_size),
+            "flight-control-channel-reuse-0".to_string(),
+        ],
         result: Vec::new(),
         values: BTreeMap::new(),
         run_id: config.benchmark_id.clone(),
@@ -715,13 +738,23 @@ async fn main() -> Result<()> {
     execute_sql(&admin_conn, "SHOW WAREHOUSES;").await?;
     wait_for_warehouse(&admin_conn, &config.warehouse).await?;
 
-    let query_conn = connect(build_dsn(
+    let query_conn = connect_benchmark(build_dsn(
         &config,
         Some(&config.database),
         Some(&config.warehouse),
         false,
     ))
     .await?;
+    let row = query_conn
+        .query_row("SELECT version()")
+        .await?
+        .context("server version was not returned")?;
+    let (server_version,): (String,) = row.try_into().map_err(|err: String| anyhow!(err))?;
+    if !server_version.contains("v1.2.954-nightly") {
+        bail!("Isolation run requires the published v1.2.954-nightly, got {server_version}");
+    }
+    println!("Verified server version: {server_version}");
+
     let history_dsn = build_dsn(
         &config,
         Some(&config.database),

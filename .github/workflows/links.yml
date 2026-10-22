@@ -1,51 +1,83 @@
-name: Links
+# Temporary, manually dispatched investigation branch only.
+# Reuses a registered workflow path; no link checks or release/publish jobs run.
+name: v954 Flight Reuse Off Benchmark
+run-name: v1.2.954-nightly TPCH1000 with Flight control reuse disabled
 
 on:
-  repository_dispatch:
   workflow_dispatch:
-  schedule:
-    - cron: "00 18 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v954-flight-reuse-off-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  linkChecker:
+  benchmark:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/investigation/v954-flight-reuse-off-20261022'
     runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        cache_size: [0, 300]
     steps:
       - uses: actions/checkout@v6
-
-      - name: Restore lychee cache
-        id: restore-cache
-        uses: actions/cache/restore@v5
+      - uses: ./.github/actions/setup_bendsql
+      - name: Run exact published release with session flag disabled
+        uses: ./.github/actions/benchmark_cloud
         with:
-          path: .lycheecache
-          key: cache-lychee-${{ github.sha }}
-          restore-keys: cache-lychee-
+          sha: ${{ github.sha }}
+          run_id: ${{ github.run_id }}-${{ github.run_attempt }}-reuse-off-${{ matrix.cache_size }}
+          dataset: tpch1000
+          database: tpch_1000
+          source: release
+          source_id: v1.2.954-nightly
+          size: Large
+          cache_size: ${{ matrix.cache_size }}
+          tries: "1"
+          version: v1.2.954-nightly
+          cloud_user: ${{ secrets.BENCHMARK_CLOUD_USER }}
+          cloud_password: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
+          cloud_gateway: ${{ secrets.BENCHMARK_CLOUD_GATEWAY }}
+      - name: Summarize isolated result
+        env:
+          CACHE_SIZE: ${{ matrix.cache_size }}
+          RUNNER_COMMIT: ${{ github.sha }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
 
-      - name: Link Checker
-        id: lychee
-        uses: lycheeverse/lychee-action@v2.8.0
+          path = Path(f"benchmark/result-tpch1000-cloud-Large-cache-{os.environ['CACHE_SIZE']}.json")
+          record = json.loads(path.read_text())
+          assert record['version'] == 'v1.2.954-nightly'
+          assert record['tries'] == 1
+          assert 'flight-control-channel-reuse-0' in record['tags']
+          failures = [q for q, attempts in record['query_details'].items()
+                      if any(not attempt['success'] for attempt in attempts)]
+          if failures:
+              raise SystemExit(f"Queries failed: {failures}")
+          total = sum(min(values) for i, values in enumerate(record['result']) if i and values)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write(f"## Published v1.2.954-nightly, Flight reuse OFF\n"
+                            f"- TPCH1000 / Large / cache={record['cache_size']} / actual tries=1\n"
+                            f"- Query total, excluding Q0: {total:.3f}s\n"
+                            f"- Session flag: enable_flight_control_channel_reuse=0\n"
+                            f"- Runner-only commit: {os.environ['RUNNER_COMMIT']}\n"
+                            f"- Fresh warehouse: {record['warehouse']}\n"
+                            f"- Results are artifacts only; no official report is overwritten.\n")
+          PY
+      - name: Keep available diagnostic results on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
         with:
-          args: >-
-            --accept 100..=103,200..=299,429
-            --cache
-            --max-cache-age 1d .
-            --exclude-all-private
-            --exclude 'https://github\.com/datafuselabs/databend/issues/.*'
-            --exclude 'https?://github\.com/databendlabs/databend/issues/.*'
-            --exclude 'https?://twitter\.com(?:/.*$)?$'
-            --exclude-path './src/query/ast/tests/it/testdata/'
-            --exclude-path './src/query/service/tests/it/storages/testdata/'
-
-      - name: Save lychee cache
-        uses: actions/cache/save@v5
-        if: always()
-        with:
-          path: .lycheecache
-          key: ${{ steps.restore-cache.outputs.cache-primary-key }}
-
-      - name: Create Issue From File
-        if: env.lychee_exit_code != 0
-        uses: peter-evans/create-issue-from-file@v6
-        with:
-          title: Link Checker Report
-          content-filepath: ./lychee/out.md
-          labels: report, automated issue
+          name: diagnostic-tpch1000-cache-${{ matrix.cache_size }}
+          path: |
+            benchmark/result-tpch1000-cloud-Large-cache-${{ matrix.cache_size }}*.json
+            benchmark/result-tpch1000-cloud-Large-cache-${{ matrix.cache_size }}*.ndjson
+          if-no-files-found: ignore
