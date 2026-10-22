@@ -1,7 +1,6 @@
-# Temporary, manually dispatched investigation branch only.
-# Reuses a registered workflow path; no link checks or release/publish jobs run.
-name: v954 Flight Reuse Off Benchmark
-run-name: v1.2.954-nightly TPCH1000 with Flight control reuse disabled
+# Temporary manually dispatched probe; published service image is unchanged.
+name: v954 Q6 Repeated Read Probe
+run-name: v1.2.954-nightly Q6 ten reads, cache zero, Flight reuse off
 
 on:
   workflow_dispatch:
@@ -10,42 +9,34 @@ permissions:
   contents: read
 
 concurrency:
-  group: v954-flight-reuse-off-${{ github.ref }}
+  group: v954-q6-repeat-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  benchmark:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/investigation/v954-flight-reuse-off-20261022'
+  q6-repeat:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/investigation/v954-q6-repeat-20261022'
     runs-on: ubuntu-latest
-    timeout-minutes: 40
-    strategy:
-      fail-fast: true
-      max-parallel: 1
-      matrix:
-        cache_size: [0, 300]
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup_bendsql
-      - name: Run exact published release with session flag disabled
+      - name: Same published v954, same process, Q6 ten times
         uses: ./.github/actions/benchmark_cloud
         with:
           sha: ${{ github.sha }}
-          run_id: ${{ github.run_id }}-${{ github.run_attempt }}-reuse-off-${{ matrix.cache_size }}
+          run_id: ${{ github.run_id }}-${{ github.run_attempt }}-q6-repeat
           dataset: tpch1000
           database: tpch_1000
           source: release
           source_id: v1.2.954-nightly
           size: Large
-          cache_size: ${{ matrix.cache_size }}
-          tries: "1"
+          cache_size: "0"
+          tries: "10"
           version: v1.2.954-nightly
           cloud_user: ${{ secrets.BENCHMARK_CLOUD_USER }}
           cloud_password: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
           cloud_gateway: ${{ secrets.BENCHMARK_CLOUD_GATEWAY }}
-      - name: Summarize isolated result
-        env:
-          CACHE_SIZE: ${{ matrix.cache_size }}
-          RUNNER_COMMIT: ${{ github.sha }}
+      - name: Verify scope and summarize individual reads
         shell: bash
         run: |
           python3 - <<'PY'
@@ -53,31 +44,35 @@ jobs:
           import os
           from pathlib import Path
 
-          path = Path(f"benchmark/result-tpch1000-cloud-Large-cache-{os.environ['CACHE_SIZE']}.json")
+          path = Path('benchmark/result-tpch1000-cloud-Large-cache-0.json')
           record = json.loads(path.read_text())
           assert record['version'] == 'v1.2.954-nightly'
-          assert record['tries'] == 1
-          assert 'flight-control-channel-reuse-0' in record['tags']
-          failures = [q for q, attempts in record['query_details'].items()
-                      if any(not attempt['success'] for attempt in attempts)]
-          if failures:
-              raise SystemExit(f"Queries failed: {failures}")
-          total = sum(min(values) for i, values in enumerate(record['result']) if i and values)
-          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
-              summary.write(f"## Published v1.2.954-nightly, Flight reuse OFF\n"
-                            f"- TPCH1000 / Large / cache={record['cache_size']} / actual tries=1\n"
-                            f"- Query total, excluding Q0: {total:.3f}s\n"
-                            f"- Session flag: enable_flight_control_channel_reuse=0\n"
-                            f"- Runner-only commit: {os.environ['RUNNER_COMMIT']}\n"
-                            f"- Fresh warehouse: {record['warehouse']}\n"
-                            f"- Results are artifacts only; no official report is overwritten.\n")
+          assert record['cache_size'] == '0'
+          assert record['tries'] == 10
+          assert 'q6-repeat-10-same-process' in record['tags']
+          details = record['query_details']
+          assert set(details) == {'Q0', 'Q6'}, list(details)
+          assert len(details['Q0']) == 1
+          assert len(details['Q6']) == 10
+          assert all(a['success'] for aa in details.values() for a in aa)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+              f.write('## Q6 repeated reads, exact published v954\n'
+                      '- One fresh warehouse, same processes/nodes for all attempts\n'
+                      '- cache=0; enable_flight_control_channel_reuse=0\n'
+                      '- Only Q0 once and Q6 ten times; not a full TPCH report\n'
+                      '- Diagnostic SQL is collected only after all ten reads\n'
+                      '- First Q6 is not preceded by Q1-Q5; do not compare directly to that sequence\n\n'
+                      '| Attempt | Server seconds | Client milliseconds |\n|---|---:|---:|\n')
+              for a in details['Q6']:
+                  f.write(f"| {a['attempt']} | {a['elapsed_seconds']:.3f} | {a['client_wall_ms']} |\n")
+              f.write('\nResults are artifacts only; no official report is overwritten.\n')
           PY
       - name: Keep available diagnostic results on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: diagnostic-tpch1000-cache-${{ matrix.cache_size }}
+          name: diagnostic-q6-repeat
           path: |
-            benchmark/result-tpch1000-cloud-Large-cache-${{ matrix.cache_size }}*.json
-            benchmark/result-tpch1000-cloud-Large-cache-${{ matrix.cache_size }}*.ndjson
+            benchmark/result-tpch1000-cloud-Large-cache-0*.json
+            benchmark/result-tpch1000-cloud-Large-cache-0*.ndjson
           if-no-files-found: ignore

@@ -104,6 +104,8 @@ struct QueryAttempt {
     #[serde(skip_serializing_if = "Option::is_none")]
     elapsed_seconds: Option<f64>,
     client_wall_ms: u128,
+    client_started_at: String,
+    client_completed_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     query_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -171,8 +173,8 @@ fn load_config() -> Result<BenchmarkConfig> {
     let tries: usize = tries_raw
         .parse()
         .with_context(|| format!("BENCHMARK_TRIES must be an integer, got {tries_raw}"))?;
-    if !(1..=3).contains(&tries) {
-        bail!("BENCHMARK_TRIES must be between 1 and 3, got {tries}");
+    if tries != 10 {
+        bail!("This isolated Q6 probe requires exactly 10 tries, got {tries}");
     }
 
     let user = env_or_default("CLOUD_USER", "");
@@ -298,9 +300,27 @@ fn is_expected_release_version(server_version: &str) -> bool {
     server_version.starts_with("Databend Query v1.2.954-dfd462acf1(")
 }
 
+fn q6_probe_attempts(query_num: usize, tries: usize) -> Option<usize> {
+    match query_num {
+        0 => Some(1),
+        6 => Some(tries),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
-mod release_guard_tests {
+mod probe_tests {
     use super::is_expected_release_version;
+    use super::q6_probe_attempts;
+
+    #[test]
+    fn only_initialization_and_q6_are_executed() {
+        assert_eq!(q6_probe_attempts(0, 10), Some(1));
+        assert_eq!(q6_probe_attempts(6, 10), Some(10));
+        for query in [1, 2, 5, 7, 12, 22] {
+            assert_eq!(q6_probe_attempts(query, 10), None);
+        }
+    }
 
     #[test]
     fn accepts_the_published_v954_server_format() {
@@ -361,6 +381,7 @@ async fn wait_for_warehouse(conn: &Connection, warehouse: &str) -> Result<()> {
 }
 
 async fn run_query_attempt(conn: &Connection, sql: &str, attempt: usize) -> QueryAttempt {
+    let client_started_at = Utc::now().to_rfc3339();
     let start = Instant::now();
     let mut stats_samples = Vec::new();
     let mut final_stats = None;
@@ -392,6 +413,7 @@ async fn run_query_attempt(conn: &Connection, sql: &str, attempt: usize) -> Quer
     }
 
     let client_wall_ms = start.elapsed().as_millis();
+    let client_completed_at = Utc::now().to_rfc3339();
     let query_id = conn.last_query_id();
     let elapsed_seconds = final_stats
         .as_ref()
@@ -403,6 +425,8 @@ async fn run_query_attempt(conn: &Connection, sql: &str, attempt: usize) -> Quer
         success,
         elapsed_seconds,
         client_wall_ms,
+        client_started_at,
+        client_completed_at,
         query_id,
         server_stats: final_stats,
         stats_samples,
@@ -722,6 +746,7 @@ async fn main() -> Result<()> {
             "s3".to_string(),
             format!("cache-{}", config.cache_size),
             "flight-control-channel-reuse-0".to_string(),
+            "q6-repeat-10-same-process".to_string(),
         ],
         result: Vec::new(),
         values: BTreeMap::new(),
@@ -788,8 +813,6 @@ async fn main() -> Result<()> {
         Some(&config.warehouse),
         false,
     );
-    let history_collector = HistoryCollector::spawn(history_dsn);
-
     println!("Checking session settings...");
     execute_sql(
         &query_conn,
@@ -811,27 +834,22 @@ async fn main() -> Result<()> {
     let mut pending_query_details: BTreeMap<String, Vec<QueryAttemptWithHistory>> = BTreeMap::new();
 
     for (query_num, query_file) in queries.iter().enumerate() {
+        // Retain the original Q6 index, but never execute the other TPCH queries.
+        record.result.push(Vec::new());
+        let Some(tries) = q6_probe_attempts(query_num, config.tries) else {
+            continue;
+        };
         println!("==> Running Q{query_num}: {}", query_file.display());
         let query_sql = fs::read_to_string(query_file)
             .with_context(|| format!("failed to read query {}", query_file.display()))?;
-        record.result.push(Vec::new());
         let query_key = format!("Q{query_num}");
         record.values.insert(query_key.clone(), Vec::new());
         let mut attempt_results = Vec::new();
 
-        for attempt in 1..=config.tries {
-            let mut detail = run_query_attempt(&query_conn, &query_sql, attempt).await;
-            let history_receiver = if let Some(query_id) = detail.query_id.clone() {
-                match history_collector.queue(query_id) {
-                    Ok(receiver) => Some(receiver),
-                    Err(err) => {
-                        detail.system_history = Some(history_error(err.to_string()));
-                        None
-                    }
-                }
-            } else {
-                None
-            };
+        for attempt in 1..=tries {
+            let detail = run_query_attempt(&query_conn, &query_sql, attempt).await;
+            // Never run diagnostic SQL concurrently with the ten measurements.
+            let history_receiver = None;
 
             if detail.success {
                 if let Some(elapsed) = detail.elapsed_seconds {
@@ -855,6 +873,10 @@ async fn main() -> Result<()> {
                 attempt: detail,
                 history_receiver,
             });
+            if query_num == 6 && attempt < tries {
+                // A fixed gap separates second-resolution S3/CloudTrail windows.
+                tokio::time::sleep(Duration::from_secs(2)).await;
+            }
         }
 
         if config.tries < 3 {
@@ -871,7 +893,18 @@ async fn main() -> Result<()> {
     }
 
     println!("Collecting system history details...");
-    for (query_key, attempts) in pending_query_details {
+    let history_collector = HistoryCollector::spawn(history_dsn);
+    for (query_key, mut attempts) in pending_query_details {
+        for detail in &mut attempts {
+            if let Some(query_id) = detail.attempt.query_id.clone() {
+                match history_collector.queue(query_id) {
+                    Ok(receiver) => detail.history_receiver = Some(receiver),
+                    Err(err) => {
+                        detail.attempt.system_history = Some(history_error(err.to_string()))
+                    }
+                }
+            }
+        }
         record
             .query_details
             .insert(query_key, finalize_history(attempts).await);
