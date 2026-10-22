@@ -10,8 +10,8 @@ export MYSQL_CLIENT_CONNECT="mysql --ssl-mode=DISABLED -u${TEST_USER_NAME} -p${T
 
 stmt "drop user if exists 'owner'"
 stmt "drop role if exists role1"
-stmt "create user 'owner' IDENTIFIED BY '$TEST_USER_PASSWORD' with DEFAULT_ROLE='role1'"
 stmt 'create role role1'
+stmt "create user 'owner' IDENTIFIED BY '$TEST_USER_PASSWORD' with DEFAULT_ROLE='role1'"
 stmt "create or replace database test"
 
 stmt 'grant role role1 to owner'

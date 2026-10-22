@@ -72,8 +72,8 @@ echo "=== show grants test ==="
 echo "drop user if exists u1" | bendsql_connect_root
 echo "drop role if exists role1" | bendsql_connect_root
 echo "drop role if exists role2" | bendsql_connect_root
-echo "create user u1 identified by '123' with DEFAULT_ROLE='role1'" | bendsql_connect_root
 echo "create role role1" | bendsql_connect_root
+echo "create user u1 identified by '123' with DEFAULT_ROLE='role1'" | bendsql_connect_root
 echo "create role role2" | bendsql_connect_root
 echo "grant select on *.* to role role1;" | bendsql_connect_root
 echo "grant insert on *.* to role role1;" | bendsql_connect_root

@@ -8,11 +8,11 @@
 >>>> DROP ROLE IF EXISTS role_rap_apply
 >>>> DROP ROLE IF EXISTS role_rap_create
 >>>> CREATE TABLE rap_rbac(id INT, region STRING, dept STRING)
+>>>> CREATE ROLE role_rap_apply
+>>>> CREATE ROLE role_rap_create
 >>>> CREATE USER rap_create IDENTIFIED BY '123' with default_role='role_rap_create'
 >>>> CREATE USER rap_apply IDENTIFIED BY '123' with default_role='role_rap_apply'
->>>> CREATE ROLE role_rap_apply
 >>>> GRANT ROLE role_rap_apply TO rap_apply
->>>> CREATE ROLE role_rap_create
 >>>> GRANT ROLE role_rap_create TO rap_create
 #### create privilege requires CREATE ROW ACCESS POLICY
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [CreateRowAccessPolicy] is required on *.* for user 'rap_create'@'%' with roles [public,role_rap_create]. Note: Please ensure that your current role have the appropriate permissions to create a new Object

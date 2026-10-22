@@ -14,13 +14,13 @@ stmt "DROP ROLE IF EXISTS role_mask_apply"
 stmt "DROP ROLE IF EXISTS role_mask_create"
 
 stmt "CREATE TABLE mp_rbac(id INT, phone STRING, email STRING)"
+stmt "CREATE ROLE role_mask_apply"
+stmt "CREATE ROLE role_mask_create"
 stmt "CREATE USER mask_create IDENTIFIED BY '123' with default_role='role_mask_create'"
 stmt "CREATE USER mask_apply IDENTIFIED BY '123' with default_role='role_mask_apply'"
-stmt "CREATE ROLE role_mask_apply"
 stmt "GRANT ROLE role_mask_apply TO mask_apply"
-stmt "CREATE ROLE role_mask_create"
 stmt "GRANT ROLE role_mask_create TO mask_create"
-stmt "CREATE USER mask_desc IDENTIFIED BY '123' with default_role='mask_desc'"
+stmt "CREATE USER mask_desc IDENTIFIED BY '123'"
 
 export USER_MASK_DESC="bendsql_connect_user mask_desc 123 -A --quote-style=never"
 
