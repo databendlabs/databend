@@ -49,6 +49,8 @@ pub const MATERIALIZED_VIEW_INVALID_SOURCE_REASON: &str =
 pub const MATERIALIZED_VIEW_INVALID_SOURCE_DATABASE_REASON: &str = "source database was renamed";
 pub const OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG: &str = "snapshot_location_fixed";
 pub const OPT_KEY_STORAGE_FORMAT: &str = "storage_format";
+/// External-table S3 storage class for new objects; overrides the experimental session setting.
+pub const OPT_KEY_S3_STORAGE_CLASS: &str = "s3_storage_class";
 pub const OPT_KEY_SEGMENT_FORMAT: &str = "segment_format";
 pub const OPT_KEY_TABLE_COMPRESSION: &str = "compression";
 pub const OPT_KEY_COMMENT: &str = "comment";

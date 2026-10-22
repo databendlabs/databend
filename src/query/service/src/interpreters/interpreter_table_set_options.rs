@@ -84,6 +84,7 @@ use crate::interpreters::common::table_option_validation::is_valid_fuse_virtual_
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
+use crate::interpreters::common::table_option_validation::is_valid_s3_storage_class;
 use crate::interpreters::common::table_option_validation::is_valid_virtual_column_layout_options;
 use crate::interpreters::hook::analyze_hook::execute_analyze;
 use crate::interpreters::interpreter_table_add_column::update_table_meta;
@@ -207,6 +208,11 @@ impl Interpreter for SetOptionsInterpreter {
                 .get_table(&self.ctx.get_tenant(), database, table_name)
                 .await?;
             check_maintenance_target(table.as_ref(), &self.plan.target)?;
+            is_valid_s3_storage_class(
+                &self.plan.set_options,
+                table.get_table_info().meta.storage_params.as_ref(),
+                table.is_temp(),
+            )?;
 
             if let Some(mode) = self.plan.set_options.get(OPT_KEY_WRITE_DISTRIBUTION_MODE) {
                 let mode = mode.parse::<WriteDistributionMode>()?;
