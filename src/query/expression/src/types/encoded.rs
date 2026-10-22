@@ -643,16 +643,48 @@ impl ForColumn {
             }
             (DataType::Date, Scalar::Date(v)) => Some(*v as i128),
             (DataType::Timestamp, Scalar::Timestamp(v)) => Some(*v as i128),
-            (DataType::Decimal(size), Scalar::Decimal(d)) if d.scale() == size.scale() => match d {
-                DecimalScalar::Decimal64(v, _) => Some(*v as i128),
-                DecimalScalar::Decimal128(v, _) => Some(*v),
-                DecimalScalar::Decimal256(v, _) => {
-                    let raw = v.as_i128();
-                    (i256::from(raw) == *v).then_some(raw)
-                }
-            },
+            // A constant of a smaller scale, e.g. `l_quantity >= 1` binds `1` as `Decimal(3, 0)`,
+            // is rescaled to the scale of the column, which keeps the comparison exact.
+            (DataType::Decimal(size), Scalar::Decimal(d)) if d.scale() <= size.scale() => {
+                let raw = match d {
+                    DecimalScalar::Decimal64(v, _) => *v as i128,
+                    DecimalScalar::Decimal128(v, _) => *v,
+                    DecimalScalar::Decimal256(v, _) => {
+                        let raw = v.as_i128();
+                        (i256::from(raw) == *v).then_some(raw)?
+                    }
+                };
+                // `None` on overflow: the comparison falls back to the decoded values.
+                raw.checked_mul(10i128.checked_pow((size.scale() - d.scale()) as u32)?)
+            }
             _ => None,
         }
+    }
+
+    /// Evaluates `value_a(i) <op> value_b(i)` for every row without decoding. With
+    /// `value = base + delta`, `base_a + a <op> base_b + b` is `a <op> b + (base_b - base_a)`:
+    /// the deltas compare after shifting one side by the difference of the bases, a constant
+    /// of the block. (Comparing the deltas directly would be wrong, as they are relative to
+    /// different bases.)
+    ///
+    /// `None` if the columns do not compare by their raw values (different types or decimal
+    /// scales, different lengths) or the shifted deltas do not fit `i64`.
+    pub fn compare_for(&self, op: &SelectOp, other: &ForColumn) -> Option<Bitmap> {
+        let comparable = match (&self.data_type, &other.data_type) {
+            (DataType::Decimal(a), DataType::Decimal(b)) => a.scale() == b.scale(),
+            (a, b) => a == b,
+        };
+        if !comparable || self.len() != other.len() {
+            return None;
+        }
+        let offset = i64::try_from(other.base.checked_sub(self.base)?).ok()?;
+        i64::try_from(self.max_delta).ok()?;
+        offset.checked_add(i64::try_from(other.max_delta).ok()?)?;
+        Some(with_narrow_buffer!(&self.deltas, |a| {
+            with_narrow_buffer!(&other.deltas, |b| {
+                compare_delta_pairs(a.as_slice(), b.as_slice(), op, offset)
+            })
+        }))
     }
 
     /// Evaluates `value(i) <op> raw` for every row on the deltas.
@@ -714,6 +746,49 @@ fn encode_values<T: ForNative + PartialOrd>(
     let base = min.to_raw();
     let deltas = NarrowBuffer::pack(values.iter().map(|v| (v.to_raw() - base) as u64), range);
     Some((base, range, deltas))
+}
+
+/// Unsigned delta widths of a [`NarrowBuffer`], as `i64` (deltas of `compare_for` fit it).
+trait DeltaInt: Copy {
+    fn to_i64(self) -> i64;
+}
+
+macro_rules! impl_delta_int {
+    ($($t:ty),*) => {$(
+        impl DeltaInt for $t {
+            #[inline(always)]
+            fn to_i64(self) -> i64 {
+                self as i64
+            }
+        }
+    )*};
+}
+
+impl_delta_int!(u8, u16, u32, u64);
+
+/// `a[i] <op> b[i] + offset` for every row.
+fn compare_delta_pairs<A: DeltaInt, B: DeltaInt>(
+    a: &[A],
+    b: &[B],
+    op: &SelectOp,
+    offset: i64,
+) -> Bitmap {
+    // SAFETY: `i < a.len() == b.len()`.
+    let pair = |i: usize| unsafe {
+        (
+            a.get_unchecked(i).to_i64(),
+            b.get_unchecked(i).to_i64() + offset,
+        )
+    };
+    let len = a.len();
+    match op {
+        SelectOp::Equal => Bitmap::collect_bool(len, |i| matches!(pair(i), (a, b) if a == b)),
+        SelectOp::NotEqual => Bitmap::collect_bool(len, |i| matches!(pair(i), (a, b) if a != b)),
+        SelectOp::Gt => Bitmap::collect_bool(len, |i| matches!(pair(i), (a, b) if a > b)),
+        SelectOp::Gte => Bitmap::collect_bool(len, |i| matches!(pair(i), (a, b) if a >= b)),
+        SelectOp::Lt => Bitmap::collect_bool(len, |i| matches!(pair(i), (a, b) if a < b)),
+        SelectOp::Lte => Bitmap::collect_bool(len, |i| matches!(pair(i), (a, b) if a <= b)),
+    }
 }
 
 fn compare_deltas<D>(deltas: &[D], op: &SelectOp, t: u64) -> Bitmap

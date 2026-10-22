@@ -370,9 +370,14 @@ impl<'a> Evaluator<'a> {
         })
     }
 
-    /// `<column> <op> <constant>` over an encoded column, evaluated without decoding (on the
-    /// deltas / once per dictionary value). `None` if the arguments do not have this form.
+    /// `<column> <op> <constant>` over an encoded column, or `<column> <op> <column>` over two
+    /// frame of reference encoded columns, evaluated without decoding (on the deltas / once per
+    /// dictionary value). `None` if the arguments do not have this form.
     pub fn try_compare_encoded(&self, op: &SelectOp, args: &[Expr]) -> Option<Bitmap> {
+        let encoded = |id: usize| match self.data_block.get_by_offset(id) {
+            BlockEntry::Column(Column::Encoded(encoded)) => Some(encoded),
+            _ => None,
+        };
         let (id, scalar, op) = match args {
             [
                 Expr::ColumnRef(ColumnRef { id, .. }),
@@ -382,12 +387,17 @@ impl<'a> Evaluator<'a> {
                 Expr::Constant(Constant { scalar, .. }),
                 Expr::ColumnRef(ColumnRef { id, .. }),
             ] => (*id, scalar, op.reverse()),
+            // `<column> <op> <column>`, both frame of reference encoded.
+            [
+                Expr::ColumnRef(ColumnRef { id: lhs, .. }),
+                Expr::ColumnRef(ColumnRef { id: rhs, .. }),
+            ] => {
+                let rhs = encoded(*rhs)?.as_for()?;
+                return encoded(*lhs)?.as_for()?.compare_for(op, rhs);
+            }
             _ => return None,
         };
-        let BlockEntry::Column(Column::Encoded(encoded)) = self.data_block.get_by_offset(id) else {
-            return None;
-        };
-        encoded.compare_scalar(&op, scalar)
+        encoded(id)?.compare_scalar(&op, scalar)
     }
 
     fn eval_common_call(

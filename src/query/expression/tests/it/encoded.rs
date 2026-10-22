@@ -359,17 +359,77 @@ fn test_for_column_compare() {
         }
     }
 
-    // Only scalars of the same logical type compare with the raw values.
+    // Scalars of the logical type compare with the raw values; decimals of a smaller scale are
+    // rescaled to the scale of the column (2), a larger scale is not.
     let Column::Encoded(encoded) = for_column(&[100, 250]) else {
         unreachable!()
     };
     let column = encoded.as_for().unwrap();
-    let same_scale = DecimalScalar::Decimal64(150, DecimalSize::new_unchecked(10, 2));
-    let other_scale = DecimalScalar::Decimal64(150, DecimalSize::new_unchecked(10, 1));
-    assert_eq!(column.raw_scalar(&Scalar::Decimal(same_scale)), Some(150));
-    assert_eq!(column.raw_scalar(&Scalar::Decimal(other_scale)), None);
+    let decimal = |v: i64, scale: u8| {
+        Scalar::Decimal(DecimalScalar::Decimal64(
+            v,
+            DecimalSize::new_unchecked(10, scale),
+        ))
+    };
+    assert_eq!(column.raw_scalar(&decimal(150, 2)), Some(150));
+    assert_eq!(column.raw_scalar(&decimal(15, 1)), Some(150));
+    assert_eq!(column.raw_scalar(&decimal(1, 0)), Some(100));
+    assert_eq!(column.raw_scalar(&decimal(-3, 0)), Some(-300));
+    assert_eq!(column.raw_scalar(&decimal(1500, 3)), None);
+    let huge = Scalar::Decimal(DecimalScalar::Decimal128(
+        i128::MAX / 10,
+        DecimalSize::new_unchecked(38, 0),
+    ));
+    assert_eq!(column.raw_scalar(&huge), None);
     assert_eq!(column.raw_scalar(&Scalar::Date(150)), None);
     assert_eq!(column.data_type(), &DataType::Decimal(decimal_size()));
+}
+
+/// `a <op> b` over two frame of reference columns, on the deltas, gives the same rows as
+/// comparing the values.
+#[test]
+fn test_for_column_compare_columns() {
+    let ops = [
+        SelectOp::Equal,
+        SelectOp::NotEqual,
+        SelectOp::Gt,
+        SelectOp::Gte,
+        SelectOp::Lt,
+        SelectOp::Lte,
+    ];
+    let cmp = |op: &SelectOp, a: i32, b: i32| match op {
+        SelectOp::Equal => a == b,
+        SelectOp::NotEqual => a != b,
+        SelectOp::Gt => a > b,
+        SelectOp::Gte => a >= b,
+        SelectOp::Lt => a < b,
+        SelectOp::Lte => a <= b,
+    };
+    let for_of = |column: &Column| match encode(column) {
+        Column::Encoded(encoded) => encoded.as_for().unwrap().clone(),
+        _ => unreachable!(),
+    };
+
+    // Different bases and delta widths (u8 / u16), overlapping ranges, ties.
+    let a = (0..500).map(|i| 9000 + (i * 7) % 200).collect::<Vec<i32>>();
+    let b = (0..500)
+        .map(|i| 8950 + (i * 13) % 3000)
+        .collect::<Vec<i32>>();
+    let (fa, fb) = (
+        for_of(&DateType::from_data(a.clone())),
+        for_of(&DateType::from_data(b.clone())),
+    );
+    for op in &ops {
+        let expected = Bitmap::from_iter(a.iter().zip(&b).map(|(a, b)| cmp(op, *a, *b)));
+        assert_eq!(fa.compare_for(op, &fb), Some(expected), "{op:?}");
+        let expected = Bitmap::from_iter(b.iter().zip(&a).map(|(b, a)| cmp(op, *b, *a)));
+        assert_eq!(fb.compare_for(op, &fa), Some(expected), "{op:?}");
+    }
+
+    // Columns of different types or lengths do not compare by their raw values.
+    let int = for_of(&Int32Type::from_data(a.clone()));
+    assert_eq!(fa.compare_for(&SelectOp::Lt, &int), None);
+    assert_eq!(fa.compare_for(&SelectOp::Lt, &fa.slice(0..10)), None);
 }
 
 /// `value <op> constant` on a dictionary column, evaluated once per dictionary value, gives the
