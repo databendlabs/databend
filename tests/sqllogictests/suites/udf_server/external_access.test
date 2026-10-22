@@ -48,6 +48,10 @@ SELECT managed_gcd(6, 4);
 ----
 2
 
+# Restore the rule for the later integration DDL, which validates references.
+statement ok
+CREATE NETWORK RULE unrelated_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('unrelated.example.com:443');
+
 # SQL policy authorization must not bypass the nonempty operator allow list.
 statement ok
 CREATE OR REPLACE NETWORK RULE operator_denied_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('localhost:8815');
