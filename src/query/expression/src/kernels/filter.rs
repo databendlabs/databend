@@ -138,6 +138,8 @@ pub struct FilterVisitor<'a> {
     filter_rows: usize,
     original_rows: usize,
     strategy: IterationStrategy,
+    /// Runs of selected rows of `filter`, computed once and shared by all the columns.
+    slices: Option<Vec<(usize, usize)>>,
 }
 
 impl<'a> FilterVisitor<'a> {
@@ -150,7 +152,15 @@ impl<'a> FilterVisitor<'a> {
             filter_rows,
             original_rows: filter.len(),
             strategy,
+            slices: None,
         }
+    }
+
+    /// `(start, len)` of each run of selected rows.
+    fn slices(&mut self) -> &[(usize, usize)] {
+        let filter = self.filter;
+        self.slices
+            .get_or_insert_with(|| SlicesIterator::new(filter).collect())
     }
 
     pub fn with_strategy(mut self, strategy: IterationStrategy) -> Self {
@@ -218,10 +228,9 @@ impl ValueVisitor for FilterVisitor<'_> {
                 });
             }
             _ => {
-                let iter = SlicesIterator::new(self.filter);
-                iter.for_each(|(start, len)| {
+                for &(start, len) in self.slices() {
                     inner_builder.append_column(&T::slice_column(&column, start..start + len));
-                });
+                }
             }
         }
         drop(inner_builder);
@@ -280,10 +289,9 @@ impl ValueVisitor for FilterVisitor<'_> {
                 let offset = bitmap.offset();
 
                 let mut builder = MutableBitmap::with_capacity(self.filter_rows);
-                let iter = SlicesIterator::new(self.filter);
-                iter.for_each(|(start, len)| {
+                for &(start, len) in self.slices() {
                     builder.append_packed_range(start + offset..start + len + offset, src)
-                });
+                }
                 builder.into()
             }
         };
@@ -335,10 +343,9 @@ impl FilterVisitor<'_> {
             }
             _ => {
                 let mut builder = Vec::with_capacity(self.filter_rows);
-                let iter = SlicesIterator::new(self.filter);
-                iter.for_each(|(start, len)| {
+                for &(start, len) in self.slices() {
                     builder.extend_from_slice(&buffer[start..start + len]);
-                });
+                }
                 builder.into()
             }
         }
