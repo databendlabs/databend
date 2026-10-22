@@ -44,6 +44,7 @@ use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
+use databend_common_expression::with_column_view_iter;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
@@ -519,17 +520,13 @@ where T: Decimal + std::ops::AddAssign
         Self::default()
     }
 
+    #[inline]
     fn add(&mut self, value: T, _function_info: &Self::FunctionInfo) -> Result<()> {
         let mut sum = T::from_u64_array(self.value);
         sum += value;
 
         if SHOULD_CHECK_OVERFLOW && (sum > T::DECIMAL_MAX || sum < T::DECIMAL_MIN) {
-            return Err(ErrorCode::Overflow(format!(
-                "Decimal overflow: {:?} not in [{}, {}]",
-                sum,
-                T::DECIMAL_MIN,
-                T::DECIMAL_MAX,
-            )));
+            return Err(decimal_sum_overflow(sum));
         }
 
         self.value = sum.to_u64_array();
@@ -540,42 +537,36 @@ where T: Decimal + std::ops::AddAssign
         &mut self,
         column: ColumnView<DecimalType<T>>,
         validity: Option<&Bitmap>,
-        function_info: &Self::FunctionInfo,
+        _function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        if SHOULD_CHECK_OVERFLOW {
-            // Check every intermediate sum, even if later values would cancel it.
+        let validity = validity.filter(|validity| validity.null_count() > 0);
+        let mut sum = T::from_u64_array(self.value);
+        with_column_view_iter!(DecimalType<T>, &column, |values| {
+            let mut add = |value: T| {
+                sum += value;
+                // Check every intermediate sum, even if later values would cancel it.
+                if SHOULD_CHECK_OVERFLOW && (sum > T::DECIMAL_MAX || sum < T::DECIMAL_MIN) {
+                    return Err(decimal_sum_overflow(sum));
+                }
+                Ok(())
+            };
             match validity {
                 Some(validity) => {
-                    for (value, valid) in column.iter().zip(validity.iter()) {
+                    for (value, valid) in values.zip(validity.iter()) {
                         if valid {
-                            self.add(value, function_info)?;
+                            add(value)?;
                         }
                     }
                 }
                 None => {
-                    for value in column.iter() {
-                        self.add(value, function_info)?;
+                    for value in values {
+                        add(value)?;
                     }
                 }
             }
-        } else {
-            let mut sum = T::from_u64_array(self.value);
-            match validity {
-                Some(validity) if validity.null_count() > 0 => {
-                    for (value, valid) in column.iter().zip(validity.iter()) {
-                        if valid {
-                            sum += value;
-                        }
-                    }
-                }
-                _ => {
-                    for value in column.iter() {
-                        sum += value;
-                    }
-                }
-            }
-            self.value = sum.to_u64_array();
-        }
+        });
+        // On overflow the query fails (`?` above), so the state is not updated then.
+        self.value = sum.to_u64_array();
         Ok(())
     }
 
@@ -612,6 +603,18 @@ where T: Decimal + std::ops::AddAssign
         let value = DecimalType::<T>::try_downcast_scalar(&value)?;
         self.add(value, &())
     }
+}
+
+/// Kept out of line: building the error is never on the hot path.
+#[cold]
+#[inline(never)]
+fn decimal_sum_overflow<T: Decimal>(sum: T) -> ErrorCode {
+    ErrorCode::Overflow(format!(
+        "Decimal overflow: {:?} not in [{}, {}]",
+        sum,
+        T::DECIMAL_MIN,
+        T::DECIMAL_MAX,
+    ))
 }
 
 #[derive(Default)]

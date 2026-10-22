@@ -352,6 +352,36 @@ impl<T: ValueType> ColumnView<T> {
     }
 }
 
+/// Runs `body` with `iter` bound to an iterator over the values of `view` (a
+/// `&ColumnView<T>`), with a concrete iterator type per layout instead of [`ColumnViewIter`],
+/// which matches the layout on every row. Plain columns and each delta width of frame of
+/// reference columns get their own copy of `body`.
+#[macro_export]
+macro_rules! with_column_view_iter {
+    ($T:ty, $view:expr, | $iter:ident | $body:expr) => {{
+        let view: &$crate::ColumnView<$T> = $view;
+        match view {
+            $crate::ColumnView::Column(column) => {
+                let $iter = <$T as $crate::types::AccessType>::iter_column(column);
+                $body
+            }
+            $crate::ColumnView::Encoded($crate::types::EncodedView::For(column)) => {
+                let base = column.base();
+                $crate::with_narrow_buffer!(column.deltas(), |deltas| {
+                    let $iter = deltas.iter().map(move |delta| {
+                        <$T as $crate::types::AccessType>::for_scalar_ref(base + *delta as i128)
+                    });
+                    $body
+                })
+            }
+            view => {
+                let $iter = view.iter();
+                $body
+            }
+        }
+    }};
+}
+
 pub enum ColumnViewIter<'a, T: AccessType> {
     Column(T::ColumnIterator<'a>),
     Const(T::ScalarRef<'a>, usize),

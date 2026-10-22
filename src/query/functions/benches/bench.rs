@@ -980,3 +980,255 @@ mod datetime_fixed_offset {
         );
     }
 }
+
+/// `sum` over plain and frame of reference encoded columns (one block, no group by), against
+/// plain loops as the lower bound.
+#[divan::bench_group(max_time = 1)]
+mod encoded_sum {
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::Column;
+    use databend_common_expression::FromData;
+    use databend_common_expression::types::DecimalColumn;
+    use databend_common_expression::types::DecimalSize;
+    use databend_common_expression::types::EncodedColumn;
+    use databend_common_expression::types::ForColumn;
+    use databend_common_expression::types::Int64Type;
+    use databend_common_functions::aggregates::eval_aggr;
+
+    const ROWS: usize = 65536;
+
+    /// Pseudo random values in `base..base + range`.
+    fn values(base: i128, range: u64) -> Vec<i128> {
+        let mut x = 0x9e37_79b9_7f4a_7c15u64;
+        (0..ROWS)
+            .map(|_| {
+                x = x
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
+                base + ((x >> 11) % range) as i128
+            })
+            .collect()
+    }
+
+    fn encode(column: &Column) -> BlockEntry {
+        let encoded = ForColumn::try_encode(column).expect("narrower deltas");
+        Column::Encoded(Box::new(EncodedColumn::For(encoded))).into()
+    }
+
+    /// `l_quantity`-like: Decimal(15, 2), deltas fit u16.
+    fn dec64() -> Column {
+        let values = values(100, 4900).into_iter().map(|v| v as i64).collect();
+        Column::Decimal(DecimalColumn::Decimal64(
+            values,
+            DecimalSize::new_unchecked(15, 2),
+        ))
+    }
+
+    /// `sum_charge`-like: Decimal(38, 6) (i128, overflow checked), deltas fit u64.
+    fn dec128() -> Column {
+        Column::Decimal(DecimalColumn::Decimal128(
+            values(900_000_000, 100_000_000_000).into(),
+            DecimalSize::new_unchecked(38, 6),
+        ))
+    }
+
+    fn int64() -> Column {
+        Int64Type::from_data(
+            values(100, 4900)
+                .into_iter()
+                .map(|v| v as i64)
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    fn sum(bencher: divan::Bencher, entry: BlockEntry) {
+        bencher.bench(|| {
+            eval_aggr("sum", vec![], std::slice::from_ref(&entry), ROWS, vec![]).unwrap()
+        });
+    }
+
+    #[divan::bench]
+    fn loop_i64(bencher: divan::Bencher) {
+        let values = values(100, 4900)
+            .into_iter()
+            .map(|v| v as i64)
+            .collect::<Vec<_>>();
+        bencher.bench(|| divan::black_box(&values).iter().sum::<i64>());
+    }
+
+    #[divan::bench]
+    fn loop_u16_deltas(bencher: divan::Bencher) {
+        let deltas = values(0, 4900)
+            .into_iter()
+            .map(|v| v as u16)
+            .collect::<Vec<_>>();
+        bencher.bench(|| {
+            let deltas = divan::black_box(&deltas);
+            100 * deltas.len() as i64 + deltas.iter().map(|d| *d as i64).sum::<i64>()
+        });
+    }
+
+    #[divan::bench]
+    fn loop_i128_checked(bencher: divan::Bencher) {
+        let values = values(900_000_000, 100_000_000_000);
+        bencher.bench(|| {
+            let mut sum = 0i128;
+            for v in divan::black_box(&values) {
+                sum += v;
+                assert!(sum < 10i128.pow(38));
+            }
+            sum
+        });
+    }
+
+    #[divan::bench]
+    fn decimal64_plain(bencher: divan::Bencher) {
+        sum(bencher, dec64().into())
+    }
+
+    #[divan::bench]
+    fn decimal64_for(bencher: divan::Bencher) {
+        sum(bencher, encode(&dec64()))
+    }
+
+    #[divan::bench]
+    fn decimal128_plain(bencher: divan::Bencher) {
+        sum(bencher, dec128().into())
+    }
+
+    #[divan::bench]
+    fn decimal128_for(bencher: divan::Bencher) {
+        sum(bencher, encode(&dec128()))
+    }
+
+    #[divan::bench]
+    fn int64_plain(bencher: divan::Bencher) {
+        sum(bencher, int64().into())
+    }
+
+    #[divan::bench]
+    fn int64_for(bencher: divan::Bencher) {
+        sum(bencher, encode(&int64()))
+    }
+
+    /// Fixed cost of `eval_aggr` (resolve, state, result), to subtract from the others.
+    #[divan::bench]
+    fn decimal64_one_row(bencher: divan::Bencher) {
+        let entry: BlockEntry = dec64().slice(0..1).into();
+        bencher
+            .bench(|| eval_aggr("sum", vec![], std::slice::from_ref(&entry), 1, vec![]).unwrap());
+    }
+
+    fn avg(bencher: divan::Bencher, entry: BlockEntry) {
+        bencher.bench(|| {
+            eval_aggr("avg", vec![], std::slice::from_ref(&entry), ROWS, vec![]).unwrap()
+        });
+    }
+
+    #[divan::bench]
+    fn avg_decimal64_plain(bencher: divan::Bencher) {
+        avg(bencher, dec64().into())
+    }
+
+    #[divan::bench]
+    fn avg_decimal64_for(bencher: divan::Bencher) {
+        avg(bencher, encode(&dec64()))
+    }
+
+    /// `group by` a dictionary encoded key with 4 values (like Q1) into a hash table with
+    /// `name(arg)`, in batches of 2048 rows (the batch size of the hash table); `count(*)`
+    /// measures the grouping alone.
+    fn grouped(bencher: divan::Bencher, name: &str, arg: Option<BlockEntry>) {
+        use std::sync::Arc;
+
+        use bumpalo::Bump;
+        use databend_common_expression::AggregateHashTable;
+        use databend_common_expression::HashTableConfig;
+        use databend_common_expression::ProbeState;
+        use databend_common_expression::ProjectedBlock;
+        use databend_common_expression::aggregate_function::RawAggregateCall;
+        use databend_common_expression::types::DictColumn;
+        use databend_common_expression::types::StringType;
+        use databend_common_functions::aggregates::AGGR_REGISTRY;
+
+        const BATCH: usize = 2048;
+        let flags = StringType::from_data(
+            (0..ROWS)
+                .map(|i| ["A", "N", "R", "Z"][i * 7 % 4])
+                .collect::<Vec<_>>(),
+        );
+        let key: BlockEntry = Column::Encoded(Box::new(EncodedColumn::Dict(
+            DictColumn::try_encode(&flags, 16).unwrap(),
+        )))
+        .into();
+        let args_type = arg.iter().map(BlockEntry::data_type).collect::<Vec<_>>();
+        let aggr = AGGR_REGISTRY
+            .resolve(RawAggregateCall {
+                name,
+                params: &[],
+                args_type: &args_type,
+                distinct: false,
+                order_by: &[],
+            })
+            .unwrap();
+        bencher.bench(|| {
+            let mut table = AggregateHashTable::new(
+                vec![key.data_type()],
+                vec![aggr.clone()],
+                HashTableConfig::default(),
+                Arc::new(Bump::new()),
+            );
+            let mut state = ProbeState::default();
+            for start in (0..ROWS).step_by(BATCH) {
+                let range = start..(start + BATCH).min(ROWS);
+                let keys = vec![key.slice(range.clone())];
+                let params = vec![
+                    arg.iter()
+                        .map(|a| a.slice(range.clone()))
+                        .collect::<Vec<_>>(),
+                ];
+                let params: Vec<ProjectedBlock> = params.iter().map(|p| p.into()).collect();
+                table
+                    .add_groups(
+                        &mut state,
+                        (&keys).into(),
+                        &params,
+                        (&[]).into(),
+                        range.len(),
+                    )
+                    .unwrap();
+            }
+            table
+        });
+    }
+
+    #[divan::bench]
+    fn grouped_count(bencher: divan::Bencher) {
+        grouped(bencher, "count", None)
+    }
+
+    #[divan::bench]
+    fn grouped_sum_decimal64_plain(bencher: divan::Bencher) {
+        grouped(bencher, "sum", Some(dec64().into()))
+    }
+
+    #[divan::bench]
+    fn grouped_sum_decimal64_for(bencher: divan::Bencher) {
+        grouped(bencher, "sum", Some(encode(&dec64())))
+    }
+
+    #[divan::bench]
+    fn grouped_sum_decimal128_plain(bencher: divan::Bencher) {
+        grouped(bencher, "sum", Some(dec128().into()))
+    }
+
+    #[divan::bench]
+    fn grouped_sum_decimal128_for(bencher: divan::Bencher) {
+        grouped(bencher, "sum", Some(encode(&dec128())))
+    }
+
+    #[divan::bench]
+    fn grouped_avg_decimal64_for(bencher: divan::Bencher) {
+        grouped(bencher, "avg", Some(encode(&dec64())))
+    }
+}

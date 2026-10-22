@@ -42,12 +42,12 @@ use databend_common_expression::types::StringType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 use itertools::Itertools;
 
-fn resolve_agg(name: &str, arg_type: DataType) -> AggregateCallRef {
+fn resolve_agg(name: &str, args_type: &[DataType]) -> AggregateCallRef {
     AGGR_REGISTRY
         .resolve(RawAggregateCall {
             name,
             params: &[],
-            args_type: &[arg_type],
+            args_type,
             distinct: false,
             order_by: &[],
         })
@@ -89,13 +89,18 @@ fn encode(columns: &[Column]) -> Vec<Column> {
         .collect()
 }
 
-/// Groups `batches` (group columns, aggregate argument) into one hash table with `count` and
-/// `sum`, and returns the group columns followed by the aggregate results.
+/// Groups `batches` (group columns, aggregate argument) into one hash table with `count(*)`,
+/// `count`, `sum`, `avg` and `array_agg` (which depends on the order of the rows of a group),
+/// and returns the group columns followed by the aggregate results.
 fn aggregate(batches: &[(Vec<Column>, Column)]) -> DataBlock {
     let group_types = batches[0].0.iter().map(|c| c.data_type()).collect_vec();
+    let int64 = [Int64Type::data_type()];
     let aggrs = vec![
-        resolve_agg("count", Int64Type::data_type()),
-        resolve_agg("sum", Int64Type::data_type()),
+        resolve_agg("count", &[]),
+        resolve_agg("count", &int64),
+        resolve_agg("sum", &int64),
+        resolve_agg("avg", &int64),
+        resolve_agg("array_agg", &int64),
     ];
     let mut hashtable = AggregateHashTable::new(
         group_types,
@@ -113,7 +118,11 @@ fn aggregate(batches: &[(Vec<Column>, Column)]) -> DataBlock {
             .collect_vec();
         let params = aggrs
             .iter()
-            .map(|_| vec![BlockEntry::from(arg.clone())])
+            .enumerate()
+            .map(|(i, _)| match i {
+                0 => vec![],
+                _ => vec![BlockEntry::from(arg.clone())],
+            })
             .collect_vec();
         let params: Vec<ProjectedBlock> = params.iter().map(|v| v.into()).collect_vec();
         hashtable
@@ -144,18 +153,25 @@ fn check_group_by_encoded_columns(decimal_step: i64) {
     let plain = plain_group_columns(n, decimal_step);
     let encoded = encode(&plain);
     let arg = Int64Type::from_data((0..n as i64).collect_vec());
+    let encoded_arg = encode(std::slice::from_ref(&arg)).remove(0);
 
     // Two batches, so the second one is matched against the rows of the first one.
     let expected = aggregate(&[(plain.clone(), arg.clone()), (plain.clone(), arg.clone())]);
     assert_eq!(expected.num_rows(), 5 * 3 * 2 * 7);
 
     let cases = [
-        ("encoded, encoded", [&encoded, &encoded]),
-        ("plain, encoded", [&plain, &encoded]),
-        ("encoded, plain", [&encoded, &plain]),
+        ("encoded, encoded", [
+            (&encoded, &encoded_arg),
+            (&encoded, &arg),
+        ]),
+        ("plain, encoded", [(&plain, &arg), (&encoded, &encoded_arg)]),
+        ("encoded, plain", [(&encoded, &encoded_arg), (&plain, &arg)]),
     ];
-    for (name, [first, second]) in cases {
-        let block = aggregate(&[(first.clone(), arg.clone()), (second.clone(), arg.clone())]);
+    for (name, [(first, first_arg), (second, second_arg)]) in cases {
+        let block = aggregate(&[
+            (first.clone(), first_arg.clone()),
+            (second.clone(), second_arg.clone()),
+        ]);
         // Group keys come back as regular columns of the group types.
         for (entry, column) in block.columns().iter().zip(plain.iter()) {
             assert_eq!(entry.data_type(), column.data_type(), "{name}");
