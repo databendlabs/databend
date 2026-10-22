@@ -613,6 +613,70 @@ QUALIFY row_number() OVER (ORDER BY coalesce(a, 100) DESC) = 1
 ----
 NULL
 
+# Before the aggregate, only the SELECT items that GROUP BY, WHERE or key
+# matching refer to are bound. An alias used by such an item is bound too.
+query III rowsort
+SELECT 10 AS x, a + x AS y, count(*) FROM grouping_symbol_t1 GROUP BY ROLLUP(y)
+----
+10 11 1
+10 12 1
+10 NULL 2
+
+query III rowsort
+SELECT (SELECT 10) AS x, a + x AS y, count(*) FROM grouping_symbol_t1 GROUP BY ROLLUP(y)
+----
+10 11 1
+10 12 1
+10 NULL 2
+
+query III rowsort
+SELECT a + 1 AS x, x * 2 AS y, count(*) FROM grouping_symbol_t1 GROUP BY ROLLUP(x, y)
+----
+2 4 1
+2 NULL 1
+3 6 1
+3 NULL 1
+NULL NULL 2
+
+# An alias stands for its pre-aggregate form while matching keys, so `k + 1`
+# is the key `a + 1`, not the key `a` plus one.
+query II rowsort
+SELECT a AS k, k + 1 AS j FROM grouping_symbol_t1 GROUP BY GROUPING SETS ((a), (a + 1))
+----
+1 NULL
+2 NULL
+NULL 2
+NULL 3
+
+query II rowsort
+SELECT a AS k, count(*) FROM grouping_symbol_t1 GROUP BY GROUPING SETS ((a), (a + 1)) HAVING k + 1 = 2
+----
+NULL 1
+
+# A subquery is bound after the aggregate unless GROUP BY or WHERE refers to it.
+query II rowsort
+SELECT a, (SELECT max(n) FROM grouping_symbol_t3 WHERE n <= t.a) AS m
+FROM grouping_symbol_t1 t GROUP BY ROLLUP(a) ORDER BY m
+----
+1 1
+2 2
+NULL NULL
+
+query II rowsort
+SELECT (SELECT max(n) FROM grouping_symbol_t3) AS m, a FROM grouping_symbol_t1 GROUP BY ROLLUP(1, a)
+----
+3 1
+3 2
+3 NULL
+NULL NULL
+
+query II rowsort
+SELECT (SELECT max(n) FROM grouping_symbol_t3) AS m, a FROM grouping_symbol_t1 WHERE a < m GROUP BY ROLLUP(a)
+----
+3 1
+3 2
+3 NULL
+
 statement ok
 DROP TABLE grouping_symbol_t1
 

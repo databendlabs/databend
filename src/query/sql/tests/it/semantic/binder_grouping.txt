@@ -238,29 +238,29 @@ description: A scalar subquery in a grouped SELECT correlates to the key output.
 sql: SELECT a, (SELECT max(n) FROM t3 WHERE n > t1.a) FROM t1 GROUP BY ROLLUP(a)
 status: ok
 EvalScalar
-├── scalars: [a (#3) AS (#3), SUBQUERY AS (#6) AS (#7)]
+├── scalars: [a (#1) AS (#1), SUBQUERY AS (#4) AS (#5)]
 ├── subquerys
 │   └── Subquery (Scalar)
-│       ├── output_column: max(n) (#6)
+│       ├── output_column: max(n) (#4)
 │       └── EvalScalar
-│           ├── scalars: [max(n) (#6) AS (#6)]
+│           ├── scalars: [max(n) (#4) AS (#4)]
 │           └── Aggregate(Initial)
 │               ├── group items: []
-│               ├── aggregate functions: [max(t3.n (#5)) AS (#6)]
+│               ├── aggregate functions: [max(t3.n (#3)) AS (#4)]
 │               └── EvalScalar
-│                   ├── scalars: [t3.n (#5) AS (#5)]
+│                   ├── scalars: [t3.n (#3) AS (#3)]
 │                   └── Filter
-│                       ├── filters: [gt(t3.n (#5), a (#3))]
+│                       ├── filters: [gt(t3.n (#3), a (#1))]
 │                       └── Scan
-│                           ├── table: default.t3 (#2)
+│                           ├── table: default.t3 (#1)
 │                           ├── filters: []
 │                           ├── order by: []
 │                           └── limit: NONE
 └── Aggregate(Initial)
-    ├── group items: [a (#3) AS (#3), _grouping_id (#4) AS (#4)]
+    ├── group items: [a (#1) AS (#1), _grouping_id (#2) AS (#2)]
     ├── aggregate functions: []
     └── EvalScalar
-        ├── scalars: [t1.a (#0) AS (#3)]
+        ├── scalars: [t1.a (#0) AS (#1)]
         └── Scan
             ├── table: default.t1 (#0)
             ├── filters: []
@@ -350,18 +350,18 @@ description: Lazy SRFs over an aggregate and a ROLLUP key are bound over the nul
 sql: SELECT a, generate_series(a, sum(b)) AS u, json_each(object_construct('k', a)), unnest([(a, 1)]) AS w FROM t1 GROUP BY ROLLUP(a) HAVING max(b) > 0 ORDER BY u
 status: ok
 Sort
-├── sort keys: [u (#13) ASC NULLS LAST]
+├── sort keys: [u (#11) ASC NULLS LAST]
 ├── limit: [NONE]
 └── EvalScalar
-    ├── scalars: [a (#6) AS (#6), json_each(object_construct('k', a (#6))) (#10) AS (#10), get(1)(generate_series(a (#6), sum(b)) (#9)) AS (#13), get(1)(unnest(array(tuple(a (#6), 1))) (#11)) AS (#14)]
-    └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(10..36), func_name: "generate_series", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(7..8), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "a", column_name_lower: None, index: 6, data_type: Nullable(Number(Int32)), visibility: Visible, virtual_expr: None, is_srf: false } }), BoundColumnRef(BoundColumnRef { span: Some(29..35), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum(b)", column_name_lower: None, index: 8, data_type: Nullable(Number(Int64)), visibility: InVisible, virtual_expr: None, is_srf: false } })] }), index: 9 }, ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(43..78), func_name: "json_each", params: [], arguments: [FunctionCall(FunctionCall { span: Some(53..77), func_name: "object_construct", params: [], arguments: [ConstantExpr(ConstantExpr { span: Some(70..73), value: String("k") }), BoundColumnRef(BoundColumnRef { span: Some(7..8), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "a", column_name_lower: None, index: 6, data_type: Nullable(Number(Int32)), visibility: Visible, virtual_expr: None, is_srf: false } })] })] }), index: 10 }, ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(80..96), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(87..95), func_name: "array", params: [], arguments: [FunctionCall(FunctionCall { span: Some(88..94), func_name: "tuple", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(7..8), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "a", column_name_lower: None, index: 6, data_type: Nullable(Number(Int32)), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(92..93), value: Number(1_u8) })] })] })] }), index: 11 }] })
+    ├── scalars: [a (#4) AS (#4), json_each(object_construct('k', a (#4))) (#8) AS (#8), get(1)(generate_series(a (#4), sum(b)) (#7)) AS (#11), get(1)(unnest(array(tuple(a (#4), 1))) (#9)) AS (#12)]
+    └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(10..36), func_name: "generate_series", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(7..8), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "a", column_name_lower: None, index: 4, data_type: Nullable(Number(Int32)), visibility: Visible, virtual_expr: None, is_srf: false } }), BoundColumnRef(BoundColumnRef { span: Some(29..35), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum(b)", column_name_lower: None, index: 6, data_type: Nullable(Number(Int64)), visibility: InVisible, virtual_expr: None, is_srf: false } })] }), index: 7 }, ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(43..78), func_name: "json_each", params: [], arguments: [FunctionCall(FunctionCall { span: Some(53..77), func_name: "object_construct", params: [], arguments: [ConstantExpr(ConstantExpr { span: Some(70..73), value: String("k") }), BoundColumnRef(BoundColumnRef { span: Some(7..8), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "a", column_name_lower: None, index: 4, data_type: Nullable(Number(Int32)), visibility: Visible, virtual_expr: None, is_srf: false } })] })] }), index: 8 }, ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(80..96), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(87..95), func_name: "array", params: [], arguments: [FunctionCall(FunctionCall { span: Some(88..94), func_name: "tuple", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(7..8), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "a", column_name_lower: None, index: 4, data_type: Nullable(Number(Int32)), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(92..93), value: Number(1_u8) })] })] })] }), index: 9 }] })
         └── Filter
-            ├── filters: [gt(max(b) (#12), 0)]
+            ├── filters: [gt(max(b) (#10), 0)]
             └── Aggregate(Initial)
-                ├── group items: [a (#6) AS (#6), _grouping_id (#7) AS (#7)]
-                ├── aggregate functions: [sum(t1.b (#1)) AS (#8), max(t1.b (#1)) AS (#12)]
+                ├── group items: [a (#4) AS (#4), _grouping_id (#5) AS (#5)]
+                ├── aggregate functions: [sum(t1.b (#1)) AS (#6), max(t1.b (#1)) AS (#10)]
                 └── EvalScalar
-                    ├── scalars: [t1.b (#1) AS (#1), CAST(t1.a (#0) AS Int32 NULL) AS (#6)]
+                    ├── scalars: [t1.b (#1) AS (#1), CAST(t1.a (#0) AS Int32 NULL) AS (#4)]
                     └── Scan
                         ├── table: default.t1 (#0)
                         ├── filters: []

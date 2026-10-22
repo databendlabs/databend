@@ -57,6 +57,9 @@ use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::planner::binder::ExprContext;
 use crate::planner::binder::aggregate_prepass::AggregateExprInfo;
+use crate::planner::binder::grouping_sets_select::PreAggregateDemand;
+use crate::planner::binder::grouping_sets_select::PreAggregateSelectList;
+use crate::planner::binder::grouping_sets_select::has_grouping_sets;
 use crate::planner::binder::project::SelectInfo;
 use crate::planner::binder::select::SelectAliasCatalog;
 use crate::planner::binder::select::SelectClauseFact;
@@ -199,22 +202,30 @@ impl Binder {
         // GROUPING SETS keys are matched against the pre-aggregate forms of the
         // SELECT list and GROUP BY; bind them without folding column-dependent
         // expressions, e.g. `a IS NULL` on a NOT NULL column.
-        from_context.defer_column_folding = matches!(
-            stmt.group_by,
-            Some(
-                GroupBy::GroupingSets(_)
-                    | GroupBy::Cube(_)
-                    | GroupBy::Rollup(_)
-                    | GroupBy::Combined(_)
-            )
-        );
+        let grouping_sets = has_grouping_sets(stmt);
+        from_context.defer_column_folding = grouping_sets;
 
         // Try put window definitions into bind context.
         // This operation should be before `normalize_select_list` because window functions can be used in select list.
         self.analyze_window_definition(&mut from_context, &stmt.window_list)?;
 
-        // Generate a analyzed select list with from context
-        let mut select_list = self.normalize_select_list(&mut from_context, &stmt.select_list)?;
+        // Generate a analyzed select list with from context. Under GROUPING SETS
+        // it is the pre-aggregate list, bound only where it is referenced; the
+        // SELECT list is bound after the keys are known.
+        let (mut select_list, pre_group_bound) = if grouping_sets {
+            let demand = PreAggregateDemand::new(stmt, order_by);
+            let PreAggregateSelectList { list, bound } = self.normalize_pre_aggregate_select_list(
+                &mut from_context,
+                &stmt.select_list,
+                &demand,
+            )?;
+            (list, Some(bound))
+        } else {
+            (
+                self.normalize_select_list(&mut from_context, &stmt.select_list)?,
+                None,
+            )
+        };
 
         // analyze set returning functions
         self.analyze_project_set_select(&mut from_context, &mut select_list)?;
@@ -232,32 +243,34 @@ impl Binder {
         }
         from_context.defer_column_folding = false;
 
-        // Bind the SELECT list again now that the GROUPING SETS keys are known,
-        // so that expressions over keys bind to their nullable outputs.
-        // TODO: the first binding is only needed for the items GROUP BY refers to
-        // by position or alias and for WHERE aliases. Binding all of it binds
-        // every subquery twice and leaves unused tables and columns of the
-        // discarded binding in the metadata.
+        // Bind the SELECT list now that the GROUPING SETS keys are known, so that
+        // expressions over keys bind to their nullable outputs.
         let mut where_alias = None;
         let mut pre_group_list = None;
-        if from_context.aggregate_info.grouping_sets().is_some() {
+        if let Some(bound) = pre_group_bound {
+            if from_context.aggregate_info.grouping_sets().is_none() {
+                return Err(ErrorCode::Internal(
+                    "GROUPING SETS query is missing its grouping sets",
+                ));
+            }
             self.prepare_grouping_sets_scope(&mut from_context)?;
+            let pre_group = PreAggregateSelectList {
+                list: std::mem::take(&mut select_list),
+                bound,
+            };
             let mut post_group_list = self.normalize_grouping_sets_select_list(
                 &mut from_context,
                 &stmt.select_list,
-                &select_list,
+                &pre_group,
             )?;
             self.analyze_project_set_select(&mut from_context, &mut post_group_list)?;
-            if let Some(scope) = &mut from_context.grouping_key_scope {
-                for (item, pre_group_item) in post_group_list.items.iter().zip(&select_list.items) {
-                    scope.add_alias_input(item.scalar.clone(), pre_group_item.scalar.clone());
-                }
-            }
+            record_alias_inputs(&mut from_context, &post_group_list, &pre_group);
             where_alias = Some(std::mem::replace(
                 &mut semantic_alias,
                 post_group_list.alias_catalog(),
             ));
-            pre_group_list = Some(std::mem::replace(&mut select_list, post_group_list));
+            select_list = post_group_list;
+            pre_group_list = Some(pre_group);
         }
 
         self.analyze_aggregate_select(&mut from_context, &mut select_list)?;
@@ -311,12 +324,8 @@ impl Binder {
 
         // HAVING resolves aliases to the rewritten items; record their
         // pre-aggregate forms too.
-        if let (Some(pre_group_list), Some(scope)) =
-            (&pre_group_list, &mut from_context.grouping_key_scope)
-        {
-            for (item, pre_group_item) in select_list.items.iter().zip(&pre_group_list.items) {
-                scope.add_alias_input(item.scalar.clone(), pre_group_item.scalar.clone());
-            }
+        if let Some(pre_group_list) = &pre_group_list {
+            record_alias_inputs(&mut from_context, &select_list, pre_group_list);
         }
 
         let global_view = SelectGlobalView {
@@ -1004,6 +1013,23 @@ impl SelectRewriter {
         }
 
         Ok(source_query)
+    }
+}
+
+/// Record the pre-aggregate forms of the SELECT items that have one, keyed by
+/// the forms post-aggregate clauses resolve their aliases to.
+fn record_alias_inputs(
+    bind_context: &mut BindContext,
+    select_list: &SelectList<'_>,
+    pre_group: &PreAggregateSelectList<'_>,
+) {
+    let Some(scope) = &mut bind_context.grouping_key_scope else {
+        return;
+    };
+    for (position, item) in select_list.items.iter().enumerate() {
+        if let Some(pre_group_item) = pre_group.item(position) {
+            scope.add_alias_input(item.scalar.clone(), pre_group_item.scalar.clone());
+        }
     }
 }
 

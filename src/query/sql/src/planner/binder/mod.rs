@@ -34,6 +34,7 @@ mod distinct;
 mod explain;
 mod expr_values;
 mod file_format;
+mod grouping_sets_select;
 mod having;
 mod insert;
 mod insert_multi_table;
