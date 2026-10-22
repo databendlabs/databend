@@ -586,7 +586,7 @@ impl SubqueryDecorrelatorOptimizer {
         )?;
 
         let metadata = self.ctx.metadata_read();
-        let group_items = aggregate
+        let group_items: Vec<ScalarItem> = aggregate
             .group_items
             .iter()
             .map(Item::Scalar)
@@ -616,6 +616,11 @@ impl SubqueryDecorrelatorOptimizer {
                 // For scalar subquery, we'll convert it to single join.
                 // Single join is similar to left outer join, if there isn't matched row in the right side, we'll add NULL value for the right side.
                 // But for count aggregation function, NULL values should be 0.
+                // TODO: this only holds for a scalar aggregate. With a GROUP BY,
+                // even one on outer columns only, an outer row without matches
+                // has no group and the subquery yields NULL, but it becomes 0, e.g.
+                // `(SELECT count(*) FROM x WHERE x.a = t.a GROUP BY t.a)`. Grouping
+                // sets with an empty set do yield a 0 row and need separate care.
                 if aggregate.aggregate_functions.len() == 1
                     && (func_name.eq_ignore_ascii_case("count")
                         || func_name.eq_ignore_ascii_case("count_distinct"))
@@ -628,13 +633,27 @@ impl SubqueryDecorrelatorOptimizer {
                 index: item.index,
             })
         }
+        let mut grouping_sets = aggregate.grouping_sets.clone();
+        if let Some(grouping_sets) = &mut grouping_sets {
+            // Correlated columns partition the subquery per outer row, so they
+            // belong to every grouping set and never receive injected NULLs.
+            let correlated_keys = group_items[aggregate.group_items.len()..]
+                .iter()
+                .map(|item| item.index)
+                .collect::<Vec<_>>();
+            for set in &mut grouping_sets.sets {
+                set.extend(correlated_keys.iter().copied());
+                set.sort();
+                set.dedup();
+            }
+        }
         Ok((
             flatten_plan.build_unary(Aggregate {
                 group_items,
                 aggregate_functions: agg_items,
                 from_distinct: aggregate.from_distinct,
                 rank_limit: aggregate.rank_limit.clone(),
-                grouping_sets: aggregate.grouping_sets.clone(),
+                grouping_sets,
             }),
             derived_columns,
         ))
@@ -1277,18 +1296,30 @@ impl SubqueryDecorrelatorOptimizer {
                 let mut aggregate = aggregate.clone();
                 let metadata = self.ctx.get_metadata();
                 let mut metadata = metadata.write();
+                if let Some(grouping_sets) = &mut aggregate.grouping_sets {
+                    // Unlike the other keys, `_grouping_id` is produced by the
+                    // aggregate expansion itself and has no child binding to clone.
+                    let old = grouping_sets.grouping_id_index;
+                    let column = metadata.column(old);
+                    let (name, data_type) = (column.name(), column.data_type());
+                    let new = metadata.add_derived_column(name, data_type);
+                    derived_columns.record(old, new);
+                    grouping_sets.grouping_id_index = new;
+                }
                 for item in &mut aggregate.group_items {
                     *item = self.clone_outer_scalar_item(item, &mut metadata, derived_columns)?;
                 }
                 for func in &mut aggregate.aggregate_functions {
                     *func = self.clone_outer_scalar_item(func, &mut metadata, derived_columns)?;
                 }
-                aggregate.rank_limit = None;
-                if aggregate.grouping_sets.is_some() {
-                    return Err(ErrorCode::Unimplemented(
-                        "join left plan can't contain aggregate with GROUPING SETS to dcorrelated join right plan",
-                    ));
+                if let Some(grouping_sets) = &mut aggregate.grouping_sets {
+                    for set in &mut grouping_sets.sets {
+                        for index in set {
+                            *index = derived_columns.must_resolve(*index)?;
+                        }
+                    }
                 }
+                aggregate.rank_limit = None;
                 aggregate.into()
             }
             _ => {

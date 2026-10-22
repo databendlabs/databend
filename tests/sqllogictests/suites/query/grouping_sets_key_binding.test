@@ -1,0 +1,620 @@
+# GROUPING SETS keys output dedicated nullable symbols. Expressions after the
+# aggregate are bound once the keys are known: a node whose pre-aggregate form
+# equals a key binds to the key output, the outermost first. Aggregate
+# arguments keep reading the input. Exercise native expansion and both UNION
+# rewrites.
+# run-with-settings: grouping_sets_to_union=1
+# run-with-settings: grouping_sets_to_union=1,enable_cascading_grouping_sets=1
+
+statement ok
+CREATE OR REPLACE TABLE grouping_symbol_t1(a Int32 NOT NULL)
+
+statement ok
+INSERT INTO grouping_symbol_t1 VALUES (1), (2)
+
+statement ok
+CREATE OR REPLACE TABLE grouping_symbol_t3(n Int32 NOT NULL)
+
+statement ok
+INSERT INTO grouping_symbol_t3 VALUES (1), (2), (3)
+
+# Direct and alias references must retain the same nullable-column predicates.
+query IIIII rowsort
+SELECT t.a AS k, coalesce(k, 100), coalesce(t.a, 100),
+       if(k IS NULL, 100, k), if(t.a IS NOT NULL, t.a, 100)
+FROM grouping_symbol_t1 t GROUP BY ROLLUP(k)
+----
+1 1 1 1 1
+2 2 2 2 2
+NULL 100 100 100 100
+
+# A grouping-key expression is evaluated before grouping. Its grand total stays
+# NULL rather than applying the expression's fallback again after grouping.
+query II rowsort
+SELECT coalesce(a, 100) AS k, grouping(k)
+FROM grouping_symbol_t1 GROUP BY ROLLUP(1)
+----
+1 0
+2 0
+NULL 1
+
+# CUBE and combined group lists must preserve the same folding boundary.
+query II rowsort
+SELECT a, coalesce(a, 100) FROM grouping_symbol_t1 GROUP BY CUBE(a)
+----
+1 1
+2 2
+NULL 100
+
+query III rowsort
+SELECT a, a + 1 AS b, coalesce(b, 100)
+FROM grouping_symbol_t1 GROUP BY a, ROLLUP(a + 1)
+----
+1 2 2
+1 NULL 100
+2 3 3
+2 NULL 100
+
+query II rowsort
+SELECT x.a, q.n
+FROM (SELECT a FROM grouping_symbol_t1 GROUP BY ROLLUP(a)) x
+JOIN LATERAL (SELECT n FROM grouping_symbol_t3 WHERE n > x.a) q ON true
+----
+1 2
+1 3
+2 3
+
+query III rowsort
+SELECT x.a, x.s, q.n
+FROM (SELECT a, sum(a + 1) AS s FROM grouping_symbol_t1 GROUP BY ROLLUP(a)) x
+JOIN LATERAL (SELECT n FROM grouping_symbol_t3 WHERE n > x.a) q ON true
+----
+1 2 2
+1 2 3
+2 3 3
+
+query II rowsort
+SELECT x.a, (SELECT max(n) FROM grouping_symbol_t3 WHERE n > x.a)
+FROM (SELECT a FROM grouping_symbol_t1 GROUP BY ROLLUP(a)) x
+----
+1 3
+2 3
+NULL NULL
+
+# Correlated references in the same SELECT bind to the key outputs.
+query II rowsort
+SELECT a, (SELECT max(n) FROM grouping_symbol_t3 WHERE n > grouping_symbol_t1.a)
+FROM grouping_symbol_t1 GROUP BY ROLLUP(a)
+----
+1 3
+2 3
+NULL NULL
+
+# Correlated expressions over keys keep the nullable type, so predicates are
+# not folded as if the key were NOT NULL.
+query IIII rowsort
+SELECT a, (SELECT t.a + 1), (SELECT coalesce(t.a, 100)),
+       (SELECT max(coalesce(t.a, 100) + s.a) FROM grouping_symbol_t1 s)
+FROM grouping_symbol_t1 t GROUP BY ROLLUP(a)
+----
+1 2 1 3
+2 3 2 4
+NULL NULL 100 102
+
+query II rowsort
+SELECT a, (SELECT n FROM grouping_symbol_t3 ORDER BY grouping_symbol_t1.a, n DESC LIMIT 1)
+FROM grouping_symbol_t1 GROUP BY ROLLUP(a)
+----
+1 3
+2 3
+NULL 3
+
+query II rowsort
+SELECT a, (SELECT n + grouping_symbol_t1.a FROM grouping_symbol_t3 ORDER BY n DESC LIMIT 1)
+FROM grouping_symbol_t1 GROUP BY ROLLUP(a)
+----
+1 4
+2 5
+NULL NULL
+
+query II rowsort
+SELECT a, (SELECT max(v) FROM (SELECT n + grouping_symbol_t1.a AS v FROM grouping_symbol_t3 UNION ALL SELECT n + grouping_symbol_t1.a + 1 AS v FROM grouping_symbol_t3) s)
+FROM grouping_symbol_t1 GROUP BY ROLLUP(a)
+----
+1 5
+2 6
+NULL NULL
+
+query II rowsort
+SELECT a, (SELECT max(v) FROM (SELECT n + grouping_symbol_t1.a AS v FROM grouping_symbol_t3 UNION ALL SELECT n + 1 AS v FROM grouping_symbol_t3) s)
+FROM grouping_symbol_t1 GROUP BY ROLLUP(a)
+----
+1 4
+2 5
+NULL 4
+
+query II rowsort
+SELECT a, (SELECT first_value(n + grouping_symbol_t1.a) OVER (ORDER BY n) FROM grouping_symbol_t3 LIMIT 1)
+FROM grouping_symbol_t1 GROUP BY ROLLUP(a)
+----
+1 2
+2 3
+NULL NULL
+
+query IB rowsort
+SELECT a, EXISTS (SELECT 1 FROM grouping_symbol_t3 WHERE n > grouping_symbol_t1.a)
+FROM grouping_symbol_t1 GROUP BY ROLLUP(a)
+----
+1 1
+2 1
+NULL 0
+
+query IB rowsort
+SELECT x.a, EXISTS (SELECT 1 FROM grouping_symbol_t3 WHERE n > x.a)
+FROM (SELECT a FROM grouping_symbol_t1 GROUP BY ROLLUP(a)) x
+----
+1 1
+2 1
+NULL 0
+
+query II rowsort
+WITH x AS (SELECT a FROM grouping_symbol_t1 GROUP BY ROLLUP(a))
+SELECT x1.a, x2.a FROM x x1 JOIN x x2 ON x1.a = x2.a
+----
+1 1
+2 2
+
+# Preserve the nullable key and corrected fallback in both CTE consumers.
+query IIII rowsort
+WITH x AS (SELECT a, coalesce(a, 100) AS k FROM grouping_symbol_t1 GROUP BY ROLLUP(a))
+SELECT x1.a, x2.a, x1.k, x2.k FROM x x1 JOIN x x2 ON x1.a IS NOT DISTINCT FROM x2.a
+----
+1 1 1 1
+2 2 2 2
+NULL NULL 100 100
+
+# Derived projection metadata must include nested nullability as well.
+query III rowsort
+WITH x AS (SELECT a, [a] AS v FROM grouping_symbol_t1 GROUP BY ROLLUP(a))
+SELECT x1.a, x1.v[1], x2.v[1] FROM x x1 JOIN x x2 ON x1.a IS NOT DISTINCT FROM x2.a
+----
+1 1 1
+2 2 2
+NULL NULL NULL
+
+query III rowsort
+WITH x AS (SELECT a, (SELECT [grouping_symbol_t1.a]) AS v FROM grouping_symbol_t1 GROUP BY ROLLUP(a))
+SELECT x1.a, x1.v[1], x2.v[1] FROM x x1 JOIN x x2 ON x1.a IS NOT DISTINCT FROM x2.a
+----
+1 1 1
+2 2 2
+NULL NULL NULL
+
+# The inferred predicate on x2 must agree with the CTE consumer schema.
+query II rowsort
+WITH x AS (SELECT a FROM grouping_symbol_t1 GROUP BY ROLLUP(a))
+SELECT x1.a, x2.a FROM x x1 JOIN x x2 ON x1.a = x2.a WHERE x1.a > 1
+----
+2 2
+
+query T
+WITH x AS (SELECT a FROM grouping_symbol_t1 GROUP BY ROLLUP(a))
+SELECT typeof(x1.a) FROM x x1 JOIN x x2 ON x1.a IS NOT DISTINCT FROM x2.a LIMIT 1
+----
+INT NULL
+
+# Positional/computed keys get nullable symbols; SUM still reads the input.
+query IIIII rowsort
+SELECT a + 1 AS k, grouping(k), sum(a), coalesce(k, 100), coalesce(k + 1, 100)
+FROM grouping_symbol_t1 GROUP BY ROLLUP(1)
+----
+2 0 1 2 3
+3 0 2 3 4
+NULL 1 3 100 100
+
+# WHERE and aggregate arguments consume input rows, not summary NULLs.
+query IIII rowsort
+SELECT a, coalesce(a, 100) AS k, sum(coalesce(a, 100)), count(if(a IS NULL, NULL, a))
+FROM grouping_symbol_t1 WHERE a IS NOT NULL AND k < 3 GROUP BY ROLLUP(a)
+----
+1 1 1 1
+2 2 2 1
+NULL 100 3 2
+
+query II rowsort
+SELECT a, coalesce(a, 100) AS k
+FROM grouping_symbol_t1 GROUP BY ROLLUP(a) HAVING k = 100
+----
+NULL 100
+
+query II
+SELECT a, coalesce(a, 100) AS k
+FROM grouping_symbol_t1 GROUP BY ROLLUP(a) ORDER BY coalesce(a, 100) DESC
+----
+NULL 100
+2 2
+1 1
+
+# Computed grouping keys must not be reused as non-nullable aggregate inputs.
+query IIIII rowsort
+SELECT a + 1 AS k, grouping(k), sum(a + 1), count(a + 1), min(a + 1)
+FROM grouping_symbol_t1 GROUP BY ROLLUP(1)
+----
+2 0 2 1 2
+3 0 3 1 3
+NULL 1 5 2 2
+
+# Ordered aggregates must likewise retain the original argument/sort-key type.
+query IT rowsort
+SELECT a + 1 AS k, string_agg(to_string(a), ',') WITHIN GROUP (ORDER BY a + 1)
+FROM grouping_symbol_t1 GROUP BY ROLLUP(1)
+----
+2 1
+3 2
+NULL 1,2
+
+# Lazy SRFs run after grouping and must read the nullable grouping outputs,
+# including when that changes a nested SRF result type.
+query II rowsort
+SELECT a, unnest([a, a + 1]) FROM grouping_symbol_t1 GROUP BY ROLLUP(a)
+----
+1 1
+1 2
+2 2
+2 3
+NULL NULL
+NULL NULL
+
+query IT rowsort
+SELECT a, unnest([(a, sum(a))]) FROM grouping_symbol_t1 GROUP BY ROLLUP(a)
+----
+1 (1,1)
+2 (2,2)
+NULL (NULL,3)
+
+# Keep the nullable arithmetic result and the fallback predicate in the same
+# window case: the summary contributes NULL to one sum and 100 to the other.
+query IIII rowsort
+SELECT a + 1 AS k, grouping(k), sum(a + 1 + 1) OVER (), sum(coalesce(k + 1, 100)) OVER ()
+FROM grouping_symbol_t1 GROUP BY ROLLUP(1)
+----
+2 0 7 107
+3 0 7 107
+NULL 1 7 107
+
+query II rowsort
+SELECT a, sum(coalesce(a, 100)) OVER () AS total
+FROM grouping_symbol_t1 GROUP BY ROLLUP(a) QUALIFY total = 103
+----
+1 103
+2 103
+NULL 103
+
+query II rowsort
+SELECT a + 1 AS k, count(a + 1) OVER ()
+FROM grouping_symbol_t1 GROUP BY ROLLUP(1)
+----
+2 2
+3 2
+NULL 2
+
+query III rowsort
+SELECT a + 1 AS k, lag(k, 1, 0) OVER (ORDER BY k NULLS FIRST), lag(k, 1, 0) OVER (ORDER BY k NULLS FIRST)
+FROM grouping_symbol_t1 GROUP BY ROLLUP(1)
+----
+2 NULL NULL
+3 2 2
+NULL 0 0
+
+query III rowsort
+WITH x AS (SELECT a, first_value([a]) OVER (ORDER BY a NULLS LAST) AS v FROM grouping_symbol_t1 GROUP BY ROLLUP(a))
+SELECT x1.a, x1.v[1], x2.v[1] FROM x x1 JOIN x x2 ON x1.a IS NOT DISTINCT FROM x2.a
+----
+1 1 1
+2 1 1
+NULL 1 1
+
+# Explicit GROUPING SETS also preserves the predicate. AVG forces the ordinary
+# GROUPING SETS-to-UNION fallback rather than the hierarchical rewrite.
+query IIRI rowsort
+SELECT a, grouping(a), avg(a), coalesce(a, 100)
+FROM grouping_symbol_t1 GROUP BY GROUPING SETS ((a), ())
+----
+1 0 1.0 1
+2 0 2.0 2
+NULL 1 1.5 100
+
+# A three-level ROLLUP exercises the hierarchical rewrite (and optional cascade).
+# Nullable input keys coexist with newly-nullable keys, aggregate arguments and
+# expressions involving grouping outputs. Nonzero fallbacks also catch early
+# folding that would otherwise be masked by a default numeric value of zero.
+query IIIIII rowsort
+SELECT a, b, grouping(a, b), count(a), sum(a), coalesce(a, 100) + coalesce(b, 100)
+FROM (SELECT a, if(a = 1, NULL, a % 2) AS b FROM grouping_symbol_t1) t
+GROUP BY ROLLUP(a, b)
+----
+1 NULL 0 1 1 101
+1 NULL 1 1 1 101
+2 0 0 1 2 2
+2 NULL 1 1 2 102
+NULL NULL 3 2 3 200
+
+# SQL UDF arguments bind to the key outputs before the body is expanded.
+statement ok
+CREATE OR REPLACE FUNCTION grouping_symbol_default AS (x) -> coalesce(x, 100)
+
+query II rowsort
+SELECT a, grouping_symbol_default(a) FROM grouping_symbol_t1 GROUP BY ROLLUP(a)
+----
+1 1
+2 2
+NULL 100
+
+statement ok
+DROP FUNCTION grouping_symbol_default
+
+# Decorrelation adds the outer columns of a correlated subquery as grouping
+# keys. They belong to every grouping set, so they keep their values and type
+# and aggregates may read them.
+query II rowsort
+SELECT a, (SELECT count(*) FROM grouping_symbol_t3 WHERE n <= t.a GROUP BY ROLLUP(n) HAVING n IS NULL)
+FROM grouping_symbol_t1 t
+----
+1 1
+2 2
+
+query II rowsort
+SELECT a, (SELECT max(t.a * 10 + n) FROM grouping_symbol_t3 WHERE n <= t.a GROUP BY ROLLUP(n) ORDER BY 1 DESC LIMIT 1)
+FROM grouping_symbol_t1 t
+----
+1 11
+2 22
+
+query II rowsort
+SELECT a, (SELECT count(t.a) + count(*) * 100 FROM grouping_symbol_t3 WHERE n <= t.a GROUP BY CUBE(n) ORDER BY 1 DESC LIMIT 1)
+FROM grouping_symbol_t1 t
+----
+1 101
+2 202
+
+query II rowsort
+SELECT a, (SELECT grouping(n) FROM grouping_symbol_t3 WHERE n <= t.a GROUP BY ROLLUP(n) ORDER BY 1 DESC LIMIT 1)
+FROM grouping_symbol_t1 t
+----
+1 1
+2 1
+
+# The nullable grouping output of an outer key may be matched by `inner = outer`
+# with a non-nullable inner column. The summary row matches nothing.
+query II rowsort
+SELECT a, (SELECT count(*) FROM grouping_symbol_t3 WHERE n = t.a)
+FROM grouping_symbol_t1 t GROUP BY ROLLUP(a)
+----
+1 1
+2 1
+NULL 0
+
+query IB rowsort
+SELECT a, EXISTS (SELECT 1 FROM grouping_symbol_t3 WHERE t.a = n)
+FROM grouping_symbol_t1 t GROUP BY ROLLUP(a)
+----
+1 1
+2 1
+NULL 0
+
+query II rowsort
+SELECT x.a, q.m
+FROM (SELECT a FROM grouping_symbol_t1 GROUP BY ROLLUP(a)) x,
+LATERAL (SELECT max(n) m FROM grouping_symbol_t3 WHERE n = x.a) q
+----
+1 1
+2 2
+NULL NULL
+
+# `_grouping_id` is UInt32: at most 32 distinct grouping keys, including the
+# highest bit. Correlated keys added by decorrelation take no bit.
+query I
+SELECT count(*) FROM (
+  SELECT grouping(a + 31) g FROM grouping_symbol_t1
+  GROUP BY GROUPING SETS (a, a + 1, a + 2, a + 3, a + 4, a + 5, a + 6, a + 7, a + 8, a + 9, a + 10, a + 11, a + 12, a + 13, a + 14, a + 15, a + 16, a + 17, a + 18, a + 19, a + 20, a + 21, a + 22, a + 23, a + 24, a + 25, a + 26, a + 27, a + 28, a + 29, a + 30, a + 31)
+) WHERE g = 0
+----
+2
+
+query II rowsort
+SELECT a, (SELECT count(*) FROM (
+  SELECT count(*) FROM grouping_symbol_t3 WHERE n <= t.a
+  GROUP BY GROUPING SETS (n, n + 1, n + 2, n + 3, n + 4, n + 5, n + 6, n + 7, n + 8, n + 9, n + 10, n + 11, n + 12, n + 13, n + 14, n + 15, n + 16, n + 17, n + 18, n + 19, n + 20, n + 21, n + 22, n + 23, n + 24, n + 25, n + 26, n + 27, n + 28, n + 29, n + 30, n + 31)
+)) FROM grouping_symbol_t1 t
+----
+1 32
+2 64
+
+statement error 1065.*at most 32 distinct grouping expressions, got 33
+SELECT count(*) FROM grouping_symbol_t1
+GROUP BY GROUPING SETS (a, a + 1, a + 2, a + 3, a + 4, a + 5, a + 6, a + 7, a + 8, a + 9, a + 10, a + 11, a + 12, a + 13, a + 14, a + 15, a + 16, a + 17, a + 18, a + 19, a + 20, a + 21, a + 22, a + 23, a + 24, a + 25, a + 26, a + 27, a + 28, a + 29, a + 30, a + 31, a + 32)
+
+# Required constant parameters must still be evaluated during binding.
+query IRI rowsort
+SELECT a, quantile_cont(1 - 1)(a), 20 + 22 FROM grouping_symbol_t1 GROUP BY ROLLUP(a)
+----
+1 1.0 42
+2 2.0 42
+NULL 1.0 42
+
+# The outermost key wins: `a + 1` is a key of its own, not the key `a` plus one.
+query II rowsort
+SELECT a, a + 1 FROM grouping_symbol_t1 GROUP BY GROUPING SETS ((a), (a + 1))
+----
+1 NULL
+2 NULL
+NULL 2
+NULL 3
+
+query I rowsort
+SELECT coalesce(a + 1, 0) + coalesce(a, 0) * 10 FROM grouping_symbol_t1
+GROUP BY GROUPING SETS ((a), (a + 1))
+----
+10
+2
+20
+3
+
+# A SQL UDF expands to builtin functions, so a call over a key matches it.
+statement ok
+CREATE OR REPLACE FUNCTION grouping_symbol_inc AS (x) -> x + 1
+
+query II rowsort
+SELECT grouping_symbol_inc(a), coalesce(grouping_symbol_inc(a), 100)
+FROM grouping_symbol_t1 GROUP BY ROLLUP(grouping_symbol_inc(a))
+----
+2 2
+3 3
+NULL 100
+
+# Keys are compared as written, without normalization.
+statement error (?s)1065.*GROUPING SETS key .* must be referenced by its SELECT alias or position
+SELECT grouping_symbol_inc(a) FROM grouping_symbol_t1 GROUP BY ROLLUP(a + 1)
+
+statement ok
+DROP FUNCTION grouping_symbol_inc
+
+statement error (?s)1065.*column "a" must appear in the GROUP BY clause
+SELECT 1 + a FROM grouping_symbol_t1 GROUP BY ROLLUP(a + 1)
+
+# A non-deterministic key is only referenced by its alias or position.
+statement error (?s)1065.*GROUPING SETS key .* must be referenced by its SELECT alias or position
+SELECT a + rand() FROM grouping_symbol_t1 GROUP BY ROLLUP(a + rand())
+
+query I
+SELECT count(*) FROM (
+  SELECT a + rand() * 0 AS k, grouping(k) AS g FROM grouping_symbol_t1 GROUP BY ROLLUP(k)
+) WHERE g = 1
+----
+1
+
+query I
+SELECT count(*) FROM (
+  SELECT a + rand() * 0, grouping(a) AS g FROM grouping_symbol_t1 GROUP BY ROLLUP(1, a)
+) WHERE g = 1
+----
+3
+
+# `*` expands to keys as well.
+query I rowsort
+SELECT * FROM grouping_symbol_t1 GROUP BY ROLLUP(a)
+----
+1
+2
+NULL
+
+query II rowsort
+SELECT *, coalesce(a, 100) FROM grouping_symbol_t1 GROUP BY ROLLUP(1)
+----
+1 1
+2 2
+NULL 100
+
+# A lambda body captures the key output.
+query IT rowsort
+SELECT a, array_transform([1, 2], x -> x + a) FROM grouping_symbol_t1 GROUP BY ROLLUP(a)
+----
+1 [2,3]
+2 [3,4]
+NULL [NULL,NULL]
+
+# Nested contexts reach the key outputs of the outer SELECT.
+query II rowsort
+SELECT a, (SELECT max(m) FROM (SELECT coalesce(t.a, 100) + n AS m FROM grouping_symbol_t3) s)
+FROM grouping_symbol_t1 t GROUP BY ROLLUP(a)
+----
+1 4
+2 5
+NULL 103
+
+query II rowsort
+SELECT a, (SELECT max(v[1]) FROM (SELECT [n + t.a] AS v FROM grouping_symbol_t3 UNION ALL SELECT [2] AS v) s)
+FROM grouping_symbol_t1 t GROUP BY ROLLUP(a)
+----
+1 4
+2 5
+NULL 2
+
+query II rowsort
+SELECT a, (SELECT max(n) FROM grouping_symbol_t3 WHERE n = t.a + 1)
+FROM grouping_symbol_t1 t GROUP BY ROLLUP(a + 1), a
+----
+1 2
+1 NULL
+2 3
+2 NULL
+
+# A subquery cannot read an input column that no key covers.
+statement error (?s)1065.*column "b" must appear in the GROUP BY clause
+SELECT a, (SELECT t.b) FROM (SELECT a, a * 10 AS b FROM grouping_symbol_t1) t GROUP BY ROLLUP(a)
+
+# Aggregates in a subquery of an aggregate argument read the input.
+query II rowsort
+SELECT a, sum((SELECT t.a * 10)) FROM grouping_symbol_t1 t GROUP BY ROLLUP(a)
+----
+1 10
+2 20
+NULL 30
+
+# grouping() is evaluated after the aggregate.
+statement error (?s)1065.*Aggregate function arguments can't contain grouping functions
+SELECT sum(grouping(a)) FROM grouping_symbol_t1 GROUP BY CUBE(a)
+
+query II rowsort
+SELECT a, sum(grouping(a)) OVER () FROM grouping_symbol_t1 GROUP BY CUBE(a)
+----
+1 1
+2 1
+NULL 1
+
+# A set-returning function over a column matches a key over the same function.
+query II rowsort
+SELECT unnest([a, a + 10]), count(*) FROM grouping_symbol_t1 GROUP BY ROLLUP(unnest([a, a + 10]))
+----
+1 1
+11 1
+12 1
+2 1
+NULL 4
+
+query II rowsort
+SELECT unnest([a, a + 10]) AS u, count(*) FROM grouping_symbol_t1 GROUP BY ROLLUP(u)
+----
+1 1
+11 1
+12 1
+2 1
+NULL 4
+
+# WHERE reads the input even through an alias of a key.
+query II rowsort
+SELECT a AS k, count(*) FROM grouping_symbol_t1 WHERE k IS NOT NULL GROUP BY ROLLUP(k)
+----
+1 1
+2 1
+NULL 2
+
+# HAVING, QUALIFY and ORDER BY bind to the key outputs.
+query II
+SELECT a, coalesce(a, 100) FROM grouping_symbol_t1 t GROUP BY ROLLUP(a)
+HAVING coalesce(t.a, 100) > 1 ORDER BY t.a NULLS LAST
+----
+2 2
+NULL 100
+
+query I
+SELECT a FROM grouping_symbol_t1 GROUP BY ROLLUP(a)
+QUALIFY row_number() OVER (ORDER BY coalesce(a, 100) DESC) = 1
+----
+NULL
+
+statement ok
+DROP TABLE grouping_symbol_t1
+
+statement ok
+DROP TABLE grouping_symbol_t3

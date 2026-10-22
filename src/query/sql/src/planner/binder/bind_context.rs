@@ -280,6 +280,15 @@ pub struct BindContext {
     /// functions, otherwise a grouping error will be raised.
     pub in_grouping: bool,
 
+    /// Post-aggregate binding state of a SELECT with GROUPING SETS. Only the
+    /// context of that SELECT owns it; nested contexts see it via `parent`.
+    pub grouping_key_scope: Option<GroupingKeyScope>,
+
+    /// Keep column-dependent expressions unfolded while binding the
+    /// pre-aggregate forms that grouping keys are matched against. Not
+    /// inherited by nested contexts.
+    pub defer_column_folding: bool,
+
     /// Views that are on the current binding path.
     pub binding_views: HashSet<ViewIdent>,
 
@@ -309,6 +318,37 @@ pub struct BindContext {
     pub planning_materialized_view_rewrite: bool,
 
     pub window_definitions: DashMap<String, WindowSpec>,
+}
+
+/// Post-aggregate binding state of a SELECT with GROUPING SETS.
+///
+/// While `active`, a node whose pre-aggregate form is exactly a grouping key
+/// binds to the nullable output of that key. See `TypeChecker` for the rules.
+#[derive(Clone, Debug, Default)]
+pub struct GroupingKeyScope {
+    /// Whether expressions being bound are evaluated after the aggregate.
+    pub active: bool,
+    /// Pre-aggregate forms of SELECT aliases, keyed by the post-aggregate
+    /// forms that post-aggregate clauses resolve aliases to.
+    alias_inputs: Vec<(ScalarExpr, ScalarExpr)>,
+}
+
+impl GroupingKeyScope {
+    pub fn add_alias_input(&mut self, output: ScalarExpr, input: ScalarExpr) {
+        self.alias_inputs.push((output, input));
+    }
+
+    /// The pre-aggregate form of an alias, or `None` if it is unknown or
+    /// ambiguous.
+    pub fn alias_input(&self, output: &ScalarExpr) -> Option<&ScalarExpr> {
+        let mut inputs = self
+            .alias_inputs
+            .iter()
+            .filter(|(alias_output, _)| alias_output == output)
+            .map(|(_, input)| input);
+        let input = inputs.next()?;
+        inputs.all(|other| other == input).then_some(input)
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -393,6 +433,8 @@ impl BindContext {
             srf_info: SetReturningInfo::default(),
             cte_context: CteContext::default(),
             in_grouping: false,
+            grouping_key_scope: None,
+            defer_column_folding: false,
             binding_views: HashSet::new(),
             have_async_func: false,
             have_udf_script: false,
@@ -443,6 +485,8 @@ impl BindContext {
             srf_info: Default::default(),
             cte_context: parent.cte_context.clone(),
             in_grouping: false,
+            grouping_key_scope: None,
+            defer_column_folding: false,
             binding_views: parent.binding_views.clone(),
             have_async_func: false,
             have_udf_script: false,

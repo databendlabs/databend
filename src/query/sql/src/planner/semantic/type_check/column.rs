@@ -174,6 +174,7 @@ where A: TypeCheckAdapter
                         }
                     }
 
+                    self.check_grouping_key_outer_column(span, &column)?;
                     let data_type = *column.data_type.clone();
                     (BoundColumnRef { span, column }.into(), data_type)
                 }
@@ -190,7 +191,9 @@ where A: TypeCheckAdapter
                 (BoundColumnRef { span, column }.into(), data_type)
             }
             NameResolutionResult::Alias { scalar, .. } => {
-                (scalar.clone(), scalar.data_type().into_owned())
+                let scalar = self.grouping_key_alias_input(scalar);
+                let data_type = scalar.data_type().into_owned();
+                (scalar, data_type)
             }
         };
 

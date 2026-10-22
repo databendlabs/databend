@@ -85,6 +85,7 @@ where A: TypeCheckAdapter
             in_masking_policy: false,
             apply_masking_policy: true,
             forbid_virtual_computed_column: false,
+            grouping_key: Default::default(),
         })
     }
 
@@ -163,7 +164,9 @@ where A: TypeCheckAdapter
         &self,
         expr: EExpr<Index>,
     ) -> std::result::Result<Box<(ScalarExpr, DataType)>, EExpr<Index>> {
-        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+        if !expr.is_deterministic(&BUILTIN_FUNCTIONS)
+            || (self.defer_column_folding() && !expr.column_refs().is_empty())
+        {
             return Err(expr);
         }
 

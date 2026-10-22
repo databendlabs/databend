@@ -223,7 +223,11 @@ impl<'a> SetReturningRewriter<'a> {
 
 impl<'a> VisitorMut<'a> for SetReturningRewriter<'a> {
     fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
-        if self.bind_context.aggregate_info.contains_group_item(expr) {
+        let aggregate_info = &self.bind_context.aggregate_info;
+        if aggregate_info.contains_group_item(expr)
+            || matches!(expr, ScalarExpr::BoundColumnRef(column)
+                if aggregate_info.is_grouping_key_output(column.column.index))
+        {
             self.is_lazy_srf = true;
         }
 

@@ -153,7 +153,16 @@ where A: super::TypeCheckAdapter
         }
 
         for (lambda_column, lambda_column_type) in lambda_columns.iter() {
-            let column_index = lambda_context.next_column_index();
+            // Lambda parameters must not collide with the outputs of grouping
+            // keys, which a lambda body can capture but are not context columns.
+            let column_index = lambda_context
+                .aggregate_info
+                .group_items()
+                .iter()
+                .map(|item| Symbol::new(item.index.as_usize() + 1))
+                .chain(std::iter::once(lambda_context.next_column_index()))
+                .max()
+                .unwrap();
             lambda_context.add_column_binding(
                 ColumnBindingBuilder::new(
                     lambda_column.clone(),
@@ -556,12 +565,17 @@ where A: super::TypeCheckAdapter
                     return Ok(());
                 }
                 self.arg_index.insert(col.column.index);
+                // The output of a grouping key is a column of the scope too.
                 let is_outer_column = self
                     .bind_context
                     .all_column_bindings()
                     .iter()
                     .map(|c| c.index)
-                    .contains(&col.column.index);
+                    .contains(&col.column.index)
+                    || self
+                        .bind_context
+                        .aggregate_info
+                        .is_grouping_key_output(col.column.index);
                 if is_outer_column {
                     let arg = ScalarExpr::BoundColumnRef(col.clone());
                     self.args.push(arg);

@@ -695,6 +695,48 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             sql: "SELECT quantity, brand, segment, sum(quantity) FROM sales GROUP BY brand, GROUPING SETS(segment, quantity)",
         },
         SqlTestCase {
+            name: "rollup_lateral_uses_nullable_output_symbol",
+            description: "A lateral reference to a ROLLUP key must use a fresh nullable symbol, not the base column.",
+            setup_sqls: &["CREATE TABLE t1(a Int32)", "CREATE TABLE t3(n Int32)"],
+            sql: "SELECT x.a, q.n FROM (SELECT a FROM t1 GROUP BY ROLLUP(a)) x JOIN LATERAL (SELECT n FROM t3 WHERE n > x.a) q ON true",
+        },
+        SqlTestCase {
+            name: "rollup_scalar_subquery_uses_nullable_output_symbol",
+            description: "Scalar correlation outside a rollup must retain the nullable grouping output type.",
+            setup_sqls: &["CREATE TABLE t1(a Int32)", "CREATE TABLE t3(n Int32)"],
+            sql: "SELECT x.a, (SELECT max(n) FROM t3 WHERE n > x.a) FROM (SELECT a FROM t1 GROUP BY ROLLUP(a)) x",
+        },
+        SqlTestCase {
+            name: "rollup_outer_query_scalar_subquery",
+            description: "A scalar subquery in a grouped SELECT correlates to the key output.",
+            setup_sqls: &["CREATE TABLE t1(a Int32)", "CREATE TABLE t3(n Int32)"],
+            sql: "SELECT a, (SELECT max(n) FROM t3 WHERE n > t1.a) FROM t1 GROUP BY ROLLUP(a)",
+        },
+        SqlTestCase {
+            name: "rollup_cte_references_have_nullable_schema",
+            description: "Repeated CTE consumers must derive nullable key types from metadata.",
+            setup_sqls: &["CREATE TABLE t1(a Int32)"],
+            sql: "WITH x AS (SELECT a FROM t1 GROUP BY ROLLUP(a)) SELECT x1.a, x2.a FROM x x1 JOIN x x2 ON x1.a = x2.a",
+        },
+        SqlTestCase {
+            name: "rollup_positional_computed_key",
+            description: "Positional computed grouping keys also receive nullable output symbols.",
+            setup_sqls: &["CREATE TABLE t1(a Int32)"],
+            sql: "SELECT a + 1 AS k, grouping(k), sum(a) FROM t1 GROUP BY ROLLUP(1)",
+        },
+        SqlTestCase {
+            name: "rollup_lazy_srf_uses_nullable_output_symbol",
+            description: "A set-returning function over a ROLLUP key runs after the aggregate and must consume the nullable grouping output.",
+            setup_sqls: &["CREATE TABLE t1(a Int32 NOT NULL)"],
+            sql: "SELECT a, unnest([a, a + 1]) AS u FROM t1 GROUP BY ROLLUP(a) ORDER BY u",
+        },
+        SqlTestCase {
+            name: "rollup_lazy_srf_retypes_nested_output",
+            description: "Lazy SRFs over an aggregate and a ROLLUP key are bound over the nullable key output.",
+            setup_sqls: &["CREATE TABLE t1(a Int32 NOT NULL, b Int32 NOT NULL)"],
+            sql: "SELECT a, generate_series(a, sum(b)) AS u, json_each(object_construct('k', a)), unnest([(a, 1)]) AS w FROM t1 GROUP BY ROLLUP(a) HAVING max(b) > 0 ORDER BY u",
+        },
+        SqlTestCase {
             name: "grouping_outside_grouping_sets_is_rejected",
             description: "grouping() should still be rejected when the query is not using grouping sets semantics.",
             setup_sqls: &["CREATE TABLE g(a UInt64, b UInt64, c UInt64)"],

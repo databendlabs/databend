@@ -264,32 +264,17 @@ impl PhysicalPlanBuilder {
                     .map(|item| Ok(item.scalar.as_expr()?.sql_display()))
                     .collect::<Result<Vec<_>>>()?;
 
-                let mut agg_funcs =
-                    build_aggregate_function(&agg.aggregate_functions, &input_schema)?;
+                let agg_funcs = build_aggregate_function(&agg.aggregate_functions, &input_schema)?;
 
                 let settings = self.ctx.get_settings();
                 let mut group_by_shuffle_mode = settings.get_group_by_shuffle_mode()?;
-                if agg.grouping_sets.is_some() {
+                if let Some(grouping_sets) = &agg.grouping_sets {
                     group_by_shuffle_mode = "before_merge".to_string();
+                    check_grouping_sets_inputs(&agg_funcs, &group_items, grouping_sets)?;
                 }
 
                 let is_cluster_aggregate = Exchange::check_physical_plan(&input);
                 let shuffle_mode = determine_shuffle_mode(self.ctx.clone(), is_cluster_aggregate)?;
-
-                if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
-                    // AggregateExpand makes grouping columns nullable and fills in dummy
-                    // NULLs for rolled-up sets. Aggregate arguments and ORDER BY keys must
-                    // use its preserved copies instead, or aggregation can panic or sort
-                    // by the dummy NULLs rather than the original values.
-                    for func in agg_funcs.iter_mut() {
-                        for arg in func.arg_indices.iter_mut() {
-                            if let Some(pos) = group_items.iter().position(|g| g == arg) {
-                                *arg = grouping_sets.dup_group_items[pos].0;
-                            }
-                        }
-                        remap_grouping_set_order_by(&mut func.sig, &group_items, grouping_sets);
-                    }
-                }
 
                 let rank_limit = agg.rank_limit.map(|(item, limit)| {
                     let desc = item
@@ -414,22 +399,7 @@ impl PhysicalPlanBuilder {
                     aggregate.input.output_schema()?
                 };
 
-                let mut agg_funcs =
-                    build_aggregate_function(&agg.aggregate_functions, &input_schema)?;
-
-                if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
-                    // Recover aggregate arguments and ORDER BY keys to the original,
-                    // unmasked columns and types from before `AggregateExpand`.
-                    for func in agg_funcs.iter_mut() {
-                        for (arg, ty) in func.arg_indices.iter_mut().zip(func.sig.args.iter_mut()) {
-                            if let Some(pos) = group_items.iter().position(|g| g == arg) {
-                                *arg = grouping_sets.dup_group_items[pos].0;
-                                *ty = grouping_sets.dup_group_items[pos].1.clone();
-                            }
-                        }
-                        remap_grouping_set_order_by(&mut func.sig, &group_items, grouping_sets);
-                    }
-                }
+                let agg_funcs = build_aggregate_function(&agg.aggregate_functions, &input_schema)?;
 
                 if let Some(partial) = AggregatePartial::from_physical_plan(&input) {
                     let group_by_display = partial.group_by_display.clone();
@@ -535,19 +505,33 @@ fn determine_shuffle_mode(
     Ok(shuffle_mode)
 }
 
-// Use the original grouping columns and types, not AggregateExpand's masked keys.
-fn remap_grouping_set_order_by(
-    signature: &mut AggregateFunctionSignature,
+/// `AggregateExpand` injects NULLs into rolled-up grouping keys, so aggregate
+/// arguments and ORDER BY keys must not read them. The binder gives every
+/// grouping-set key its own nullable symbol, separate from the input symbols
+/// that aggregates read; reject any plan that breaks that invariant instead of
+/// aggregating the injected NULLs.
+fn check_grouping_sets_inputs(
+    agg_funcs: &[AggregateFunctionDesc],
     group_items: &[Symbol],
     grouping_sets: &GroupingSets,
-) {
-    for item in &mut signature.order_by {
-        if let Some(pos) = group_items.iter().position(|g| *g == item.index) {
-            let (index, data_type) = &grouping_sets.dup_group_items[pos];
-            item.index = *index;
-            item.data_type = data_type.clone();
+) -> Result<()> {
+    for func in agg_funcs {
+        let inputs = func
+            .arg_indices
+            .iter()
+            .chain(func.sig.order_by.iter().map(|item| &item.index));
+        for index in inputs {
+            let is_injected = *index == grouping_sets.grouping_id_index
+                || (group_items.contains(index) && grouping_sets.is_rolled_up(*index));
+            if is_injected {
+                return Err(ErrorCode::Internal(format!(
+                    "aggregate function {} reads grouping-set key {index}, which contains injected NULLs",
+                    func.display
+                )));
+            }
         }
     }
+    Ok(())
 }
 
 fn build_aggregate_function(

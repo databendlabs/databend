@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use crate::BindContext;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
+use crate::format_scalar;
 use crate::plans::BoundColumnRef;
 use crate::plans::FunctionCall;
 use crate::plans::LambdaFunc;
@@ -49,11 +50,21 @@ const GROUPING_FUNC_NAME: &str = "grouping";
 
 impl VisitorMut<'_> for GroupingChecker<'_> {
     fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
-        if let Some(column_binding) = self.bind_context.aggregate_info.lookup_group_item_column(
-            expr,
-            GROUP_ITEM_NAME,
-            Visibility::Visible,
-        )? {
+        let aggregate_info = &self.bind_context.aggregate_info;
+        if aggregate_info.grouping_sets().is_some() {
+            // Expressions over GROUPING SETS keys are bound to the key outputs
+            // during binding. A key expression left here is one that is not
+            // eligible for matching, e.g. a UDF or a subquery.
+            if aggregate_info.lookup_grouping_key_output(expr).is_some() {
+                return Err(ErrorCode::SemanticError(format!(
+                    "GROUPING SETS key `{}` must be referenced by its SELECT alias or position",
+                    format_scalar(expr)
+                ))
+                .set_span(expr.span()));
+            }
+        } else if let Some(column_binding) =
+            aggregate_info.lookup_group_item_column(expr, GROUP_ITEM_NAME, Visibility::Visible)?
+        {
             *expr = BoundColumnRef {
                 span: expr.span(),
                 column: column_binding,
