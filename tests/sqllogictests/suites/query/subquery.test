@@ -1599,6 +1599,61 @@ use default;
 statement ok
 drop database issue_20380_subquery;
 
+# An inner non-nullable column reused for a nullable outer column through
+# `inner = outer` keeps the outer type wherever the outer column is referenced.
+statement ok
+create or replace database nullable_outer_subquery;
+
+statement ok
+use nullable_outer_subquery;
+
+statement ok
+create table o(a int null, b int not null);
+
+statement ok
+create table i(a int not null, b int not null);
+
+statement ok
+insert into o values (1, 10), (NULL, 20), (2, 5);
+
+statement ok
+insert into i values (1, 10), (2, 20), (2, 30);
+
+query II rowsort
+select a, (select count(*) from i where i.a = o.a) from o;
+----
+1 1
+2 2
+NULL 0
+
+query IB rowsort
+select a, exists (select 1 from i join i j on i.b = j.b where i.a = o.a) from o;
+----
+1 1
+2 1
+NULL 0
+
+query II rowsort
+select a, (select i.a from i where i.a = o.a and i.a = o.b limit 1) from o;
+----
+1 NULL
+2 NULL
+NULL NULL
+
+query II rowsort
+select o.a, s.m from o left join lateral (select i.b m from i where i.a = o.a) s on true;
+----
+1 10
+2 20
+2 30
+NULL NULL
+
+statement ok
+use default;
+
+statement ok
+drop database nullable_outer_subquery;
+
 # A correlated scalar subquery over a scalar aggregate (no GROUP BY) returns the aggregate's
 # empty-input result for an outer value without input rows, not NULL.
 statement ok
