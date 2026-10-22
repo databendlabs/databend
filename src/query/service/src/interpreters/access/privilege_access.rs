@@ -28,6 +28,7 @@ use databend_common_management::WarehouseInfo;
 use databend_common_meta_api::DatamaskApi;
 use databend_common_meta_api::RowAccessPolicyApi;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
+use databend_common_meta_app::principal::BUILTIN_ROLE_PUBLIC;
 use databend_common_meta_app::principal::GetProcedureReq;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipInfo;
@@ -2429,7 +2430,11 @@ impl AccessChecker for PrivilegeAccess {
                     false,
                 )
                     .await?;
-                if plan.user_option.default_role().is_some() {
+                if plan
+                    .user_option
+                    .default_role()
+                    .is_some_and(|role| role != BUILTIN_ROLE_PUBLIC)
+                {
                     self.validate_access(&GrantObject::Global, UserPrivilegeType::Grant, false, false)
                         .await?;
                 }

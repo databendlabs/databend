@@ -1,4 +1,4 @@
-# CREATE grants DEFAULT_ROLE; ALTER only selects an already granted role.
+# CREATE grants non-public DEFAULT_ROLE; ALTER accepts direct and inherited roles.
 statement ok
 DROP USER IF EXISTS default_role_user
 
@@ -142,6 +142,78 @@ query TT
 SELECT default_role, roles FROM system.users WHERE name = 'default_role_user'
 ----
 public (empty)
+
+# Explicit role options use the final value, including when unchanged.
+statement ok
+ALTER USER default_role_user WITH DEFAULT_ROLE = default_role_missing, DEFAULT_ROLE = public
+
+statement error 2204
+ALTER USER default_role_user WITH DEFAULT_ROLE = public, DEFAULT_ROLE = default_role_missing
+
+query TT
+SELECT default_role, roles FROM system.users WHERE name = 'default_role_user'
+----
+public (empty)
+
+# CREATE also keeps PUBLIC implicit.
+statement ok
+CREATE USER default_role_public_user IDENTIFIED BY 'password' WITH DEFAULT_ROLE = public
+
+query TT
+SELECT default_role, roles FROM system.users WHERE name = 'default_role_public_user'
+----
+public (empty)
+
+statement ok
+DROP USER default_role_public_user
+
+# Match login and SET ROLE membership: a default may be inherited.
+statement ok
+CREATE ROLE default_role_parent
+
+statement ok
+CREATE ROLE default_role_child
+
+statement ok
+GRANT ROLE default_role_child TO ROLE default_role_parent
+
+statement ok
+CREATE USER default_role_inherited_user IDENTIFIED BY 'password'
+
+statement ok
+GRANT ROLE default_role_parent TO USER default_role_inherited_user
+
+statement ok
+ALTER USER default_role_inherited_user WITH DEFAULT_ROLE = default_role_child
+
+query TT
+SELECT default_role, roles FROM system.users WHERE name = 'default_role_inherited_user'
+----
+default_role_child default_role_parent
+
+statement ok
+ALTER USER default_role_inherited_user WITH DEFAULT_ROLE = default_role_missing, DEFAULT_ROLE = default_role_child
+
+# Repeating the same default cannot restore a revoked inheritance edge.
+statement ok
+REVOKE ROLE default_role_child FROM ROLE default_role_parent
+
+statement error 2206
+ALTER USER default_role_inherited_user WITH DEFAULT_ROLE = default_role_child
+
+query TT
+SELECT default_role, roles FROM system.users WHERE name = 'default_role_inherited_user'
+----
+default_role_child default_role_parent
+
+statement ok
+DROP USER default_role_inherited_user
+
+statement ok
+DROP ROLE default_role_parent
+
+statement ok
+DROP ROLE default_role_child
 
 statement ok
 DROP USER default_role_user

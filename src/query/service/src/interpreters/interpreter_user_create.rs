@@ -19,6 +19,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::UserApi;
 use databend_common_management::meta_service_error;
+use databend_common_meta_app::principal::BUILTIN_ROLE_PUBLIC;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserQuota;
@@ -99,7 +100,9 @@ impl Interpreter for CreateUserInterpreter {
             };
             if let Some(role) = user_info.option.default_role() {
                 user_mgr.get_role(&tenant, role.clone()).await?;
-                user_info.grants.grant_role(role.clone());
+                if role != BUILTIN_ROLE_PUBLIC {
+                    user_info.grants.grant_role(role.clone());
+                }
             }
             user_mgr
                 .create_user(&tenant, user_info, &plan.create_option)

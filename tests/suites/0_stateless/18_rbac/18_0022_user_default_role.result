@@ -1,5 +1,9 @@
 DEFAULT_ROLE alone enables SELECT and selects the role on login
 CREATE USER without GRANT cannot implicitly grant account_admin
+CREATE with PUBLIC needs no GRANT and writes no explicit grant
+ALTER accepts inherited defaults without adding a direct grant
+ALTER validates the target user's closure rather than the executor's
+Revoked inheritance cannot be restored by repeating DEFAULT_ROLE
 ALTER cannot select an ungranted role
 An unchanged default still requires ALTER and membership
 Switching to an already granted role does not require GRANT

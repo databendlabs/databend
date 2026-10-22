@@ -607,11 +607,10 @@ impl Binder {
             None
         };
 
-        let default_role = user_options
-            .iter()
-            .any(|option| matches!(option, UserOptionItem::DefaultRole(_)))
-            .then(|| user_option.default_role().cloned())
-            .flatten();
+        let default_role = user_options.iter().rev().find_map(|option| match option {
+            UserOptionItem::DefaultRole(role) => Some(role.clone()),
+            _ => None,
+        });
         let change_auth = new_auth_info.is_some() || key_pair_changed;
         let change_user_option = user_option != user_info.option;
         let new_user_option = if change_user_option {
