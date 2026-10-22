@@ -32,6 +32,9 @@ use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::plans::UDFType;
 use databend_query_script_udf_support::ScriptUdfFunctionDesc;
 use itertools::Itertools;
+use serde::Serialize;
+use serde::Serializer;
+use serde::ser::SerializeStruct;
 
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -170,8 +173,10 @@ impl IPhysicalPlan for Udf {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, serde::Deserialize)]
 pub struct UdfFunctionDesc {
+    #[serde(default)]
+    pub external_access_integrations: Vec<String>,
     pub name: String,
     pub func_name: String,
     pub output_column: Symbol,
@@ -180,7 +185,35 @@ pub struct UdfFunctionDesc {
     pub data_type: Box<DataType>,
     pub headers: BTreeMap<String, String>,
 
+    #[serde(alias = "policy_udf_type")]
     pub udf_type: UDFType,
+}
+
+impl Serialize for UdfFunctionDesc {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        let mut state = serializer.serialize_struct("UdfFunctionDesc", 9)?;
+        state.serialize_field(
+            "external_access_integrations",
+            &self.external_access_integrations,
+        )?;
+        state.serialize_field("name", &self.name)?;
+        state.serialize_field("func_name", &self.func_name)?;
+        state.serialize_field("output_column", &self.output_column)?;
+        state.serialize_field("arg_indices", &self.arg_indices)?;
+        state.serialize_field("arg_exprs", &self.arg_exprs)?;
+        state.serialize_field("data_type", &self.data_type)?;
+        state.serialize_field("headers", &self.headers)?;
+        // Old executors ignore unknown fields. For policy-controlled calls,
+        // omit their required `udf_type` field so fragment decoding fails before
+        // they can build a pipeline that does not enforce external access.
+        let type_field = if self.external_access_integrations.is_empty() {
+            "udf_type"
+        } else {
+            "policy_udf_type"
+        };
+        state.serialize_field(type_field, &self.udf_type)?;
+        state.end()
+    }
 }
 
 impl From<UdfFunctionDesc> for ScriptUdfFunctionDesc {
@@ -260,6 +293,7 @@ impl PhysicalPlanBuilder {
                         .collect::<Result<Vec<_>>>()?;
 
                     let udf_func = UdfFunctionDesc {
+                        external_access_integrations: func.external_access_integrations.clone(),
                         name: func.name.clone(),
                         func_name: func.handler.clone(),
                         output_column: item.index,

@@ -57,6 +57,7 @@ mod interpreter_dynamic_table_refresh;
 mod interpreter_execute_immediate;
 mod interpreter_explain;
 mod interpreter_explain_perf;
+mod interpreter_external_access;
 mod interpreter_factory;
 mod interpreter_file_format_create;
 mod interpreter_file_format_drop;

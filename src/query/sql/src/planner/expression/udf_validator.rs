@@ -19,16 +19,22 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Lambda;
 use databend_common_ast::ast::LambdaArgument;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
+use databend_common_expression::types::DataType;
+use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::is_builtin_function;
+use databend_common_meta_app::principal::UDFServer;
+use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use unicase::Ascii;
+use url::Url;
 
 use crate::plans::UDFLanguage;
 
@@ -192,6 +198,56 @@ impl UDFValidator {
         Ok(())
     }
 
+    /// For integration-bound UDFs, call only after the interpreter access check.
+    pub async fn verify_server(
+        ctx: &dyn TableContext,
+        name: &str,
+        server: &UDFServer,
+    ) -> Result<()> {
+        if server.external_access_integrations.is_empty() {
+            Self::is_udf_server_allowed(&server.address)?;
+        } else {
+            Self::is_udf_server_policy_allowed(&server.address)?;
+            UserApiProvider::instance()
+                .validate_external_access(
+                    &ctx.get_tenant(),
+                    &server.address,
+                    &server.external_access_integrations,
+                )
+                .await?;
+        }
+        let settings = ctx.get_settings();
+        let connect_timeout = settings.get_external_server_connect_timeout_secs()?;
+        let request_timeout = settings.get_external_server_request_timeout_secs()?;
+        let batch_rows = settings.get_external_server_request_batch_rows()? as usize;
+        let endpoint = UDFFlightClient::build_endpoint(
+            &server.address,
+            connect_timeout,
+            request_timeout,
+            &ctx.get_version().udf_client_user_agent(),
+        )?;
+        let mut client =
+            UDFFlightClient::connect(&server.handler, endpoint, connect_timeout, batch_rows)
+                .await?
+                .with_tenant(ctx.get_tenant().tenant_name())?
+                .with_func_name(name)?
+                .with_handler_name(&server.handler)?
+                .with_query_id(&ctx.get_id())?
+                .with_headers(server.headers.iter())?;
+        let arg_types = server
+            .arg_types
+            .iter()
+            .map(DataType::from)
+            .collect::<Vec<_>>();
+        client
+            .check_schema(
+                &server.handler,
+                &arg_types,
+                &DataType::from(&server.return_type),
+            )
+            .await
+    }
+
     pub fn is_udf_server_allowed(address: &str) -> Result<()> {
         Self::is_udf_server_allowed_with_config(
             address,
@@ -203,16 +259,55 @@ impl UDFValidator {
         address: &str,
         config: &UdfValidationConfig,
     ) -> Result<()> {
+        Self::is_udf_server_transport_allowed_with_config(address, config)?;
+        let url_addr =
+            Url::parse(address).map_err(|e| ErrorCode::InvalidArgument(e.to_string()))?;
+        if config.udf_server_allow_list.iter().all(|allow_url| {
+            Url::parse(allow_url)
+                .map(|allowed| allowed.host_str() != url_addr.host_str())
+                .unwrap_or(true)
+        }) {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "Unallowed UDF server address, '{address}' is not in udf_server_allow_list"
+            )));
+        }
+        Ok(())
+    }
+
+    pub fn is_udf_server_policy_allowed(address: &str) -> Result<()> {
+        Self::is_udf_server_policy_allowed_with_config(
+            address,
+            &UdfValidationConfig::from_inner_config(GlobalConfig::instance().as_ref()),
+        )
+    }
+
+    /// A nonempty operator allow list remains a ceiling for SQL-managed policies.
+    /// An empty list delegates endpoint authorization to integrations; legacy UDFs
+    /// still require an allow-list match. Keep the existing host-only comparison.
+    pub fn is_udf_server_policy_allowed_with_config(
+        address: &str,
+        config: &UdfValidationConfig,
+    ) -> Result<()> {
+        if config.udf_server_allow_list.is_empty() {
+            Self::is_udf_server_transport_allowed_with_config(address, config)
+        } else {
+            Self::is_udf_server_allowed_with_config(address, config)
+        }
+    }
+
+    pub fn is_udf_server_transport_allowed_with_config(
+        address: &str,
+        config: &UdfValidationConfig,
+    ) -> Result<()> {
         if !config.enable_udf_server {
             return Err(ErrorCode::Unimplemented(
                 "UDF server is not allowed, you can enable it by setting 'enable_udf_server = true' in query node config",
             ));
         }
 
-        let url_addr = url::Url::parse(address)
-            .map_err_to_code(ErrorCode::InvalidArgument, || {
-                format!("udf server address '{address}' is invalid, please check the address",)
-            })?;
+        let url_addr = Url::parse(address).map_err_to_code(ErrorCode::InvalidArgument, || {
+            format!("udf server address '{address}' is invalid, please check the address",)
+        })?;
 
         if !config.udf_server_allow_insecure && url_addr.scheme() != "https" {
             return Err(ErrorCode::Unimplemented(
@@ -220,17 +315,6 @@ impl UDFValidator {
             ));
         }
 
-        if config.udf_server_allow_list.iter().all(|allow_url| {
-            if let Ok(allow_url) = url::Url::parse(allow_url) {
-                allow_url.host_str() != url_addr.host_str()
-            } else {
-                true
-            }
-        }) {
-            return Err(ErrorCode::InvalidArgument(format!(
-                "Unallowed UDF server address, '{address}' is not in udf_server_allow_list"
-            )));
-        }
         Ok(())
     }
 }
@@ -246,6 +330,72 @@ mod tests {
     fn parse(sql: &str) -> Expr {
         let tokens = tokenize_sql(sql).unwrap();
         parse_expr(&tokens, Dialect::PostgreSQL).unwrap()
+    }
+
+    #[test]
+    fn remote_udf_transport_and_legacy_allow_list() {
+        let mut config = UdfValidationConfig {
+            enable_udf_server: true,
+            udf_server_allow_insecure: false,
+            udf_server_allow_list: vec!["https://video.example.com:8815".into()],
+            ..Default::default()
+        };
+        // Keep the legacy host-only comparison, even when ports differ.
+        UDFValidator::is_udf_server_allowed_with_config("https://video.example.com", &config)
+            .unwrap();
+        assert!(
+            UDFValidator::is_udf_server_allowed_with_config("https://other.example.com", &config)
+                .is_err()
+        );
+        UDFValidator::is_udf_server_policy_allowed_with_config(
+            "https://video.example.com",
+            &config,
+        )
+        .unwrap();
+        assert!(
+            UDFValidator::is_udf_server_policy_allowed_with_config(
+                "https://other.example.com",
+                &config
+            )
+            .is_err()
+        );
+        config.udf_server_allow_list = vec!["invalid allow-list entry".into()];
+        assert!(
+            UDFValidator::is_udf_server_policy_allowed_with_config(
+                "https://video.example.com",
+                &config
+            )
+            .is_err()
+        );
+        config.udf_server_allow_list.clear();
+        assert!(
+            UDFValidator::is_udf_server_allowed_with_config("https://video.example.com", &config)
+                .is_err()
+        );
+        // Only an empty operator list delegates authorization to SQL policies.
+        UDFValidator::is_udf_server_policy_allowed_with_config(
+            "https://video.example.com",
+            &config,
+        )
+        .unwrap();
+        assert!(
+            UDFValidator::is_udf_server_policy_allowed_with_config(
+                "http://video.example.com",
+                &config
+            )
+            .is_err()
+        );
+        config.udf_server_allow_insecure = true;
+        UDFValidator::is_udf_server_policy_allowed_with_config("http://video.example.com", &config)
+            .unwrap();
+        config.enable_udf_server = false;
+        assert!(
+            UDFValidator::is_udf_server_policy_allowed_with_config(
+                "https://video.example.com",
+                &config
+            )
+            .is_err()
+        );
     }
 
     #[test]

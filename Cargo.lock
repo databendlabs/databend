@@ -4538,6 +4538,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-backtrace",
+ "async-trait",
  "base64 0.22.1",
  "chrono",
  "cidr",
@@ -4559,6 +4560,7 @@ dependencies = [
  "databend-meta-runtime",
  "divan",
  "enumflags2",
+ "futures",
  "itertools 0.13.0",
  "jwt-simple",
  "log",
@@ -4572,6 +4574,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "url",
  "wiremock",
 ]
 

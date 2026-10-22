@@ -48,6 +48,52 @@ impl FromToProto for mt::LambdaUDF {
     }
 }
 
+impl FromToProto for mt::NetworkRule {
+    type PB = pb::NetworkRule;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible> {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        Ok(Self {
+            name: p.name,
+            value_list: p.value_list,
+        })
+    }
+    fn to_pb(&self) -> Self::PB {
+        Self::PB {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            name: self.name.clone(),
+            value_list: self.value_list.clone(),
+        }
+    }
+}
+
+impl FromToProto for mt::ExternalAccessIntegration {
+    type PB = pb::ExternalAccessIntegration;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible> {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        Ok(Self {
+            name: p.name,
+            allowed_network_rules: p.allowed_network_rules,
+            enabled: p.enabled,
+        })
+    }
+    fn to_pb(&self) -> Self::PB {
+        Self::PB {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            name: self.name.clone(),
+            allowed_network_rules: self.allowed_network_rules.clone(),
+            enabled: self.enabled,
+        }
+    }
+}
+
 impl FromToProto for mt::UDFServer {
     type PB = pb::UdfServer;
     fn get_pb_ver(p: &Self::PB) -> u64 {
@@ -74,6 +120,7 @@ impl FromToProto for mt::UDFServer {
             language: p.language,
             immutable: p.immutable,
             arg_names: p.arg_names,
+            external_access_integrations: p.external_access_integrations,
         })
     }
 
@@ -87,7 +134,13 @@ impl FromToProto for mt::UDFServer {
 
         pb::UdfServer {
             ver: VER,
-            min_reader_ver: MIN_READER_VER,
+            // Older readers must not silently ignore this security policy.
+            min_reader_ver: if self.external_access_integrations.is_empty() {
+                MIN_READER_VER
+            } else {
+                190
+            },
+            external_access_integrations: self.external_access_integrations.clone(),
             address: self.address.clone(),
             handler: self.handler.clone(),
             headers: self.headers.clone(),

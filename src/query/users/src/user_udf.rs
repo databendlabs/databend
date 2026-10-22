@@ -25,14 +25,14 @@ use crate::UserApiProvider;
 
 /// UDF operations.
 impl UserApiProvider {
-    // Add a new UDF.
+    /// Add a UDF, returning whether metadata changed.
     #[async_backtrace::framed]
     pub async fn add_udf(
         &self,
         tenant: &Tenant,
         info: UserDefinedFunction,
         create_option: &CreateOption,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         if self.get_configured_udf(&info.name).is_some() {
             return Err(ErrorCode::UdfAlreadyExists(format!(
                 "Built-in UDF `{}` already exists",
@@ -41,8 +41,7 @@ impl UserApiProvider {
         }
 
         let udf_api = self.udf_api(tenant);
-        udf_api.add_udf(info, create_option).await??;
-        Ok(())
+        Ok(udf_api.add_udf(info, create_option).await??)
     }
 
     // Update a UDF.
