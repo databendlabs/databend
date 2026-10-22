@@ -192,7 +192,12 @@ impl StorageParams {
     pub async fn auto_detect(self) -> Result<Self> {
         let sp = match self {
             StorageParams::S3(mut s3) if s3.region.is_empty() => {
-                s3.region = detect_s3_region(&s3.endpoint_url, &s3.bucket).await;
+                s3.region = detect_s3_region(
+                    &s3.endpoint_url,
+                    &s3.bucket,
+                    std::env::var("AWS_REGION").ok(),
+                )
+                .await;
                 StorageParams::S3(s3)
             }
             v => v,

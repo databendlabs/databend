@@ -44,6 +44,23 @@ runs:
         RUST_LOG: ERROR
         RUST_MIN_STACK: 33554432
 
+    # Anonymous HeadBucket probes only: needs network access to AWS, no credentials.
+    - name: Test S3 region detection against AWS S3
+      if: env.RUNNER_PROVIDER == 'aws'
+      shell: bash
+      run: |
+        cargo nextest run \
+          --no-fail-fast \
+          --hide-progress-bar \
+          --run-ignored only \
+          --workspace \
+          s3_region::tests::real_s3::
+      env:
+        DATABEND_TEST_S3_BUCKET: databend-ci
+        DATABEND_TEST_S3_REGION: us-east-2
+        RUST_LOG: ERROR
+        RUST_MIN_STACK: 33554432
+
     - name: Upload failure
       if: failure()
       uses: ./.github/actions/artifact_failure
