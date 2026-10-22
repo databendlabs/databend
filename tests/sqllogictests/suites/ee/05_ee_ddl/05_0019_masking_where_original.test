@@ -18,7 +18,7 @@ statement ok
 CREATE MASKING POLICY masking_raw_where_policy AS (val VARIANT) RETURNS VARIANT -> object_delete(val, 'secret')
 
 statement ok
-CREATE TABLE masking_raw_where(id INT, data VARIANT, other VARIANT) CLUSTER BY (data['secret']::STRING) enable_virtual_column = 1
+CREATE TABLE masking_raw_where(id INT, data VARIANT, other VARIANT) CLUSTER BY (data['secret']::STRING) enable_virtual_column = true
 
 statement ok
 INSERT INTO masking_raw_where SELECT 1, parse_json('{"secret":"alice","public":1}'), parse_json('{"secret":"alice","public":1}')
@@ -161,7 +161,7 @@ statement ok
 DROP TABLE IF EXISTS variant_conditional_paths
 
 statement ok
-CREATE TABLE variant_conditional_paths(flag BOOLEAN, v VARIANT) enable_virtual_column = 1
+CREATE TABLE variant_conditional_paths(flag BOOLEAN, v VARIANT) enable_virtual_column = true
 
 statement ok
 INSERT INTO variant_conditional_paths SELECT true, parse_json('{"a":2}')

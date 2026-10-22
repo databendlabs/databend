@@ -231,6 +231,21 @@ impl ModifyTableColumnInterpreter {
             columns_ids.push(data_field.column_id);
         }
 
+        // SET may update WHERE authorization for the same binding, but must not
+        // silently replace an existing policy or change its argument columns.
+        // Switching policies still requires an explicit UNSET first.
+        if let Some(existing) = table_info
+            .meta
+            .column_mask_policy_columns_ids
+            .get(&target_column_id)
+            && (existing.policy_id != *policy_id || existing.columns_ids != columns_ids)
+        {
+            return Err(ErrorCode::AlterTableError(format!(
+                "Column '{}' is already attached to a security policy. Unset the existing policy before replacing it",
+                using_columns[0],
+            )));
+        }
+
         let table_id = table_info.ident.table_id;
 
         let req = SetTableColumnMaskPolicyReq {
