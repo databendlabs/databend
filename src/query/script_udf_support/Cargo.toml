@@ -41,6 +41,9 @@ uuid = { workspace = true }
 walkdir = { workspace = true }
 zip = { workspace = true }
 
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+
 [[test]]
 name = "python_worker_process"
 path = "tests/python_worker_process.rs"

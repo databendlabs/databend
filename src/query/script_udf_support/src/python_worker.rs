@@ -44,6 +44,7 @@ use tokio::process::Command;
 use tokio::sync::OnceCell;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
+use tokio::time::Instant;
 
 use super::transform_udf_script::python_pool::RESTRICTED_PYTHON_CODE;
 use super::transform_udf_script::venv::TempDir;
@@ -64,6 +65,7 @@ pub struct PythonWorkerConfig {
     pub max_queued_queries: usize,
     pub queue_timeout: Duration,
     pub execution_timeout: Duration,
+    pub idle_timeout: Duration,
 }
 
 impl Default for PythonWorkerConfig {
@@ -75,6 +77,7 @@ impl Default for PythonWorkerConfig {
             max_queued_queries: 128,
             queue_timeout: Duration::from_secs(60),
             execution_timeout: Duration::from_secs(300),
+            idle_timeout: Duration::from_secs(300),
         }
     }
 }
@@ -96,9 +99,11 @@ impl PythonWorkerConfig {
             || self.max_queued_queries > Semaphore::MAX_PERMITS
             || self.queue_timeout.is_zero()
             || self.execution_timeout.is_zero()
+            || self.idle_timeout.is_zero()
+            || Instant::now().checked_add(self.idle_timeout).is_none()
         {
             return Err(ErrorCode::InvalidConfig(
-                "Python worker limits must satisfy query <= tenant <= node <= u32::MAX (0 = automatic); queue capacity and timeouts must be positive",
+                "Python worker limits must satisfy query <= tenant <= node <= u32::MAX (0 = automatic); queue capacity and timeouts must be positive and the idle timeout must fit the timer range",
             ));
         }
         Ok(self)

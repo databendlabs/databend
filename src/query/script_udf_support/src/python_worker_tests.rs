@@ -280,6 +280,132 @@ mod tests {
         assert!(query.try_extra().is_some());
     }
 
+    // Use real pool bookkeeping and socket handles, but no child processes, so
+    // paused Tokio time can test the five-minute policy without OS-clock sleeps.
+    async fn idle_runtime() -> Arc<PythonRuntime> {
+        let query = manager(4).query("idle", 4);
+        let runtime = PythonRuntime::new(
+            PythonFunction {
+                name: "idle".to_owned(),
+                handler: "handler".to_owned(),
+                code: "def handler(x): return x".to_owned(),
+                return_field: Field::new("x", arrow_schema::DataType::Int64, false),
+            },
+            query,
+            None,
+        )
+        .unwrap();
+        let minimum = runtime.query.admit().await.unwrap();
+        return_idle_worker(&runtime, minimum);
+        runtime
+    }
+
+    fn return_idle_worker(runtime: &Arc<PythonRuntime>, reservation: Arc<Reservation>) {
+        let (socket, _peer) = UnixStream::pair().unwrap();
+        let worker = Worker {
+            child: None,
+            socket,
+            reservation,
+            directory: None,
+            runtime: tokio::runtime::Handle::current(),
+        };
+        runtime.pool.lock().live += 1;
+        WorkerLease::new(runtime.clone(), Some(worker), None)
+            .complete()
+            .unwrap();
+    }
+
+    async fn advance_idle_clock(seconds: u64) {
+        tokio::time::advance(Duration::from_secs(seconds)).await;
+        tokio::task::yield_now().await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn idle_timer_expires_extras_at_five_minutes_without_new_requests() {
+        let runtime = idle_runtime().await;
+        assert_eq!(
+            runtime.query.manager.config.idle_timeout,
+            Duration::from_secs(300)
+        );
+        assert!(runtime.pool.lock().idle_reaper.is_none());
+        return_idle_worker(&runtime, runtime.query.try_extra().unwrap());
+        let reaper = runtime.pool.lock().idle_reaper.as_ref().unwrap().clone();
+        advance_idle_clock(100).await;
+        return_idle_worker(&runtime, runtime.query.try_extra().unwrap());
+        advance_idle_clock(199).await;
+        assert_eq!(runtime.pool.lock().live, 3);
+        advance_idle_clock(1).await;
+        assert_eq!(runtime.pool.lock().live, 2);
+        assert_eq!(runtime.query.manager.slots.available_permits(), 2);
+        advance_idle_clock(99).await;
+        assert_eq!(runtime.pool.lock().live, 2);
+        advance_idle_clock(1).await;
+        assert_eq!(runtime.pool.lock().live, 1);
+        assert!(runtime.pool.lock().idle_reaper.is_none());
+        assert!(reaper.is_finished());
+        assert!(!runtime.pool.lock().idle[0].worker.reservation.extra);
+        advance_idle_clock(600).await;
+        assert_eq!(runtime.pool.lock().live, 1);
+        runtime.query.finish();
+        assert_eq!(runtime.query.manager.slots.available_permits(), 4);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn checkout_protects_busy_worker_and_return_resets_idle_age() {
+        let runtime = idle_runtime().await;
+        return_idle_worker(&runtime, runtime.query.try_extra().unwrap());
+        advance_idle_clock(299).await;
+        let minimum = runtime.query.admit().await.unwrap();
+        let lease = runtime.checkout(minimum).await.unwrap();
+        assert!(lease.worker.as_ref().unwrap().reservation.extra);
+        advance_idle_clock(601).await;
+        assert_eq!(runtime.pool.lock().live, 2);
+        assert!(runtime.pool.lock().idle_reaper.is_none());
+        lease.complete().unwrap();
+        advance_idle_clock(299).await;
+        assert_eq!(runtime.pool.lock().live, 2);
+        advance_idle_clock(1).await;
+        assert_eq!(runtime.pool.lock().live, 1);
+        runtime.query.finish();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn pressure_reclaim_and_query_finish_cancel_idle_timers() {
+        let runtime = idle_runtime().await;
+        return_idle_worker(&runtime, runtime.query.try_extra().unwrap());
+        let first_reaper = runtime.pool.lock().idle_reaper.as_ref().unwrap().clone();
+        assert!(runtime.retire_idle_extra());
+        tokio::task::yield_now().await;
+        assert!(first_reaper.is_finished());
+        assert!(runtime.pool.lock().idle_reaper.is_none());
+        assert_eq!(runtime.pool.lock().live, 1);
+        return_idle_worker(&runtime, runtime.query.try_extra().unwrap());
+        let next_reaper = runtime.pool.lock().idle_reaper.as_ref().unwrap().clone();
+        runtime.query.finish();
+        tokio::task::yield_now().await;
+        assert!(next_reaper.is_finished());
+        assert!(runtime.pool.lock().idle_reaper.is_none());
+        assert_eq!(runtime.pool.lock().live, 0);
+        assert_eq!(runtime.query.manager.slots.available_permits(), 4);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn idle_timer_does_not_keep_runtime_alive() {
+        let runtime = idle_runtime().await;
+        let query = runtime.query.clone();
+        return_idle_worker(&runtime, query.try_extra().unwrap());
+        let reaper = runtime.pool.lock().idle_reaper.as_ref().unwrap().clone();
+        tokio::task::yield_now().await;
+        let weak = Arc::downgrade(&runtime);
+        drop(runtime);
+        assert!(weak.upgrade().is_none());
+        tokio::task::yield_now().await;
+        assert!(reaper.is_finished());
+        assert_eq!(query.manager.slots.available_permits(), 3);
+        query.finish();
+        assert_eq!(query.manager.slots.available_permits(), 4);
+    }
+
     #[test]
     fn arrow_ipc_preserves_zero_argument_row_count_and_nulls() {
         use arrow_array::Int64Array;
@@ -334,6 +460,15 @@ mod tests {
             })
             .is_err()
         );
+        for idle_timeout in [Duration::ZERO, Duration::MAX] {
+            assert!(
+                PythonWorkerManager::new(PythonWorkerConfig {
+                    idle_timeout,
+                    ..Default::default()
+                })
+                .is_err()
+            );
+        }
         assert!(check_length(MAX_FRAME_BYTES + 1).is_err());
     }
 }

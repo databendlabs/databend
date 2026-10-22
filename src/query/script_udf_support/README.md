@@ -23,6 +23,13 @@ initialization; workers do not start query servers or load service configuration
   Idle extras can be retired to serve another operator or query; busy extras
   yield on completion when minimum admissions are waiting. Reclaimed workers
   are killed and reaped, never handed to another SQL execution.
+- Idle extras are also automatically retired after five minutes without a batch,
+  even when there is no capacity pressure or subsequent request. Idle time starts
+  when a successful request returns its worker to the pool, and resets on reuse.
+  Each pool has at most one deadline-driven timer while idle extras exist; the
+  timer does not keep the runtime alive. Busy workers are never idle-expired.
+  The minimum worker per runtime is kept for progress; query completion still
+  terminates all workers immediately, without waiting for idle expiry.
 - The admission queue is bounded. Full queues, queue timeouts, excessive query
   budgets, and attempts to add runtimes after admission return errors. They never
   cause unbounded process creation or an impossible resource wait. A repeated
@@ -55,6 +62,7 @@ python_udf_max_workers_per_query = 0
 python_udf_max_queued_queries = 128
 python_udf_queue_timeout_secs = 60
 python_udf_execution_timeout_secs = 300
+python_udf_worker_idle_timeout_secs = 300
 ```
 
 Zero selects automatic sizing:
@@ -71,7 +79,9 @@ Zero selects automatic sizing:
 An explicit nonzero query limit caps total resident workers, including minima,
 starting workers, and extras; it also caps execution parallelism. Nonzero limits
 must satisfy `query <= tenant <= node`. Queue capacity and timeouts must be
-positive. These are local-node limits, not warehouse-wide limits. A minimum
+positive; the idle timeout defaults to 300 seconds (five minutes). It is separate
+from admission and execution timeouts and only shrinks idle extra capacity.
+These are local-node limits, not warehouse-wide limits. A minimum
 budget that cannot fit fails during pipeline construction rather than waiting
 forever. Runtime count is not limited to `max_threads`: multiple UDF operators
 can still execute sequentially when `max_threads=1`.
@@ -129,8 +139,12 @@ the same worker protocol as the query binary. It requires no pip,
 metastore, license, or network access. It covers concurrent same-definition SQL
 isolation, lazy pools at parallelism 1/4/8, reuse and reclamation within/between
 queries, minimum admission, process failure, timeout, multi-worker cancellation,
-and quota recovery. Unit tests also simulate 64/128-CPU capacities without
-starting that many processes. SQL service coverage lives in
+and quota recovery. It also uses a shortened idle timeout to verify that busy
+workers survive, idle extra processes exit and are reaped without new requests,
+the base worker stays reusable, and the pool can expand again. Unit tests use
+paused Tokio time to cover the default five-minute boundary, reuse resetting idle
+age, timer cancellation, and runtime lifetime; they also simulate 64/128-CPU
+capacities without starting that many processes. SQL service coverage lives in
 `tests/suites/5_ee/08_udf_python/08_0002_process_isolation.sh` and
 `08_0003_worker_pool.sh`.
 

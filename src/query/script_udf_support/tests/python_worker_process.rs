@@ -271,6 +271,59 @@ async fn parallel_pool_tests() {
     next.finish();
 }
 
+async fn idle_pool_tests() {
+    let manager = PythonWorkerManager::new(PythonWorkerConfig {
+        max_workers: 4,
+        // Real child processes use OS time; unit tests cover the default 300s
+        // with paused Tokio time, without making this harness wait five minutes.
+        idle_timeout: Duration::from_secs(3),
+        ..Default::default()
+    })
+    .unwrap();
+    let query = manager.query("idle", 4);
+    let code = "import os, time\ndef handler(x):\n    time.sleep(4 if x else 0.05)\n    return os.getpid()\n";
+    let mut batch = transforms(query.clone(), "idle", code, 4);
+    let base = pids(&mut batch[..1]).await;
+    let original = pids(&mut batch).await;
+    assert_eq!(original.len(), 4);
+    assert!(base.is_subset(&original));
+    // All four workers are busy longer than the idle timeout. None may be killed.
+    let busy = futures::future::join_all(batch.iter_mut().map(|udf| udf.transform(input(1))))
+        .await
+        .into_iter()
+        .map(|result| {
+            result
+                .unwrap()
+                .get_by_offset(1)
+                .index(0)
+                .unwrap()
+                .to_string()
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(busy, original);
+    let extras: Vec<i32> = original
+        .difference(&base)
+        .map(|pid| pid.parse().unwrap())
+        .collect();
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            // SAFETY: signal 0 only checks existence; it sends no signal.
+            if extras.iter().all(|pid| unsafe { libc::kill(*pid, 0) != 0 }) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("idle workers were not terminated and reaped without new requests");
+    assert_eq!(pids(&mut batch[..1]).await, base);
+    // Released quota permits demand-driven expansion again in the same SQL.
+    let regrown = pids(&mut batch).await;
+    assert_eq!(regrown.len(), 4);
+    assert!(base.is_subset(&regrown));
+    query.finish();
+}
+
 async fn process_tests() {
     let manager = PythonWorkerManager::new(PythonWorkerConfig {
         max_workers: 2,
@@ -390,6 +443,7 @@ def handler(x):
     call(&mut tl, 9).await.unwrap();
     last.finish();
     parallel_pool_tests().await;
+    idle_pool_tests().await;
     #[cfg(target_os = "linux")]
     parent_loss_test().await;
 }

@@ -1937,6 +1937,10 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "300")]
     pub python_udf_execution_timeout_secs: u64,
 
+    /// Recycle idle extra Python workers after this interval; keep one per runtime.
+    #[clap(long, value_name = "VALUE", default_value = "300")]
+    pub python_udf_worker_idle_timeout_secs: u64,
+
     #[clap(long, value_name = "VALUE", default_value = "true")]
     pub enable_udf_js_script: bool,
 
