@@ -106,10 +106,14 @@ SELECT count(*) FROM (SELECT data FROM masking_raw_where WHERE data['secret']::S
 ----
 0
 
-# Explicit internal virtual-column identifiers must not expose raw values created
-# while binding earlier SELECT items, policy expressions, or WHERE predicates.
-statement error
-SELECT data['public'], "data['public']" FROM masking_raw_where
+# A quoted identifier matching an earlier SELECT expression resolves to its
+# output alias, not an internal raw virtual column. Both outputs must stay masked
+# even though WHERE uses the original sensitive path. Internal-column rejection
+# is covered separately by the masking_where_tests binder regression.
+query TT
+SELECT data['secret'], "data['secret']" FROM masking_raw_where WHERE data['secret']::STRING = 'alice'
+----
+NULL NULL
 
 # Each column has its own option even when both bind the same policy.
 statement ok
