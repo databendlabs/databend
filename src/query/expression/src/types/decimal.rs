@@ -683,6 +683,176 @@ pub trait Decimal:
     }
 }
 
+/// `10^n` for every Decimal128 scale.
+const U128_POW10: [u128; 39] = {
+    let mut table = [1u128; 39];
+    let mut i = 1;
+    while i < table.len() {
+        table[i] = table[i - 1] * 10;
+        i += 1;
+    }
+    table
+};
+
+/// The float operations that decimal-to-float conversion needs, for `f32` and `f64`.
+trait DecimalTargetFloat:
+    Copy + 'static + Div<Output = Self> + Neg<Output = Self> + std::str::FromStr<Err: Debug>
+{
+    const ZERO: Self;
+    /// Total width of the encoding.
+    const BITS: u32;
+    /// Significand bits, including the implicit leading bit.
+    const MANTISSA_DIGITS: u32;
+    /// Powers of ten that the type represents exactly.
+    const EXACT_POW10: &'static [Self];
+
+    /// Rounds to nearest, ties to even.
+    fn from_i128(value: i128) -> Self;
+    /// Rounds to nearest, ties to even.
+    fn from_u128(value: u128) -> Self;
+    fn to_bits_u64(self) -> u64;
+    fn from_bits_u64(bits: u64) -> Self;
+}
+
+impl DecimalTargetFloat for f64 {
+    const ZERO: Self = 0.0;
+    const BITS: u32 = u64::BITS;
+    const MANTISSA_DIGITS: u32 = f64::MANTISSA_DIGITS;
+    const EXACT_POW10: &'static [Self] = &[
+        1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16,
+        1e17, 1e18, 1e19, 1e20, 1e21, 1e22,
+    ];
+
+    fn from_i128(value: i128) -> Self {
+        value as f64
+    }
+
+    fn from_u128(value: u128) -> Self {
+        value as f64
+    }
+
+    fn to_bits_u64(self) -> u64 {
+        self.to_bits()
+    }
+
+    fn from_bits_u64(bits: u64) -> Self {
+        f64::from_bits(bits)
+    }
+}
+
+impl DecimalTargetFloat for f32 {
+    const ZERO: Self = 0.0;
+    const BITS: u32 = u32::BITS;
+    const MANTISSA_DIGITS: u32 = f32::MANTISSA_DIGITS;
+    const EXACT_POW10: &'static [Self] = &[1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10];
+
+    fn from_i128(value: i128) -> Self {
+        value as f32
+    }
+
+    fn from_u128(value: u128) -> Self {
+        value as f32
+    }
+
+    fn to_bits_u64(self) -> u64 {
+        self.to_bits() as u64
+    }
+
+    fn from_bits_u64(bits: u64) -> Self {
+        f32::from_bits(bits as u32)
+    }
+}
+
+/// Converts `mantissa * 10^-scale` to the nearest float.
+///
+/// The result must round exactly once to be the nearest float; the naive integer cast,
+/// power and division round up to three times. Three paths each round once:
+/// - a float division, when the mantissa fits in the significand and `10^scale` is in
+///   the exact power table, so both operands are exact;
+/// - an exact integer quotient (`scaled_u128_to_float`) for scales within Decimal128,
+///   which covers every Decimal64 and Decimal128 value;
+/// - the standard library's correctly rounded parser for the rest: scales beyond 38,
+///   and subnormal results, which only `f32` reaches.
+///
+/// Decimal256 mantissas beyond i128 go straight to the parser.
+fn decimal_i128_to_float<F: DecimalTargetFloat>(mantissa: i128, scale: u8) -> F {
+    if scale == 0 {
+        return F::from_i128(mantissa);
+    }
+    let magnitude = mantissa.unsigned_abs();
+    if magnitude <= 1 << F::MANTISSA_DIGITS && (scale as usize) < F::EXACT_POW10.len() {
+        return F::from_i128(mantissa) / F::EXACT_POW10[scale as usize];
+    }
+    if (scale as usize) < U128_POW10.len() {
+        if let Some(value) = scaled_u128_to_float::<F>(magnitude, scale) {
+            return if mantissa < 0 { -value } else { value };
+        }
+    }
+    parse_scaled_decimal(mantissa, scale)
+}
+
+/// Converts `magnitude * 10^-scale`, with `scale <= 38`, rounding once; `None` when the
+/// result is subnormal.
+///
+/// `q = floor(magnitude * 2^k / 10^scale)` is computed exactly, with `k` chosen so that
+/// `q` has 64 or 65 bits. Setting the lowest bit of `q` when the division leaves a
+/// remainder (a sticky bit) preserves the rounding decision of the exact quotient,
+/// because that bit lies below the rounding position of the float. The integer cast is
+/// then the only rounding, and scaling by `2^-k` through the exponent field is exact
+/// while the result stays normal.
+fn scaled_u128_to_float<F: DecimalTargetFloat>(magnitude: u128, scale: u8) -> Option<F> {
+    if magnitude == 0 {
+        return Some(F::ZERO);
+    }
+    let divisor = U128_POW10[scale as usize];
+    let magnitude_bits = (u128::BITS - magnitude.leading_zeros()) as i32;
+    let divisor_bits = (u128::BITS - divisor.leading_zeros()) as i32;
+    // At most 64 + 127 bits are shifted, so both operands fit in u256.
+    let k = 64 + divisor_bits - magnitude_bits;
+    let (dividend, divisor) = if k >= 0 {
+        (u256::from(magnitude) << k as u32, u256::from(divisor))
+    } else {
+        (
+            u256::from(magnitude),
+            u256::from(divisor) << k.unsigned_abs(),
+        )
+    };
+    let quotient = dividend / divisor;
+    let sticky = quotient * divisor != dividend;
+    let bits = F::from_u128(quotient.as_u128() | sticky as u128).to_bits_u64();
+
+    let exponent_shift = F::MANTISSA_DIGITS - 1;
+    let biased_exponent = (bits >> exponent_shift) as i32 - k;
+    if biased_exponent <= 0 {
+        return None;
+    }
+    debug_assert!(biased_exponent < (1 << (F::BITS - F::MANTISSA_DIGITS)) - 1);
+    Some(F::from_bits_u64(
+        (biased_exponent as u64) << exponent_shift | bits & ((1 << exponent_shift) - 1),
+    ))
+}
+
+/// Parses `{mantissa}e-{scale}` without allocating.
+fn parse_scaled_decimal<T>(mantissa: impl std::fmt::Display, scale: u8) -> T
+where
+    T: std::str::FromStr,
+    T::Err: Debug,
+{
+    use std::io::Write;
+
+    // `i256::MIN` has 78 characters and the exponent suffix at most 5.
+    let mut buf = [0u8; 96];
+    let len = {
+        let mut cursor = &mut buf[..];
+        write!(cursor, "{mantissa}e-{scale}").expect("decimal text fits the buffer");
+        96 - cursor.len()
+    };
+    std::str::from_utf8(&buf[..len])
+        .expect("decimal text is ASCII")
+        .parse()
+        .expect("decimal text is a valid float")
+}
+
 impl Decimal for i64 {
     type U64Array = [u64; 1];
 
@@ -853,13 +1023,11 @@ impl Decimal for i64 {
     }
 
     fn to_float32(self, scale: u8) -> f32 {
-        let div = 10_f32.powi(scale as i32);
-        self as f32 / div
+        decimal_i128_to_float(self as i128, scale)
     }
 
     fn to_float64(self, scale: u8) -> f64 {
-        let div = 10_f64.powi(scale as i32);
-        self as f64 / div
+        decimal_i128_to_float(self as i128, scale)
     }
 
     fn to_int<U: NumCast>(self, scale: u8, rounding_mode: bool) -> Option<U> {
@@ -1190,13 +1358,11 @@ impl Decimal for i128 {
     }
 
     fn to_float32(self, scale: u8) -> f32 {
-        let div = 10_f32.powi(scale as i32);
-        self as f32 / div
+        decimal_i128_to_float(self, scale)
     }
 
     fn to_float64(self, scale: u8) -> f64 {
-        let div = 10_f64.powi(scale as i32);
-        self as f64 / div
+        decimal_i128_to_float(self, scale)
     }
 
     fn to_int<U: NumCast>(self, scale: u8, rounding_mode: bool) -> Option<U> {
@@ -1482,13 +1648,17 @@ impl Decimal for i256 {
     }
 
     fn to_float32(self, scale: u8) -> f32 {
-        let div = 10_f32.powi(scale as i32);
-        self.as_f32() / div
+        match i128::try_from(self.0) {
+            Ok(v) => decimal_i128_to_float(v, scale),
+            Err(_) => parse_scaled_decimal(self.0, scale),
+        }
     }
 
     fn to_float64(self, scale: u8) -> f64 {
-        let div = 10_f64.powi(scale as i32);
-        self.as_f64() / div
+        match i128::try_from(self.0) {
+            Ok(v) => decimal_i128_to_float(v, scale),
+            Err(_) => parse_scaled_decimal(self.0, scale),
+        }
     }
 
     fn to_int<U: NumCast>(self, scale: u8, rounding_mode: bool) -> Option<U> {
