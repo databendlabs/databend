@@ -40,7 +40,7 @@ pub enum FlightCompression {
     Zstd,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct FlightKeepAliveParams {
     pub time: Option<Duration>,
     pub interval: Option<Duration>,
@@ -1105,6 +1105,10 @@ impl Settings {
 
     pub fn get_flight_retry_interval(&self) -> Result<u64> {
         self.try_get_u64("flight_connection_retry_interval")
+    }
+
+    pub fn get_enable_flight_control_channel_reuse(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_flight_control_channel_reuse")? != 0)
     }
 
     pub fn get_hash_shuffle_rows_threshold(&self) -> Result<usize> {

@@ -117,6 +117,9 @@ impl Processor for UnbranchedReplaceIntoProcessor {
             self.input_port.is_finished() && self.output_data_replace_into_action.is_none();
 
         if finished {
+            // The processor is kept until the query ends; the seen keys grow
+            // with the input and are not needed any more.
+            self.replace_into_mutator.release_seen_keys();
             self.output_port_replace_into_action.finish();
             return Ok(Event::Finished);
         }
