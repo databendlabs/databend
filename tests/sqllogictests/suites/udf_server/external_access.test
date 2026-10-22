@@ -36,6 +36,34 @@ SELECT managed_gcd(6, 4);
 ----
 2
 
+# A dangling rule matches nothing instead of breaking the matching flight_rule.
+statement ok
+DROP NETWORK RULE unrelated_rule;
+
+statement ok
+SELECT sleep(0.5);
+
+query I
+SELECT managed_gcd(6, 4);
+----
+2
+
+# SQL policy authorization must not bypass the nonempty operator allow list.
+statement ok
+CREATE OR REPLACE NETWORK RULE operator_denied_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('localhost:8815');
+
+statement ok
+CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION operator_denied_access ALLOWED_NETWORK_RULES = (operator_denied_rule) ENABLED = TRUE;
+
+statement error udf_server_allow_list
+CREATE FUNCTION operator_denied_gcd(INT, INT) RETURNS INT LANGUAGE python HANDLER = 'gcd' ADDRESS = 'http://localhost:8815' EXTERNAL_ACCESS_INTEGRATIONS = (operator_denied_access);
+
+statement ok
+DROP INTEGRATION operator_denied_access;
+
+statement ok
+DROP NETWORK RULE operator_denied_rule;
+
 query I
 SELECT managed_gcd(number::INT, 2) FROM numbers(3);
 ----
@@ -134,4 +162,4 @@ statement ok
 DROP NETWORK RULE flight_rule;
 
 statement ok
-DROP NETWORK RULE unrelated_rule;
+DROP NETWORK RULE IF EXISTS unrelated_rule;

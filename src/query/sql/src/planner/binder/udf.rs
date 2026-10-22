@@ -164,7 +164,7 @@ impl Binder {
                 if integrations.is_empty() {
                     UDFValidator::is_udf_server_allowed(address.as_str())?;
                 } else {
-                    UDFValidator::is_udf_server_transport_allowed_with_config(
+                    UDFValidator::is_udf_server_policy_allowed_with_config(
                         address,
                         &UdfValidationConfig::from_inner_config(GlobalConfig::instance().as_ref()),
                     )?;

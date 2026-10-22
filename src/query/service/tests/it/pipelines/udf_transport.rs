@@ -51,6 +51,7 @@ use databend_common_expression::Symbol;
 use databend_common_expression::types::DataType;
 use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::plans::UDFType;
@@ -291,7 +292,7 @@ async fn external_access_creation_authorization_and_schema() -> Result<()> {
     let mut config = ConfigBuilder::create().config();
     config.query.common.enable_udf_server = true;
     config.query.common.udf_server_allow_insecure = true;
-    config.query.common.udf_server_allow_list.clear();
+    config.query.common.udf_server_allow_list = vec!["http://127.0.0.1".into()];
     assert!(!config.query.common.management_mode);
     let fixture = TestFixture::setup_with_config(&config).await?;
     let listener = TcpListener::bind("127.0.0.1:0").await?;
@@ -313,7 +314,7 @@ async fn external_access_creation_authorization_and_schema() -> Result<()> {
     session.set_authed_user(admin.clone(), None).await?;
     session.set_current_role_checked("account_admin").await?;
     for sql in [
-        format!("CREATE NETWORK RULE auth_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('{address}')"),
+        format!("CREATE NETWORK RULE auth_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('{address}', 'localhost:{}')", address.port()),
         "CREATE EXTERNAL ACCESS INTEGRATION auth_access ALLOWED_NETWORK_RULES = (auth_rule) ENABLED = TRUE".into(),
         "CREATE ROLE udf_developer".into(),
         "GRANT CREATE ON *.* TO ROLE udf_developer".into(),
@@ -384,7 +385,40 @@ async fn external_access_creation_authorization_and_schema() -> Result<()> {
         .await?;
     session.set_authed_user(developer.clone(), None).await?;
     session.set_current_role_checked("udf_developer").await?;
+    // Even SUPER + USAGE cannot escape a nonempty operator host allow list.
+    let blocked_address = format!("http://localhost:{}", address.port());
+    let denied = create
+        .replace("managed_echo", "operator_denied_echo")
+        .replace(&format!("http://{address}"), &blocked_address);
+    assert!(
+        fixture
+            .execute_command(&denied)
+            .await
+            .unwrap_err()
+            .message()
+            .contains("udf_server_allow_list")
+    );
     fixture.execute_command(&create).await?;
+    // An already stored function must pass the same bound during SELECT binding.
+    let tenant = fixture.new_query_ctx().await?.get_tenant();
+    let api = UserApiProvider::instance();
+    let original = api.get_udf(&tenant, "managed_echo").await?.unwrap();
+    let mut blocked = original.clone();
+    let UDFDefinition::UDFServer(definition) = &mut blocked.definition else {
+        unreachable!()
+    };
+    definition.address = blocked_address.clone();
+    api.update_udf(&tenant, blocked).await?;
+    let ctx = fixture.new_query_ctx().await?;
+    assert!(
+        Planner::new(ctx)
+            .plan_sql("SELECT managed_echo('hello')")
+            .await
+            .unwrap_err()
+            .message()
+            .contains("udf_server_allow_list")
+    );
+    api.update_udf(&tenant, original).await?;
     // SQL-managed policies do not skip the original Flight schema check.
     let bad_schema = create.replace("managed_echo(STRING)", "bad_schema(INT)");
     assert!(
@@ -395,9 +429,10 @@ async fn external_access_creation_authorization_and_schema() -> Result<()> {
             .message()
             .contains("arg types mismatch")
     );
-    // The legacy path still requires the old configured allow list.
+    // The legacy path also obeys the operator host allow list.
     let legacy = create
         .replace("managed_echo", "legacy_echo")
+        .replace(&format!("http://{address}"), &blocked_address)
         .replace(" EXTERNAL_ACCESS_INTEGRATIONS = (auth_access)", "");
     assert!(
         fixture
@@ -583,6 +618,7 @@ async fn external_access_rechecks_already_built_transform() -> Result<()> {
     let mut config = ConfigBuilder::create().config();
     config.query.common.enable_udf_server = true;
     config.query.common.udf_server_allow_insecure = true;
+    config.query.common.udf_server_allow_list = vec!["http://127.0.0.1".into()];
     let fixture = TestFixture::setup_with_config(&config).await?;
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let address = listener.local_addr()?;
@@ -613,6 +649,19 @@ async fn external_access_rechecks_already_built_transform() -> Result<()> {
     };
     let endpoints = TransformUdfServer::init_endpoints(ctx.clone(), from_ref(&func))?;
     let semaphore = TransformUdfServer::init_semaphore(ctx.clone())?;
+    // A received physical plan is checked against the worker's own config too.
+    let mut blocked = func.clone();
+    blocked.udf_type = UDFType::Server(format!("http://localhost:{}", address.port()));
+    let blocked_endpoints = TransformUdfServer::init_endpoints(ctx.clone(), from_ref(&blocked))?;
+    let err = TransformUdfServer::new(
+        ctx.clone(),
+        vec![blocked],
+        semaphore.clone(),
+        blocked_endpoints,
+    )
+    .err()
+    .unwrap();
+    assert!(err.message().contains("udf_server_allow_list"));
     let transform = Arc::new(Mutex::new(TransformUdfServer::new(
         ctx.clone(),
         vec![func],

@@ -114,7 +114,7 @@ async fn provider(
             .add(
                 ExternalAccessIntegration {
                     name: name.into(),
-                    allowed_network_rules: vec!["shared".into(), "shared".into()],
+                    allowed_network_rules: vec!["missing".into(), "shared".into(), "shared".into()],
                     enabled: true,
                 },
                 &CreateOption::Create,
@@ -145,7 +145,7 @@ async fn external_access_busy_cache_batches_and_fails_closed() -> anyhow::Result
     let batches = count.batches.lock().clone();
     assert_eq!(batches.len(), 2);
     assert_eq!(batches[0].len(), 2); // duplicate integration removed
-    assert_eq!(batches[1].len(), 1); // shared / duplicate rules removed
+    assert_eq!(batches[1].len(), 2); // missing rule does not shadow shared / duplicate rules
 
     count.fail.store(true, Ordering::Relaxed);
     let err = timeout(

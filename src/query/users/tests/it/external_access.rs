@@ -19,6 +19,7 @@ use anyhow::Result;
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_meta_app::principal::ExternalAccessIntegration;
 use databend_common_meta_app::principal::NetworkRule;
 use databend_common_meta_app::schema::CreateOption;
@@ -159,6 +160,20 @@ async fn test_external_access_live_policy() -> Result<()> {
     provider
         .validate_external_access(&tenant, "https://video.example.com:8443", &names)
         .await?;
+    // Dropping one referenced rule must not shadow another matching rule.
+    rules.remove("video", MatchSeq::GE(1)).await?;
+    sleep(Duration::from_millis(500)).await;
+    provider
+        .validate_external_access(&tenant, "https://other.example.com:8443", &names)
+        .await?;
+    assert_eq!(
+        provider
+            .validate_external_access(&tenant, "https://video.example.com:8443", &names)
+            .await
+            .unwrap_err()
+            .code(),
+        ErrorCode::PERMISSION_DENIED
+    );
     integration.allowed_network_rules = vec!["other".into()];
     integrations.update(integration, MatchSeq::GE(1)).await?;
     sleep(Duration::from_millis(500)).await;
@@ -170,11 +185,13 @@ async fn test_external_access_live_policy() -> Result<()> {
     );
     rules.remove("other", MatchSeq::GE(1)).await?;
     sleep(Duration::from_millis(500)).await;
-    assert!(
+    assert_eq!(
         provider
             .validate_external_access(&tenant, "https://other.example.com:8443", &names)
             .await
-            .is_err()
+            .unwrap_err()
+            .code(),
+        ErrorCode::PERMISSION_DENIED
     );
     integrations.remove("access", MatchSeq::GE(1)).await?;
     sleep(Duration::from_millis(500)).await;

@@ -219,6 +219,27 @@ impl UDFValidator {
         Ok(())
     }
 
+    pub fn is_udf_server_policy_allowed(address: &str) -> Result<()> {
+        Self::is_udf_server_policy_allowed_with_config(
+            address,
+            &UdfValidationConfig::from_inner_config(GlobalConfig::instance().as_ref()),
+        )
+    }
+
+    /// A nonempty operator allow list remains a ceiling for SQL-managed policies.
+    /// An empty list delegates endpoint authorization to integrations; legacy UDFs
+    /// still require an allow-list match. Keep the existing host-only comparison.
+    pub fn is_udf_server_policy_allowed_with_config(
+        address: &str,
+        config: &UdfValidationConfig,
+    ) -> Result<()> {
+        if config.udf_server_allow_list.is_empty() {
+            Self::is_udf_server_transport_allowed_with_config(address, config)
+        } else {
+            Self::is_udf_server_allowed_with_config(address, config)
+        }
+    }
+
     pub fn is_udf_server_transport_allowed_with_config(
         address: &str,
         config: &UdfValidationConfig,
@@ -271,33 +292,50 @@ mod tests {
             UDFValidator::is_udf_server_allowed_with_config("https://other.example.com", &config)
                 .is_err()
         );
-        config.udf_server_allow_list.clear();
-        assert!(
-            UDFValidator::is_udf_server_allowed_with_config("https://video.example.com", &config)
-                .is_err()
-        );
-        // SQL-managed policies replace the list, not transport security flags.
-        UDFValidator::is_udf_server_transport_allowed_with_config(
+        UDFValidator::is_udf_server_policy_allowed_with_config(
             "https://video.example.com",
             &config,
         )
         .unwrap();
         assert!(
-            UDFValidator::is_udf_server_transport_allowed_with_config(
+            UDFValidator::is_udf_server_policy_allowed_with_config(
+                "https://other.example.com",
+                &config
+            )
+            .is_err()
+        );
+        config.udf_server_allow_list = vec!["invalid allow-list entry".into()];
+        assert!(
+            UDFValidator::is_udf_server_policy_allowed_with_config(
+                "https://video.example.com",
+                &config
+            )
+            .is_err()
+        );
+        config.udf_server_allow_list.clear();
+        assert!(
+            UDFValidator::is_udf_server_allowed_with_config("https://video.example.com", &config)
+                .is_err()
+        );
+        // Only an empty operator list delegates authorization to SQL policies.
+        UDFValidator::is_udf_server_policy_allowed_with_config(
+            "https://video.example.com",
+            &config,
+        )
+        .unwrap();
+        assert!(
+            UDFValidator::is_udf_server_policy_allowed_with_config(
                 "http://video.example.com",
                 &config
             )
             .is_err()
         );
         config.udf_server_allow_insecure = true;
-        UDFValidator::is_udf_server_transport_allowed_with_config(
-            "http://video.example.com",
-            &config,
-        )
-        .unwrap();
+        UDFValidator::is_udf_server_policy_allowed_with_config("http://video.example.com", &config)
+            .unwrap();
         config.enable_udf_server = false;
         assert!(
-            UDFValidator::is_udf_server_transport_allowed_with_config(
+            UDFValidator::is_udf_server_policy_allowed_with_config(
                 "https://video.example.com",
                 &config
             )

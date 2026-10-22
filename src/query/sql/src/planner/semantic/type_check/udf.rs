@@ -610,10 +610,7 @@ impl UdfAdapter for FullTypeCheckAdapter {
         if definition.external_access_integrations.is_empty() {
             UDFValidator::is_udf_server_allowed_with_config(&definition.address, &config)
         } else {
-            UDFValidator::is_udf_server_transport_allowed_with_config(
-                &definition.address,
-                &config,
-            )?;
+            UDFValidator::is_udf_server_policy_allowed_with_config(&definition.address, &config)?;
             self.block_on(UserApiProvider::instance().validate_external_access(
                 &self.ctx.get_tenant(),
                 &definition.address,

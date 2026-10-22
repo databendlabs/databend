@@ -31,6 +31,7 @@ use databend_common_expression::udf_client::is_transport_error_message;
 use databend_common_metrics::external_server::record_error_external;
 use databend_common_metrics::external_server::record_retry_external;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
+use databend_common_sql::planner::UDFValidator;
 use databend_common_users::UserApiProvider;
 use tokio::sync::Semaphore;
 use tonic::transport::Endpoint;
@@ -99,6 +100,12 @@ impl TransformUdfServer {
         let connect_timeout = settings.get_external_server_connect_timeout_secs()?;
         let request_batch_rows = settings.get_external_server_request_batch_rows()? as usize;
         let retry_times = settings.get_external_server_request_retry_times()? as usize;
+        // A received physical plan must also obey this executor's operator config.
+        for func in &funcs {
+            if !func.external_access_integrations.is_empty() {
+                UDFValidator::is_udf_server_policy_allowed(func.udf_type.as_server().unwrap())?;
+            }
+        }
 
         Ok(Self {
             ctx,
@@ -127,7 +134,7 @@ impl TransformUdfServer {
             ErrorCode::Internal(format!("Udf transformer acquire permit failure. {}", e))
         })?;
         // Check immediately before every Flight request (including retries),
-        // using current meta state rather than a cached plan or warehouse config.
+        // using the watch-backed policy view or authoritative KV fallback.
         if !func.external_access_integrations.is_empty() {
             user_api
                 .validate_external_access(

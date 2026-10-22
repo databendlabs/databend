@@ -69,7 +69,8 @@ fn endpoint(url: &Url) -> Result<(String, u16)> {
 impl UserApiProvider {
     /// Reuse the node-local meta watch caches, falling back to meta when unavailable.
     /// Policy changes follow the existing watch cache's asynchronous propagation.
-    /// Explicit integrations never fall back to the legacy allow list.
+    /// Missing rules match nothing; explicit integrations never fall back to the
+    /// legacy allow list. Callers also enforce the operator's configured ceiling.
     /// Creation checks SUPER and integration USAGE; invocation uses the existing
     /// UDF privileges and does not require integration USAGE.
     pub async fn validate_external_access(
@@ -114,11 +115,7 @@ impl UserApiProvider {
             .external_access_values(tenant, &self.network_rule_cache, keys)
             .await?;
         let mut allowed = false;
-        for (name, value) in rules.iter().zip(values) {
-            let value = value.ok_or_else(|| {
-                let ident = TIdent::<RuleResource>::new(tenant, name);
-                ErrorCode::from(ident.unknown_error("validate external access"))
-            })?;
+        for value in values.into_iter().flatten() {
             let rule = decode_pb::<NetworkRule>(&value.data)
                 .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?;
             for value in &rule.value_list {
