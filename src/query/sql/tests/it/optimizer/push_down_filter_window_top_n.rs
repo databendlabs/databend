@@ -65,6 +65,24 @@ async fn test_push_down_filter_window_top_n_outcomes() -> Result<()> {
             setup_sqls: &[T_TABLE],
             sql: "SELECT k, row_number() OVER (PARTITION BY k ORDER BY v DESC) AS r, rank() OVER (PARTITION BY k ORDER BY w) AS rk FROM t QUALIFY r = 1",
         },
+        SqlTestCase {
+            name: "upper_bound_predicate_is_dropped",
+            description: "The window emits only rows ranked within the top-n, so `r <= 2` is satisfied and the Filter disappears.",
+            setup_sqls: &[T_TABLE],
+            sql: "SELECT k, row_number() OVER (PARTITION BY k ORDER BY v DESC) AS r FROM t QUALIFY r <= 2",
+        },
+        SqlTestCase {
+            name: "exact_rank_predicate_is_kept",
+            description: "`r = 2` is not implied by keeping the top 2 rows, so the Filter stays above the window.",
+            setup_sqls: &[T_TABLE],
+            sql: "SELECT k, row_number() OVER (PARTITION BY k ORDER BY v DESC) AS r FROM t QUALIFY r = 2",
+        },
+        SqlTestCase {
+            name: "unrelated_conjunct_is_kept",
+            description: "Only the rank bound is dropped; the other conjunct remains in the Filter.",
+            setup_sqls: &[T_TABLE],
+            sql: "SELECT k, row_number() OVER (PARTITION BY k ORDER BY v DESC) AS r FROM t QUALIFY r <= 2 AND k > 0",
+        },
     ];
 
     for case in &cases {

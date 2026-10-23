@@ -2,23 +2,22 @@
 description: A lone ranking window filtered by QUALIFY should get the top-n.
 sql: SELECT k, row_number() OVER (PARTITION BY k ORDER BY v DESC) AS r FROM t QUALIFY r = 1
 optimized_plan:
-Filter
-├── filters: [eq(row_number() OVER (PARTITION BY k ORDER BY v DESC) (#3), 1)]
-└── Window
-    ├── aggregate function: row_number
-    ├── partition items: [t.k (#0) AS (#0)]
-    ├── order by items: [t.v (#1) AS (#1) DESC]
-    ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    └── Sort
-        ├── sort keys: [t.k (#0) ASC NULLS LAST, t.v (#1) DESC NULLS LAST]
-        ├── limit: [NONE]
-        ├── window top: 1
-        ├── window function: RowNumber
-        └── Scan
-            ├── table: default.t (#0)
-            ├── filters: []
-            ├── order by: [t.k (#0) ASC, t.v (#1) DESC]
-            └── limit: NONE
+Window
+├── aggregate function: row_number
+├── partition items: [t.k (#0) AS (#0)]
+├── order by items: [t.v (#1) AS (#1) DESC]
+├── frame: [Range: Preceding(None) ~ CurrentRow]
+├── top: 1
+└── Sort
+    ├── sort keys: [t.k (#0) ASC NULLS LAST, t.v (#1) DESC NULLS LAST]
+    ├── limit: [NONE]
+    ├── window top: 1
+    ├── window function: RowNumber
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: [t.k (#0) ASC, t.v (#1) DESC]
+        └── limit: NONE
 
 
 === aggregate_after_top_window_blocks_top ===
@@ -49,25 +48,23 @@ Filter
 description: An aggregate window evaluated before the top-n window has already seen every row, so the top-n can be pushed.
 sql: SELECT k, sum(w) OVER (PARTITION BY k ORDER BY v, w) AS s, row_number() OVER (PARTITION BY k ORDER BY v DESC) AS r FROM t QUALIFY r = 1
 optimized_plan:
-Filter
-├── filters: [eq(row_number() OVER (PARTITION BY k ORDER BY v DESC) (#4), 1)]
-└── WindowGroup
-    ├── Window
-    │   ├── aggregate function: sum
-    │   ├── partition items: [t.k (#0) AS (#0)]
-    │   ├── order by items: [t.v (#1) AS (#1), t.w (#2) AS (#2)]
-    │   └── frame: [Range: Preceding(None) ~ CurrentRow]
-    ├── Window
-    │   ├── aggregate function: row_number
-    │   ├── partition items: [t.k (#0) AS (#0)]
-    │   ├── order by items: [t.v (#1) AS (#1) DESC]
-    │   ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    │   └── top: 1
-    └── Scan
-        ├── table: default.t (#0)
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+WindowGroup
+├── Window
+│   ├── aggregate function: sum
+│   ├── partition items: [t.k (#0) AS (#0)]
+│   ├── order by items: [t.v (#1) AS (#1), t.w (#2) AS (#2)]
+│   └── frame: [Range: Preceding(None) ~ CurrentRow]
+├── Window
+│   ├── aggregate function: row_number
+│   ├── partition items: [t.k (#0) AS (#0)]
+│   ├── order by items: [t.v (#1) AS (#1) DESC]
+│   ├── frame: [Range: Preceding(None) ~ CurrentRow]
+│   └── top: 1
+└── Scan
+    ├── table: default.t (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
 
 
 === ranking_different_order_blocks_top ===
@@ -91,6 +88,74 @@ Filter
         ├── table: default.t (#0)
         ├── filters: []
         ├── order by: []
+        └── limit: NONE
+
+
+=== upper_bound_predicate_is_dropped ===
+description: The window emits only rows ranked within the top-n, so `r <= 2` is satisfied and the Filter disappears.
+sql: SELECT k, row_number() OVER (PARTITION BY k ORDER BY v DESC) AS r FROM t QUALIFY r <= 2
+optimized_plan:
+Window
+├── aggregate function: row_number
+├── partition items: [t.k (#0) AS (#0)]
+├── order by items: [t.v (#1) AS (#1) DESC]
+├── frame: [Range: Preceding(None) ~ CurrentRow]
+├── top: 2
+└── Sort
+    ├── sort keys: [t.k (#0) ASC NULLS LAST, t.v (#1) DESC NULLS LAST]
+    ├── limit: [NONE]
+    ├── window top: 2
+    ├── window function: RowNumber
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: [t.k (#0) ASC, t.v (#1) DESC]
+        └── limit: NONE
+
+
+=== exact_rank_predicate_is_kept ===
+description: `r = 2` is not implied by keeping the top 2 rows, so the Filter stays above the window.
+sql: SELECT k, row_number() OVER (PARTITION BY k ORDER BY v DESC) AS r FROM t QUALIFY r = 2
+optimized_plan:
+Filter
+├── filters: [eq(row_number() OVER (PARTITION BY k ORDER BY v DESC) (#3), 2)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: [t.k (#0) AS (#0)]
+    ├── order by items: [t.v (#1) AS (#1) DESC]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    ├── top: 2
+    └── Sort
+        ├── sort keys: [t.k (#0) ASC NULLS LAST, t.v (#1) DESC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: 2
+        ├── window function: RowNumber
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: [t.k (#0) ASC, t.v (#1) DESC]
+            └── limit: NONE
+
+
+=== unrelated_conjunct_is_kept ===
+description: Only the rank bound is dropped; the other conjunct remains in the Filter.
+sql: SELECT k, row_number() OVER (PARTITION BY k ORDER BY v DESC) AS r FROM t QUALIFY r <= 2 AND k > 0
+optimized_plan:
+Window
+├── aggregate function: row_number
+├── partition items: [t.k (#0) AS (#0)]
+├── order by items: [t.v (#1) AS (#1) DESC]
+├── frame: [Range: Preceding(None) ~ CurrentRow]
+├── top: 2
+└── Sort
+    ├── sort keys: [t.k (#0) ASC NULLS LAST, t.v (#1) DESC NULLS LAST]
+    ├── limit: [NONE]
+    ├── window top: 2
+    ├── window function: RowNumber
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: [gt(t.k (#0), 0)]
+        ├── order by: [t.k (#0) ASC, t.v (#1) DESC]
         └── limit: NONE
 
 

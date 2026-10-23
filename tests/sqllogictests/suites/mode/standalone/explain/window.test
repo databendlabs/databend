@@ -178,49 +178,46 @@ CREATE TABLE Test (k int, v int);
 query T
 explain SELECT k, v FROM (SELECT *, rank() OVER (PARTITION BY k ORDER BY v DESC) AS rank FROM ((SELECT k, v FROM Test) UNION ALL (SELECT k, v FROM Test) ) t1 ) t2 WHERE rank = 1 AND k = 12;
 ----
-Filter
-├── output columns: [k (#4), v (#5)]
-├── filters: [rank() OVER (PARTITION BY k ORDER BY v DESC) (#6) = 1]
-├── estimated rows: 0.00
-└── Window
-    ├── output columns: [k (#4), v (#5), rank() OVER (PARTITION BY k ORDER BY v DESC) (#6)]
-    ├── aggregate function: [rank]
-    ├── partition by: [k]
-    ├── order by: [v]
-    ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    └── WindowPartition
+Window
+├── output columns: [k (#4), v (#5), rank() OVER (PARTITION BY k ORDER BY v DESC) (#6)]
+├── aggregate function: [rank]
+├── partition by: [k]
+├── order by: [v]
+├── frame: [Range: Preceding(None) ~ CurrentRow]
+├── top: [1]
+└── WindowPartition
+    ├── output columns: [k (#4), v (#5)]
+    ├── hash keys: [k]
+    ├── top: 1
+    ├── estimated rows: 0.00
+    └── WindowPartialTopN
         ├── output columns: [k (#4), v (#5)]
-        ├── hash keys: [k]
+        ├── partition by: [k]
         ├── top: 1
         ├── estimated rows: 0.00
-        └── WindowPartialTopN
+        └── UnionAll
             ├── output columns: [k (#4), v (#5)]
-            ├── partition by: [k]
-            ├── top: 1
             ├── estimated rows: 0.00
-            └── UnionAll
-                ├── output columns: [k (#4), v (#5)]
-                ├── estimated rows: 0.00
-                ├── TableScan
-                │   ├── table: default.test_explain_window.test
-                │   ├── scan id: 0
-                │   ├── output columns: [k (#0), v (#1)]
-                │   ├── read rows: 0
-                │   ├── read size: 0
-                │   ├── partitions total: 0
-                │   ├── partitions scanned: 0
-                │   ├── push downs: [filters: [is_true(test.k (#0) = 12)], limit: NONE]
-                │   └── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.test_explain_window.test
-                    ├── scan id: 1
-                    ├── output columns: [k (#2), v (#3)]
-                    ├── read rows: 0
-                    ├── read size: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [is_true(test.k (#2) = 12)], limit: NONE]
-                    └── estimated rows: 0.00
+            ├── TableScan
+            │   ├── table: default.test_explain_window.test
+            │   ├── scan id: 0
+            │   ├── output columns: [k (#0), v (#1)]
+            │   ├── read rows: 0
+            │   ├── read size: 0
+            │   ├── partitions total: 0
+            │   ├── partitions scanned: 0
+            │   ├── push downs: [filters: [is_true(test.k (#0) = 12)], limit: NONE]
+            │   └── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.test_explain_window.test
+                ├── scan id: 1
+                ├── output columns: [k (#2), v (#3)]
+                ├── read rows: 0
+                ├── read size: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [is_true(test.k (#2) = 12)], limit: NONE]
+                └── estimated rows: 0.00
 
 # cannot push down filter in window function
 query T
@@ -228,7 +225,7 @@ explain SELECT k, v FROM (SELECT *, rank() OVER (PARTITION BY v ORDER BY v DESC)
 ----
 Filter
 ├── output columns: [k (#4), v (#5)]
-├── filters: [rank() OVER (PARTITION BY v ORDER BY v DESC) (#6) = 1, is_true(t1.k (#4) = 12)]
+├── filters: [is_true(t1.k (#4) = 12)]
 ├── estimated rows: 0.00
 └── Window
     ├── output columns: [k (#4), v (#5), rank() OVER (PARTITION BY v ORDER BY v DESC) (#6)]
@@ -236,6 +233,7 @@ Filter
     ├── partition by: [v]
     ├── order by: [v]
     ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    ├── top: [1]
     └── WindowPartition
         ├── output columns: [k (#4), v (#5)]
         ├── hash keys: [v]
@@ -748,9 +746,8 @@ digraph {
     7 [ label = "ShuffleMergePartition(WindowTopN)" ]
     8 [ label = "TransformWindowPartitionCollect(Sort)" ]
     9 [ label = "Transform Window" ]
-    10 [ label = "TransformFilter" ]
-    11 [ label = "LimitTransform" ]
-    12 [ label = "CompoundBlockOperator(Project)" ]
+    10 [ label = "LimitTransform" ]
+    11 [ label = "CompoundBlockOperator(Project)" ]
     0 -> 1 [ label = "" ]
     1 -> 2 [ label = "" ]
     2 -> 3 [ label = "" ]
@@ -762,7 +759,6 @@ digraph {
     8 -> 9 [ label = "" ]
     9 -> 10 [ label = "" ]
     10 -> 11 [ label = "" ]
-    11 -> 12 [ label = "" ]
 }
 
 # top n 0
@@ -1065,21 +1061,22 @@ AggregateFinal
 ├── output columns: [count() (#4), numbers.number (#0)]
 ├── group by: [number]
 ├── aggregate functions: [count()]
-├── estimated rows: 1.00
+├── estimated rows: 166.67
 └── AggregatePartial
     ├── group by: [number]
     ├── aggregate functions: [count()]
-    ├── estimated rows: 1.00
+    ├── estimated rows: 166.67
     └── Filter
         ├── output columns: [numbers.number (#0)]
-        ├── filters: [numbers.number (#0) = 3, row_number() OVER (PARTITION BY id ORDER BY number DESC) (#3) = 1]
-        ├── estimated rows: 1.00
+        ├── filters: [numbers.number (#0) = 3]
+        ├── estimated rows: 500.00
         └── Window
             ├── output columns: [numbers.number (#0), row_number_part_0 (#2), row_number() OVER (PARTITION BY id ORDER BY number DESC) (#3)]
             ├── aggregate function: [row_number]
             ├── partition by: [row_number_part_0]
             ├── order by: [number]
             ├── frame: [Range: Preceding(None) ~ CurrentRow]
+            ├── top: [1]
             └── WindowPartition
                 ├── output columns: [numbers.number (#0), row_number_part_0 (#2)]
                 ├── hash keys: [row_number_part_0]
@@ -1104,6 +1101,112 @@ AggregateFinal
                             ├── partitions scanned: 1
                             ├── push downs: [filters: [], limit: NONE]
                             └── estimated rows: 1000.00
+
+# A ranking window with a pushed-down top-n emits only rows ranked within it,
+# so a Filter that only bounds the rank from above is dropped; `rn = 2` stays.
+statement ok
+create table t_top(k int, v int, w int);
+
+query T
+explain select k from (select k, row_number() over (partition by k order by w desc) rn from t_top) where rn <= 2;
+----
+Window
+├── output columns: [t_top.k (#0), t_top.w (#2), row_number() OVER (PARTITION BY k ORDER BY w DESC) (#3)]
+├── aggregate function: [row_number]
+├── partition by: [k]
+├── order by: [w]
+├── frame: [Range: Preceding(None) ~ CurrentRow]
+├── top: [2]
+└── WindowPartition
+    ├── output columns: [t_top.k (#0), t_top.w (#2)]
+    ├── hash keys: [k]
+    ├── top: 2
+    ├── estimated rows: 0.00
+    └── WindowPartialTopN
+        ├── output columns: [t_top.k (#0), t_top.w (#2)]
+        ├── partition by: [k]
+        ├── top: 2
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.test_explain_window.t_top
+            ├── scan id: 0
+            ├── output columns: [k (#0), w (#2)]
+            ├── read rows: 0
+            ├── read size: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 0.00
+
+query T
+explain select k from (select k, row_number() over (partition by k order by w desc) rn from t_top) where rn = 2;
+----
+Filter
+├── output columns: [t_top.k (#0)]
+├── filters: [row_number() OVER (PARTITION BY k ORDER BY w DESC) (#3) = 2]
+├── estimated rows: 0.00
+└── Window
+    ├── output columns: [t_top.k (#0), t_top.w (#2), row_number() OVER (PARTITION BY k ORDER BY w DESC) (#3)]
+    ├── aggregate function: [row_number]
+    ├── partition by: [k]
+    ├── order by: [w]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    ├── top: [2]
+    └── WindowPartition
+        ├── output columns: [t_top.k (#0), t_top.w (#2)]
+        ├── hash keys: [k]
+        ├── top: 2
+        ├── estimated rows: 0.00
+        └── WindowPartialTopN
+            ├── output columns: [t_top.k (#0), t_top.w (#2)]
+            ├── partition by: [k]
+            ├── top: 2
+            ├── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.test_explain_window.t_top
+                ├── scan id: 0
+                ├── output columns: [k (#0), w (#2)]
+                ├── read rows: 0
+                ├── read size: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 0.00
+
+query T
+explain select k from (select k, v, rank() over (partition by k order by w desc) rn from t_top) where rn <= 2 and v = 1;
+----
+Filter
+├── output columns: [t_top.k (#0)]
+├── filters: [is_true(t_top.v (#1) = 1)]
+├── estimated rows: 0.00
+└── Window
+    ├── output columns: [t_top.k (#0), t_top.v (#1), t_top.w (#2), rank() OVER (PARTITION BY k ORDER BY w DESC) (#3)]
+    ├── aggregate function: [rank]
+    ├── partition by: [k]
+    ├── order by: [w]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    ├── top: [2]
+    └── WindowPartition
+        ├── output columns: [t_top.k (#0), t_top.v (#1), t_top.w (#2)]
+        ├── hash keys: [k]
+        ├── top: 2
+        ├── estimated rows: 0.00
+        └── WindowPartialTopN
+            ├── output columns: [t_top.k (#0), t_top.v (#1), t_top.w (#2)]
+            ├── partition by: [k]
+            ├── top: 2
+            ├── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.test_explain_window.t_top
+                ├── scan id: 0
+                ├── output columns: [k (#0), v (#1), w (#2)]
+                ├── read rows: 0
+                ├── read size: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 0.00
 
 statement ok
 DROP DATABASE test_explain_window;

@@ -358,27 +358,33 @@ fn apply_window_transform(
         let transform = if window.window_frame.units.is_rows() {
             let start_bound = FrameBound::try_from(&window.window_frame.start_bound)?;
             let end_bound = FrameBound::try_from(&window.window_frame.end_bound)?;
-            Box::new(TransformWindow::try_create_rows(
-                input,
-                output,
-                func.clone(),
-                partition_by.clone(),
-                order_by.clone(),
-                (start_bound, end_bound),
-                builder.func_ctx.clone(),
-            )?) as Box<dyn Processor>
+            Box::new(
+                TransformWindow::try_create_rows(
+                    input,
+                    output,
+                    func.clone(),
+                    partition_by.clone(),
+                    order_by.clone(),
+                    (start_bound, end_bound),
+                    builder.func_ctx.clone(),
+                )?
+                .with_top(window.top),
+            ) as Box<dyn Processor>
         } else {
             let start_bound = FrameBound::try_from(&window.window_frame.start_bound)?;
             let end_bound = FrameBound::try_from(&window.window_frame.end_bound)?;
-            Box::new(TransformWindow::try_create_range(
-                input,
-                output,
-                func.clone(),
-                partition_by.clone(),
-                order_by.clone(),
-                (start_bound, end_bound),
-                builder.func_ctx.clone(),
-            )?) as Box<dyn Processor>
+            Box::new(
+                TransformWindow::try_create_range(
+                    input,
+                    output,
+                    func.clone(),
+                    partition_by.clone(),
+                    order_by.clone(),
+                    (start_bound, end_bound),
+                    builder.func_ctx.clone(),
+                )?
+                .with_top(window.top),
+            ) as Box<dyn Processor>
         };
         Ok(ProcessorPtr::create(transform))
     })?;

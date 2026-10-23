@@ -21,10 +21,12 @@ use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use databend_common_column::bitmap::Bitmap;
 use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
@@ -41,6 +43,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_functions::scalars::dt_func::date_arithmetic::EvalMonthsImpl;
 use databend_common_functions::scalars::dt_func::date_conversion::calc_date_to_timestamp;
@@ -176,6 +179,10 @@ pub struct TransformWindow {
     is_empty_frame: bool,
     // If window function is ranking function
     is_ranking: bool,
+    /// Per-partition top-n pushed down onto a ranking function: rows whose
+    /// rank exceeds it are dropped from the output instead of being filtered
+    /// afterwards.
+    top: Option<usize>,
 }
 
 impl TransformWindow {
@@ -445,7 +452,19 @@ impl TransformWindow {
         true
     }
 
-    fn check_outputs(&mut self) {
+    /// Drop the rows of an output block whose ranking value exceeds `top`.
+    fn truncate_output(mut output: DataBlock, ranking: Column, top: usize) -> Result<DataBlock> {
+        let ranks = UInt64Type::try_downcast_column(&ranking)?;
+        let top = top as u64;
+        let bitmap = Bitmap::from_iter(ranks.iter().map(|&rank| rank <= top));
+        output.add_column(ranking);
+        if bitmap.null_count() == 0 {
+            return Ok(output);
+        }
+        output.filter_with_bitmap(&bitmap)
+    }
+
+    fn check_outputs(&mut self) -> Result<()> {
         while self.next_output_block - self.first_block < self.blocks.len() {
             let block = &mut self.blocks[self.next_output_block - self.first_block];
 
@@ -459,8 +478,16 @@ impl TransformWindow {
                     ColumnBuilder::with_capacity(&data_type, 0),
                 );
                 let new_column = builder.build();
-                output.add_column(new_column);
-                self.outputs.push_back(output);
+                let output = match self.top {
+                    Some(top) => Self::truncate_output(output, new_column, top)?,
+                    None => {
+                        output.add_column(new_column);
+                        output
+                    }
+                };
+                if output.num_rows() > 0 {
+                    self.outputs.push_back(output);
+                }
                 self.next_output_block += 1;
             } else {
                 break;
@@ -479,6 +506,7 @@ impl TransformWindow {
             self.blocks.drain(..first_used_block - self.first_block);
             self.first_block = first_used_block;
         }
+        Ok(())
     }
 
     fn apply_aggregate(&self, agg: &WindowFuncAggImpl) -> Result<()> {
@@ -810,6 +838,7 @@ impl TransformWindow {
             input_is_finished: false,
             is_empty_frame,
             is_ranking,
+            top: None,
         })
     }
 }
@@ -887,7 +916,15 @@ impl TransformWindow {
             input_is_finished: false,
             is_empty_frame,
             is_ranking,
+            top: None,
         })
+    }
+
+    /// Keep only rows ranked within `top` in each partition. Only meaningful
+    /// for ranking functions; ignored otherwise.
+    pub fn with_top(mut self, top: Option<usize>) -> Self {
+        self.top = if self.is_ranking { top } else { None };
+        self
     }
 
     fn advance_frame_start(&mut self) -> Result<()> {
@@ -1600,7 +1637,7 @@ impl Processor for TransformWindow {
             std::mem::replace(&mut self.state, ProcessorState::Consume)
         {
             self.add_block(data)?;
-            self.check_outputs();
+            self.check_outputs()?;
             self.state = if self.outputs.is_empty() {
                 ProcessorState::Consume
             } else {
@@ -1618,7 +1655,6 @@ mod tests {
     use std::sync::Arc;
 
     use databend_common_exception::Result;
-    use databend_common_expression::Column;
     use databend_common_expression::ColumnBuilder;
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
@@ -1855,6 +1891,52 @@ mod tests {
     }
 
     #[test]
+    fn test_top_truncates_ranking_output() -> Result<()> {
+        let mut transform =
+            get_ranking_transform_window((FrameBound::Preceding(None), FrameBound::CurrentRow))?
+                .with_top(Some(2));
+        assert_eq!(transform.top, Some(2));
+
+        transform.add_block(Some(DataBlock::new_from_columns(vec![
+            Int32Type::from_data(vec![1, 1, 2, 2, 3, 3]),
+        ])))?;
+        transform.add_block(None)?;
+        transform.check_outputs()?;
+
+        let output = transform.outputs.pop_front().unwrap();
+        assert_blocks_eq(
+            vec![
+                "+----------+----------+",
+                "| Column 0 | Column 1 |",
+                "+----------+----------+",
+                "| 1        | 1        |",
+                "| 1        | 1        |",
+                "| 2        | 2        |",
+                "| 2        | 2        |",
+                "+----------+----------+",
+            ],
+            &[output],
+        );
+        assert!(transform.outputs.is_empty());
+
+        // A block with no surviving rows is dropped instead of being emitted empty.
+        let mut transform =
+            get_ranking_transform_window((FrameBound::Preceding(None), FrameBound::CurrentRow))?
+                .with_top(Some(1));
+        transform.add_block(Some(DataBlock::new_from_columns(vec![
+            Int32Type::from_data(vec![1, 1]),
+        ])))?;
+        transform.add_block(Some(DataBlock::new_from_columns(vec![
+            Int32Type::from_data(vec![2, 3]),
+        ])))?;
+        transform.add_block(None)?;
+        transform.check_outputs()?;
+        assert_eq!(transform.outputs.len(), 1);
+        assert_eq!(transform.outputs[0].num_rows(), 2);
+        Ok(())
+    }
+
+    #[test]
     fn test_block_release() -> Result<()> {
         // ranking function release early
         {
@@ -1868,21 +1950,21 @@ mod tests {
                 Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
             ])))?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
             assert_eq!(transform.blocks.len(), 1);
 
             transform.add_block(Some(DataBlock::new_from_columns(vec![
                 Int32Type::from_data(vec![3, 3, 3]),
             ])))?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
             assert_eq!(transform.blocks.len(), 1);
 
             transform.add_block(Some(DataBlock::new_from_columns(vec![
                 Int32Type::from_data(vec![3, 4, 4]),
             ])))?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
             assert_eq!(transform.blocks.len(), 1);
 
             let output = transform.outputs.pop_front().unwrap();
@@ -1922,7 +2004,7 @@ mod tests {
 
             transform.input_is_finished = true;
             transform.add_block(None)?;
-            transform.check_outputs();
+            transform.check_outputs()?;
             let output = transform.outputs.pop_front().unwrap();
 
             assert_blocks_eq(
@@ -1951,21 +2033,21 @@ mod tests {
                 Int32Type::from_data(vec![1, 1, 1]),
             ])))?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
             assert_eq!(transform.blocks.len(), 1);
 
             transform.add_block(Some(DataBlock::new_from_columns(vec![
                 Int32Type::from_data(vec![2, 2, 2]),
             ])))?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
             assert_eq!(transform.blocks.len(), 1);
 
             transform.add_block(Some(DataBlock::new_from_columns(vec![
                 Int32Type::from_data(vec![3, 3, 3]),
             ])))?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
             assert_eq!(transform.blocks.len(), 1);
 
             let output = transform.outputs.pop_front().unwrap();
@@ -2000,7 +2082,7 @@ mod tests {
 
             transform.input_is_finished = true;
             transform.add_block(None)?;
-            transform.check_outputs();
+            transform.check_outputs()?;
             let output = transform.outputs.pop_front().unwrap();
 
             assert_blocks_eq(
@@ -2029,14 +2111,14 @@ mod tests {
                 Int32Type::from_data(vec![1, 1, 1, 2, 2, 3, 3, 3]),
             ])))?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
             assert_eq!(transform.blocks.len(), 1);
 
             transform.add_block(Some(DataBlock::new_from_columns(vec![
                 Int32Type::from_data(vec![3, 4, 4]),
             ])))?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
             assert_eq!(transform.blocks.len(), 2);
 
             let output = transform.outputs.pop_front().unwrap();
@@ -2063,7 +2145,7 @@ mod tests {
 
             transform.add_block(None)?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
 
             let output = transform.outputs.pop_front().unwrap();
 
@@ -2101,7 +2183,7 @@ mod tests {
 
             transform.add_block(None)?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
 
             let output = transform.outputs.pop_front().unwrap();
 
@@ -2134,7 +2216,7 @@ mod tests {
                 Int32Type::from_data(vec![3, 4, 4]),
             ])))?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
 
             let output = transform.outputs.pop_front().unwrap();
 
@@ -2160,7 +2242,7 @@ mod tests {
 
             transform.add_block(None)?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
 
             let output = transform.outputs.pop_front().unwrap();
 
@@ -2193,7 +2275,7 @@ mod tests {
                 Int32Type::from_data(vec![5, 4, 4]),
             ])))?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
 
             let output = transform.outputs.pop_front().unwrap();
 
@@ -2219,7 +2301,7 @@ mod tests {
 
             transform.add_block(None)?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
 
             let output = transform.outputs.pop_front().unwrap();
 
@@ -2252,7 +2334,7 @@ mod tests {
                 Int32Type::from_data(vec![3, 4, 4]),
             ])))?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
 
             let output = transform.outputs.pop_front().unwrap();
 
@@ -2278,7 +2360,7 @@ mod tests {
 
             transform.add_block(None)?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
 
             let output = transform.outputs.pop_front().unwrap();
 
@@ -2314,7 +2396,7 @@ mod tests {
                 Int32Type::from_data(vec![3, 4, 4]),
             ])))?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
 
             let output = transform.outputs.pop_front().unwrap();
 
@@ -2340,7 +2422,7 @@ mod tests {
 
             transform.add_block(None)?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
 
             let output = transform.outputs.pop_front().unwrap();
 
@@ -2376,7 +2458,7 @@ mod tests {
                 Int32Type::from_data(vec![3, 4, 4]),
             ])))?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
 
             let output = transform.outputs.pop_front().unwrap();
 
@@ -2402,7 +2484,7 @@ mod tests {
 
             transform.add_block(None)?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
 
             let output = transform.outputs.pop_front().unwrap();
 
@@ -2435,7 +2517,7 @@ mod tests {
                 Int32Type::from_data(vec![3, 4, 4]),
             ])))?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
 
             let output = transform.outputs.pop_front().unwrap();
 
@@ -2461,7 +2543,7 @@ mod tests {
 
             transform.add_block(None)?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
 
             let output = transform.outputs.pop_front().unwrap();
 
@@ -2497,7 +2579,7 @@ mod tests {
                 Int32Type::from_data(vec![3, 4, 4]),
             ])))?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
 
             let output = transform.outputs.pop_front().unwrap();
 
@@ -2523,7 +2605,7 @@ mod tests {
 
             transform.add_block(None)?;
 
-            transform.check_outputs();
+            transform.check_outputs()?;
 
             let output = transform.outputs.pop_front().unwrap();
 
