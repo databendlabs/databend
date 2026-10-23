@@ -36,6 +36,7 @@ use databend_common_expression::types::ForColumn;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::NarrowBuffer;
+use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
@@ -499,4 +500,26 @@ fn test_dict_column_compare() {
         encoded.compare_scalar(&SelectOp::Equal, &Scalar::Number(5i32.into())),
         None
     );
+}
+
+/// Wrapping an encoded column in a nullable column (e.g. an outer join making its input
+/// nullable) decodes it: consumers only handle encoded columns at the top level.
+#[test]
+fn test_nullable_wraps_decoded_column() {
+    let plain = Int32Type::from_data(vec![7, 9, 8]);
+    let validity = Bitmap::from_iter([true, false, true]);
+    for column in [
+        encode(&plain),
+        NullableColumn::new_column(dict_column(&["a", "b"], &[1, 0, 1]), validity.clone()),
+    ] {
+        let wrapped = match column {
+            Column::Nullable(c) => *c,
+            column => NullableColumn::new(column, validity.clone()),
+        };
+        assert!(!matches!(wrapped.column, Column::Encoded(_)));
+    }
+    let Column::Nullable(wrapped) = encode(&plain).wrap_nullable(None) else {
+        unreachable!()
+    };
+    assert_eq!(wrapped.column, plain);
 }
