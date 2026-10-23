@@ -15,3 +15,4 @@
 mod builders;
 mod optimizer;
 mod semantic;
+mod view_cte_resolution;
