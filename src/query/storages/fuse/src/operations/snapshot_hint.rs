@@ -143,6 +143,12 @@ impl SnapshotHintWriter<'_> {
         table_meta: &TableMeta,
     ) {
         let ctx = &self.ctx;
+        // Attached tables trust this hint without consulting the catalog. Do not
+        // expose a buffered snapshot; COMMIT publishes the final snapshot after
+        // the metadata update succeeds (and has switched to auto-commit mode).
+        if ctx.txn_mgr().lock().is_active() {
+            return;
+        }
         if let Ok(false) = ctx.get_settings().get_enable_last_snapshot_location_hint() {
             info!(
                 "Write last_snapshot_location_hint disabled. Snapshot {}",
