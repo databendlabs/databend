@@ -82,9 +82,9 @@ impl ColumnEncoding {
             && dict.values().null_count() == 0
             && (dict.null_count() == 0 || data_type.is_nullable())
         {
-            // A dictionary with more values than half the rows is no smaller than the column
-            // (the dictionary of the column chunk holds the distinct values of the block).
-            if dict.values().is_empty() || dict.values().len() * 2 > dict.len() {
+            // Same NDV-to-row ratio as the writer enabling dictionary encoding
+            // (`HIGH_CARDINALITY_RATIO_THRESHOLD`).
+            if dict.values().is_empty() || dict.values().len() * 10 > dict.len() {
                 return Column::from_arrow_rs(array, data_type);
             }
             // The Parquet dictionary, as is.
@@ -111,6 +111,11 @@ impl ColumnEncoding {
             });
         }
 
+        // A string column chunk without a dictionary page was written without dictionary
+        // encoding because of its cardinality: keep it.
+        if self.reuses_parquet_dictionary(data_type) {
+            return Column::from_arrow_rs(array, data_type);
+        }
         let column = Column::from_arrow_rs(array, data_type)?;
         Ok(match column {
             Column::Nullable(column) => self
@@ -131,7 +136,7 @@ impl ColumnEncoding {
             }
             best = Some(EncodedColumn::For(for_column));
         }
-        let max_ndv = (column.len() / 2).min(MAX_DICTIONARY_NDV);
+        let max_ndv = (column.len() / 10).min(MAX_DICTIONARY_NDV);
         if let Some(dict) = DictColumn::try_encode(&column, max_ndv) {
             let dict = EncodedColumn::Dict(dict);
             if best
@@ -228,14 +233,16 @@ mod tests {
                 if all_valid { 0 } else { 198 }
             );
         }
-        // Without a Parquet dictionary, encode the inner strings and keep row validity.
+        // Without a Parquet dictionary, the strings stay a regular column with the validity.
         let array = StringArray::from(
             (0..1000)
                 .map(|i| (i % 5 != 0).then_some("xxx/long/repeated/url"))
                 .collect::<Vec<_>>(),
         );
         let column = encode_checked(ColumnEncoding::Dictionary, Arc::new(array), &data_type);
-        assert!(column.as_nullable().unwrap().column.is_encoded());
+        let nullable = column.as_nullable().unwrap();
+        assert!(!nullable.column.is_encoded());
+        assert_eq!(nullable.validity.null_count(), 200);
 
         // Nullable dictionary entries contribute logical nulls even when all keys are valid.
         let array = DictionaryArray::<UInt32Type>::try_new(
@@ -286,16 +293,26 @@ mod tests {
 
     #[test]
     fn test_encode_string_without_parquet_dictionary() {
-        // Few distinct values: a block-level dictionary is built.
+        // The writer disables dictionary encoding for high-NDV strings, so a string column chunk
+        // without a dictionary page is kept as is, even with few distinct values.
         let array = StringArray::from((0..1000).map(|i| ["x", "y"][i % 2]).collect::<Vec<_>>());
         let column = encode_checked(
             ColumnEncoding::Dictionary,
             Arc::new(array),
             &DataType::String,
         );
-        let dict = as_dict(&column);
-        assert_eq!(dict.values.len(), 2);
-        assert_eq!(dict.keys.byte_width(), 1);
+        assert!(matches!(column, Column::String(_)));
+
+        // A Parquet dictionary with more values than a tenth of the rows is not kept either.
+        let values = StringArray::from((0..200).map(|i| i.to_string()).collect::<Vec<_>>());
+        let keys = UInt32Array::from((0..1000).map(|i| i % 200).collect::<Vec<_>>());
+        let array = DictionaryArray::<UInt32Type>::try_new(keys, Arc::new(values)).unwrap();
+        let column = encode_checked(
+            ColumnEncoding::Dictionary,
+            Arc::new(array),
+            &DataType::String,
+        );
+        assert!(matches!(column, Column::String(_)));
 
         // All values distinct: the regular column is kept.
         let array = StringArray::from((0..1000).map(|i| i.to_string()).collect::<Vec<_>>());
