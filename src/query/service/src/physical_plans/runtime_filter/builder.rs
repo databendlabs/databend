@@ -338,9 +338,9 @@ fn propagate_probe_targets(
 }
 
 /// Allowlist for commuting a scan predicate through an intermediate operator.
-/// Only inner/cross joins are transparent on both sides. Support for creating
-/// a filter *at* an outer/semi/anti/mark/single/ANY/asof join does not imply that
-/// it is safe to push a different join's filter through it. Unknown operators,
+/// Inner/cross joins allow both inputs; semi joins allow only their output
+/// input, as selected by `probe_child_is_safe`. Creating a filter *at* a join
+/// does not imply that another join's filter may cross it. Unknown operators,
 /// shared CTE producers, windows, TopN and UnionAll (which needs explicit column
 /// remapping) are conservative barriers.
 fn row_preserving_probe_operator(plan: &PhysicalRelOperator) -> bool {
@@ -359,10 +359,27 @@ fn row_preserving_probe_operator(plan: &PhysicalRelOperator) -> bool {
             // A rewritten scalar join can look like Inner while still enforcing
             // single-row cardinality. Filtering its inputs can hide duplicates.
             join.single_to_inner.is_none()
-                && matches!(join.join_type, JoinType::Inner | JoinType::Cross)
+                && matches!(
+                    join.join_type,
+                    JoinType::Inner | JoinType::Cross | JoinType::LeftSemi | JoinType::RightSemi
+                )
         }
         _ => false,
     }
+}
+
+// Allow a parent filter through a semi join's output-side input only.
+// Use the same child policy for target paths and equivalence collection.
+fn probe_child_is_safe(plan: &PhysicalRelOperator, child_index: usize) -> bool {
+    row_preserving_probe_operator(plan)
+        && match plan {
+            PhysicalRelOperator::Join(join) => match join.join_type {
+                JoinType::LeftSemi => child_index == 0,
+                JoinType::RightSemi => child_index == 1,
+                _ => true,
+            },
+            _ => true,
+        }
 }
 
 /// Verify the complete path to a scan *column*, not just scan reachability.
@@ -396,8 +413,9 @@ fn probe_path_is_safe(s_expr: &PExpr, scan_id: usize, column: Symbol) -> bool {
         }
         let mut result = None;
         // Visit even below barriers to detect unsafe duplicate occurrences.
-        for child in s_expr.children() {
-            if let Some(child_safe) = visit(child, scan_id, column, safe) {
+        for (child_index, child) in s_expr.children().enumerate() {
+            let child_safe = safe && probe_child_is_safe(plan, child_index);
+            if let Some(child_safe) = visit(child, scan_id, column, child_safe) {
                 result = Some(result.unwrap_or(true) && child_safe);
             }
         }
@@ -423,8 +441,10 @@ fn collect_equi_conditions(s_expr: &PExpr) -> Result<Vec<JoinEquiCondition>> {
         }
     }
 
-    for child in s_expr.children() {
-        conditions.extend(collect_equi_conditions(child)?);
+    for (child_index, child) in s_expr.children().enumerate() {
+        if probe_child_is_safe(s_expr.plan(), child_index) {
+            conditions.extend(collect_equi_conditions(child)?);
+        }
     }
 
     Ok(conditions)
@@ -908,6 +928,117 @@ mod tests {
                 }
             }
         }
+    }
+
+    fn assert_semi_output_probe_targets(join_type: databend_common_sql::plans::JoinType) {
+        use databend_common_expression::TableDataType;
+        use databend_common_sql::MetadataRef;
+        use databend_common_sql::optimizer::ir::PExpr;
+        use databend_common_sql::plans::Join;
+        use databend_common_sql::plans::JoinEquiCondition;
+        use databend_common_sql::plans::JoinType;
+
+        let metadata = MetadataRef::default();
+        for index in 0..4 {
+            metadata.write().add_base_table_column(
+                format!("c{index}"),
+                TableDataType::Number(NumberDataType::Int32),
+                0,
+                Some(vec![index]),
+                index as u32,
+                None,
+                None,
+            );
+        }
+        metadata
+            .write()
+            .add_base_column_scan_id((0..4).map(|index| (Symbol::new(index), index)).collect());
+        let col = |index| path_column(index, NumberDataType::Int32);
+        let inner = |left, right| {
+            PExpr::create_binary(
+                Join {
+                    join_type: JoinType::Inner,
+                    equi_conditions: vec![JoinEquiCondition::new(col(left), col(right), false)],
+                    ..Default::default()
+                },
+                path_scan(left, left),
+                path_scan(right, right),
+            )
+        };
+        // The output subtree has c0=c1; the hidden subtree has c2=c3.
+        // The semi join's own equality must not bridge these two subtrees.
+        let (left, right, condition) = if matches!(join_type, JoinType::LeftSemi) {
+            (
+                inner(0, 1),
+                inner(2, 3),
+                JoinEquiCondition::new(col(0), col(2), false),
+            )
+        } else {
+            (
+                inner(2, 3),
+                inner(0, 1),
+                JoinEquiCondition::new(col(2), col(0), false),
+            )
+        };
+        let plan = PExpr::create_binary(
+            Join {
+                join_type,
+                equi_conditions: vec![condition],
+                ..Default::default()
+            },
+            left,
+            right,
+        );
+        for index in 0..4 {
+            for connector in [true, false] {
+                let key = column(
+                    &format!("c{index}"),
+                    DataType::Number(NumberDataType::Int32),
+                );
+                let key = if connector {
+                    key
+                } else {
+                    check_function(None, "plus", &[], &[key, int32(1)], &BUILTIN_FUNCTIONS).unwrap()
+                };
+                let targets = super::find_probe_targets(
+                    &metadata,
+                    &plan,
+                    key.as_remote_expr(),
+                    index,
+                    Symbol::new(index),
+                    connector,
+                    &FunctionContext::default(),
+                )
+                .unwrap();
+                let mut scans: Vec<_> = targets.iter().map(|(_, scan_id)| *scan_id).collect();
+                scans.sort_unstable();
+                let expected = if index >= 2 {
+                    vec![]
+                } else if connector {
+                    vec![0, 1]
+                } else {
+                    vec![index]
+                };
+                assert_eq!(
+                    scans, expected,
+                    "{join_type:?}: root c{index}, connector={connector}"
+                );
+            }
+        }
+        let conditions = super::collect_equi_conditions(&plan).unwrap();
+        assert_eq!(conditions.len(), 1);
+        assert_eq!(conditions[0].left, col(0));
+        assert_eq!(conditions[0].right, col(1));
+    }
+
+    #[test]
+    fn test_left_semi_keeps_output_side_targets() {
+        assert_semi_output_probe_targets(databend_common_sql::plans::JoinType::LeftSemi);
+    }
+
+    #[test]
+    fn test_right_semi_keeps_output_side_targets() {
+        assert_semi_output_probe_targets(databend_common_sql::plans::JoinType::RightSemi);
     }
 
     #[test]
