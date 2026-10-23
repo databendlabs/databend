@@ -16,6 +16,7 @@ databend_common_tracing::register_module_tag!("[META_CLIENT]", "databend_meta_cl
 
 pub(crate) mod local;
 
+use std::future::Future;
 use std::ops::Deref;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -211,6 +212,18 @@ impl MetaStore {
 impl MetaStoreProvider {
     pub fn new(rpc_conf: RpcClientConf) -> Self {
         MetaStoreProvider { rpc_conf }
+    }
+
+    /// [`Self::create_meta_store`] for the production runtime.
+    ///
+    /// The embedded meta-service behind it is a whole openraft node. An `async fn`'s state
+    /// machine is code-generated in every crate that polls it, so returning it as a boxed
+    /// `dyn Future` makes this crate the only one that generates the raft code; callers only go
+    /// through the vtable.
+    pub fn create_default_meta_store(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<MetaStore, CreationError>> + Send + '_>> {
+        Box::pin(self.create_meta_store::<DatabendRuntime>())
     }
 
     pub async fn create_meta_store<RT: RuntimeApi>(&self) -> Result<MetaStore, CreationError> {
