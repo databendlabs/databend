@@ -1,0 +1,114 @@
+# Pre-exchange reduction for ranking windows filtered by a top-n
+# (WindowPartialTopN). Keys repeat across many blocks, so the reduction only
+# works when the transform keeps state across blocks. Every result is checked
+# against the same query with the reduction disabled.
+
+statement ok
+CREATE DATABASE IF NOT EXISTS test_window_partial_top_n
+
+statement ok
+USE test_window_partial_top_n
+
+statement ok
+CREATE OR REPLACE TABLE t AS SELECT number AS n, number % 1000 AS k, number % 7 AS a, number % 11 AS b, (number DIV 1000) % 10 AS v FROM numbers(2000000)
+
+statement ok
+SET enable_window_partial_top_n = 0
+
+query II
+SELECT COUNT(*), SUM(n) FROM (SELECT n, ROW_NUMBER() OVER (PARTITION BY k ORDER BY n DESC) rn FROM t) WHERE rn = 1
+----
+1000 1999499500
+
+query II
+SELECT COUNT(*), SUM(n) FROM (SELECT n, ROW_NUMBER() OVER (PARTITION BY k ORDER BY n) rn FROM t) WHERE rn <= 3
+----
+3000 4498500
+
+query II
+SELECT COUNT(*), SUM(n) FROM (SELECT n, RANK() OVER (PARTITION BY k ORDER BY v DESC) r FROM t) WHERE r <= 2
+----
+200000 200899900000
+
+query II
+SELECT COUNT(*), SUM(n) FROM (SELECT n, DENSE_RANK() OVER (PARTITION BY k ORDER BY v DESC) r FROM t) WHERE r <= 2
+----
+400000 401599800000
+
+query II
+SELECT COUNT(*), SUM(n) FROM (SELECT n, ROW_NUMBER() OVER (PARTITION BY a, b ORDER BY n DESC) rn FROM t) WHERE rn = 1
+----
+77 153996997
+
+statement ok
+SET enable_window_partial_top_n = 1
+
+query II
+SELECT COUNT(*), SUM(n) FROM (SELECT n, ROW_NUMBER() OVER (PARTITION BY k ORDER BY n DESC) rn FROM t) WHERE rn = 1
+----
+1000 1999499500
+
+query II
+SELECT COUNT(*), SUM(n) FROM (SELECT n, ROW_NUMBER() OVER (PARTITION BY k ORDER BY n) rn FROM t) WHERE rn <= 3
+----
+3000 4498500
+
+query II
+SELECT COUNT(*), SUM(n) FROM (SELECT n, RANK() OVER (PARTITION BY k ORDER BY v DESC) r FROM t) WHERE r <= 2
+----
+200000 200899900000
+
+query II
+SELECT COUNT(*), SUM(n) FROM (SELECT n, DENSE_RANK() OVER (PARTITION BY k ORDER BY v DESC) r FROM t) WHERE r <= 2
+----
+400000 401599800000
+
+query II
+SELECT COUNT(*), SUM(n) FROM (SELECT n, ROW_NUMBER() OVER (PARTITION BY a, b ORDER BY n DESC) rn FROM t) WHERE rn = 1
+----
+77 153996997
+
+# A tiny budget makes every pass flush; ratio 100 keeps reducing after each
+# flush, ratio 0 switches to passthrough after the first one. Both must still
+# be exact.
+
+statement ok
+SET window_partial_top_n_memory_mb = 1
+
+statement ok
+SET window_partial_top_n_passthrough_ratio = 100
+
+query II
+SELECT COUNT(*), SUM(n) FROM (SELECT n, ROW_NUMBER() OVER (PARTITION BY k ORDER BY n DESC) rn FROM t) WHERE rn = 1
+----
+1000 1999499500
+
+query II
+SELECT COUNT(*), SUM(n) FROM (SELECT n, RANK() OVER (PARTITION BY k ORDER BY v DESC) r FROM t) WHERE r <= 2
+----
+200000 200899900000
+
+statement ok
+SET window_partial_top_n_passthrough_ratio = 0
+
+query II
+SELECT COUNT(*), SUM(n) FROM (SELECT n, ROW_NUMBER() OVER (PARTITION BY k ORDER BY n DESC) rn FROM t) WHERE rn = 1
+----
+1000 1999499500
+
+query II
+SELECT COUNT(*), SUM(n) FROM (SELECT n, DENSE_RANK() OVER (PARTITION BY k ORDER BY v DESC) r FROM t) WHERE r <= 2
+----
+400000 401599800000
+
+statement ok
+UNSET window_partial_top_n_passthrough_ratio
+
+statement ok
+UNSET window_partial_top_n_memory_mb
+
+statement ok
+UNSET enable_window_partial_top_n
+
+statement ok
+DROP DATABASE test_window_partial_top_n

@@ -193,29 +193,34 @@ Filter
         ├── hash keys: [k]
         ├── top: 1
         ├── estimated rows: 0.00
-        └── UnionAll
+        └── WindowPartialTopN
             ├── output columns: [k (#4), v (#5)]
+            ├── partition by: [k]
+            ├── top: 1
             ├── estimated rows: 0.00
-            ├── TableScan
-            │   ├── table: default.test_explain_window.test
-            │   ├── scan id: 0
-            │   ├── output columns: [k (#0), v (#1)]
-            │   ├── read rows: 0
-            │   ├── read size: 0
-            │   ├── partitions total: 0
-            │   ├── partitions scanned: 0
-            │   ├── push downs: [filters: [is_true(test.k (#0) = 12)], limit: NONE]
-            │   └── estimated rows: 0.00
-            └── TableScan
-                ├── table: default.test_explain_window.test
-                ├── scan id: 1
-                ├── output columns: [k (#2), v (#3)]
-                ├── read rows: 0
-                ├── read size: 0
-                ├── partitions total: 0
-                ├── partitions scanned: 0
-                ├── push downs: [filters: [is_true(test.k (#2) = 12)], limit: NONE]
-                └── estimated rows: 0.00
+            └── UnionAll
+                ├── output columns: [k (#4), v (#5)]
+                ├── estimated rows: 0.00
+                ├── TableScan
+                │   ├── table: default.test_explain_window.test
+                │   ├── scan id: 0
+                │   ├── output columns: [k (#0), v (#1)]
+                │   ├── read rows: 0
+                │   ├── read size: 0
+                │   ├── partitions total: 0
+                │   ├── partitions scanned: 0
+                │   ├── push downs: [filters: [is_true(test.k (#0) = 12)], limit: NONE]
+                │   └── estimated rows: 0.00
+                └── TableScan
+                    ├── table: default.test_explain_window.test
+                    ├── scan id: 1
+                    ├── output columns: [k (#2), v (#3)]
+                    ├── read rows: 0
+                    ├── read size: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [is_true(test.k (#2) = 12)], limit: NONE]
+                    └── estimated rows: 0.00
 
 # cannot push down filter in window function
 query T
@@ -236,29 +241,34 @@ Filter
         ├── hash keys: [v]
         ├── top: 1
         ├── estimated rows: 0.00
-        └── UnionAll
+        └── WindowPartialTopN
             ├── output columns: [k (#4), v (#5)]
+            ├── partition by: [v]
+            ├── top: 1
             ├── estimated rows: 0.00
-            ├── TableScan
-            │   ├── table: default.test_explain_window.test
-            │   ├── scan id: 0
-            │   ├── output columns: [k (#0), v (#1)]
-            │   ├── read rows: 0
-            │   ├── read size: 0
-            │   ├── partitions total: 0
-            │   ├── partitions scanned: 0
-            │   ├── push downs: [filters: [], limit: NONE]
-            │   └── estimated rows: 0.00
-            └── TableScan
-                ├── table: default.test_explain_window.test
-                ├── scan id: 1
-                ├── output columns: [k (#2), v (#3)]
-                ├── read rows: 0
-                ├── read size: 0
-                ├── partitions total: 0
-                ├── partitions scanned: 0
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 0.00
+            └── UnionAll
+                ├── output columns: [k (#4), v (#5)]
+                ├── estimated rows: 0.00
+                ├── TableScan
+                │   ├── table: default.test_explain_window.test
+                │   ├── scan id: 0
+                │   ├── output columns: [k (#0), v (#1)]
+                │   ├── read rows: 0
+                │   ├── read size: 0
+                │   ├── partitions total: 0
+                │   ├── partitions scanned: 0
+                │   ├── push downs: [filters: [], limit: NONE]
+                │   └── estimated rows: 0.00
+                └── TableScan
+                    ├── table: default.test_explain_window.test
+                    ├── scan id: 1
+                    ├── output columns: [k (#2), v (#3)]
+                    ├── read rows: 0
+                    ├── read size: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 0.00
 
 # cannot push down filter in window function
 query T
@@ -731,13 +741,16 @@ digraph {
     0 [ label = "PartitionStreamSource" ]
     1 [ label = "AsyncReadDataTransform" ]
     2 [ label = "DeserializeDataTransform" ]
-    3 [ label = "ShufflePartition(WindowTopN)" ]
-    4 [ label = "ShuffleMergePartition(WindowTopN)" ]
-    5 [ label = "TransformWindowPartitionCollect(Sort)" ]
-    6 [ label = "Transform Window" ]
-    7 [ label = "TransformFilter" ]
-    8 [ label = "LimitTransform" ]
-    9 [ label = "CompoundBlockOperator(Project)" ]
+    3 [ label = "ShufflePartition(Window)" ]
+    4 [ label = "ShuffleMergePartition(Window)" ]
+    5 [ label = "TransformWindowPartialTopN" ]
+    6 [ label = "ShufflePartition(WindowTopN)" ]
+    7 [ label = "ShuffleMergePartition(WindowTopN)" ]
+    8 [ label = "TransformWindowPartitionCollect(Sort)" ]
+    9 [ label = "Transform Window" ]
+    10 [ label = "TransformFilter" ]
+    11 [ label = "LimitTransform" ]
+    12 [ label = "CompoundBlockOperator(Project)" ]
     0 -> 1 [ label = "" ]
     1 -> 2 [ label = "" ]
     2 -> 3 [ label = "" ]
@@ -747,6 +760,9 @@ digraph {
     6 -> 7 [ label = "" ]
     7 -> 8 [ label = "" ]
     8 -> 9 [ label = "" ]
+    9 -> 10 [ label = "" ]
+    10 -> 11 [ label = "" ]
+    11 -> 12 [ label = "" ]
 }
 
 # top n 0
@@ -1069,20 +1085,25 @@ AggregateFinal
                 ├── hash keys: [row_number_part_0]
                 ├── top: 1
                 ├── estimated rows: 1000.00
-                └── EvalScalar
+                └── WindowPartialTopN
                     ├── output columns: [numbers.number (#0), row_number_part_0 (#2)]
-                    ├── expressions: [numbers.number (#0) % 10]
+                    ├── partition by: [row_number_part_0]
+                    ├── top: 1
                     ├── estimated rows: 1000.00
-                    └── TableScan
-                        ├── table: default.system.numbers
-                        ├── scan id: 0
-                        ├── output columns: [number (#0)]
-                        ├── read rows: 1000
-                        ├── read size: 7.81 KiB
-                        ├── partitions total: 1
-                        ├── partitions scanned: 1
-                        ├── push downs: [filters: [], limit: NONE]
-                        └── estimated rows: 1000.00
+                    └── EvalScalar
+                        ├── output columns: [numbers.number (#0), row_number_part_0 (#2)]
+                        ├── expressions: [numbers.number (#0) % 10]
+                        ├── estimated rows: 1000.00
+                        └── TableScan
+                            ├── table: default.system.numbers
+                            ├── scan id: 0
+                            ├── output columns: [number (#0)]
+                            ├── read rows: 1000
+                            ├── read size: 7.81 KiB
+                            ├── partitions total: 1
+                            ├── partitions scanned: 1
+                            ├── push downs: [filters: [], limit: NONE]
+                            └── estimated rows: 1000.00
 
 statement ok
 DROP DATABASE test_explain_window;

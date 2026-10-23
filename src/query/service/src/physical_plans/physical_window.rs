@@ -35,6 +35,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
+use databend_common_settings::Settings;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
@@ -54,6 +55,7 @@ use super::NtileFunctionDesc;
 use super::WindowFunction;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::Sort;
+use crate::physical_plans::WindowPartialTopN;
 use crate::physical_plans::WindowPartition;
 use crate::physical_plans::WindowPartitionTopN;
 use crate::physical_plans::WindowPartitionTopNFunc;
@@ -584,7 +586,8 @@ impl PhysicalPlanBuilder {
             let spec = window_specs.remove(0);
             let settings = self.ctx.get_settings();
             let enable_fixed_rows = settings.get_enable_fixed_rows_sort()?;
-            let input = apply_window_sort_plan(input, &spec, enable_fixed_rows, stat_info)?;
+            let input =
+                apply_window_sort_plan(&settings, input, &spec, enable_fixed_rows, stat_info)?;
             return Ok(PhysicalPlan::new(Window {
                 input,
                 index: spec.index,
@@ -600,7 +603,13 @@ impl PhysicalPlanBuilder {
 
         let settings = self.ctx.get_settings();
         let enable_fixed_rows = settings.get_enable_fixed_rows_sort()?;
-        let input = apply_window_sort_plan(input, &window_specs[0], enable_fixed_rows, stat_info)?;
+        let input = apply_window_sort_plan(
+            &settings,
+            input,
+            &window_specs[0],
+            enable_fixed_rows,
+            stat_info,
+        )?;
 
         Ok(PhysicalPlan::new(WindowGroup {
             meta: PhysicalPlanMeta::new("WindowGroup"),
@@ -878,6 +887,7 @@ impl PhysicalPlanBuilder {
 }
 
 fn apply_window_sort_plan(
+    settings: &Settings,
     input: PhysicalPlan,
     window: &WindowSpec,
     enable_fixed_rows: bool,
@@ -899,12 +909,21 @@ fn apply_window_sort_plan(
     }
 
     if !window.partition_by.is_empty() {
+        let top_n = window_top_n(window).map(|(top, func)| WindowPartitionTopN { func, top });
+        let input = WindowPartialTopN::wrap_input(
+            settings,
+            input,
+            &window.partition_by,
+            &order_by,
+            top_n.as_ref(),
+            Some(&stat_info),
+        )?;
         return Ok(PhysicalPlan::new(WindowPartition {
             meta: PhysicalPlanMeta::new("WindowPartition"),
             input,
             partition_by: window.partition_by.clone(),
             order_by,
-            top_n: window_top_n(window).map(|(top, func)| WindowPartitionTopN { func, top }),
+            top_n,
             stat_info: Some(stat_info),
         }));
     }

@@ -511,16 +511,21 @@ Exchange
     │           └── Exchange
     │               ├── output columns: [a00c.a0f (#28), a00c.a0t (#42)]
     │               ├── exchange type: Hash(a00c.a0f (#28))
-    │               └── TableScan
-    │                   ├── table: default.default.a00c
-    │                   ├── scan id: 1
-    │                   ├── output columns: [a0f (#28), a0t (#42)]
-    │                   ├── read rows: 0
-    │                   ├── read size: 0
-    │                   ├── partitions total: 0
-    │                   ├── partitions scanned: 0
-    │                   ├── push downs: [filters: [], limit: NONE]
-    │                   └── estimated rows: 0.00
+    │               └── WindowPartialTopN
+    │                   ├── output columns: [a00c.a0f (#28), a00c.a0t (#42)]
+    │                   ├── partition by: [a0f]
+    │                   ├── top: 1
+    │                   ├── estimated rows: 0.00
+    │                   └── TableScan
+    │                       ├── table: default.default.a00c
+    │                       ├── scan id: 1
+    │                       ├── output columns: [a0f (#28), a0t (#42)]
+    │                       ├── read rows: 0
+    │                       ├── read size: 0
+    │                       ├── partitions total: 0
+    │                       ├── partitions scanned: 0
+    │                       ├── push downs: [filters: [], limit: NONE]
+    │                       └── estimated rows: 0.00
     └── Exchange(Probe)
         ├── output columns: [min(to_yyyymm(a0t)) (#25), a00c.a0f (#2)]
         ├── exchange type: Hash(t2.a0f (#2))

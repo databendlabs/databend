@@ -37,6 +37,7 @@ use itertools::Itertools;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanCast;
+use crate::physical_plans::WindowPartialTopN;
 use crate::physical_plans::WindowPartition;
 use crate::physical_plans::WindowPartitionTopN;
 use crate::physical_plans::WindowPartitionTopNFunc;
@@ -408,20 +409,30 @@ impl PhysicalPlanBuilder {
 
             let input_plan = self.build(s_expr.unary_child(), required).await?;
 
+            let top_n = window.top.map(|top| WindowPartitionTopN {
+                func: match window.func {
+                    WindowFuncType::RowNumber => WindowPartitionTopNFunc::RowNumber,
+                    WindowFuncType::Rank => WindowPartitionTopNFunc::Rank,
+                    WindowFuncType::DenseRank => WindowPartitionTopNFunc::DenseRank,
+                    _ => unreachable!(),
+                },
+                top,
+            });
+            let input_plan = WindowPartialTopN::wrap_input(
+                &self.ctx.get_settings(),
+                input_plan,
+                &window_partition,
+                &order_by,
+                top_n.as_ref(),
+                Some(&stat_info),
+            )?;
+
             return Ok(PhysicalPlan::new(WindowPartition {
                 meta: PhysicalPlanMeta::new("WindowPartition"),
                 input: input_plan,
                 partition_by: window_partition.clone(),
                 order_by: order_by.clone(),
-                top_n: window.top.map(|top| WindowPartitionTopN {
-                    func: match window.func {
-                        WindowFuncType::RowNumber => WindowPartitionTopNFunc::RowNumber,
-                        WindowFuncType::Rank => WindowPartitionTopNFunc::Rank,
-                        WindowFuncType::DenseRank => WindowPartitionTopNFunc::DenseRank,
-                        _ => unreachable!(),
-                    },
-                    top,
-                }),
+                top_n,
                 stat_info: Some(stat_info.clone()),
             }));
         };
