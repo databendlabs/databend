@@ -517,6 +517,9 @@ where A: TypeCheckAdapter
         arena: &CoreExprArena<'_>,
         id: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if let Some(resolved) = self.try_resolve_grouping_key(arena, id)? {
+            return Ok(resolved);
+        }
         match arena.get(id) {
             CoreExpr::Literal { span, value } => {
                 let (value, data_type) = infer_literal_data_type(value.clone());

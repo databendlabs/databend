@@ -115,7 +115,9 @@ impl Metadata {
         Arc::new(RwLock::new(Self::default()))
     }
 
-    fn next_column_index(&self) -> Symbol {
+    /// The symbol the next registered column gets. Every symbol of the query
+    /// is below it.
+    pub(crate) fn next_column_index(&self) -> Symbol {
         Symbol::new(self.columns.len())
     }
 

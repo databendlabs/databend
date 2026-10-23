@@ -61,6 +61,7 @@ mod async_functions;
 mod column;
 mod core_expr;
 mod date;
+mod grouping_key;
 mod in_list;
 mod lambda;
 mod literal;
@@ -523,6 +524,9 @@ pub struct TypeChecker<'a, A> {
     in_masking_policy: bool,
     apply_masking_policy: bool,
     forbid_virtual_computed_column: bool,
+
+    // Grouping-key matching state, see `grouping_key.rs`.
+    grouping_key: grouping_key::GroupingKeyState,
 }
 
 #[cfg(test)]

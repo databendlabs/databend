@@ -57,6 +57,9 @@ use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::planner::binder::ExprContext;
 use crate::planner::binder::aggregate_prepass::AggregateExprInfo;
+use crate::planner::binder::grouping_sets_select::PreAggregateDemand;
+use crate::planner::binder::grouping_sets_select::PreAggregateSelectList;
+use crate::planner::binder::grouping_sets_select::has_grouping_sets;
 use crate::planner::binder::project::SelectInfo;
 use crate::planner::binder::select::SelectAliasCatalog;
 use crate::planner::binder::select::SelectClauseFact;
@@ -110,13 +113,19 @@ impl SelectClauseFacts {
 struct SelectGlobalView {
     semantic_alias: SelectAliasCatalog,
     rewritten_alias: SelectAliasCatalog,
+    /// Under GROUPING SETS, `semantic_alias` describes the SELECT list bound
+    /// after the aggregate; WHERE uses the pre-aggregate one.
+    where_alias: Option<SelectAliasCatalog>,
     qualify: Option<SelectClauseFact>,
     order_by: Vec<SelectClauseFact>,
 }
 
 impl SelectGlobalView {
     fn where_aliases(&self) -> &[(String, ScalarExpr)] {
-        self.semantic_alias.all_aliases()
+        self.where_alias
+            .as_ref()
+            .unwrap_or(&self.semantic_alias)
+            .all_aliases()
     }
 
     fn having_aliases(&self) -> &[(String, ScalarExpr)] {
@@ -190,12 +199,33 @@ impl Binder {
     ) -> Result<SelectPreparation<'a>> {
         let (s_expr, mut from_context) = self.bind_select_source(bind_context, stmt)?;
 
+        // GROUPING SETS keys are matched against the pre-aggregate forms of the
+        // SELECT list and GROUP BY; bind them without folding column-dependent
+        // expressions, e.g. `a IS NULL` on a NOT NULL column.
+        let grouping_sets = has_grouping_sets(stmt);
+        from_context.defer_column_folding = grouping_sets;
+
         // Try put window definitions into bind context.
         // This operation should be before `normalize_select_list` because window functions can be used in select list.
         self.analyze_window_definition(&mut from_context, &stmt.window_list)?;
 
-        // Generate a analyzed select list with from context
-        let mut select_list = self.normalize_select_list(&mut from_context, &stmt.select_list)?;
+        // Generate a analyzed select list with from context. Under GROUPING SETS
+        // it is the pre-aggregate list, bound only where it is referenced; the
+        // SELECT list is bound after the keys are known.
+        let (mut select_list, pre_group_bound) = if grouping_sets {
+            let demand = PreAggregateDemand::new(stmt, order_by);
+            let PreAggregateSelectList { list, bound } = self.normalize_pre_aggregate_select_list(
+                &mut from_context,
+                &stmt.select_list,
+                &demand,
+            )?;
+            (list, Some(bound))
+        } else {
+            (
+                self.normalize_select_list(&mut from_context, &stmt.select_list)?,
+                None,
+            )
+        };
 
         // analyze set returning functions
         self.analyze_project_set_select(&mut from_context, &mut select_list)?;
@@ -205,11 +235,42 @@ impl Binder {
         // pre-window expressions behind aliases, but SRF aliases must already point
         // at the ProjectSet-produced columns instead of expanding back to raw SRFs.
         let mut semantic_alias = select_list.alias_catalog();
-        let group_by_aliases = semantic_alias.group_by_bindings();
 
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
+            let group_by_aliases = semantic_alias.group_by_bindings();
             self.analyze_group_items(&mut from_context, &select_list, &group_by_aliases, group_by)?;
+        }
+        from_context.defer_column_folding = false;
+
+        // Bind the SELECT list now that the GROUPING SETS keys are known, so that
+        // expressions over keys bind to their nullable outputs.
+        let mut where_alias = None;
+        let mut pre_group_list = None;
+        if let Some(bound) = pre_group_bound {
+            if from_context.aggregate_info.grouping_sets().is_none() {
+                return Err(ErrorCode::Internal(
+                    "GROUPING SETS query is missing its grouping sets",
+                ));
+            }
+            self.prepare_grouping_sets_scope(&mut from_context)?;
+            let pre_group = PreAggregateSelectList {
+                list: std::mem::take(&mut select_list),
+                bound,
+            };
+            let mut post_group_list = self.normalize_grouping_sets_select_list(
+                &mut from_context,
+                &stmt.select_list,
+                &pre_group,
+            )?;
+            self.analyze_project_set_select(&mut from_context, &mut post_group_list)?;
+            record_alias_inputs(&mut from_context, &post_group_list, &pre_group);
+            where_alias = Some(std::mem::replace(
+                &mut semantic_alias,
+                post_group_list.alias_catalog(),
+            ));
+            select_list = post_group_list;
+            pre_group_list = Some(pre_group);
         }
 
         self.analyze_aggregate_select(&mut from_context, &mut select_list)?;
@@ -261,9 +322,16 @@ impl Binder {
             "SELECT projection expects aggregate/UDAF calls to be rewritten before projection analysis",
         );
 
+        // HAVING resolves aliases to the rewritten items; record their
+        // pre-aggregate forms too.
+        if let Some(pre_group_list) = &pre_group_list {
+            record_alias_inputs(&mut from_context, &select_list, pre_group_list);
+        }
+
         let global_view = SelectGlobalView {
             semantic_alias,
             rewritten_alias: select_list.alias_catalog(),
+            where_alias,
             qualify,
             order_by,
         };
@@ -304,8 +372,12 @@ impl Binder {
         // Bind WHERE after select-list analysis so aliases are available, but
         // resolve them against the original pre-rewrite select-item semantics.
         let where_scalar = if let Some(expr) = &stmt.selection {
-            let (new_expr, scalar) =
-                self.bind_where(&mut from_context, global_view.where_aliases(), expr, s_expr)?;
+            // WHERE is evaluated before the aggregate.
+            let scope = from_context.grouping_key_scope.take();
+            let result =
+                self.bind_where(&mut from_context, global_view.where_aliases(), expr, s_expr);
+            from_context.grouping_key_scope = scope;
+            let (new_expr, scalar) = result?;
             s_expr = new_expr;
             Some(scalar)
         } else {
@@ -349,6 +421,8 @@ impl Binder {
             stmt.distinct,
         )?;
         self.refresh_select_output(&from_context, &mut select_info)?;
+        // All post-aggregate expressions are bound.
+        from_context.grouping_key_scope = None;
 
         // After all analysis is done.
         if from_context.srf_info.srfs.is_empty() {
@@ -939,6 +1013,23 @@ impl SelectRewriter {
         }
 
         Ok(source_query)
+    }
+}
+
+/// Record the pre-aggregate forms of the SELECT items that have one, keyed by
+/// the forms post-aggregate clauses resolve their aliases to.
+fn record_alias_inputs(
+    bind_context: &mut BindContext,
+    select_list: &SelectList<'_>,
+    pre_group: &PreAggregateSelectList<'_>,
+) {
+    let Some(scope) = &mut bind_context.grouping_key_scope else {
+        return;
+    };
+    for (position, item) in select_list.items.iter().enumerate() {
+        if let Some(pre_group_item) = pre_group.item(position) {
+            scope.add_alias_input(item.scalar.clone(), pre_group_item.scalar.clone());
+        }
     }
 }
 

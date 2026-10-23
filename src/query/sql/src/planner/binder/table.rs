@@ -192,6 +192,8 @@ impl Binder {
             srf_info: Default::default(),
             cte_context: bind_context.cte_context.clone(),
             in_grouping: false,
+            grouping_key_scope: None,
+            defer_column_folding: false,
             binding_views: bind_context.binding_views.clone(),
             have_async_func: false,
             have_udf_script: false,

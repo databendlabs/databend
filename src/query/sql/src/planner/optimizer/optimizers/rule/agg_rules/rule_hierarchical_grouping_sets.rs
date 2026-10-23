@@ -871,15 +871,12 @@ impl RuleHierarchicalGroupingSetsToUnion {
             .iter()
             .filter(|item| !is_grouping_id_item(item, grouping_id_index))
             .collect();
-        let mask = (1 << all_groups.len()) - 1;
-        let mut id = 0;
-
-        for (i, group_item) in all_groups.iter().enumerate() {
-            if group_columns.contains(&group_item.index) {
-                id |= 1 << i;
-            }
-        }
-        !id & mask
+        // Only absent keys set a bit; see `GroupingSets::grouping_ids`.
+        all_groups
+            .iter()
+            .enumerate()
+            .filter(|(_, group_item)| !group_columns.contains(&group_item.index))
+            .fold(0, |id, (i, _)| id | (1 << i))
     }
 }
 
@@ -988,17 +985,18 @@ struct GroupingSetsNullVisitor {
 
 impl VisitorMut<'_> for GroupingSetsNullVisitor {
     fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
-        let old = expr.clone();
         if let ScalarExpr::BoundColumnRef(col) = expr {
             if self.group_indexes.contains(&col.column.index) {
-                // For base CTE, we need to cast to nullable, but use the correct target type
-                // The target type should be UInt64 to match the CTE's actual output type
-                *expr = ScalarExpr::CastExpr(CastExpr {
-                    argument: Box::new(old),
-                    is_try: true,
-                    target_type: Box::new(col.column.data_type.wrap_nullable()),
-                    span: col.span,
-                });
+                // Binder-generated grouping keys are already nullable, including
+                // in the intermediate CTEs of the hierarchy.
+                if !col.column.data_type.is_nullable_or_null() {
+                    *expr = ScalarExpr::CastExpr(CastExpr {
+                        argument: Box::new(col.clone().into()),
+                        is_try: true,
+                        target_type: Box::new(col.column.data_type.wrap_nullable()),
+                        span: col.span,
+                    });
+                }
             } else if self.exclude_group_indexes.contains(&col.column.index) {
                 // Replace with NULL for excluded grouping columns
                 *expr = ScalarExpr::TypedConstantExpr(

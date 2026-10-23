@@ -695,6 +695,33 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             sql: "SELECT quantity, brand, segment, sum(quantity) FROM sales GROUP BY brand, GROUPING SETS(segment, quantity)",
         },
         SqlTestCase {
+            name: "grouping_sets_key_outputs",
+            description: "A ROLLUP key outputs a nullable symbol computed below the aggregate; the aggregate reads the input and expressions over the key read the output.",
+            setup_sqls: &["CREATE TABLE t1(a Int32 NOT NULL)"],
+            sql: "SELECT a + 1 AS k, grouping(k), sum(a + 1), coalesce(k, 0) FROM t1 GROUP BY ROLLUP(1)",
+        },
+        SqlTestCase {
+            name: "grouping_sets_outermost_key_wins",
+            description: "`a + 1` binds to its own key rather than to the key `a` plus one.",
+            setup_sqls: &["CREATE TABLE t1(a Int32 NOT NULL)"],
+            sql: "SELECT a, a + 1 FROM t1 GROUP BY GROUPING SETS ((a), (a + 1))",
+        },
+        SqlTestCase {
+            name: "grouping_sets_subquery_reads_key_output",
+            description: "A correlated subquery in a grouped SELECT references the key output.",
+            setup_sqls: &[
+                "CREATE TABLE t1(a Int32 NOT NULL)",
+                "CREATE TABLE t3(n Int32 NOT NULL)",
+            ],
+            sql: "SELECT a, (SELECT max(n) FROM t3 WHERE n > t1.a) FROM t1 GROUP BY ROLLUP(a)",
+        },
+        SqlTestCase {
+            name: "grouping_sets_srf_reads_key_output",
+            description: "A set-returning function over a key runs after the aggregate over the key output.",
+            setup_sqls: &["CREATE TABLE t1(a Int32 NOT NULL)"],
+            sql: "SELECT a, unnest([a, a + 1]) FROM t1 GROUP BY ROLLUP(a)",
+        },
+        SqlTestCase {
             name: "grouping_outside_grouping_sets_is_rejected",
             description: "grouping() should still be rejected when the query is not using grouping sets semantics.",
             setup_sqls: &["CREATE TABLE g(a UInt64, b UInt64, c UInt64)"],
@@ -807,6 +834,64 @@ async fn test_clause_prepass_skips_subquery_metadata_side_effects() -> Result<()
             "{} should only keep metadata for the outer query and the final subquery bind",
             case.name
         );
+    }
+
+    Ok(())
+}
+
+/// The SELECT list of a GROUPING SETS query is bound after the keys are known.
+/// Before that, only the items GROUP BY, WHERE or key matching refer to are
+/// bound, so a subquery elsewhere in the SELECT list is bound once.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_grouping_sets_binds_select_subqueries_once() -> Result<()> {
+    let setup_sqls: &[&str] = &[
+        "CREATE TABLE t1(a Int32)",
+        "CREATE TABLE t2(b Int32)",
+        "CREATE TABLE t3(n Int32)",
+    ];
+    let cases = [
+        (
+            "correlated_select_subquery",
+            "SELECT a, (SELECT max(n) FROM t3 WHERE n <= t1.a) FROM t1 GROUP BY ROLLUP(a)",
+            2,
+        ),
+        // Binding every SELECT item twice would bind t3 twice and t2 four times.
+        (
+            "nested_grouping_sets",
+            "SELECT a, (SELECT (SELECT max(b) FROM t2) FROM t3 GROUP BY ROLLUP(n) LIMIT 1) FROM t1 GROUP BY ROLLUP(a)",
+            3,
+        ),
+        (
+            "order_by_alias_of_subquery",
+            "SELECT a, (SELECT max(n) FROM t3) AS m FROM t1 GROUP BY ROLLUP(a) ORDER BY m",
+            2,
+        ),
+        (
+            "having_alias_of_subquery",
+            "SELECT a, (SELECT max(n) FROM t3) AS m FROM t1 GROUP BY ROLLUP(a) HAVING m > 0",
+            2,
+        ),
+        // A key referenced by position is bound once, before the aggregate.
+        (
+            "subquery_key_by_position",
+            "SELECT (SELECT max(n) FROM t3) AS m, a FROM t1 GROUP BY ROLLUP(1, a)",
+            2,
+        ),
+    ];
+
+    for (name, sql, tables) in cases {
+        let case = SqlTestCase {
+            name,
+            description: "",
+            setup_sqls,
+            sql,
+        };
+        let ctx = setup_context(&case).await?;
+        let plan = ctx.bind_sql(case.sql).await?;
+        let Plan::Query { metadata, .. } = plan else {
+            panic!("expected query plan for {name}");
+        };
+        assert_eq!(metadata.read().tables().len(), tables, "{name}");
     }
 
     Ok(())
