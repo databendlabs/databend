@@ -41,6 +41,13 @@ SELECT count(*) FROM fs_t WHERE a = 1 AND is_null(a = 2)
 ----
 0
 
+# OR branches assert alternatives, not facts that can be merged into one class.
+# Check the result directly: TLP totals alone can still pass for a wrong predicate.
+query I
+SELECT count(*) FROM fs_t WHERE (a = 1 AND c = 'ab') OR (a = 2 AND c IS NULL)
+----
+2
+
 # TLP: the three partitions of any predicate add up to the whole table.
 query I
 SELECT (SELECT count(*) FROM fs_t WHERE (a = 1 AND a = 2) OR c LIKE 'a%')

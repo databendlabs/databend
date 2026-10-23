@@ -316,6 +316,330 @@ optimized_plan:
 EmptyResultScan
 
 
+=== merged_class_constraints ===
+description: Bounds and exclusions from different members apply to the whole class; an unrelated column stays independent.
+sql: SELECT a FROM infer_rows
+WHERE a = b AND b = c AND a > 1 AND b > 5 AND c < 10 AND b != 7 AND n >= 100
+raw_plan:
+EvalScalar
+├── scalars: [infer_rows.a (#0) AS (#0)]
+└── Filter
+    ├── filters: [eq(infer_rows.a (#0), infer_rows.b (#1)), eq(infer_rows.b (#1), infer_rows.c (#2)), gt(infer_rows.a (#0), 1), gt(infer_rows.b (#1), 5), lt(infer_rows.c (#2), 10), noteq(infer_rows.b (#1), 7), gte(infer_rows.n (#3), 100)]
+    └── Scan
+        ├── table: default.infer_rows (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [infer_rows.a (#0) AS (#0), infer_rows.b (#1) AS (#4), infer_rows.c (#2) AS (#5), infer_rows.n (#3) AS (#6)]
+└── Scan
+    ├── table: default.infer_rows (#0)
+    ├── filters: [gt(infer_rows.a (#0), 5), lt(infer_rows.a (#0), 10), noteq(infer_rows.a (#0), 7), gt(infer_rows.b (#1), 5), lt(infer_rows.b (#1), 10), noteq(infer_rows.b (#1), 7), gt(infer_rows.c (#2), 5), lt(infer_rows.c (#2), 10), noteq(infer_rows.c (#2), 7), gte(infer_rows.n (#3), 100), eq(infer_rows.a (#0), infer_rows.b (#1)), eq(infer_rows.a (#0), infer_rows.c (#2)), eq(infer_rows.b (#1), infer_rows.c (#2))]
+    ├── order by: []
+    └── limit: NONE
+
+
+=== transitive_join_connections ===
+description: A chain retains transitive join connections and propagates numeric constraints to all inputs.
+sql: SELECT l.a FROM infer_rows l
+JOIN infer_rows m ON l.a = m.a
+JOIN infer_rows r ON m.a = r.a
+WHERE l.a > 1 AND m.a > 5 AND r.a < 10
+raw_plan:
+EvalScalar
+├── scalars: [infer_rows.a (#0) AS (#0)]
+└── Filter
+    ├── filters: [gt(infer_rows.a (#0), 1), gt(infer_rows.a (#4), 5), lt(infer_rows.a (#8), 10)]
+    └── Join(Inner)
+        ├── build keys: [infer_rows.a (#8)]
+        ├── probe keys: [infer_rows.a (#4)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.infer_rows (#2)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Join(Inner)
+            ├── build keys: [infer_rows.a (#4)]
+            ├── probe keys: [infer_rows.a (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.infer_rows (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.infer_rows (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [infer_rows.a (#0) AS (#0), infer_rows.a (#4) AS (#12), infer_rows.a (#8) AS (#13)]
+└── Join(Inner)
+    ├── build keys: [infer_rows.a (#8)]
+    ├── probe keys: [infer_rows.a (#0)]
+    ├── other filters: []
+    ├── Join(Inner)
+    │   ├── build keys: [infer_rows.a (#8)]
+    │   ├── probe keys: [infer_rows.a (#4)]
+    │   ├── other filters: []
+    │   ├── Scan
+    │   │   ├── table: default.infer_rows (#2)
+    │   │   ├── filters: [gt(infer_rows.a (#8), 5), lt(infer_rows.a (#8), 10)]
+    │   │   ├── order by: []
+    │   │   └── limit: NONE
+    │   └── Scan
+    │       ├── table: default.infer_rows (#1)
+    │       ├── filters: [gt(infer_rows.a (#4), 5), lt(infer_rows.a (#4), 10)]
+    │       ├── order by: []
+    │       └── limit: NONE
+    └── Scan
+        ├── table: default.infer_rows (#0)
+        ├── filters: [gt(infer_rows.a (#0), 5), lt(infer_rows.a (#0), 10)]
+        ├── order by: []
+        └── limit: NONE
+
+
+=== transitive_like_filters ===
+description: A LIKE filter reaches all three scans in a transitive equality class.
+sql: SELECT l.s FROM infer_strings l
+JOIN infer_strings m ON l.s = m.s
+JOIN infer_strings r ON m.s = r.s
+WHERE l.s LIKE '%foo%'
+raw_plan:
+EvalScalar
+├── scalars: [infer_strings.s (#0) AS (#0)]
+└── Filter
+    ├── filters: [like(infer_strings.s (#0), '%foo%')]
+    └── Join(Inner)
+        ├── build keys: [infer_strings.s (#4)]
+        ├── probe keys: [infer_strings.s (#2)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.infer_strings (#2)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Join(Inner)
+            ├── build keys: [infer_strings.s (#2)]
+            ├── probe keys: [infer_strings.s (#0)]
+            ├── other filters: []
+            ├── Scan
+            │   ├── table: default.infer_strings (#1)
+            │   ├── filters: []
+            │   ├── order by: []
+            │   └── limit: NONE
+            └── Scan
+                ├── table: default.infer_strings (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [infer_strings.s (#0) AS (#0), infer_strings.s (#2) AS (#6), infer_strings.s (#4) AS (#7)]
+└── Join(Inner)
+    ├── build keys: [infer_strings.s (#4)]
+    ├── probe keys: [infer_strings.s (#0)]
+    ├── other filters: []
+    ├── Join(Inner)
+    │   ├── build keys: [infer_strings.s (#4)]
+    │   ├── probe keys: [infer_strings.s (#2)]
+    │   ├── other filters: []
+    │   ├── Scan
+    │   │   ├── table: default.infer_strings (#2)
+    │   │   ├── filters: [like(infer_strings.s (#4), '%foo%')]
+    │   │   ├── order by: []
+    │   │   └── limit: NONE
+    │   └── Scan
+    │       ├── table: default.infer_strings (#1)
+    │       ├── filters: [like(infer_strings.s (#2), '%foo%')]
+    │       ├── order by: []
+    │       └── limit: NONE
+    └── Scan
+        ├── table: default.infer_strings (#0)
+        ├── filters: [like(infer_strings.s (#0), '%foo%')]
+        ├── order by: []
+        └── limit: NONE
+
+
+=== whole_input_filter_rewrite ===
+description: A two-column predicate is rewritten onto the opposite join input without mixed-input variants.
+sql: SELECT l.s FROM infer_strings l JOIN infer_strings r
+ON l.s = r.s AND l.t = r.t
+WHERE concat(l.s, l.t) LIKE '%foo%'
+raw_plan:
+EvalScalar
+├── scalars: [infer_strings.s (#0) AS (#0)]
+└── Filter
+    ├── filters: [like(concat(infer_strings.s (#0), infer_strings.t (#1)), '%foo%')]
+    └── Join(Inner)
+        ├── build keys: [infer_strings.s (#2), infer_strings.t (#3)]
+        ├── probe keys: [infer_strings.s (#0), infer_strings.t (#1)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.infer_strings (#1)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.infer_strings (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [infer_strings.s (#0) AS (#0), infer_strings.s (#2) AS (#4), infer_strings.t (#1) AS (#5), infer_strings.t (#3) AS (#6)]
+└── Join(Inner)
+    ├── build keys: [infer_strings.s (#2), infer_strings.t (#3)]
+    ├── probe keys: [infer_strings.s (#0), infer_strings.t (#1)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.infer_strings (#1)
+    │   ├── filters: [like(concat(infer_strings.s (#2), infer_strings.t (#3)), '%foo%')]
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.infer_strings (#0)
+        ├── filters: [like(concat(infer_strings.s (#0), infer_strings.t (#1)), '%foo%')]
+        ├── order by: []
+        └── limit: NONE
+
+
+=== outer_join_filter_boundary ===
+description: A filter on the null-supplying input must not restrict the preserved input.
+sql: SELECT l.s, r.s FROM infer_strings l LEFT JOIN infer_strings r
+ON l.s = r.s AND r.s LIKE '%foo%'
+raw_plan:
+EvalScalar
+├── scalars: [infer_strings.s (#0) AS (#0), infer_strings.s (#2) AS (#2)]
+└── Join(Left)
+    ├── build keys: [infer_strings.s (#2)]
+    ├── probe keys: [infer_strings.s (#0)]
+    ├── other filters: []
+    ├── Filter
+    │   ├── filters: [like(infer_strings.s (#2), '%foo%')]
+    │   └── Scan
+    │       ├── table: default.infer_strings (#1)
+    │       ├── filters: []
+    │       ├── order by: []
+    │       └── limit: NONE
+    └── Scan
+        ├── table: default.infer_strings (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+optimized_plan:
+Join(Left)
+├── build keys: [infer_strings.s (#2)]
+├── probe keys: [infer_strings.s (#0)]
+├── other filters: []
+├── Scan
+│   ├── table: default.infer_strings (#1)
+│   ├── filters: [like(infer_strings.s (#2), '%foo%')]
+│   ├── order by: []
+│   └── limit: NONE
+└── Scan
+    ├── table: default.infer_strings (#0)
+    ├── filters: []
+    ├── order by: []
+    └── limit: NONE
+
+
+=== null_safe_filter_boundary ===
+description: Null-safe join equality is not absorbed into ordinary equality inference.
+sql: SELECT l.s FROM infer_strings l JOIN infer_strings r
+ON l.s IS NOT DISTINCT FROM r.s WHERE l.s IS NULL
+raw_plan:
+EvalScalar
+├── scalars: [infer_strings.s (#0) AS (#0)]
+└── Filter
+    ├── filters: [not(is_not_null(infer_strings.s (#0)))]
+    └── Join(Inner)
+        ├── build keys: []
+        ├── probe keys: []
+        ├── other filters: [assume_not_null(if(and(not(is_not_null(infer_strings.s (#0))), not(is_not_null(infer_strings.s (#2)))), true, or(not(is_not_null(infer_strings.s (#0))), not(is_not_null(infer_strings.s (#2)))), false, eq(infer_strings.s (#0), infer_strings.s (#2))))]
+        ├── Scan
+        │   ├── table: default.infer_strings (#1)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.infer_strings (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [infer_strings.s (#0) AS (#0), infer_strings.s (#2) AS (#4)]
+└── Filter
+    ├── filters: [assume_not_null(if(and(not(is_not_null(infer_strings.s (#0))), not(is_not_null(infer_strings.s (#2)))), true, or(not(is_not_null(infer_strings.s (#0))), not(is_not_null(infer_strings.s (#2)))), false, eq(infer_strings.s (#0), infer_strings.s (#2))))]
+    └── Join(Cross)
+        ├── build keys: []
+        ├── probe keys: []
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.infer_strings (#1)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.infer_strings (#0)
+            ├── filters: [not(is_not_null(infer_strings.s (#0)))]
+            ├── order by: []
+            └── limit: NONE
+
+
+=== float_representation_filter_boundary ===
+description: Equal signed zeros need not have identical string representations; do not copy arbitrary float predicates.
+sql: SELECT l.f FROM infer_bounds l JOIN infer_bounds r ON l.f = r.f
+WHERE to_string(l.f) LIKE '-%'
+raw_plan:
+EvalScalar
+├── scalars: [infer_bounds.f (#2) AS (#2)]
+└── Filter
+    ├── filters: [gte(CAST(infer_bounds.f (#2) AS String NULL), '-'), lt(CAST(infer_bounds.f (#2) AS String NULL), '.')]
+    └── Join(Inner)
+        ├── build keys: [infer_bounds.f (#9)]
+        ├── probe keys: [infer_bounds.f (#2)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.infer_bounds (#1)
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.infer_bounds (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+optimized_plan:
+EvalScalar
+├── scalars: [infer_bounds.f (#2) AS (#2), infer_bounds.f (#9) AS (#14)]
+└── Join(Inner)
+    ├── build keys: [infer_bounds.f (#9)]
+    ├── probe keys: [infer_bounds.f (#2)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: default.infer_bounds (#1)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: default.infer_bounds (#0)
+        ├── filters: [gte(CAST(infer_bounds.f (#2) AS String NULL), '-'), lt(CAST(infer_bounds.f (#2) AS String NULL), '.')]
+        ├── order by: []
+        └── limit: NONE
+
+
 === join_and_aggregate ===
 description: A propagated contradiction eliminates the join inputs but preserves COUNT on empty input.
 sql: SELECT count(*) FROM infer_bounds AS l JOIN infer_right AS r ON l.x = r.x WHERE l.x > 0 AND l.x < 5 AND r.x >= 5

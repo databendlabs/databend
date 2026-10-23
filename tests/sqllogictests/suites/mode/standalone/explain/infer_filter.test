@@ -1046,3 +1046,89 @@ DROP TABLE infer_filter_decimal_edges;
 
 statement ok
 DROP TABLE infer_filter_constraints;
+
+# Incremental class merging must preserve filters and transitive join connections.
+statement ok
+CREATE TABLE infer_state(a BIGINT, b BIGINT, c BIGINT, n BIGINT) ENGINE = MEMORY;
+
+statement ok
+INSERT INTO infer_state VALUES (NULL, NULL, NULL, 100), (4, 4, 4, 100), (6, 6, 6, 100), (7, 7, 7, 100), (8, 8, 8, 0), (9, 9, 9, 100), (11, 11, 11, 100);
+
+# Bounds and exclusions merge across the class. The row with a = 8 must still
+# be rejected by the independent n constraint, not absorbed into the class.
+query I rowsort
+SELECT a FROM infer_state WHERE a = b AND b = c AND a > 1 AND b > 5 AND c < 10 AND b != 7 AND n >= 100;
+----
+6
+9
+
+query I rowsort
+SELECT l.a FROM infer_state l JOIN infer_state m ON l.a = m.a JOIN infer_state r ON m.a = r.a WHERE l.a > 1 AND m.a > 5 AND r.a < 10;
+----
+6
+7
+8
+9
+
+# Null-safe join equality must not become ordinary equality and discard NULL matches.
+query I
+SELECT count(*) FROM infer_state l JOIN infer_state r ON l.a IS NOT DISTINCT FROM r.a WHERE l.a IS NULL;
+----
+1
+
+statement ok
+DROP TABLE infer_state;
+
+# General predicates query the complete class, or rewrite onto a complete join input.
+statement ok
+CREATE OR REPLACE TABLE infer_strings(s STRING NULL, t STRING NULL) ENGINE = MEMORY;
+
+statement ok
+INSERT INTO infer_strings VALUES (NULL, NULL), ('foo', 'x'), ('bar', 'foo'), ('bar', 'x'), ('other', 'x');
+
+query T rowsort
+SELECT l.s FROM infer_strings l JOIN infer_strings m ON l.s = m.s JOIN infer_strings r ON m.s = r.s WHERE l.s LIKE '%foo%';
+----
+foo
+
+query T rowsort
+SELECT l.s FROM infer_strings l JOIN infer_strings r ON l.s = r.s AND l.t = r.t WHERE concat(l.s, l.t) LIKE '%foo%';
+----
+bar
+foo
+
+# Repeated references must be rewritten consistently, not independently.
+query T rowsort
+SELECT l.s FROM infer_strings l JOIN infer_strings r ON l.s = r.s WHERE concat(l.s, l.s) LIKE '%foo%';
+----
+foo
+
+# An ON filter on the nullable side must not remove preserved-side rows.
+query I
+SELECT count(*) FROM infer_strings l LEFT JOIN infer_strings r ON l.s = r.s AND r.s LIKE '%foo%' WHERE r.s IS NULL;
+----
+4
+
+query I
+SELECT count(*) FROM infer_strings l JOIN infer_strings r ON l.s IS NOT DISTINCT FROM r.s WHERE l.s IS NULL;
+----
+1
+
+statement ok
+DROP TABLE infer_strings;
+
+# Float equality does not imply interchangeability inside arbitrary functions:
+# -0.0 = 0.0, but their string representations differ. Do not copy this filter.
+statement ok
+CREATE OR REPLACE TABLE infer_float_repr(x FLOAT64) ENGINE = MEMORY;
+
+statement ok
+INSERT INTO infer_float_repr VALUES ('-0.0'::FLOAT64), ('0.0'::FLOAT64);
+
+query I
+SELECT count(*) FROM infer_float_repr l JOIN infer_float_repr r ON l.x = r.x WHERE to_string(l.x) LIKE '-%';
+----
+2
+
+statement ok
+DROP TABLE infer_float_repr;

@@ -348,6 +348,8 @@ async fn write_infer_filter_cases(file: &mut impl Write) -> Result<()> {
         "CREATE TABLE infer_bounds(x BIGINT, y INT, f FLOAT32, d DECIMAL(18, 2), d38 DECIMAL(38, 2), d76 DECIMAL(76, 2), e DECIMAL(38, 3))",
         "CREATE TABLE infer_right(x BIGINT)",
         "CREATE TABLE infer_decimal_chain(a DECIMAL(37,0), b DECIMAL(1,0), c DECIMAL(38,2))",
+        "CREATE TABLE infer_rows(a BIGINT, b BIGINT, c BIGINT, n BIGINT)",
+        "CREATE TABLE infer_strings(s STRING, t STRING)",
     ];
     let cases = [
         (
@@ -399,6 +401,53 @@ async fn write_infer_filter_cases(file: &mut impl Write) -> Result<()> {
             "equivalent_columns",
             "Contradictory bounds are merged across a lossless Int32/Int64 equality.",
             "SELECT x FROM infer_bounds WHERE x = y AND x > 0 AND x < 5 AND y >= 5",
+        ),
+        (
+            "merged_class_constraints",
+            "Bounds and exclusions from different members apply to the whole class; an unrelated column stays independent.",
+            "SELECT a FROM infer_rows
+WHERE a = b AND b = c AND a > 1 AND b > 5 AND c < 10 AND b != 7 AND n >= 100",
+        ),
+        (
+            "transitive_join_connections",
+            "A chain retains transitive join connections and propagates numeric constraints to all inputs.",
+            "SELECT l.a FROM infer_rows l
+JOIN infer_rows m ON l.a = m.a
+JOIN infer_rows r ON m.a = r.a
+WHERE l.a > 1 AND m.a > 5 AND r.a < 10",
+        ),
+        (
+            "transitive_like_filters",
+            "A LIKE filter reaches all three scans in a transitive equality class.",
+            "SELECT l.s FROM infer_strings l
+JOIN infer_strings m ON l.s = m.s
+JOIN infer_strings r ON m.s = r.s
+WHERE l.s LIKE '%foo%'",
+        ),
+        (
+            "whole_input_filter_rewrite",
+            "A two-column predicate is rewritten onto the opposite join input without mixed-input variants.",
+            "SELECT l.s FROM infer_strings l JOIN infer_strings r
+ON l.s = r.s AND l.t = r.t
+WHERE concat(l.s, l.t) LIKE '%foo%'",
+        ),
+        (
+            "outer_join_filter_boundary",
+            "A filter on the null-supplying input must not restrict the preserved input.",
+            "SELECT l.s, r.s FROM infer_strings l LEFT JOIN infer_strings r
+ON l.s = r.s AND r.s LIKE '%foo%'",
+        ),
+        (
+            "null_safe_filter_boundary",
+            "Null-safe join equality is not absorbed into ordinary equality inference.",
+            "SELECT l.s FROM infer_strings l JOIN infer_strings r
+ON l.s IS NOT DISTINCT FROM r.s WHERE l.s IS NULL",
+        ),
+        (
+            "float_representation_filter_boundary",
+            "Equal signed zeros need not have identical string representations; do not copy arbitrary float predicates.",
+            "SELECT l.f FROM infer_bounds l JOIN infer_bounds r ON l.f = r.f
+WHERE to_string(l.f) LIKE '-%'",
         ),
         (
             "join_and_aggregate",

@@ -59,14 +59,10 @@ Sort
             ├── logical_recursive_cte_id: None
             ├── EvalScalar
             │   ├── scalars: [1 AS (#0)]
-            │   └── Filter
-            │       ├── filters: [or_filters(eq(1, 1), gt(now(), '2020-01-01 00:00:00.000000'))]
-            │       └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+            │   └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
             └── EvalScalar
                 ├── scalars: [2 AS (#1)]
-                └── Filter
-                    ├── filters: [or_filters(eq(2, 1), gt(now(), '2020-01-01 00:00:00.000000'))]
-                    └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+                └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
 
 
 === statement_time_preserves_null_rows ===
