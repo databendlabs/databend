@@ -337,54 +337,55 @@ fn propagate_probe_targets(
     Ok(result)
 }
 
-/// Allowlist for commuting a scan predicate through an intermediate operator.
-/// Inner/cross joins allow both inputs; semi/anti joins allow only the input
-/// that supplies output rows, as selected by `probe_child_is_safe`. Creating a
-/// filter *at* a join does not imply that another join's filter may cross it.
-/// Unknown operators, shared CTE producers, windows, TopN and UnionAll (which
-/// needs explicit column remapping) are conservative barriers.
-fn row_preserving_probe_operator(plan: &PhysicalRelOperator) -> bool {
+/// One policy for target paths and equivalence collection. Only traverse
+/// inputs to which a parent scan predicate can commute. Creating a filter
+/// *at* a join does not imply that another join's filter may cross it.
+fn probe_child_is_safe(plan: &PhysicalRelOperator, child_index: usize) -> bool {
     match plan {
-        PhysicalRelOperator::Scan(scan) => {
-            scan.limit.is_none() && scan.sample.is_none() && scan.vector_index.is_none()
-        }
         PhysicalRelOperator::EvalScalar(_)
         | PhysicalRelOperator::Filter(_)
         | PhysicalRelOperator::Exchange(_) => true,
         PhysicalRelOperator::Sort(sort) => sort.limit.is_none() && sort.window_partition.is_none(),
         PhysicalRelOperator::Aggregate(aggregate) => {
-            aggregate.aggregate.grouping_sets.is_none() && aggregate.aggregate.rank_limit.is_none()
+            !aggregate.aggregate.group_items.is_empty()
+                && aggregate.aggregate.grouping_sets.is_none()
+                && aggregate.aggregate.rank_limit.is_none()
         }
         PhysicalRelOperator::Join(join) => {
-            // A rewritten scalar join can look like Inner while still enforcing
-            // single-row cardinality. Filtering its inputs can hide duplicates.
-            join.single_to_inner.is_none()
-                && matches!(
-                    join.join_type,
-                    JoinType::Inner
-                        | JoinType::Cross
-                        | JoinType::LeftSemi
-                        | JoinType::RightSemi
-                        | JoinType::LeftAnti
-                        | JoinType::RightAnti
-                )
+            // Rewritten scalar joins still enforce single-row cardinality.
+            if join.single_to_inner.is_some() {
+                return false;
+            }
+            match join.join_type {
+                JoinType::Inner | JoinType::Cross => true,
+                // Mark names describe the marker side, not the retained side.
+                JoinType::Left | JoinType::LeftSemi | JoinType::LeftAnti | JoinType::RightMark => {
+                    child_index == 0
+                }
+                JoinType::Right
+                | JoinType::RightSemi
+                | JoinType::RightAnti
+                | JoinType::LeftMark => child_index == 1,
+                // Binder puts window(original right) in child0 and original
+                // left in child1. Keep the window itself as a barrier below.
+                JoinType::Asof | JoinType::LeftAsof => child_index == 1,
+                JoinType::RightAsof => child_index == 0,
+                // Full joins can create NULL-extended rows on either side.
+                // ANY requires separate validation of representative-row
+                // selection. Single joins can hide cardinality errors.
+                JoinType::Full
+                | JoinType::InnerAny
+                | JoinType::LeftAny
+                | JoinType::RightAny
+                | JoinType::LeftSingle
+                | JoinType::RightSingle
+                | JoinType::FullAsof => false,
+            }
         }
+        // Shared CTEs, windows, TopN and operators needing column remapping
+        // (e.g. UnionAll) remain barriers until separately proven safe.
         _ => false,
     }
-}
-
-// Allow a parent filter through a semi/anti join's output-side input only.
-// Use the same child policy for target paths and equivalence collection.
-fn probe_child_is_safe(plan: &PhysicalRelOperator, child_index: usize) -> bool {
-    row_preserving_probe_operator(plan)
-        && match plan {
-            PhysicalRelOperator::Join(join) => match join.join_type {
-                JoinType::LeftSemi | JoinType::LeftAnti => child_index == 0,
-                JoinType::RightSemi | JoinType::RightAnti => child_index == 1,
-                _ => true,
-            },
-            _ => true,
-        }
 }
 
 /// Verify the complete path to a scan *column*, not just scan reachability.
@@ -396,7 +397,7 @@ fn probe_child_is_safe(plan: &PhysicalRelOperator, child_index: usize) -> bool {
 fn probe_path_is_safe(s_expr: &PExpr, scan_id: usize, column: Symbol) -> bool {
     fn visit(s_expr: &PExpr, scan_id: usize, column: Symbol, safe: bool) -> Option<bool> {
         let plan = s_expr.plan();
-        let mut safe = safe && row_preserving_probe_operator(plan);
+        let mut safe = safe;
         if let PhysicalRelOperator::Aggregate(aggregate) = plan {
             safe &= aggregate.aggregate.group_items.iter().any(|item| {
                 item.index == column
@@ -414,7 +415,12 @@ fn probe_path_is_safe(s_expr: &PExpr, scan_id: usize, column: Symbol) -> bool {
             });
         }
         if let PhysicalRelOperator::Scan(scan) = plan {
-            return (scan.scan_id == scan_id).then_some(safe && scan.columns.contains(&column));
+            return (scan.scan_id == scan_id).then_some(
+                safe && scan.columns.contains(&column)
+                    && scan.limit.is_none()
+                    && scan.sample.is_none()
+                    && scan.vector_index.is_none(),
+            );
         }
         let mut result = None;
         // Visit even below barriers to detect unsafe duplicate occurrences.
@@ -430,18 +436,13 @@ fn probe_path_is_safe(s_expr: &PExpr, scan_id: usize, column: Symbol) -> bool {
 }
 
 fn collect_equi_conditions(s_expr: &PExpr) -> Result<Vec<JoinEquiCondition>> {
-    // Equivalences below row-sensitive nodes do not necessarily hold for the
-    // outputs above them. Even for a plain aggregate we conservatively avoid
-    // harvesting input equalities; key-specific target paths remain supported.
-    if !row_preserving_probe_operator(s_expr.plan())
-        || matches!(s_expr.plan(), PhysicalRelOperator::Aggregate(_))
-    {
-        return Ok(vec![]);
-    }
+    // Every endpoint is checked against the full column path before entering
+    // the graph. Across a plain aggregate, this permits only unchanged group
+    // keys on both ends; non-group columns cannot become equivalence bridges.
     let mut conditions = Vec::new();
 
     if let PhysicalRelOperator::Join(join) = s_expr.plan() {
-        if matches!(join.join_type, JoinType::Inner) {
+        if matches!(join.join_type, JoinType::Inner) && probe_child_is_safe(s_expr.plan(), 0) {
             conditions.extend(join.equi_conditions.clone());
         }
     }
@@ -839,6 +840,50 @@ mod tests {
         );
         for connector in [true, false] {
             assert_eq!(path_targets(&safe, connector).len(), 1);
+            // Only an identity definition may retain the original scan key.
+            for (index, scalar, allowed) in [
+                (0, path_column(0, NumberDataType::Int32), true),
+                (
+                    0,
+                    ScalarExpr::ConstantExpr(ConstantExpr {
+                        span: None,
+                        value: Scalar::Number(NumberScalar::Int32(0)),
+                    }),
+                    false,
+                ),
+                (1, path_column(0, NumberDataType::Int32), true),
+            ] {
+                let plan = PExpr::create_unary(
+                    EvalScalar {
+                        items: vec![ScalarItem {
+                            index: Symbol::new(index),
+                            scalar,
+                        }],
+                    },
+                    path_scan(7, 0),
+                );
+                assert_eq!(path_targets(&plan, connector).len(), usize::from(allowed));
+            }
+            // A safe occurrence must not hide a limited occurrence of a
+            // shared scan. Reuse the same subtree, not two distinct scan IDs.
+            let shared = path_scan(7, 0);
+            let plan = PExpr::create_binary(
+                Join {
+                    join_type: JoinType::Cross,
+                    ..Default::default()
+                },
+                shared.clone(),
+                PExpr::create_unary(
+                    Limit {
+                        before_exchange: false,
+                        limit: Some(1),
+                        offset: 0,
+                        lazy_columns: Default::default(),
+                    },
+                    shared,
+                ),
+            );
+            assert!(path_targets(&plan, connector).is_empty());
         }
     }
 
@@ -912,24 +957,52 @@ mod tests {
                     path_scan(0, 0),
                     branch,
                 );
-                let targets = super::find_probe_targets(
-                    &metadata,
-                    &plan,
-                    column("c0", DataType::Number(NumberDataType::Int64)).as_remote_expr(),
-                    0,
-                    Symbol::new(0),
-                    true,
-                    &FunctionContext::default(),
-                )
-                .unwrap();
-                let mut scans: Vec<_> = targets.iter().map(|(_, id)| *id).collect();
-                scans.sort_unstable();
-                assert_eq!(scans, if blocked { vec![0] } else { vec![0, 1] });
-                if !blocked && matches!(endpoint, ScalarExpr::FunctionCall(_)) {
-                    assert!(matches!(
-                        targets.iter().find(|(_, id)| *id == 1).unwrap().0,
-                        RemoteExpr::FunctionCall { .. }
-                    ));
+                // With grouping, both endpoints must remain unchanged keys.
+                // An input equality must not bridge a non-grouped column.
+                for group_keys in [None, Some(1), Some(2)] {
+                    let plan = if let Some(count) = group_keys {
+                        let keys = [left.clone(), path_column(1, NumberDataType::Int32)];
+                        PExpr::create_unary(
+                            PhysicalAggregate::new(
+                                Aggregate {
+                                    group_items: keys
+                                        .into_iter()
+                                        .take(count)
+                                        .enumerate()
+                                        .map(|(index, scalar)| ScalarItem {
+                                            index: Symbol::new(index),
+                                            scalar,
+                                        })
+                                        .collect(),
+                                    ..Default::default()
+                                },
+                                AggregateMode::Final,
+                            ),
+                            plan.clone(),
+                        )
+                    } else {
+                        plan.clone()
+                    };
+                    let targets = super::find_probe_targets(
+                        &metadata,
+                        &plan,
+                        column("c0", DataType::Number(NumberDataType::Int64)).as_remote_expr(),
+                        0,
+                        Symbol::new(0),
+                        true,
+                        &FunctionContext::default(),
+                    )
+                    .unwrap();
+                    let mut scans: Vec<_> = targets.iter().map(|(_, id)| *id).collect();
+                    scans.sort_unstable();
+                    let blocked = blocked || group_keys == Some(1);
+                    assert_eq!(scans, if blocked { vec![0] } else { vec![0, 1] });
+                    if !blocked && matches!(endpoint, ScalarExpr::FunctionCall(_)) {
+                        assert!(matches!(
+                            targets.iter().find(|(_, id)| *id == 1).unwrap().0,
+                            RemoteExpr::FunctionCall { .. }
+                        ));
+                    }
                 }
             }
         }
@@ -958,6 +1031,12 @@ mod tests {
         metadata
             .write()
             .add_base_column_scan_id((0..4).map(|index| (Symbol::new(index), index)).collect());
+        let marker = join_type.is_mark_join().then(|| {
+            metadata.write().add_derived_column(
+                "marker".to_string(),
+                DataType::Nullable(Box::new(DataType::Boolean)),
+            )
+        });
         let col = |index| path_column(index, NumberDataType::Int32);
         let inner = |left, right| {
             PExpr::create_binary(
@@ -971,31 +1050,73 @@ mod tests {
             )
         };
         // The output subtree has c0=c1; the hidden subtree has c2=c3.
-        // Neither the semi/anti join's own equality nor the hidden subtree's
+        // Neither the join's own equality nor the non-retained subtree's
         // equality may be exported to connect these two inputs.
-        let (left, right, condition) =
-            if matches!(join_type, JoinType::LeftSemi | JoinType::LeftAnti) {
-                (
-                    inner(0, 1),
-                    inner(2, 3),
-                    JoinEquiCondition::new(col(0), col(2), false),
-                )
-            } else {
-                (
-                    inner(2, 3),
-                    inner(0, 1),
-                    JoinEquiCondition::new(col(2), col(0), false),
-                )
-            };
+        let (left, right, condition) = if matches!(
+            join_type,
+            JoinType::Left | JoinType::LeftSemi | JoinType::LeftAnti | JoinType::RightMark
+        ) {
+            (
+                inner(0, 1),
+                inner(2, 3),
+                JoinEquiCondition::new(col(0), col(2), false),
+            )
+        } else {
+            (
+                inner(2, 3),
+                inner(0, 1),
+                JoinEquiCondition::new(col(2), col(0), false),
+            )
+        };
         let plan = PExpr::create_binary(
             Join {
                 join_type,
+                marker_index: marker,
                 equi_conditions: vec![condition],
                 ..Default::default()
             },
             left,
             right,
         );
+        if let Some(index) = marker {
+            use databend_common_sql::ColumnBindingBuilder;
+            use databend_common_sql::Visibility;
+            use databend_common_sql::plans::BoundColumnRef;
+            use databend_common_sql::plans::FunctionCall;
+            use databend_common_sql::plans::ScalarExpr;
+            let data_type = DataType::Nullable(Box::new(DataType::Boolean));
+            let scalar: ScalarExpr = BoundColumnRef {
+                span: None,
+                column: ColumnBindingBuilder::new(
+                    "marker".into(),
+                    index,
+                    Box::new(data_type.clone()),
+                    Visibility::Visible,
+                )
+                .build(),
+            }
+            .into();
+            let not_marker: ScalarExpr = FunctionCall {
+                span: None,
+                func_name: "not".into(),
+                params: vec![],
+                arguments: vec![scalar.clone()],
+                return_type: Box::new(data_type),
+            }
+            .into();
+            for expression in [scalar, not_marker] {
+                assert!(
+                    super::scalar_to_probe_target(
+                        &metadata,
+                        &expression,
+                        &FunctionContext::default()
+                    )
+                    .unwrap()
+                    .is_none()
+                );
+            }
+            assert!(!super::probe_path_is_safe(&plan, 0, index));
+        }
         for index in 0..4 {
             for connector in [true, false] {
                 let key = column(
@@ -1056,6 +1177,67 @@ mod tests {
     #[test]
     fn test_right_anti_keeps_output_side_targets() {
         assert_output_side_probe_targets(databend_common_sql::plans::JoinType::RightAnti);
+    }
+
+    #[test]
+    fn test_left_mark_keeps_right_input_and_rejects_marker() {
+        assert_output_side_probe_targets(databend_common_sql::plans::JoinType::LeftMark);
+    }
+
+    #[test]
+    fn test_right_mark_keeps_left_input_and_rejects_marker() {
+        assert_output_side_probe_targets(databend_common_sql::plans::JoinType::RightMark);
+    }
+
+    #[test]
+    fn test_outer_keeps_only_retained_input_targets() {
+        use databend_common_sql::plans::JoinType;
+        for kind in [JoinType::Left, JoinType::Right] {
+            assert_output_side_probe_targets(kind);
+        }
+    }
+
+    #[test]
+    fn test_all_join_types_have_explicit_child_policy() {
+        use databend_common_sql::plans::Join;
+        use databend_common_sql::plans::JoinType;
+        use databend_common_sql::plans::PhysicalRelOperator;
+        let cases = [
+            (JoinType::Inner, [true, true]),
+            (JoinType::Cross, [true, true]),
+            (JoinType::Left, [true, false]),
+            (JoinType::Right, [false, true]),
+            (JoinType::Full, [false, false]),
+            (JoinType::InnerAny, [false, false]),
+            (JoinType::LeftAny, [false, false]),
+            (JoinType::RightAny, [false, false]),
+            (JoinType::LeftSemi, [true, false]),
+            (JoinType::RightSemi, [false, true]),
+            (JoinType::LeftAnti, [true, false]),
+            (JoinType::RightAnti, [false, true]),
+            (JoinType::LeftMark, [false, true]),
+            (JoinType::RightMark, [true, false]),
+            (JoinType::LeftSingle, [false, false]),
+            (JoinType::RightSingle, [false, false]),
+            (JoinType::Asof, [false, true]),
+            (JoinType::LeftAsof, [false, true]),
+            (JoinType::RightAsof, [true, false]),
+            (JoinType::FullAsof, [false, false]),
+        ];
+        for (kind, expected) in cases {
+            let plan: PhysicalRelOperator = Join {
+                join_type: kind,
+                ..Default::default()
+            }
+            .into();
+            for (child, safe) in expected.into_iter().enumerate() {
+                assert_eq!(
+                    super::probe_child_is_safe(&plan, child),
+                    safe,
+                    "{kind:?} child{child}"
+                );
+            }
+        }
     }
 
     #[test]
