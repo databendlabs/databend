@@ -1,0 +1,53 @@
+# Compare both parsers in one standard binary, including VARIANT subtrees
+# nested in tuples/arrays, wide integer encodings, float overflow and escapes.
+# Check rendered representations as well as value equality. Exact JSONB byte
+# equality (including numeric tags and negative zero) is covered by unit tests.
+statement ok
+set enable_sonic_json_parser = 0
+
+statement ok
+create or replace table ndjson_variant_serde (id int, payload variant, nested tuple(v variant, a array(variant)))
+
+statement ok
+copy into ndjson_variant_serde from @data/ndjson/variant_parser.ndjson file_format = (type = ndjson)
+
+statement ok
+set enable_sonic_json_parser = 1
+
+statement ok
+create or replace table ndjson_variant_sonic like ndjson_variant_serde
+
+statement ok
+copy into ndjson_variant_sonic from @data/ndjson/variant_parser.ndjson file_format = (type = ndjson)
+
+query IIIIIII
+select count(*), count_if(s.payload != d.payload), count_if(s.nested:v != d.nested:v), count_if(s.nested:a != d.nested:a),
+       count_if(s.payload::string != d.payload::string), count_if((s.nested:v)::string != (d.nested:v)::string),
+       count_if(array_transform(s.nested:a, x -> x::string) != array_transform(d.nested:a, x -> x::string))
+from ndjson_variant_serde s join ndjson_variant_sonic d on s.id = d.id
+----
+2 0 0 0 0 0 0
+
+# Live rollback to Serde, without rebuilding or restarting the server.
+statement ok
+set enable_sonic_json_parser = 0
+
+statement ok
+truncate table ndjson_variant_sonic
+
+statement ok
+copy into ndjson_variant_sonic from @data/ndjson/variant_parser.ndjson file_format = (type = ndjson) force = true
+
+query IIIIIII
+select count(*), count_if(s.payload != d.payload), count_if(s.nested:v != d.nested:v), count_if(s.nested:a != d.nested:a),
+       count_if(s.payload::string != d.payload::string), count_if((s.nested:v)::string != (d.nested:v)::string),
+       count_if(array_transform(s.nested:a, x -> x::string) != array_transform(d.nested:a, x -> x::string))
+from ndjson_variant_serde s join ndjson_variant_sonic d on s.id = d.id
+----
+2 0 0 0 0 0 0
+
+statement ok
+drop table ndjson_variant_serde
+
+statement ok
+drop table ndjson_variant_sonic

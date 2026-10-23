@@ -1,0 +1,18 @@
+# run-with-settings: enable_sonic_json_parser=1
+
+# Exact duplicates collapse to the last value before MAP validation and tuple
+# size checks, including escaped keys and overwritten values of a wrong type.
+statement ok
+create or replace table ndjson_duplicate_keys (id int, m map(string,int), t tuple(a int,b int))
+
+statement ok
+copy into ndjson_duplicate_keys from @data/ndjson/duplicate_keys.ndjson file_format = (type = ndjson)
+
+query IIIIII
+select id, length(map_keys(m)), m['a'], m['b'], t:a, t:b from ndjson_duplicate_keys order by id
+----
+1 2 2 3 2 3
+2 2 6 8 6 7
+
+statement ok
+drop table ndjson_duplicate_keys

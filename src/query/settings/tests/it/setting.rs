@@ -20,6 +20,38 @@ use databend_common_settings::Settings;
 use databend_common_version::BUILD_INFO;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sonic_json_parser_setting() {
+    let thread_name = std::thread::current().name().unwrap().to_string();
+    databend_common_base::base::GlobalInstance::init_testing(&thread_name);
+    GlobalConfig::init(&InnerConfig::default(), &BUILD_INFO).unwrap();
+    let settings = Settings::create(Tenant::new_literal("test"));
+    assert!(!settings.get_enable_sonic_json_parser().unwrap());
+    assert!(
+        !settings
+            .get_input_format_settings()
+            .unwrap()
+            .enable_sonic_json_parser
+    );
+    for enabled in ["1", "0"] {
+        settings
+            .set_setting("enable_sonic_json_parser".to_string(), enabled.to_string())
+            .unwrap();
+        assert_eq!(
+            settings
+                .get_input_format_settings()
+                .unwrap()
+                .enable_sonic_json_parser,
+            enabled == "1"
+        );
+    }
+    assert!(
+        settings
+            .set_setting("enable_sonic_json_parser".to_string(), "2".to_string())
+            .is_err()
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_set_settings() {
     let settings = Settings::create(Tenant::new_literal("test"));
     // Number range.

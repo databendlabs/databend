@@ -1,3 +1,5 @@
+# run-with-settings: enable_sonic_json_parser=1
+
 # Regression for #20748: unquoted JSON numbers must retain DECIMAL precision.
 # Include Float64 in the same rows to exercise the unchanged floating-point path.
 statement ok

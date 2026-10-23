@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -20,6 +19,8 @@ use bstr::ByteSlice;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
 use databend_common_formats::FieldJsonAstDecoder;
+use databend_common_formats::json::JsonObjectLookup;
+use databend_common_formats::json::JsonValue;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_storage::FileParseError;
 
@@ -61,17 +62,29 @@ impl NdJsonDecoder {
         null_if: &[&str],
         file_path: &str,
     ) -> std::result::Result<(), FileParseError> {
-        // Use from_slice instead of from_reader: from_reader wraps the slice
-        // in an IoRead adapter that reads byte-by-byte and disables serde_json's
-        // slice fast path. Benchmarks on ~890 MiB of real NDJSON show a 2.5x
-        // speedup from this change alone.
+        if self.load_context.settings.enable_sonic_json_parser
+            && !self.field_decoder.is_select
+            && let Some(json) = databend_common_formats::json::parse_sonic(buf)
+        {
+            return self.read_row_value(&json, columns, null_if, file_path);
+        }
+        // Keep serde for stage SELECT, unsupported rows and error diagnostics.
         let json: serde_json::Value =
             serde_json::from_slice(buf).map_err(|e| map_json_error(e, buf, file_path))?;
-        // todo: this is temporary
+        self.read_row_value(&json, columns, null_if, file_path)
+    }
+
+    fn read_row_value(
+        &self,
+        json: &impl JsonValue,
+        columns: &mut [ColumnBuilder],
+        null_if: &[&str],
+        file_path: &str,
+    ) -> std::result::Result<(), FileParseError> {
+        // Stage SELECT always comes through the Serde branch in read_row.
         if self.field_decoder.is_select {
             if let ColumnBuilder::Variant(column) = &mut columns[0] {
-                let value = jsonb::Value::from(&json);
-                value.write_to_vec(&mut column.data);
+                json.write_jsonb(&mut column.data);
                 column.commit_row();
             } else {
                 return Err(FileParseError::InvalidRow {
@@ -83,9 +96,12 @@ impl NdJsonDecoder {
                 });
             }
         } else {
-            let object_keys = json.as_object().map(|object| object.len()).unwrap_or(0);
-            let object_values =
-                object_values_by_key(&json, self.field_decoder.ident_case_sensitive);
+            let object_keys = json.object_iter().map(|object| object.len()).unwrap_or(0);
+            let object_values = JsonObjectLookup::for_row(
+                json,
+                self.field_decoder.ident_case_sensitive,
+                columns.len(),
+            );
             let mut used_keys = 0;
 
             for ((column_index, field), column) in self
@@ -96,14 +112,7 @@ impl NdJsonDecoder {
                 .enumerate()
                 .zip(columns.iter_mut())
             {
-                let field_name =
-                    normalize_field_name(field.name(), self.field_decoder.ident_case_sensitive);
-                let value = get_object_value(
-                    &json,
-                    object_values.as_ref(),
-                    &field_name,
-                    self.field_decoder.ident_case_sensitive,
-                );
+                let value = object_values.get(field.name());
                 if value.is_some() {
                     used_keys += 1;
                 }
@@ -112,7 +121,7 @@ impl NdJsonDecoder {
                         NullAs::Error => {
                             let advice = self.build_column_missing_advice(
                                 field.name(),
-                                &json,
+                                json,
                                 "MISSING_FIELD_AS=ERROR",
                                 None,
                             );
@@ -129,7 +138,7 @@ impl NdJsonDecoder {
                             } else {
                                 let advice = self.build_column_missing_advice(
                                     field.name(),
-                                    &json,
+                                    json,
                                     "MISSING_FIELD_AS=NULL",
                                     Some("the column is not nullable"),
                                 );
@@ -145,7 +154,7 @@ impl NdJsonDecoder {
                             self.load_context.push_default_value(column, column_index)?;
                         }
                     },
-                    Some(serde_json::Value::Null) => match self.fmt.params.null_field_as {
+                    Some(value) if value.is_null() => match self.fmt.params.null_field_as {
                         NullAs::Error => unreachable!("null_field_as should be error"),
                         NullAs::Null => {
                             if field.is_nullable_or_null() {
@@ -167,8 +176,7 @@ impl NdJsonDecoder {
                     Some(value) => {
                         if !null_if.is_empty()
                             && matches!(column, ColumnBuilder::Nullable(_))
-                            && value.is_string()
-                            && null_if.contains(&value.as_str().unwrap())
+                            && value.as_str().is_some_and(|s| null_if.contains(&s))
                         {
                             column.push_default();
                         } else {
@@ -179,7 +187,7 @@ impl NdJsonDecoder {
                                     column_name: field.name().to_owned(),
                                     column_type: field.data_type.to_string(),
                                     decode_error: e.to_string(),
-                                    column_data: truncate_column_data(value.to_string()),
+                                    column_data: truncate_column_data(value.diagnostic_text()),
                                 })?;
                         }
                     }
@@ -188,7 +196,7 @@ impl NdJsonDecoder {
 
             if self.load_context.schema_evolution && object_keys != used_keys {
                 let extra_columns = extra_object_keys(
-                    &json,
+                    json,
                     &self.schema_field_names,
                     self.field_decoder.ident_case_sensitive,
                 );
@@ -210,7 +218,7 @@ impl NdJsonDecoder {
     fn build_column_missing_advice(
         &self,
         column_name: &str,
-        json: &serde_json::Value,
+        json: &impl JsonValue,
         current_setting: &str,
         extra_reason: Option<&str>,
     ) -> String {
@@ -226,9 +234,10 @@ impl NdJsonDecoder {
 
         // Hint 3: if case_sensitive, try case-insensitive match
         if self.field_decoder.ident_case_sensitive {
-            if let Some(object) = json.as_object() {
+            if let Some(mut object) = json.object_iter() {
                 let lower_column = column_name.to_lowercase();
-                let matched_key = object.keys().find(|k| k.to_lowercase() == lower_column);
+                let matched_key =
+                    object.find_map(|(k, _)| (k.to_lowercase() == lower_column).then_some(k));
                 if let Some(key) = matched_key {
                     hints.push(format!(
                         "found field '{}' with different case; consider using COPY with `COLUMN_MATCH_MODE=CASE_INSENSITIVE`",
@@ -264,54 +273,21 @@ fn normalize_field_name(name: &str, case_sensitive: bool) -> String {
     }
 }
 
-fn get_object_value<'a>(
-    json: &'a serde_json::Value,
-    object_values: Option<&HashMap<String, &'a serde_json::Value>>,
-    field_name: &str,
-    case_sensitive: bool,
-) -> Option<&'a serde_json::Value> {
-    let serde_json::Value::Object(object) = json else {
-        return None;
-    };
-    if case_sensitive {
-        object.get(field_name)
-    } else {
-        object_values.and_then(|values| values.get(field_name).copied())
-    }
-}
-
-fn object_values_by_key(
-    json: &serde_json::Value,
-    case_sensitive: bool,
-) -> Option<HashMap<String, &serde_json::Value>> {
-    if case_sensitive {
-        return None;
-    }
-    let serde_json::Value::Object(object) = json else {
-        return None;
-    };
-    Some(
-        object
-            .iter()
-            .map(|(key, value)| (key.to_lowercase(), value))
-            .collect(),
-    )
-}
-
 fn extra_object_keys(
-    json: &serde_json::Value,
+    json: &impl JsonValue,
     schema_field_names: &HashSet<String>,
     case_sensitive: bool,
 ) -> Vec<String> {
-    let serde_json::Value::Object(object) = json else {
+    let Some(object) = json.object_iter() else {
         return vec![];
     };
     let mut extra_columns = object
-        .keys()
+        .map(|(key, _)| key)
         .filter(|key| !schema_field_names.contains(&normalize_field_name(key, case_sensitive)))
-        .cloned()
+        .map(str::to_owned)
         .collect::<Vec<_>>();
     extra_columns.sort();
+    extra_columns.dedup();
     extra_columns
 }
 
@@ -379,10 +355,9 @@ mod test {
     use std::collections::HashSet;
 
     use super::FileParseError;
+    use super::JsonObjectLookup;
     use super::extra_object_keys;
-    use super::get_object_value;
     use super::map_json_error;
-    use super::object_values_by_key;
 
     fn decode_err(data: &str) -> String {
         serde_json::from_slice::<serde_json::Value>(data.as_bytes())
@@ -415,13 +390,44 @@ mod test {
     }
 
     #[test]
+    fn test_sonic_object_matching() {
+        use databend_common_formats::json::JsonValue;
+        use databend_common_formats::json::parse_sonic;
+
+        for text in [
+            r#"{"A":1,"a":2,"Å":3,"extra":4}"#,
+            r#"{"id":1,"d":165.6263,"nested":{"a":-0.0003}}"#,
+        ] {
+            let serde: serde_json::Value = serde_json::from_str(text).unwrap();
+            let sonic = parse_sonic(text.as_bytes()).unwrap();
+            for case_sensitive in [false, true] {
+                let expected_map = JsonObjectLookup::for_row(&serde, case_sensitive, 8);
+                let actual_map = JsonObjectLookup::for_row(&sonic, case_sensitive, 8);
+                for key in ["A", "a", "Å", "å", "id", "d", "nested", "missing"] {
+                    let expected = expected_map.get(key);
+                    let actual = actual_map.get(key);
+                    assert_eq!(
+                        actual.map(JsonValue::diagnostic_text),
+                        expected.map(JsonValue::diagnostic_text)
+                    );
+                }
+                let schema = HashSet::from(["a".to_string(), "id".to_string()]);
+                assert_eq!(
+                    extra_object_keys(&sonic, &schema, case_sensitive),
+                    extra_object_keys(&serde, &schema, case_sensitive)
+                );
+            }
+        }
+    }
+
+    #[test]
     fn test_ndjson_extra_object_keys_case_insensitive() {
         let json: serde_json::Value = serde_json::from_str(r#"{"A":1,"B":2,"D":3}"#).unwrap();
         let schema_field_names = HashSet::from(["a".to_string(), "b".to_string()]);
-        let object_values = object_values_by_key(&json, false);
+        let object_values = JsonObjectLookup::for_row(&json, false, 2);
 
         assert_eq!(
-            get_object_value(&json, object_values.as_ref(), "a", false),
+            object_values.get("a"),
             Some(&serde_json::Value::Number(1.into()))
         );
         assert_eq!(extra_object_keys(&json, &schema_field_names, false), vec![

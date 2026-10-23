@@ -180,11 +180,30 @@ pub fn read_decimal_from_json<T: Decimal>(
     rounding_mode: bool,
 ) -> Result<T, String> {
     let text = match value {
-        serde_json::Value::Number(n) => {
+        serde_json::Value::Number(n) => JsonDecimalText::Number(n.as_str()),
+        serde_json::Value::String(s) => JsonDecimalText::String(s),
+        _ => return Err("Incorrect json value for decimal".to_string()),
+    };
+    read_decimal_from_json_text(text, size, rounding_mode)
+}
+
+/// Preserve the numeric token's integer fast path without treating quoted
+/// strings as JSON numbers. Shared by Serde and other JSON DOM decoders.
+pub enum JsonDecimalText<'a> {
+    Number(&'a str),
+    String(&'a str),
+}
+
+pub fn read_decimal_from_json_text<T: Decimal>(
+    value: JsonDecimalText<'_>,
+    size: DecimalSize,
+    rounding_mode: bool,
+) -> Result<T, String> {
+    let text = match value {
+        JsonDecimalText::Number(text) => {
             // With arbitrary_precision, Number stores text. Choose the integer parser
             // by sign so decimals do not fail both as_i64() and as_u64(), while still
             // keeping integer input out of the more expensive decimal parser.
-            let text = n.as_str();
             let integer = if text.starts_with('-') {
                 text.parse::<i64>().ok().map(T::from_i64)
             } else {
@@ -195,8 +214,7 @@ pub fn read_decimal_from_json<T: Decimal>(
             }
             text
         }
-        serde_json::Value::String(s) => s.as_str(),
-        _ => return Err("Incorrect json value for decimal".to_string()),
+        JsonDecimalText::String(s) => s,
     };
     // Borrow the exact number text, without allocating or losing digits through f64.
     let (n, _) = read_decimal_with_size::<T>(text.as_bytes(), size, true, rounding_mode)?;
