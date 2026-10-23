@@ -1,0 +1,80 @@
+# Backend-independent SQL contracts only. Positive external-table inheritance,
+# PUT probe classes and stored S3 object classes are tested against real AWS S3.
+
+statement ok
+CREATE OR REPLACE DATABASE test_storage_class OPTIONS(DEFAULT_S3_STORAGE_CLASS = 'intelligent_tiering')
+
+query TT
+SHOW CREATE DATABASE test_storage_class
+----
+test_storage_class CREATE DATABASE `test_storage_class` ENGINE=DEFAULT OPTIONS (DEFAULT_S3_STORAGE_CLASS='intelligent_tiering')
+
+statement ok
+SET experimental_s3_storage_class = 'intelligent_tiering'
+
+# Internal tables (including Dynamic Tables) do not inherit the database class.
+statement ok
+CREATE TABLE test_storage_class.internal(id INT)
+
+statement ok
+CREATE DYNAMIC TABLE test_storage_class.dynamic AS SELECT id FROM test_storage_class.internal
+
+query TB rowsort
+SELECT name, table_option LIKE '%S3_STORAGE_CLASS=%'
+FROM system.tables WHERE database = 'test_storage_class'
+----
+dynamic 0
+internal 0
+
+statement error 1301
+CREATE TABLE test_storage_class.invalid(id INT) S3_STORAGE_CLASS = 'standard'
+
+statement error 1301
+CREATE TABLE test_storage_class.invalid_ctas S3_STORAGE_CLASS = 'standard' AS SELECT 1 AS id
+
+statement error 1301
+ALTER TABLE test_storage_class.internal SET OPTIONS(S3_STORAGE_CLASS = 'intelligent_tiering')
+
+statement error 1301
+CREATE DYNAMIC TABLE test_storage_class.invalid_dynamic S3_STORAGE_CLASS = 'standard' AS SELECT id FROM test_storage_class.internal
+
+# Temporary tables reject both classes; UNSET can still clean legacy metadata.
+statement error 1301
+CREATE TEMPORARY TABLE test_storage_class.invalid_temp(id INT) S3_STORAGE_CLASS = 'standard'
+
+statement error 1301
+CREATE TEMPORARY TABLE test_storage_class.invalid_temp_it(id INT) S3_STORAGE_CLASS = 'intelligent_tiering'
+
+statement ok
+CREATE TEMPORARY TABLE test_storage_class.temp(id INT)
+
+statement error 1301
+ALTER TABLE test_storage_class.temp SET OPTIONS(S3_STORAGE_CLASS = 'standard')
+
+statement ok
+ALTER TABLE test_storage_class.temp UNSET OPTIONS(S3_STORAGE_CLASS)
+
+statement ok
+DROP TABLE test_storage_class.temp
+
+statement ok
+ALTER TABLE test_storage_class.internal UNSET OPTIONS(S3_STORAGE_CLASS)
+
+statement error 1301
+CREATE TABLE test_storage_class.invalid_memory(id INT) ENGINE = MEMORY S3_STORAGE_CLASS = 'standard'
+
+# Invalid or duplicate database values fail without requiring a storage backend.
+statement error 2004
+ALTER DATABASE test_storage_class SET OPTIONS(DEFAULT_S3_STORAGE_CLASS = 'glacier')
+
+statement error 2004
+CREATE DATABASE invalid_storage_class OPTIONS(DEFAULT_S3_STORAGE_CLASS = '')
+
+statement error 2004
+CREATE DATABASE duplicate_storage_class OPTIONS(DEFAULT_S3_STORAGE_CLASS = 'standard', default_s3_storage_class = 'intelligent_tiering')
+
+statement ok
+UNSET experimental_s3_storage_class
+
+statement ok
+DROP DATABASE test_storage_class

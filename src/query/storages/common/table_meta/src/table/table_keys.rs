@@ -49,6 +49,8 @@ pub const MATERIALIZED_VIEW_INVALID_SOURCE_REASON: &str =
 pub const MATERIALIZED_VIEW_INVALID_SOURCE_DATABASE_REASON: &str = "source database was renamed";
 pub const OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG: &str = "snapshot_location_fixed";
 pub const OPT_KEY_STORAGE_FORMAT: &str = "storage_format";
+/// External-table S3 storage class for new objects; overrides the experimental session setting.
+pub const OPT_KEY_S3_STORAGE_CLASS: &str = "s3_storage_class";
 pub const OPT_KEY_SEGMENT_FORMAT: &str = "segment_format";
 pub const OPT_KEY_TABLE_COMPRESSION: &str = "compression";
 pub const OPT_KEY_COMMENT: &str = "comment";
@@ -130,6 +132,24 @@ pub fn is_fuse_backed_engine(engine: &str) -> bool {
     is_fuse_engine(engine)
         || is_materialized_view_engine(engine)
         || engine.eq_ignore_ascii_case(DYNAMIC_TABLE_ENGINE)
+}
+
+/// Table engines that have been removed from Databend but may still be
+/// referenced by table metadata created by older versions.
+///
+/// Every engine listed here must be a read-only external engine, i.e.
+/// Databend never owned any data files of such tables. Dropped tables with
+/// these engines can therefore be reclaimed by removing their metadata only,
+/// without instantiating the (no longer available) table engine.
+pub const RETIRED_TABLE_ENGINES: &[&str] = &[
+    // Removed in #20558, used to read external Delta Lake tables.
+    "DELTA",
+];
+
+pub fn is_retired_engine(engine: &str) -> bool {
+    RETIRED_TABLE_ENGINES
+        .iter()
+        .any(|retired| engine.eq_ignore_ascii_case(retired))
 }
 
 /// Table option keys that reserved for internal usage only

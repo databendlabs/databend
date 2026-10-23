@@ -80,8 +80,8 @@ pub fn get_global_http_client(
         // Disable http2 for better performance.
         builder = builder.http1_only();
 
-        // Enforce to use native tls backend.
-        builder = builder.use_native_tls();
+        // Enforce to use rustls (ring) backend.
+        builder = builder.use_rustls_tls();
 
         // Set dns resolver.
         builder = builder.dns_resolver(GLOBAL_HICKORY_RESOLVER.clone());
@@ -139,8 +139,8 @@ impl HttpClient {
         // Disable http2 for better performance.
         builder = builder.http1_only();
 
-        // Enforce to use native tls backend.
-        builder = builder.use_native_tls();
+        // Enforce to use rustls (ring) backend.
+        builder = builder.use_rustls_tls();
 
         // Set dns resolver.
         builder = builder.dns_resolver(GLOBAL_HICKORY_RESOLVER.clone());

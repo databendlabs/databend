@@ -101,6 +101,26 @@ async fn test_add_udf() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_udf_create_if_not_exists_reports_unchanged() -> anyhow::Result<()> {
+    let (_, udf_api) = new_udf_api().await?;
+    let udf = create_test_udf_server();
+    assert!(
+        udf_api
+            .add_udf(udf.clone(), &CreateOption::Create)
+            .await??
+    );
+    let mut replacement = udf.clone();
+    replacement.description = "must not replace".into();
+    assert!(
+        !udf_api
+            .add_udf(replacement, &CreateOption::CreateIfNotExists)
+            .await??
+    );
+    assert_eq!(udf_api.get_udf(&udf.name).await?.unwrap().data, udf);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_already_exists_add_udf() -> anyhow::Result<()> {
     let (_, udf_api) = new_udf_api().await?;
 

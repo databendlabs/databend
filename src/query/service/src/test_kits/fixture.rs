@@ -187,10 +187,18 @@ impl TestFixture {
 
     /// Create a new TestFixture with setup impl.
     pub async fn setup_with_custom(setup: impl Setup) -> Result<TestFixture> {
+        Self::setup_with_custom_and_session_type(setup, SessionType::Dummy).await
+    }
+
+    /// Use a client session type when SQL behavior depends on it, e.g. temporary tables.
+    pub async fn setup_with_custom_and_session_type(
+        setup: impl Setup,
+        session_type: SessionType,
+    ) -> Result<TestFixture> {
         let conf = setup.setup().await?;
 
         // This will use a max_active_sessions number.
-        let default_session = Self::create_session(SessionType::Dummy).await?;
+        let default_session = Self::create_session(session_type).await?;
         let default_ctx = default_session.create_query_context(&BUILD_INFO).await?;
 
         let random_prefix: String = Uuid::new_v4().simple().to_string();

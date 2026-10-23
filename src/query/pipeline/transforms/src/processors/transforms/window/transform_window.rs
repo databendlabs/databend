@@ -464,6 +464,14 @@ impl TransformWindow {
         output.filter_with_bitmap(&bitmap)
     }
 
+    /// The last partition's blocks are only released when a new partition
+    /// starts, and the processor is kept until the query ends, so release them
+    /// once the processor finishes.
+    fn release_blocks(&mut self) {
+        self.blocks = VecDeque::new();
+        self.outputs = VecDeque::new();
+    }
+
     fn check_outputs(&mut self) -> Result<()> {
         while self.next_output_block - self.first_block < self.blocks.len() {
             let block = &mut self.blocks[self.next_output_block - self.first_block];
@@ -1589,6 +1597,7 @@ impl Processor for TransformWindow {
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
             self.input.finish();
+            self.release_blocks();
             return Ok(Event::Finished);
         }
 
@@ -1615,6 +1624,7 @@ impl Processor for TransformWindow {
                             Ok(Event::Sync)
                         } else {
                             self.output.finish();
+                            self.release_blocks();
                             Ok(Event::Finished)
                         }
                     }

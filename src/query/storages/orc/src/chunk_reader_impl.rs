@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+
 use bytes::Bytes;
 use futures_util::AsyncRead;
 use futures_util::AsyncReadExt;
@@ -24,6 +28,8 @@ pub struct OrcChunkReader {
     pub operator: Operator,
     pub path: String,
     pub size: u64,
+    /// Total bytes fetched from storage through this reader.
+    pub read_bytes: Arc<AtomicUsize>,
 }
 
 impl AsyncChunkReader for OrcChunkReader {
@@ -45,6 +51,7 @@ impl AsyncChunkReader for OrcChunkReader {
                 .chunk(8 << 20)
                 .concurrent(4)
                 .await?;
+            self.read_bytes.fetch_add(buf.len(), Ordering::Relaxed);
             Ok(buf.to_bytes())
         }
         .boxed()

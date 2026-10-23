@@ -19,6 +19,8 @@ lint:
 	typos --config .config/typos.toml
 	# Cargo.toml file formatter(make setup to install)
 	taplo fmt --config .config/taplo.toml
+	# Keep OpenSSL / aws-lc out of the dependency graph
+	./scripts/ci/ci-check-tls-backend.sh
 	# Python file formatter(make setup to install)
 	# ruff format tests/
 	# Bash file formatter(make setup to install)

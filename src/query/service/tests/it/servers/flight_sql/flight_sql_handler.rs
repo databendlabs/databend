@@ -16,11 +16,22 @@
 
 use std::fs;
 use std::io::Write;
+use std::sync::Arc;
+use std::time::Duration;
 
 use arrow_array::RecordBatch;
 use arrow_cast::pretty::pretty_format_batches;
+use arrow_flight::Action;
+use arrow_flight::FlightData;
+use arrow_flight::FlightDescriptor;
+use arrow_flight::Ticket;
 use arrow_flight::error::FlightError;
 use arrow_flight::flight_service_server::FlightServiceServer;
+use arrow_flight::sql::ActionClosePreparedStatementRequest;
+use arrow_flight::sql::Any;
+use arrow_flight::sql::CommandPreparedStatementQuery;
+use arrow_flight::sql::CommandPreparedStatementUpdate;
+use arrow_flight::sql::ProstMessageExt;
 use arrow_flight::sql::client::FlightSqlServiceClient;
 use databend_common_base::runtime::Runtime;
 use databend_common_config::InnerConfig;
@@ -28,21 +39,28 @@ use databend_common_config::UserAuthConfig;
 use databend_common_config::UserConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::PasswordHashMethod;
+use databend_common_meta_app::schema::ListLockRevReq;
+use databend_common_meta_app::schema::LockKey;
 use databend_query::servers::flight_sql::flight_sql_service::FlightSqlServiceImpl;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 use futures::TryStreamExt;
 use goldenfile::Mint;
 use hyper_util::rt::TokioIo;
 use log::debug;
+use prost::Message;
 use tempfile::NamedTempFile;
 use tokio::net::UnixListener;
 use tokio::net::UnixStream;
 use tokio_stream::wrappers::UnixListenerStream;
+use tonic::Code;
+use tonic::Request;
 use tonic::transport::Channel;
 use tonic::transport::Endpoint;
 use tonic::transport::Server;
 use tower::service_fn;
+use uuid::Uuid;
 
 const TEST_USER: &str = "test_user";
 const TEST_PASSWORD: &str = "test_password";
@@ -80,7 +98,185 @@ async fn run_query(
             .map_err(FlightError::from)?
             .to_string()
     };
+    stmt.close().await?;
     Ok(res)
+}
+
+fn prepared_request<T>(
+    client: &FlightSqlServiceClient<Channel>,
+    message: T,
+    authenticated: bool,
+) -> Request<T> {
+    let mut request = Request::new(message);
+    if authenticated {
+        let token = client.token().expect("client must be authenticated");
+        request
+            .metadata_mut()
+            .insert("authorization", format!("Bearer {token}").parse().unwrap());
+    }
+    request
+}
+
+async fn assert_prepared_put_handle_errors(client: &mut FlightSqlServiceClient<Channel>) {
+    // Go through the real FlightService dispatcher: PeekableFlightDataStream cannot be
+    // constructed directly, and both Query and Update commands must reject malformed UUIDs.
+    for (bytes, authenticated, expected) in [
+        (
+            Uuid::nil().to_string().into_bytes(),
+            true,
+            Code::InvalidArgument,
+        ),
+        (Uuid::nil().as_bytes().to_vec(), true, Code::NotFound),
+        // One malformed handle per handler is enough to verify authentication comes first.
+        (
+            Uuid::nil().to_string().into_bytes(),
+            false,
+            Code::Unauthenticated,
+        ),
+    ] {
+        for command in [
+            CommandPreparedStatementQuery {
+                prepared_statement_handle: bytes.clone().into(),
+            }
+            .as_any(),
+            CommandPreparedStatementUpdate {
+                prepared_statement_handle: bytes.clone().into(),
+            }
+            .as_any(),
+        ] {
+            let data = FlightData {
+                flight_descriptor: Some(FlightDescriptor::new_cmd(command.encode_to_vec())),
+                ..Default::default()
+            };
+            let request = prepared_request(client, futures::stream::iter([data]), authenticated);
+            let error = client
+                .inner_mut()
+                .do_put(request)
+                .await
+                .expect_err("an invalid or unknown prepared handle must not execute");
+            assert_eq!(error.code(), expected, "{}: {error}", command.type_url);
+        }
+    }
+}
+
+async fn assert_prepared_statement_lifecycle(client: &mut FlightSqlServiceClient<Channel>) {
+    let mut statement = client.prepare("SELECT 1".to_string(), None).await.unwrap();
+    for authenticated in [false, true] {
+        let expected = if authenticated {
+            Code::InvalidArgument
+        } else {
+            Code::Unauthenticated
+        };
+        // UUID text is malformed here: prepared statement handles are opaque binary UUIDs.
+        let handle = Uuid::nil().to_string().into_bytes();
+        let action = Action {
+            r#type: "ClosePreparedStatement".to_string(),
+            body: ActionClosePreparedStatementRequest {
+                prepared_statement_handle: handle.clone().into(),
+            }
+            .as_any()
+            .encode_to_vec()
+            .into(),
+        };
+        let request = prepared_request(client, action, authenticated);
+        let error = client.inner_mut().do_action(request).await.unwrap_err();
+        assert_eq!(error.code(), expected);
+        let command = CommandPreparedStatementQuery {
+            prepared_statement_handle: handle.into(),
+        };
+        let descriptor = FlightDescriptor::new_cmd(command.as_any().encode_to_vec());
+        let request = prepared_request(client, descriptor, authenticated);
+        let error = client
+            .inner_mut()
+            .get_flight_info(request)
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), expected);
+    }
+
+    // The real SDK must still be able to use the statement after the rejected requests.
+    let info = statement.execute().await.unwrap();
+    let ticket = info.endpoint[0].ticket.clone().unwrap();
+    let mut malformed = Any::decode(ticket.ticket.as_ref()).unwrap();
+    // An empty protobuf message gives FetchResults its default (empty) UUID string.
+    malformed.value = Default::default();
+    let request = prepared_request(
+        client,
+        Ticket {
+            ticket: malformed.encode_to_vec().into(),
+        },
+        true,
+    );
+    let error = client.inner_mut().do_get(request).await.unwrap_err();
+    assert_eq!(error.code(), Code::InvalidArgument);
+
+    statement.clone().close().await.unwrap();
+    let error = statement.execute().await.unwrap_err();
+    assert!(
+        matches!(&error, FlightError::Tonic(status) if status.code() == Code::NotFound),
+        "{error}"
+    );
+    let request = prepared_request(client, ticket, true);
+    let error = client.inner_mut().do_get(request).await.unwrap_err();
+    assert_eq!(error.code(), Code::NotFound);
+    statement.close().await.unwrap(); // Closing an already removed statement is idempotent.
+}
+
+async fn assert_prepared_update_lock(
+    fixture: &TestFixture,
+    client: &mut FlightSqlServiceClient<Channel>,
+) {
+    let table_name = format!(
+        "{}.{}",
+        fixture.default_db_name(),
+        fixture.default_table_name()
+    );
+    let statement = client
+        .prepare(format!("UPDATE {table_name} SET id = 2"), None)
+        .await
+        .unwrap();
+    let ctx = fixture.new_query_ctx().await.unwrap();
+    let catalog = ctx
+        .get_catalog(&fixture.default_catalog_name())
+        .await
+        .unwrap();
+    let table = fixture.latest_default_table().await.unwrap();
+    let request = ListLockRevReq::new(LockKey::Table {
+        tenant: fixture.default_tenant(),
+        table_id: table.get_id(),
+    });
+    let revisions = catalog.list_lock_revisions(request.clone()).await.unwrap();
+    assert_eq!(
+        revisions.len(),
+        1,
+        "prepare must hold a revision to release"
+    );
+    assert!(revisions[0].1.acquired_on.is_some());
+
+    statement.close().await.unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !catalog
+            .list_lock_revisions(request.clone())
+            .await
+            .unwrap()
+            .is_empty()
+        {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("Close must release the prepared UPDATE's table lock");
+    client
+        .execute_update("SET acquire_lock_timeout = 0".to_string(), None)
+        .await
+        .unwrap();
+    assert_eq!(
+        client
+            .execute_update(format!("UPDATE {table_name} SET id = 3"), None)
+            .await
+            .unwrap(),
+        1
+    );
 }
 
 fn prepare_config() -> InnerConfig {
@@ -101,7 +297,16 @@ fn prepare_config() -> InnerConfig {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_query() -> Result<()> {
-    let _fixture = TestFixture::setup_with_config(&prepare_config()).await?;
+    let fixture = TestFixture::setup_with_config(&prepare_config()).await?;
+    fixture.create_default_database().await?;
+    fixture.create_default_table().await?;
+    fixture
+        .execute_command(&format!(
+            "INSERT INTO {}.{}(id) VALUES (1)",
+            fixture.default_db_name(),
+            fixture.default_table_name()
+        ))
+        .await?;
 
     let runtime = Runtime::with_default_worker_threads(Some("flight-sql-test".to_string()))?;
     runtime.block_on(async {
@@ -113,10 +318,10 @@ async fn test_query() -> Result<()> {
         let stream = UnixListenerStream::new(uds);
 
         // We would just listen on TCP, but it seems impossible to know when tonic is ready to serve
-        let service = FlightSqlServiceImpl::create(&databend_common_version::BUILD_INFO);
+        let service = Arc::new(FlightSqlServiceImpl::create(&databend_common_version::BUILD_INFO));
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
         let serve_future = Server::builder()
-            .add_service(FlightServiceServer::new(service))
+            .add_service(FlightServiceServer::from_arc(service.clone()))
             .serve_with_incoming_shutdown(stream, async { shutdown_rx.await.unwrap() });
 
         let request_future = async {
@@ -127,6 +332,7 @@ async fn test_query() -> Result<()> {
             let token = client.handshake(TEST_USER, TEST_PASSWORD).await.unwrap();
 
             debug!("Auth succeeded with token: {:?}", token);
+            assert_prepared_put_handle_errors(&mut client).await;
             let cases = [
                 "select 1, 'abc', 1.1, 1.1::float32 as c, 1::nullable(int) as b",
                 "select [1, 2]",
@@ -148,6 +354,13 @@ async fn test_query() -> Result<()> {
                 };
                 writeln!(file, "{}", res).unwrap();
             }
+            assert_prepared_statement_lifecycle(&mut client).await;
+            assert_prepared_update_lock(&fixture, &mut client).await;
+            // Invalidate a real handshake token without waiting for its wall-clock TTL.
+            let statement = client.prepare("SELECT 1".to_string(), None).await.unwrap();
+            service.sessions.lock().remove(client.token().unwrap());
+            let error = statement.close().await.unwrap_err();
+            assert!(matches!(&error, FlightError::Tonic(status) if status.code() == Code::Unauthenticated), "{error}");
         };
         tokio::pin!(serve_future);
 

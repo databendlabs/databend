@@ -18,7 +18,10 @@
 //! These tests check that it reports the block IO of `SELECT`,
 //! `INSERT ... SELECT`, `REPLACE INTO` and `COPY INTO` regardless of how the
 //! interpreter was entered, and that the partition counters still come from
-//! the attached table.
+//! the attached table. They also cover the segment pruning of a lazy
+//! distributed `DELETE`, at pipeline preparation or at query runtime.
+
+use std::sync::Arc;
 
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::IoStatsSnapshot;
@@ -26,9 +29,18 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sinks::EmptySink;
 use databend_query::interpreters::InterpreterFactory;
+use databend_query::pipelines::PipelineBuilder;
+use databend_query::pipelines::executor::ExecutorSettings;
+use databend_query::pipelines::executor::PipelineCompleteExecutor;
+use databend_query::servers::flight::v1::packets::QueryFragments;
+use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContextProgress;
 use databend_query::sessions::TableContextQueryIdentity;
+use databend_query::sessions::TableContextSettings;
 use databend_query::sql::Planner;
 use databend_query::test_kits::TestFixture;
 use futures_util::TryStreamExt;
@@ -236,15 +248,18 @@ async fn handler_installed_io_stats_is_reused() -> Result<()> {
     Ok(())
 }
 
-/// On a cluster worker, pipeline *preparation* (`INIT_QUERY_FRAGMENTS`) runs in
-/// its own RPC scope, before `START_PREPARED_QUERY`. For a lazy `DELETE` that
-/// phase already reads segment and index data (`do_mutation_block_pruning`).
-/// This exercises `init_query_fragments` the way the RPC handler does, outside
-/// any `io_stats` scope, and checks the preparation IO lands on the query's
-/// counter before any pipeline has executed, so it cannot be hidden behind
-/// execution-time reads.
-#[tokio::test(flavor = "multi_thread")]
-async fn init_query_fragments_counts_preparation_reads() -> Result<()> {
+/// Plans a lazy `DELETE` on a two-node cluster and runs the real
+/// `INIT_QUERY_FRAGMENTS` handler for this node, the way the RPC handler does,
+/// outside any `io_stats` scope. Returns the context and the fragments this
+/// node received.
+///
+/// `enable_prune_pipeline` decides when the lazy segments are pruned: while the
+/// pipeline is being prepared (`false`, `do_mutation_block_pruning`), or in a
+/// pruning pipeline once the query runs (`true`).
+async fn init_lazy_delete_fragments(
+    fixture: &TestFixture,
+    enable_prune_pipeline: bool,
+) -> Result<(Arc<QueryContext>, QueryFragments)> {
     use databend_query::interpreters::MutationInterpreter;
     use databend_query::schedulers::Fragmenter;
     use databend_query::schedulers::QueryFragmentsActions;
@@ -253,7 +268,6 @@ async fn init_query_fragments_counts_preparation_reads() -> Result<()> {
     use databend_query::sql::plans::Plan;
     use databend_query::test_kits::ClusterDescriptor;
 
-    let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
     let db = fixture.default_db_name();
     let table = format!("{db}.lazy_delete");
@@ -263,7 +277,7 @@ async fn init_query_fragments_counts_preparation_reads() -> Result<()> {
         .await?;
     // Two inserts give two segments; with a two-node cluster below the DELETE
     // source becomes lazy (`segments >= nodes`), deferring block pruning to
-    // pipeline preparation.
+    // the node that runs the mutation source.
     for _ in 0..2 {
         fixture
             .execute_command(&format!(
@@ -280,6 +294,10 @@ async fn init_query_fragments_counts_preparation_reads() -> Result<()> {
                 .with_node("node2", ""),
         )
         .await?;
+    ctx.get_settings().set_setting(
+        "enable_prune_pipeline".to_string(),
+        u64::from(enable_prune_pipeline).to_string(),
+    )?;
     assert!(ThreadTracker::io_stats().is_none());
 
     let sql = format!("delete from {table} where b like '%99%'");
@@ -326,14 +344,49 @@ async fn init_query_fragments_counts_preparation_reads() -> Result<()> {
     exchange_manager.handle_statistics_exchange(query_id.clone(), "peer".to_string())?;
     exchange_manager.set_ctx(&query_id, ctx.clone())?;
 
-    let prepared = init_query_fragments(fragments).await;
+    let prepared = init_query_fragments(fragments.clone()).await;
     // Undo the registration above. In production this happens when the query
-    // finishes executing, which this test never does; without it the
-    // `QueryCoordinator` (and the `QueryContext` it holds) would stay in the
-    // global `DataExchangeManager` for the rest of the test binary. Done before
-    // `?` so that a failed preparation is cleaned up too.
+    // finishes executing, which this test never does through the exchange
+    // manager; without it the `QueryCoordinator` (and the `QueryContext` it
+    // holds) would stay in the global `DataExchangeManager` for the rest of the
+    // test binary. Done before `?` so that a failed preparation is cleaned up
+    // too.
     exchange_manager.on_finished_query(&query_id, None);
     prepared?;
+
+    Ok((ctx, fragments))
+}
+
+/// Executes `pipelines` the way `START_PREPARED_QUERY` does on a worker: the
+/// executor is created while the query's counter is bound to the tracking
+/// payload, which every processor of the pipelines then inherits.
+async fn execute_like_prepared_query(
+    ctx: &Arc<QueryContext>,
+    pipelines: Vec<Pipeline>,
+) -> Result<()> {
+    let executor = {
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.query_id = Some(ctx.get_id());
+        tracking_payload.io_stats = Some(ctx.get_local_io_stats());
+        let _guard = ThreadTracker::tracking(tracking_payload);
+
+        let mut settings = ExecutorSettings::try_create(ctx.clone())?;
+        settings.enable_queries_executor = false;
+        PipelineCompleteExecutor::from_pipelines(pipelines, settings)?
+    };
+    ctx.set_executor(executor.get_inner())?;
+    executor.execute().await
+}
+
+/// With the pruning pipeline disabled, a lazy `DELETE` still prunes its
+/// segments while `INIT_QUERY_FRAGMENTS` prepares the pipeline. That phase runs
+/// in its own RPC scope, before `START_PREPARED_QUERY`; check its IO lands on
+/// the query's counter before any pipeline has executed, so it cannot be
+/// hidden behind execution-time reads.
+#[tokio::test(flavor = "multi_thread")]
+async fn init_query_fragments_counts_preparation_reads() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let (ctx, _) = init_lazy_delete_fragments(&fixture, false).await?;
 
     let io_stats = ctx.get_io_stats();
     assert!(
@@ -341,5 +394,61 @@ async fn init_query_fragments_counts_preparation_reads() -> Result<()> {
         "lazy DELETE pruning during pipeline preparation read nothing through the query counter"
     );
     assert_eq!(io_stats.write_bytes, 0, "nothing executed yet");
+    Ok(())
+}
+
+/// With the pruning pipeline enabled, `INIT_QUERY_FRAGMENTS` only builds the
+/// pruning pipeline of a lazy `DELETE`, so preparing it reads nothing. The
+/// segments are pruned once the query runs; check that IO lands on the query's
+/// counter. The pruning pipeline runs first and alone, so the bytes it reads
+/// are not mixed with the block reads of the mutation source.
+#[tokio::test(flavor = "multi_thread")]
+async fn prune_pipeline_counts_runtime_pruning_reads() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let (ctx, fragments) = init_lazy_delete_fragments(&fixture, true).await?;
+    assert_eq!(
+        ctx.get_io_stats().read_bytes,
+        0,
+        "lazy DELETE pruning must not run while the pipeline is prepared"
+    );
+
+    // `INIT_QUERY_FRAGMENTS` built the pipelines inside the exchange manager,
+    // whose execution needs the flight channels of a real cluster. Build the
+    // mutation source fragment again and run it here instead.
+    let fragment = fragments
+        .fragments
+        .iter()
+        .find(|fragment| format!("{:?}", fragment.physical_plan).contains("MutationSource"))
+        .expect("the lazy mutation source must be prepared on this node");
+    let mut build_res =
+        PipelineBuilder::create(ctx.get_function_context()?, ctx.get_settings(), ctx.clone())
+            .finalize(&fragment.physical_plan)?;
+    build_res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
+    assert!(
+        !build_res.sources_pipelines.is_empty(),
+        "the lazy mutation source must come with a pruning pipeline"
+    );
+
+    // The pruned parts are buffered in the channel feeding the mutation
+    // sources, which stay alive (not yet executed) in the main pipeline.
+    let prune_pipelines = std::mem::take(&mut build_res.sources_pipelines);
+    execute_like_prepared_query(&ctx, prune_pipelines).await?;
+    let pruned = ctx.get_io_stats();
+    assert!(
+        pruned.read_bytes > 0,
+        "lazy DELETE pruning at query runtime read nothing through the query counter"
+    );
+    assert_eq!(pruned.write_bytes, 0, "only the pruning pipeline executed");
+
+    // Then let the mutation sources consume the pruned parts.
+    let mut main_pipeline = build_res.main_pipeline;
+    if !main_pipeline.is_complete_pipeline()? {
+        main_pipeline.add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
+    }
+    execute_like_prepared_query(&ctx, vec![main_pipeline]).await?;
+    assert!(
+        ctx.get_io_stats().read_bytes > pruned.read_bytes,
+        "the mutation sources read nothing of the parts streamed by the pruning pipeline"
+    );
     Ok(())
 }

@@ -19,47 +19,23 @@ mod entry;
 
 use clap::Parser;
 use databend_common_base::mem_allocator::TrackingGlobalAllocator;
-use databend_common_base::runtime::Runtime;
-use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
-use databend_common_tracing::SignalListener;
-use databend_common_tracing::pipe_file;
-use databend_common_tracing::set_crash_hook;
 use databend_common_version::BUILD_INFO;
-use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_enterprise_query::enterprise_services::EnterpriseServices;
 use entry::MainError;
 
 use self::cmd::Cmd;
 use crate::entry::init_services;
 use crate::entry::run_cmd;
+use crate::entry::run_main;
 use crate::entry::start_services;
 
 #[global_allocator]
 pub static GLOBAL_ALLOCATOR: TrackingGlobalAllocator = TrackingGlobalAllocator::create();
 
 fn main() {
-    // Crash tracker
-    let (input, output) = pipe_file().unwrap();
-    set_crash_hook(output);
-    SignalListener::spawn(input, DATABEND_COMMIT_VERSION.to_string());
-
-    // Thread tracker
-    ThreadTracker::init();
-
-    match Runtime::with_default_worker_threads(Some("main-worker".to_string())) {
-        Err(cause) => {
-            eprintln!("Databend Query start failure, cause: {:?}", cause);
-            std::process::exit(cause.code() as i32);
-        }
-        Ok(rt) => {
-            if let Err(cause) = rt.block_on(main_entrypoint()) {
-                eprintln!("Databend Query start failure, cause: {:?}", cause);
-                std::process::exit(cause.code() as i32);
-            }
-        }
-    }
+    run_main(main_entrypoint());
 }
 
 pub async fn main_entrypoint() -> Result<(), MainError> {

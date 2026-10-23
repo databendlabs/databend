@@ -323,6 +323,15 @@ impl TableContextSpillProgress for QueryContext {
 }
 
 impl TableContextStream for QueryContext {
+    fn get_cached_stream(&self, table_id: u64) -> Option<Arc<dyn Table>> {
+        self.shared
+            .tables_refs
+            .lock()
+            .values()
+            .find(|table| table.is_stream() && table.get_table_info().ident.table_id == table_id)
+            .cloned()
+    }
+
     fn add_streams_ref(&self, catalog: &str, database: &str, stream: &str, consume: bool) {
         let mut streams = self.shared.streams_refs.write();
         let stream_key = (

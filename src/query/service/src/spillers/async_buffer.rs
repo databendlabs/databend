@@ -627,7 +627,7 @@ impl SpillsDataReader {
         let batch = reader.next().transpose()?.unwrap();
         debug_assert!(reader.next().is_none());
         record_read_profile(self.target, start.elapsed(), fetched.read_bytes);
-        Ok(Some(DataBlock::from_record_batch(
+        Ok(Some(DataBlock::from_record_batch_keep_null_const(
             &self.data_schema,
             &batch,
         )?))

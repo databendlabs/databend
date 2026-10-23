@@ -45,6 +45,7 @@ use databend_common_expression::variant_transform::contains_variant;
 use databend_common_expression::variant_transform::transform_variant;
 #[cfg_attr(not(feature = "python-udf"), allow(unused_imports))]
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::plans::UDFLanguage;
 use databend_common_sql::plans::UDFScriptCode;
@@ -52,6 +53,14 @@ use databend_common_sql::plans::UDFType;
 use databend_common_storage::init_stage_operator;
 
 use self::venv::TempDir;
+#[cfg(feature = "python-udf")]
+use super::python_worker::PythonFunction;
+#[cfg(feature = "python-udf")]
+use super::python_worker::PythonQueryWorkers;
+#[cfg(feature = "python-udf")]
+use super::python_worker::PythonRuntime;
+#[cfg(feature = "python-udf")]
+use super::python_worker::PythonWorkerManager;
 use super::runtime_pool::Pool;
 use super::runtime_pool::RuntimeBuilder;
 use crate::ScriptUdfFunctionDesc;
@@ -60,14 +69,18 @@ pub enum ScriptRuntime {
     JavaScript(JsRuntimePool),
     WebAssembly(arrow_udf_runtime::wasm::Runtime),
     #[cfg(feature = "python-udf")]
-    Python(python_pool::PyRuntimePool),
+    Python(Arc<PythonRuntime>),
 }
 
 static PY_VERSION: LazyLock<String> =
     LazyLock::new(|| venv::detect_python_version().unwrap_or("3.12".to_string()));
 
 impl ScriptRuntime {
-    pub fn try_create(func: &ScriptUdfFunctionDesc, _temp_dir: Option<TempDir>) -> Result<Self> {
+    pub fn try_create(
+        func: &ScriptUdfFunctionDesc,
+        _temp_dir: Option<TempDir>,
+        #[cfg(feature = "python-udf")] query: &Arc<PythonQueryWorkers>,
+    ) -> Result<Self> {
         let UDFType::Script(deref!(UDFScriptCode { language, code, .. })) = &func.udf_type else {
             unreachable!()
         };
@@ -100,26 +113,31 @@ impl ScriptRuntime {
             UDFLanguage::Python => {
                 let user_code = String::from_utf8(code.to_vec())?;
                 let code = if let Some(temp_dir) = &_temp_dir {
-                    let import_dir = temp_dir.path().display();
-                    let mut script = String::from("import sys\n");
-                    script.push_str(&format!(
-                        r#"sys._xoptions['databend_import_directory'] = '{dir}'
-if '{dir}' not in sys.path:
-    sys.path.append('{dir}')
-"#,
-                        dir = import_dir,
-                    ));
+                    // Each worker executes in its own dependency copy. Do not
+                    // bake the parent's template directory into sys.path.
+                    let mut script = String::from(
+                        "import os, sys\n\
+                         _databend_import_dir = os.getcwd()\n\
+                         sys._xoptions['databend_import_directory'] = _databend_import_dir\n\
+                         if _databend_import_dir not in sys.path:\n    sys.path.append(_databend_import_dir)\n",
+                    );
 
                     let stage_paths = Self::collect_stage_sys_paths(func, temp_dir);
                     if !stage_paths.is_empty() {
-                        script.push_str("for _databend_zip in (");
+                        script.push_str("for _databend_zip in [");
                         for (idx, path) in stage_paths.iter().enumerate() {
                             if idx > 0 {
                                 script.push_str(", ");
                             }
-                            script.push_str(&format!("{path:?}"));
+                            let relative = std::path::Path::new(path)
+                                .strip_prefix(temp_dir.path())
+                                .map_err(|err| ErrorCode::UDFRuntimeError(err.to_string()))?;
+                            script.push_str(&format!(
+                                "os.path.join(_databend_import_dir, {:?})",
+                                relative.to_string_lossy(),
+                            ));
                         }
-                        script.push_str("):\n    if _databend_zip not in sys.path:\n        sys.path.append(_databend_zip)\ndel _databend_zip\n");
+                        script.push_str("]:\n    if _databend_zip not in sys.path:\n        sys.path.append(_databend_zip)\ndel _databend_zip\n");
                     }
 
                     script.push_str(&user_code);
@@ -139,14 +157,17 @@ if '{dir}' not in sys.path:
                     }
                 }
 
-                let builder = PyRuntimeBuilder {
+                let function = PythonFunction {
                     name: func.name.clone(),
                     handler: func.func_name.clone(),
                     code,
-                    output_type: func.data_type.as_ref().clone(),
-                    counter: Default::default(),
+                    return_field: arrow_field_from_data_type(&func.name, *func.data_type.clone()),
                 };
-                Ok(Self::Python(python_pool::PyRuntimePool::new(builder)))
+                Ok(Self::Python(PythonRuntime::new(
+                    function,
+                    query.clone(),
+                    _temp_dir,
+                )?))
             }
             #[cfg(not(feature = "python-udf"))]
             UDFLanguage::Python => Err(ErrorCode::EnterpriseFeatureNotEnable(
@@ -172,22 +193,10 @@ if '{dir}' not in sys.path:
                 })
             })?,
             #[cfg(feature = "python-udf")]
-            ScriptRuntime::Python(pool) => {
-                let batch = pool
-                    .call(|runtime| runtime.call(&func.name, input_batch))
-                    .map_err(|err| {
-                        ErrorCode::UDFRuntimeError(format!(
-                            "Python UDF {:?} execution failed: {err}",
-                            func.name
-                        ))
-                    })?;
-                if let Some(message) = Self::python_error_from_batch(func, &batch)? {
-                    return Err(ErrorCode::UDFRuntimeError(format!(
-                        "Python UDF {:?} execution failed: {}",
-                        func.name, message
-                    )));
-                }
-                batch
+            ScriptRuntime::Python(_) => {
+                return Err(ErrorCode::Internal(
+                    "Python UDF requires an async transform",
+                ));
             }
             ScriptRuntime::WebAssembly(runtime) => {
                 let return_type = func.data_type.as_ref().clone();
@@ -539,20 +548,8 @@ fn arrow_field_from_data_type(name: &str, dt: DataType) -> arrow_schema::Field {
 type JsRuntimePool = Pool<arrow_udf_runtime::javascript::Runtime, JsRuntimeBuilder>;
 
 #[cfg(feature = "python-udf")]
-pub struct PyRuntimeBuilder {
-    name: String,
-    handler: String,
-    code: String,
-    output_type: DataType,
-
-    counter: AtomicUsize,
-}
-
-#[cfg(feature = "python-udf")]
-mod python_pool {
-    use super::*;
-
-    const RESTRICTED_PYTHON_CODE: &str = r#"
+pub(super) mod python_pool {
+    pub(crate) const RESTRICTED_PYTHON_CODE: &str = r#"
 import os
 import sys
 import sysconfig
@@ -690,36 +687,6 @@ if "DATABEND_RESTRICTED_PYTHON" not in sys._xoptions:
         module.copy_context = copy_context
         sys.modules["_contextvars"] = module
 "#;
-
-    impl RuntimeBuilder<arrow_udf_runtime::python::Runtime> for PyRuntimeBuilder {
-        type Error = ErrorCode;
-
-        fn build(&self) -> Result<arrow_udf_runtime::python::Runtime> {
-            let start = std::time::Instant::now();
-            let mut runtime = arrow_udf_runtime::python::Builder::default()
-                .safe_codes(RESTRICTED_PYTHON_CODE.to_string())
-                .build()?;
-            runtime.add_function_with_handler(
-                &self.name,
-                arrow_field_from_data_type(&self.name, self.output_type.clone()),
-                arrow_udf_runtime::CallMode::CalledOnNullInput,
-                &self.code,
-                &self.handler,
-            )?;
-
-            log::info!(
-                "Init Python UDF runtime for {:?} #{} took: {:?}",
-                self.name,
-                self.counter
-                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-                start.elapsed()
-            );
-
-            Ok(runtime)
-        }
-    }
-
-    pub type PyRuntimePool = Pool<arrow_udf_runtime::python::Runtime, PyRuntimeBuilder>;
 }
 
 pub struct TransformUdfScript {
@@ -762,10 +729,61 @@ impl Transform for TransformUdfScript {
     }
 }
 
+#[async_trait::async_trait]
+impl AsyncTransform for TransformUdfScript {
+    const NAME: &'static str = "AsyncUDFScriptTransform";
+
+    async fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
+        if data_block.is_empty() {
+            return Ok(data_block);
+        }
+        for func in &self.funcs {
+            let entries = self.prepare_block_entries(func, &data_block)?;
+            let input = self.create_input_batch(entries, data_block.num_rows())?;
+            let (runtime, _) = self.script_runtimes.get(&func.name).unwrap();
+            let result = match runtime.as_ref() {
+                #[cfg(feature = "python-udf")]
+                ScriptRuntime::Python(runtime) => {
+                    let batch = runtime.call(&input).await?;
+                    if let Some(message) = ScriptRuntime::python_error_from_batch(func, &batch)? {
+                        return Err(ErrorCode::UDFRuntimeError(format!(
+                            "Python UDF {:?} execution failed: {message}",
+                            func.name,
+                        )));
+                    }
+                    batch
+                }
+                _ => tokio::task::block_in_place(|| runtime.handle_execution(func, &input))?,
+            };
+            self.update_datablock(func, result, &mut data_block)?;
+        }
+        Ok(data_block)
+    }
+}
+
 type RuntimeTimeRes = BTreeMap<String, (Arc<ScriptRuntime>, Option<TempDir>)>;
 
 impl TransformUdfScript {
     pub fn init_runtime(funcs: &[ScriptUdfFunctionDesc]) -> Result<RuntimeTimeRes> {
+        Self::init_runtime_inner(
+            funcs,
+            #[cfg(feature = "python-udf")]
+            PythonWorkerManager::instance().query("default", 1),
+        )
+    }
+
+    #[cfg(feature = "python-udf")]
+    pub fn init_runtime_for_query(
+        funcs: &[ScriptUdfFunctionDesc],
+        query: Arc<PythonQueryWorkers>,
+    ) -> Result<RuntimeTimeRes> {
+        Self::init_runtime_inner(funcs, query)
+    }
+
+    fn init_runtime_inner(
+        funcs: &[ScriptUdfFunctionDesc],
+        #[cfg(feature = "python-udf")] query: Arc<PythonQueryWorkers>,
+    ) -> Result<RuntimeTimeRes> {
         let mut script_runtimes = BTreeMap::new();
         for func in funcs {
             let code = match &func.udf_type {
@@ -795,7 +813,7 @@ impl TransformUdfScript {
                         let entry = venv::cache_entry(key);
                         // Only this environment is serialized. Never hold the global
                         // cache lock across install, stage reads, or archive restoration.
-                        Ok(Some(entry.get_or_init(|| {
+                        Ok(Some(entry.get_private(|| {
                             let temp_dir = venv::create_venv(PY_VERSION.as_str())?;
                             venv::install_deps(temp_dir.path(), &dependencies)?;
 
@@ -835,7 +853,13 @@ impl TransformUdfScript {
             };
 
             if let Entry::Vacant(entry) = script_runtimes.entry(func.name.clone()) {
-                let runtime = ScriptRuntime::try_create(func, temp_dir.clone()).map_err(|err| {
+                let runtime = ScriptRuntime::try_create(
+                    func,
+                    temp_dir.clone(),
+                    #[cfg(feature = "python-udf")]
+                    &query,
+                )
+                .map_err(|err| {
                     ErrorCode::UDFDataError(format!(
                         "Failed to create UDF runtime for language {:?} with error: {err}",
                         code.language
@@ -1034,7 +1058,7 @@ impl TransformUdfScript {
     }
 }
 
-mod venv {
+pub(super) mod venv {
     use std::fs;
     use std::fs::File;
     use std::io;
@@ -1113,6 +1137,32 @@ mod venv {
 
         pub fn path(&self) -> &Path {
             &self.inner.path
+        }
+
+        /// Copy executable dependencies, never writable hardlinks or live
+        /// directories. Archive extraction already materializes regular files.
+        #[cfg(any(feature = "python-udf", test))]
+        pub fn private_copy(&self) -> Result<Self, String> {
+            let copy = Self::new()?;
+            for entry in WalkDir::new(self.path()).min_depth(1) {
+                let entry = entry.map_err(|err| err.to_string())?;
+                let relative = entry
+                    .path()
+                    .strip_prefix(self.path())
+                    .map_err(|err| err.to_string())?;
+                let target = copy.path().join(relative);
+                if entry.file_type().is_dir() {
+                    fs::create_dir_all(target).map_err(|err| err.to_string())?;
+                } else if entry.file_type().is_file() {
+                    fs::copy(entry.path(), target).map_err(|err| err.to_string())?;
+                } else {
+                    return Err(format!(
+                        "Unexpected Python dependency file: {:?}",
+                        entry.path()
+                    ));
+                }
+            }
+            Ok(copy)
         }
 
         fn downgrade(&self) -> WeakTempDir {
@@ -1325,6 +1375,19 @@ mod venv {
                     archive_path,
                 }))),
             }
+        }
+
+        // Only immutable archives are shared with executable UDFs. Every
+        // runtime receives an extracted private directory, never writable links.
+        pub fn get_private(
+            &self,
+            init: impl FnOnce() -> databend_common_exception::Result<(TempDir, PathBuf)>,
+        ) -> databend_common_exception::Result<TempDir> {
+            let _cached = self.get_or_init(init)?;
+            let env = self.env.lock();
+            let dir = TempDir::new()?;
+            restore_env_into(&env.as_ref().unwrap().archive_path, dir.path())?;
+            Ok(dir)
         }
 
         pub fn get_or_init(

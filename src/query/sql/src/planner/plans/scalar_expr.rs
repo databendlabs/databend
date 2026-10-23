@@ -1335,6 +1335,7 @@ fn hash_column_set<H: Hasher>(columns: &ColumnSet, state: &mut H) {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct UDFCall {
+    pub external_access_integrations: Vec<String>,
     #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     // name in meta

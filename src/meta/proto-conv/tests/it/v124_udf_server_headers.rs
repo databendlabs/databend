@@ -40,6 +40,7 @@ fn test_decode_v124_udf_server_headers() -> anyhow::Result<()> {
         7, 88, 45, 84, 111, 107, 101, 110, 18, 6, 97, 98, 99, 49, 50, 51, 160, 6, 124, 168, 6, 24,
     ];
     let want = || UDFServer {
+        external_access_integrations: vec![],
         address: "http://127.0.0.1:8888".to_string(),
         handler: "isempty".to_string(),
         headers: BTreeMap::from([

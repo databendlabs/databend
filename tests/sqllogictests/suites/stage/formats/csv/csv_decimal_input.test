@@ -1,0 +1,216 @@
+# Shared decimal parsing must work independently of the JSON-number decoder.
+statement ok
+set numeric_cast_option = 'rounding'
+
+statement ok
+create or replace table decimal_text_input (d decimal(1, 0))
+
+statement ok
+insert into decimal_text_input values (10000000000000000000e-19)
+
+query T
+select d::string from decimal_text_input
+----
+1
+
+# The fast VALUES decoder must consume an exponent marker/sign even without digits.
+statement ok
+insert into decimal_text_input values (1e), (1e+), (1e-)
+
+query II
+select count(*), sum(d)::int from decimal_text_input
+----
+4 4
+
+statement ok
+drop table decimal_text_input
+
+# Unlike the compatibility cases above, the old fast VALUES path accepted this
+# rounding carry and stored an out-of-range coefficient instead of falling back.
+statement ok
+create or replace table decimal_values_carry (d decimal(4, 2))
+
+statement error Decimal overflow
+insert into decimal_values_carry values (99.995)
+
+query I
+select count(*) from decimal_values_carry
+----
+0
+
+statement ok
+set numeric_cast_option = 'truncating'
+
+statement ok
+insert into decimal_values_carry values (99.995), (-99.995)
+
+query T
+select d::string from decimal_values_carry order by d
+----
+-99.99
+99.99
+
+statement ok
+set numeric_cast_option = 'rounding'
+
+statement ok
+drop table decimal_values_carry
+
+# Write raw text, not decimal values, so COPY receives the original mantissas.
+# The scalar field uses the CSV decoder; the array elements use the nested decoder.
+statement ok
+create or replace stage csv_decimal_input
+
+statement ok
+copy into @csv_decimal_input/ from (
+    select '1|10000000000000000000e-19|[10000000000000000000e-19,-10000000000000000000e-19]'
+    union all select '2|.0210e3|[.0210e3,0120.0210e-1]'
+    union all select '3|1e|[1e,1.5e]'
+    union all select '4|1e+|[1e+,1e-]'
+    union all select '5|-1e-|[-1.5e,-1e+]'
+    union all select '6|1.2345|[1.2345,-1.2345]'
+    union all select '7|-1.2345|[-1.2345,1.2345]'
+)
+file_format = (type = csv field_delimiter = '~' quote = '`' quote_style = 'quote_minimal' compression = none)
+
+statement ok
+create or replace table decimal_csv_input (id int, d decimal(6, 3), a array(decimal(6, 3)))
+
+statement ok
+copy into decimal_csv_input from @csv_decimal_input/
+file_format = (type = csv field_delimiter = '|')
+
+query ITTT
+select id, d::string, a[1]::string, a[2]::string from decimal_csv_input order by id
+----
+1 1.000 1.000 -1.000
+2 21.000 21.000 12.002
+3 1.000 1.000 1.500
+4 1.000 1.000 1.000
+5 -1.000 -1.500 -1.000
+6 1.235 1.235 -1.235
+7 -1.235 -1.235 1.235
+
+statement ok
+set numeric_cast_option = 'truncating'
+
+statement ok
+truncate table decimal_csv_input
+
+statement ok
+copy into decimal_csv_input from @csv_decimal_input/
+file_format = (type = csv field_delimiter = '|') force = true
+
+query ITTT
+select id, d::string, a[1]::string, a[2]::string from decimal_csv_input where id >= 6 order by id
+----
+6 1.234 1.234 -1.234
+7 -1.234 -1.234 1.234
+
+# TSV uses the same scalar and nested settings, with the same raw fixture.
+statement ok
+truncate table decimal_csv_input
+
+statement ok
+copy into decimal_csv_input from @csv_decimal_input/
+file_format = (type = tsv field_delimiter = '|') force = true
+
+query ITTT
+select id, d::string, a[1]::string, a[2]::string from decimal_csv_input where id >= 6 order by id
+----
+6 1.234 1.234 -1.234
+7 -1.234 -1.234 1.234
+
+statement ok
+set numeric_cast_option = 'rounding'
+
+statement ok
+truncate table decimal_csv_input
+
+statement ok
+copy into decimal_csv_input from @csv_decimal_input/
+file_format = (type = tsv field_delimiter = '|') force = true
+
+query ITTT
+select id, d::string, a[1]::string, a[2]::string from decimal_csv_input where id >= 6 order by id
+----
+6 1.235 1.235 -1.235
+7 -1.235 -1.235 1.235
+
+# Exercise scalar VALUES and its nested array decoder under both settings.
+statement ok
+truncate table decimal_csv_input
+
+statement ok
+insert into decimal_csv_input values (8, 1.2345, [1.2345, -1.2345]), (9, -1.2345, [-1.2345, 1.2345])
+
+query ITTT
+select id, d::string, a[1]::string, a[2]::string from decimal_csv_input order by id
+----
+8 1.235 1.235 -1.235
+9 -1.235 -1.235 1.235
+
+statement ok
+set numeric_cast_option = 'truncating'
+
+statement ok
+truncate table decimal_csv_input
+
+statement ok
+insert into decimal_csv_input values (8, 1.2345, [1.2345, -1.2345]), (9, -1.2345, [-1.2345, 1.2345])
+
+query ITTT
+select id, d::string, a[1]::string, a[2]::string from decimal_csv_input order by id
+----
+8 1.234 1.234 -1.234
+9 -1.234 -1.234 1.234
+
+statement ok
+set numeric_cast_option = 'rounding'
+
+# Exact text parsing also keeps the historical missing-exponent interpretation.
+query TTT
+select '1e'::decimal(6, 3)::string, '1e+'::decimal(6, 3)::string, '1.5e-'::decimal(6, 3)::string
+----
+1.000 1.000 1.500
+
+statement ok
+drop table decimal_csv_input
+
+# Keep the original field text so CSV, not a prior decimal cast, performs rounding.
+statement ok
+copy into @csv_decimal_input/carry/ from (select '99.995')
+file_format = (type = csv compression = none)
+
+statement ok
+create or replace table decimal_csv_carry (d decimal(4, 2))
+
+statement error Decimal overflow
+copy into decimal_csv_carry from @csv_decimal_input/carry/
+file_format = (type = csv)
+
+query I
+select count(*) from decimal_csv_carry
+----
+0
+
+statement ok
+set numeric_cast_option = 'truncating'
+
+statement ok
+copy into decimal_csv_carry from @csv_decimal_input/carry/
+file_format = (type = csv) force = true
+
+query T
+select d::string from decimal_csv_carry
+----
+99.99
+
+statement ok
+set numeric_cast_option = 'rounding'
+
+statement ok
+drop table decimal_csv_carry
+
+statement ok
+drop stage csv_decimal_input

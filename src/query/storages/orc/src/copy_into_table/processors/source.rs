@@ -14,6 +14,8 @@
 
 use std::mem;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use databend_common_base::base::Progress;
@@ -43,6 +45,8 @@ pub struct ORCSourceForCopy {
     scan_progress: Arc<Progress>,
     op: Operator,
     reader: Option<ReadingFile>,
+    /// Bytes fetched by the current file's reader since the last stripe was emitted.
+    read_bytes: Arc<AtomicUsize>,
 }
 
 impl ORCSourceForCopy {
@@ -58,6 +62,7 @@ impl ORCSourceForCopy {
             op,
             scan_progress,
             reader: None,
+            read_bytes: Default::default(),
         })
     }
 
@@ -72,10 +77,12 @@ impl ORCSourceForCopy {
         let content_key = file.content_key.clone();
         let last_modified = file.last_modified;
 
+        let read_bytes = Arc::new(AtomicUsize::new(0));
         let file = OrcChunkReader {
             operator: self.op.clone(),
             size: file.size as u64,
             path: file.path,
+            read_bytes: read_bytes.clone(),
         };
         let builder = ArrowReaderBuilder::try_new_async(file)
             .await
@@ -84,6 +91,9 @@ impl ORCSourceForCopy {
         let (factory, schema) = reader.into_parts();
         let stripe_factory = factory.expect("factory must has been created");
         let schema = HashableSchema::try_create(schema)?;
+        // Exclude file metadata reads, only count bytes of stripes.
+        read_bytes.store(0, Ordering::Relaxed);
+        self.read_bytes = read_bytes;
 
         self.reader = Some(ReadingFile {
             path: path.to_string(),
@@ -126,7 +136,7 @@ impl AsyncSource for ORCSourceForCopy {
                         let used = start.elapsed().as_secs_f32();
                         let rows = stripe.number_of_rows();
 
-                        let bytes = stripe.stream_map().inner.values().map(|b| b.len()).sum();
+                        let bytes = self.read_bytes.swap(0, Ordering::Relaxed);
                         let progress_values = ProgressValues { rows, bytes };
                         Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, bytes);
                         log::info!(

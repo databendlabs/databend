@@ -50,6 +50,7 @@ use databend_common_storage::MetaHLL;
 use databend_storages_common_cache::Partitions;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
+use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -480,11 +481,12 @@ impl SinkAnalyzeState {
             .await?;
         // ANALYZE bypasses the mutation sinks but still buffers a snapshot in an explicit
         // transaction. Record a known zero so commit retries preserve the source's
-        // cumulative counters instead of treating them as missing.
+        // cumulative counters instead of treating them as missing. Its full refresh
+        // is not a write delta, so it contributes no statistics to replay.
         self.ctx
             .txn_mgr()
             .lock()
-            .add_logical_change_delta(table.get_id(), (0, 0));
+            .add_table_delta(table.get_id(), (0, 0), &BlockHLL::new(), 0);
         Ok(())
     }
 

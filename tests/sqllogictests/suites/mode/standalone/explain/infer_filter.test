@@ -245,7 +245,7 @@ TableScan
 ├── read size: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [t1.a (#0) <> 1 and t1.a (#0) < 2], limit: NONE]
+├── push downs: [filters: [t1.a (#0) < 2 and t1.a (#0) <> 1], limit: NONE]
 └── estimated rows: 0.00
 
 # a != 1 and a <= 1
@@ -275,7 +275,7 @@ TableScan
 ├── read size: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [t1.a (#0) <> 1 and t1.a (#0) <= 2], limit: NONE]
+├── push downs: [filters: [t1.a (#0) <= 2 and t1.a (#0) <> 1], limit: NONE]
 └── estimated rows: 0.00
 
 # a > 1;
@@ -305,7 +305,7 @@ TableScan
 ├── read size: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [t1.a (#0) <> 1 and t1.a (#0) > 0], limit: NONE]
+├── push downs: [filters: [t1.a (#0) > 0 and t1.a (#0) <> 1], limit: NONE]
 └── estimated rows: 0.00
 
 # a != 1 and a >= 1
@@ -335,7 +335,7 @@ TableScan
 ├── read size: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [t1.a (#0) <> 1 and t1.a (#0) >= 0], limit: NONE]
+├── push downs: [filters: [t1.a (#0) >= 0 and t1.a (#0) <> 1], limit: NONE]
 └── estimated rows: 0.00
 
 # false
@@ -422,7 +422,7 @@ TableScan
 ├── read size: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [t1.a (#0) < 5 and t1.a (#0) > 2], limit: NONE]
+├── push downs: [filters: [t1.a (#0) > 2 and t1.a (#0) < 5], limit: NONE]
 └── estimated rows: 0.00
 
 # a > 10 and a <= 100
@@ -437,7 +437,7 @@ TableScan
 ├── read size: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [t1.a (#0) <= 100 and t1.a (#0) > 10], limit: NONE]
+├── push downs: [filters: [t1.a (#0) > 10 and t1.a (#0) <= 100], limit: NONE]
 └── estimated rows: 0.00
 
 # t1.a > 10 and t2.a > 10
@@ -805,3 +805,244 @@ drop table if exists t1;
 
 statement ok
 drop table if exists t2;
+
+# Constraint normalization must be independent of predicate order and retain NULL/cast semantics.
+statement ok
+CREATE TABLE infer_filter_constraints(x BIGINT, y INT, f FLOAT32, d DECIMAL(18, 2));
+
+statement ok
+INSERT INTO infer_filter_constraints VALUES (NULL, NULL, NULL, NULL), (0, 0, 0.0, 0.00), (1, 1, 0.1, 1.01), (4, 4, 4.0, 4.00), (5, 5, 5.0, 5.00), (10, 10, 10.0, 10.00);
+
+query I rowsort
+SELECT x FROM infer_filter_constraints WHERE x > 0 AND x < 10 AND x < 5;
+----
+1
+4
+
+query I rowsort
+SELECT x FROM infer_filter_constraints WHERE x < 5 AND x > 0 AND x < 10;
+----
+1
+4
+
+query I
+SELECT count(*) FROM infer_filter_constraints WHERE x > 0 AND x < 5 AND x >= 5;
+----
+0
+
+query I
+SELECT count(*) FROM infer_filter_constraints WHERE x >= 5 AND x > 0 AND x < 5;
+----
+0
+
+query I
+SELECT count(*) FROM infer_filter_constraints WHERE x = y AND x > 0 AND x < 5 AND y >= 5;
+----
+0
+
+query I
+SELECT count(*) FROM infer_filter_constraints AS l JOIN infer_filter_constraints AS r ON l.x = r.x WHERE l.x > 0 AND l.x < 5 AND r.x >= 5;
+----
+0
+
+query I rowsort
+SELECT x FROM infer_filter_constraints WHERE x >= 0 AND x <= 10 AND x != 0 AND x != 10 AND x != 5 AND x != 5 AND x != 20;
+----
+1
+4
+
+query I
+SELECT count(*) FROM infer_filter_constraints WHERE x >= 5 AND x <= 5 AND x != 5;
+----
+0
+
+query I
+SELECT x FROM infer_filter_constraints WHERE x >= 5 AND x <= 5;
+----
+5
+
+query I
+SELECT count(*) FROM infer_filter_constraints WHERE x != NULL;
+----
+0
+
+query I
+SELECT count(*) FROM infer_filter_constraints WHERE x = x;
+----
+5
+
+# NULL-typed expressions must not bridge exact and floating numeric domains.
+query I
+SELECT count(*) FROM infer_filter_constraints CROSS JOIN (SELECT NULL AS n) AS nulls WHERE x = nulls.n AND nulls.n = f AND x > 0 AND f > 0;
+----
+0
+
+query I
+SELECT count(*) FROM infer_filter_constraints WHERE CAST(y AS BIGINT) > 0 AND y < 5 AND y >= 5;
+----
+0
+
+# A contradiction on the nullable side of a LEFT JOIN must preserve all left rows.
+query I
+SELECT count(*) FROM infer_filter_constraints AS l LEFT JOIN infer_filter_constraints AS r ON l.x = r.x AND r.x > 0 AND r.x < 5 AND r.x >= 5 WHERE r.x IS NULL;
+----
+6
+
+# IS NULL accepts null-extended rows; it is not interchangeable with = NULL.
+query I
+SELECT count(*) FROM infer_filter_constraints AS l LEFT JOIN infer_filter_constraints AS r ON l.x = r.x WHERE r.x IS NULL;
+----
+1
+
+query I
+SELECT count(*) FROM infer_filter_constraints AS l RIGHT JOIN infer_filter_constraints AS r ON l.x = r.x WHERE l.x IS NULL;
+----
+1
+
+query I
+SELECT count(*) FROM infer_filter_constraints AS l FULL JOIN infer_filter_constraints AS r ON l.x = r.x WHERE l.x IS NULL;
+----
+2
+
+query I
+SELECT count(*) FROM infer_filter_constraints AS l LEFT JOIN infer_filter_constraints AS r ON l.x = r.x WHERE r.x IS NOT NULL;
+----
+5
+
+query I
+SELECT count(*) FROM infer_filter_constraints AS l LEFT JOIN infer_filter_constraints AS r ON l.x = r.x WHERE r.x = NULL;
+----
+0
+
+# Stored Float32 0.1 is greater than Float64 0.1, but equal to Float32 0.1.
+# Keeping the original threshold type must preserve this distinction.
+query I
+SELECT count(*) FROM infer_filter_constraints WHERE f > 0.1::FLOAT64;
+----
+4
+
+query I
+SELECT count(*) FROM infer_filter_constraints WHERE f > 0.1::FLOAT32;
+----
+3
+
+# Float32 0.1 is strictly inside this Float64 interval; rounding either endpoint is unsafe.
+query I
+SELECT x FROM infer_filter_constraints WHERE CAST(f AS FLOAT64) > 0.1::FLOAT64 AND CAST(f AS FLOAT64) < 0.100000002::FLOAT64;
+----
+1
+
+query I
+SELECT count(*) FROM infer_filter_constraints WHERE f >= (-0.0)::FLOAT32 AND f <= 0.0::FLOAT32 AND f != 0.0::FLOAT32;
+----
+0
+
+query I
+SELECT x FROM infer_filter_constraints WHERE d >= 5.00::DECIMAL(18,2) AND d <= 5.00::DECIMAL(18,2);
+----
+5
+
+query I
+SELECT count(*) FROM infer_filter_constraints WHERE d >= 5.00::DECIMAL(18,2) AND d <= 5.00::DECIMAL(18,2) AND d != 5.00::DECIMAL(18,2);
+----
+0
+
+# Rounding casts constrain the cast expression, not the original Decimal value.
+query I
+SELECT x FROM infer_filter_constraints WHERE CAST(d AS DECIMAL(18,1)) = 1.0::DECIMAL(18,1) AND d > 1.0::DECIMAL(18,2);
+----
+1
+
+# Lossy integer-to-float casts must not create a false contradiction.
+statement ok
+INSERT INTO infer_filter_constraints(x, y) VALUES (9007199254740993, 1);
+
+query I
+SELECT x FROM infer_filter_constraints WHERE CAST(x AS FLOAT64) = 9007199254740992::FLOAT64 AND x = 9007199254740993;
+----
+9007199254740993
+
+# Different exact integers can become equal after a lossy Float64 conversion.
+# They must not be merged into one exact constraint class or eliminated as FALSE.
+statement ok
+CREATE TABLE infer_filter_float_bridge(x BIGINT);
+
+statement ok
+INSERT INTO infer_filter_float_bridge VALUES (9007199254740992);
+
+query I
+SELECT l.x FROM infer_filter_constraints AS l JOIN infer_filter_float_bridge AS r ON CAST(l.x AS FLOAT64) = CAST(r.x AS FLOAT64) WHERE l.x = 9007199254740993 AND r.x = 9007199254740992;
+----
+9007199254740993
+
+statement ok
+DROP TABLE infer_filter_float_bridge;
+
+# MEMORY isolates exact Decimal limits from Fuse statistics, whose floating-point
+# bounds can round Decimal76::MAX out of range during debug selectivity validation.
+statement ok
+CREATE TABLE infer_filter_decimal_edges(d38 DECIMAL(38,2), d76 DECIMAL(76,2)) ENGINE = MEMORY;
+
+statement ok
+INSERT INTO infer_filter_decimal_edges VALUES ('999999999999999999999999999999999999.99', CAST(CONCAT(REPEAT('9',74),'.99') AS DECIMAL(76,2)));
+
+query I
+SELECT count(*) FROM infer_filter_decimal_edges WHERE d38 >= '999999999999999999999999999999999999.99'::DECIMAL(38,2) AND d38 <= '999999999999999999999999999999999999.99'::DECIMAL(38,2) AND d38 != '999999999999999999999999999999999999.99'::DECIMAL(38,2);
+----
+0
+
+query I
+SELECT count(*) FROM infer_filter_decimal_edges WHERE d76 >= CAST(CONCAT(REPEAT('9',74),'.99') AS DECIMAL(76,2)) AND d76 <= CAST(CONCAT(REPEAT('9',74),'.99') AS DECIMAL(76,2));
+----
+1
+
+query I
+SELECT count(*) FROM infer_filter_decimal_edges WHERE d76 >= CAST(CONCAT(REPEAT('9',74),'.99') AS DECIMAL(76,2)) AND d76 <= CAST(CONCAT(REPEAT('9',74),'.99') AS DECIMAL(76,2)) AND d76 != CAST(CONCAT(REPEAT('9',74),'.99') AS DECIMAL(76,2));
+----
+0
+
+# The endpoints of a lossless equality chain may not have a lossless common type.
+statement ok
+CREATE TABLE infer_filter_decimal_chain(a DECIMAL(37,0), b DECIMAL(1,0), c DECIMAL(38,2));
+
+statement ok
+INSERT INTO infer_filter_decimal_chain VALUES (5, 5, 5.00), (7, 7, 7.00), (8, 8, 8.00), ('9999999999999999999999999999999999999', 0, 0.00);
+
+query T rowsort
+SELECT to_string(a) FROM infer_filter_decimal_chain WHERE a = b AND b = c AND c >= 5.00::DECIMAL(38,2) AND a < 8::DECIMAL(37,0);
+----
+5
+7
+
+statement ok
+DROP TABLE infer_filter_decimal_chain;
+
+statement ok
+CREATE TABLE infer_filter_numeric_edges(u UINT64, f FLOAT32);
+
+statement ok
+INSERT INTO infer_filter_numeric_edges VALUES (18446744073709551615, '-inf'), (9223372036854775807, 'inf'), (0, 'nan'), (1, 0.0);
+
+query T
+SELECT to_string(u) FROM infer_filter_numeric_edges WHERE u > 0 AND u >= 18446744073709551615 AND u <= 18446744073709551615;
+----
+18446744073709551615
+
+query I
+SELECT count(*) FROM infer_filter_numeric_edges WHERE f > '-inf'::FLOAT32 AND f < 'nan'::FLOAT32;
+----
+2
+
+query I
+SELECT count(*) FROM infer_filter_numeric_edges WHERE f >= '-inf'::FLOAT32 AND f <= 'inf'::FLOAT32;
+----
+3
+
+statement ok
+DROP TABLE infer_filter_numeric_edges;
+
+statement ok
+DROP TABLE infer_filter_decimal_edges;
+
+statement ok
+DROP TABLE infer_filter_constraints;
