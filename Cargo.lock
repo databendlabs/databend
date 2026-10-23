@@ -4551,6 +4551,7 @@ dependencies = [
  "databend-common-version",
  "databend-meta-client 260205.13.5",
  "databend-meta-plugin-cache",
+ "databend-meta-runtime",
  "divan",
  "enumflags2",
  "futures",

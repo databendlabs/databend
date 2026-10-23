@@ -32,6 +32,7 @@ use databend_meta_client::types::TxnReply;
 use databend_meta_client::types::TxnRequest;
 use databend_meta_client::types::UpsertKV;
 use databend_meta_client::types::errors::IncompleteStream;
+use databend_meta_runtime::DatabendRuntime;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use futures::stream;
