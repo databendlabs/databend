@@ -310,7 +310,13 @@ impl ReplaceInterpreter {
             .ctx
             .get_settings()
             .get_replace_into_bloom_pruning_max_column_number()?;
-        let bloom_filter_column_indexes = if table.cluster_key_meta().is_some() {
+        // Only the partitioned path computes the input hashes needed for bloom pruning.
+        let bloom_filter_column_indexes = if table.cluster_key_meta().is_some()
+            && self
+                .ctx
+                .get_settings()
+                .get_enable_replace_into_partitioning()?
+        {
             fuse_table
                 .choose_bloom_filter_columns(
                     self.ctx.clone(),
