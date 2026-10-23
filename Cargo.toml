@@ -645,7 +645,7 @@ databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "
 databend-meta = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.7.0" }
 databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260205.13.5" }
 databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.7.0" }
-jsonb = { git = "https://github.com/databendlabs/jsonb.git", rev = "fba895c" }
+jsonb = { git = "https://github.com/b41sh/jsonb.git", rev = "76858545ff75108333ae7be75f60cf57d4a9aae2" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.5.0" }
 # dev: v0.2.0 plus the reqwest rustls fix (datafuse-extras/paimon-rust#1).
 paimon = { git = "https://github.com/datafuse-extras/paimon-rust", branch = "dev" }

@@ -118,6 +118,27 @@ pub enum VirtualFieldReadPlan {
     Object {
         entries: Vec<(String, VirtualFieldReadPlan)>,
     },
+    /// Evaluate `element` in the flattened element space, then reconstruct the
+    /// array (`index == None`) or select a zero-based, possibly negative index.
+    /// Every referenced leaf is a Nullable(Array(T)) column in source row space.
+    /// `boundary_slot` supplies offsets/validity even for sparse element paths.
+    ArrayGroup {
+        boundary_slot: VirtualReadSlotId,
+        element: Box<VirtualFieldReadPlan>,
+        index: Option<i32>,
+    },
+    /// Read a path from its value plan, and from the overflow map for rows
+    /// where the value plan is NULL. The overflow map is one bucket, a
+    /// `Map(String, Variant)` represented by adjacent key/value slots, and
+    /// `path` is the canonical path looked up in it. `value` is absent when the
+    /// block stores no value column for the path. Materializes as
+    /// `Nullable(Variant)`.
+    WithOverflow {
+        value: Option<Box<VirtualFieldReadPlan>>,
+        key_slot: VirtualReadSlotId,
+        value_slot: VirtualReadSlotId,
+        path: String,
+    },
 }
 
 #[typetag::serde(name = "block_meta_index")]

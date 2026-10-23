@@ -32,6 +32,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
@@ -133,6 +134,7 @@ impl VirtualColumnReader {
 
         let mut schema = TableSchema::empty();
         let mut ranges = Vec::with_capacity(virtual_block_meta.read_slots.len());
+        // Map key slot -> value slot, for shared maps and overflow buckets.
         let mut shared_slots = HashMap::new();
         for plan in virtual_block_meta.fields.values() {
             collect_shared_slots(plan, &mut shared_slots);
@@ -146,13 +148,15 @@ impl VirtualColumnReader {
                 continue;
             }
             if let Some(value_slot_id) = shared_slots.get(&slot_id) {
+                // Shared maps have `UInt32` keys and overflow maps `String` keys;
+                // validation has checked the key slot type of each plan.
                 let value_slot = virtual_block_meta
                     .read_slots
                     .get(value_slot_id.as_usize())?;
                 let data_type = TableDataType::Map(Box::new(TableDataType::Tuple {
                     fields_name: vec!["key".to_string(), "value".to_string()],
                     fields_type: vec![
-                        TableDataType::Number(NumberDataType::UInt32),
+                        infer_schema_type(&slot.data_type.remove_nullable()).ok()?,
                         infer_schema_type(&value_slot.data_type.remove_nullable()).ok()?,
                     ],
                 }));
@@ -416,6 +420,20 @@ fn validate_read_plan(plan: &VirtualFieldReadPlan, read_slots: &[VirtualReadSlot
                 && key.num_values == value.num_values
                 && shared_data_type_from_physical(&value.data_type).is_ok()
         }
+        VirtualFieldReadPlan::ArrayGroup {
+            boundary_slot,
+            element,
+            ..
+        } => {
+            let mut slots = HashSet::from([*boundary_slot]);
+            collect_array_element_slots(element, &mut slots)
+                && slots.iter().all(|slot| {
+                    read_slots.get(slot.as_usize()).is_some_and(|meta| {
+                        matches!(&meta.data_type, DataType::Nullable(inner)
+                        if matches!(inner.as_ref(), DataType::Array(_)))
+                    })
+                })
+        }
         VirtualFieldReadPlan::FromParent { parent, .. } => validate_read_plan(parent, read_slots),
         VirtualFieldReadPlan::Coalesce { plans } => {
             !plans.is_empty()
@@ -428,6 +446,25 @@ fn validate_read_plan(plan: &VirtualFieldReadPlan, read_slots: &[VirtualReadSlot
                 && entries
                     .iter()
                     .all(|(_, plan)| validate_read_plan(plan, read_slots))
+        }
+        VirtualFieldReadPlan::WithOverflow {
+            value,
+            key_slot,
+            value_slot,
+            ..
+        } => {
+            let Some(key) = read_slots.get(key_slot.as_usize()) else {
+                return false;
+            };
+            let Some(overflow_value) = read_slots.get(value_slot.as_usize()) else {
+                return false;
+            };
+            value_slot.0 == key_slot.0 + 1
+                && key.data_type.remove_nullable() == DataType::String
+                && overflow_value.data_type.remove_nullable() == DataType::Variant
+                && value
+                    .as_ref()
+                    .is_none_or(|plan| validate_read_plan(plan, read_slots))
         }
     }
 }
@@ -444,6 +481,9 @@ fn collect_shared_slots(
         } => {
             shared_slots.insert(*key_slot, *value_slot);
         }
+        VirtualFieldReadPlan::ArrayGroup { element, .. } => {
+            collect_shared_slots(element, shared_slots);
+        }
         VirtualFieldReadPlan::FromParent { parent, .. } => {
             collect_shared_slots(parent, shared_slots);
         }
@@ -454,6 +494,17 @@ fn collect_shared_slots(
         }
         VirtualFieldReadPlan::Object { entries } => {
             for (_, plan) in entries {
+                collect_shared_slots(plan, shared_slots);
+            }
+        }
+        VirtualFieldReadPlan::WithOverflow {
+            value,
+            key_slot,
+            value_slot,
+            ..
+        } => {
+            shared_slots.insert(*key_slot, *value_slot);
+            if let Some(plan) = value {
                 collect_shared_slots(plan, shared_slots);
             }
         }
@@ -511,6 +562,20 @@ fn eval_read_plan(
             if suffix_path.is_empty() {
                 return Ok((value, data_type));
             }
+            // Typed Array leaves are complete JSON values too. Convert through
+            // to_variant (not parse_json) before applying the remaining path.
+            let (value, data_type) = if matches!(data_type.remove_nullable(), DataType::Array(_)) {
+                cast_to_target_type(
+                    value,
+                    data_type,
+                    &DataType::Nullable(Box::new(DataType::Variant)),
+                    false,
+                    func_ctx,
+                    num_rows,
+                )?
+            } else {
+                (value, data_type)
+            };
             let (value, value_type) = eval_function(
                 None,
                 "get_by_keypath",
@@ -546,6 +611,20 @@ fn eval_read_plan(
                     })?;
             materialize_shared_map_value(column, data_type, shared_data_type, *index, num_rows)
         }
+        VirtualFieldReadPlan::ArrayGroup {
+            boundary_slot,
+            element,
+            index,
+        } => materialize_array_group(
+            *boundary_slot,
+            element,
+            *index,
+            record_batch,
+            orig_schema,
+            read_slots,
+            func_ctx,
+            num_rows,
+        ),
         VirtualFieldReadPlan::Coalesce { plans } => materialize_coalesce_read_plan(
             plans,
             record_batch,
@@ -562,7 +641,272 @@ fn eval_read_plan(
             func_ctx,
             num_rows,
         ),
+        VirtualFieldReadPlan::WithOverflow {
+            value,
+            key_slot,
+            path,
+            ..
+        } => {
+            let (overflow_column, _) =
+                column_from_record_batch(record_batch, orig_schema, &key_slot.0.to_string())?
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "virtual overflow slot {} is missing from the sidecar record batch",
+                            key_slot.0
+                        ))
+                    })?;
+            let value = value
+                .as_ref()
+                .map(|plan| {
+                    eval_read_plan(
+                        plan,
+                        record_batch,
+                        orig_schema,
+                        read_slots,
+                        func_ctx,
+                        num_rows,
+                    )
+                })
+                .transpose()?;
+            materialize_overflow(&overflow_column, path, value.as_ref(), func_ctx, num_rows)
+        }
     }
+}
+
+/// Element plans operate only on direct, aligned list leaves, plus the usual
+/// object/coalesce/extraction operators. No element-space shared/overflow map
+/// or recursive ArrayGroup is written in this version.
+fn collect_array_element_slots(
+    plan: &VirtualFieldReadPlan,
+    slots: &mut HashSet<VirtualReadSlotId>,
+) -> bool {
+    match plan {
+        VirtualFieldReadPlan::Missing => true,
+        VirtualFieldReadPlan::Direct { slot } => {
+            slots.insert(*slot);
+            true
+        }
+        VirtualFieldReadPlan::FromParent { parent, .. } => {
+            collect_array_element_slots(parent, slots)
+        }
+        VirtualFieldReadPlan::Coalesce { plans } => {
+            !plans.is_empty()
+                && plans
+                    .iter()
+                    .all(|plan| collect_array_element_slots(plan, slots))
+        }
+        VirtualFieldReadPlan::Object { entries } => {
+            !entries.is_empty()
+                && entries
+                    .iter()
+                    .all(|(_, plan)| collect_array_element_slots(plan, slots))
+        }
+        VirtualFieldReadPlan::ArrayGroup { .. }
+        | VirtualFieldReadPlan::Shared { .. }
+        | VirtualFieldReadPlan::WithOverflow { .. } => false,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn materialize_array_group(
+    boundary_slot: VirtualReadSlotId,
+    element_plan: &VirtualFieldReadPlan,
+    index: Option<i32>,
+    record_batch: &RecordBatch,
+    orig_schema: &TableSchema,
+    read_slots: &[VirtualReadSlot],
+    func_ctx: &FunctionContext,
+    num_rows: usize,
+) -> Result<(Value<AnyType>, DataType)> {
+    let (boundary, _) =
+        column_from_record_batch(record_batch, orig_schema, &boundary_slot.0.to_string())?
+            .ok_or_else(|| ErrorCode::Internal("virtual array boundary column is missing"))?;
+    let Column::Nullable(boundary) = boundary else {
+        return Err(ErrorCode::Internal(
+            "virtual array boundary must be nullable",
+        ));
+    };
+    let Column::Array(array) = &boundary.column else {
+        return Err(ErrorCode::Internal(
+            "virtual array boundary must be an Array",
+        ));
+    };
+    if array.len() != num_rows {
+        return Err(ErrorCode::Internal(
+            "virtual array group row count mismatch",
+        ));
+    }
+    let offsets = array.offsets();
+    let first = offsets[0] as usize;
+    let total_elements = offsets[num_rows] as usize - first;
+    let mut slots = HashSet::from([boundary_slot]);
+    if !collect_array_element_slots(element_plan, &mut slots) {
+        return Err(ErrorCode::Internal("invalid virtual array element plan"));
+    }
+    let mut slots = slots.into_iter().collect::<Vec<_>>();
+    slots.sort();
+    let mut fields = Vec::with_capacity(slots.len());
+    let mut columns = Vec::with_capacity(slots.len());
+    for slot in slots {
+        let name = slot.0.to_string();
+        let (column, data_type) = column_from_record_batch(record_batch, orig_schema, &name)?
+            .ok_or_else(|| ErrorCode::Internal("virtual array element column is missing"))?;
+        let Column::Nullable(column) = column else {
+            return Err(ErrorCode::Internal(
+                "virtual array element column must be nullable",
+            ));
+        };
+        let Column::Array(array) = &column.column else {
+            return Err(ErrorCode::Internal(
+                "virtual array element column must be an Array",
+            ));
+        };
+        if array.len() != num_rows || column.validity != boundary.validity {
+            return Err(ErrorCode::Internal("virtual array group validity mismatch"));
+        }
+        let actual = array.offsets();
+        for row in 0..num_rows {
+            let expected_len = offsets[row + 1] - offsets[row];
+            if actual[row + 1] - actual[row] != expected_len
+                || (!boundary.validity.get_bit(row) && expected_len != 0)
+            {
+                return Err(ErrorCode::Internal("virtual array group length mismatch"));
+            }
+        }
+        let DataType::Array(inner_type) = data_type.remove_nullable() else {
+            return Err(ErrorCode::Internal("virtual array group type mismatch"));
+        };
+        fields.push(TableField::new(&name, infer_schema_type(&inner_type)?));
+        columns.push(BlockEntry::Column(
+            array
+                .values()
+                .slice(actual[0] as usize..actual[num_rows] as usize),
+        ));
+    }
+    let element_schema = TableSchema::new(fields);
+    let elements = DataBlock::new(columns, total_elements).to_record_batch(&element_schema)?;
+    let (values, _) = eval_read_plan(
+        element_plan,
+        &elements,
+        &element_schema,
+        read_slots,
+        func_ctx,
+        total_elements,
+    )?;
+    let output_type = DataType::Nullable(Box::new(DataType::Variant));
+    let mut builder = ColumnBuilder::with_capacity(&output_type, num_rows);
+    let mut bytes = Vec::new();
+    let mut element_bytes = Vec::new();
+    for row in 0..num_rows {
+        if !boundary.validity.get_bit(row) {
+            builder.push(ScalarRef::Null);
+            continue;
+        }
+        let start = offsets[row] as usize - first;
+        let end = offsets[row + 1] as usize - first;
+        if let Some(index) = index {
+            let len = (end - start) as i64;
+            let index = if index < 0 {
+                len + i64::from(index)
+            } else {
+                i64::from(index)
+            };
+            let value = if index >= 0 && index < len {
+                values
+                    .index(start + index as usize)
+                    .unwrap_or(ScalarRef::Null)
+            } else {
+                ScalarRef::Null
+            };
+            if value == ScalarRef::Null {
+                builder.push(ScalarRef::Null);
+            } else {
+                bytes.clear();
+                cast_scalar_to_variant(value, &func_ctx.tz, &mut bytes, None);
+                builder.push(ScalarRef::Variant(&bytes));
+            }
+        } else {
+            element_bytes.clear();
+            for position in start..end {
+                let scalar = values.index(position).unwrap_or(ScalarRef::Null);
+                if scalar == ScalarRef::Null {
+                    return Err(ErrorCode::Internal("virtual array group lost an element"));
+                }
+                let mut bytes = Vec::new();
+                cast_scalar_to_variant(scalar, &func_ctx.tz, &mut bytes, None);
+                element_bytes.push(bytes);
+            }
+            let array =
+                OwnedJsonb::build_array(element_bytes.iter().map(|bytes| RawJsonb::new(bytes)))
+                    .map_err(|error| {
+                        ErrorCode::Internal(format!("failed to reconstruct virtual array: {error}"))
+                    })?;
+            builder.push(ScalarRef::Variant(array.as_ref()));
+        }
+    }
+    Ok((Value::Column(builder.build()), output_type))
+}
+
+/// Merges a path's value column with its overflow map bucket into
+/// `Nullable(Variant)`.
+///
+/// Rows where the value is non-NULL produce the value converted to Variant;
+/// other rows produce the overflow value of `path`, or SQL NULL when the bucket
+/// has no entry for it. The writer never stores a path in both places.
+fn materialize_overflow(
+    overflow_column: &Column,
+    path: &str,
+    value: Option<&(Value<AnyType>, DataType)>,
+    func_ctx: &FunctionContext,
+    num_rows: usize,
+) -> Result<(Value<AnyType>, DataType)> {
+    let Column::Map(map) = overflow_column else {
+        return Err(ErrorCode::Internal(
+            "virtual column overflow data should be Map",
+        ));
+    };
+    if map.len() != num_rows {
+        return Err(ErrorCode::Internal(format!(
+            "virtual column overflow row count mismatch, expected {}, got {}",
+            num_rows,
+            map.len()
+        )));
+    }
+    let Column::Tuple(fields) = map.values() else {
+        return Err(ErrorCode::Internal(
+            "virtual column overflow map values should be Tuple(key, value)",
+        ));
+    };
+    let (Some(Column::String(keys)), Some(values)) = (fields.first(), fields.get(1)) else {
+        return Err(ErrorCode::Internal(
+            "virtual column overflow map should be Map(String, Variant)",
+        ));
+    };
+    let offsets = map.offsets();
+
+    let output_type = DataType::Nullable(Box::new(DataType::Variant));
+    let mut builder = ColumnBuilder::with_capacity(&output_type, num_rows);
+    let mut value_buf = Vec::new();
+    for row in 0..num_rows {
+        let scalar = value
+            .and_then(|(value, _)| value.index(row))
+            .unwrap_or(ScalarRef::Null);
+        if scalar != ScalarRef::Null {
+            value_buf.clear();
+            cast_scalar_to_variant(scalar, &func_ctx.tz, &mut value_buf, None);
+            builder.push(ScalarRef::Variant(value_buf.as_slice()));
+            continue;
+        }
+        // Keys are sorted within a row.
+        let start = offsets[row] as usize;
+        let end = offsets[row + 1] as usize;
+        let overflow = (start..end)
+            .find(|pos| keys.value(*pos) == path)
+            .and_then(|pos| values.index(pos))
+            .unwrap_or(ScalarRef::Null);
+        builder.push(overflow);
+    }
+    Ok((Value::Column(builder.build()), output_type))
 }
 
 fn materialize_coalesce_read_plan(
