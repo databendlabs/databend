@@ -142,6 +142,11 @@ async fn test_clone_inherits_only_fresh_selected_snapshot_statistics() -> anyhow
             .await?
             .unwrap();
         assert!(anchor.prev_snapshot_id.is_none());
+        assert_eq!(anchor.segment_block_counts, fresh.segment_block_counts);
+        super::segment_block_counts::assert_segment_block_counts(FuseTable::try_from_table(
+            cloned.as_ref(),
+        )?)
+        .await?;
         assert_eq!(
             anchor.table_statistics_location.as_ref(),
             if inherit {

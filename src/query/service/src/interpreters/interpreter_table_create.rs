@@ -781,7 +781,7 @@ impl CreateTableInterpreter {
             .await?
             .filter(|statistics| statistics.is_fresh_for(snapshot))
             .and_then(|_| snapshot.table_statistics_location.clone());
-        let anchor = TableSnapshot::try_new(
+        let mut anchor = TableSnapshot::try_new(
             None,
             None,
             staged_table_meta.schema.as_ref().clone(),
@@ -791,6 +791,7 @@ impl CreateTableInterpreter {
             statistics_location,
             TableMetaTimestamps::new(None, Duration::zero()),
         )?;
+        anchor.segment_block_counts = snapshot.segment_block_counts.clone();
         let anchor_location = target
             .meta_location_generator()
             .gen_snapshot_location(&anchor.snapshot_id, TableSnapshot::VERSION)?;

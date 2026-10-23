@@ -73,6 +73,11 @@ impl TransformMergeCommitMeta {
                             .into_iter()
                             .chain(r.replaced_segments)
                             .collect(),
+                        segment_block_counts: l
+                            .segment_block_counts
+                            .into_iter()
+                            .chain(r.segment_block_counts)
+                            .collect(),
                         merged_statistics: merge_statistics(
                             l.merged_statistics.clone(),
                             &r.merged_statistics,
@@ -96,6 +101,11 @@ impl TransformMergeCommitMeta {
                             .merged_segments
                             .into_iter()
                             .chain(r.merged_segments)
+                            .collect(),
+                        segment_block_counts: l
+                            .segment_block_counts
+                            .into_iter()
+                            .chain(r.segment_block_counts)
                             .collect(),
                         merged_statistics: merge_statistics(
                             l.merged_statistics.clone(),
@@ -188,6 +198,51 @@ mod tests {
             });
         meta.logical_deleted_rows = deleted_rows;
         meta
+    }
+
+    #[test]
+    fn test_merge_commit_meta_preserves_segment_block_counts() {
+        for append_only in [false, true] {
+            let make_meta = |path: &str, count: u64| {
+                let segment_block_counts =
+                    std::collections::HashMap::from([(path.to_string(), count)]);
+                let mut meta = CommitMeta::empty(1);
+                meta.conflict_resolve_context = if append_only {
+                    ConflictResolveContext::AppendOnly((
+                        SnapshotMerged {
+                            merged_segments: vec![(path.to_string(), 4)],
+                            merged_statistics: Statistics::default(),
+                            segment_block_counts,
+                        },
+                        std::sync::Arc::new(databend_common_expression::TableSchema::default()),
+                    ))
+                } else {
+                    ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
+                        appended_segments: vec![(path.to_string(), 4)],
+                        segment_block_counts,
+                        ..Default::default()
+                    })
+                };
+                meta
+            };
+            let merged = TransformMergeCommitMeta::merge_commit_meta(
+                make_meta("a", 2),
+                make_meta("b", 7),
+                None,
+            )
+            .unwrap();
+            let counts = match merged.conflict_resolve_context {
+                ConflictResolveContext::AppendOnly((merged, _)) => merged.segment_block_counts,
+                ConflictResolveContext::ModifiedSegmentExistsInLatest(changes) => {
+                    changes.segment_block_counts
+                }
+                ConflictResolveContext::None => panic!("missing conflict resolve context"),
+            };
+            assert_eq!(
+                counts,
+                std::collections::HashMap::from([("a".to_string(), 2), ("b".to_string(), 7)])
+            );
+        }
     }
 
     #[test]
