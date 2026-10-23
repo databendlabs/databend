@@ -59,6 +59,7 @@ mod format_top_n;
 mod format_udf;
 mod format_union_all;
 mod format_window;
+mod format_window_partial_top_n;
 mod format_window_partition;
 mod physical_format;
 
@@ -110,5 +111,6 @@ pub use format_top_n::*;
 pub use format_udf::*;
 pub use format_union_all::*;
 pub use format_window::*;
+pub use format_window_partial_top_n::*;
 pub use format_window_partition::*;
 pub use physical_format::*;

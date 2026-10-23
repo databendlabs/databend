@@ -493,24 +493,26 @@ Exchange
     ├── build join filters(distributed):
     │   └── filter id:0, build key:t1.a0f (#28), probe targets:[t2.a0f (#2)@scan0], filter type:bloom,inlist,min_max
     ├── estimated rows: 0.00
-    ├── Filter(Build)
-    │   ├── output columns: [a00c.a0f (#28)]
-    │   ├── filters: [row_number() OVER (PARTITION BY a0f ORDER BY a0t DESC NULLS LAST) (#50) = 1]
-    │   ├── estimated rows: 0.00
-    │   └── Window
-    │       ├── output columns: [a00c.a0f (#28), a00c.a0t (#42), row_number() OVER (PARTITION BY a0f ORDER BY a0t DESC NULLS LAST) (#50)]
-    │       ├── aggregate function: [row_number]
-    │       ├── partition by: [a0f]
-    │       ├── order by: [a0t]
-    │       ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    │       └── WindowPartition
+    ├── Window(Build)
+    │   ├── output columns: [a00c.a0f (#28), a00c.a0t (#42), row_number() OVER (PARTITION BY a0f ORDER BY a0t DESC NULLS LAST) (#50)]
+    │   ├── aggregate function: [row_number]
+    │   ├── partition by: [a0f]
+    │   ├── order by: [a0t]
+    │   ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    │   ├── top: [1]
+    │   └── WindowPartition
+    │       ├── output columns: [a00c.a0f (#28), a00c.a0t (#42)]
+    │       ├── hash keys: [a0f]
+    │       ├── top: 1
+    │       ├── estimated rows: 0.00
+    │       └── Exchange
     │           ├── output columns: [a00c.a0f (#28), a00c.a0t (#42)]
-    │           ├── hash keys: [a0f]
-    │           ├── top: 1
-    │           ├── estimated rows: 0.00
-    │           └── Exchange
+    │           ├── exchange type: Hash(a00c.a0f (#28))
+    │           └── WindowPartialTopN
     │               ├── output columns: [a00c.a0f (#28), a00c.a0t (#42)]
-    │               ├── exchange type: Hash(a00c.a0f (#28))
+    │               ├── partition by: [a0f]
+    │               ├── top: 1
+    │               ├── estimated rows: 0.00
     │               └── TableScan
     │                   ├── table: default.default.a00c
     │                   ├── scan id: 1

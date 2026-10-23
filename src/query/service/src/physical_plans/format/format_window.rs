@@ -87,6 +87,9 @@ impl<'a> PhysicalFormat for WindowFormatter<'a> {
         if let Some(limit) = self.inner.limit {
             node_children.push(FormatTreeNode::new(format!("limit: [{}]", limit)));
         }
+        if let Some(top) = self.inner.top {
+            node_children.push(FormatTreeNode::new(format!("top: [{}]", top)));
+        }
 
         // Add child nodes at the end (format input)
         let input_formatter = self.inner.input.formatter()?;

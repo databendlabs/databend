@@ -90,10 +90,76 @@ impl Exchange for WindowPartitionTopNExchange {
 
 impl WindowPartitionTopNExchange {
     fn partition_permutation(&self, block: &DataBlock) -> Vec<Vec<u32>> {
+        let selector = WindowTopNSelector {
+            partition_indices: &self.partition_indices,
+            sort_desc: &self.sort_desc,
+            top: self.top,
+            func: self.func,
+        };
+        let selection = selector.select(block);
+
+        // Hash the first row of every surviving partition; all rows of that
+        // partition share the key, so they share the bucket.
+        let hash_indices = selection
+            .partition_starts
+            .iter()
+            .map(|&start| selection.rows[start as usize])
+            .collect::<Vec<_>>();
+
+        let mut hashes = vec![0u64; block.num_rows()];
+        for (i, &offset) in self.partition_indices.iter().enumerate() {
+            let entry = block.get_by_offset(offset);
+            group_hash_value_spread(&hash_indices, entry.value(), i == 0, &mut hashes).unwrap();
+        }
+
+        let mut partition_permutation = vec![Vec::new(); self.num_partitions as usize];
+        for (segment, &start) in selection.partition_starts.iter().enumerate() {
+            let end = selection
+                .partition_starts
+                .get(segment + 1)
+                .map_or(selection.rows.len(), |&end| end as usize);
+            let rows = &selection.rows[start as usize..end];
+            let bucket = (hashes[rows[0] as usize] % self.num_partitions) as usize;
+            partition_permutation[bucket].extend_from_slice(rows);
+        }
+        partition_permutation
+    }
+}
+
+/// Rows of a block that can still rank within the top `top` of their
+/// partition, in (partition keys, order keys) order.
+pub struct WindowTopNSelection {
+    /// Kept row indices, sorted by partition keys then order keys.
+    pub rows: Vec<u32>,
+    /// Offsets into `rows` where each partition starts.
+    pub partition_starts: Vec<u32>,
+}
+
+/// Selects, per partition, the rows a ranking function could still assign a
+/// rank `<= top`. For `row_number` that is the first `top` rows; for `rank`
+/// and `dense_rank` it includes every row tied at the boundary.
+pub struct WindowTopNSelector<'a> {
+    pub partition_indices: &'a [usize],
+    /// Partition columns first (ascending), then the window ORDER BY.
+    pub sort_desc: &'a [SortColumnDescription],
+    pub top: usize,
+    pub func: WindowPartitionTopNFunc,
+}
+
+impl WindowTopNSelector<'_> {
+    pub fn select(&self, block: &DataBlock) -> WindowTopNSelection {
         let rows = block.num_rows();
+        let mut selection = WindowTopNSelection {
+            rows: Vec::new(),
+            partition_starts: Vec::new(),
+        };
+        if rows == 0 {
+            return selection;
+        }
+
         let mut sort_compare = SortCompare::with_force_equality(self.sort_desc.to_vec(), rows);
 
-        for &offset in &self.partition_indices {
+        for &offset in self.partition_indices {
             let array = block.get_by_offset(offset).value();
             sort_compare.visit_value(array).unwrap();
             sort_compare.increment_column_index();
@@ -110,63 +176,64 @@ impl WindowPartitionTopNExchange {
         let full_equality = sort_compare.equality_index().to_vec();
         let permutation = sort_compare.take_permutation();
 
-        let hash_indices = std::iter::once(permutation[0])
-            .chain(
-                partition_equality
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(i, &eq)| if eq == 0 { Some(permutation[i]) } else { None }),
-            )
-            .collect::<Vec<_>>();
-
-        let mut hashes = vec![0u64; rows];
-        for (i, &offset) in self.partition_indices.iter().enumerate() {
-            let entry = block.get_by_offset(offset);
-            group_hash_value_spread(&hash_indices, entry.value(), i == 0, &mut hashes).unwrap();
-        }
-
-        let mut partition_permutation = vec![Vec::new(); self.num_partitions as usize];
-
-        let mut start = 0;
-        let mut cur = 0;
-        while cur < rows {
-            let partition = &mut partition_permutation
-                [(hashes[permutation[start] as usize] % self.num_partitions) as usize];
-            partition.push(permutation[start]);
-
-            let mut rank = 0; // this first value is rank 0
-            cur = start + 1;
-            while cur < rows {
-                if partition_equality[cur] == 0 {
-                    start = cur;
-                    break;
-                }
-
-                match self.func {
-                    WindowPartitionTopNFunc::RowNumber => {
-                        if cur - start < self.top {
-                            partition.push(permutation[cur]);
-                        }
-                    }
-                    WindowPartitionTopNFunc::Rank | WindowPartitionTopNFunc::DenseRank => {
-                        if full_equality[cur] == 0 {
-                            if matches!(self.func, WindowPartitionTopNFunc::Rank) {
-                                rank = cur - start
-                            } else {
-                                rank += 1
-                            }
-                        }
-
-                        if rank < self.top {
-                            partition.push(permutation[cur]);
-                        }
-                    }
-                }
-                cur += 1;
-            }
-        }
-        partition_permutation
+        let (kept, partition_starts) = keep_ranked(
+            rows,
+            self.top,
+            self.func,
+            |i| partition_equality[i] == 0,
+            |i| full_equality[i] == 0,
+        );
+        selection.rows = kept.into_iter().map(|i| permutation[i as usize]).collect();
+        selection.partition_starts = partition_starts;
+        selection
     }
+}
+
+/// Walk a sequence already sorted by (partition keys, order keys) and return
+/// the positions a ranking function could still rank within `top`, plus the
+/// offsets in that result where each partition starts. `new_partition(i)` and
+/// `new_order(i)` tell whether position `i > 0` starts a new partition or a
+/// new order-key group relative to position `i - 1`.
+pub fn keep_ranked(
+    len: usize,
+    top: usize,
+    func: WindowPartitionTopNFunc,
+    mut new_partition: impl FnMut(usize) -> bool,
+    mut new_order: impl FnMut(usize) -> bool,
+) -> (Vec<u32>, Vec<u32>) {
+    let mut kept = Vec::new();
+    let mut partition_starts = Vec::new();
+    let mut start = 0;
+    let mut rank = 0;
+    for i in 0..len {
+        if i == 0 || new_partition(i) {
+            start = i;
+            rank = 0;
+            partition_starts.push(kept.len() as u32);
+            kept.push(i as u32);
+            continue;
+        }
+        let pos = i - start;
+        let keep = match func {
+            WindowPartitionTopNFunc::RowNumber => pos < top,
+            WindowPartitionTopNFunc::Rank => {
+                if new_order(i) {
+                    rank = pos;
+                }
+                rank < top
+            }
+            WindowPartitionTopNFunc::DenseRank => {
+                if new_order(i) {
+                    rank += 1;
+                }
+                rank < top
+            }
+        };
+        if keep {
+            kept.push(i as u32);
+        }
+    }
+    (kept, partition_starts)
 }
 
 #[cfg(test)]

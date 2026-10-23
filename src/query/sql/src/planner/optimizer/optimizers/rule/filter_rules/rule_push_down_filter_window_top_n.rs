@@ -102,7 +102,7 @@ impl Rule for RulePushDownFilterWindowTopN {
             return self.apply_window_group(s_expr, filter, window_expr, &func_ctx, state);
         }
 
-        let window: Window = window_expr.plan().clone().try_into()?;
+        let mut window: Window = window_expr.plan().clone().try_into()?;
         let sort_expr = window_expr.child(0)?;
         let mut sort: Sort = sort_expr.plan().clone().try_into()?;
 
@@ -110,13 +110,12 @@ impl Rule for RulePushDownFilterWindowTopN {
             return Ok(());
         }
 
-        let predicates = filter
+        let Some(top_n) = filter
             .predicates
-            .into_iter()
-            .filter_map(|predicate| extract_top_n(window.index, predicate, &func_ctx))
-            .collect::<Vec<_>>();
-
-        let Some(top_n) = predicates.into_iter().min() else {
+            .iter()
+            .filter_map(|predicate| extract_top_n(window.index, predicate.clone(), &func_ctx))
+            .min()
+        else {
             return Ok(());
         };
 
@@ -141,14 +140,19 @@ impl Rule for RulePushDownFilterWindowTopN {
         }
 
         sort.window_partition.as_mut().unwrap().top = Some(top_n);
+        window.top = Some(top_n);
 
-        let mut result = SExpr::create_unary(
-            s_expr.plan.clone(),
-            SExpr::create_unary(
-                window_expr.plan.clone(),
-                sort_expr.replace_plan(Arc::new(sort.into())),
-            ),
+        // The window emits only rows ranked within `top_n`, so predicates that
+        // merely bound the rank from above are already satisfied.
+        let remaining = remaining_predicates(filter, window.index, top_n, &func_ctx);
+        let window_result = SExpr::create_unary(
+            Arc::new(window.into()),
+            sort_expr.replace_plan(Arc::new(sort.into())),
         );
+        let mut result = match remaining {
+            Some(filter) => SExpr::create_unary(Arc::new(filter.into()), window_result),
+            None => window_result,
+        };
         result.set_applied_rule(&self.id);
 
         state.add_result(result);
@@ -217,9 +221,13 @@ impl RulePushDownFilterWindowTopN {
         }
 
         window_group.windows[index].top = Some(top_n);
-        let mut result = s_expr.replace_children(vec![Arc::new(
-            window_expr.replace_plan(Arc::new(window_group.into())),
-        )]);
+        let column = window_group.windows[index].index;
+        let remaining = remaining_predicates(filter, column, top_n, func_ctx);
+        let group_result = window_expr.replace_plan(Arc::new(window_group.into()));
+        let mut result = match remaining {
+            Some(filter) => SExpr::create_unary(Arc::new(filter.into()), group_result),
+            None => group_result,
+        };
         result.set_applied_rule(&self.id);
         state.add_result(result);
 
@@ -242,11 +250,59 @@ fn can_truncate_window_group(window_group: &WindowGroup, index: usize) -> bool {
     })
 }
 
+/// Predicates still needed above a window that emits at most `top_n` rows
+/// per partition. `rank <= n`, `rank < n` and `rank = 1` are implied by the
+/// truncation; `rank = n` with `n > 1` and unrelated predicates are kept.
+/// Returns `None` when no predicate is left.
+fn remaining_predicates(
+    filter: Filter,
+    column: Symbol,
+    top_n: usize,
+    func_ctx: &FunctionContext,
+) -> Option<Filter> {
+    let predicates = filter
+        .predicates
+        .into_iter()
+        .filter(|predicate| {
+            !matches!(
+                extract_rank_bound(column, predicate, func_ctx),
+                Some(RankBound::AtMost(_)) | Some(RankBound::Exactly(1))
+            )
+        })
+        .collect::<Vec<_>>();
+    debug_assert!(top_n >= 1);
+    (!predicates.is_empty()).then_some(Filter { predicates })
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RankBound {
+    /// `rank <= n`
+    AtMost(usize),
+    /// `rank = n`
+    Exactly(usize),
+}
+
+impl RankBound {
+    fn top_n(self) -> usize {
+        match self {
+            RankBound::AtMost(n) | RankBound::Exactly(n) => n,
+        }
+    }
+}
+
 fn extract_top_n(
     column: Symbol,
     predicate: ScalarExpr,
     func_ctx: &FunctionContext,
 ) -> Option<usize> {
+    extract_rank_bound(column, &predicate, func_ctx).map(RankBound::top_n)
+}
+
+fn extract_rank_bound(
+    column: Symbol,
+    predicate: &ScalarExpr,
+    func_ctx: &FunctionContext,
+) -> Option<RankBound> {
     let ScalarExpr::FunctionCall(call) = predicate else {
         return None;
     };
@@ -258,7 +314,7 @@ fn extract_top_n(
             | (number, ScalarExpr::BoundColumnRef(col))
                 if col.column.index == column =>
             {
-                extract_i32(number, func_ctx).map(|n| n.max(0) as usize)
+                extract_i32(number, func_ctx).map(|n| RankBound::Exactly(n.max(0) as usize))
             }
             _ => None,
         };
@@ -286,11 +342,11 @@ fn extract_top_n(
         || func_name == ComparisonOp::LTE.to_func_name();
 
     extract_i32(right, func_ctx).map(|n| {
-        if eq {
+        RankBound::AtMost(if eq {
             n.max(0) as usize
         } else {
             n.max(1) as usize - 1
-        }
+        })
     })
 }
 

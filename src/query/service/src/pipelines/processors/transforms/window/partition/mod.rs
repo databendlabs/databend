@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod data_processor_strategy;
+mod transform_window_partial_top_n;
 mod transform_window_partition_collect;
 mod window_partition_buffer;
 mod window_partition_exchange;
@@ -20,6 +21,7 @@ mod window_partition_meta;
 mod window_partition_partial_top_n_exchange;
 
 pub use data_processor_strategy::*;
+pub use transform_window_partial_top_n::*;
 pub use transform_window_partition_collect::*;
 pub use window_partition_exchange::*;
 pub use window_partition_meta::*;

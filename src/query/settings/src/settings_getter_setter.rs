@@ -612,6 +612,22 @@ impl Settings {
         self.try_get_u64("window_partition_sort_block_size")
     }
 
+    pub fn get_enable_window_partial_top_n(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_window_partial_top_n")? == 1)
+    }
+
+    pub fn get_window_partial_top_n_memory_mb(&self) -> Result<u64> {
+        self.try_get_u64("window_partial_top_n_memory_mb")
+    }
+
+    pub fn get_window_partial_top_n_local_passthrough_ratio(&self) -> Result<u64> {
+        self.try_get_u64("window_partial_top_n_local_passthrough_ratio")
+    }
+
+    pub fn get_window_partial_top_n_passthrough_ratio(&self) -> Result<u64> {
+        self.try_get_u64("window_partial_top_n_passthrough_ratio")
+    }
+
     pub fn get_sort_spilling_batch_bytes(&self) -> Result<usize> {
         Ok(self.try_get_u64("sort_spilling_batch_bytes")? as usize)
     }

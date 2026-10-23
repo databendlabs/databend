@@ -1,0 +1,74 @@
+# A ranking window with a pushed-down top-n emits only the rows ranked within
+# it, so the planner drops the predicates the truncation already satisfies.
+# Predicates it cannot satisfy (rank = n with n > 1, unrelated conjuncts) stay.
+
+statement ok
+CREATE DATABASE IF NOT EXISTS test_window_top_n_in_operator
+
+statement ok
+USE test_window_top_n_in_operator
+
+statement ok
+CREATE OR REPLACE TABLE t(k INT, v INT, w INT) AS SELECT number % 3, number % 5, number FROM numbers(30)
+
+query III
+SELECT k, v, w FROM (SELECT k, v, w, ROW_NUMBER() OVER (PARTITION BY k ORDER BY w DESC) rn FROM t) WHERE rn = 1 ORDER BY k
+----
+0 2 27
+1 3 28
+2 4 29
+
+query IIII
+SELECT k, v, w, rn FROM (SELECT k, v, w, ROW_NUMBER() OVER (PARTITION BY k ORDER BY w DESC) rn FROM t) WHERE rn <= 2 ORDER BY k, rn
+----
+0 2 27 1
+0 4 24 2
+1 3 28 1
+1 0 25 2
+2 4 29 1
+2 1 26 2
+
+# rank = 2 is not implied by the truncation and must still filter
+query IIII
+SELECT k, v, w, rn FROM (SELECT k, v, w, ROW_NUMBER() OVER (PARTITION BY k ORDER BY w DESC) rn FROM t) WHERE rn = 2 ORDER BY k
+----
+0 4 24 2
+1 0 25 2
+2 1 26 2
+
+# an unrelated conjunct stays above the window
+query IIII
+SELECT k, v, w, rn FROM (SELECT k, v, w, ROW_NUMBER() OVER (PARTITION BY k ORDER BY w DESC) rn FROM t) WHERE rn <= 3 AND v = 4 ORDER BY k, rn
+----
+0 4 24 2
+2 4 29 1
+
+# rank keeps every row tied at the boundary; dense_rank counts distinct values
+query IIII
+SELECT k, v, w, r FROM (SELECT k, v, w, RANK() OVER (PARTITION BY k ORDER BY v DESC) r FROM t) WHERE r <= 2 ORDER BY k, w
+----
+0 4 9 1
+0 4 24 1
+1 4 4 1
+1 4 19 1
+2 4 14 1
+2 4 29 1
+
+query IIII
+SELECT k, v, w, r FROM (SELECT k, v, w, DENSE_RANK() OVER (PARTITION BY k ORDER BY v DESC) r FROM t) WHERE r <= 2 ORDER BY k, w
+----
+0 3 3 2
+0 4 9 1
+0 3 18 2
+0 4 24 1
+1 4 4 1
+1 3 13 2
+1 4 19 1
+1 3 28 2
+2 3 8 2
+2 4 14 1
+2 3 23 2
+2 4 29 1
+
+statement ok
+DROP DATABASE test_window_top_n_in_operator
