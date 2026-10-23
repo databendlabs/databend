@@ -35,6 +35,7 @@ use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::TransformWindowPartialTopN;
 use crate::pipelines::processors::transforms::WindowPartitionExchange;
+use crate::pipelines::processors::transforms::WindowPartitionTopNExchange;
 
 /// Pre-exchange reduction for a `WindowPartition` with a pushed-down ranking
 /// top-n. It runs on the sending side of the hash exchange (or directly below
@@ -47,6 +48,12 @@ pub struct WindowPartialTopN {
     pub partition_by: Vec<Symbol>,
     pub order_by: Vec<SortDesc>,
     pub top_n: WindowPartitionTopN,
+    /// Whether the rows cross a hash exchange after this node. Then every
+    /// thread first takes ownership of its share of the keys through a local
+    /// redistribution, so the node keeps one candidate set per key per node.
+    /// Without an exchange the rows stay on this node and each thread reduces
+    /// its own stream; the window partition below redistributes anyway.
+    pub distributed: bool,
 
     pub stat_info: Option<PlanStatsInfo>,
 }
@@ -70,13 +77,14 @@ impl WindowPartialTopN {
             return Ok(input);
         }
 
-        let partial = |input: PhysicalPlan| {
+        let partial = |input: PhysicalPlan, distributed: bool| {
             PhysicalPlan::new(WindowPartialTopN {
                 meta: PhysicalPlanMeta::new("WindowPartialTopN"),
                 input,
                 partition_by: partition_by.to_vec(),
                 order_by: order_by.to_vec(),
                 top_n: top_n.clone(),
+                distributed,
                 stat_info: stat_info.cloned(),
             })
         };
@@ -84,7 +92,7 @@ impl WindowPartialTopN {
         if let Some(exchange) = Exchange::from_physical_plan(&input) {
             return Ok(PhysicalPlan::new(Exchange {
                 meta: exchange.meta.clone(),
-                input: partial(exchange.input.clone()),
+                input: partial(exchange.input.clone(), true),
                 kind: exchange.kind.clone(),
                 keys: exchange.keys.clone(),
                 ignore_exchange: exchange.ignore_exchange,
@@ -92,7 +100,7 @@ impl WindowPartialTopN {
             }));
         }
 
-        Ok(partial(input))
+        Ok(partial(input, false))
     }
 }
 
@@ -136,6 +144,7 @@ impl IPhysicalPlan for WindowPartialTopN {
             partition_by: self.partition_by.clone(),
             order_by: self.order_by.clone(),
             top_n: self.top_n.clone(),
+            distributed: self.distributed,
             stat_info: self.stat_info.clone(),
         })
     }
@@ -149,8 +158,12 @@ impl IPhysicalPlan for WindowPartialTopN {
         let max_memory = settings
             .get_window_partial_top_n_memory_mb()?
             .saturating_mul(1024 * 1024) as usize;
-        let passthrough_ratio =
-            settings.get_window_partial_top_n_passthrough_ratio()? as f64 / 100.0;
+        let passthrough_ratio = if self.distributed {
+            settings.get_window_partial_top_n_passthrough_ratio()?
+        } else {
+            settings.get_window_partial_top_n_local_passthrough_ratio()?
+        } as f64
+            / 100.0;
 
         let schema = self.output_schema()?;
         let partition_by = self
@@ -173,11 +186,29 @@ impl IPhysicalPlan for WindowPartialTopN {
 
         // Route every row of a partition to one thread first, so each thread
         // holds candidates for its own share of the keys instead of all of
-        // them.
-        builder.main_pipeline.exchange(
-            num_processors,
-            WindowPartitionExchange::create(partition_by.clone(), num_partitions),
-        )?;
+        // them. The per-block truncating exchange prunes inside each block on
+        // the way (in parallel, before any thread is hit by a hot key); the
+        // transform then prunes across blocks.
+        if !self.distributed {
+            // Nothing to own: the rows stay here and WindowPartition will
+            // redistribute them. Reduce each thread's stream as it comes.
+        } else if self.top_n.top < 10000 {
+            builder.main_pipeline.exchange(
+                num_processors,
+                WindowPartitionTopNExchange::create(
+                    partition_by.clone(),
+                    order_by.clone(),
+                    self.top_n.top,
+                    self.top_n.func,
+                    num_partitions as u64,
+                ),
+            )?;
+        } else {
+            builder.main_pipeline.exchange(
+                num_processors,
+                WindowPartitionExchange::create(partition_by.clone(), num_partitions),
+            )?;
+        }
 
         builder.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(AccumulatingTransformer::create(

@@ -821,6 +821,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
+                ("window_partial_top_n_local_passthrough_ratio", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(50),
+                    desc: "Like window_partial_top_n_passthrough_ratio, for a window partial top-n whose rows do not cross an exchange: there is no network to save, so it gives up sooner.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=100)),
+                }),
                 ("window_partial_top_n_passthrough_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(80),
                     desc: "Percentage of input rows the window partial top-n must still keep when its memory is full to give up reducing and pass rows through.",

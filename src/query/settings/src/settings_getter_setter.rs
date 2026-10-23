@@ -620,6 +620,10 @@ impl Settings {
         self.try_get_u64("window_partial_top_n_memory_mb")
     }
 
+    pub fn get_window_partial_top_n_local_passthrough_ratio(&self) -> Result<u64> {
+        self.try_get_u64("window_partial_top_n_local_passthrough_ratio")
+    }
+
     pub fn get_window_partial_top_n_passthrough_ratio(&self) -> Result<u64> {
         self.try_get_u64("window_partial_top_n_passthrough_ratio")
     }

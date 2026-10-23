@@ -176,45 +176,64 @@ impl WindowTopNSelector<'_> {
         let full_equality = sort_compare.equality_index().to_vec();
         let permutation = sort_compare.take_permutation();
 
-        let mut start = 0;
-        let mut cur = 0;
-        while cur < rows {
-            selection.partition_starts.push(selection.rows.len() as u32);
-            selection.rows.push(permutation[start]);
-
-            let mut rank = 0; // this first value is rank 0
-            cur = start + 1;
-            while cur < rows {
-                if partition_equality[cur] == 0 {
-                    start = cur;
-                    break;
-                }
-
-                match self.func {
-                    WindowPartitionTopNFunc::RowNumber => {
-                        if cur - start < self.top {
-                            selection.rows.push(permutation[cur]);
-                        }
-                    }
-                    WindowPartitionTopNFunc::Rank | WindowPartitionTopNFunc::DenseRank => {
-                        if full_equality[cur] == 0 {
-                            if matches!(self.func, WindowPartitionTopNFunc::Rank) {
-                                rank = cur - start
-                            } else {
-                                rank += 1
-                            }
-                        }
-
-                        if rank < self.top {
-                            selection.rows.push(permutation[cur]);
-                        }
-                    }
-                }
-                cur += 1;
-            }
-        }
+        let (kept, partition_starts) = keep_ranked(
+            rows,
+            self.top,
+            self.func,
+            |i| partition_equality[i] == 0,
+            |i| full_equality[i] == 0,
+        );
+        selection.rows = kept.into_iter().map(|i| permutation[i as usize]).collect();
+        selection.partition_starts = partition_starts;
         selection
     }
+}
+
+/// Walk a sequence already sorted by (partition keys, order keys) and return
+/// the positions a ranking function could still rank within `top`, plus the
+/// offsets in that result where each partition starts. `new_partition(i)` and
+/// `new_order(i)` tell whether position `i > 0` starts a new partition or a
+/// new order-key group relative to position `i - 1`.
+pub fn keep_ranked(
+    len: usize,
+    top: usize,
+    func: WindowPartitionTopNFunc,
+    mut new_partition: impl FnMut(usize) -> bool,
+    mut new_order: impl FnMut(usize) -> bool,
+) -> (Vec<u32>, Vec<u32>) {
+    let mut kept = Vec::new();
+    let mut partition_starts = Vec::new();
+    let mut start = 0;
+    let mut rank = 0;
+    for i in 0..len {
+        if i == 0 || new_partition(i) {
+            start = i;
+            rank = 0;
+            partition_starts.push(kept.len() as u32);
+            kept.push(i as u32);
+            continue;
+        }
+        let pos = i - start;
+        let keep = match func {
+            WindowPartitionTopNFunc::RowNumber => pos < top,
+            WindowPartitionTopNFunc::Rank => {
+                if new_order(i) {
+                    rank = pos;
+                }
+                rank < top
+            }
+            WindowPartitionTopNFunc::DenseRank => {
+                if new_order(i) {
+                    rank += 1;
+                }
+                rank < top
+            }
+        };
+        if keep {
+            kept.push(i as u32);
+        }
+    }
+    (kept, partition_starts)
 }
 
 #[cfg(test)]
