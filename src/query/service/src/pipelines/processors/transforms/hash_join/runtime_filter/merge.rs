@@ -109,7 +109,7 @@ fn merge_inlist(
         .iter()
         .map(|packet| packet.get(&rf_id).unwrap().inlist.clone().unwrap())
         .collect::<Vec<_>>();
-    let column = Column::concat_columns(columns.into_iter())?;
+    let column = Column::concat_columns(columns)?;
     Ok(Some(column))
 }
 

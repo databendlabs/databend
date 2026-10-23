@@ -373,6 +373,7 @@ impl<T: ReturnType> NullableColumn<T> {
 
 impl NullableColumn<AnyType> {
     pub fn new(column: Column, validity: Bitmap) -> Self {
+        let column = decode_nested(column);
         debug_assert_eq!(column.len(), validity.len());
         debug_assert!(!column.is_nullable() && !column.is_null());
         NullableColumn { column, validity }
@@ -399,9 +400,20 @@ impl NullableColumn<AnyType> {
     }
 
     pub fn new_column(column: Column, validity: Bitmap) -> Column {
+        let column = decode_nested(column);
         debug_assert_eq!(column.len(), validity.len());
         debug_assert!(!matches!(column, Column::Nullable(_)));
         Column::Nullable(Box::new(NullableColumn { column, validity }))
+    }
+}
+
+/// Encoded columns only appear at the top level of a block: consumers decode
+/// `Column::Encoded`, but not inside other columns. Wrapping one, e.g. when an outer join
+/// makes its input nullable, decodes it.
+fn decode_nested(column: Column) -> Column {
+    match column {
+        Column::Encoded(encoded) => encoded.decode(),
+        column => column,
     }
 }
 

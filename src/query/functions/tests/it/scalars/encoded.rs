@@ -1,0 +1,231 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Expressions over encoded columns must evaluate exactly like over the decoded columns,
+//! whether the function reads the encoding directly (decimal arithmetic) or not.
+
+use std::borrow::Cow;
+
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataBlock;
+use databend_common_expression::EvaluateOptions;
+use databend_common_expression::Evaluator;
+use databend_common_expression::FilterExecutor;
+use databend_common_expression::FromData;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::type_check;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
+use databend_common_expression::types::DecimalColumn;
+use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::DictColumn;
+use databend_common_expression::types::EncodedColumn;
+use databend_common_expression::types::Float64Type;
+use databend_common_expression::types::ForColumn;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::NarrowBuffer;
+use databend_common_expression::types::StringType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+
+use super::parser;
+
+fn decimal(values: &[i64], precision: u8, scale: u8) -> (Column, Column) {
+    let size = DecimalSize::new_unchecked(precision, scale);
+    let plain = Column::Decimal(DecimalColumn::Decimal64(values.to_vec().into(), size));
+    (encode(&plain), plain)
+}
+
+fn encode(plain: &Column) -> Column {
+    Column::Encoded(Box::new(EncodedColumn::For(
+        ForColumn::try_encode(plain).unwrap(),
+    )))
+}
+
+fn build_dict(plain: &Column) -> Column {
+    let dict = DictColumn::try_encode(plain, 1 << 16).unwrap();
+    Column::Encoded(Box::new(EncodedColumn::Dict(dict)))
+}
+
+fn dict(values: &[&str], keys: &[u32]) -> (Column, Column) {
+    let dictionary = StringType::from_data(values.to_vec());
+    let plain = StringType::from_data(keys.iter().map(|k| values[*k as usize]).collect());
+    let keys = NarrowBuffer::pack(keys.iter().map(|k| *k as u64), values.len() as u64 - 1);
+    let encoded = Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(
+        keys, dictionary,
+    ))));
+    (encoded, plain)
+}
+
+#[test]
+fn test_eval_on_encoded_columns() {
+    let n = 257;
+    let price = (0..n).map(|i| 90_000 + i * 4099).collect::<Vec<i64>>();
+    let discount = (0..n).map(|i| i % 11).collect::<Vec<i64>>();
+    let tax = (0..n).map(|i| i % 9).collect::<Vec<i64>>();
+    // non-zero divisor
+    let quantity = (0..n).map(|i| 100 + i % 50 * 100).collect::<Vec<i64>>();
+    let narrow = (0..n).map(|i| i * 3 - 200).collect::<Vec<i64>>();
+    let flags = (0..n).map(|i| (i % 3) as u32).collect::<Vec<_>>();
+    let dates = (0..n as i32)
+        .map(|i| 10_400 + (i * 7) % 200)
+        .collect::<Vec<_>>();
+    let quantities = (0..n as i32).map(|i| 1 + i % 50).collect::<Vec<_>>();
+    let codes = (0..n)
+        .map(|i| [7, 1_000_000_007, -3][i as usize % 3])
+        .collect::<Vec<i64>>();
+    let ratios = (0..n)
+        .map(|i| [0.5, -2.25, 1e9][i as usize % 3])
+        .collect::<Vec<f64>>();
+    let amounts = (0..n)
+        .map(|i| [100, 250_000_000_000][i as usize % 2])
+        .collect::<Vec<i64>>();
+
+    let columns = [
+        ("price", decimal(&price, 15, 2)),
+        ("discount", decimal(&discount, 15, 2)),
+        ("tax", decimal(&tax, 15, 2)),
+        ("quantity", decimal(&quantity, 15, 2)),
+        ("narrow", decimal(&narrow, 6, 3)),
+        ("flag", dict(&["A", "N", "R"], &flags)),
+        ("ship", {
+            let plain = DateType::from_data(dates);
+            (encode(&plain), plain)
+        }),
+        ("qty", {
+            let plain = Int32Type::from_data(quantities);
+            (encode(&plain), plain)
+        }),
+        // block-level dictionaries over wide-range / non-integer values
+        ("code", {
+            let plain = Int64Type::from_data(codes);
+            (build_dict(&plain), plain)
+        }),
+        ("ratio", {
+            let plain = Float64Type::from_data(ratios);
+            (build_dict(&plain), plain)
+        }),
+        ("amount", {
+            let plain = Column::Decimal(DecimalColumn::Decimal64(
+                amounts.into(),
+                DecimalSize::new_unchecked(15, 2),
+            ));
+            (build_dict(&plain), plain)
+        }),
+    ];
+
+    // (expression, whether the result stays encoded)
+    let exprs = [
+        ("price + discount", true),
+        ("price - discount", true),
+        ("1 - discount", true),
+        ("discount + 1", true),
+        ("price * (1 - discount)", true),
+        ("price * (1 - discount) * (1 + tax)", true),
+        ("price * discount", true),
+        ("price / quantity", false),
+        ("price % quantity", false),
+        // different scales
+        ("price + narrow", false),
+        ("narrow * narrow", true),
+        ("price + 1.5", true),
+        ("price * 2", true),
+        ("price > quantity", false),
+        ("price::DECIMAL(20, 4)", false),
+        ("floor(price * discount)", false),
+        ("flag = 'N'", false),
+        ("concat(flag, 'x')", false),
+        ("if(flag = 'A', price, discount)", false),
+        ("ship", true),
+        ("ship <= '1998-09-02'::DATE", false),
+        ("'1998-09-02'::DATE > ship", false),
+        ("ship = '1998-08-01'::DATE", false),
+        ("ship >= '2000-01-01'::DATE", false),
+        ("qty < 25", false),
+        ("qty != 7", false),
+        ("qty + 1", false),
+        ("price * discount > 1000", false),
+        ("ship <= '1998-09-02'::DATE and qty < 25", false),
+        ("code", true),
+        ("code + 1", false),
+        ("code = 7", false),
+        ("code > 0 and ratio < 1", false),
+        ("ratio * 2", false),
+        ("amount * (1 - discount)", false),
+        ("amount + price", false),
+        ("amount > 1000", false),
+    ];
+
+    let names = columns
+        .iter()
+        .map(|(name, (encoded, _))| (*name, encoded.data_type()))
+        .collect::<Vec<_>>();
+    let encoded_block = DataBlock::new(
+        columns
+            .iter()
+            .map(|(_, (encoded, _))| BlockEntry::from(encoded.clone()))
+            .collect(),
+        n as usize,
+    );
+    let plain_block = DataBlock::new(
+        columns
+            .iter()
+            .map(|(_, (_, plain))| BlockEntry::from(plain.clone()))
+            .collect(),
+        n as usize,
+    );
+
+    let func_ctx = FunctionContext::default();
+    for (text, stays_encoded) in exprs {
+        let raw_expr = parser::parse_raw_expr(text, &names, &BUILTIN_FUNCTIONS);
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+        let expr = type_check::rewrite_function_to_cast(expr, &BUILTIN_FUNCTIONS);
+        // Fold constants like the planner does, so comparisons see constant operands.
+        let (expr, _) = ConstantFolder::fold(Cow::Owned(expr), &func_ctx, &BUILTIN_FUNCTIONS);
+        let expr = expr.into_owned();
+
+        let encoded_evaluator = Evaluator::new(&encoded_block, &func_ctx, &BUILTIN_FUNCTIONS);
+        let plain_evaluator = Evaluator::new(&plain_block, &func_ctx, &BUILTIN_FUNCTIONS);
+        let plain = plain_evaluator.run(&expr).unwrap();
+
+        let encoded = encoded_evaluator.run(&expr).unwrap();
+        assert!(!encoded.is_encoded(), "{text}: result must be decoded");
+        assert_eq!(encoded, plain, "{text}");
+
+        let kept = encoded_evaluator
+            .partial_run(&expr, None, &mut EvaluateOptions::default(), true)
+            .unwrap();
+        assert_eq!(kept.is_encoded(), stays_encoded, "{text}");
+        assert_eq!(kept.decode_encoded(), plain, "{text}");
+
+        // The selector (filter operator) agrees on predicates.
+        if expr.data_type() == &DataType::Boolean {
+            let count = |block: &DataBlock| {
+                FilterExecutor::new(
+                    expr.clone(),
+                    func_ctx.clone(),
+                    n as usize,
+                    None,
+                    &BUILTIN_FUNCTIONS,
+                    false,
+                )
+                .select(block)
+                .unwrap()
+            };
+            assert_eq!(count(&encoded_block), count(&plain_block), "{text}");
+        }
+    }
+}

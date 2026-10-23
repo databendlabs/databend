@@ -937,7 +937,7 @@ impl FuseLowLevelColumnBatchReader {
         if parts.len() == 1 {
             Ok(parts.pop().expect("one logical-column batch"))
         } else {
-            Column::concat_columns(parts.into_iter())
+            Column::concat_columns(parts)
         }
     }
 
@@ -974,7 +974,7 @@ impl FuseLowLevelColumnBatchReader {
         if parts.len() == 1 {
             Ok(parts.pop())
         } else {
-            Ok(Some(Column::concat_columns(parts.into_iter())?))
+            Ok(Some(Column::concat_columns(parts)?))
         }
     }
 
@@ -1045,7 +1045,7 @@ impl FuseLowLevelFullRowReader {
                 Some(column) if column.len() == actual_rows => column,
                 Some(column) => {
                     let tail = reader.read_rows(actual_rows - column.len())?;
-                    Column::concat_columns([column, tail].into_iter())?
+                    Column::concat_columns(vec![column, tail])?
                 }
                 None => reader.read_rows(actual_rows)?,
             };
@@ -1730,7 +1730,7 @@ mod tests {
         while let Some(column) = reader.read().unwrap() {
             parts.push(column);
         }
-        Column::concat_columns(parts.into_iter()).unwrap()
+        Column::concat_columns(parts).unwrap()
     }
 
     fn read_columns(
@@ -1751,7 +1751,7 @@ mod tests {
                 lengths.push(column.len());
                 parts.push(column);
             }
-            columns.push(Column::concat_columns(parts.into_iter()).unwrap());
+            columns.push(Column::concat_columns(parts).unwrap());
             boundaries.push(lengths);
             data = reader.finish().unwrap();
         }
@@ -1830,10 +1830,7 @@ mod tests {
         while let Some(part) = column.read_min_rows(2).unwrap() {
             parts.push(part);
         }
-        assert_eq!(
-            Column::concat_columns(parts.into_iter()).unwrap(),
-            columns[0]
-        );
+        assert_eq!(Column::concat_columns(parts).unwrap(), columns[0]);
         column.finish().unwrap();
 
         let mut reader = block.read_full_rows().unwrap();
@@ -2081,10 +2078,7 @@ mod tests {
         reader.finish().unwrap().finish().unwrap();
 
         assert_eq!(boundaries, vec![2, 1, 1, 1]);
-        assert_eq!(
-            Column::concat_columns(batches.into_iter()).unwrap(),
-            expected
-        );
+        assert_eq!(Column::concat_columns(batches).unwrap(), expected);
     }
 
     #[test]
@@ -2237,10 +2231,7 @@ mod tests {
         reader.finish().unwrap().finish().unwrap();
 
         assert_eq!(boundaries, vec![2, 1, 2]);
-        assert_eq!(
-            Column::concat_columns(batches.into_iter()).unwrap(),
-            expected
-        );
+        assert_eq!(Column::concat_columns(batches).unwrap(), expected);
     }
 
     #[test]
@@ -2456,7 +2447,7 @@ mod tests {
             assert!(batch.len() > 0);
             batches.push(batch);
         }
-        let column = Column::concat_columns(batches.into_iter()).unwrap();
+        let column = Column::concat_columns(batches).unwrap();
         let actual = column
             .iter()
             .map(|value| value.to_owned())

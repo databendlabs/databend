@@ -33,6 +33,7 @@ use crate::FunctionEval;
 use crate::FunctionRegistry;
 use crate::RemoteExpr;
 use crate::ScalarRef;
+use crate::SelectOp;
 use crate::block::DataBlock;
 use crate::expr::*;
 use crate::expression::Expr;
@@ -227,11 +228,12 @@ impl<'a> Evaluator<'a> {
     }
 
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
-        self.partial_run(expr, None, &mut EvaluateOptions::default())
+        self.partial_run(expr, None, &mut EvaluateOptions::default(), false)
             .map_err(|err| Self::map_err(err, expr))
     }
 
-    fn map_err(err: ErrorCode, expr: &Expr) -> ErrorCode {
+    /// Adds the expression to an error of evaluating it, like [`Self::run`] does.
+    pub fn map_err(err: ErrorCode, expr: &Expr) -> ErrorCode {
         let expr_str = format!("`{}`", expr.sql_display());
         if err.message().contains(expr_str.as_str()) {
             err
@@ -243,12 +245,17 @@ impl<'a> Evaluator<'a> {
 
     /// Run an expression partially, only the rows that are valid in the validity bitmap
     /// will be evaluated, the rest will be default values and should not throw any error.
+    ///
+    /// `keep_encoded`: the result may be an encoded column (see
+    /// [`crate::types::EncodedColumn`]), otherwise it is decoded. Only set it where the result
+    /// is stored (e.g. into a block) or passed to a function that accepts encoded arguments.
     #[recursive::recursive]
     pub fn partial_run(
         &self,
         expr: &Expr,
         validity: Option<Bitmap>,
         options: &mut EvaluateOptions,
+        keep_encoded: bool,
     ) -> Result<Value<AnyType>> {
         debug_assert!(
             validity.is_none() || validity.as_ref().unwrap().len() == self.data_block.num_rows()
@@ -266,7 +273,7 @@ impl<'a> Evaluator<'a> {
                 expr: inner,
                 dest_type,
             }) => {
-                let value = self.partial_run(inner, validity.clone(), options)?;
+                let value = self.partial_run(inner, validity.clone(), options, false)?;
                 let src_type = inner.data_type();
                 if *is_try {
                     self.run_try_cast(*span, src_type, dest_type, value, &|| expr.sql_display())?
@@ -316,7 +323,7 @@ impl<'a> Evaluator<'a> {
                 let data_types = args.iter().map(|arg| arg.data_type().clone()).collect();
                 let args = args
                     .iter()
-                    .map(|expr| self.partial_run(expr, validity.clone(), options))
+                    .map(|expr| self.partial_run(expr, validity.clone(), options, false))
                     .collect::<Result<Vec<_>>>()?;
                 assert!(
                     args.iter()
@@ -356,7 +363,41 @@ impl<'a> Evaluator<'a> {
             )
         }
 
-        Ok(result)
+        Ok(if keep_encoded {
+            result
+        } else {
+            result.decode_encoded()
+        })
+    }
+
+    /// `<column> <op> <constant>` over an encoded column, or `<column> <op> <column>` over two
+    /// frame of reference encoded columns, evaluated without decoding (on the deltas / once per
+    /// dictionary value). `None` if the arguments do not have this form.
+    pub fn try_compare_encoded(&self, op: &SelectOp, args: &[Expr]) -> Option<Bitmap> {
+        let encoded = |id: usize| match self.data_block.get_by_offset(id) {
+            BlockEntry::Column(Column::Encoded(encoded)) => Some(encoded),
+            _ => None,
+        };
+        let (id, scalar, op) = match args {
+            [
+                Expr::ColumnRef(ColumnRef { id, .. }),
+                Expr::Constant(Constant { scalar, .. }),
+            ] => (*id, scalar, op.clone()),
+            [
+                Expr::Constant(Constant { scalar, .. }),
+                Expr::ColumnRef(ColumnRef { id, .. }),
+            ] => (*id, scalar, op.reverse()),
+            // `<column> <op> <column>`, both frame of reference encoded.
+            [
+                Expr::ColumnRef(ColumnRef { id: lhs, .. }),
+                Expr::ColumnRef(ColumnRef { id: rhs, .. }),
+            ] => {
+                let rhs = encoded(*rhs)?.as_for()?;
+                return encoded(*lhs)?.as_for()?.compare_for(op, rhs);
+            }
+            _ => return None,
+        };
+        encoded(id)?.compare_scalar(&op, scalar)
     }
 
     fn eval_common_call(
@@ -384,9 +425,25 @@ impl<'a> Evaluator<'a> {
             child_option.strict_eval = false;
         }
 
+        if args.len() == 2
+            && let Some(op) = SelectOp::try_from_func_name(&function.signature.name)
+            && let Some(bitmap) = self.try_compare_encoded(&op, args)
+        {
+            return Ok(Value::Column(Column::Boolean(bitmap)));
+        }
+
+        let accepts_encoded_args = function
+            .eval
+            .as_scalar()
+            .is_some_and(|(_, _, eval)| eval.accepts_encoded_args());
         let mut args_value = Vec::with_capacity(args.len());
         for expr in args {
-            match self.partial_run(expr, validity.clone(), &mut child_option) {
+            match self.partial_run(
+                expr,
+                validity.clone(),
+                &mut child_option,
+                accepts_encoded_args,
+            ) {
                 Ok(value) => args_value.push(value),
                 Err(err) => {
                     return Err(self.attach_function_argument_mismatch_hint(
@@ -1692,7 +1749,7 @@ impl<'a> Evaluator<'a> {
         let mut flags = Vec::new();
         let mut results = Vec::new();
         for cond_idx in (0..args.len() - 1).step_by(2) {
-            let cond = self.partial_run(&args[cond_idx], Some(validity.clone()), options)?;
+            let cond = self.partial_run(&args[cond_idx], Some(validity.clone()), options, false)?;
             match cond.try_downcast::<NullableType<BooleanType>>().unwrap() {
                 Value::Scalar(None | Some(false)) => {
                     results.push(Value::Scalar(Scalar::default_value(&generics[0])));
@@ -1703,6 +1760,7 @@ impl<'a> Evaluator<'a> {
                         &args[cond_idx + 1],
                         Some(validity.clone()),
                         options,
+                        false,
                     )?);
                     validity = Bitmap::new_constant(false, num_rows);
                     flags.push(Bitmap::new_constant(true, len.unwrap_or(1)));
@@ -1714,6 +1772,7 @@ impl<'a> Evaluator<'a> {
                         &args[cond_idx + 1],
                         Some((&validity) & (&flag)),
                         options,
+                        false,
                     )?);
                     validity = (&validity) & (&flag.not());
                     flags.push(flag);
@@ -1721,7 +1780,8 @@ impl<'a> Evaluator<'a> {
             };
             conds.push(cond);
         }
-        let else_result = self.partial_run(&args[args.len() - 1], Some(validity), options)?;
+        let else_result =
+            self.partial_run(&args[args.len() - 1], Some(validity), options, false)?;
 
         // Assert that all the arguments have the same length.
         assert!(
@@ -1790,6 +1850,7 @@ impl<'a> Evaluator<'a> {
                 arg,
                 validity.clone(),
                 options,
+                false,
             )?) {
                 Value::Scalar(false) if is_or => {
                     continue;
@@ -2492,7 +2553,7 @@ impl<'a> Evaluator<'a> {
             )),
             Expr::ColumnRef(ColumnRef { id, .. }) => {
                 let entry = self.data_block.get_by_offset(*id);
-                Ok((entry.value().clone(), entry.data_type()))
+                Ok((entry.decoded_value(), entry.data_type()))
             }
             Expr::Cast(Cast {
                 span,
@@ -2640,7 +2701,9 @@ impl<'a> Evaluator<'a> {
                 let data_types = args.iter().map(|arg| arg.data_type().clone()).collect();
                 let args = args
                     .iter()
-                    .map(|expr| self.partial_run(expr, None, &mut EvaluateOptions::default()))
+                    .map(|expr| {
+                        self.partial_run(expr, None, &mut EvaluateOptions::default(), false)
+                    })
                     .collect::<Result<Vec<_>>>()?;
                 assert!(
                     args.iter()

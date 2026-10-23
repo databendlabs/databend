@@ -141,6 +141,9 @@ impl FieldEncoderCSV {
         out_buf: &mut Vec<u8>,
     ) -> Result<()> {
         match &column {
+            Column::Encoded(c) => c.with_row(row_index, |column, row| {
+                self.write_field(column, row, out_buf)
+            })?,
             Column::Nullable(deref!(c)) => self.write_nullable(c, row_index, out_buf)?,
 
             Column::Binary(c) => {

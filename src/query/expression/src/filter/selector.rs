@@ -303,6 +303,17 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
+        if let Some(bitmap) = self.evaluator.try_compare_encoded(select_op, exprs) {
+            let buffers = SelectionBuffers {
+                true_selection,
+                false_selection: false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            };
+            return Ok(self.select_boolean_column_adapt(bitmap, buffers, false_selection.1));
+        }
         let selection = self.selection(
             true_selection,
             false_selection.0,
@@ -424,7 +435,11 @@ impl<'a> Selector<'a> {
         buffers: SelectionBuffers,
         has_false: bool,
     ) -> Result<usize> {
-        let column = self.evaluator.data_block().get_by_offset(id).value();
+        let column = self
+            .evaluator
+            .data_block()
+            .get_by_offset(id)
+            .decoded_value();
         self.select_value(column, data_type, buffers, has_false)
     }
 
@@ -501,7 +516,10 @@ impl<'a> Selector<'a> {
 
                 let args = args
                     .iter()
-                    .map(|expr| self.evaluator.partial_run(expr, None, &mut eval_options))
+                    .map(|expr| {
+                        self.evaluator
+                            .partial_run(expr, None, &mut eval_options, false)
+                    })
                     .collect::<Result<Vec<_>>>()?;
                 assert!(
                     args.iter()
@@ -594,7 +612,10 @@ impl<'a> Selector<'a> {
                 let data_types = args.iter().map(|arg| arg.data_type().clone()).collect();
                 let args = args
                     .iter()
-                    .map(|expr| self.evaluator.partial_run(expr, None, &mut eval_options))
+                    .map(|expr| {
+                        self.evaluator
+                            .partial_run(expr, None, &mut eval_options, false)
+                    })
                     .collect::<Result<Vec<_>>>()?;
                 assert!(
                     args.iter()

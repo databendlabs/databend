@@ -251,6 +251,7 @@ impl Debug for Column {
                 .finish()
         }
         match self {
+            Column::Encoded(col) => write!(f, "{col:?}"),
             Column::Null { len } => f.debug_struct("Null").field("len", len).finish(),
             Column::EmptyArray { len } => f.debug_struct("EmptyArray").field("len", len).finish(),
             Column::EmptyMap { len } => f.debug_struct("EmptyMap").field("len", len).finish(),
