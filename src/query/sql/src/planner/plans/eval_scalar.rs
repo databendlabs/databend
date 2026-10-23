@@ -37,6 +37,7 @@ use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::BoundColumnRef;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 
@@ -295,6 +296,8 @@ impl Operator for EvalScalar {
     }
 }
 
+impl PhysicalOperator for EvalScalar {}
+
 #[cfg(test)]
 mod tests {
     use databend_common_expression::Scalar;
@@ -387,7 +390,7 @@ mod tests {
         );
         let eval = SExpr::create_unary(EvalScalar { items }, input);
         RelExpr::with_s_expr(&eval)
-            .derive_cardinality(&StatContext::default())
+            .derive_cardinality(&StatContext::without_settings(Default::default()))
             .unwrap()
     }
 
@@ -420,7 +423,7 @@ mod tests {
         );
 
         let derived = RelExpr::with_s_expr(&eval)
-            .derive_cardinality(&StatContext::default())
+            .derive_cardinality(&StatContext::without_settings(Default::default()))
             .unwrap();
         assert!(Arc::ptr_eq(&derived, &input_stats));
     }

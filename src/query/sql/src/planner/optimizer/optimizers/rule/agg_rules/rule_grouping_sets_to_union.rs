@@ -34,7 +34,6 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::planner::binder::is_grouping_id_item;
 use crate::plans::Aggregate;
-use crate::plans::AggregateMode;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
@@ -91,7 +90,7 @@ impl RuleGroupingSetsToUnion {
     }
 }
 
-// Must go before `RuleSplitAggregate`
+// Must go before `physical lowering`
 impl Rule for RuleGroupingSetsToUnion {
     fn id(&self) -> RuleID {
         self.id
@@ -100,10 +99,6 @@ impl Rule for RuleGroupingSetsToUnion {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let mut eval_scalar: EvalScalar = s_expr.plan().clone().try_into()?;
         let agg: Aggregate = s_expr.child(0)?.plan().clone().try_into()?;
-        if agg.mode != AggregateMode::Initial {
-            return Ok(());
-        }
-
         let agg_input = s_expr.child(0)?.child(0)?;
         let agg_input_columns: Vec<Symbol> = RelExpr::with_s_expr(agg_input)
             .derive_relational_prop()?

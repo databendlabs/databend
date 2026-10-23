@@ -82,14 +82,17 @@ impl EliminateEvalScalarOptimizer {
         if self.ctx.get_enable_trace()
             && let Some(collector) = &self.trace_collector
         {
+            let metadata_ref = self.ctx.get_metadata();
+            let metadata = metadata_ref.read();
             collector.trace_rule(
                 id.to_string(),
                 self.name(),
                 start.elapsed(),
-                before,
-                result.as_ref().unwrap_or(&expr),
-                &self.ctx.get_metadata().read(),
-                self.ctx.get_stat_context(),
+                &before.pretty_format(&metadata, self.ctx.get_stat_context())?,
+                &result
+                    .as_ref()
+                    .unwrap_or(&expr)
+                    .pretty_format(&metadata, self.ctx.get_stat_context())?,
             )?;
         }
         Ok(result)

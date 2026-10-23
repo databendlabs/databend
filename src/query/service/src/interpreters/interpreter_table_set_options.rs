@@ -18,10 +18,13 @@ use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_ast::ast::Engine;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_sql::plans::MaintenanceTarget;
 use databend_common_sql::plans::SetOptionsPlan;
@@ -81,8 +84,10 @@ use crate::interpreters::common::table_option_validation::is_valid_fuse_virtual_
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
+use crate::interpreters::common::table_option_validation::is_valid_s3_storage_class;
 use crate::interpreters::common::table_option_validation::is_valid_virtual_column_layout_options;
 use crate::interpreters::hook::analyze_hook::execute_analyze;
+use crate::interpreters::interpreter_table_add_column::update_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
@@ -203,6 +208,11 @@ impl Interpreter for SetOptionsInterpreter {
                 .get_table(&self.ctx.get_tenant(), database, table_name)
                 .await?;
             check_maintenance_target(table.as_ref(), &self.plan.target)?;
+            is_valid_s3_storage_class(
+                &self.plan.set_options,
+                table.get_table_info().meta.storage_params.as_ref(),
+                table.is_temp(),
+            )?;
 
             if let Some(mode) = self.plan.set_options.get(OPT_KEY_WRITE_DISTRIBUTION_MODE) {
                 let mode = mode.parse::<WriteDistributionMode>()?;
@@ -262,24 +272,60 @@ impl Interpreter for SetOptionsInterpreter {
             is_valid_approx_distinct_columns(&self.plan.set_options, table.schema())?;
             is_valid_analyze_frequency_columns(&self.plan.set_options, table.schema())?;
 
-            if let Some(new_snapshot_location) =
+            // Only a clone-group member needs the LVT-guarded publication path: it is the only
+            // case where `build_table_lvt_check()` yields a fence. Other tables keep
+            // `upsert_table_option()`, which publishes immediately even inside an explicit
+            // transaction, whereas `update_table_meta()` would be buffered until COMMIT.
+            let mut fenced_gc_safe_time = None;
+            if let Some((new_snapshot_location, gc_safe_time)) =
                 set_segment_format(self.ctx.clone(), table.clone(), &self.plan.set_options).await?
             {
                 options_map.insert(
                     OPT_KEY_SNAPSHOT_LOCATION.to_string(),
                     Some(new_snapshot_location),
                 );
+                if table
+                    .get_table_info()
+                    .meta
+                    .options
+                    .contains_key(OPT_KEY_CLONE_GROUP_ID)
+                {
+                    fenced_gc_safe_time = Some(gc_safe_time);
+                }
             }
-
-            let req = UpsertTableOptionReq {
-                table_id: table.get_id(),
-                seq: MatchSeq::Exact(table_version),
-                options: options_map,
-            };
-
-            let _resp = catalog
-                .upsert_table_option(&self.ctx.get_tenant(), database, req)
+            if let Some(gc_safe_time) = fenced_gc_safe_time {
+                let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+                let mut new_table_meta = table.get_table_info().meta.clone();
+                for (key, value) in options_map {
+                    match value {
+                        Some(value) => {
+                            new_table_meta.options.insert(key, value);
+                        }
+                        None => {
+                            new_table_meta.options.remove(&key);
+                        }
+                    }
+                }
+                new_table_meta.updated_on = Utc::now();
+                update_table_meta(
+                    fuse_table,
+                    &new_table_meta,
+                    catalog,
+                    self.ctx.get_tenant(),
+                    Some(gc_safe_time),
+                )
                 .await?;
+            } else {
+                let req = UpsertTableOptionReq {
+                    table_id: table.get_id(),
+                    seq: MatchSeq::Exact(table_version),
+                    options: options_map,
+                };
+
+                catalog
+                    .upsert_table_option(&self.ctx.get_tenant(), database, req)
+                    .await?;
+            }
             Ok(PipelineBuildResult::create())
         })
     }
@@ -289,7 +335,7 @@ async fn set_segment_format(
     ctx: Arc<QueryContext>,
     table: Arc<dyn Table>,
     options: &BTreeMap<String, String>,
-) -> Result<Option<String>> {
+) -> Result<Option<(String, DateTime<Utc>)>> {
     let Some(value) = options.get(OPT_KEY_SEGMENT_FORMAT) else {
         return Ok(None);
     };
@@ -379,11 +425,14 @@ async fn set_segment_format(
         .meta_location_generator()
         .gen_snapshot_location(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
 
+    let timestamp = new_snapshot
+        .timestamp
+        .ok_or_else(|| ErrorCode::Internal("segment-format snapshot has no GC-safety timestamp"))?;
     fuse_table
         .get_operator()
         .write(&location, new_snapshot.to_bytes()?)
         .await?;
-    Ok(Some(location))
+    Ok(Some((location, timestamp)))
 }
 
 async fn analyze_table(

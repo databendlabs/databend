@@ -47,8 +47,8 @@ use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
+use crate::interpreters::common::build_update_stream_reqs;
 use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::common::dml_build_update_stream_req;
 #[cfg(feature = "storage-stage")]
 use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::physical_plans::CommitSink;
@@ -378,6 +378,7 @@ impl ReplaceInterpreter {
             table_meta_timestamps,
             recluster_info: None,
             meta: PhysicalPlanMeta::new("CommitSink"),
+            expected_ttl: None,
         });
 
         root.adjust_plan_id(&mut 0);
@@ -481,7 +482,7 @@ impl ReplaceInterpreter {
             v => unreachable!("Input plan must be Query, but it's {}", v),
         };
 
-        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
+        let update_stream_meta = build_update_stream_reqs(&self.ctx, false).await?;
 
         let select_interpreter = SelectInterpreter::try_create(
             ctx.clone(),

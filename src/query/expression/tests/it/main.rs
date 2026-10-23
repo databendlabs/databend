@@ -35,6 +35,7 @@ mod decimal;
 mod display;
 mod evaluator;
 mod fill_field_default_value;
+mod filter_executor;
 mod group_by;
 mod hilbert;
 mod kernel;
@@ -44,6 +45,7 @@ mod scalar_hash;
 mod schema;
 mod serde;
 mod sort;
+mod stream_partition;
 mod types;
 
 mod like_pattern_escape;

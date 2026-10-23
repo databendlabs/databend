@@ -25,6 +25,10 @@ fn test_decode_v65_least_visible_time() -> anyhow::Result<()> {
     let want = || mt::LeastVisibleTime {
         time: DateTime::<Utc>::from_timestamp(10267, 0).unwrap(),
     };
+    common::test_pb_from_to(func_name!(), mt::LeastVisibleTime::unbounded())?;
+    assert!(
+        mt::LeastVisibleTime::unbounded().time < DateTime::<Utc>::from_timestamp(-1, 0).unwrap()
+    );
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), bytes.as_slice(), 64, want())?;
 

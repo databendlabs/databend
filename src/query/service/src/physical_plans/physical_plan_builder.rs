@@ -29,7 +29,8 @@ use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::optimizer::ir::PlannedQuery;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::StatContext;
-use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::Exchange;
+use databend_common_sql::plans::PhysicalRelOperator;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
@@ -71,7 +72,7 @@ impl PhysicalPlanBuilder {
 
     pub fn build_plan_stat_info(&self, s_expr: &PExpr) -> Result<PlanStatsInfo> {
         let rel_expr = RelExpr::with_p_expr(s_expr);
-        let stat_context = StatContext::new(self.func_ctx.clone());
+        let stat_context = StatContext::new(self.func_ctx.clone(), &self.ctx.get_settings());
         let stat_info = rel_expr.derive_cardinality(&stat_context)?;
 
         Ok(PlanStatsInfo {
@@ -137,72 +138,82 @@ impl PhysicalPlanBuilder {
         // Build stat info.
         let stat_info = self.build_plan_stat_info(s_expr)?;
         match s_expr.plan() {
-            RelOperator::Scan(scan) => self.build_table_scan(scan, required, stat_info).await,
-            RelOperator::DummyTableScan(dummy_scan) => {
+            PhysicalRelOperator::Scan(scan) => {
+                self.build_table_scan(scan, required, stat_info).await
+            }
+            PhysicalRelOperator::DummyTableScan(dummy_scan) => {
                 self.build_dummy_table_scan(dummy_scan).await
             }
-            RelOperator::Join(join) => self.build_join(s_expr, join, required, stat_info).await,
-            RelOperator::EvalScalar(eval_scalar) => {
+            PhysicalRelOperator::Join(join) => {
+                self.build_join(s_expr, join, required, stat_info).await
+            }
+            PhysicalRelOperator::EvalScalar(eval_scalar) => {
                 self.build_eval_scalar(s_expr, eval_scalar, required, stat_info)
                     .await
             }
-            RelOperator::Filter(filter) => {
+            PhysicalRelOperator::Filter(filter) => {
                 self.build_filter(s_expr, filter, required, stat_info).await
             }
-            RelOperator::Aggregate(agg) => {
+            PhysicalRelOperator::Aggregate(agg) => {
                 self.build_aggregate(s_expr, agg, required, stat_info).await
             }
-            RelOperator::Window(window) => {
+            PhysicalRelOperator::Window(window) => {
                 self.build_window(s_expr, window, required, stat_info).await
             }
-            RelOperator::WindowGroup(window_group) => {
+            PhysicalRelOperator::WindowGroup(window_group) => {
                 self.build_window_group(s_expr, window_group, required, stat_info)
                     .await
             }
-            RelOperator::Sort(sort) => self.build_sort(s_expr, sort, required, stat_info).await,
-            RelOperator::TopN(top_n) => self.build_top_n(s_expr, top_n, required, stat_info).await,
-            RelOperator::Limit(limit) => self.build_limit(s_expr, limit, required, stat_info).await,
-            RelOperator::Exchange(exchange) => {
+            PhysicalRelOperator::Sort(sort) => {
+                self.build_sort(s_expr, sort, required, stat_info).await
+            }
+            PhysicalRelOperator::TopN(top_n) => {
+                self.build_top_n(s_expr, top_n, required, stat_info).await
+            }
+            PhysicalRelOperator::Limit(limit) => {
+                self.build_limit(s_expr, limit, required, stat_info).await
+            }
+            PhysicalRelOperator::Exchange(exchange) => {
                 self.build_exchange(s_expr, exchange, required).await
             }
-            RelOperator::UnionAll(union_all) => {
+            PhysicalRelOperator::UnionAll(union_all) => {
                 self.build_union_all(s_expr, union_all, required, stat_info)
                     .await
             }
-            RelOperator::ProjectSet(project_set) => {
+            PhysicalRelOperator::ProjectSet(project_set) => {
                 self.build_project_set(s_expr, project_set, required, stat_info)
                     .await
             }
-            RelOperator::ConstantTableScan(scan) => {
+            PhysicalRelOperator::ConstantTableScan(scan) => {
                 self.build_constant_table_scan(scan, required).await
             }
-            RelOperator::ExpressionScan(scan) => {
+            PhysicalRelOperator::ExpressionScan(scan) => {
                 self.build_expression_scan(s_expr, scan, required).await
             }
-            RelOperator::CacheScan(scan) => self.build_cache_scan(scan, required).await,
-            RelOperator::Udf(udf) => self.build_udf(s_expr, udf, required, stat_info).await,
-            RelOperator::RecursiveCteScan(scan) => {
+            PhysicalRelOperator::CacheScan(scan) => self.build_cache_scan(scan, required).await,
+            PhysicalRelOperator::Udf(udf) => self.build_udf(s_expr, udf, required, stat_info).await,
+            PhysicalRelOperator::RecursiveCteScan(scan) => {
                 self.build_recursive_cte_scan(scan, stat_info).await
             }
-            RelOperator::AsyncFunction(async_func) => {
+            PhysicalRelOperator::AsyncFunction(async_func) => {
                 self.build_async_func(s_expr, async_func, required, stat_info)
                     .await
             }
-            RelOperator::Mutation(mutation) => {
+            PhysicalRelOperator::Mutation(mutation) => {
                 self.build_mutation(s_expr, mutation, required).await
             }
-            RelOperator::MutationSource(mutation_source) => {
+            PhysicalRelOperator::MutationSource(mutation_source) => {
                 self.build_mutation_source(mutation_source).await
             }
-            RelOperator::CompactBlock(compact) => self.build_compact_block(compact).await,
-            RelOperator::MaterializedCTE(materialized_cte) => {
+            PhysicalRelOperator::CompactBlock(compact) => self.build_compact_block(compact).await,
+            PhysicalRelOperator::MaterializedCTE(materialized_cte) => {
                 self.build_materialized_cte(s_expr, materialized_cte, stat_info)
                     .await
             }
-            RelOperator::MaterializedCTERef(cte_consumer) => {
+            PhysicalRelOperator::MaterializedCTERef(cte_consumer) => {
                 self.build_cte_consumer(cte_consumer, stat_info).await
             }
-            RelOperator::Sequence(sequence) => {
+            PhysicalRelOperator::Sequence(sequence) => {
                 self.build_sequence(s_expr, sequence, stat_info, required)
                     .await
             }
@@ -231,7 +242,7 @@ impl PhysicalPlanBuilder {
             (0..arity).map(|_| parent_required.clone()).collect();
 
         match s_expr.plan() {
-            RelOperator::EvalScalar(eval_scalar) => {
+            PhysicalRelOperator::EvalScalar(eval_scalar) => {
                 let req = &mut child_required[0];
                 for item in &eval_scalar.items {
                     if parent_required.contains(&item.index) {
@@ -239,13 +250,14 @@ impl PhysicalPlanBuilder {
                     }
                 }
             }
-            RelOperator::Filter(filter) => {
+            PhysicalRelOperator::Filter(filter) => {
                 let req = &mut child_required[0];
                 for predicate in &filter.predicates {
                     predicate.collect_used_columns(req);
                 }
             }
-            RelOperator::Aggregate(agg) => {
+            PhysicalRelOperator::Aggregate(physical) => {
+                let agg = &physical.aggregate;
                 let req = &mut child_required[0];
                 for item in &agg.group_items {
                     req.insert(item.index);
@@ -257,7 +269,7 @@ impl PhysicalPlanBuilder {
                     }
                 }
             }
-            RelOperator::Window(window) => {
+            PhysicalRelOperator::Window(window) => {
                 let req = &mut child_required[0];
                 for item in &window.arguments {
                     item.scalar.collect_used_columns(req);
@@ -272,7 +284,7 @@ impl PhysicalPlanBuilder {
                     req.insert(item.order_by_item.index);
                 }
             }
-            RelOperator::WindowGroup(window_group) => {
+            PhysicalRelOperator::WindowGroup(window_group) => {
                 let req = &mut child_required[0];
                 for window in &window_group.windows {
                     req.remove(&window.index);
@@ -296,19 +308,19 @@ impl PhysicalPlanBuilder {
                     }
                 }
             }
-            RelOperator::Sort(sort) => {
+            PhysicalRelOperator::Sort(sort) => {
                 let req = &mut child_required[0];
                 for item in &sort.items {
                     req.insert(item.index);
                 }
             }
-            RelOperator::TopN(top_n) => {
+            PhysicalRelOperator::TopN(top_n) => {
                 let req = &mut child_required[0];
                 for item in &top_n.items {
                     req.insert(item.index);
                 }
             }
-            RelOperator::Join(join) => {
+            PhysicalRelOperator::Join(join) => {
                 let mut others_required = parent_required.clone();
                 for condition in &join.non_equi_conditions {
                     condition.collect_used_columns(&mut others_required);
@@ -329,7 +341,7 @@ impl PhysicalPlanBuilder {
                 child_required[0] = left_required;
                 child_required[1] = right_required;
             }
-            RelOperator::UnionAll(union_all) => {
+            PhysicalRelOperator::UnionAll(union_all) => {
                 let (left_required, right_required) = if !union_all.cte_scan_names.is_empty() {
                     let left: ColumnSet = union_all
                         .left_outputs
@@ -367,19 +379,19 @@ impl PhysicalPlanBuilder {
                 child_required[0] = left_required;
                 child_required[1] = right_required;
             }
-            RelOperator::Exchange(databend_common_sql::plans::Exchange::NodeToNodeHash(exprs)) => {
+            PhysicalRelOperator::Exchange(Exchange::NodeToNodeHash(exprs)) => {
                 let req = &mut child_required[0];
                 for expr in exprs {
                     expr.collect_used_columns(req);
                 }
             }
-            RelOperator::ProjectSet(project_set) => {
+            PhysicalRelOperator::ProjectSet(project_set) => {
                 let req = &mut child_required[0];
                 for item in &project_set.srfs {
                     item.scalar.collect_used_columns(req);
                 }
             }
-            RelOperator::Udf(udf) => {
+            PhysicalRelOperator::Udf(udf) => {
                 let req = &mut child_required[0];
                 for item in &udf.items {
                     if parent_required.contains(&item.index) {
@@ -387,7 +399,7 @@ impl PhysicalPlanBuilder {
                     }
                 }
             }
-            RelOperator::AsyncFunction(async_func) => {
+            PhysicalRelOperator::AsyncFunction(async_func) => {
                 let req = &mut child_required[0];
                 for item in &async_func.items {
                     if parent_required.contains(&item.index) {
@@ -396,20 +408,20 @@ impl PhysicalPlanBuilder {
                 }
             }
 
-            RelOperator::Scan(_)
-            | RelOperator::DummyTableScan(_)
-            | RelOperator::ConstantTableScan(_)
-            | RelOperator::CacheScan(_)
-            | RelOperator::RecursiveCteScan(_)
-            | RelOperator::CompactBlock(_)
-            | RelOperator::MutationSource(_)
-            | RelOperator::MaterializedCTERef(_)
-            | RelOperator::Sequence(_)
-            | RelOperator::MaterializedCTE(_)
-            | RelOperator::Mutation(_)
-            | RelOperator::ExpressionScan(_)
-            | RelOperator::Limit(_)
-            | RelOperator::Exchange(_) => {}
+            PhysicalRelOperator::Scan(_)
+            | PhysicalRelOperator::DummyTableScan(_)
+            | PhysicalRelOperator::ConstantTableScan(_)
+            | PhysicalRelOperator::CacheScan(_)
+            | PhysicalRelOperator::RecursiveCteScan(_)
+            | PhysicalRelOperator::CompactBlock(_)
+            | PhysicalRelOperator::MutationSource(_)
+            | PhysicalRelOperator::MaterializedCTERef(_)
+            | PhysicalRelOperator::Sequence(_)
+            | PhysicalRelOperator::MaterializedCTE(_)
+            | PhysicalRelOperator::Mutation(_)
+            | PhysicalRelOperator::ExpressionScan(_)
+            | PhysicalRelOperator::Limit(_)
+            | PhysicalRelOperator::Exchange(_) => {}
         }
 
         Ok(child_required)
@@ -419,13 +431,13 @@ impl PhysicalPlanBuilder {
     fn requires_cte_column_collection(s_expr: &PExpr) -> bool {
         matches!(
             s_expr.plan(),
-            RelOperator::Sequence(_) | RelOperator::MaterializedCTERef(_)
+            PhysicalRelOperator::Sequence(_) | PhysicalRelOperator::MaterializedCTERef(_)
         ) || s_expr.children().any(Self::requires_cte_column_collection)
     }
 
     fn collect_cte_required_columns(&mut self, s_expr: &PExpr, required: ColumnSet) -> Result<()> {
         match s_expr.plan() {
-            RelOperator::MaterializedCTERef(cte_ref) => {
+            PhysicalRelOperator::MaterializedCTERef(cte_ref) => {
                 let mut required_mapped = ColumnSet::new();
                 for col in required {
                     if let Some(mapped) = cte_ref.column_mapping.get(&col) {
@@ -440,12 +452,12 @@ impl PhysicalPlanBuilder {
                     .or_insert(required_mapped);
                 Ok(())
             }
-            RelOperator::Sequence(_) => {
+            PhysicalRelOperator::Sequence(_) => {
                 // The right child contains all consumers for the left CTE definition.
                 self.collect_cte_required_columns(s_expr.child(1)?, required.clone())?;
 
                 let left_child = s_expr.child(0)?;
-                let RelOperator::MaterializedCTE(cte) = left_child.plan() else {
+                let PhysicalRelOperator::MaterializedCTE(cte) = left_child.plan() else {
                     return Err(ErrorCode::Internal(
                         "Sequence left child is expected to be MaterializedCTE".to_string(),
                     ));

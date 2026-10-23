@@ -55,3 +55,24 @@ GRANT create sequence on *.* to role 'role1';
 
 statement ok
 GRANT create procedure on *.* to role 'role1';
+
+# test_cases.yaml runs rbac_current as 1.2.833 -> current and current -> 1.2.833.
+# GRANT ALL includes ATTACH TABLE on current writers, while remaining valid on
+# old writers. Remove SELECT so SHOW GRANTS expands names instead of printing ALL.
+statement ok
+drop database if exists attach_table_compat;
+
+statement ok
+create database attach_table_compat;
+
+statement ok
+drop role if exists 'role_attach_table';
+
+statement ok
+create role 'role_attach_table';
+
+statement ok
+grant all on attach_table_compat.* to role 'role_attach_table';
+
+statement ok
+revoke select on attach_table_compat.* from role 'role_attach_table';

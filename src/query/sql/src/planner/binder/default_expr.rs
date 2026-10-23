@@ -163,7 +163,7 @@ impl DefaultExprBinder {
         } else {
             (scalar_expr.as_expr()?, false)
         };
-        Ok((expr.sql_display(), is_deterministic, is_nextval))
+        Ok((expr.to_sql_string(), is_deterministic, is_nextval))
     }
 
     pub fn parse(&mut self, default_expr: &str) -> Result<AExpr> {

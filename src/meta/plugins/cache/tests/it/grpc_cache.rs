@@ -87,6 +87,11 @@ async fn test_cache_basic() -> anyhow::Result<()> {
 
     let last_seq = c.try_last_seq().await?;
     assert_eq!(last_seq, 3);
+    assert_eq!(
+        c.try_get_ready("pp/c").without_proposed_at(),
+        Some(SeqV::new(3, b("c")))
+    );
+    assert!(c.try_get_ready("pp/missing").is_none());
 
     // Receive update
 
@@ -161,6 +166,37 @@ async fn test_cache_when_leader_down() -> anyhow::Result<()> {
     let got = c.try_get("pp/c").await?;
     assert_eq!(got.without_proposed_at(), Some(SeqV::new(5, b("c2"))));
 
+    Ok(())
+}
+
+/// A watch pinned to a dead node must not block callers whose ordinary KV
+/// client can still use the remaining nodes.
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
+#[fastrace::trace]
+async fn test_ready_cache_read_during_reconnect() -> anyhow::Result<()> {
+    let mut tcs = start_metasrv_cluster::<DatabendRuntime>(&[0, 1, 2]).await?;
+    let addresses = tcs
+        .iter()
+        .map(|tc| tc.config.grpc.api_address().unwrap())
+        .collect::<Vec<_>>();
+    let writer = make_grpc_client::<DatabendRuntime>(addresses[1..].to_vec())?;
+    writer
+        .upsert_kv(UpsertKV::update("ready/a", b"old"))
+        .await?;
+    let watch_client = make_grpc_client::<DatabendRuntime>(vec![addresses[0].clone()])?;
+    let mut cache = Cache::new(watch_client, "ready", "reconnect-ready").await;
+    assert!(cache.try_get("ready/a").await?.is_some());
+
+    let mut stopped = tcs.remove(0);
+    { stopped }.grpc_srv.take().unwrap().do_stop(None).await;
+    sleep(Duration::from_secs(6)).await;
+
+    writer
+        .upsert_kv(UpsertKV::update("ready/a", b"new"))
+        .await?;
+    assert_eq!(writer.get_kv("ready/a").await?.unwrap().data, b("new"));
+    // The old blocking try_get would wait for this watch to reconnect forever.
+    assert!(cache.try_get_ready("ready/a").is_none());
     Ok(())
 }
 

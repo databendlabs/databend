@@ -34,6 +34,8 @@ mod visibility_checker;
 
 pub mod builtin;
 pub mod connection;
+mod external_access;
+pub use external_access::network_rule_endpoint;
 pub mod file_format;
 pub mod role_cache_mgr;
 pub mod role_util;

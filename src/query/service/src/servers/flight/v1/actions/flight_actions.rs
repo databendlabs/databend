@@ -35,6 +35,8 @@ use crate::servers::flight::v1::actions::init_query_env::INIT_QUERY_ENV;
 use crate::servers::flight::v1::actions::init_query_env::init_query_env;
 use crate::servers::flight::v1::actions::init_query_fragments::init_query_fragments;
 use crate::servers::flight::v1::actions::kill_query::kill_query;
+use crate::servers::flight::v1::actions::ping::PING;
+use crate::servers::flight::v1::actions::ping::ping;
 use crate::servers::flight::v1::actions::set_priority::SET_PRIORITY;
 use crate::servers::flight::v1::actions::set_priority::set_priority;
 use crate::servers::flight::v1::actions::start_prepared_query::start_prepared_query;
@@ -146,4 +148,5 @@ pub fn flight_actions() -> FlightActions {
         .action(SET_PRIORITY, set_priority)
         .action(SYSTEM_ACTION, system_action)
         .action(GET_RUNNING_QUERY_DUMP, get_running_query_dump)
+        .action(PING, ping)
 }

@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
+use databend_common_ast::ast::ExternalAccessStmt;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -159,7 +160,6 @@ use crate::plans::RefreshMaterializedViewPlan;
 use crate::plans::RefreshTableCachePlan;
 use crate::plans::RefreshTableIndexPlan;
 use crate::plans::RefreshVirtualColumnPlan;
-use crate::plans::RelOperator;
 use crate::plans::RemoveStagePlan;
 use crate::plans::RenameDatabasePlan;
 use crate::plans::RenameTableColumnPlan;
@@ -445,6 +445,7 @@ pub enum Plan {
     RemoveStage(Box<RemoveStagePlan>),
 
     // Connection
+    ExternalAccess(Box<ExternalAccessStmt>),
     CreateConnection(Box<CreateConnectionPlan>),
     DescConnection(Box<DescConnectionPlan>),
     DropConnection(Box<DropConnectionPlan>),
@@ -706,7 +707,10 @@ impl Plan {
         } = self
         {
             if s_expr.planned().is_ok_and(|plan| {
-                matches!(plan.expr().plan(), RelOperator::Exchange(Exchange::Merge))
+                matches!(
+                    plan.expr().plan(),
+                    crate::plans::PhysicalRelOperator::Exchange(Exchange::Merge)
+                )
             }) {
                 let s_expr = Box::new(s_expr.remove_root_merge());
                 return Plan::Query {

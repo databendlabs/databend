@@ -26,6 +26,7 @@ jobs:
         uses: actions/github-script@v9
         with:
           github-token: ${{ github.token }}
+          retries: 3
           script: |
             const script = require('./.github/scripts/ci_timing_comment.js');
             await script({ github, context, core });

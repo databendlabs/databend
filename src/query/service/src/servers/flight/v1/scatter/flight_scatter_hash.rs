@@ -20,18 +20,8 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionID;
 use databend_common_expression::RemoteExpr;
-use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 use databend_common_expression::group_hash_entry;
-use databend_common_expression::type_check::check_function;
-use databend_common_expression::types::AccessType;
-use databend_common_expression::types::AnyType;
-use databend_common_expression::types::Buffer;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NullableType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberType;
-use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::group_hash_route_index;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::servers::flight::v1::scatter::flight_scatter::FlightScatter;
@@ -75,7 +65,7 @@ impl HashFlightScatter {
 struct OneHashKeyFlightScatter {
     scatter_size: usize,
     func_ctx: FunctionContext,
-    indices_scalar: Expr,
+    hash_key: Expr,
     default_scatter_index: u64,
 }
 
@@ -91,32 +81,54 @@ impl OneHashKeyFlightScatter {
         } else {
             0
         };
-        let indices_scalar = check_function(
-            None,
-            "modulo",
-            &[],
-            &[
-                check_function(
-                    None,
-                    "siphash",
-                    &[],
-                    &[hash_key.as_expr(&BUILTIN_FUNCTIONS)],
-                    &BUILTIN_FUNCTIONS,
-                )?,
-                Expr::constant(
-                    Scalar::Number(NumberScalar::UInt64(scatter_size as u64)),
-                    Some(DataType::Number(NumberDataType::UInt64)),
-                ),
-            ],
-            &BUILTIN_FUNCTIONS,
-        )?;
 
         Ok(Box::new(OneHashKeyFlightScatter {
             scatter_size,
             func_ctx,
-            indices_scalar,
+            hash_key: hash_key.as_expr(&BUILTIN_FUNCTIONS),
             default_scatter_index,
         }))
+    }
+
+    fn build_scatter_indices(&self, data_block: &DataBlock) -> Result<Vec<u64>> {
+        let num_rows = data_block.num_rows();
+        let evaluator = Evaluator::new(data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let entry = BlockEntry::new(evaluator.run(&self.hash_key)?, || {
+            (self.hash_key.data_type().clone(), num_rows)
+        });
+
+        let validity = match &entry {
+            BlockEntry::Const(scalar, _, _) if scalar.is_null() => {
+                return Ok(vec![self.default_scatter_index; num_rows]);
+            }
+            BlockEntry::Const(..) => None,
+            BlockEntry::Column(column) => match column.validity() {
+                (true, _) => return Ok(vec![self.default_scatter_index; num_rows]),
+                (false, validity) => validity.filter(|v| v.null_count() > 0).cloned(),
+            },
+        };
+
+        let mut indices = vec![0; num_rows];
+        group_hash_entry(&entry, &mut indices, true);
+
+        let scatter_size = self.scatter_size as u64;
+        match validity {
+            None => {
+                for index in &mut indices {
+                    *index = group_hash_route_index(*index, scatter_size);
+                }
+            }
+            Some(validity) => {
+                for (index, valid) in indices.iter_mut().zip(validity.iter()) {
+                    *index = if valid {
+                        group_hash_route_index(*index, scatter_size)
+                    } else {
+                        self.default_scatter_index
+                    };
+                }
+            }
+        }
+        Ok(indices)
     }
 }
 
@@ -126,11 +138,7 @@ impl FlightScatter for OneHashKeyFlightScatter {
     }
 
     fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
-        let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        let num = data_block.num_rows();
-
-        let indices = evaluator.run(&self.indices_scalar).unwrap();
-        let indices = get_hash_values(indices, num, self.default_scatter_index)?;
+        let indices = self.build_scatter_indices(&data_block)?;
         let data_blocks = DataBlock::scatter(&data_block, &indices, self.scatter_size)?;
 
         let block_meta = data_block.get_meta();
@@ -143,11 +151,7 @@ impl FlightScatter for OneHashKeyFlightScatter {
     }
 
     fn scatter_indices(&self, data_block: &DataBlock) -> Result<Option<Vec<u64>>> {
-        let evaluator = Evaluator::new(data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        let num = data_block.num_rows();
-        let indices = evaluator.run(&self.indices_scalar).unwrap();
-        let indices = get_hash_values(indices, num, self.default_scatter_index)?;
-        Ok(Some(indices.to_vec()))
+        Ok(Some(self.build_scatter_indices(data_block)?))
     }
 }
 
@@ -193,7 +197,7 @@ impl HashFlightScatter {
 
         let scatter_size = self.scatter_size as u64;
         for hash in &mut hashes {
-            *hash %= scatter_size;
+            *hash = group_hash_route_index(*hash, scatter_size);
         }
         Ok(hashes)
     }
@@ -221,70 +225,21 @@ fn shuffle_by_block_id_in_merge_into(expr: &RemoteExpr) -> bool {
     false
 }
 
-fn get_hash_values(
-    column: Value<AnyType>,
-    rows: usize,
-    default_scatter_index: u64,
-) -> Result<Buffer<u64>> {
-    match column {
-        Value::Scalar(c) => match c {
-            databend_common_expression::Scalar::Null => {
-                Ok(vec![default_scatter_index; rows].into())
-            }
-            databend_common_expression::Scalar::Number(NumberScalar::UInt64(x)) => {
-                Ok(vec![x; rows].into())
-            }
-            _ => unreachable!(),
-        },
-        Value::Column(c) => {
-            if let Ok(column) = NumberType::<u64>::try_downcast_column(&c) {
-                return Ok(column);
-            }
-
-            let mut column = NullableType::<NumberType<u64>>::try_downcast_column(&c).unwrap();
-            let null_map = column.validity;
-            if null_map.null_count() == 0 {
-                return Ok(column.column);
-            }
-            if null_map.null_count() == null_map.len() {
-                return Ok(vec![default_scatter_index; rows].into());
-            }
-
-            let mut need_new_vec = true;
-            if let Some(column) = unsafe { column.column.get_mut() } {
-                column
-                    .iter_mut()
-                    .zip(null_map.iter())
-                    .for_each(|(x, valid)| {
-                        if valid {
-                            *x *= valid as u64;
-                        } else {
-                            *x = default_scatter_index;
-                        }
-                    });
-                need_new_vec = false;
-            }
-
-            if !need_new_vec {
-                Ok(column.column)
-            } else {
-                Ok(column
-                    .column
-                    .iter()
-                    .zip(null_map.iter())
-                    .map(|(x, b)| if b { *x } else { default_scatter_index })
-                    .collect())
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
+    use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
     use databend_common_expression::ColumnRef;
     use databend_common_expression::FromData;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::type_check::check_function;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::StringType;
     use databend_common_expression::types::UInt64Type;
+    use databend_common_expression::types::number::NumberScalar;
+    use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 
     use super::*;
 
@@ -496,6 +451,307 @@ mod tests {
         for partitions in [3, 4, 8] {
             let indices = scatter_indices(block_hash_keys(&block), partitions, &block)?;
             assert_balanced(&indices, partitions);
+        }
+        Ok(())
+    }
+
+    fn single_key_scatter_indices(
+        hash_key: Expr,
+        scatter_size: usize,
+        local_pos: usize,
+        block: &DataBlock,
+    ) -> Result<Vec<u64>> {
+        let scatter = HashFlightScatter::try_create(
+            FunctionContext::default(),
+            vec![hash_key.as_remote_expr()],
+            scatter_size,
+            local_pos,
+        )?;
+        assert_eq!(scatter.name(), "OneHashKey");
+        Ok(scatter.scatter_indices(block)?.unwrap())
+    }
+
+    fn u64_constant(value: u64) -> Expr {
+        Expr::constant(
+            Scalar::Number(NumberScalar::UInt64(value)),
+            Some(DataType::Number(NumberDataType::UInt64)),
+        )
+    }
+
+    // Same shape as the key built by `build_block_id_shuffle_exchange`.
+    fn block_id_shuffle_key(row_id: Expr) -> Result<Expr> {
+        check_function(
+            None,
+            "bit_and",
+            &[],
+            &[
+                check_function(
+                    None,
+                    "bit_shift_right",
+                    &[],
+                    &[row_id, u64_constant((64 - NUM_ROW_ID_PREFIX_BITS) as u64)],
+                    &BUILTIN_FUNCTIONS,
+                )?,
+                u64_constant(((1 << NUM_BLOCK_ID_BITS) - 1) as u64),
+            ],
+            &BUILTIN_FUNCTIONS,
+        )
+    }
+
+    fn row_id(block_id: u64, row: u64) -> u64 {
+        (block_id << (64 - NUM_ROW_ID_PREFIX_BITS)) | row
+    }
+
+    #[test]
+    fn single_key_routes_equal_keys_to_same_partition() -> Result<()> {
+        const ROWS: u64 = 4096;
+        let nullable_type = DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64)));
+
+        // Both sides of a shuffle join: the same values in a different order, one side
+        // nullable and the other not.
+        let left = DataBlock::new_from_columns(vec![UInt64Type::from_data(
+            (0..ROWS).map(|row| row * 7).collect::<Vec<_>>(),
+        )]);
+        let right = DataBlock::new_from_columns(vec![UInt64Type::from_data_with_validity(
+            (0..ROWS).rev().map(|row| row * 7).collect::<Vec<_>>(),
+            vec![true; ROWS as usize],
+        )]);
+        let left_text = DataBlock::new_from_columns(vec![StringType::from_data(
+            (0..ROWS)
+                .map(|row| format!("key-{row}"))
+                .collect::<Vec<_>>(),
+        )]);
+        let right_text = DataBlock::new_from_columns(vec![StringType::from_data(
+            (0..ROWS)
+                .rev()
+                .map(|row| format!("key-{row}"))
+                .collect::<Vec<_>>(),
+        )]);
+
+        for partitions in [2, 3, 4, 8] {
+            let numeric_type = DataType::Number(NumberDataType::UInt64);
+            let mut left_indices =
+                single_key_scatter_indices(column_expr(0, numeric_type), partitions, 0, &left)?;
+            let right_indices = single_key_scatter_indices(
+                column_expr(0, nullable_type.clone()),
+                partitions,
+                0,
+                &right,
+            )?;
+            left_indices.reverse();
+            assert_eq!(left_indices, right_indices);
+
+            let mut left_indices = single_key_scatter_indices(
+                column_expr(0, DataType::String),
+                partitions,
+                0,
+                &left_text,
+            )?;
+            let right_indices = single_key_scatter_indices(
+                column_expr(0, DataType::String),
+                partitions,
+                0,
+                &right_text,
+            )?;
+            left_indices.reverse();
+            assert_eq!(left_indices, right_indices);
+
+            // A constant key is hashed like the materialized column.
+            let constant = single_key_scatter_indices(u64_constant(42), partitions, 0, &left)?;
+            let materialized = single_key_scatter_indices(
+                column_expr(0, DataType::Number(NumberDataType::UInt64)),
+                partitions,
+                0,
+                &DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![42; ROWS as usize])]),
+            )?;
+            assert_eq!(constant, materialized);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn single_key_routes_null_keys_to_default_index() -> Result<()> {
+        let nullable_type = DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64)));
+        let block = DataBlock::new_from_columns(vec![UInt64Type::from_data_with_validity(
+            vec![1, 2, 3, 4, 5, 6],
+            vec![true, false, true, false, false, true],
+        )]);
+        let all_null = DataBlock::new_from_columns(vec![UInt64Type::from_data_with_validity(
+            vec![1, 2, 3],
+            vec![false, false, false],
+        )]);
+        let non_null = DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![1, 3, 6])]);
+
+        for partitions in [3, 4, 8] {
+            // Ordinary shuffle keys send NULL to partition 0 regardless of the local position.
+            let indices = single_key_scatter_indices(
+                column_expr(0, nullable_type.clone()),
+                partitions,
+                2,
+                &block,
+            )?;
+            let expected = single_key_scatter_indices(
+                column_expr(0, DataType::Number(NumberDataType::UInt64)),
+                partitions,
+                2,
+                &non_null,
+            )?;
+            assert_eq!([indices[0], indices[2], indices[5]], [
+                expected[0],
+                expected[1],
+                expected[2]
+            ]);
+            assert_eq!([indices[1], indices[3], indices[4]], [0, 0, 0]);
+
+            let indices = single_key_scatter_indices(
+                column_expr(0, nullable_type.clone()),
+                partitions,
+                2,
+                &all_null,
+            )?;
+            assert_eq!(indices, vec![0, 0, 0]);
+
+            let null_constant = Expr::constant(Scalar::Null, Some(nullable_type.clone()));
+            let indices = single_key_scatter_indices(null_constant, partitions, 2, &all_null)?;
+            assert_eq!(indices, vec![0, 0, 0]);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn single_key_routes_merge_into_unmatched_rows_to_local_pos() -> Result<()> {
+        let nullable_type = DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64)));
+        let hash_key = block_id_shuffle_key(column_expr(0, nullable_type))?;
+
+        // Rows 0/2/4 are matched rows in blocks 5 and 9; NULL row ids are unmatched rows.
+        let block = DataBlock::new_from_columns(vec![UInt64Type::from_data_with_validity(
+            vec![row_id(5, 1), 0, row_id(5, 100), 0, row_id(9, 7)],
+            vec![true, false, true, false, true],
+        )]);
+        let all_unmatched = DataBlock::new_from_columns(vec![UInt64Type::from_data_with_validity(
+            vec![0, 0],
+            vec![false, false],
+        )]);
+
+        for (partitions, local_pos) in [(2, 1), (3, 2), (4, 3), (8, 5)] {
+            let indices =
+                single_key_scatter_indices(hash_key.clone(), partitions, local_pos, &block)?;
+            assert_eq!(indices[1], local_pos as u64);
+            assert_eq!(indices[3], local_pos as u64);
+            // Rows of the same block are sent to the same node.
+            assert_eq!(indices[0], indices[2]);
+            assert!(indices.iter().all(|index| *index < partitions as u64));
+
+            let indices = single_key_scatter_indices(
+                hash_key.clone(),
+                partitions,
+                local_pos,
+                &all_unmatched,
+            )?;
+            assert_eq!(indices, vec![local_pos as u64; 2]);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn single_key_distributes_across_partitions() -> Result<()> {
+        const ROWS: usize = 1 << 16;
+        let numeric_type = DataType::Number(NumberDataType::UInt64);
+
+        // Dense, even-only and power-of-two strided integer keys, plus strings.
+        let blocks = [
+            (
+                DataBlock::new_from_columns(vec![UInt64Type::from_data(
+                    (0..ROWS as u64).collect::<Vec<_>>(),
+                )]),
+                numeric_type.clone(),
+            ),
+            (
+                DataBlock::new_from_columns(vec![UInt64Type::from_data(
+                    (0..ROWS as u64).map(|row| row * 2).collect::<Vec<_>>(),
+                )]),
+                numeric_type.clone(),
+            ),
+            (
+                DataBlock::new_from_columns(vec![UInt64Type::from_data(
+                    (0..ROWS as u64).map(|row| row << 20).collect::<Vec<_>>(),
+                )]),
+                numeric_type.clone(),
+            ),
+            (
+                DataBlock::new_from_columns(vec![StringType::from_data(
+                    (0..ROWS)
+                        .map(|row| format!("{row:042x}"))
+                        .collect::<Vec<_>>(),
+                )]),
+                DataType::String,
+            ),
+        ];
+
+        for (block, data_type) in &blocks {
+            for partitions in [2, 3, 4, 8, 16] {
+                let indices = single_key_scatter_indices(
+                    column_expr(0, data_type.clone()),
+                    partitions,
+                    0,
+                    block,
+                )?;
+                assert_balanced(&indices, partitions);
+            }
+        }
+        Ok(())
+    }
+
+    // Window partitioning and the aggregate hash index read raw bits of the same group
+    // hash, so every scatter target must still cover all of their values.
+    #[test]
+    fn scatter_is_independent_of_local_hash_bits() -> Result<()> {
+        const ROWS: u64 = 1 << 16;
+        const WINDOW_PARTITIONS: u64 = 256;
+
+        let block = DataBlock::new_from_columns(vec![
+            UInt64Type::from_data((0..ROWS).collect::<Vec<_>>()),
+            UInt64Type::from_data((0..ROWS).map(|row| row * 31).collect::<Vec<_>>()),
+        ]);
+
+        for key_count in [1, 2] {
+            let mut hashes = vec![0; ROWS as usize];
+            for (index, entry) in block.columns()[..key_count].iter().enumerate() {
+                group_hash_entry(entry, &mut hashes, index == 0);
+            }
+            let hash_key = block_hash_keys(&block)[..key_count].to_vec();
+
+            for partitions in [32, 48] {
+                let indices = scatter_indices(hash_key.clone(), partitions, &block)?;
+                let mut window_partitions = vec![HashSet::new(); partitions];
+                let mut slots = vec![HashSet::new(); partitions];
+                let mut tags = vec![HashSet::new(); partitions];
+                for (index, hash) in indices.iter().zip(hashes.iter()) {
+                    let target = *index as usize;
+                    window_partitions[target].insert(hash % WINDOW_PARTITIONS);
+                    slots[target].insert(hash & 127);
+                    tags[target].insert(hash >> 57);
+                }
+
+                let coverage = window_partitions.iter().zip(&slots).zip(&tags);
+                for (target, ((window_partitions, slots), tags)) in coverage.enumerate() {
+                    assert!(
+                        window_partitions.len() >= 240,
+                        "target {target} covers {} window partitions",
+                        window_partitions.len()
+                    );
+                    assert!(
+                        slots.len() >= 120,
+                        "target {target} covers {} low-bit slots",
+                        slots.len()
+                    );
+                    assert!(
+                        tags.len() >= 120,
+                        "target {target} covers {} tags",
+                        tags.len()
+                    );
+                }
+            }
         }
         Ok(())
     }

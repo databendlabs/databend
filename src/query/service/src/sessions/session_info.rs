@@ -16,10 +16,10 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_catalog::session_type::SessionType;
 pub use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::ProcessInfoState;
-use databend_common_storage::StorageMetrics;
 
 use crate::sessions::Session;
 use crate::sessions::SessionContext;
@@ -98,11 +98,11 @@ impl Session {
             .map(|context_shared| context_shared.get_query_str())
     }
 
-    fn query_data_metrics(status: &SessionContext) -> Option<StorageMetrics> {
+    fn query_data_metrics(status: &SessionContext) -> Option<IoStatsSnapshot> {
         status
             .get_query_context_shared()
             .as_ref()
-            .map(|context_shared| context_shared.get_data_metrics())
+            .map(|context_shared| context_shared.get_io_stats())
     }
 
     fn query_scan_progress_value(status: &SessionContext) -> Option<ProgressValues> {

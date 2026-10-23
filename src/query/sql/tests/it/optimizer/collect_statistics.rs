@@ -24,6 +24,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::plans::PhysicalRelOperator;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::Scan;
@@ -143,7 +144,7 @@ fn find_scan(plan: &Plan) -> &Scan {
 
 fn find_scan_in_s_expr(s_expr: &databend_common_sql::optimizer::ir::PExpr) -> Option<&Scan> {
     match s_expr.plan() {
-        RelOperator::Scan(scan) => Some(scan),
+        PhysicalRelOperator::Scan(scan) => Some(scan),
         _ => s_expr.children().find_map(find_scan_in_s_expr),
     }
 }

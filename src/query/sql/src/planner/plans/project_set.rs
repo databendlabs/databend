@@ -24,6 +24,7 @@ use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::StatContext;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
 
@@ -99,3 +100,5 @@ impl Operator for ProjectSet {
         self.derive_project_set_stats(&mut input_stat)
     }
 }
+
+impl PhysicalOperator for ProjectSet {}

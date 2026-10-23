@@ -55,6 +55,7 @@ use databend_common_storage::IcebergFileIO;
 use databend_common_storages_orc::ORCSource;
 use databend_common_storages_orc::StripeDecoder;
 use databend_common_storages_parquet::ParquetReaderBuilder;
+use databend_common_storages_parquet::ParquetSchemaResolver;
 use databend_common_storages_parquet::ParquetSource;
 use databend_common_storages_parquet::ParquetSourceType;
 use databend_storages_common_table_meta::meta::SnapshotId;
@@ -68,6 +69,8 @@ use crate::IcebergMutableCatalog;
 use crate::append::IcebergCommitSink;
 use crate::append::IcebergDataFileWriter;
 use crate::credential::with_refreshing_credentials;
+use crate::parquet_schema::IcebergParquetSchemaResolver;
+use crate::parquet_schema::NAME_MAPPING_PROPERTY;
 use crate::partition::convert_file_scan_task;
 use crate::predicate::PredicateBuilder;
 use crate::statistics;
@@ -169,9 +172,11 @@ impl IcebergTable {
             field.column_id = field_id;
             fields.push(field);
         }
+        let metadata: BTreeMap<String, String> =
+            arrow_schema.metadata().clone().into_iter().collect();
         Ok(TableSchema {
             fields,
-            metadata: arrow_schema.metadata().clone().into_iter().collect(),
+            metadata,
             next_column_id: 0,
         })
     }
@@ -373,7 +378,24 @@ impl IcebergTable {
                 )
             });
         } else {
-            let arrow_schema: Schema = table_schema.as_ref().into();
+            // TableSchema's Arrow conversion does not retain Iceberg field IDs,
+            // especially nested IDs. The initial reader needs the catalog schema
+            // just like the per-file readers rebuilt after resolving name mapping.
+            let arrow_schema = schema_to_arrow_schema(
+                self.table.metadata().current_schema().as_ref(),
+            )
+            .map_err(|e| {
+                ErrorCode::ReadTableDataError(format!("Cannot convert Iceberg schema: {e}"))
+            })?;
+            let schema_resolver: Arc<dyn ParquetSchemaResolver> =
+                Arc::new(IcebergParquetSchemaResolver::new(
+                    arrow_schema.clone(),
+                    self.table
+                        .metadata()
+                        .properties()
+                        .get(NAME_MAPPING_PROPERTY)
+                        .map(String::as_str),
+                )?);
             let need_row_number = internal_columns.contains(&InternalColumnType::FileRowNumber);
             let topk = plan
                 .push_downs
@@ -389,6 +411,7 @@ impl IcebergTable {
                 arrow_schema.clone(),
             )?
             .with_options(read_options)
+            .with_schema_resolver(schema_resolver)
             .with_push_downs(plan.push_downs.as_ref());
 
             if !need_row_number {
@@ -437,14 +460,42 @@ impl IcebergTable {
             self.table.scan()
         };
 
+        // iceberg-rust binds select/filter against the snapshot's schema, which
+        // can lag behind the current schema (rename-only transactions, time
+        // travel). Databend plans with current names, so translate them through
+        // field IDs; anything the snapshot cannot bind stays unpushed.
+        let metadata = self.table.metadata();
+        let snapshot = if let Some(id) = self.snapshot_id {
+            metadata.snapshot_by_id(id)
+        } else {
+            metadata.current_snapshot()
+        };
+        let current_schema = metadata.current_schema();
+        let snapshot_schema = snapshot
+            .map(|snapshot| snapshot.schema(metadata))
+            .transpose()
+            .map_err(|error| {
+                ErrorCode::TableSchemaMismatch(format!("Iceberg snapshot schema: {error}"))
+            })?
+            .unwrap_or_else(|| current_schema.clone());
         if let Some(push_downs) = &push_downs {
             if let Some(projection) = &push_downs.projection {
+                // Columns added after the snapshot are not selectable there.
+                // Databend's reader still resolves every projected field itself.
                 let select_fields =
-                    Self::projection_to_iceberg_select_fields(projection, &self.schema())?;
+                    Self::projection_to_iceberg_select_fields(projection, &self.schema())?
+                        .into_iter()
+                        .filter_map(|name| {
+                            let id = current_schema.field_id_by_name(&name)?;
+                            snapshot_schema.name_by_field_id(id).map(str::to_owned)
+                        })
+                        .collect::<Vec<_>>();
                 scan = scan.select(select_fields);
             }
             if let Some(filter) = &push_downs.filters {
-                let (_, predicate) = PredicateBuilder::build(&filter.filter);
+                let (_, predicate) = PredicateBuilder::new(&self.schema())
+                    .bind_to_snapshot(current_schema, &snapshot_schema)
+                    .build(&filter.filter);
                 scan = scan.with_filter(predicate)
             }
         }

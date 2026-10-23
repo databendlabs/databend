@@ -19,6 +19,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::MetadataRef;
+use databend_common_sql::optimizer::ir::DefaultPhysicalPlanner;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::OptimizeCompactBlock;
 
@@ -81,7 +82,7 @@ impl Interpreter for OptimizeCompactBlockInterpreter {
                 PhysicalPlanBuilder::new(MetadataRef::default(), self.ctx.clone(), false);
             match builder
                 .build(
-                    &databend_common_sql::optimizer::ir::PExpr::from(self.s_expr.clone()),
+                    &DefaultPhysicalPlanner::plan(&self.s_expr)?,
                     ColumnSet::new(),
                 )
                 .await

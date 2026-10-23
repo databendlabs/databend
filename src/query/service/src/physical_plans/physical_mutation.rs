@@ -363,6 +363,7 @@ impl PhysicalPlanBuilder {
                 recluster_info: None,
                 meta: PhysicalPlanMeta::new("CommitSink"),
                 table_meta_timestamps: mutation_build_info.table_meta_timestamps,
+                expected_ttl: mutation.expected_ttl.clone(),
             });
             plan.adjust_plan_id(&mut 0);
             return Ok(plan);
@@ -456,6 +457,7 @@ impl PhysicalPlanBuilder {
                 meta: PhysicalPlanMeta::new("CommitSink"),
                 recluster_info: None,
                 table_meta_timestamps: mutation_build_info.table_meta_timestamps,
+                expected_ttl: mutation.expected_ttl.clone(),
             });
 
             plan.adjust_plan_id(&mut 0);
@@ -697,6 +699,7 @@ impl PhysicalPlanBuilder {
             recluster_info: None,
             meta: PhysicalPlanMeta::new("CommitSink"),
             table_meta_timestamps: mutation_build_info.table_meta_timestamps,
+            expected_ttl: mutation.expected_ttl.clone(),
         });
 
         physical_plan.adjust_plan_id(&mut 0);

@@ -511,6 +511,7 @@ impl GrantObjectVisibilityChecker {
                     GrantObject::Warehouse(w) => {
                         granted_ws.insert(Arc::from(w.as_str()));
                     }
+                    GrantObject::Integration(_) => {}
                     GrantObject::Connection(c) => {
                         granted_c.insert(Arc::from(c.as_str()));
                     }

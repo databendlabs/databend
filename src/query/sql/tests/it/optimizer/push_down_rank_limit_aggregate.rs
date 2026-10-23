@@ -14,9 +14,8 @@
 
 use databend_common_exception::Result;
 use databend_common_sql::optimizer::ir::PExpr;
-use databend_common_sql::optimizer::ir::StatContext;
+use databend_common_sql::plans::PhysicalRelOperator;
 use databend_common_sql::plans::Plan;
-use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::SortItem;
 
 use crate::framework::golden::SqlTestCase;
@@ -34,13 +33,13 @@ async fn write_optimized_case(file: &mut impl std::io::Write, case: &SqlTestCase
     writeln!(
         file,
         "{}",
-        raw_plan.format_indent(Default::default(), &StatContext::default())?
+        raw_plan.format_indent(Default::default(), &ctx.stat_context()?)?
     )?;
     writeln!(file, "optimized_plan:")?;
     writeln!(
         file,
         "{}",
-        optimized_plan.format_indent(Default::default(), &StatContext::default())?
+        optimized_plan.format_indent(Default::default(), &ctx.stat_context()?)?
     )?;
     // The plan formatter does not show rank limit keys, so print them separately.
     let Plan::Query { s_expr, .. } = &optimized_plan else {
@@ -63,7 +62,9 @@ async fn write_optimized_case(file: &mut impl std::io::Write, case: &SqlTestCase
 
 fn find_rank_limit(s_expr: &PExpr) -> Option<&(Vec<SortItem>, usize)> {
     match s_expr.plan() {
-        RelOperator::Aggregate(agg) if agg.rank_limit.is_some() => agg.rank_limit.as_ref(),
+        PhysicalRelOperator::Aggregate(agg) if agg.aggregate.rank_limit.is_some() => {
+            agg.aggregate.rank_limit.as_ref()
+        }
         _ => s_expr.children().find_map(find_rank_limit),
     }
 }

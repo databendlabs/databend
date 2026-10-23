@@ -159,12 +159,7 @@ impl IPhysicalPlan for MutationSource {
             .collect();
 
         let is_lazy = self.partitions.partitions_type() == PartInfoType::LazyLevel && is_delete;
-        if is_lazy {
-            let ctx = builder.ctx.clone();
-            let table_clone = table.clone();
-            let ctx_clone = builder.ctx.clone();
-            let filters_clone = self.filters.clone();
-            let projection = Projection::Columns(read_partition_columns.clone());
+        let partition_receiver = if is_lazy {
             let mut segment_locations = Vec::with_capacity(self.partitions.partitions.len());
             for part in &self.partitions.partitions {
                 // Safe to downcast because we know the partition is lazy
@@ -175,27 +170,45 @@ impl IPhysicalPlan for MutationSource {
                     snapshot_loc: None,
                 });
             }
-            let prune_ctx = MutationBlockPruningContext {
-                segment_locations,
-                block_count: None,
-            };
-            Runtime::with_worker_threads(2, Some("do_mutation_block_pruning".to_string()))?
-                .block_on(async move {
-                    let (_, partitions) = table_clone
-                        .do_mutation_block_pruning(
-                            ctx_clone,
-                            filters_clone,
-                            projection,
-                            prune_ctx,
-                            true,
-                        )
-                        .await?;
-                    ctx.set_partitions(partitions)?;
-                    Ok(())
-                })?;
+            let projection = Projection::Columns(read_partition_columns.clone());
+            if builder.ctx.get_settings().get_enable_prune_pipeline()? {
+                // Prune the segments while the query is running and stream the deletion tasks.
+                let (prune_pipeline, partition_receiver) = table.build_mutation_prune_pipeline(
+                    builder.ctx.clone(),
+                    self.filters.clone(),
+                    projection,
+                    segment_locations,
+                )?;
+                builder.pipelines.push(prune_pipeline);
+                Some(partition_receiver)
+            } else {
+                // Preserve the legacy initialization-time pruning when the pipeline is disabled.
+                let ctx = builder.ctx.clone();
+                let table = table.clone();
+                let filters = self.filters.clone();
+                let prune_ctx = MutationBlockPruningContext {
+                    segment_locations,
+                    block_count: None,
+                };
+                Runtime::with_worker_threads(2, Some("do_mutation_block_pruning".to_string()))?
+                    .block_on(async move {
+                        let (_, partitions) = table
+                            .do_mutation_block_pruning(
+                                ctx.clone(),
+                                filters,
+                                projection,
+                                prune_ctx,
+                                true,
+                            )
+                            .await?;
+                        ctx.set_partitions(partitions)
+                    })?;
+                None
+            }
         } else {
             builder.ctx.set_partitions(self.partitions.clone())?;
-        }
+            None
+        };
 
         let filter = self.filters.clone().map(|v| v.filter);
         let mutation_action = if is_delete {
@@ -216,6 +229,7 @@ impl IPhysicalPlan for MutationSource {
             col_indices,
             &mut builder.main_pipeline,
             mutation_action,
+            partition_receiver,
         )?;
 
         if table.change_tracking_enabled() {

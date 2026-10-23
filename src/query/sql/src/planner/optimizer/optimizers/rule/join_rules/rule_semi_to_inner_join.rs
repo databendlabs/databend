@@ -133,7 +133,6 @@ fn visit_group_by_keys(child: &SExpr, visitor: &mut impl FnMut(Symbol, &DataType
         RelOperator::Sort(_)
         | RelOperator::Limit(_)
         | RelOperator::TopN(_)
-        | RelOperator::Exchange(_)
         | RelOperator::UnionAll(_)
         | RelOperator::DummyTableScan(_)
         | RelOperator::ProjectSet(_)

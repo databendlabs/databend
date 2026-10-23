@@ -158,7 +158,7 @@ impl StorageHttpClient {
                 // populates resolved_addrs for IP literals as well.
                 let mut builder = storage_http_client_builder()
                     .http1_only()
-                    .use_native_tls()
+                    .use_rustls_tls()
                     .dns_resolver(Arc::new(PinnedEndpointResolver {
                         host: host.clone(),
                         resolved_addrs: resolved_addrs.to_vec(),

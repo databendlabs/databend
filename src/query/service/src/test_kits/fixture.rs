@@ -187,10 +187,18 @@ impl TestFixture {
 
     /// Create a new TestFixture with setup impl.
     pub async fn setup_with_custom(setup: impl Setup) -> Result<TestFixture> {
+        Self::setup_with_custom_and_session_type(setup, SessionType::Dummy).await
+    }
+
+    /// Use a client session type when SQL behavior depends on it, e.g. temporary tables.
+    pub async fn setup_with_custom_and_session_type(
+        setup: impl Setup,
+        session_type: SessionType,
+    ) -> Result<TestFixture> {
         let conf = setup.setup().await?;
 
         // This will use a max_active_sessions number.
-        let default_session = Self::create_session(SessionType::Dummy).await?;
+        let default_session = Self::create_session(session_type).await?;
         let default_ctx = default_session.create_query_context(&BUILD_INFO).await?;
 
         let random_prefix: String = Uuid::new_v4().simple().to_string();
@@ -301,6 +309,13 @@ impl TestFixture {
         self.default_session.clone()
     }
 
+    pub fn enable_experimental_clone_table(&self) -> Result<()> {
+        self.default_session.get_settings().set_setting(
+            "enable_experimental_clone_table".to_string(),
+            "1".to_string(),
+        )
+    }
+
     /// returns new QueryContext of default session
     pub async fn new_query_ctx(&self) -> Result<Arc<QueryContext>> {
         self.default_session.create_query_context(&BUILD_INFO).await
@@ -396,6 +411,7 @@ impl TestFixture {
             ttl: None,
             table_indexes: None,
             table_constraints: None,
+            clone: None,
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,
@@ -427,6 +443,7 @@ impl TestFixture {
             ttl: None,
             table_indexes: None,
             table_constraints: None,
+            clone: None,
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,
@@ -474,6 +491,7 @@ impl TestFixture {
             ttl: None,
             table_indexes: None,
             table_constraints: None,
+            clone: None,
             attached_columns: None,
             table_partition: None,
             index_user_dictionaries: None,
@@ -516,6 +534,7 @@ impl TestFixture {
             ttl: None,
             table_indexes: None,
             table_constraints: None,
+            clone: None,
             attached_columns: None,
             table_properties: Default::default(),
             index_user_dictionaries: None,
@@ -566,6 +585,7 @@ impl TestFixture {
             ttl: None,
             table_indexes: None,
             table_constraints: None,
+            clone: None,
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,

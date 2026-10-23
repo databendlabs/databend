@@ -19,6 +19,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_ast::ast::ExternalAccessStmt;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Settings;
 use databend_common_ast::ast::Statement;
@@ -528,7 +529,7 @@ impl Binder {
             }
             Statement::Replace(stmt) => self.bind_replace(bind_context, stmt).await?,
             Statement::MergeInto(stmt) => self.bind_merge_into(bind_context, stmt).await?,
-            Statement::Delete(stmt) => self.bind_delete(bind_context, stmt).await?,
+            Statement::Delete(stmt) => self.bind_delete(bind_context, stmt, None).await?,
             Statement::Update(stmt) => self.bind_update(bind_context, stmt).await?,
 
             // Permissions
@@ -579,6 +580,30 @@ impl Binder {
             Statement::ShowFileFormats => Plan::ShowFileFormats(Box::new(ShowFileFormatsPlan {})),
 
             // Connections
+            Statement::ExternalAccess(stmt) => {
+                use ExternalAccessStmt::*;
+                let mut stmt = stmt.clone();
+                let name = match &mut stmt {
+                    CreateNetworkRule { name, .. }
+                    | AlterNetworkRule { name, .. }
+                    | DropNetworkRule { name, .. }
+                    | CreateIntegration { name, .. }
+                    | AlterIntegration { name, .. }
+                    | DropIntegration { name, .. } => name,
+                };
+                *name = self.normalize_identifier(name);
+                let rules = match &mut stmt {
+                    CreateIntegration { rules, .. } => Some(rules),
+                    AlterIntegration { rules, .. } => rules.as_mut(),
+                    _ => None,
+                };
+                if let Some(rules) = rules {
+                    for rule in rules {
+                        *rule = self.normalize_identifier(rule);
+                    }
+                }
+                Plan::ExternalAccess(Box::new(stmt))
+            }
             Statement::CreateConnection(stmt) => self.bind_create_connection(stmt).await?,
             Statement::DropConnection(stmt) => Plan::DropConnection(Box::new(DropConnectionPlan {
                 if_exists: stmt.if_exists,

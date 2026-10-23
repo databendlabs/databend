@@ -34,6 +34,7 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -92,6 +93,7 @@ enum State {
         snapshot: TableSnapshot,
         table_info: TableInfo,
         table_statistics: Option<TableSnapshotStatistics>,
+        lvt_check: Option<TableLvtCheck>,
     },
     Abort(ErrorCode),
     Finish,
@@ -135,6 +137,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
     // Recluster may rewrite disjoint segment sets concurrently. Serialize only the final
     // refresh, sequence validation, and metadata CAS.
     acquire_commit_lock: bool,
+    expected_ttl: Option<String>,
 }
 
 #[derive(Debug)]
@@ -159,6 +162,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
         deduplicated_label: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
         acquire_commit_lock: bool,
+        expected_ttl: Option<String>,
     ) -> Result<ProcessorPtr> {
         let purge_mode = Self::purge_mode(ctx.as_ref(), table, &snapshot_gen)?;
         let enable_auto_analyze = Self::enable_auto_analyze(ctx.clone(), table, &snapshot_gen);
@@ -199,6 +203,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
             vacuum_handler,
             pending_noop_commit: false,
             acquire_commit_lock,
+            expected_ttl,
         })))
     }
 
@@ -264,9 +269,10 @@ where F: SnapshotGenerator + Send + Sync + 'static
     }
 
     fn no_side_effects_in_meta_store(e: &ErrorCode) -> bool {
-        // currently, the only error that we know,  which indicates there are no side effects
-        // is TABLE_VERSION_MISMATCHED
-        e.code() == ErrorCode::TABLE_VERSION_MISMATCHED
+        matches!(
+            e.code(),
+            ErrorCode::TABLE_VERSION_MISMATCHED | ErrorCode::TABLE_SNAPSHOT_EXPIRED
+        )
     }
 
     fn read_meta(&mut self) -> Result<Event> {
@@ -557,6 +563,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     table_stats_gen,
                 ) {
                     Ok(snapshot) => {
+                        let lvt_check =
+                            FuseTable::build_table_lvt_check(&table_info, snapshot.timestamp)?;
                         stamp_table_statistics_with_snapshot_predecessor(
                             &mut table_statistics,
                             &snapshot,
@@ -567,6 +575,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                             snapshot,
                             table_info,
                             table_statistics,
+                            lvt_check,
                         };
                     }
                     Err(e) => {
@@ -679,6 +688,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 snapshot,
                 table_info,
                 table_statistics,
+                lvt_check,
             } => {
                 snapshot.ensure_segments_unique()?;
                 let location = self
@@ -759,6 +769,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                             &self.copied_files,
                             &self.update_stream_meta,
                             &self.dal,
+                            lvt_check,
                             self.deduplicated_label.clone(),
                         )
                         .await
@@ -769,10 +780,12 @@ where F: SnapshotGenerator + Send + Sync + 'static
 
                 match commit_result {
                     Ok(_) => {
-                        self.ctx
-                            .txn_mgr()
-                            .lock()
-                            .add_logical_change_delta(table_info.ident.table_id, logical_delta);
+                        self.ctx.txn_mgr().lock().add_table_delta(
+                            table_info.ident.table_id,
+                            logical_delta,
+                            &self.statistics_hll,
+                            self.statistics_rows,
+                        );
                         set_compaction_num_block_hint(
                             self.ctx.as_ref(),
                             &table_info,
@@ -888,14 +901,28 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         }
                     }
                     Err(e) => {
-                        // we are not sure about if the table state has been modified or not, just propagate the error
-                        // and return, without aborting anything.
-                        return Err(e);
+                        if Self::no_side_effects_in_meta_store(&e) {
+                            // Meta rejected the transaction before applying any writes. Enter the
+                            // normal abort state for consistent accounting, but do not retry: the
+                            // already-written objects retain their timestamps.
+                            self.state = State::Abort(e);
+                        } else {
+                            // The metastore outcome may be ambiguous; propagate without treating
+                            // the operation as a confirmed abort.
+                            return Err(e);
+                        }
                     }
                 };
             }
             State::RefreshTable => {
                 self.table = self.table.refresh(self.ctx.as_ref()).await?;
+                if let Some(expected) = &self.expected_ttl {
+                    if self.table.get_table_info().meta.ttl.as_deref() != Some(expected.as_str()) {
+                        return Err(ErrorCode::SemanticError(
+                            "TTL definition changed; retry MATERIALIZE TTL",
+                        ));
+                    }
+                }
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
                 let previous = fuse_table.read_table_snapshot().await?;
                 let table_stats_gen = fuse_table

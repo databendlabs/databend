@@ -510,6 +510,8 @@ pub enum TokenKind {
     CHANGES,
     #[token("CLUSTER", ignore(ascii_case))]
     CLUSTER,
+    #[token("CLONE", ignore(ascii_case))]
+    CLONE,
     #[token("COMMENT", ignore(ascii_case))]
     COMMENT,
     #[token("COMMENTS", ignore(ascii_case))]
@@ -966,6 +968,8 @@ pub enum TokenKind {
     MONTH,
     #[token("MODIFY", ignore(ascii_case))]
     MODIFY,
+    #[token("MATERIALIZE", ignore(ascii_case))]
+    MATERIALIZE,
     #[token("MATERIALIZED", ignore(ascii_case))]
     MATERIALIZED,
     #[token("MUST_CHANGE_PASSWORD", ignore(ascii_case))]
@@ -1550,6 +1554,18 @@ pub enum TokenKind {
     PIPE,
     #[token("NOTIFICATION", ignore(ascii_case))]
     NOTIFICATION,
+    #[token("RULE", ignore(ascii_case))]
+    RULE,
+    #[token("EXTERNAL", ignore(ascii_case))]
+    EXTERNAL,
+    #[token("MODE", ignore(ascii_case))]
+    MODE,
+    #[token("VALUE_LIST", ignore(ascii_case))]
+    VALUE_LIST,
+    #[token("ALLOWED_NETWORK_RULES", ignore(ascii_case))]
+    ALLOWED_NETWORK_RULES,
+    #[token("EXTERNAL_ACCESS_INTEGRATIONS", ignore(ascii_case))]
+    EXTERNAL_ACCESS_INTEGRATIONS,
     #[token("INTEGRATION", ignore(ascii_case))]
     INTEGRATION,
     #[token("ENABLED", ignore(ascii_case))]

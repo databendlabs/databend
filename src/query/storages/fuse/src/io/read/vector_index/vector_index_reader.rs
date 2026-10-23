@@ -19,15 +19,11 @@ use databend_storages_common_index::ScoredPointOffset;
 use databend_storages_common_io::ReadSettings;
 use opendal::Operator;
 
-use crate::io::read::vector_index::vector_index_loader::load_vector_index_files;
+use super::vector_index_object_loader::VectorIndexLoader;
 
 #[derive(Clone)]
 pub struct VectorIndexReader {
-    operator: Operator,
-    settings: ReadSettings,
-    dim: usize,
-    distance_type: DistanceType,
-    columns: Vec<String>,
+    loader: VectorIndexLoader,
     query_values: Vec<f32>,
 }
 
@@ -43,11 +39,7 @@ impl VectorIndexReader {
         let processed_query_values = HNSWIndex::preprocess_query(distance_type, query_values);
 
         Self {
-            operator,
-            settings,
-            dim,
-            distance_type,
-            columns,
+            loader: VectorIndexLoader::new(operator, settings, distance_type, dim, columns),
             query_values: processed_query_values,
         }
     }
@@ -58,16 +50,8 @@ impl VectorIndexReader {
         row_count: usize,
         location: &str,
     ) -> Result<Vec<ScoredPointOffset>> {
-        let binary_columns = load_vector_index_files(
-            self.operator.clone(),
-            &self.settings,
-            &self.columns,
-            location,
-        )
-        .await?;
-
-        let hnsw_index = HNSWIndex::open(self.distance_type, self.dim, row_count, binary_columns)?;
-        hnsw_index.search(limit, &self.query_values)
+        let index = self.loader.load(row_count, location).await?;
+        index.index().search(limit, &self.query_values)
     }
 
     pub async fn generate_scores(
@@ -75,15 +59,9 @@ impl VectorIndexReader {
         row_count: usize,
         location: &str,
     ) -> Result<Vec<ScoredPointOffset>> {
-        let binary_columns = load_vector_index_files(
-            self.operator.clone(),
-            &self.settings,
-            &self.columns,
-            location,
-        )
-        .await?;
-
-        let hnsw_index = HNSWIndex::open(self.distance_type, self.dim, row_count, binary_columns)?;
-        hnsw_index.generate_scores(row_count as u32, &self.query_values)
+        let index = self.loader.load(row_count, location).await?;
+        index
+            .index()
+            .generate_scores(row_count as u32, &self.query_values)
     }
 }

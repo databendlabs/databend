@@ -85,6 +85,8 @@ pub struct Mutation {
     pub strategy: MutationStrategy,
     pub matched_clauses: Vec<MatchedClause>,
     pub unmatched_clauses: Vec<UnmatchedClause>,
+    /// TTL deletions bind raw values and recheck this definition on commit conflicts.
+    pub expected_ttl: Option<String>,
 }
 
 impl Mutation {
@@ -136,6 +138,7 @@ impl Binder {
             strategy,
             matched_clauses,
             unmatched_clauses,
+            expected_ttl,
         } = mutation;
 
         let (catalog_name, database_name, table_name, table_name_alias) = (
@@ -175,6 +178,7 @@ impl Binder {
                 table.clone(),
                 &target_table_identifier,
                 table_schema.clone(),
+                expected_ttl.is_some(),
             )
             .await?;
         let target_table_index = bind_result.target_table_index;
@@ -300,6 +304,7 @@ impl Binder {
             predicate_column_index: None,
             direct_filter: vec![],
             truncate_table: false,
+            expected_ttl,
         };
 
         if mutation_strategy == MutationStrategy::NotMatchedOnly && !insert_only(&mutation) {

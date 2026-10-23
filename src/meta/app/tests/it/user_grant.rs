@@ -121,6 +121,26 @@ fn test_grant_object_contains() -> anyhow::Result<()> {
 }
 
 #[test]
+fn test_integration_grant_quotes_identifiers() {
+    for (name, quoted) in [
+        ("access", r#""access""#),
+        ("QuotedAccess", r#""QuotedAccess""#),
+        ("access with space", r#""access with space""#),
+        ("access/r", r#""access/r""#),
+        ("access\"r", r#""access""r""#),
+        ("select", r#""select""#),
+    ] {
+        let object = GrantObject::Integration(name.to_string());
+        assert_eq!(object.to_string(), format!("INTEGRATION {quoted}"));
+        let grant = GrantEntry::new(object, make_bitflags!(UserPrivilegeType::{Usage}));
+        assert_eq!(
+            grant.to_string(),
+            format!("GRANT ALL ON INTEGRATION {quoted}")
+        );
+    }
+}
+
+#[test]
 fn test_user_grant_entry() -> anyhow::Result<()> {
     let grant = GrantEntry::new(
         GrantObject::Global,
