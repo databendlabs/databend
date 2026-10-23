@@ -126,6 +126,11 @@ async fn test_epochless_transaction_conflict_preserves_complete_delta() -> anyho
     make_epochless(&fixture, name).await?;
     let writer = fixture.new_session_with_type(SessionType::Dummy).await?;
     let id = table(&fixture, name).await?.get_id();
+    // The transaction's bound is larger than the concurrent writer's bound.
+    fixture
+        .default_session()
+        .get_settings()
+        .set_max_execute_time_in_seconds(172800)?;
 
     // The other session commits after this transaction buffers its mutations,
     // forcing a metadata conflict at COMMIT.
@@ -150,9 +155,24 @@ async fn test_epochless_transaction_conflict_preserves_complete_delta() -> anyho
                 .get(&id),
             Some(&Some((2, 1)))
         );
+        let transaction_bound = table(&fixture, name)
+            .await?
+            .read_table_snapshot()
+            .await?
+            .unwrap()
+            .max_block_timestamp;
         execute(&writer, &format!("INSERT INTO {target} VALUES (100,0)")).await?;
         fixture.execute_command("COMMIT").await?;
         assert_eq!(totals(&fixture, name).await?, (before.0 + 2, before.1 + 1));
+        assert_eq!(
+            table(&fixture, name)
+                .await?
+                .read_table_snapshot()
+                .await?
+                .unwrap()
+                .max_block_timestamp,
+            transaction_bound
+        );
         assert_eq!(
             table(&fixture, name)
                 .await?

@@ -320,6 +320,12 @@ async fn try_rebuild_req(
             stats_location,
             table_meta_timestamps,
         )?;
+        // Retry merges already written objects, so retain both histories' original bounds.
+        merged_snapshot.max_block_timestamp = merged_snapshot.max_block_timestamp.max(
+            new_snapshot
+                .as_ref()
+                .and_then(|snapshot| snapshot.max_block_timestamp),
+        );
         // Missing/overflowed bookkeeping must not become a trusted zero. This
         // fallback protects epoch-aware readers, not unrestricted old-reader
         // mixed mode: an older writer may recreate zero counters afterward.
