@@ -10,8 +10,8 @@ export TEST_USER_CONNECT="bendsql_connect_user owner password -A"
 run_root_sql "
 drop user if exists 'owner';
 drop role if exists role1;
-create user 'owner' IDENTIFIED BY '$TEST_USER_PASSWORD' with DEFAULT_ROLE='role1';
 create role role1;
+create user 'owner' IDENTIFIED BY '$TEST_USER_PASSWORD' with DEFAULT_ROLE='role1';
 grant role role1 to owner;
 grant create on default.* to role role1;
 drop table if exists t;
