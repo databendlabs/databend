@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::StatEvaluator;
@@ -184,6 +185,15 @@ impl Operator for EvalScalar {
     }
 
     fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        let mut defined_columns = ColumnSet::new();
+        for item in &self.items {
+            if !defined_columns.insert(item.index) {
+                return Err(ErrorCode::Internal(format!(
+                    "EvalScalar has duplicate output index {}",
+                    item.index
+                )));
+            }
+        }
         let input = rel_expr.derive_cardinality_child(0, stat_ctx)?;
         if self.items.iter().all(|item| {
             matches!(
@@ -199,16 +209,6 @@ impl Operator for EvalScalar {
             .precise_cardinality
             .map(StatCardinality::exact)
             .unwrap_or_else(|| StatCardinality::estimate(input.cardinality));
-        let defined_columns = self
-            .items
-            .iter()
-            .map(|item| item.index)
-            .collect::<ColumnSet>();
-        debug_assert_eq!(
-            defined_columns.len(),
-            self.items.len(),
-            "EvalScalar output indexes must be unique"
-        );
         let Statistics {
             column_stats,
             top_n,
