@@ -338,11 +338,11 @@ fn propagate_probe_targets(
 }
 
 /// Allowlist for commuting a scan predicate through an intermediate operator.
-/// Inner/cross joins allow both inputs; semi joins allow only their output
-/// input, as selected by `probe_child_is_safe`. Creating a filter *at* a join
-/// does not imply that another join's filter may cross it. Unknown operators,
-/// shared CTE producers, windows, TopN and UnionAll (which needs explicit column
-/// remapping) are conservative barriers.
+/// Inner/cross joins allow both inputs; semi/anti joins allow only the input
+/// that supplies output rows, as selected by `probe_child_is_safe`. Creating a
+/// filter *at* a join does not imply that another join's filter may cross it.
+/// Unknown operators, shared CTE producers, windows, TopN and UnionAll (which
+/// needs explicit column remapping) are conservative barriers.
 fn row_preserving_probe_operator(plan: &PhysicalRelOperator) -> bool {
     match plan {
         PhysicalRelOperator::Scan(scan) => {
@@ -361,21 +361,26 @@ fn row_preserving_probe_operator(plan: &PhysicalRelOperator) -> bool {
             join.single_to_inner.is_none()
                 && matches!(
                     join.join_type,
-                    JoinType::Inner | JoinType::Cross | JoinType::LeftSemi | JoinType::RightSemi
+                    JoinType::Inner
+                        | JoinType::Cross
+                        | JoinType::LeftSemi
+                        | JoinType::RightSemi
+                        | JoinType::LeftAnti
+                        | JoinType::RightAnti
                 )
         }
         _ => false,
     }
 }
 
-// Allow a parent filter through a semi join's output-side input only.
+// Allow a parent filter through a semi/anti join's output-side input only.
 // Use the same child policy for target paths and equivalence collection.
 fn probe_child_is_safe(plan: &PhysicalRelOperator, child_index: usize) -> bool {
     row_preserving_probe_operator(plan)
         && match plan {
             PhysicalRelOperator::Join(join) => match join.join_type {
-                JoinType::LeftSemi => child_index == 0,
-                JoinType::RightSemi => child_index == 1,
+                JoinType::LeftSemi | JoinType::LeftAnti => child_index == 0,
+                JoinType::RightSemi | JoinType::RightAnti => child_index == 1,
                 _ => true,
             },
             _ => true,
@@ -930,7 +935,7 @@ mod tests {
         }
     }
 
-    fn assert_semi_output_probe_targets(join_type: databend_common_sql::plans::JoinType) {
+    fn assert_output_side_probe_targets(join_type: databend_common_sql::plans::JoinType) {
         use databend_common_expression::TableDataType;
         use databend_common_sql::MetadataRef;
         use databend_common_sql::optimizer::ir::PExpr;
@@ -966,20 +971,22 @@ mod tests {
             )
         };
         // The output subtree has c0=c1; the hidden subtree has c2=c3.
-        // The semi join's own equality must not bridge these two subtrees.
-        let (left, right, condition) = if matches!(join_type, JoinType::LeftSemi) {
-            (
-                inner(0, 1),
-                inner(2, 3),
-                JoinEquiCondition::new(col(0), col(2), false),
-            )
-        } else {
-            (
-                inner(2, 3),
-                inner(0, 1),
-                JoinEquiCondition::new(col(2), col(0), false),
-            )
-        };
+        // Neither the semi/anti join's own equality nor the hidden subtree's
+        // equality may be exported to connect these two inputs.
+        let (left, right, condition) =
+            if matches!(join_type, JoinType::LeftSemi | JoinType::LeftAnti) {
+                (
+                    inner(0, 1),
+                    inner(2, 3),
+                    JoinEquiCondition::new(col(0), col(2), false),
+                )
+            } else {
+                (
+                    inner(2, 3),
+                    inner(0, 1),
+                    JoinEquiCondition::new(col(2), col(0), false),
+                )
+            };
         let plan = PExpr::create_binary(
             Join {
                 join_type,
@@ -1033,12 +1040,22 @@ mod tests {
 
     #[test]
     fn test_left_semi_keeps_output_side_targets() {
-        assert_semi_output_probe_targets(databend_common_sql::plans::JoinType::LeftSemi);
+        assert_output_side_probe_targets(databend_common_sql::plans::JoinType::LeftSemi);
     }
 
     #[test]
     fn test_right_semi_keeps_output_side_targets() {
-        assert_semi_output_probe_targets(databend_common_sql::plans::JoinType::RightSemi);
+        assert_output_side_probe_targets(databend_common_sql::plans::JoinType::RightSemi);
+    }
+
+    #[test]
+    fn test_left_anti_keeps_output_side_targets() {
+        assert_output_side_probe_targets(databend_common_sql::plans::JoinType::LeftAnti);
+    }
+
+    #[test]
+    fn test_right_anti_keeps_output_side_targets() {
+        assert_output_side_probe_targets(databend_common_sql::plans::JoinType::RightAnti);
     }
 
     #[test]
