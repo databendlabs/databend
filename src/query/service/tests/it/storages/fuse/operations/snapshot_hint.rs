@@ -20,11 +20,11 @@ use databend_common_storages_fuse::operations::load_last_snapshot_hint;
 use databend_common_version::BUILD_INFO;
 use databend_query::sessions::Session;
 use databend_query::sessions::TableContextTableAccess;
-use databend_query::test_kits::ConfigBuilder;
-use databend_query::test_kits::OSSSetup;
 use databend_query::test_kits::TestFixture;
 use futures::TryStreamExt;
 
+// Single-session behavior is covered by txn_snapshot_hint.test. These tests
+// control concurrent writers to exercise successful and failed commit retries.
 async fn execute(session: &Arc<Session>, sql: &str) -> anyhow::Result<()> {
     let ctx = session.create_query_context(&BUILD_INFO).await?;
     TestFixture::execute_query_with_ctx(ctx, sql)
@@ -60,105 +60,13 @@ async fn hint(table: &FuseTable) -> anyhow::Result<Option<String>> {
 }
 
 async fn setup() -> anyhow::Result<TestFixture> {
-    let fixture = TestFixture::setup_with_custom_and_session_type(
-        OSSSetup {
-            config: ConfigBuilder::create().config(),
-        },
-        SessionType::MySQL,
-    )
-    .await?;
+    let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
     fixture
         .execute_command("SET auto_compaction_imperfect_blocks_threshold=0")
         .await?;
     fixture.execute_command("SET enable_auto_analyze=0").await?;
     Ok(fixture)
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_transaction_snapshot_hint_rollback() -> anyhow::Result<()> {
-    let fixture = setup().await?;
-    let target = format!("{}.hint_rollback", fixture.default_db_name());
-    fixture
-        .execute_command(&format!("CREATE TABLE {target}(id INT, v INT)"))
-        .await?;
-    fixture
-        .execute_command(&format!("INSERT INTO {target} VALUES (1,10)"))
-        .await?;
-    let committed = table(&fixture, "hint_rollback").await?;
-    let expected = Some(snapshot_path(&committed));
-    assert_eq!(hint(&committed).await?, expected);
-
-    for statements in [
-        vec![format!("INSERT INTO {target} VALUES (2,20),(3,30)")],
-        vec![format!("UPDATE {target} SET v=-1 WHERE id=1")],
-        vec![format!("DELETE FROM {target} WHERE id=1")],
-        vec![format!(
-            "REPLACE INTO {target} ON (id) VALUES (1,-1),(5,50)"
-        )],
-        vec![
-            format!("UPDATE {target} SET v=-1 WHERE id=1"),
-            format!("REPLACE INTO {target} ON (id) VALUES (7,70),(8,80)"),
-        ],
-    ] {
-        fixture.execute_command("BEGIN").await?;
-        for sql in &statements {
-            fixture.execute_command(sql).await?;
-            // Check before ROLLBACK too: attached readers must not see dirty data.
-            assert_eq!(hint(&committed).await?, expected, "{sql}");
-        }
-        assert_ne!(
-            table(&fixture, "hint_rollback").await?.snapshot_loc(),
-            committed.snapshot_loc()
-        );
-        fixture.execute_command("ROLLBACK").await?;
-        assert_eq!(hint(&committed).await?, expected, "{statements:?}");
-        assert_eq!(
-            table(&fixture, "hint_rollback").await?.snapshot_loc(),
-            committed.snapshot_loc()
-        );
-    }
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_transaction_first_snapshot_hint_and_disabled_hint() -> anyhow::Result<()> {
-    let fixture = setup().await?;
-    let target = format!("{}.hint_first", fixture.default_db_name());
-    fixture
-        .execute_command(&format!("CREATE TABLE {target}(id INT)"))
-        .await?;
-    let empty = table(&fixture, "hint_first").await?;
-    assert_eq!(hint(&empty).await?, None);
-    for end in ["ROLLBACK", "COMMIT"] {
-        fixture.execute_command("BEGIN").await?;
-        fixture
-            .execute_command(&format!("INSERT INTO {target} VALUES (1)"))
-            .await?;
-        assert_eq!(hint(&empty).await?, None);
-        fixture.execute_command(end).await?;
-        if end == "ROLLBACK" {
-            assert_eq!(hint(&empty).await?, None);
-        }
-    }
-    let committed = table(&fixture, "hint_first").await?;
-    let expected = Some(snapshot_path(&committed));
-    assert_eq!(hint(&committed).await?, expected);
-
-    fixture
-        .execute_command("SET enable_last_snapshot_location_hint=0")
-        .await?;
-    fixture.execute_command("BEGIN").await?;
-    fixture
-        .execute_command(&format!("INSERT INTO {target} VALUES (2)"))
-        .await?;
-    fixture.execute_command("COMMIT").await?;
-    assert_ne!(
-        table(&fixture, "hint_first").await?.snapshot_loc(),
-        committed.snapshot_loc()
-    );
-    assert_eq!(hint(&committed).await?, expected);
-    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -176,76 +84,27 @@ async fn test_transaction_snapshot_hints_after_retry() -> anyhow::Result<()> {
             .await?;
     }
 
-    // Exercise both a conflict-free multi-table commit and OCC snapshot rebuilds.
-    for retry in [false, true] {
-        let mut before = Vec::new();
-        for name in names {
-            before.push(hint(&table(&fixture, name).await?).await?);
-        }
-        fixture.execute_command("BEGIN").await?;
+    fixture.execute_command("BEGIN").await?;
+    fixture
+        .execute_command(&format!(
+            "INSERT ALL INTO {db}.{} INTO {db}.{} SELECT 2,20",
+            names[0], names[1]
+        ))
+        .await?;
+    let mut buffered = Vec::new();
+    for name in names {
         fixture
-            .execute_command(&format!(
-                "INSERT ALL INTO {db}.{} INTO {db}.{} SELECT 2,20",
-                names[0], names[1]
-            ))
+            .execute_command(&format!("INSERT INTO {db}.{name} VALUES (3,30)"))
             .await?;
-        let mut buffered = Vec::new();
-        for (index, name) in names.into_iter().enumerate() {
-            fixture
-                .execute_command(&format!("INSERT INTO {db}.{name} VALUES (3,30)"))
-                .await?;
-            let table = table(&fixture, name).await?;
-            buffered.push(table.snapshot_loc());
-            assert_eq!(hint(&table).await?, before[index]);
-        }
-        if retry {
-            for name in names {
-                execute(&writer, &format!("INSERT INTO {db}.{name} VALUES (4,40)")).await?;
-            }
-        }
-        fixture.execute_command("COMMIT").await?;
-        for (index, name) in names.into_iter().enumerate() {
-            let table = table(&fixture, name).await?;
-            assert_eq!(hint(&table).await?, Some(snapshot_path(&table)));
-            assert_ne!(hint(&table).await?, before[index]);
-            if retry {
-                assert_ne!(table.snapshot_loc(), buffered[index]);
-            } else {
-                assert_eq!(table.snapshot_loc(), buffered[index]);
-            }
-        }
+        buffered.push(table(&fixture, name).await?.snapshot_loc());
+        // Advance both tables from another session to force snapshot rebuilds.
+        execute(&writer, &format!("INSERT INTO {db}.{name} VALUES (4,40)")).await?;
     }
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_transaction_temp_table_snapshot_hint() -> anyhow::Result<()> {
-    let fixture = setup().await?;
-    let target = format!("{}.hint_temp", fixture.default_db_name());
-    fixture
-        .execute_command(&format!("CREATE TEMP TABLE {target}(id INT)"))
-        .await?;
-    fixture
-        .execute_command(&format!("INSERT INTO {target} VALUES (1)"))
-        .await?;
-    let committed = table(&fixture, "hint_temp").await?;
-    let expected = Some(snapshot_path(&committed));
-    assert_eq!(hint(&committed).await?, expected);
-
-    for end in ["ROLLBACK", "COMMIT"] {
-        fixture.execute_command("BEGIN").await?;
-        fixture
-            .execute_command(&format!("INSERT INTO {target} VALUES (2)"))
-            .await?;
-        assert_eq!(hint(&committed).await?, expected);
-        fixture.execute_command(end).await?;
-        let latest = table(&fixture, "hint_temp").await?;
-        assert_eq!(hint(&latest).await?, Some(snapshot_path(&latest)));
-        if end == "ROLLBACK" {
-            assert_eq!(latest.snapshot_loc(), committed.snapshot_loc());
-        } else {
-            assert_ne!(latest.snapshot_loc(), committed.snapshot_loc());
-        }
+    fixture.execute_command("COMMIT").await?;
+    for (index, name) in names.into_iter().enumerate() {
+        let table = table(&fixture, name).await?;
+        assert_ne!(table.snapshot_loc(), buffered[index]);
+        assert_eq!(hint(&table).await?, Some(snapshot_path(&table)));
     }
     Ok(())
 }

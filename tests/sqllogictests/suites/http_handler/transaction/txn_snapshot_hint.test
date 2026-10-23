@@ -14,16 +14,42 @@ statement ok
 set enable_auto_analyze=0;
 
 statement ok
-create or replace stage txn_hint_stage url='fs:///tmp/http_handler_txn_snapshot_hint/';
+create or replace stage txn_hint_stage url='fs:///tmp/http_handler_txn_snapshot_hint/persistent/';
 
 statement ok
 remove @txn_hint_stage;
 
 statement ok
-create table t(id int, v int) 'fs:///tmp/http_handler_txn_snapshot_hint/';
+create table t(id int, v int) 'fs:///tmp/http_handler_txn_snapshot_hint/persistent/';
+
+# A table's first snapshot must not create a hint until COMMIT.
+statement ok
+begin;
 
 statement ok
 insert into t values (1,10);
+
+query I
+select count(*) from @txn_hint_stage (pattern=>'.*last_snapshot_location_hint_v2', file_format=>'ndjson');
+----
+0
+
+statement ok
+rollback;
+
+query I
+select count(*) from @txn_hint_stage (pattern=>'.*last_snapshot_location_hint_v2', file_format=>'ndjson');
+----
+0
+
+statement ok
+begin;
+
+statement ok
+insert into t values (1,10);
+
+statement ok
+commit;
 
 statement ok
 create temp table hint_before as select $1:snapshot_full_path::string as path from @txn_hint_stage (pattern=>'.*last_snapshot_location_hint_v2', file_format=>'ndjson');
@@ -40,10 +66,19 @@ select count(*) from t;
 ----
 0
 
-query T
+statement ok
+insert into t values (1,10),(2,20);
+
+statement ok
+update t set v=-1 where id=1;
+
+statement ok
+replace into t on (id) values (1,-2),(5,50);
+
+query B
 select $1:snapshot_full_path::string = (select path from hint_before) from @txn_hint_stage (pattern=>'.*last_snapshot_location_hint_v2', file_format=>'ndjson');
 ----
-true
+1
 
 statement ok
 rollback;
@@ -53,10 +88,10 @@ select * from t;
 ----
 1 10
 
-query T
-select ends_with($1:snapshot_full_path::string, (select snapshot_location from fuse_snapshot('txn_snapshot_hint','t') limit 1)) from @txn_hint_stage (pattern=>'.*last_snapshot_location_hint_v2', file_format=>'ndjson');
+query B
+select $1:snapshot_full_path::string = (select path from hint_before) from @txn_hint_stage (pattern=>'.*last_snapshot_location_hint_v2', file_format=>'ndjson');
 ----
-true
+1
 
 # Multiple statements must publish only the final snapshot on COMMIT.
 statement ok
@@ -68,10 +103,10 @@ insert into t values (2,20);
 statement ok
 update t set v=11 where id=1;
 
-query T
+query B
 select $1:snapshot_full_path::string = (select path from hint_before) from @txn_hint_stage (pattern=>'.*last_snapshot_location_hint_v2', file_format=>'ndjson');
 ----
-true
+1
 
 statement ok
 commit;
@@ -82,15 +117,103 @@ select * from t order by id;
 1 11
 2 20
 
-query T
-select ends_with($1:snapshot_full_path::string, (select snapshot_location from fuse_snapshot('txn_snapshot_hint','t') limit 1)) from @txn_hint_stage (pattern=>'.*last_snapshot_location_hint_v2', file_format=>'ndjson');
+query B
+select right($1:snapshot_full_path::string, length(s.snapshot_location)) = s.snapshot_location
+from @txn_hint_stage (pattern=>'.*last_snapshot_location_hint_v2', file_format=>'ndjson')
+cross join (select snapshot_location from fuse_snapshot('txn_snapshot_hint','t') limit 1) s;
 ----
-true
+1
 
-query T
+query B
 select $1:snapshot_full_path::string != (select path from hint_before) from @txn_hint_stage (pattern=>'.*last_snapshot_location_hint_v2', file_format=>'ndjson');
 ----
-true
+1
+
+# COMMIT must still honor the setting that disables hint writes.
+statement ok
+set enable_last_snapshot_location_hint=0;
+
+statement ok
+begin;
+
+statement ok
+insert into t values (3,30);
+
+statement ok
+commit;
+
+query B
+select right($1:snapshot_full_path::string, length(s.snapshot_location)) = s.snapshot_location
+from @txn_hint_stage (pattern=>'.*last_snapshot_location_hint_v2', file_format=>'ndjson')
+cross join (select snapshot_location from fuse_snapshot('txn_snapshot_hint','t') limit 1) s;
+----
+0
+
+statement ok
+set enable_last_snapshot_location_hint=1;
+
+# Temporary tables use a separate metadata-update list at COMMIT.
+statement ok
+create or replace stage txn_temp_hint_stage url='fs:///tmp/http_handler_txn_snapshot_hint/temporary/';
+
+statement ok
+remove @txn_temp_hint_stage;
+
+statement ok
+create temp table tt(id int) 'fs:///tmp/http_handler_txn_snapshot_hint/temporary/';
+
+statement ok
+insert into tt values (1);
+
+statement ok
+begin;
+
+statement ok
+insert into tt values (2);
+
+query B
+select right($1:snapshot_full_path::string, length(s.snapshot_location)) = s.snapshot_location
+from @txn_temp_hint_stage (pattern=>'.*last_snapshot_location_hint_v2', file_format=>'ndjson')
+cross join (select snapshot_location from fuse_snapshot('txn_snapshot_hint','tt') limit 1) s;
+----
+0
+
+statement ok
+rollback;
+
+query B
+select right($1:snapshot_full_path::string, length(s.snapshot_location)) = s.snapshot_location
+from @txn_temp_hint_stage (pattern=>'.*last_snapshot_location_hint_v2', file_format=>'ndjson')
+cross join (select snapshot_location from fuse_snapshot('txn_snapshot_hint','tt') limit 1) s;
+----
+1
+
+statement ok
+begin;
+
+statement ok
+insert into tt values (2);
+
+statement ok
+commit;
+
+query B
+select right($1:snapshot_full_path::string, length(s.snapshot_location)) = s.snapshot_location
+from @txn_temp_hint_stage (pattern=>'.*last_snapshot_location_hint_v2', file_format=>'ndjson')
+cross join (select snapshot_location from fuse_snapshot('txn_snapshot_hint','tt') limit 1) s;
+----
+1
+
+query I
+select count(*) from tt;
+----
+2
+
+statement ok
+drop table tt;
+
+statement ok
+drop stage txn_temp_hint_stage;
 
 statement ok
 drop table hint_before;
