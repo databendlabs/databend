@@ -18,6 +18,7 @@ use std::collections::hash_map::Entry;
 use std::iter::once;
 
 use ahash::HashSet;
+use ahash::HashSetExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -86,7 +87,7 @@ impl ReplaceIntoMutator {
         Ok(Self {
             on_conflict_fields,
             table_range_index: table_range_idx,
-            key_saw: Default::default(),
+            key_saw: HashSet::new(),
             partitioner,
         })
     }
@@ -511,7 +512,6 @@ fn on_conflict_key_column_values(
 
 #[cfg(test)]
 mod tests {
-    use ahash::HashSetExt;
     use databend_common_expression::BlockEntry;
     use databend_common_expression::FromData;
     use databend_common_expression::TableDataType;
