@@ -1,0 +1,105 @@
+# Regression for #20752. Inspect the same storage hint used by ATTACH TABLE,
+# without requiring an enterprise license to attach the table. The dedicated
+# fs prefix follows txn_ext.test; clear it so repeated runs see only this table.
+statement ok
+create or replace database txn_snapshot_hint;
+
+statement ok
+use txn_snapshot_hint;
+
+statement ok
+set auto_compaction_imperfect_blocks_threshold=0;
+
+statement ok
+set enable_auto_analyze=0;
+
+statement ok
+create or replace stage txn_hint_stage url='fs:///tmp/http_handler_txn_snapshot_hint/';
+
+statement ok
+remove @txn_hint_stage;
+
+statement ok
+create table t(id int, v int) 'fs:///tmp/http_handler_txn_snapshot_hint/';
+
+statement ok
+insert into t values (1,10);
+
+statement ok
+create temp table hint_before as select $1:snapshot_full_path::string as path from @txn_hint_stage (pattern=>'.*last_snapshot_location_hint_v2', file_format=>'ndjson');
+
+statement ok
+begin;
+
+statement ok
+delete from t where id=1;
+
+# The source sees its own DELETE, but the published hint must not change.
+query I
+select count(*) from t;
+----
+0
+
+query T
+select $1:snapshot_full_path::string = (select path from hint_before) from @txn_hint_stage (pattern=>'.*last_snapshot_location_hint_v2', file_format=>'ndjson');
+----
+true
+
+statement ok
+rollback;
+
+query II
+select * from t;
+----
+1 10
+
+query T
+select ends_with($1:snapshot_full_path::string, (select snapshot_location from fuse_snapshot('txn_snapshot_hint','t') limit 1)) from @txn_hint_stage (pattern=>'.*last_snapshot_location_hint_v2', file_format=>'ndjson');
+----
+true
+
+# Multiple statements must publish only the final snapshot on COMMIT.
+statement ok
+begin;
+
+statement ok
+insert into t values (2,20);
+
+statement ok
+update t set v=11 where id=1;
+
+query T
+select $1:snapshot_full_path::string = (select path from hint_before) from @txn_hint_stage (pattern=>'.*last_snapshot_location_hint_v2', file_format=>'ndjson');
+----
+true
+
+statement ok
+commit;
+
+query II
+select * from t order by id;
+----
+1 11
+2 20
+
+query T
+select ends_with($1:snapshot_full_path::string, (select snapshot_location from fuse_snapshot('txn_snapshot_hint','t') limit 1)) from @txn_hint_stage (pattern=>'.*last_snapshot_location_hint_v2', file_format=>'ndjson');
+----
+true
+
+query T
+select $1:snapshot_full_path::string != (select path from hint_before) from @txn_hint_stage (pattern=>'.*last_snapshot_location_hint_v2', file_format=>'ndjson');
+----
+true
+
+statement ok
+drop table hint_before;
+
+statement ok
+drop table t;
+
+statement ok
+drop stage txn_hint_stage;
+
+statement ok
+drop database txn_snapshot_hint;

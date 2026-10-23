@@ -34,6 +34,7 @@ use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use databend_storages_common_table_meta::table::is_fuse_backed_engine;
 use log::info;
+use log::warn;
 use tokio::time::sleep;
 
 use super::diff::SegmentsDiff;
@@ -66,6 +67,9 @@ pub async fn commit_with_backoff(
             .retryable_update_multi_table_meta(tenant, req.clone())
             .await?;
         let Err(update_failed_tbls) = ret else {
+            // Retries can replace the buffered snapshots with merged snapshots.
+            // Publish only the locations in the request that actually committed.
+            write_snapshot_hints(ctx.as_ref(), &req).await;
             return Ok(());
         };
         let Some(duration) = backoff.next_backoff() else {
@@ -86,6 +90,60 @@ pub async fn commit_with_backoff(
             &table_deltas,
         )
         .await?;
+    }
+}
+
+// Like the hint write itself, operator initialization is best effort: metadata
+// has already committed, so a hint failure must not turn COMMIT into an error.
+async fn write_snapshot_hints(ctx: &dyn TableContext, req: &UpdateMultiTableMetaReq) {
+    let storage_class = match ctx.get_settings().get_s3_storage_class() {
+        Ok(storage_class) => storage_class,
+        Err(e) => {
+            warn!("Failed to initialize transaction snapshot hints: {e}");
+            return;
+        }
+    };
+    let tables = req
+        .update_table_metas
+        .iter()
+        .map(|(update, info)| {
+            (
+                update.table_id,
+                info.ident.seq,
+                &update.new_table_meta,
+                info.desc.as_str(),
+            )
+        })
+        .chain(req.update_temp_tables.iter().map(|update| {
+            (
+                update.table_id,
+                0,
+                &update.new_table_meta,
+                update.desc.as_str(),
+            )
+        }));
+    for (table_id, seq, meta, desc) in tables {
+        if !is_fuse_backed_engine(&meta.engine) {
+            continue;
+        }
+        let table =
+            match FuseTable::from_table_meta(table_id, seq, meta.clone(), storage_class, desc) {
+                Ok(table) => table,
+                Err(e) => {
+                    warn!("Failed to initialize snapshot hint for table {table_id}: {e}");
+                    continue;
+                }
+            };
+        if let Some(location) = table.snapshot_loc() {
+            FuseTable::write_last_snapshot_hint(
+                ctx,
+                &table.get_operator(),
+                table.meta_location_generator(),
+                &location,
+                meta,
+            )
+            .await;
+        }
     }
 }
 
