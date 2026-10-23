@@ -3348,6 +3348,7 @@ dependencies = [
  "geozero",
  "goldenfile",
  "hex",
+ "indexmap 2.14.0",
  "jsonb",
  "lexical-core",
  "match-template",

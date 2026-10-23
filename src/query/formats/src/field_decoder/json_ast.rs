@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashSet;
 
 use chrono_tz::Tz;
 use databend_common_column::types::months_days_micros;
@@ -21,7 +22,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::TableDataType;
-use databend_common_expression::serialize::read_decimal_with_size;
+use databend_common_expression::serialize::JsonDecimalText;
+use databend_common_expression::serialize::read_decimal_from_json_text;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberColumnBuilder;
@@ -55,6 +57,7 @@ use serde_json::Value;
 use crate::FieldDecoder;
 use crate::json::JsonObjectLookup;
 use crate::json::JsonValue;
+use crate::json::unique_object_entries;
 
 pub struct FieldJsonAstDecoder {
     timezone: Tz,
@@ -262,30 +265,19 @@ impl FieldJsonAstDecoder {
     ) -> Result<()> {
         let number = value.as_number();
         let text = if let Some(number) = &number {
-            // Match read_decimal_from_json: keep sign-directed integer input
-            // on the native with_size fast path, including precision checks.
-            let text = number.as_str();
-            let integer = if text.starts_with('-') {
-                text.parse::<i64>().ok().map(D::from_i64)
-            } else {
-                text.parse::<u64>().ok().and_then(D::from_i128)
-            };
-            if let Some(n) = integer {
-                column.push(
-                    n.with_size(size)
-                        .ok_or_else(|| "Decimal overflow".to_string())?,
-                );
-                return Ok(());
-            }
-            text
+            JsonDecimalText::Number(number.as_str())
         } else {
-            value
-                .as_str()
-                .ok_or_else(|| "Incorrect json value for decimal".to_string())?
+            JsonDecimalText::String(
+                value
+                    .as_str()
+                    .ok_or_else(|| "Incorrect json value for decimal".to_string())?,
+            )
         };
-        let (n, _) =
-            read_decimal_with_size::<D>(text.as_bytes(), size, true, self.is_rounding_mode)?;
-        column.push(n);
+        column.push(read_decimal_from_json_text(
+            text,
+            size,
+            self.is_rounding_mode,
+        )?);
         Ok(())
     }
 
@@ -415,7 +407,7 @@ impl FieldJsonAstDecoder {
     }
 
     fn read_variant(&self, column: &mut BinaryColumnBuilder, value: &impl JsonValue) -> Result<()> {
-        value.write_jsonb(&mut column.data)?;
+        value.write_jsonb(&mut column.data);
         column.commit_row();
         Ok(())
     }
@@ -486,11 +478,22 @@ impl FieldJsonAstDecoder {
         }
         let key_type = &fields_type[KEY];
         let value_type = &fields_type[VALUE];
-        match value.object_iter() {
+        match unique_object_entries(value) {
             Some(obj) => {
+                let mut keys = HashSet::new();
                 for (key, val) in obj {
                     let key = Value::String(key.to_string());
                     self.read_field_with_data_type(&mut map_builder[KEY], &key, key_type)?;
+                    // String keys are already unique in the ordered object
+                    // view. Other key types can collide after conversion.
+                    if !matches!(key_type, TableDataType::String) {
+                        let key = map_builder[KEY].pop().unwrap();
+                        if keys.contains(&key) {
+                            return Err(ErrorCode::BadBytes("map keys have to be unique"));
+                        }
+                        map_builder[KEY].push(key.as_ref());
+                        keys.insert(key);
+                    }
                     self.read_field_with_data_type(&mut map_builder[VALUE], val, value_type)?;
                 }
                 column.commit_row();
@@ -507,17 +510,18 @@ impl FieldJsonAstDecoder {
         tuple_fields: Option<(&[String], &[TableDataType])>,
     ) -> Result<()> {
         match (value.object_iter(), value.as_array()) {
-            (Some(obj), _) => {
-                if fields.len() != obj.len() {
+            (Some(_), _) => {
+                let object =
+                    JsonObjectLookup::for_tuple(value, self.ident_case_sensitive, fields.len());
+                let object_len = object.unique_len();
+                if fields.len() != object_len {
                     return Err(ErrorCode::BadBytes(format!(
                         "Incorrect json value, expect {} values, but get {} values",
                         fields.len(),
-                        obj.len()
+                        object_len
                     )));
                 }
                 if let Some((fields_name, fields_type)) = tuple_fields {
-                    let object =
-                        JsonObjectLookup::for_tuple(value, self.ident_case_sensitive, fields.len());
                     for (idx, (field, field_name)) in
                         fields.iter_mut().zip(fields_name.iter()).enumerate()
                     {
@@ -858,6 +862,86 @@ mod tests {
                 );
                 assert_eq!(expected.build(), actual.build(), "{data_type}: {text}");
             }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_map_duplicate_keys_keep_last_value() -> Result<()> {
+        let data_type = TableDataType::Map(Box::new(TableDataType::Tuple {
+            fields_name: vec!["key".to_string(), "value".to_string()],
+            fields_type: vec![
+                TableDataType::String,
+                TableDataType::Number(NumberDataType::Int64),
+            ],
+        }));
+        let decoder = FieldJsonAstDecoder::create(&InputFormatSettings::default(), false);
+        for text in [r#"{"a":1,"a":2}"#, r#"{"a":"discarded","b":3,"\u0061":2}"#] {
+            let serde: serde_json::Value = serde_json::from_str(text).unwrap();
+            let sonic = crate::json::parse_sonic(text.as_bytes()).unwrap();
+            let mut expected = ColumnBuilder::with_capacity(&DataType::from(&data_type), 1);
+            let mut actual = ColumnBuilder::with_capacity(&DataType::from(&data_type), 1);
+            decoder.read_field_with_data_type(&mut expected, &serde, &data_type)?;
+            decoder.read_field_with_data_type(&mut actual, &sonic, &data_type)?;
+            let column = actual.build();
+            assert_eq!(column, expected.build());
+            let ScalarRef::Map(entries) = column.index(0).unwrap() else {
+                unreachable!()
+            };
+            assert_eq!(entries.len(), serde.as_object().unwrap().len());
+        }
+        // Distinct input keys that convert to the same typed key must also be
+        // rejected, as by the nested/fast-values decoders and MAP evaluator.
+        let decimal_map = TableDataType::Map(Box::new(TableDataType::Tuple {
+            fields_name: vec!["key".to_string(), "value".to_string()],
+            fields_type: vec![
+                TableDataType::Decimal(
+                    databend_common_expression::types::decimal::DecimalDataType::Decimal128(
+                        DecimalSize::new(4, 2)?,
+                    ),
+                ),
+                TableDataType::String,
+            ],
+        }));
+        let text = r#"{"1":"a","1.0":"b"}"#;
+        let serde: serde_json::Value = serde_json::from_str(text).unwrap();
+        let sonic = crate::json::parse_sonic(text.as_bytes()).unwrap();
+        let mut expected = ColumnBuilder::with_capacity(&DataType::from(&decimal_map), 1);
+        let mut actual = ColumnBuilder::with_capacity(&DataType::from(&decimal_map), 1);
+        for error in [
+            decoder
+                .read_field_with_data_type(&mut expected, &serde, &decimal_map)
+                .unwrap_err(),
+            decoder
+                .read_field_with_data_type(&mut actual, &sonic, &decimal_map)
+                .unwrap_err(),
+        ] {
+            assert!(error.to_string().contains("map keys have to be unique"));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_tuple_duplicate_keys_match_serde() -> Result<()> {
+        let decoder = FieldJsonAstDecoder::create(&InputFormatSettings::default(), false);
+        for width in [1, 2, 16, 32] {
+            let mut entries = vec![r#""a":"discarded""#.to_string()];
+            entries.extend((1..width).map(|i| format!("\"k{i}\":{i}")));
+            entries.push(r#""\u0061":2"#.to_string());
+            let text = format!("{{{}}}", entries.join(","));
+            let serde: serde_json::Value = serde_json::from_str(&text).unwrap();
+            let sonic = crate::json::parse_sonic(text.as_bytes()).unwrap();
+            let data_type = TableDataType::Tuple {
+                fields_name: std::iter::once("a".to_string())
+                    .chain((1..width).map(|i| format!("k{i}")))
+                    .collect(),
+                fields_type: vec![TableDataType::Number(NumberDataType::Int64); width],
+            };
+            let mut expected = ColumnBuilder::with_capacity(&DataType::from(&data_type), 1);
+            let mut actual = ColumnBuilder::with_capacity(&DataType::from(&data_type), 1);
+            decoder.read_field_with_data_type(&mut expected, &serde, &data_type)?;
+            decoder.read_field_with_data_type(&mut actual, &sonic, &data_type)?;
+            assert_eq!(actual.build(), expected.build());
         }
         Ok(())
     }

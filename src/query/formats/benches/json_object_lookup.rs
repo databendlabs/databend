@@ -13,8 +13,9 @@
 // limitations under the License.
 
 //! Lookup-only benchmark: includes index construction/destruction per object,
-//! excludes parsing. Compare full named tuples and narrow projections.
-//! cargo run --release -p databend-common-formats --example json_object_lookup
+//! excludes parsing. Includes unique-key size validation for named tuples.
+//! Compare full named tuples and narrow projections.
+//! cargo bench -p databend-common-formats --bench json_object_lookup
 
 use std::collections::HashMap;
 use std::hint::black_box;
@@ -56,6 +57,9 @@ fn run<V: JsonValue>(
     row: bool,
 ) {
     let old = measure(|| {
+        if !row {
+            black_box(value.object_iter().unwrap().len());
+        }
         if row && !case_sensitive {
             // This is the existing COPY path, not a repeated linear scan.
             let index: HashMap<_, _> = black_box(value)
@@ -82,6 +86,9 @@ fn run<V: JsonValue>(
         } else {
             JsonObjectLookup::for_tuple(black_box(value), case_sensitive, queries.len())
         };
+        if !row {
+            black_box(lookup.unique_len());
+        }
         for key in queries {
             black_box(lookup.get(black_box(key)));
         }

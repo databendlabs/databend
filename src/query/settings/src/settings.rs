@@ -92,6 +92,7 @@ impl Settings {
             .unwrap_or(true);
         let disable_variant_check = self.get_disable_variant_check()?;
         let enable_auto_detect_datetime_format = self.get_enable_auto_detect_datetime_format()?;
+        let enable_sonic_json_parser = self.get_enable_sonic_json_parser()?;
         Ok(InputFormatSettings {
             timezone,
             geometry_format,
@@ -99,7 +100,7 @@ impl Settings {
             is_rounding_mode,
             disable_variant_check,
             enable_auto_detect_datetime_format,
-            enable_sonic_json_parser: self.get_enable_sonic_json_parser()?,
+            enable_sonic_json_parser,
         })
     }
 

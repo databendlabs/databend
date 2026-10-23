@@ -13,7 +13,7 @@
 // limitations under the License.
 
 //! Parser-only benchmark, including validation, compatibility checks and drop.
-//! cargo run --release -p databend-common-formats --example ndjson_parser
+//! cargo bench -p databend-common-formats --bench ndjson_parser
 //! Add --variant to include direct jsonb conversion and encoding.
 //! Append an NDJSON file path to measure a real workload instead of synthetic rows.
 
@@ -37,7 +37,7 @@ fn main() {
 
     let mut args: Vec<_> = std::env::args().skip(1).collect();
     let encode_jsonb = args.iter().any(|arg| arg == "--variant");
-    args.retain(|arg| arg != "--variant");
+    args.retain(|arg| arg != "--variant" && arg != "--bench");
     let cases = if let Some(path) = args.first() {
         vec![(path.clone(), std::fs::read_to_string(path).unwrap())]
     } else {
@@ -68,8 +68,8 @@ fn main() {
             if encode_jsonb && let Some(sonic) = parse_sonic(row.as_bytes()) {
                 let mut expected = Vec::new();
                 let mut actual = Vec::new();
-                serde.write_jsonb(&mut expected).unwrap();
-                sonic.write_jsonb(&mut actual).unwrap();
+                serde.write_jsonb(&mut expected);
+                sonic.write_jsonb(&mut actual);
                 assert_eq!(actual, expected);
             }
         }
@@ -86,7 +86,7 @@ fn main() {
                             .unwrap();
                     if encode_jsonb {
                         out.clear();
-                        value.write_jsonb(&mut out).unwrap();
+                        value.write_jsonb(&mut out);
                         black_box(&out);
                     }
                     black_box(value);
@@ -101,7 +101,7 @@ fn main() {
                         Some(value) => {
                             if encode_jsonb {
                                 out.clear();
-                                value.write_jsonb(&mut out).unwrap();
+                                value.write_jsonb(&mut out);
                                 black_box(&out);
                             }
                             black_box(value);
@@ -111,7 +111,7 @@ fn main() {
                                 .unwrap();
                             if encode_jsonb {
                                 out.clear();
-                                value.write_jsonb(&mut out).unwrap();
+                                value.write_jsonb(&mut out);
                                 black_box(&out);
                             }
                             black_box(value);

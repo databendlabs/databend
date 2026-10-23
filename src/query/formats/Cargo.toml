@@ -22,6 +22,7 @@ bstr = { workspace = true }
 chrono-tz = { workspace = true }
 geozero = { workspace = true }
 hex = { workspace = true }
+indexmap = { workspace = true }
 jsonb = { workspace = true }
 lexical-core = { workspace = true }
 match-template = { workspace = true }
@@ -39,6 +40,14 @@ databend-common-settings = { workspace = true }
 goldenfile = { workspace = true }
 pretty_assertions = { workspace = true }
 tokio = { workspace = true }
+
+[[bench]]
+name = "ndjson_parser"
+harness = false
+
+[[bench]]
+name = "json_object_lookup"
+harness = false
 
 [lints]
 workspace = true

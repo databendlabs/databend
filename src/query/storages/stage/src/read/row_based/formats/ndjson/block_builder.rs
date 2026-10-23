@@ -81,14 +81,10 @@ impl NdJsonDecoder {
         null_if: &[&str],
         file_path: &str,
     ) -> std::result::Result<(), FileParseError> {
-        // todo: this is temporary
+        // Stage SELECT always comes through the Serde branch in read_row.
         if self.field_decoder.is_select {
             if let ColumnBuilder::Variant(column) = &mut columns[0] {
-                json.write_jsonb(&mut column.data)
-                    .map_err(|e| FileParseError::InvalidRow {
-                        format: "NDJSON".to_string(),
-                        message: e.to_string(),
-                    })?;
+                json.write_jsonb(&mut column.data);
                 column.commit_row();
             } else {
                 return Err(FileParseError::InvalidRow {
@@ -291,6 +287,7 @@ fn extra_object_keys(
         .map(str::to_owned)
         .collect::<Vec<_>>();
     extra_columns.sort();
+    extra_columns.dedup();
     extra_columns
 }
 

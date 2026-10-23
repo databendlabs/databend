@@ -12,14 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Borrowed access to JSON DOMs used by the NDJSON field decoder.
+//! Borrowed JSON DOM access for NDJSON COPY. DECIMAL reads exact number text;
+//! VARIANT converts directly to jsonb without a text round trip or Serde DOM.
+//! Object views keep the last value of each exact key, in first-insertion order,
+//! before applying the existing row/tuple case-folding rules.
 //!
-//! Keep the numeric token, rather than converting through f64. In particular,
-//! DECIMAL must see all the digits in the file, including in nested values.
+//! Sonic is selected by `enable_sonic_json_parser` (default off). Stage SELECT
+//! stays on Serde. Parsing remains checked; deep input and Serde's reserved
+//! number-wrapper key use the existing parser/diagnostics. The depth precheck
+//! scans rows containing many delimiters, and escapes/`$` can trigger a DOM walk
+//! for the reserved key. Include these costs, object indexes and MAP validation
+//! in end-to-end COPY measurements; isolated parser gains are not COPY gains.
+//! CPU/SIMD flags and release configuration are unchanged.
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt::Display;
+
+use indexmap::IndexMap;
 
 pub enum JsonNumber<'a> {
     Serde(&'a serde_json::Number),
@@ -95,6 +106,7 @@ impl Display for JsonNumber<'_> {
 /// Sonic values must be constructed with `parse_sonic` to retain number text.
 pub trait JsonValue: Display + Sized {
     const OBJECT_LOOKUP_IS_LINEAR: bool;
+    const OBJECT_HAS_UNIQUE_KEYS: bool;
 
     fn is_null(&self) -> bool;
     fn as_bool(&self) -> Option<bool>;
@@ -103,7 +115,7 @@ pub trait JsonValue: Display + Sized {
     fn as_array(&self) -> Option<&[Self]>;
     fn object_iter(&self) -> Option<impl ExactSizeIterator<Item = (&str, &Self)>>;
     fn object_get(&self, key: &str) -> Option<&Self>;
-    fn write_jsonb(&self, out: &mut Vec<u8>) -> serde_json::Result<()>;
+    fn write_jsonb(&self, out: &mut Vec<u8>);
 
     fn diagnostic_text(&self) -> String {
         self.to_string()
@@ -117,6 +129,7 @@ pub struct JsonObjectLookup<'a, V> {
     value: &'a V,
     case_sensitive: bool,
     index: Option<HashMap<Cow<'a, str>, &'a V>>,
+    unique_len: Option<usize>,
 }
 
 impl<'a, V: JsonValue> JsonObjectLookup<'a, V> {
@@ -137,7 +150,11 @@ impl<'a, V: JsonValue> JsonObjectLookup<'a, V> {
         const MIN_FIELDS: usize = 16;
         const MIN_LOOKUPS: usize = 8;
         let mut index = None;
+        let mut unique_len = None;
         if let Some(object) = value.object_iter() {
+            if V::OBJECT_HAS_UNIQUE_KEYS {
+                unique_len = Some(object.len());
+            }
             let repeated_scan = object.len() >= MIN_FIELDS && lookups >= MIN_LOOKUPS;
             let needs_index = if case_sensitive {
                 V::OBJECT_LOOKUP_IS_LINEAR && repeated_scan
@@ -145,18 +162,37 @@ impl<'a, V: JsonValue> JsonObjectLookup<'a, V> {
                 row || repeated_scan
             };
             if needs_index {
-                let mut values = HashMap::with_capacity(object.len());
+                let len = object.len();
+                let mut values = HashMap::with_capacity(len);
+                let mut folded_collision = false;
                 for (key, value) in object {
                     let key = if case_sensitive {
                         Cow::Borrowed(key)
                     } else {
                         Cow::Owned(key.to_lowercase())
                     };
-                    if row {
-                        values.insert(key, value);
-                    } else {
-                        values.entry(key).or_insert(value);
+                    if values.insert(key, value).is_some() && !case_sensitive {
+                        folded_collision = true;
+                        break;
                     }
+                }
+                if folded_collision {
+                    // Collapse exact duplicates before case folding, preserving
+                    // their first position and last value like Serde. Only
+                    // colliding objects pay for this extra ordered index.
+                    let entries: IndexMap<_, _> = value.object_iter().unwrap().collect();
+                    unique_len = Some(entries.len());
+                    values.clear();
+                    for (key, value) in entries {
+                        let key = Cow::Owned(key.to_lowercase());
+                        if row {
+                            values.insert(key, value);
+                        } else {
+                            values.entry(key).or_insert(value);
+                        }
+                    }
+                } else {
+                    unique_len = Some(if case_sensitive { values.len() } else { len });
                 }
                 index = Some(values);
             }
@@ -165,6 +201,30 @@ impl<'a, V: JsonValue> JsonObjectLookup<'a, V> {
             value,
             case_sensitive,
             index,
+            unique_len,
+        }
+    }
+
+    pub fn unique_len(&self) -> usize {
+        if let Some(len) = self.unique_len {
+            return len;
+        }
+        let Some(object) = self.value.object_iter() else {
+            return 0;
+        };
+        if object.len() <= 16 {
+            // Small tuples need no heap allocation just to validate their size.
+            let mut keys = [""; 16];
+            let mut len = 0;
+            for (key, _) in object {
+                if !keys[..len].contains(&key) {
+                    keys[len] = key;
+                    len += 1;
+                }
+            }
+            len
+        } else {
+            object.map(|(key, _)| key).collect::<HashSet<_>>().len()
         }
     }
 
@@ -184,16 +244,44 @@ impl<'a, V: JsonValue> JsonObjectLookup<'a, V> {
         let field_name = field_name.to_lowercase();
         match &self.index {
             Some(index) => index.get(field_name.as_str()).copied(),
-            None => self
-                .value
-                .object_iter()?
-                .find_map(|(key, value)| (key.to_lowercase() == field_name).then_some(value)),
+            None => self.value.object_iter()?.find_map(|(key, value)| {
+                if key.to_lowercase() != field_name {
+                    None
+                } else if V::OBJECT_HAS_UNIQUE_KEYS {
+                    Some(value)
+                } else {
+                    self.value.object_get(key)
+                }
+            }),
         }
     }
 }
 
+/// Ordered, unique object entries for MAP decoding. Serde already provides
+/// this view; only Sonic needs an ordered index. Values and keys borrow the DOM.
+pub fn unique_object_entries<V: JsonValue>(value: &V) -> Option<impl Iterator<Item = (&str, &V)>> {
+    let object = value.object_iter()?;
+    let merged = if V::OBJECT_HAS_UNIQUE_KEYS {
+        None
+    } else {
+        Some(object.collect::<IndexMap<_, _>>())
+    };
+    let original = if V::OBJECT_HAS_UNIQUE_KEYS {
+        value.object_iter()
+    } else {
+        None
+    };
+    Some(
+        original
+            .into_iter()
+            .flatten()
+            .chain(merged.into_iter().flat_map(|entries| entries.into_iter())),
+    )
+}
+
 impl JsonValue for serde_json::Value {
     const OBJECT_LOOKUP_IS_LINEAR: bool = false;
+    const OBJECT_HAS_UNIQUE_KEYS: bool = true;
 
     fn is_null(&self) -> bool {
         self.is_null()
@@ -224,14 +312,14 @@ impl JsonValue for serde_json::Value {
         self.as_object()?.get(key)
     }
 
-    fn write_jsonb(&self, out: &mut Vec<u8>) -> serde_json::Result<()> {
+    fn write_jsonb(&self, out: &mut Vec<u8>) {
         jsonb::Value::from(self).write_to_vec(out);
-        Ok(())
     }
 }
 
 impl JsonValue for sonic_rs::Value {
     const OBJECT_LOOKUP_IS_LINEAR: bool = true;
+    const OBJECT_HAS_UNIQUE_KEYS: bool = false;
 
     fn is_null(&self) -> bool {
         sonic_rs::JsonValueTrait::is_null(self)
@@ -258,12 +346,14 @@ impl JsonValue for sonic_rs::Value {
     }
 
     fn object_get(&self, key: &str) -> Option<&Self> {
-        sonic_rs::JsonContainerTrait::as_object(self)?.get(&key)
+        sonic_rs::JsonContainerTrait::as_object(self)?
+            .iter()
+            .rev()
+            .find_map(|(name, value)| (name == key).then_some(value))
     }
 
-    fn write_jsonb(&self, out: &mut Vec<u8>) -> serde_json::Result<()> {
+    fn write_jsonb(&self, out: &mut Vec<u8>) {
         sonic_to_jsonb(self).write_to_vec(out);
-        Ok(())
     }
 
     fn diagnostic_text(&self) -> String {
@@ -346,7 +436,7 @@ pub fn parse_sonic(data: &[u8]) -> Option<sonic_rs::Value> {
     // arbitrary_precision retains number tokens. Use from_slice rather than
     // Deserializer::deserialize, which does not check trailing input.
     let value: sonic_rs::Value = sonic_rs::from_slice(data).ok()?;
-    // Duplicate keys deliberately retain the backend's native behavior. Only
+    // Duplicate keys are resolved by the object views during decoding. Only
     // serde's reserved number key requires DOM inspection. Escapes may hide the
     // key's spelling; ordinary rows need no post-parse object traversal.
     if memchr::memchr2(b'$', b'\\', data).is_some() && contains_serde_number_key(&value) {
@@ -356,8 +446,7 @@ pub fn parse_sonic(data: &[u8]) -> Option<sonic_rs::Value> {
 }
 
 /// serde_json::Value treats this key as an arbitrary-precision number wrapper,
-/// even in otherwise ordinary JSON objects. Keep that behavior independent of
-/// the deliberately unspecified duplicate-key policy.
+/// even in otherwise ordinary JSON objects. Keep that existing behavior.
 fn contains_serde_number_key(value: &sonic_rs::Value) -> bool {
     if let Some(object) = sonic_rs::JsonContainerTrait::as_object(value) {
         object.iter().any(|(key, value)| {
@@ -498,17 +587,17 @@ mod tests {
 
     #[test]
     fn test_sonic_duplicate_keys_do_not_fall_back() {
-        // Neither first-wins nor last-wins is part of COPY's contract for
-        // duplicate keys. Do not pay for detecting or normalizing them.
+        // Keep parsing in the arena; exact-key lookup consistently uses the
+        // last value without a second Serde parse.
         for text in [r#"{"a":1,"a":2}"#, r#"{"a":1,"\u0061":2}"#] {
             let value = parse_sonic(text.as_bytes()).unwrap();
             let number = JsonValue::as_number(value.object_get("a").unwrap()).unwrap();
-            assert!(matches!(number.as_i64(), Some(1 | 2)));
+            assert_eq!(number.as_i64(), Some(2));
         }
         let nested = parse_sonic(br#"{"a":[{"b":1,"b":2}]}"#).unwrap();
         let value = &JsonValue::as_array(nested.object_get("a").unwrap()).unwrap()[0];
         let number = JsonValue::as_number(value.object_get("b").unwrap()).unwrap();
-        assert!(matches!(number.as_i64(), Some(1 | 2)));
+        assert_eq!(number.as_i64(), Some(2));
         let wide = format!(
             "{{{},\"k0\":2}}",
             (0..16)
@@ -546,6 +635,46 @@ mod tests {
                 }
                 data[pos] = original;
             }
+        }
+    }
+
+    #[test]
+    fn test_duplicate_lookup_matches_serde_across_thresholds() {
+        for padding in [0, 12, 13, 14, 32] {
+            let mut entries = vec![
+                r#""A":1"#.to_string(),
+                r#""a":2"#.to_string(),
+                r#""\u0041":3"#.to_string(),
+            ];
+            entries.extend((0..padding).map(|i| format!("\"k{i}\":{i}")));
+            let text = format!("{{{}}}", entries.join(","));
+            let serde: serde_json::Value = serde_json::from_str(&text).unwrap();
+            let sonic = parse_sonic(text.as_bytes()).unwrap();
+            for lookups in [1, 7, 8, 32] {
+                for case_sensitive in [false, true] {
+                    for row in [false, true] {
+                        let expected = JsonObjectLookup::new(&serde, case_sensitive, lookups, row);
+                        let actual = JsonObjectLookup::new(&sonic, case_sensitive, lookups, row);
+                        assert_eq!(actual.unique_len(), expected.unique_len());
+                        for key in ["A", "a", "k0", "missing"] {
+                            assert_eq!(
+                                actual.get(key).map(ToString::to_string),
+                                expected.get(key).map(ToString::to_string),
+                                "padding={padding}, lookups={lookups}, row={row}, case_sensitive={case_sensitive}, key={key}"
+                            );
+                        }
+                    }
+                }
+            }
+            let expected: Vec<_> = unique_object_entries(&serde)
+                .unwrap()
+                .map(|(k, v)| (k, v.to_string()))
+                .collect();
+            let actual: Vec<_> = unique_object_entries(&sonic)
+                .unwrap()
+                .map(|(k, v)| (k, v.to_string()))
+                .collect();
+            assert_eq!(actual, expected);
         }
     }
 
@@ -672,8 +801,8 @@ mod tests {
             assert_eq!(roundtrip, serde, "{data:?}");
             let mut expected = Vec::new();
             let mut actual = Vec::new();
-            serde.write_jsonb(&mut expected).unwrap();
-            sonic.write_jsonb(&mut actual).unwrap();
+            serde.write_jsonb(&mut expected);
+            sonic.write_jsonb(&mut actual);
             assert_eq!(actual, expected, "{data:?}");
         }
     }
@@ -746,8 +875,8 @@ mod tests {
         let sonic = parse_sonic(text.as_bytes()).unwrap();
         let mut expected = Vec::new();
         let mut actual = Vec::new();
-        serde.write_jsonb(&mut expected).unwrap();
-        sonic.write_jsonb(&mut actual).unwrap();
+        serde.write_jsonb(&mut expected);
+        sonic.write_jsonb(&mut actual);
         assert_eq!(actual, expected, "{text}");
     }
 
@@ -841,8 +970,8 @@ mod tests {
             let sonic = parse_sonic(text.as_bytes()).unwrap();
             let mut expected = Vec::new();
             let mut actual = Vec::new();
-            serde.write_jsonb(&mut expected).unwrap();
-            sonic.write_jsonb(&mut actual).unwrap();
+            serde.write_jsonb(&mut expected);
+            sonic.write_jsonb(&mut actual);
             assert_eq!(actual, expected, "{text}");
             assert_eq!(sonic.diagnostic_text(), serde.to_string(), "{text}");
             assert_eq!(

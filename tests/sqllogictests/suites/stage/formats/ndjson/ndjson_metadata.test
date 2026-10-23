@@ -1,5 +1,3 @@
-# run-with-settings: enable_sonic_json_parser=1
-
 query TTI
 select metadata$filename, $1, metadata$file_row_number  from @data_s3/ndjson/ts.ndjson (file_format=>'ndjson')
 ----
