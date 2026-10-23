@@ -42,7 +42,9 @@ use databend_common_meta_app::storage::StorageOssConfig;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig;
+use databend_common_storage::EndpointPolicyScope;
 use databend_common_storage::STDIN_FD;
+use databend_common_storage::auto_detect_storage_params;
 use databend_common_storage::check_storage_params_endpoints;
 use log::LevelFilter;
 use log::info;
@@ -650,20 +652,24 @@ async fn parse_uri_location_resolved(
     // free of policy knowledge and ensures new fields cannot silently bypass
     // it.
     //
-    // Run before sp.auto_detect(): the S3 auto-detect branch contacts the
-    // configured endpoint to discover the bucket region, so the policy must
-    // gate that call as well. auto_detect only mutates `region`, not the
-    // endpoint URL, so a single pre-check is sufficient.
+    // Run before auto_detect_storage_params(): the S3 auto-detect branch
+    // contacts the configured endpoint to discover the bucket region, so the
+    // policy must gate that call as well. auto_detect_storage_params only
+    // mutates `region`, not the endpoint URL. With the `External` scope it
+    // checks any other endpoint it contacts (the `AWS_REGION` regional
+    // endpoint) itself, so this single pre-check is sufficient here.
     check_storage_params_endpoints(&sp)
         .await
         .map_err(|err| Error::new(ErrorKind::InvalidInput, err.to_string()))?;
 
-    let sp = sp.auto_detect().await.map_err(|err| {
-        Error::new(
-            ErrorKind::InvalidInput,
-            anyhow!("storage params is invalid for it's auto detect failed for {err:?}"),
-        )
-    })?;
+    let sp = auto_detect_storage_params(sp, EndpointPolicyScope::External)
+        .await
+        .map_err(|err| {
+            Error::new(
+                ErrorKind::InvalidInput,
+                anyhow!("storage params is invalid for it's auto detect failed for {err:?}"),
+            )
+        })?;
 
     Ok((sp, path))
 }
