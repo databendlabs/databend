@@ -126,6 +126,39 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
             Some(Arc::new(factory_abs(params, args_type)?))
         })),
     );
+
+    // As in PostgreSQL: the fewest fractional digits that represent the value
+    // exactly, `min_scale(1.2300::DECIMAL(10, 4)) = 2`.
+    registry.register_function_factory(
+        "min_scale",
+        FunctionFactory::Closure(Box::new(|_params, args_type| {
+            if args_type.len() != 1 {
+                return None;
+            }
+            let from_type = args_type[0].remove_nullable();
+            if !matches!(from_type, DataType::Decimal(_)) {
+                return None;
+            }
+            let signature = FunctionSignature {
+                name: "min_scale".to_string(),
+                args_type: vec![from_type],
+                return_type: DataType::Number(NumberDataType::UInt8),
+            };
+            Some(Arc::new(Function::with_passthrough_nullable(
+                signature,
+                FunctionDomain::Full,
+                decimal_min_scale,
+                None,
+                args_type[0].is_nullable(),
+            )))
+        })),
+    );
+    // A bare NULL has no decimal type for the factory to match.
+    registry.register_1_arg_core::<NullType, NullType, _, _>(
+        "min_scale",
+        |_, _| FunctionDomain::Domain(()),
+        |val, _| val.to_owned(),
+    );
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -368,6 +401,49 @@ where
         (RoundMode::Floor, _) => decimal_floor::<C, T, U>(arg, source_scale, ctx),
         (RoundMode::Ceil, _) => decimal_ceil::<C, T, U>(arg, source_scale, ctx),
     }
+}
+
+fn decimal_min_scale(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let arg = &args[0];
+    let (from_type, _) = DecimalDataType::from_value(arg).unwrap();
+
+    with_decimal_mapped_type!(|T| match from_type {
+        DecimalDataType::T(size) => {
+            let value = arg.try_downcast().unwrap();
+            vectorize_1_arg::<DecimalType<T>, UInt8Type>(|v, _| min_scale(v, size.scale()))(
+                value, ctx,
+            )
+            .upcast()
+        }
+    })
+}
+
+/// The fractional digits of `value`, an unscaled decimal of `scale`, left once
+/// its trailing zeros are dropped. One wide remainder takes the low 18 digits,
+/// whose trailing zeros are then counted in a `u64`; only a value whose 18 low
+/// digits are all zero, possible at a scale above 18, takes another round.
+fn min_scale<T: Decimal>(mut value: T, mut scale: u8) -> u8 {
+    const CHUNK: u8 = 18;
+    while scale > 0 {
+        let digits = scale.min(CHUNK);
+        let unit = T::e(digits);
+        // `unit` is a positive power of ten, so neither operation can fail.
+        let low = value.checked_rem(unit).unwrap();
+        if low == T::zero() {
+            value = value.checked_div(unit).unwrap();
+            scale -= digits;
+            continue;
+        }
+        // Below 10^18 in magnitude, so exact in an i64.
+        let mut low = low.as_decimal::<i64>().unsigned_abs();
+        let mut zeros = 0;
+        while low % 10 == 0 {
+            low /= 10;
+            zeros += 1;
+        }
+        return scale - zeros;
+    }
+    0
 }
 
 fn decimal_abs(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {

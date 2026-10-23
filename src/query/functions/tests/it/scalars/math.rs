@@ -36,6 +36,7 @@ fn test_math() {
     test_truncate(file);
     test_log_function(file);
     test_factorial(file);
+    test_min_scale(file);
 }
 
 fn test_abs(file: &mut impl Write) {
@@ -176,5 +177,38 @@ fn test_log_function(file: &mut impl Write) {
     run_ast(file, "round(2, a)", &[(
         "a",
         Int64Type::from_data(vec![22i64, 65536, 10]),
+    )]);
+}
+
+// Expected values are the literals' digits after their last non-zero one.
+fn test_min_scale(file: &mut impl Write) {
+    run_ast(file, "min_scale(1.2300::DECIMAL(10, 4))", &[]);
+    run_ast(file, "min_scale(-0.0010::DECIMAL(10, 4))", &[]);
+    run_ast(file, "min_scale(0::DECIMAL(10, 4))", &[]);
+    run_ast(file, "min_scale(5::DECIMAL(10, 0))", &[]);
+    run_ast(file, "min_scale(0.001::DECIMAL(38, 19))", &[]);
+    // The low 18 digits are 0000...01: the count must not stop at an i64.
+    run_ast(
+        file,
+        "min_scale(1.0000000000000000001::DECIMAL(38, 19))",
+        &[],
+    );
+    // 40 fractional digits: two all-zero 18-digit rounds, then 5000.
+    run_ast(file, "min_scale(1.5::DECIMAL(76, 40))", &[]);
+    run_ast(file, "min_scale(null)", &[]);
+    run_ast(file, "min_scale(1.5::DOUBLE)", &[]);
+    run_ast(file, "min_scale(a)", &[(
+        "a",
+        Decimal128Type::from_data_with_size(
+            // 1.5, 0.001, -42, 0 and 0.0000000000000000001 at scale 19.
+            [
+                15_000_000_000_000_000_000i128,
+                10_000_000_000_000_000,
+                -420_000_000_000_000_000_000,
+                0,
+                1,
+            ],
+            Some(DecimalSize::new_unchecked(38, 19)),
+        ),
     )]);
 }
