@@ -569,9 +569,12 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
                 let mut changed = false;
                 let mut args_expr = Vec::with_capacity(args.len());
+                // Start with the operator identity: false for OR, true for AND.
+                // Starting with both values possible would pin OR's has_true,
+                // even when every argument is known to be false or NULL.
                 let mut result_domain = Some(BooleanDomain {
-                    has_true: true,
-                    has_false: true,
+                    has_true: !is_or,
+                    has_false: is_or,
                 });
 
                 for arg in args {

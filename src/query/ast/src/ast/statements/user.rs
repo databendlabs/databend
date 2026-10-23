@@ -22,6 +22,7 @@ use derive_visitor::DriveMut;
 
 use crate::ast::AuthType;
 use crate::ast::CreateOption;
+use crate::ast::Identifier;
 use crate::ast::PrincipalIdentity;
 use crate::ast::ProcedureIdentity;
 use crate::ast::ShowOptions;
@@ -263,6 +264,7 @@ impl Display for AccountMgrSource {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum AccountMgrLevel {
+    Integration(Identifier),
     Global,
     Database(Option<String>),
     Table(Option<String>, String),
@@ -298,6 +300,7 @@ impl Display for AccountMgrLevel {
             AccountMgrLevel::Stage(stage) => write!(f, " STAGE {stage}"),
             AccountMgrLevel::Warehouse(w) => write!(f, " WAREHOUSE {w}"),
             AccountMgrLevel::Connection(c) => write!(f, " CONNECTION {c}"),
+            AccountMgrLevel::Integration(c) => write!(f, " INTEGRATION {c}"),
             AccountMgrLevel::Sequence(s) => write!(f, " SEQUENCE {s}"),
             AccountMgrLevel::Procedure(p) => write!(f, " PROCEDURE {p}"),
             AccountMgrLevel::MaskingPolicy(policy) => write!(f, " MASKING POLICY {policy}"),

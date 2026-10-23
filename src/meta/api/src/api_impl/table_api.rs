@@ -727,6 +727,8 @@ where
                     txn_put_pb(&key_table_id_to_name, &key_dbid_tbname), /* __fd_table_id_to_name/db_id/table_name -> DBIdTableName */
                 ]);
 
+                // Reuse this attempt's source-option read when validating the MV source.
+                let mut source_drop_status = None;
                 if let Some(source_update) = &req.source_table_option {
                     let source_id = TableId::new(source_update.table_id);
                     let source_meta = self.get_pb(&source_id).await?.ok_or_else(|| {
@@ -746,6 +748,8 @@ where
                         )));
                     }
 
+                    source_drop_status =
+                        Some((source_update.table_id, source_meta.drop_on.is_some()));
                     let source_seq = source_meta.seq;
                     let mut updated_source_meta = source_meta.data;
                     for (key, value) in &source_update.options {
@@ -774,18 +778,24 @@ where
                     txn.if_then.push(txn_put_pb(&def_ident, &mv.definition));
 
                     let source_table_id = req.table_meta.materialized_view_source_table_id()?;
-                    let source_table_ident = TableId::new(source_table_id);
-                    let source_table_meta =
-                        self.get_pb(&source_table_ident).await?.ok_or_else(|| {
-                            KVAppError::AppError(
-                                InvalidMaterializedView::new(format!(
-                                    "source table id {} does not exist",
-                                    source_table_id
-                                ))
-                                .into(),
-                            )
-                        })?;
-                    if source_table_meta.drop_on.is_some() {
+                    let source_is_dropped = match source_drop_status {
+                        Some((id, is_dropped)) if id == source_table_id => is_dropped,
+                        _ => {
+                            let source_table_ident = TableId::new(source_table_id);
+                            let source_table_meta =
+                                self.get_pb(&source_table_ident).await?.ok_or_else(|| {
+                                    KVAppError::AppError(
+                                        InvalidMaterializedView::new(format!(
+                                            "source table id {} does not exist",
+                                            source_table_id
+                                        ))
+                                        .into(),
+                                    )
+                                })?;
+                            source_table_meta.drop_on.is_some()
+                        }
+                    };
+                    if source_is_dropped {
                         return Err(KVAppError::AppError(
                             InvalidMaterializedView::new(format!(
                                 "source table id {} is dropped",

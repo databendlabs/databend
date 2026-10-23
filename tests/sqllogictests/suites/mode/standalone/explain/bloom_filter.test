@@ -388,3 +388,107 @@ TableScan
 ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(bloom_test_nullable_t2.c0 (#0))], limit: NONE]
 └── estimated rows: 1.00
+
+# Nullable comparisons may be FALSE or NULL; neither passes WHERE.
+# Two INSERTs create two blocks. The absent strings are inside min/max ranges,
+# so the first OR/IN cases need bloom membership to exclude both blocks.
+statement ok
+drop table if exists bloom_test_nullable_or_t
+
+statement ok
+create table bloom_test_nullable_or_t(c1 varchar null, c2 varchar null, c3 int null)
+
+statement ok
+insert into bloom_test_nullable_or_t values('a1', 'b1', 1), (null, 'b2', 2), ('a3', null, null)
+
+statement ok
+insert into bloom_test_nullable_or_t values('a4', 'b4', 4), (null, null, 5), ('a6', 'b6', null)
+
+query T
+explain select * from bloom_test_nullable_or_t where c1 = 'a2' or c2 = 'b5'
+----
+TableScan
+├── table: default.default.bloom_test_nullable_or_t
+├── scan id: 0
+├── output columns: [c1 (#0), c2 (#1), c3 (#2)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 2
+├── partitions scanned: 0
+├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom index read cost: <slt:ignore>, bloom pruning: 2 to 0 cost: <slt:ignore>>]
+├── push downs: [filters: [bloom_test_nullable_or_t.c1 (#0) = 'a2' or bloom_test_nullable_or_t.c2 (#1) = 'b5'], limit: NONE]
+└── estimated rows: <slt:ignore>
+
+# IN uses OR conditions on the same nullable column; both values are absent.
+query T
+explain select * from bloom_test_nullable_or_t where c1 in ('a2', 'a5')
+----
+TableScan
+├── table: default.default.bloom_test_nullable_or_t
+├── scan id: 0
+├── output columns: [c1 (#0), c2 (#1), c3 (#2)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 2
+├── partitions scanned: 0
+├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom index read cost: <slt:ignore>, bloom pruning: 2 to 0 cost: <slt:ignore>>]
+├── push downs: [filters: [bloom_test_nullable_or_t.c1 (#0) = 'a2' or bloom_test_nullable_or_t.c1 (#0) = 'a5'], limit: NONE]
+└── estimated rows: <slt:ignore>
+
+# A matching AND branch must keep the second block, not prune everything.
+query T
+explain select * from bloom_test_nullable_or_t where c1 = 'a2' or (c2 = 'b4' and c3 > 1)
+----
+TableScan
+├── table: default.default.bloom_test_nullable_or_t
+├── scan id: 0
+├── output columns: [c1 (#0), c2 (#1), c3 (#2)]
+├── read rows: 3
+├── read size: < 1 KiB
+├── partitions total: 2
+├── partitions scanned: 1
+├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom index read cost: <slt:ignore>, bloom pruning: 2 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [bloom_test_nullable_or_t.c1 (#0) = 'a2' or bloom_test_nullable_or_t.c2 (#1) = 'b4' and bloom_test_nullable_or_t.c3 (#2) > 1], limit: NONE]
+└── estimated rows: <slt:ignore>
+
+# Check actual rows too, including matches involving NULL-bearing columns.
+query TTI
+select * from bloom_test_nullable_or_t where c1 = 'a2' or c2 = 'b5'
+----
+
+query TTI
+select * from bloom_test_nullable_or_t where c1 = 'a2' or (c2 = 'b4' and c3 > 1)
+----
+a4 b4 4
+
+# Keep NULL OR TRUE and TRUE OR NULL; (NULL,NULL,5) must not pass.
+query TTI
+select * from bloom_test_nullable_or_t where c1 = 'a3' or c2 = 'b2' order by c1 nulls first
+----
+NULL b2 2
+a3 NULL NULL
+
+query TTI
+select * from bloom_test_nullable_or_t where c1 in ('a3', 'a6') order by c1
+----
+a3 NULL NULL
+a6 b6 NULL
+
+# Out-of-range disjuncts must also prune at the segment range stage.
+query T
+explain select * from bloom_test_nullable_or_t where c1 = 'z1' or c2 = 'z2'
+----
+TableScan
+├── table: default.default.bloom_test_nullable_or_t
+├── scan id: 0
+├── output columns: [c1 (#0), c2 (#1), c3 (#2)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 2
+├── partitions scanned: 0
+├── pruning stats: [segments: <read cost: <slt:ignore>, range pruning: 2 to 0 cost: <slt:ignore>>]
+├── push downs: [filters: [bloom_test_nullable_or_t.c1 (#0) = 'z1' or bloom_test_nullable_or_t.c2 (#1) = 'z2'], limit: NONE]
+└── estimated rows: <slt:ignore>
+
+statement ok
+drop table bloom_test_nullable_or_t

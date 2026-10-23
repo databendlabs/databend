@@ -122,6 +122,24 @@ RIGHT JOIN outer_to_anti_right AS r ON l.k = r.k
 WHERE l.keep IS NULL",
         },
         SqlTestCase {
+            name: "left_expression_key_is_not_anti_join",
+            description: "IF returns 0 on an unmatched right side, so its NULL test must not become a left anti join.",
+            setup_sqls: &[LEFT_TABLE, RIGHT_TABLE],
+            sql: "SELECT l.k
+FROM outer_to_anti_left AS l
+LEFT JOIN outer_to_anti_right AS r ON l.k = IF(r.k IS NULL, 0, r.payload)
+WHERE IF(r.k IS NULL, 0, r.payload) IS NULL",
+        },
+        SqlTestCase {
+            name: "right_expression_key_is_not_anti_join",
+            description: "The RIGHT JOIN mirror must also avoid the expression-key anti rewrite; later valid simplifications are allowed.",
+            setup_sqls: &[LEFT_TABLE, RIGHT_TABLE],
+            sql: "SELECT l.k
+FROM outer_to_anti_right AS r
+RIGHT JOIN outer_to_anti_left AS l ON IF(r.k IS NULL, 0, r.payload) = l.k
+WHERE IF(r.k IS NULL, 0, r.payload) IS NULL",
+        },
+        SqlTestCase {
             name: "null_safe_condition_keeps_left_outer",
             description: "A null-safe condition is not a regular equi-key in the raw plan and must remain a left outer join.",
             setup_sqls: &[LEFT_TABLE, RIGHT_TABLE],

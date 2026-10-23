@@ -1,0 +1,137 @@
+# Issue #20775: string bounds on numeric columns use numeric SQL comparisons,
+# not the lexicographic ordering of the two string constants.
+statement ok
+CREATE OR REPLACE TABLE numeric_string_range_t(id INT, n INT NOT NULL, b BIGINT NULL, f DOUBLE NULL, s STRING)
+
+statement ok
+INSERT INTO numeric_string_range_t VALUES (1, 9, 9, 9.5, '9'), (2, 10, 10, 10, '10'), (3, 50, 50, 50, '50'), (4, 0, NULL, NULL, '0')
+
+# Each bound on its own and numeric literals are controls for the conjunction.
+query I
+SELECT id FROM numeric_string_range_t WHERE n >= '9' ORDER BY id
+----
+1
+2
+3
+
+query I
+SELECT id FROM numeric_string_range_t WHERE n <= '10' ORDER BY id
+----
+1
+2
+4
+
+query I
+SELECT id FROM numeric_string_range_t WHERE n >= 9 AND n <= 10 ORDER BY id
+----
+1
+2
+
+query I
+SELECT id FROM numeric_string_range_t WHERE n >= '9' AND n <= '10' ORDER BY id
+----
+1
+2
+
+query I
+SELECT id FROM numeric_string_range_t WHERE n BETWEEN '9' AND '10' ORDER BY id
+----
+1
+2
+
+# Reversed operands and an unrelated predicate must not change the result.
+query I
+SELECT id FROM numeric_string_range_t WHERE '10' >= n AND '9' <= n ORDER BY id
+----
+1
+2
+
+query I
+SELECT id FROM numeric_string_range_t WHERE n >= '9' AND n <= '10' AND id > 0 ORDER BY id
+----
+1
+2
+
+query I
+SELECT id FROM numeric_string_range_t WHERE n = '10' AND n > '2' ORDER BY id
+----
+2
+
+query I
+SELECT id FROM numeric_string_range_t WHERE n > '2' AND n < '20' ORDER BY id
+----
+1
+2
+
+# Nullable BIGINT and DOUBLE comparisons have the same conversion semantics.
+query I
+SELECT id FROM numeric_string_range_t WHERE b >= '9' AND b <= '10' ORDER BY id
+----
+1
+2
+
+query I
+SELECT id FROM numeric_string_range_t WHERE b BETWEEN '9' AND '10' ORDER BY id
+----
+1
+2
+
+query I
+SELECT id FROM numeric_string_range_t WHERE f >= '9.5' AND f <= '10' ORDER BY id
+----
+1
+2
+
+# Numeric contradictions must still return no rows even when the string bounds
+# are lexicographically ordered. STRING columns must retain string semantics.
+query I
+SELECT count(*) FROM numeric_string_range_t WHERE n >= '10' AND n <= '2'
+----
+0
+
+query I
+SELECT count(*) FROM numeric_string_range_t WHERE n >= '100' AND n <= '20'
+----
+0
+
+query I
+SELECT count(*) FROM numeric_string_range_t WHERE s >= '9' AND s <= '10'
+----
+0
+
+# The same push-down folding is used by mutations: verify stored rows, not only
+# SELECT results, so an incorrectly constant-false mutation cannot pass silently.
+statement ok
+CREATE OR REPLACE TABLE numeric_string_range_delete AS SELECT * FROM numeric_string_range_t
+
+statement ok
+DELETE FROM numeric_string_range_delete WHERE n BETWEEN '9' AND '10'
+
+query II
+SELECT id, n FROM numeric_string_range_delete ORDER BY id
+----
+3 50
+4 0
+
+statement ok
+CREATE OR REPLACE TABLE numeric_string_range_update AS SELECT * FROM numeric_string_range_t
+
+statement ok
+UPDATE numeric_string_range_update SET n = 0 WHERE n >= '9' AND n <= '10'
+
+query II
+SELECT id, n FROM numeric_string_range_update ORDER BY id
+----
+1 0
+2 0
+3 50
+4 0
+
+statement ok
+DROP TABLE numeric_string_range_delete
+
+statement ok
+DROP TABLE numeric_string_range_update
+
+statement ok
+DROP TABLE numeric_string_range_t

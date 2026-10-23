@@ -17,6 +17,10 @@
 
 #[cfg(feature = "script-udf")]
 mod script_udf {
+    #[cfg(feature = "python-udf")]
+    pub mod python_worker {
+        include!("python_worker.rs");
+    }
     mod runtime_pool {
         include!("runtime_pool.rs");
     }
@@ -66,6 +70,18 @@ pub struct ScriptUdfFunctionDesc {
 pub use script_udf::TransformUdfScript;
 #[cfg(feature = "script-udf")]
 pub use script_udf::create_udaf_script_function;
+#[cfg(feature = "python-udf")]
+pub use script_udf::python_worker::PYTHON_WORKER_ARG;
+#[cfg(feature = "python-udf")]
+pub use script_udf::python_worker::PythonPipelineLease;
+#[cfg(feature = "python-udf")]
+pub use script_udf::python_worker::PythonQueryWorkers;
+#[cfg(feature = "python-udf")]
+pub use script_udf::python_worker::PythonWorkerConfig;
+#[cfg(feature = "python-udf")]
+pub use script_udf::python_worker::PythonWorkerManager;
+#[cfg(feature = "python-udf")]
+pub use script_udf::python_worker::run_python_udf_worker;
 #[cfg(not(feature = "script-udf"))]
 pub use script_udf_stub::TransformUdfScript;
 #[cfg(not(feature = "script-udf"))]

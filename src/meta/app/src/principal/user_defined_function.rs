@@ -29,6 +29,7 @@ pub struct LambdaUDF {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UDFServer {
+    pub external_access_integrations: Vec<String>,
     pub address: String,
     pub handler: String,
     pub headers: BTreeMap<String, String>,
@@ -199,6 +200,7 @@ impl UserDefinedFunction {
             name: name.to_string(),
             description: description.to_string(),
             definition: UDFDefinition::UDFServer(UDFServer {
+                external_access_integrations: Vec::new(),
                 address: address.to_string(),
                 handler: handler.to_string(),
                 headers: headers.clone(),
@@ -269,6 +271,7 @@ impl Display for UDFDefinition {
                 write!(f, ") -> {definition}")?;
             }
             UDFDefinition::UDFServer(UDFServer {
+                external_access_integrations,
                 address,
                 arg_names,
                 arg_types,
@@ -307,6 +310,13 @@ impl Display for UDFDefinition {
                     write!(f, ")")?;
                 }
                 write!(f, " ADDRESS = {address}")?;
+                if !external_access_integrations.is_empty() {
+                    write!(
+                        f,
+                        " EXTERNAL_ACCESS_INTEGRATIONS = ({})",
+                        external_access_integrations.join(", ")
+                    )?;
+                }
             }
             UDFDefinition::UDFScript(UDFScript {
                 code,

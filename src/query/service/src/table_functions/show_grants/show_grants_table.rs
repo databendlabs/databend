@@ -551,7 +551,7 @@ async fn show_account_grants(
                         grant_list.push(format!("{} TO {}", grant_entry, identity));
                     }
                 }
-                GrantObject::Connection(connection) => {
+                GrantObject::Integration(connection) | GrantObject::Connection(connection) => {
                     object_name.push(connection.to_string());
                     object_id.push(None);
                     privileges.push(get_priv_str(grant_entry));

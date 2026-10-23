@@ -1304,7 +1304,8 @@ impl LiteTableContext {
     pub async fn register_udf(self: &Arc<Self>, udf: UserDefinedFunction) -> Result<()> {
         UserApiProvider::instance()
             .add_udf(&self.tenant, udf, &CreateOption::CreateOrReplace)
-            .await
+            .await?;
+        Ok(())
     }
 
     pub async fn register_table_sql(self: &Arc<Self>, sql: &str) -> Result<()> {
@@ -1332,7 +1333,8 @@ impl LiteTableContext {
                     Plan::CreateUDF(plan) => {
                         UserApiProvider::instance()
                             .add_udf(&self.tenant, plan.udf.clone(), &plan.create_option)
-                            .await
+                            .await?;
+                        Ok(())
                     }
                     _ => unreachable!("create udf statement must bind to create udf plan"),
                 }

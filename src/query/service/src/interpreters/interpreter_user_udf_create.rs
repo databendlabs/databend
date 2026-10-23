@@ -17,6 +17,8 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::principal::UDFDefinition;
+use databend_common_sql::planner::UDFValidator;
 use databend_common_sql::plans::CreateUDFPlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -60,9 +62,17 @@ impl Interpreter for CreateUserUDFScript {
             let plan = self.plan.clone();
             let tenant = self.ctx.get_tenant();
             let udf = plan.udf;
-            UserApiProvider::instance()
+            if let UDFDefinition::UDFServer(server) = &udf.definition
+                && !server.external_access_integrations.is_empty()
+            {
+                UDFValidator::verify_server(self.ctx.as_ref(), &udf.name, server).await?;
+            }
+            let changed = UserApiProvider::instance()
                 .add_udf(&tenant, udf, &plan.create_option)
                 .await?;
+            if !changed {
+                return Ok(PipelineBuildResult::create());
+            }
 
             // Grant ownership as the current role
             if let Some(current_role) = self.ctx.get_current_role() {
