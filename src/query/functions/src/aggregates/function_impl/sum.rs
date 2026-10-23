@@ -541,33 +541,39 @@ where T: Decimal + std::ops::AddAssign
     ) -> Result<()> {
         let validity = validity.filter(|validity| validity.null_count() > 0);
         let mut sum = T::from_u64_array(self.value);
+        let result: Result<()>;
         with_column_view_iter!(DecimalType<T>, &column, |values| {
             let mut add = |value: T| {
-                sum += value;
+                let mut next = sum;
+                next += value;
                 // Check every intermediate sum, even if later values would cancel it.
-                if SHOULD_CHECK_OVERFLOW && (sum > T::DECIMAL_MAX || sum < T::DECIMAL_MIN) {
-                    return Err(decimal_sum_overflow(sum));
+                if SHOULD_CHECK_OVERFLOW && (next > T::DECIMAL_MAX || next < T::DECIMAL_MIN) {
+                    return Err(decimal_sum_overflow(next));
                 }
+                sum = next;
                 Ok(())
             };
-            match validity {
-                Some(validity) => {
-                    for (value, valid) in values.zip(validity.iter()) {
-                        if valid {
+            result = (|| {
+                match validity {
+                    Some(validity) => {
+                        for (value, valid) in values.zip(validity.iter()) {
+                            if valid {
+                                add(value)?;
+                            }
+                        }
+                    }
+                    None => {
+                        for value in values {
                             add(value)?;
                         }
                     }
                 }
-                None => {
-                    for value in values {
-                        add(value)?;
-                    }
-                }
-            }
+                Ok(())
+            })();
         });
-        // On overflow the query fails (`?` above), so the state is not updated then.
+        // Like `add`, an overflow keeps the last sum that did not overflow.
         self.value = sum.to_u64_array();
-        Ok(())
+        result
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
