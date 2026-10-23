@@ -363,6 +363,20 @@ impl<'a> Selector<'a> {
         select_strategy: SelectStrategy,
         count: usize,
     ) -> Result<usize> {
+        if let Some(bitmap) = self
+            .evaluator
+            .try_like_encoded(column_ref, like_pattern, not)
+        {
+            let buffers = SelectionBuffers {
+                true_selection,
+                false_selection: false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            };
+            return Ok(self.select_boolean_column_adapt(bitmap, buffers, false_selection.1));
+        }
         let selection = self.selection(
             true_selection,
             false_selection.0,

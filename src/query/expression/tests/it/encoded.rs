@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
+
 use databend_common_column::bitmap::Bitmap;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -21,6 +23,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::SelectOp;
 use databend_common_expression::Value;
+use databend_common_expression::filter::generate_like_pattern;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
@@ -433,6 +436,63 @@ fn test_for_column_compare_columns() {
     assert_eq!(fa.compare_for(&SelectOp::Lt, &fa.slice(0..10)), None);
 }
 
+/// LIKE matches each dictionary entry once and maps results through keys of any width.
+#[test]
+fn test_dict_column_like() {
+    let values = StringType::from_data(vec![
+        "yyy/b", "xxx/a", "", "xxx_100%", "中文/a", "xxx/c", "unused",
+    ]);
+    let keys = [1u64, 0, 1, 5, 2, 3, 4, 0, 5];
+    for keys in [
+        NarrowBuffer::U8(keys.iter().map(|k| *k as u8).collect::<Vec<_>>().into()),
+        NarrowBuffer::U16(keys.iter().map(|k| *k as u16).collect::<Vec<_>>().into()),
+        NarrowBuffer::U32(keys.iter().map(|k| *k as u32).collect::<Vec<_>>().into()),
+        NarrowBuffer::U64(keys.to_vec().into()),
+    ] {
+        // Sliced keys need not start at the buffer's original offset; the dictionary may
+        // contain unused entries (as Parquet dictionaries and filtered columns do).
+        for keys in [keys.clone(), keys.slice(1..8), keys.slice(0..0)] {
+            let dict = DictColumn::new(keys, values.clone());
+            let Column::String(decoded) = dict.decode() else {
+                unreachable!()
+            };
+            for text in [
+                "xxx/a",
+                "xxx%",
+                "%/a",
+                "%xx%",
+                "x%/%",
+                "%x%/%",
+                "xxx/_",
+                "",
+                "%",
+                "no match",
+                "unused",
+                r"xxx\_100\%",
+                "中文%",
+            ] {
+                let pattern = generate_like_pattern(Cow::Borrowed(text.as_bytes()), 0);
+                for not in [false, true] {
+                    let expected = decoded
+                        .iter()
+                        .map(|value| pattern.compare(value.as_bytes()) ^ not)
+                        .collect::<Bitmap>();
+                    assert_eq!(dict.like(&pattern, not), Some(expected), "{text} {not}");
+                }
+            }
+        }
+    }
+
+    let pattern = generate_like_pattern(b"%".as_slice(), 0);
+    let empty = DictColumn::new(
+        NarrowBuffer::U8(Vec::<u8>::new().into()),
+        StringType::from_data(Vec::<String>::new()),
+    );
+    assert_eq!(empty.like(&pattern, false), Some(Bitmap::new()));
+    let numbers = DictColumn::try_encode(&Int32Type::from_data(vec![1, 2, 1]), 2).unwrap();
+    assert_eq!(numbers.like(&pattern, false), None);
+}
+
 /// `value <op> constant` on a dictionary column, evaluated once per dictionary value, gives the
 /// same rows as comparing the decoded values.
 #[test]
@@ -502,10 +562,75 @@ fn test_dict_column_compare() {
     );
 }
 
-/// Wrapping an encoded column in a nullable column (e.g. an outer join making its input
-/// nullable) decodes it: consumers only handle encoded columns at the top level.
+/// Nullable encodings keep the same NULL semantics through generic consumer boundaries.
 #[test]
-fn test_nullable_wraps_decoded_column() {
+fn test_nullable_encoded_consumers() {
+    for encoded in [
+        dict_column(&["xxx/a", "yyy/b", ""], &[0, 1, 0, 2, 1, 0, 2, 0]),
+        encode(&Int32Type::from_data(vec![7, 9, 7, 8, 9, 7, 8, 7])),
+    ] {
+        let decoded = encoded.as_encoded().unwrap().decode();
+        for validity in [
+            Bitmap::new_constant(true, 8),
+            Bitmap::new_constant(false, 8),
+            Bitmap::from_iter([true, false, true, false, true, true, false, true]),
+        ] {
+            let column = NullableColumn::new_column(encoded.clone(), validity.clone());
+            let plain = NullableColumn::new_column(decoded.clone(), validity);
+            let block = DataBlock::new_from_columns(vec![column.clone()]);
+            let expected = DataBlock::new_from_columns(vec![plain.clone()]);
+            let mut hashes = vec![0; 8];
+            let mut expected_hashes = vec![0; 8];
+            databend_common_expression::group_hash_entries(block.columns().into(), &mut hashes);
+            databend_common_expression::group_hash_entries(
+                expected.columns().into(),
+                &mut expected_hashes,
+            );
+            assert_eq!(hashes, expected_hashes);
+
+            let filtered = column.filter(&Bitmap::from_iter((0..8).map(|i| i % 3 != 0)));
+            let plain_filtered = plain.filter(&Bitmap::from_iter((0..8).map(|i| i % 3 != 0)));
+            assert!(filtered.remove_nullable().is_encoded());
+            assert_eq!(
+                BlockEntry::Column(filtered).decoded_value(),
+                BlockEntry::Column(plain_filtered).decoded_value()
+            );
+
+            let taken = block.take_ranges(&[0..3, 4..8], 7).unwrap();
+            let plain_taken = expected.take_ranges(&[0..3, 4..8], 7).unwrap();
+            assert!(
+                taken
+                    .get_by_offset(0)
+                    .to_column()
+                    .remove_nullable()
+                    .is_encoded()
+            );
+            assert_eq!(
+                taken.get_by_offset(0).decoded_value(),
+                plain_taken.get_by_offset(0).value()
+            );
+
+            let concat = DataBlock::concat(&[
+                DataBlock::new_from_columns(vec![column]),
+                DataBlock::new_from_columns(vec![plain.clone()]),
+            ])
+            .unwrap();
+            let expected_concat = DataBlock::concat(&[
+                DataBlock::new_from_columns(vec![plain.clone()]),
+                DataBlock::new_from_columns(vec![plain]),
+            ])
+            .unwrap();
+            assert_eq!(
+                concat.get_by_offset(0).decoded_value(),
+                expected_concat.get_by_offset(0).value()
+            );
+        }
+    }
+}
+
+/// Nullable wrappers keep the encoding; evaluator boundaries decode the inner column.
+#[test]
+fn test_nullable_wraps_encoded_column() {
     let plain = Int32Type::from_data(vec![7, 9, 8]);
     let validity = Bitmap::from_iter([true, false, true]);
     for column in [
@@ -516,10 +641,15 @@ fn test_nullable_wraps_decoded_column() {
             Column::Nullable(c) => *c,
             column => NullableColumn::new(column, validity.clone()),
         };
-        assert!(!matches!(wrapped.column, Column::Encoded(_)));
+        assert!(matches!(wrapped.column, Column::Encoded(_)));
     }
     let Column::Nullable(wrapped) = encode(&plain).wrap_nullable(None) else {
         unreachable!()
     };
-    assert_eq!(wrapped.column, plain);
+    assert!(wrapped.column.is_encoded());
+    let expected = NullableColumn::new_column(plain, wrapped.validity.clone());
+    let value = Value::Column(Column::Nullable(wrapped));
+    assert!(value.is_encoded());
+    assert_eq!(*value.decoded(), Value::Column(expected.clone()));
+    assert_eq!(value.decode_encoded(), Value::Column(expected));
 }

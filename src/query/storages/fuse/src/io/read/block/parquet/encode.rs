@@ -18,6 +18,7 @@ use arrow_array::Array;
 use arrow_array::ArrayRef;
 use arrow_array::DictionaryArray;
 use arrow_array::types::UInt32Type;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::types::DataType;
@@ -40,9 +41,10 @@ pub enum ColumnEncoding {
 }
 
 impl ColumnEncoding {
-    /// Only non-nullable types are encoded.
+    /// Nullable strings keep their validity outside the dictionary encoded values.
     pub fn for_type(data_type: &DataType) -> Option<ColumnEncoding> {
         match data_type {
+            DataType::Nullable(inner) if inner.is_string() => Some(ColumnEncoding::Dictionary),
             // 1-byte values cannot get narrower.
             DataType::Number(ty) if ty.bit_width() == 8 => None,
             // Frame of reference handles raw values up to `i128`.
@@ -59,7 +61,7 @@ impl ColumnEncoding {
     /// return a `DictionaryArray` instead of expanding it. arrow-rs only preserves the Parquet
     /// dictionary for byte arrays; it would rebuild one for primitive types.
     pub fn reuses_parquet_dictionary(self, data_type: &DataType) -> bool {
-        self == ColumnEncoding::Dictionary && *data_type == DataType::String
+        self == ColumnEncoding::Dictionary && data_type.remove_nullable().is_string()
     }
 
     /// Suffix of the column array cache key: encoded and decoded arrays of the same column
@@ -75,30 +77,57 @@ impl ColumnEncoding {
     /// Converts the Arrow array read from Parquet into the narrowest in-memory form: the
     /// encoded column, or the regular column if no encoding makes the block smaller.
     pub fn encode(self, array: ArrayRef, data_type: &DataType) -> Result<Column> {
+        let inner_type = data_type.remove_nullable();
         if let Some(dict) = array.as_any().downcast_ref::<DictionaryArray<UInt32Type>>()
-            && dict.null_count() == 0
+            && dict.values().null_count() == 0
+            && (dict.null_count() == 0 || data_type.is_nullable())
         {
             // A dictionary with more values than half the rows is no smaller than the column
             // (the dictionary of the column chunk holds the distinct values of the block).
-            if dict.values().len() * 2 > dict.len() {
+            if dict.values().is_empty() || dict.values().len() * 2 > dict.len() {
                 return Column::from_arrow_rs(array, data_type);
             }
             // The Parquet dictionary, as is.
-            let values = Column::from_arrow_rs(dict.values().clone(), data_type)?;
+            let values = Column::from_arrow_rs(dict.values().clone(), &inner_type)?;
             let max_key = values.len().saturating_sub(1) as u64;
-            let keys = dict.keys().values().iter().map(|key| *key as u64);
-            let keys = NarrowBuffer::pack(keys, max_key);
-            return Ok(encoded(EncodedColumn::Dict(DictColumn::new(keys, values))));
+            // Null rows still need an in-bounds key for kernels that read the inner column.
+            let keys = if dict.null_count() > 0 {
+                NarrowBuffer::pack(
+                    dict.keys().iter().map(|key| key.unwrap_or(0) as u64),
+                    max_key,
+                )
+            } else {
+                NarrowBuffer::pack(dict.keys().values().iter().map(|key| *key as u64), max_key)
+            };
+            let column = encoded(EncodedColumn::Dict(DictColumn::new(keys, values)));
+            return Ok(if data_type.is_nullable() {
+                let validity = match dict.nulls() {
+                    Some(nulls) => Bitmap::from_null_buffer(nulls.clone()),
+                    None => Bitmap::new_constant(true, dict.len()),
+                };
+                column.wrap_nullable(Some(validity))
+            } else {
+                column
+            });
         }
 
         let column = Column::from_arrow_rs(array, data_type)?;
+        Ok(match column {
+            Column::Nullable(column) => self
+                .encode_column(column.column)
+                .wrap_nullable(Some(column.validity)),
+            column => self.encode_column(column),
+        })
+    }
+
+    fn encode_column(self, column: Column) -> Column {
         let mut best = None;
         if self == ColumnEncoding::FrameOfReference
             && let Some(for_column) = ForColumn::try_encode(&column)
         {
             // Deltas of at most 2 bytes: a dictionary cannot be meaningfully narrower.
             if for_column.deltas().byte_width() <= 2 {
-                return Ok(encoded(EncodedColumn::For(for_column)));
+                return encoded(EncodedColumn::For(for_column));
             }
             best = Some(EncodedColumn::For(for_column));
         }
@@ -112,10 +141,10 @@ impl ColumnEncoding {
                 best = Some(dict);
             }
         }
-        Ok(match best {
+        match best {
             Some(best) if best.memory_size(false) < column.memory_size(false) => encoded(best),
             _ => column,
-        })
+        }
     }
 }
 
@@ -134,6 +163,7 @@ mod tests {
     use arrow_array::Int64Array;
     use arrow_array::StringArray;
     use arrow_array::UInt32Array;
+    use databend_common_expression::BlockEntry;
     use databend_common_expression::types::DecimalSize;
     use databend_common_expression::types::NumberDataType;
 
@@ -143,11 +173,10 @@ mod tests {
     fn encode_checked(encoding: ColumnEncoding, array: ArrayRef, data_type: &DataType) -> Column {
         let plain = Column::from_arrow_rs(array.clone(), data_type).unwrap();
         let column = encoding.encode(array, data_type).unwrap();
-        let decoded = match &column {
-            Column::Encoded(encoded) => encoded.decode(),
-            column => column.clone(),
-        };
-        assert_eq!(decoded, plain);
+        let decoded = BlockEntry::Column(column.clone()).decoded_value();
+        // The inner value of a NULL row is unspecified (encoded rows use an in-bounds
+        // dictionary key), so compare logical values rather than placeholder bytes.
+        assert!(decoded.as_column().unwrap().iter().eq(plain.iter()));
         assert_eq!(column.data_type(), *data_type);
         column
     }
@@ -168,6 +197,63 @@ mod tests {
 
     fn int64() -> DataType {
         DataType::Number(NumberDataType::Int64)
+    }
+
+    #[test]
+    fn test_encode_nullable_string_dictionary() {
+        let data_type = DataType::Nullable(Box::new(DataType::String));
+        assert_eq!(
+            ColumnEncoding::for_type(&data_type),
+            Some(ColumnEncoding::Dictionary)
+        );
+        assert!(ColumnEncoding::Dictionary.reuses_parquet_dictionary(&data_type));
+        for all_valid in [false, true] {
+            let values =
+                StringArray::from(vec!["xxx/long/repeated/url", "yyy/another/url", "unused"]);
+            let keys = UInt32Array::from(
+                (0..1000)
+                    .map(|i| (all_valid || i % 5 != 0).then_some(i % 2))
+                    .collect::<Vec<_>>(),
+            );
+            let array = DictionaryArray::<UInt32Type>::try_new(keys, Arc::new(values)).unwrap();
+            let column = encode_checked(
+                ColumnEncoding::Dictionary,
+                Arc::new(array.slice(3, 990)),
+                &data_type,
+            );
+            let nullable = column.as_nullable().unwrap();
+            assert!(nullable.column.is_encoded());
+            assert_eq!(
+                nullable.validity.null_count(),
+                if all_valid { 0 } else { 198 }
+            );
+        }
+        // Without a Parquet dictionary, encode the inner strings and keep row validity.
+        let array = StringArray::from(
+            (0..1000)
+                .map(|i| (i % 5 != 0).then_some("xxx/long/repeated/url"))
+                .collect::<Vec<_>>(),
+        );
+        let column = encode_checked(ColumnEncoding::Dictionary, Arc::new(array), &data_type);
+        assert!(column.as_nullable().unwrap().column.is_encoded());
+
+        // Nullable dictionary entries contribute logical nulls even when all keys are valid.
+        let array = DictionaryArray::<UInt32Type>::try_new(
+            UInt32Array::from((0..1000).map(|i| i % 2).collect::<Vec<_>>()),
+            Arc::new(StringArray::from(vec![Some("xxx/long/repeated/url"), None])),
+        )
+        .unwrap();
+        let column = encode_checked(ColumnEncoding::Dictionary, Arc::new(array), &data_type);
+        assert_eq!(column.as_nullable().unwrap().validity.null_count(), 500);
+
+        // Empty dictionaries with all-null keys must not produce out-of-bounds codes.
+        let array = DictionaryArray::<UInt32Type>::try_new(
+            UInt32Array::from(vec![None; 16]),
+            Arc::new(StringArray::from(Vec::<&str>::new())),
+        )
+        .unwrap();
+        let column = encode_checked(ColumnEncoding::Dictionary, Arc::new(array), &data_type);
+        assert_eq!(column.as_nullable().unwrap().validity.null_count(), 16);
     }
 
     #[test]

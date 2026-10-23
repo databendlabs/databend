@@ -269,3 +269,120 @@ select v from t where cast(v as int32) <= 10 group by v order by v;
 
 statement ok
 drop table t;
+
+# Low-cardinality Parquet strings exercise dictionary LIKE when encoded columns and the
+# deserialized column cache are enabled. The expression tests also force Dict input directly.
+statement ok
+CREATE OR REPLACE TABLE encoded_like(k UINT64 NOT NULL, url STRING NOT NULL, nullable_url STRING NULL) STORAGE_FORMAT = 'parquet' ENABLE_PARQUET_DICTIONARY = true;
+
+statement ok
+INSERT INTO encoded_like SELECT number, url, IF(number % 8 IN (2, 4), NULL, url) FROM (SELECT number, ['xxx/a', 'yyy/b', 'xxx/a', 'xxx/c', '', 'xxx_100%', 'yyy/b', 'xxx/c'][number % 8 + 1]::STRING AS url FROM numbers(8000));
+
+statement ok
+SET enable_selector_executor = 1;
+
+statement ok
+SET enable_encoded_columns = 0;
+
+statement ok
+CREATE OR REPLACE TABLE encoded_like_expected AS SELECT k, url FROM encoded_like WHERE (url LIKE 'xxx%' OR k % 8 = 1) AND (url NOT LIKE '%/a' OR k % 8 = 2);
+
+query I
+SELECT count(*) FROM encoded_like_expected;
+----
+5000
+
+statement ok
+SET enable_encoded_columns = 1;
+
+query I
+SELECT count(*) FROM encoded_like WHERE url LIKE 'xxx%';
+----
+5000
+
+query I
+SELECT count(*) FROM encoded_like WHERE url NOT LIKE 'xxx%';
+----
+3000
+
+query I
+SELECT count(*) FROM encoded_like WHERE url LIKE 'xxx/a';
+----
+2000
+
+query I
+SELECT count(*) FROM encoded_like WHERE url LIKE 'xxx!_%' ESCAPE '!';
+----
+1000
+
+query I
+SELECT count(*) FROM encoded_like WHERE url LIKE 'xxx/_';
+----
+4000
+
+query I
+SELECT count(*) FROM encoded_like WHERE url LIKE '%';
+----
+8000
+
+query I
+SELECT count(*) FROM encoded_like WHERE url NOT LIKE '%';
+----
+0
+
+query I
+SELECT count(*) FROM encoded_like WHERE url LIKE '';
+----
+1000
+
+query I
+SELECT count(*) FROM encoded_like WHERE nullable_url LIKE 'xxx%';
+----
+4000
+
+query I
+SELECT count(*) FROM encoded_like WHERE nullable_url NOT LIKE 'xxx%';
+----
+2000
+
+query I
+SELECT count(*) FROM encoded_like WHERE nullable_url LIKE 'xxx%' OR k % 8 = 2;
+----
+5000
+
+# Consumers after the scan must still see the original NULL semantics.
+query TI
+SELECT nullable_url, count(*) FROM encoded_like GROUP BY nullable_url ORDER BY nullable_url NULLS FIRST;
+----
+NULL 2000
+xxx/a 1000
+xxx/c 2000
+xxx_100% 1000
+yyy/b 2000
+
+query I
+SELECT count(*) FROM encoded_like l JOIN encoded_like r ON l.k = r.k AND l.nullable_url = r.nullable_url WHERE l.url LIKE 'xxx%';
+----
+4000
+
+query I
+SELECT count(*) FROM (SELECT k, url FROM encoded_like WHERE (url LIKE 'xxx%' OR k % 8 = 1) AND (url NOT LIKE '%/a' OR k % 8 = 2) EXCEPT ALL SELECT k, url FROM encoded_like_expected);
+----
+0
+
+query I
+SELECT count(*) FROM (SELECT k, url FROM encoded_like_expected EXCEPT ALL SELECT k, url FROM encoded_like WHERE (url LIKE 'xxx%' OR k % 8 = 1) AND (url NOT LIKE '%/a' OR k % 8 = 2));
+----
+0
+
+statement ok
+UNSET enable_encoded_columns;
+
+statement ok
+UNSET enable_selector_executor;
+
+statement ok
+DROP TABLE encoded_like_expected;
+
+statement ok
+DROP TABLE encoded_like;

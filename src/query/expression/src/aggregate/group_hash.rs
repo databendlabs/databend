@@ -264,9 +264,14 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
     }
 
     fn visit_encoded(&mut self, column: Box<EncodedColumn>) -> Result<()> {
+        // Hashing once per dictionary value only pays when there are fewer values than rows:
+        // aggregation hashes batches of a block, and each batch carries the whole dictionary.
         let EncodedColumn::Dict(dict) = column.as_ref() else {
             return self.visit_column(column.decode());
         };
+        if dict.values.len() > dict.len() {
+            return self.visit_column(column.decode());
+        }
         let mut hashes = vec![0; dict.values.len()];
         HashVisitor::<true> {
             values: &mut hashes,

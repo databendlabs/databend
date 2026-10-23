@@ -27,6 +27,7 @@ use super::DataType;
 use super::DecimalColumn;
 use super::DecimalDataType;
 use super::DecimalScalar;
+use super::NullableColumn;
 use super::NumberColumn;
 use super::NumberDataType;
 use super::ValueType;
@@ -35,6 +36,7 @@ use super::number::Number;
 use crate::BlockEntry;
 use crate::Column;
 use crate::Domain;
+use crate::LikePattern;
 use crate::Scalar;
 use crate::ScalarRef;
 use crate::SelectOp;
@@ -294,6 +296,22 @@ impl DictColumn {
             Bitmap::collect_bool(len, |i| unsafe {
                 *matches.get_unchecked(*keys.get_unchecked(i) as usize)
             })
+        }))
+    }
+
+    /// Matches a string pattern once per dictionary value, then maps the results to rows.
+    /// `None` for dictionaries whose values are not strings.
+    pub fn like(&self, pattern: &LikePattern, not: bool) -> Option<Bitmap> {
+        let Column::String(values) = &self.values else {
+            return None;
+        };
+        // Cache by dictionary index: repeated keys must not evaluate LIKE again.
+        let dict_matches: Vec<bool> = values
+            .iter()
+            .map(|value| pattern.compare(value.as_bytes()) ^ not)
+            .collect();
+        Some(with_narrow_buffer!(&self.keys, |keys| {
+            keys.iter().map(|key| dict_matches[*key as usize]).collect()
         }))
     }
 
@@ -1115,27 +1133,57 @@ impl Value<AnyType> {
     pub fn decode_encoded(self) -> Self {
         match self {
             Value::Column(Column::Encoded(c)) => Value::Column(c.decode()),
+            Value::Column(Column::Nullable(mut column)) => {
+                if let Column::Encoded(encoded) = &column.column {
+                    column.column = encoded.decode();
+                }
+                Value::Column(Column::Nullable(column))
+            }
             other => other,
         }
     }
 
     pub fn decoded(&self) -> Cow<'_, Self> {
         match self {
-            Value::Column(Column::Encoded(c)) => Cow::Owned(Value::Column(c.decode())),
-            other => Cow::Borrowed(other),
+            Value::Column(Column::Encoded(encoded)) => Cow::Owned(Value::Column(encoded.decode())),
+            Value::Column(Column::Nullable(column)) => {
+                if let Column::Encoded(encoded) = &column.column {
+                    Cow::Owned(Value::Column(NullableColumn::new_column(
+                        encoded.decode(),
+                        column.validity.clone(),
+                    )))
+                } else {
+                    Cow::Borrowed(self)
+                }
+            }
+            _ => Cow::Borrowed(self),
         }
     }
 
     pub fn is_encoded(&self) -> bool {
-        matches!(self, Value::Column(Column::Encoded(_)))
+        match self {
+            Value::Column(Column::Encoded(_)) => true,
+            Value::Column(Column::Nullable(c)) => c.column.is_encoded(),
+            _ => false,
+        }
     }
 }
 
 impl BlockEntry {
     pub fn decoded_value(&self) -> Value<AnyType> {
         match self {
-            BlockEntry::Column(Column::Encoded(c)) => Value::Column(c.decode()),
-            entry => entry.value(),
+            BlockEntry::Column(Column::Encoded(encoded)) => Value::Column(encoded.decode()),
+            BlockEntry::Column(Column::Nullable(column)) => {
+                if let Column::Encoded(encoded) = &column.column {
+                    Value::Column(NullableColumn::new_column(
+                        encoded.decode(),
+                        column.validity.clone(),
+                    ))
+                } else {
+                    self.value()
+                }
+            }
+            _ => self.value(),
         }
     }
 }

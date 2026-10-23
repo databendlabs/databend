@@ -31,6 +31,7 @@ use crate::BlockEntry;
 use crate::FunctionContext;
 use crate::FunctionEval;
 use crate::FunctionRegistry;
+use crate::LikePattern;
 use crate::RemoteExpr;
 use crate::ScalarRef;
 use crate::SelectOp;
@@ -398,6 +399,34 @@ impl<'a> Evaluator<'a> {
             _ => return None,
         };
         encoded(id)?.compare_scalar(&op, scalar)
+    }
+
+    /// Evaluates a filter's LIKE over a dictionary encoded string column without decoding.
+    /// Nullable columns apply their validity after LIKE / NOT LIKE; NULL selects as false.
+    pub fn try_like_encoded(
+        &self,
+        expr: &Expr,
+        pattern: &LikePattern,
+        not: bool,
+    ) -> Option<Bitmap> {
+        let Expr::ColumnRef(ColumnRef { id, .. }) = expr else {
+            return None;
+        };
+        let BlockEntry::Column(column) = self.data_block.get_by_offset(*id) else {
+            return None;
+        };
+        let (column, validity) = match column {
+            Column::Nullable(column) => (&column.column, Some(&column.validity)),
+            column => (column, None),
+        };
+        let Column::Encoded(encoded) = column else {
+            return None;
+        };
+        let bitmap = encoded.as_dict()?.like(pattern, not)?;
+        Some(match validity {
+            Some(validity) => &bitmap & validity,
+            None => bitmap,
+        })
     }
 
     fn eval_common_call(
