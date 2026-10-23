@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod inverted_index_bundle_loader;
+mod inverted_index_collector;
 mod inverted_index_reader;
 mod inverted_index_warmup;
 

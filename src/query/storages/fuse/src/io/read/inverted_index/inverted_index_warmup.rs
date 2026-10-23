@@ -25,7 +25,12 @@ use tantivy::SegmentReader;
 use tantivy::Term;
 use tantivy::index::Segment;
 use tantivy::index::SegmentComponent;
+use tantivy::query::BooleanQuery;
+use tantivy::query::Occur;
+use tantivy::query::PhrasePrefixQuery;
+use tantivy::query::PhraseQuery;
 use tantivy::query::Query;
+use tantivy::query::TermQuery;
 use tantivy::query_grammar::UserInputAst;
 use tantivy::query_grammar::UserInputLeaf;
 use tantivy::schema::Field;
@@ -35,6 +40,8 @@ use tantivy::schema::Schema;
 /// terms; the input AST only identifies operations whose terms `query_terms()` cannot enumerate.
 #[derive(Clone, Default)]
 pub struct InvertedIndexWarmupInfo {
+    // Kept independently: normalize() may remove exact postings covered by a Full warmup.
+    required_terms: HashSet<Term>,
     exact_postings: HashMap<Term, bool>,
     full_posting_fields: HashMap<Field, bool>,
     dictionary_fields: HashSet<Field>,
@@ -51,6 +58,7 @@ impl InvertedIndexWarmupInfo {
     ) -> Result<Self> {
         let mut plan = Self::default();
         plan.collect_exact_terms(query);
+        plan.collect_required_terms(query, schema);
         plan.collect_ast_requirements(ast, schema, fallback_fields, fuzziness);
         plan.normalize();
         Ok(plan)
@@ -60,6 +68,28 @@ impl InvertedIndexWarmupInfo {
         query.query_terms(&mut |term, with_positions| {
             *self.exact_postings.entry(term.clone()).or_default() |= with_positions;
         });
+    }
+
+    /// Only descend through mandatory clauses and query types with known exact terms.
+    /// query_terms() alone cannot distinguish OR alternatives, exclusions, or fuzzy expansions.
+    fn collect_required_terms(&mut self, query: &dyn Query, schema: &Schema) {
+        if let Some(boolean) = query.downcast_ref::<BooleanQuery>() {
+            for (occur, child) in boolean.clauses() {
+                if *occur == Occur::Must {
+                    self.collect_required_terms(child.as_ref(), schema);
+                }
+            }
+        } else if query.is::<TermQuery>()
+            || query.is::<PhraseQuery>()
+            || query.is::<PhrasePrefixQuery>()
+        {
+            // PhrasePrefixQuery reports only fixed phrase terms, never the prefix itself.
+            query.query_terms(&mut |term, _| {
+                if schema.get_field_entry(term.field()).is_indexed() {
+                    self.required_terms.insert(term.clone());
+                }
+            });
+        }
     }
 
     fn collect_ast_requirements(
@@ -176,12 +206,14 @@ impl InvertedIndexWarmupInfo {
             .retain(|field| !self.full_posting_fields.contains_key(field));
     }
 
+    /// Returns false only when every segment is proven unable to match. In that case no
+    /// postings, positions, fieldnorm, or fast-field warmup (or synchronous search) is needed.
     pub(crate) async fn warm_searcher(
         &self,
         searcher: &Searcher,
         raw_bundle_directory: &FooterDirectory,
         has_score: bool,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let segments = searcher.index().searchable_segments()?;
         let segments_by_id = segments
             .iter()
@@ -204,11 +236,44 @@ impl InvertedIndexWarmupInfo {
             })
             .collect::<Result<Vec<_>>>()?;
 
+        if readers.is_empty() {
+            return Ok(false);
+        }
+        if !self.required_terms.is_empty() {
+            // Check before any payload/metadata warmup, not alongside the Full download.
+            let present = future::try_join_all(
+                readers
+                    .iter()
+                    .map(|(reader, _)| self.has_required_terms(reader)),
+            )
+            .await?;
+            if !present.into_iter().any(|present| present) {
+                return Ok(false);
+            }
+            // Production bundles contain one segment. If a searcher has several, keep all
+            // warmed when any can match: synchronous search still visits every segment.
+        }
+
         tokio::try_join!(
             self.warm_metadata(searcher, &readers, has_score),
             self.warm_payload(&readers, raw_bundle_directory),
         )?;
-        Ok(())
+        Ok(true)
+    }
+
+    async fn has_required_terms(&self, reader: &SegmentReader) -> Result<bool> {
+        for term in &self.required_terms {
+            // Only look up TermInfo. Do not warm postings just to discover absence.
+            if reader
+                .inverted_index(term.field())?
+                .doc_freq_async(term)
+                .await?
+                == 0
+            {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 
     /// Dictionary, fieldnorm, and fast-field reads do not depend on payload downloads.
@@ -408,6 +473,45 @@ mod tests {
             assert!(plan.exact_postings.is_empty(), "{text}");
             assert!(plan.dictionary_fields.is_empty(), "{text}");
             assert!(plan.fast_fields.is_empty(), "{text}");
+        }
+    }
+
+    #[test]
+    fn required_terms_follow_mandatory_query_structure() {
+        let cases: &[(&str, Option<u8>, &[&str])] = &[
+            ("body:alpha", None, &["alpha"]),
+            ("body:alpha AND body:beta", None, &["alpha", "beta"]),
+            ("body:\"alpha beta\"~1", None, &["alpha", "beta"]),
+            ("body:\"alpha bet\"*", None, &["alpha"]),
+            ("body:alpha AND body:\"beta gam\"*", None, &[
+                "alpha", "beta",
+            ]),
+            ("body:alpha AND (body:beta OR body:missing)", None, &[
+                "alpha",
+            ]),
+            ("+body:alpha -body:missing", None, &["alpha"]),
+            ("body:alpha OR body:missing", None, &[]),
+            ("body:alpha OR (body:beta AND body:missing)", None, &[]),
+            ("body: IN [alpha beta]", None, &[]),
+            ("body:alpa", Some(1), &[]),
+            // Opaque wrappers and expansion queries stay conservative.
+            ("body:alpha^2", None, &[]),
+            ("body:/alp.*/", None, &[]),
+            ("body:[alpha TO delta]", None, &[]),
+        ];
+        for &(text, fuzziness, expected) in cases {
+            let (plan, field) = plan(text, fuzziness);
+            assert_eq!(
+                plan.required_terms,
+                expected
+                    .iter()
+                    .map(|text| Term::from_field_text(field, text))
+                    .collect::<HashSet<_>>(),
+                "{text}"
+            );
+            if !plan.full_posting_fields.is_empty() {
+                assert!(plan.exact_postings.is_empty(), "{text}");
+            }
         }
     }
 

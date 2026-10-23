@@ -12,21 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Instant;
-
+use databend_common_base::runtime::spawn_blocking;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::F32;
-use databend_common_metrics::storage::metrics_inc_block_inverted_index_search_milliseconds;
+use databend_common_metrics::storage::InvertedIndexPhase;
+use databend_common_metrics::storage::InvertedIndexTimer;
+use databend_common_metrics::storage::metrics_observe_block_inverted_index_warmup_bytes;
 use databend_storages_common_index::INVERTED_INDEX_FILE_FORMAT_VERSION;
 use opendal::Operator;
 use tantivy::Index;
-use tantivy::collector::DocSetCollector;
-use tantivy::collector::TopDocs;
 use tantivy::query::Query;
 use tantivy::tokenizer::TokenizerManager;
 
 use crate::io::read::inverted_index::inverted_index_bundle_loader::load_bundle_search_directory;
+use crate::io::read::inverted_index::inverted_index_collector::InvertedIndexCollector;
 use crate::io::read::inverted_index::inverted_index_warmup::InvertedIndexWarmupInfo;
 
 pub type InvertedIndexFilterResult = Option<(Vec<usize>, Option<Vec<F32>>)>;
@@ -81,6 +81,7 @@ impl InvertedIndexReader {
         query: Box<dyn Query>,
         row_count: u64,
     ) -> Result<InvertedIndexFilterResult> {
+        let open_timer = InvertedIndexTimer::new(InvertedIndexPhase::Open);
         let bundle = load_bundle_search_directory(&self.dal, index_path, object_size).await?;
         let mut index = Index::open(bundle.directory.clone())?;
         index.set_tokenizers(self.tokenizer_manager.clone());
@@ -94,51 +95,164 @@ impl InvertedIndexReader {
             )));
         }
 
-        self.warmup
-            .warm_searcher(&searcher, &bundle.directory, self.has_score)
-            .await?;
-        self.search(&searcher, query, row_count)
+        drop(open_timer);
+
+        let can_match = {
+            let _timer = InvertedIndexTimer::new(InvertedIndexPhase::Warmup);
+            self.warmup
+                .warm_searcher(&searcher, &bundle.directory, self.has_score)
+                .await?
+        };
+        metrics_observe_block_inverted_index_warmup_bytes(bundle.search_pin.pinned_bytes());
+        if !can_match {
+            return Ok(None);
+        }
+        Self::search(searcher, query, row_count, self.has_score).await
     }
 
-    fn search(
-        &self,
-        searcher: &tantivy::Searcher,
+    async fn search(
+        searcher: tantivy::Searcher,
         query: Box<dyn Query>,
         row_count: u64,
+        has_score: bool,
     ) -> Result<InvertedIndexFilterResult> {
-        let row_limit = usize::try_from(row_count).map_err(|_| {
-            ErrorCode::StorageOther("inverted-index row count exceeds this platform")
-        })?;
-        let start = Instant::now();
-        let (matched_rows, matched_scores) = if self.has_score {
-            let collector = TopDocs::with_limit(row_limit);
-            let docs = searcher.search(&query, &collector.order_by_score())?;
-
-            let mut matched_rows = Vec::with_capacity(docs.len());
-            let mut matched_scores = Vec::with_capacity(docs.len());
-            for (score, doc_addr) in docs {
-                matched_rows.push(usize::try_from(doc_addr.doc_id).map_err(|_| {
-                    ErrorCode::StorageOther("inverted-index document id exceeds this platform")
-                })?);
-                matched_scores.push(F32::from(score));
-            }
-            (matched_rows, Some(matched_scores))
-        } else {
-            let docs = searcher.search(&query, &DocSetCollector)?;
+        // Searcher owns the index/directory and keeps the warmed ranges pinned until the
+        // blocking task finishes, even if the caller drops its IndexReader or is cancelled.
+        // Production callers await this task while holding their block-pruning permit.
+        let queue_timer = InvertedIndexTimer::new(InvertedIndexPhase::SearchQueue);
+        spawn_blocking(move || {
+            drop(queue_timer);
+            // Execution wall time includes collection/conversion, but excludes queueing.
+            let _timer = InvertedIndexTimer::new(InvertedIndexPhase::Search);
+            let row_limit = usize::try_from(row_count).map_err(|_| {
+                ErrorCode::StorageOther("inverted-index row count exceeds this platform")
+            })?;
+            let docs = searcher.search(query.as_ref(), &InvertedIndexCollector::new(has_score))?;
+            debug_assert!(docs.rows.len() <= row_limit);
             let matched_rows = docs
+                .rows
                 .into_iter()
-                .map(|doc_addr| {
-                    usize::try_from(doc_addr.doc_id).map_err(|_| {
+                .map(|doc| {
+                    usize::try_from(doc).map_err(|_| {
                         ErrorCode::StorageOther("inverted-index document id exceeds this platform")
                     })
                 })
                 .collect::<Result<Vec<_>>>()?;
-            (matched_rows, None)
-        };
-        metrics_inc_block_inverted_index_search_milliseconds(
-            u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
-        );
+            let matched_scores = docs.scores;
+            Ok((!matched_rows.is_empty()).then_some((matched_rows, matched_scores)))
+        })
+        .await?
+    }
+}
 
-        Ok((!matched_rows.is_empty()).then_some((matched_rows, matched_scores)))
+#[cfg(test)]
+mod tests {
+    use std::thread::ThreadId;
+
+    use databend_common_base::runtime::ThreadTracker;
+    use databend_common_base::runtime::metrics::MetricValue;
+    use databend_common_base::runtime::metrics::ScopedRegistry;
+    use tantivy::Term;
+    use tantivy::query::EnableScoring;
+    use tantivy::query::TermQuery;
+    use tantivy::query::Weight;
+    use tantivy::schema::IndexRecordOption;
+    use tantivy::schema::Schema;
+    use tantivy::schema::TEXT;
+
+    use super::*;
+
+    #[derive(Clone, Debug)]
+    struct ThreadCheckedQuery {
+        inner: Box<dyn Query>,
+        async_thread: ThreadId,
+        fail: bool,
+    }
+
+    impl Query for ThreadCheckedQuery {
+        fn weight(&self, scoring: EnableScoring<'_>) -> tantivy::Result<Box<dyn Weight>> {
+            // On a current-thread runtime, this fails if search moves back onto the async worker.
+            assert_ne!(std::thread::current().id(), self.async_thread);
+            if self.fail {
+                return Err(tantivy::TantivyError::InvalidArgument(
+                    "injected search failure".to_owned(),
+                ));
+            }
+            self.inner.weight(scoring)
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_blocking_search_preserves_results_and_errors() -> Result<()> {
+        let mut schema = Schema::builder();
+        let body = schema.add_text_field("body", TEXT);
+        let index = Index::create_in_ram(schema.build());
+        let mut writer = index.writer_with_num_threads(1, 50_000_000)?;
+        writer.add_document(tantivy::doc!(body => "alpha"))?;
+        writer.add_document(tantivy::doc!(body => "beta"))?;
+        writer.commit()?;
+        drop(writer);
+        let reader = index.reader()?;
+        let searcher = reader.searcher();
+        // The owned searcher must keep the index/directory alive on its own.
+        drop(reader);
+        drop(index);
+
+        let metrics = ScopedRegistry::create(None);
+        let mut payload = ThreadTracker::new_tracking_payload();
+        payload.metrics = Some(metrics.clone());
+        let _tracking = ThreadTracker::tracking(payload);
+
+        for (word, has_score, fail) in [
+            ("alpha", false, false),
+            ("alpha", true, false),
+            ("missing", false, false),
+            ("missing", true, false),
+            ("alpha", false, true),
+        ] {
+            let query = ThreadCheckedQuery {
+                inner: Box::new(TermQuery::new(
+                    Term::from_field_text(body, word),
+                    IndexRecordOption::WithFreqs,
+                )),
+                async_thread: std::thread::current().id(),
+                fail,
+            };
+            let result =
+                InvertedIndexReader::search(searcher.clone(), Box::new(query), 2, has_score).await;
+            if fail {
+                assert!(
+                    result
+                        .unwrap_err()
+                        .to_string()
+                        .contains("injected search failure")
+                );
+            } else if word == "missing" {
+                assert!(result?.is_none());
+            } else {
+                let (rows, scores) = result?.unwrap();
+                assert_eq!(rows, vec![0]);
+                if has_score {
+                    let scores = scores.unwrap();
+                    assert_eq!(scores.len(), rows.len());
+                    assert!(scores[0].is_finite() && scores[0].0 > 0.0);
+                } else {
+                    assert!(scores.is_none());
+                }
+            }
+        }
+        let samples = metrics.dump_sample()?;
+        for name in [
+            "fuse_block_inverted_index_search_queue_milliseconds",
+            "fuse_block_inverted_index_search_milliseconds",
+        ] {
+            let sample = samples.iter().find(|sample| sample.name == name).unwrap();
+            let MetricValue::Histogram(buckets) = &sample.value else {
+                panic!("expected a histogram for {name}");
+            };
+            // Four successful searches and one failed search, all tracked in this query scope.
+            assert_eq!(buckets.last().unwrap().count, 5.0, "{name}");
+        }
+        Ok(())
     }
 }
