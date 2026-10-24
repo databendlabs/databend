@@ -18,9 +18,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
 use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::aggregate::aggregate_function::AggregateCallRef;
+use databend_common_expression::aggregate_function::AggregateStateOwner;
+use databend_common_expression::aggregate_function::AggregateStateSet;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::NumberDataType;
@@ -35,6 +42,7 @@ use databend_query_script_udf_support::PythonWorkerConfig;
 use databend_query_script_udf_support::PythonWorkerManager;
 use databend_query_script_udf_support::ScriptUdfFunctionDesc;
 use databend_query_script_udf_support::TransformUdfScript;
+use databend_query_script_udf_support::create_udaf_script_function;
 use databend_query_script_udf_support::run_python_udf_worker;
 
 fn function(name: &str, code: &str) -> ScriptUdfFunctionDesc {
@@ -581,6 +589,7 @@ def handler(x):
     hardening_tests().await;
     #[cfg(target_os = "linux")]
     sandbox_tests().await;
+    udaf_tests().await;
     parallel_pool_tests().await;
     idle_pool_tests().await;
     #[cfg(target_os = "linux")]
@@ -592,6 +601,213 @@ def handler(x):
 #[global_allocator]
 static GLOBAL_ALLOCATOR: databend_common_base::mem_allocator::TrackingGlobalAllocator =
     databend_common_base::mem_allocator::TrackingGlobalAllocator::create();
+
+const PY_SUM: &str = r#"
+import os
+
+class State:
+    def __init__(self):
+        self.sum = 0
+        self.count = 0
+
+def create_state():
+    return State()
+
+def accumulate(state, value):
+    if value is not None:
+        state.sum += value
+    state.count += 1
+    return state
+
+def merge(state, other):
+    state.sum += other.sum
+    state.count += other.count
+    return state
+
+def finish(state):
+    # Encodes both fields; the pid variant proves where the code ran.
+    return state.sum * 1000 + state.count if state.count >= 0 else os.getpid()
+"#;
+
+fn udaf(query: &Arc<PythonQueryWorkers>, name: &str, code: &str) -> AggregateCallRef {
+    let int64 = DataType::Number(NumberDataType::Int64);
+    let code = UDFScriptCode {
+        language: UDFLanguage::Python,
+        runtime_version: String::new(),
+        imports_stage_info: vec![],
+        imports: vec![],
+        packages: vec![],
+        code: Arc::new(code.as_bytes().to_vec().into_boxed_slice()),
+    };
+    create_udaf_script_function(
+        &code,
+        name.into(),
+        name.into(),
+        vec![
+            DataField::new("sum", int64.clone()),
+            DataField::new("count", int64.clone()),
+        ],
+        vec![DataField::new("arg_0", int64.wrap_nullable())],
+        int64,
+        Some(query.clone()),
+    )
+    .unwrap()
+}
+
+fn results(function: &AggregateCallRef, owners: &[&AggregateStateOwner]) -> Vec<i64> {
+    let mut builder = ColumnBuilder::with_capacity(&function.signature().return_type, owners.len());
+    for owner in owners {
+        function.merge_result(owner.state(0), &mut builder).unwrap();
+    }
+    let column = builder.build();
+    (0..owners.len())
+        .map(|row| {
+            column
+                .index(row)
+                .unwrap()
+                .as_number()
+                .unwrap()
+                .as_int64()
+                .copied()
+                .unwrap()
+        })
+        .collect()
+}
+
+// Python aggregates run in the query's sandboxed workers with the same pooling
+// as scalar UDFs; states stay in the query process between requests.
+async fn udaf_tests() {
+    let query = PythonWorkerManager::new(PythonWorkerConfig::default())
+        .unwrap()
+        .query("udaf", 2);
+    let function = udaf(&query, "py_sum", PY_SUM);
+    // The initial state is created lazily, so a Python runtime built after the
+    // aggregate (e.g. a scalar UDF below it in the plan) can still register.
+    let mut scalar = transform(
+        query.clone(),
+        "after_udaf",
+        "def handler(x):\n    return x\n",
+    );
+
+    // The executor calls aggregate functions synchronously.
+    let function = databend_common_base::runtime::spawn_blocking(move || {
+        let values = (0..10)
+            .map(|v| if v == 4 { None } else { Some(v) })
+            .collect::<Vec<_>>();
+        let column: BlockEntry = Int64Type::from_opt_data(values).into();
+        let columns = [column];
+
+        // GROUP BY v % 3 through one batched request, places interleaved.
+        let groups = [(); 3].map(|_| AggregateStateOwner::new(vec![function.clone()]).unwrap());
+        let loc = groups[0].state(0).loc;
+        let places = (0..10)
+            .map(|v| groups[v % 3].state(0).addr)
+            .collect::<Vec<_>>();
+        function
+            .accumulate_keys(AggregateStateSet::new(&places, loc), (&columns).into())
+            .unwrap();
+        // 0+3+6+9, 1+7 (4 is NULL), 2+5+8
+        assert_eq!(results(&function, &[&groups[0], &groups[1], &groups[2]]), [
+            18_004, 8_003, 15_003
+        ]);
+
+        // Without GROUP BY.
+        let total = AggregateStateOwner::new(vec![function.clone()]).unwrap();
+        function
+            .accumulate(total.state(0), (&columns).into())
+            .unwrap();
+        assert_eq!(results(&function, &[&total]), [41_010]);
+
+        // Partial states shipped between nodes or spilled: serialize, then
+        // merge into fewer states, including a repeated place in one block.
+        let mut builder = ColumnBuilder::with_capacity(&DataType::Binary, 3);
+        let group_places = groups.iter().map(|g| g.state(0).addr).collect::<Vec<_>>();
+        function
+            .serialize(
+                AggregateStateSet::new(&group_places, loc),
+                std::slice::from_mut(&mut builder),
+            )
+            .unwrap();
+        // The executor ships states as a tuple of their serde items.
+        let serialized: BlockEntry = Column::Tuple(vec![builder.build()]).into();
+        let merged = [(); 2].map(|_| AggregateStateOwner::new(vec![function.clone()]).unwrap());
+        let targets = [
+            merged[0].state(0).addr,
+            merged[0].state(0).addr,
+            merged[1].state(0).addr,
+        ];
+        function
+            .merge_serialized(AggregateStateSet::new(&targets, loc), &serialized)
+            .unwrap();
+        assert_eq!(results(&function, &[&merged[0], &merged[1]]), [
+            26_007, 15_003
+        ]);
+
+        function
+            .merge_states(merged[1].state(0), total.state(0))
+            .unwrap();
+        assert_eq!(results(&function, &[&merged[1]]), [56_013]);
+
+        // Untouched states finish from the lazily created initial state.
+        let empty = AggregateStateOwner::new(vec![function.clone()]).unwrap();
+        assert_eq!(results(&function, &[&empty]), [0]);
+        drop((groups, total, merged, empty));
+        function
+    })
+    .await
+    .unwrap();
+    call(&mut scalar, 3).await.unwrap();
+    drop(function);
+    query.finish();
+
+    // User code is out of process and inside the sandbox.
+    let query = PythonWorkerManager::new(PythonWorkerConfig::default())
+        .unwrap()
+        .query("udaf", 1);
+    let probe = udaf(
+        &query,
+        "py_probe",
+        &PY_SUM.replace("if state.count >= 0 else", "if False else"),
+    );
+    let hostile = udaf(
+        &query,
+        "py_hostile",
+        &PY_SUM.replace(
+            "    return State()",
+            "    open('/etc/passwd').read()\n    return State()",
+        ),
+    );
+    databend_common_base::runtime::spawn_blocking(move || {
+        let owner = AggregateStateOwner::new(vec![probe.clone()]).unwrap();
+        let pid = results(&probe, &[&owner])[0];
+        assert_ne!(
+            pid,
+            std::process::id() as i64,
+            "UDAF ran in the query process"
+        );
+        assert!(std::fs::metadata(format!("/proc/{pid}")).is_ok());
+
+        // macOS workers are unconfined (local development only).
+        #[cfg(target_os = "linux")]
+        {
+            let owner = AggregateStateOwner::new(vec![hostile.clone()]).unwrap();
+            let mut builder = ColumnBuilder::with_capacity(&hostile.signature().return_type, 1);
+            let error = hostile
+                .merge_result(owner.state(0), &mut builder)
+                .unwrap_err();
+            assert!(
+                error.message().contains("PermissionError"),
+                "{}",
+                error.message()
+            );
+        }
+        #[cfg(not(target_os = "linux"))]
+        let _ = hostile;
+    })
+    .await
+    .unwrap();
+    query.finish();
+}
 
 fn main() {
     databend_common_base::runtime::ThreadTracker::init();
@@ -618,6 +834,6 @@ fn main() {
                 .unwrap();
         });
     println!(
-        "Python worker process isolation, hardening, reuse, quota, failure, timeout and cancellation: passed"
+        "Python worker process isolation, hardening, aggregates, reuse, quota, failure, timeout and cancellation: passed"
     );
 }

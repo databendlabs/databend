@@ -290,6 +290,7 @@ mod tests {
                 handler: "handler".to_owned(),
                 code: "def handler(x): return x".to_owned(),
                 return_field: Field::new("x", arrow_schema::DataType::Int64, false),
+                aggregate_state: None,
             },
             query,
             None,

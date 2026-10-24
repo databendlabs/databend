@@ -168,6 +168,7 @@ impl ScriptRuntime {
                     handler: func.func_name.clone(),
                     code,
                     return_field: arrow_field_from_data_type(&func.name, *func.data_type.clone()),
+                    aggregate_state: None,
                 };
                 Ok(Self::Python(PythonRuntime::new(
                     function,

@@ -197,12 +197,30 @@ per-worker/aggregate memory limits and metrics need separate resource-controller
 integration before treating this as an OOM containment boundary. In particular,
 a process-count limit alone does not bound total memory.
 
-Python aggregate script UDFs (`udaf_script.rs`) have a separate state/merge API and
-are **not migrated** here: they still run inside the query process. They are
-therefore rejected (at `CREATE FUNCTION`, at binding, and again on the executing
-node) when `enable_udf_sandbox = true`, and follow `enable_udf_python_script`
-otherwise. The process isolation and sandbox in this document apply only to
-scalar Python script UDFs.
+## Python aggregate UDFs
+
+Python aggregate script UDFs (`udaf_script.rs`) run in the same worker pool,
+sandbox and quotas as scalar ones: a worker started for an aggregate loads its
+`create_state`/`accumulate`/`merge`/`finish` functions instead of a handler.
+
+- States stay in the query process (as Arrow arrays, serialized for spilling and
+  exchange exactly as before) and travel with every request, so workers are
+  stateless: any pooled worker serves any request, and a killed worker loses no
+  aggregation state.
+- Requests are batched per block: `accumulate_keys` sends the distinct states of
+  a block, a row-to-state index and the arguments once; the worker applies rows
+  to their state in row order. `merge_serialized` does the same for partial
+  states. Final results (`merge_result`) are still one request per group, because
+  the aggregate API finalizes states one at a time.
+- The initial state is created by the first request, not while the pipeline is
+  built: the first worker request admits the query, after which no other Python
+  runtime of the query may register.
+- Aggregates do not install `packages`/`imports` (unchanged).
+
+They are still rejected (at `CREATE FUNCTION`, at binding, and on the executing
+node) when `enable_udf_sandbox = true`, which routes scalar Python UDFs to an
+external sandbox service that has no aggregate API; otherwise they follow
+`enable_udf_python_script`.
 
 ## JavaScript and WebAssembly limits
 

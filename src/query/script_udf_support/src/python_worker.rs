@@ -427,9 +427,173 @@ impl PythonQueryWorkers {
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct PythonFunction {
     pub name: String,
+    /// Scalar functions only: aggregates use the fixed `create_state`,
+    /// `accumulate`, `merge` and `finish` names.
     pub handler: String,
     pub code: String,
     pub return_field: Field,
+    /// `Some` for an aggregate function: requests are `AggregateRequest`s.
+    pub aggregate_state: Option<Field>,
+}
+
+/// Aggregate requests. States stay in the query process and travel with every
+/// request, so workers are stateless: any pooled worker serves any request, and
+/// a killed worker loses no aggregation state.
+///
+/// A request frame is the op code followed by length-prefixed Arrow streams
+/// (`parts`). Group-wise operations update `G` states from `N` rows: a UInt32
+/// `groups` column maps each row to its state, and rows are applied to their
+/// state in input order. The response is one Arrow stream with `G` rows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub(crate) enum AggregateOp {
+    /// parts: none. Response: one initial state.
+    CreateState = 0,
+    /// parts: states (G), groups (N), arguments (N).
+    Accumulate = 1,
+    /// parts: states (G), groups (N), states to merge into them (N).
+    Merge = 2,
+    /// parts: states (G). Response: G results.
+    Finish = 3,
+}
+
+impl AggregateOp {
+    fn from_u8(op: u8) -> Result<Self> {
+        Ok(match op {
+            0 => Self::CreateState,
+            1 => Self::Accumulate,
+            2 => Self::Merge,
+            3 => Self::Finish,
+            _ => return Err(udf_error(format!("invalid aggregate op {op}"))),
+        })
+    }
+
+    fn parts(self) -> usize {
+        match self {
+            Self::CreateState => 0,
+            Self::Finish => 1,
+            Self::Accumulate | Self::Merge => 3,
+        }
+    }
+}
+
+/// Wrap an array as a single-column batch, the unit of aggregate IPC.
+pub(crate) fn array_batch(array: arrow_array::ArrayRef) -> Result<RecordBatch> {
+    let schema = arrow_schema::Schema::new(vec![Field::new(
+        "value",
+        array.data_type().clone(),
+        true,
+    )]);
+    RecordBatch::try_new(Arc::new(schema), vec![array]).map_err(udf_error)
+}
+
+pub(crate) fn encode_aggregate_request(op: AggregateOp, parts: &[RecordBatch]) -> Result<Vec<u8>> {
+    if parts.len() != op.parts() {
+        return Err(udf_error(format!("{op:?} takes {} parts", op.parts())));
+    }
+    let mut bytes = vec![op as u8];
+    for part in parts {
+        let encoded = encode_batch(part)?;
+        bytes.extend_from_slice(&(encoded.len() as u32).to_be_bytes());
+        bytes.extend_from_slice(&encoded);
+    }
+    check_length(bytes.len())?;
+    Ok(bytes)
+}
+
+fn decode_aggregate_request(bytes: &[u8]) -> Result<(AggregateOp, Vec<RecordBatch>)> {
+    let (&op, mut rest) = bytes
+        .split_first()
+        .ok_or_else(|| udf_error("empty aggregate request"))?;
+    let op = AggregateOp::from_u8(op)?;
+    let mut parts = Vec::with_capacity(op.parts());
+    while !rest.is_empty() {
+        let (len, tail) = rest
+            .split_first_chunk::<4>()
+            .ok_or_else(|| udf_error("truncated aggregate request"))?;
+        let len = u32::from_be_bytes(*len) as usize;
+        if tail.len() < len {
+            return Err(udf_error("truncated aggregate request"));
+        }
+        parts.push(decode_batch(&tail[..len])?);
+        rest = &tail[len..];
+    }
+    if parts.len() != op.parts() {
+        return Err(udf_error(format!("{op:?} takes {} parts", op.parts())));
+    }
+    Ok((op, parts))
+}
+
+/// Apply `apply(state, rows)` to every state that has rows, in row order.
+/// States without rows are returned unchanged.
+fn update_groups(
+    states: &arrow_array::ArrayRef,
+    groups: &RecordBatch,
+    mut apply: impl FnMut(&dyn arrow_array::Array, &arrow_array::UInt32Array) -> anyhow::Result<arrow_array::ArrayRef>,
+) -> Result<arrow_array::ArrayRef> {
+    use arrow_array::cast::AsArray;
+
+    let groups = groups
+        .column(0)
+        .as_primitive_opt::<arrow_array::types::UInt32Type>()
+        .ok_or_else(|| udf_error("aggregate groups must be UInt32"))?;
+    let mut rows = vec![Vec::new(); states.len()];
+    for (row, group) in groups.values().iter().enumerate() {
+        rows.get_mut(*group as usize)
+            .ok_or_else(|| udf_error("aggregate group out of range"))?
+            .push(row as u32);
+    }
+    let updated = rows
+        .into_iter()
+        .enumerate()
+        .map(|(group, rows)| {
+            let state = states.slice(group, 1);
+            if rows.is_empty() {
+                Ok(state)
+            } else {
+                apply(&state, &arrow_array::UInt32Array::from(rows)).map_err(udf_error)
+            }
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let updated = updated.iter().map(AsRef::as_ref).collect::<Vec<_>>();
+    if updated.is_empty() {
+        return Ok(states.slice(0, 0));
+    }
+    arrow_select::concat::concat(&updated).map_err(udf_error)
+}
+
+fn serve_aggregate(
+    runtime: &arrow_udf_runtime::python::Runtime,
+    name: &str,
+    bytes: &[u8],
+) -> Result<Vec<u8>> {
+    let (op, parts) = decode_aggregate_request(bytes)?;
+    let output = match op {
+        AggregateOp::CreateState => runtime.create_state(name).map_err(udf_error)?,
+        AggregateOp::Accumulate => {
+            let (states, groups, input) = (parts[0].column(0), &parts[1], &parts[2]);
+            if groups.num_rows() != input.num_rows() {
+                return Err(udf_error("aggregate groups and arguments differ in length"));
+            }
+            update_groups(states, groups, |state, rows| {
+                let input = arrow_select::take::take_record_batch(input, rows)?;
+                runtime.accumulate(name, state, &input)
+            })?
+        }
+        AggregateOp::Merge => {
+            let (states, groups, others) = (parts[0].column(0), &parts[1], parts[2].column(0));
+            if groups.num_rows() != others.len() {
+                return Err(udf_error("aggregate groups and states differ in length"));
+            }
+            update_groups(states, groups, |state, rows| {
+                let others = arrow_select::take::take(others.as_ref(), rows, None)?;
+                let states = arrow_select::concat::concat(&[state, others.as_ref()])?;
+                runtime.merge(name, states.as_ref())
+            })?
+        }
+        AggregateOp::Finish => runtime.finish(name, parts[0].column(0)).map_err(udf_error)?,
+    };
+    encode_batch(&array_batch(output)?)
 }
 
 include!("python_worker_pool.rs");
@@ -679,7 +843,7 @@ fn encode_batch(batch: &RecordBatch) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn decode_batch(bytes: &[u8]) -> Result<RecordBatch> {
+pub(crate) fn decode_batch(bytes: &[u8]) -> Result<RecordBatch> {
     let mut reader = StreamReader::try_new(bytes, None).map_err(udf_error)?;
     let batch = reader
         .next()
@@ -777,18 +941,27 @@ pub fn run_python_udf_worker(socket_path: PathBuf) -> Result<()> {
             .map_err(udf_error)?;
         sandbox_python_worker().map_err(udf_error)?;
         watch_parent(&socket)?;
-        runtime
-            .add_function_with_handler(
+        let aggregate = function.aggregate_state.is_some();
+        match function.aggregate_state {
+            Some(state_field) => runtime.add_aggregate(
+                &function.name,
+                state_field,
+                function.return_field,
+                arrow_udf_runtime::CallMode::CalledOnNullInput,
+                &function.code,
+            ),
+            None => runtime.add_function_with_handler(
                 &function.name,
                 function.return_field,
                 arrow_udf_runtime::CallMode::CalledOnNullInput,
                 &function.code,
                 &function.handler,
-            )
-            .map_err(udf_error)?;
-        Ok((runtime, function.name))
+            ),
+        }
+        .map_err(udf_error)?;
+        Ok((runtime, function.name, aggregate))
     })();
-    let (runtime, name) = match init {
+    let (runtime, name, aggregate) = match init {
         Ok(value) => {
             respond(&mut socket, Ok(Vec::new()))?;
             value
@@ -800,11 +973,15 @@ pub fn run_python_udf_worker(socket_path: PathBuf) -> Result<()> {
     };
     loop {
         let bytes = read_frame(&mut socket)?;
-        let result = (|| {
-            let input = decode_batch(&bytes)?;
-            let output = runtime.call(&name, &input).map_err(udf_error)?;
-            encode_batch(&output)
-        })();
+        let result = if aggregate {
+            serve_aggregate(&runtime, &name, &bytes)
+        } else {
+            (|| {
+                let input = decode_batch(&bytes)?;
+                let output = runtime.call(&name, &input).map_err(udf_error)?;
+                encode_batch(&output)
+            })()
+        };
         let failed = result.is_err();
         respond(&mut socket, result)?;
         if failed {
