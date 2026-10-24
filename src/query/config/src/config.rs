@@ -1941,11 +1941,26 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "300")]
     pub python_udf_worker_idle_timeout_secs: u64,
 
+    /// Install Python UDF dependencies from wheels only (`pip --only-binary=:all:`).
+    /// Source distributions run arbitrary build code on the query node at install time.
+    #[clap(long, value_name = "VALUE", default_value = "true")]
+    pub python_udf_pip_only_binary: bool,
+
     #[clap(long, value_name = "VALUE", default_value = "true")]
     pub enable_udf_js_script: bool,
 
     #[clap(long, value_name = "VALUE", default_value = "true")]
     pub enable_udf_wasm_script: bool,
+
+    /// Memory limit in MiB of each in-process script UDF runtime: the
+    /// JavaScript heap and the WebAssembly linear memory (0 = unlimited).
+    #[clap(long, value_name = "VALUE", default_value = "1024")]
+    pub udf_script_memory_limit_mb: usize,
+
+    /// Interrupt an in-process script UDF call that runs longer than this
+    /// (0 = unlimited). Currently enforced for JavaScript only.
+    #[clap(long, value_name = "VALUE", default_value = "300")]
+    pub udf_script_execution_timeout_secs: u64,
 
     #[clap(long, value_name = "VALUE", default_value = "false")]
     pub enable_udf_sandbox: bool,

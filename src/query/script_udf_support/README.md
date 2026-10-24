@@ -108,13 +108,83 @@ Python state such as `sys.path`, `sys.modules`, `builtins`, OS environment
 variables, and working-directory changes cannot leak
 through a shared interpreter into another query.
 
-## Boundaries
+## Sandbox
 
-This change does **not** provide a security sandbox. Workers run as the query
-service user; filesystem/network access and process creation remain subject to
-existing OS permissions. The process limit bounds manager-created workers, not
-arbitrary descendants created by user code. Process-group cleanup is best effort
-and is not a substitute for cgroups or containers.
+Every Python worker enters an unprivileged OS sandbox (`python_sandbox.rs`)
+after the interpreter has started and before any user code runs. There is no
+switch: if the sandbox cannot be entered, the worker reports
+`Python UDF sandbox is unavailable, refusing to run user code: ...` and the
+query fails. Requirements: Linux 5.13+ with `landlock` in the active LSM list
+(`/sys/kernel/security/lsm`), seccomp, x86_64 or aarch64, and a container
+seccomp profile that permits the `landlock_*` syscalls.
+
+macOS has neither Landlock nor seccomp and is supported for local development
+only: workers there run **without** the sandbox (environment allowlist, private
+directory and `RLIMIT_CORE=0` still apply) and the query node logs a warning
+when the worker manager starts. Do not serve untrusted UDFs from macOS. Other
+non-Linux platforms refuse to run Python UDFs.
+
+Landlock (filesystem):
+
+- read only: the stdlib, `lib-dynload` and site-packages of the environment and
+  its base installation, every `sys.path` and `LD_LIBRARY_PATH` entry (except
+  `/`), system library directories (`/lib*`, `/usr/lib*`, `/usr/local/lib`),
+  `/usr/share/zoneinfo`, `/etc/localtime`, `/etc/ld.so.cache`, `/dev/zero`,
+  `/dev/random`, `/dev/urandom`, `/proc/cpuinfo`, `/sys/devices/system/cpu` and
+  the worker's own `/proc/<pid>`;
+- read/write: `/dev/null` and the worker's private directory, which is its cwd,
+  `TMPDIR` and the location of dependencies and stage imports;
+- everything else is denied, including query configuration and data
+  directories, `/proc/<query pid>/environ` and other processes' `/proc` entries.
+  Path lookup is not restricted: `stat` still reveals whether a path exists.
+- on ABI 4+ TCP bind/connect and on ABI 6+ signals and abstract Unix sockets
+  outside the worker are denied by Landlock as well.
+
+seccomp (deny list, EPERM unless noted):
+
+- `socket` (EACCES): no network and no Unix sockets of other local services. The
+  IPC connection is created before the filter;
+- `execve`/`execveat`: `subprocess`/`os.system` cannot start programs;
+- `kill` only to the worker itself or its process group, `tgkill` and
+  `rt_*sigqueueinfo` only to its own threads, no `tkill`/`pidfd_send_signal`;
+- `ptrace`, `process_vm_*`, `pidfd_getfd`, `io_uring_*`, `bpf`,
+  `perf_event_open`, `userfaultfd`, keyrings, namespaces (`unshare`, `setns`,
+  `clone` with `CLONE_NEW*`; `clone3` returns ENOSYS so libc falls back to
+  `clone`), mounts, `chroot`, kernel modules, `kexec`, `reboot`, swap, handle-based
+  opens;
+- path-based `chmod`/`chown`/`*xattr`, which Landlock does not control
+  (`shutil.copy`/`copystat` fail; `shutil.copyfile` works); `truncate` too on
+  Landlock ABI < 3;
+- x32 syscalls (ENOSYS) and foreign architectures (process killed).
+
+Known limits: workers still run as the query service user, so the kernel, not a
+separate uid, is the boundary; memory and CPU are not bounded (see below);
+`/dev/shm` is not available, so `multiprocessing` locks and managers fail.
+
+Additional hardening:
+
+- Workers start with a cleared environment. Only an allowlist is inherited:
+  `PATH`, `HOME`, locale (`LANG`, `LANGUAGE`, `LC_*`, `TZ`), library and
+  interpreter lookup (`LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH`, `PYTHONHOME`,
+  `PYTHONPATH`, `PYTHONIOENCODING`, `PYTHONUTF8`, `PYTHONHASHSEED`), CA bundles
+  (`SSL_CERT_FILE`, `SSL_CERT_DIR`) and BLAS thread counts. `TMPDIR` is set to
+  the private directory.
+- Workers run with `no_new_privs` and `RLIMIT_CORE=0`.
+- `pip install` runs in the query node, not in the sandbox. It receives only
+  `name[extras]<version specifiers>` requirements, after `--`, so requirements
+  can never become pip options, URLs, direct references, local paths or
+  environment markers. pip runs with the same environment allowlist plus `PIP_*`,
+  proxy, CA-bundle and XDG variables, so operator-configured mirrors keep
+  working. With `python_udf_pip_only_binary = true` (default) only wheels are
+  installed: source distributions would run build scripts on the query node. Set
+  it to `false` for sdist-only packages.
+
+The process limit bounds manager-created workers. Process-group cleanup is best
+effort and is not a substitute for cgroups.
+
+`RESTRICTED_PYTHON_CODE` is an in-interpreter blacklist that is trivially
+bypassed (for example through `io.open` or `ctypes`); the OS sandbox above is the
+boundary.
 
 Python worker memory is not charged to the query process allocator. OS-enforced
 per-worker/aggregate memory limits and metrics need separate resource-controller
@@ -122,8 +192,27 @@ integration before treating this as an OOM containment boundary. In particular,
 a process-count limit alone does not bound total memory.
 
 Python aggregate script UDFs (`udaf_script.rs`) have a separate state/merge API and
-are **not migrated** here; their existing in-process behavior is unchanged. The
-isolation guarantees in this document apply only to scalar Python script UDFs.
+are **not migrated** here: they still run inside the query process. They are
+therefore rejected (at `CREATE FUNCTION`, at binding, and again on the executing
+node) when `enable_udf_sandbox = true`, and follow `enable_udf_python_script`
+otherwise. The process isolation and sandbox in this document apply only to
+scalar Python script UDFs.
+
+## JavaScript and WebAssembly limits
+
+JavaScript (QuickJS) and WebAssembly (wasmtime + WASI) have no file, network,
+process or environment access: no WASI directories, sockets or variables are
+provided and the JavaScript `fetch` feature is not built. Their remaining risk is
+resource exhaustion inside the query process, bounded by:
+
+```toml
+udf_script_memory_limit_mb = 1024        # JS heap per runtime / WASM linear memory per instance, 0 = unlimited
+udf_script_execution_timeout_secs = 300  # JS only: per call and for top-level module code, 0 = unlimited
+```
+
+WebAssembly has no execution timeout yet: `arrow-udf-runtime` creates the
+wasmtime `Store` internally, so epoch/fuel deadlines need an upstream change.
+Neither engine observes query cancellation during a running call.
 
 ## Validation
 
@@ -139,7 +228,8 @@ the same worker protocol as the query binary. It requires no pip,
 metastore, license, or network access. It covers concurrent same-definition SQL
 isolation, lazy pools at parallelism 1/4/8, reuse and reclamation within/between
 queries, minimum admission, process failure, timeout, multi-worker cancellation,
-and quota recovery. It also uses a shortened idle timeout to verify that busy
+and quota recovery, and worker hardening (environment allowlist, `no_new_privs`,
+no core dumps). It also uses a shortened idle timeout to verify that busy
 workers survive, idle extra processes exit and are reaped without new requests,
 the base worker stays reusable, and the pool can expand again. Unit tests use
 paused Tokio time to cover the default five-minute boundary, reuse resetting idle

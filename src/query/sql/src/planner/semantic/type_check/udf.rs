@@ -1198,6 +1198,10 @@ where A: UdfAdapter
             packages,
         } = udf_definition;
         let language = language.parse()?;
+        UDFValidator::is_udaf_script_allowed_with_config(
+            &language,
+            &self.udf_adapter.validation_config()?,
+        )?;
         let code_blob = self.udf_adapter.load_udf_code(code)?.into_boxed_slice();
         let imports_stage_info = self.udf_adapter.load_stage_locations(&imports)?;
 

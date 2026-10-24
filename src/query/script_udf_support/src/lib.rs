@@ -21,8 +21,15 @@ mod script_udf {
     pub mod python_worker {
         include!("python_worker.rs");
     }
+    #[cfg(feature = "python-udf")]
+    mod python_sandbox {
+        include!("python_sandbox.rs");
+    }
     mod runtime_pool {
         include!("runtime_pool.rs");
+    }
+    mod script_udf_limits {
+        include!("script_udf_limits.rs");
     }
     mod transform_udf_script {
         include!("transform_udf_script.rs");
