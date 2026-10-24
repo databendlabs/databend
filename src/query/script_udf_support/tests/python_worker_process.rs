@@ -226,11 +226,14 @@ def unix_socket(): socket.socket(socket.AF_UNIX)
 def spawn(): subprocess.run(['/bin/true'])
 def signal_parent(): os.kill(os.getppid(), 0)
 def signal_everyone(): os.kill(-1, 0)
+def fork():
+    if os.fork() == 0:
+        os._exit(0)
 
 def handler(x):
     for action in (read_secret, read_passwd, read_parent_environ, list_root,
                    write_outside, remove_outside, chmod_outside, tcp,
-                   unix_socket, spawn, signal_parent, signal_everyone):
+                   unix_socket, spawn, signal_parent, signal_everyone, fork):
         try:
             action()
         except PermissionError:

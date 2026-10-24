@@ -145,6 +145,8 @@ seccomp (deny list, EPERM unless noted):
 - `socket` (EACCES): no network and no Unix sockets of other local services. The
   IPC connection is created before the filter;
 - `execve`/`execveat`: `subprocess`/`os.system` cannot start programs;
+- `fork`/`vfork` and `clone` without `CLONE_THREAD`: no child processes, so
+  user code cannot escape the per-worker process accounting or fork-bomb;
 - `kill` only to the worker itself or its process group, `tgkill` and
   `rt_*sigqueueinfo` only to its own threads, no `tkill`/`pidfd_send_signal`;
 - `ptrace`, `process_vm_*`, `pidfd_getfd`, `io_uring_*`, `bpf`,

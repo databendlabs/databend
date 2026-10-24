@@ -473,7 +473,7 @@ mod seccomp {
         Kill,
         /// tgkill()/rt_*sigqueueinfo(): only threads of this process.
         SelfOnly,
-        /// clone(): no new namespaces.
+        /// clone(): threads only, without new namespaces.
         Clone,
     }
 
@@ -513,7 +513,8 @@ mod seccomp {
             ],
             Rule::Clone => vec![
                 stmt(LD_W_ABS, DATA_ARG0_LOW),
-                jump(JSET_K, NAMESPACE_FLAGS, 0, 1),
+                jump(JSET_K, NAMESPACE_FLAGS, 1, 0),
+                jump(JSET_K, libc::CLONE_THREAD as u32, 1, 0),
                 errno(libc::EPERM),
                 stmt(RET_K, RET_ALLOW),
             ],
@@ -528,7 +529,13 @@ mod seccomp {
             // clone3 flags live in memory BPF cannot read. ENOSYS makes libc
             // fall back to clone(), whose flags are checked.
             (libc::SYS_clone3, Rule::Errno(libc::ENOSYS)),
+            // No new processes: a forked child would escape the per-worker
+            // accounting of the worker pool (and could fork-bomb the node).
             (libc::SYS_clone, Rule::Clone),
+            #[cfg(target_arch = "x86_64")]
+            (libc::SYS_fork, Rule::Errno(libc::EPERM)),
+            #[cfg(target_arch = "x86_64")]
+            (libc::SYS_vfork, Rule::Errno(libc::EPERM)),
             (libc::SYS_kill, Rule::Kill),
             (libc::SYS_tgkill, Rule::SelfOnly),
             (libc::SYS_rt_sigqueueinfo, Rule::SelfOnly),
@@ -688,6 +695,15 @@ mod tests {
                 check(libc::SYS_clone, thread | namespace as u64),
                 errno(libc::EPERM)
             );
+        }
+        let fork = libc::SIGCHLD as u64;
+        assert_eq!(check(libc::SYS_clone, fork), errno(libc::EPERM));
+        let spawn = (libc::CLONE_VM | libc::CLONE_VFORK) as u64 | fork;
+        assert_eq!(check(libc::SYS_clone, spawn), errno(libc::EPERM));
+        #[cfg(target_arch = "x86_64")]
+        {
+            assert_eq!(check(libc::SYS_fork, 0), errno(libc::EPERM));
+            assert_eq!(check(libc::SYS_vfork, 0), errno(libc::EPERM));
         }
         assert_eq!(check(libc::SYS_clone3, 0), errno(libc::ENOSYS));
     }
