@@ -587,6 +587,12 @@ def handler(x):
     parent_loss_test().await;
 }
 
+// The query binary's allocator: jemalloc with background purge threads
+// (`background_thread:true` from .cargo/config.toml).
+#[global_allocator]
+static GLOBAL_ALLOCATOR: databend_common_base::mem_allocator::TrackingGlobalAllocator =
+    databend_common_base::mem_allocator::TrackingGlobalAllocator::create();
+
 fn main() {
     databend_common_base::runtime::ThreadTracker::init();
     let mut args = std::env::args_os().skip(1);

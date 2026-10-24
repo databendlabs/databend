@@ -132,14 +132,7 @@ fn enter_impl(_read_only: Vec<PathBuf>, _private_dir: PathBuf) -> Result<(), Str
 
 #[cfg(target_os = "linux")]
 fn enter_impl(mut read_only: Vec<PathBuf>, private_dir: PathBuf) -> Result<(), String> {
-    let threads = std::fs::read_dir("/proc/self/task")
-        .map_err(|err| format!("cannot count threads: {err}"))?
-        .count();
-    if threads != 1 {
-        return Err(format!(
-            "worker has {threads} threads; the sandbox must be entered single-threaded"
-        ));
-    }
+    wait_single_threaded()?;
     read_only.extend(SYSTEM_READ_PATHS.iter().map(PathBuf::from));
     // Resolves to /proc/<pid>: other processes' entries stay unreadable.
     read_only.push(PathBuf::from("/proc/self"));
@@ -172,6 +165,39 @@ fn enter_impl(mut read_only: Vec<PathBuf>, private_dir: PathBuf) -> Result<(), S
         .restrict_self()
         .map_err(|err| format!("Landlock: {err}"))?;
     seccomp::install(abi).map_err(|err| format!("seccomp: {err}"))
+}
+
+/// Stopped threads (e.g. allocator background threads) are joined before
+/// this runs, but the kernel may list an exited task for a moment longer.
+#[cfg(target_os = "linux")]
+fn wait_single_threaded() -> Result<(), String> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    loop {
+        let tasks = std::fs::read_dir("/proc/self/task")
+            .map_err(|err| format!("cannot list threads: {err}"))?
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .collect::<Vec<_>>();
+        if tasks.len() == 1 {
+            return Ok(());
+        }
+        if std::time::Instant::now() >= deadline {
+            let names = tasks
+                .iter()
+                .map(|task| {
+                    std::fs::read_to_string(task.join("comm"))
+                        .map(|comm| comm.trim().to_string())
+                        .unwrap_or_else(|_| "?".to_string())
+                })
+                .collect::<Vec<_>>();
+            return Err(format!(
+                "worker has {} threads ({}); the sandbox must be entered single-threaded",
+                tasks.len(),
+                names.join(", ")
+            ));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 }
 
 #[cfg(target_os = "linux")]

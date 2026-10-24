@@ -45,6 +45,9 @@ walkdir = { workspace = true }
 zip = { workspace = true }
 
 [dev-dependencies]
+# Same allocator as the query binary: jemalloc background threads must not
+# defeat the single-threaded sandbox entry.
+databend-common-base = { workspace = true, features = ["jemalloc"] }
 tokio = { workspace = true, features = ["test-util"] }
 
 [[test]]

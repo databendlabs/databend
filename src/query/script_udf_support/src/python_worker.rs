@@ -771,6 +771,10 @@ pub fn run_python_udf_worker(socket_path: PathBuf) -> Result<()> {
         // The interpreter is initialized but no user code has run. Confine the
         // process now, while it is still single-threaded: the parent watcher
         // thread starts afterwards so it inherits the sandbox.
+        // jemalloc (`background_thread:true` in the query binary) runs purge
+        // threads that would stay outside the Landlock domain.
+        databend_common_base::mem_allocator::stop_allocator_background_threads()
+            .map_err(udf_error)?;
         sandbox_python_worker().map_err(udf_error)?;
         watch_parent(&socket)?;
         runtime

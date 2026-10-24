@@ -159,6 +159,10 @@ seccomp (deny list, EPERM unless noted):
   Landlock ABI < 3;
 - x32 syscalls (ENOSYS) and foreign architectures (process killed).
 
+The sandbox is entered single-threaded (Landlock only confines the calling
+thread and its future children), so the worker first stops jemalloc's background
+purge threads (`background_thread:true` in the query binary).
+
 Known limits: workers still run as the query service user, so the kernel, not a
 separate uid, is the boundary; memory and CPU are not bounded (see below);
 `/dev/shm` is not available, so `multiprocessing` locks and managers fail.
