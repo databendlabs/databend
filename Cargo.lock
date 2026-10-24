@@ -5778,7 +5778,7 @@ dependencies = [
  "uuid",
  "walkdir",
  "wiremock",
- "zstd 0.12.4",
+ "zstd",
 ]
 
 [[package]]
