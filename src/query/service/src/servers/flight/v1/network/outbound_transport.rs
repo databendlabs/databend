@@ -103,6 +103,12 @@ impl PingPongExchangeInner {
         self.force_send(data)
     }
 
+    /// Claim the single in-flight slot without sending. On success the caller must
+    /// follow up with `force_send` or `ready_send`.
+    pub(crate) fn try_acquire_send(&self) -> bool {
+        !self.in_flight.fetch_or(true, Ordering::SeqCst)
+    }
+
     pub(crate) fn force_send(&self, data: FlightData) -> Result<Option<FlightData>, Status> {
         *self.send_time.lock() = Some(Instant::now());
         match self.send_tx.try_send(data) {

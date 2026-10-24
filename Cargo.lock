@@ -5729,6 +5729,7 @@ dependencies = [
  "jsonb",
  "jwt-simple",
  "log",
+ "lz4_flex 0.13.0",
  "maplit",
  "match-template",
  "md-5",
@@ -5777,6 +5778,7 @@ dependencies = [
  "uuid",
  "walkdir",
  "wiremock",
+ "zstd",
 ]
 
 [[package]]

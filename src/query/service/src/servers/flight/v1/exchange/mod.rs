@@ -27,15 +27,18 @@ mod exchange_transform;
 mod exchange_transform_scatter;
 mod exchange_transform_shuffle;
 mod fuse_part_exchange;
-mod hash_send_sink;
 mod hash_send_source;
 mod hash_send_transform;
+#[cfg(test)]
+mod hash_shuffle_tests;
+mod hash_shuffle_writer;
 mod outbound_send_channels;
 mod statistics_receiver;
 mod statistics_sender;
 
 pub mod serde;
 
+pub use broadcast_recv_transform::CoalesceThreshold;
 pub use broadcast_recv_transform::ExchangeRecvTransform;
 pub type BroadcastRecvTransform = ExchangeRecvTransform;
 pub type HashRecvTransform = ExchangeRecvTransform;
@@ -54,6 +57,5 @@ pub use exchange_transform_scatter::ScatterTransform;
 pub use exchange_transform_shuffle::ExchangeShuffleMeta;
 pub use exchange_transform_shuffle::ExchangeShuffleTransform;
 pub use fuse_part_exchange::FusePartExchangeInjector;
-pub use hash_send_sink::HashSendSink;
 pub use hash_send_source::HashSendSource;
 pub use hash_send_transform::HashSendTransform;

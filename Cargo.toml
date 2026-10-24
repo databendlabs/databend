@@ -295,6 +295,7 @@ humantime = "2.1.0"
 hyper = "1"
 hyper-util = { version = "0.1.9", features = ["client", "client-legacy", "tokio", "service"] }
 lru = "0.12"
+lz4_flex = { version = "0.13", default-features = false, features = ["std"] }
 perf-event2 = "0.7.4"
 proc-macro2 = "1.0"
 quote = "1.0"

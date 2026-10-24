@@ -158,6 +158,7 @@ impl FlightService for DatabendQueryFlightService {
             &params.query_id,
             &params.exchange_id,
             params.num_threads,
+            params.max_bytes_per_connection,
         )?;
 
         let mut stream = req.into_inner();

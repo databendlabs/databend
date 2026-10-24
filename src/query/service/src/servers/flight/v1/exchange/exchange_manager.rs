@@ -305,6 +305,7 @@ impl DataExchangeManager {
             None => env.settings.clone(),
         };
         let keep_alive = settings.get_flight_keep_alive_params()?;
+        let recv_queue_bytes = settings.get_exchange_recv_queue_bytes()?;
 
         let mut request_exchanges = HashMap::new();
         let mut targets_exchanges = HashMap::<String, Vec<FlightExchange>>::new();
@@ -378,7 +379,8 @@ impl DataExchangeManager {
                     .edges_directed(index, Direction::Outgoing);
 
                 for edge in outgoing_edges {
-                    let target = env.dataflow_diagram[edge.target()].clone();
+                    let target_index = edge.target();
+                    let target = env.dataflow_diagram[target_index].clone();
                     let edge = edge.weight().clone();
 
                     if let Edge::ExchangeFragment {
@@ -392,6 +394,15 @@ impl DataExchangeManager {
                         let address = target.flight_address.clone();
                         let keep_alive_params = keep_alive;
                         let num_threads = channels.len();
+                        // The target's receive quota of this exchange is shared evenly
+                        // by every node sending to it.
+                        let num_senders = env
+                            .dataflow_diagram
+                            .edges_directed(target_index, Direction::Incoming)
+                            .filter(|x| matches!(x.weight(), Edge::ExchangeFragment { exchange_id: id, .. } if id == &exchange_id))
+                            .count();
+                        let max_bytes_per_connection =
+                            recv_queue_bytes_per_connection(recv_queue_bytes, num_senders);
 
                         flight_exchanges.push(Box::pin(async move {
                             let (send_tx, response_stream) = {
@@ -409,6 +420,7 @@ impl DataExchangeManager {
                                         query_id,
                                         num_threads,
                                         exchange_id: exchange_id.clone(),
+                                        max_bytes_per_connection,
                                     })
                                     .await?;
                                 Ok::<_, ErrorCode>((send_tx, response_stream))
@@ -712,15 +724,21 @@ impl DataExchangeManager {
         query_id: &str,
         channel_id: &str,
         num_threads: usize,
+        max_bytes_per_connection: usize,
     ) -> Result<NetworkInboundSender> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.entry(query_id.to_string()) {
-            Entry::Occupied(mut v) => v.get_mut().create_inbound_sender(channel_id, num_threads),
-            Entry::Vacant(v) => v
-                .insert(QueryCoordinator::create())
-                .create_inbound_sender(channel_id, num_threads),
+            Entry::Occupied(mut v) => {
+                v.get_mut()
+                    .create_inbound_sender(channel_id, num_threads, max_bytes_per_connection)
+            }
+            Entry::Vacant(v) => v.insert(QueryCoordinator::create()).create_inbound_sender(
+                channel_id,
+                num_threads,
+                max_bytes_per_connection,
+            ),
         }
     }
 
@@ -1152,11 +1170,9 @@ impl QueryCoordinator {
         &mut self,
         channel_id: &str,
         num_threads: usize,
+        max_bytes_per_connection: usize,
     ) -> Result<NetworkInboundSender> {
         let channel_set = self.get_or_create_inbound_channel_set(channel_id, num_threads)?;
-
-        // TODO: get max_bytes_per_connection from query settings
-        let max_bytes_per_connection = 20 * 1024 * 1024; // 20MB
 
         Ok(NetworkInboundSender::new(
             &channel_set,
@@ -1510,4 +1526,17 @@ impl FragmentCoordinator {
 
         Ok(())
     }
+}
+
+/// Lower bound of a connection's receive quota, so that a large cluster still keeps
+/// a few frames in flight per connection.
+const MIN_RECV_QUEUE_BYTES_PER_CONNECTION: usize = 1024 * 1024;
+
+pub(super) fn recv_queue_bytes_per_connection(
+    recv_queue_bytes: usize,
+    num_senders: usize,
+) -> usize {
+    (recv_queue_bytes / num_senders.max(1))
+        .max(MIN_RECV_QUEUE_BYTES_PER_CONNECTION)
+        .min(u32::MAX as usize)
 }

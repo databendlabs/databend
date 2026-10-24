@@ -38,20 +38,8 @@ impl OutboundSendChannels {
         self.channels.len()
     }
 
-    pub(super) fn channel(&self, idx: usize) -> &Arc<dyn OutboundChannel> {
-        &self.channels[idx]
-    }
-
     pub(super) fn iter(&self) -> impl Iterator<Item = (usize, &Arc<dyn OutboundChannel>)> {
         self.channels.iter().enumerate()
-    }
-
-    pub(super) fn is_closed(&self, idx: usize) -> bool {
-        self.channels[idx].is_closed()
-    }
-
-    pub(super) fn all_closed(&self) -> bool {
-        self.channels.iter().all(|ch| ch.is_closed())
     }
 
     pub(super) fn all_closed_except(&self, except_idx: usize) -> bool {
