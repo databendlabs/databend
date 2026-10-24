@@ -141,6 +141,142 @@ async fn parent_loss_test() {
     .expect("worker survived loss of its parent");
 }
 
+// The worker must not inherit query node secrets, must not regain privileges
+// through setuid binaries, and must not dump UDF memory to disk on a crash.
+async fn hardening_tests() {
+    let query = PythonWorkerManager::new(PythonWorkerConfig::default())
+        .unwrap()
+        .query("hardening", 1);
+    let mut udf = transform(
+        query.clone(),
+        "hardening",
+        r#"
+import os, resource
+
+def handler(x):
+    assert 'DATABEND_TEST_SECRET' not in os.environ, 'query node environment leaked'
+    assert 'PATH' in os.environ
+    assert resource.getrlimit(resource.RLIMIT_CORE) == (0, 0)
+    return os.getpid()
+"#,
+    );
+    let result = udf.transform(input(0)).await.unwrap();
+    let pid = result.get_by_offset(1).index(0).unwrap().to_string();
+    #[cfg(target_os = "linux")]
+    {
+        let status = std::fs::read_to_string(format!("/proc/{pid}/status")).unwrap();
+        assert!(
+            status
+                .lines()
+                .any(|line| line.split_whitespace().eq(["NoNewPrivs:", "1"])),
+            "worker {pid} runs without no_new_privs"
+        );
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = pid;
+    query.finish();
+
+    // A dependency must never reach pip as an option, URL or path. Rejected
+    // before pip runs, so this needs no pip or network access.
+    let query = PythonWorkerManager::new(PythonWorkerConfig::default())
+        .unwrap()
+        .query("hardening", 1);
+    let injected = function(
+        "pip_injection",
+        "# /// script\n# dependencies = [\"--index-url=http://127.0.0.1:1/simple\"]\n# ///\ndef handler(x):\n    return x\n",
+    );
+    let error = TransformUdfScript::init_runtime_for_query(&[injected], query.clone())
+        .err()
+        .expect("option-like dependency must be rejected");
+    assert!(
+        error.message().contains("Invalid Python UDF dependency"),
+        "{}",
+        error.message()
+    );
+    query.finish();
+}
+
+// User code runs inside Landlock + seccomp: query node files, network, child
+// programs and other processes are out of reach, while the private working
+// directory, temporary files, threads and the standard library keep working.
+// Linux only: macOS workers run unconfined for local development.
+#[cfg(target_os = "linux")]
+async fn sandbox_tests() {
+    let secret =
+        std::env::temp_dir().join(format!("databend-sandbox-secret-{}", std::process::id()));
+    std::fs::write(&secret, "query node secret").unwrap();
+    // A reachable TCP service proves the denial comes from the sandbox.
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let code = format!(
+        r#"
+import datetime, decimal, json, os, socket, subprocess, tempfile, threading
+
+SECRET = {secret:?}
+
+def read_secret(): open(SECRET).read()
+def read_passwd(): open('/etc/passwd').read()
+def read_parent_environ(): open('/proc/%d/environ' % os.getppid()).read()
+def list_root(): os.listdir('/')
+def write_outside(): open(SECRET + '.new', 'w').write('x')
+def remove_outside(): os.unlink(SECRET)
+def chmod_outside(): os.chmod(SECRET, 0o777)
+def tcp(): socket.create_connection(('127.0.0.1', {port}), timeout=1)
+def unix_socket(): socket.socket(socket.AF_UNIX)
+def spawn(): subprocess.run(['/bin/true'])
+def signal_parent(): os.kill(os.getppid(), 0)
+def signal_everyone(): os.kill(-1, 0)
+def fork():
+    if os.fork() == 0:
+        os._exit(0)
+
+def handler(x):
+    for action in (read_secret, read_passwd, read_parent_environ, list_root,
+                   write_outside, remove_outside, chmod_outside, tcp,
+                   unix_socket, spawn, signal_parent, signal_everyone, fork):
+        try:
+            action()
+        except PermissionError:
+            continue
+        raise AssertionError('sandbox allowed ' + action.__name__)
+    assert tempfile.gettempdir() == os.getcwd()
+    with tempfile.NamedTemporaryFile() as f:
+        f.write(b'ok')
+    with open('local.txt', 'w') as f:
+        f.write('ok')
+    with open('local.txt') as f:
+        assert f.read() == 'ok'
+    os.kill(os.getpid(), 0)
+    worker = threading.Thread(target=lambda: json.dumps([str(decimal.Decimal(1))]))
+    worker.start()
+    worker.join()
+    datetime.datetime.now().astimezone()
+    return os.getpid()
+"#,
+        secret = secret.to_str().unwrap(),
+    );
+    let query = PythonWorkerManager::new(PythonWorkerConfig::default())
+        .unwrap()
+        .query("sandbox", 1);
+    let mut udf = transform(query.clone(), "sandbox", &code);
+    let result = udf.transform(input(0)).await.unwrap();
+    let pid = result.get_by_offset(1).index(0).unwrap().to_string();
+    let status = std::fs::read_to_string(format!("/proc/{pid}/status")).unwrap();
+    assert!(
+        status
+            .lines()
+            .any(|line| line.split_whitespace().eq(["Seccomp:", "2"])),
+        "worker {pid} runs without a seccomp filter"
+    );
+    query.finish();
+    assert_eq!(
+        std::fs::read_to_string(&secret).unwrap(),
+        "query node secret"
+    );
+    std::fs::remove_file(&secret).unwrap();
+    drop(listener);
+}
+
 fn transforms(
     query: Arc<PythonQueryWorkers>,
     name: &str,
@@ -442,11 +578,20 @@ def handler(x):
     let mut tl = transform(last.clone(), "last", "def handler(x):\n    return x\n");
     call(&mut tl, 9).await.unwrap();
     last.finish();
+    hardening_tests().await;
+    #[cfg(target_os = "linux")]
+    sandbox_tests().await;
     parallel_pool_tests().await;
     idle_pool_tests().await;
     #[cfg(target_os = "linux")]
     parent_loss_test().await;
 }
+
+// The query binary's allocator: jemalloc with background purge threads
+// (`background_thread:true` from .cargo/config.toml).
+#[global_allocator]
+static GLOBAL_ALLOCATOR: databend_common_base::mem_allocator::TrackingGlobalAllocator =
+    databend_common_base::mem_allocator::TrackingGlobalAllocator::create();
 
 fn main() {
     databend_common_base::runtime::ThreadTracker::init();
@@ -456,6 +601,8 @@ fn main() {
         let result = run_python_udf_worker(args.next().unwrap().into());
         std::process::exit(if result.is_ok() { 0 } else { 1 });
     }
+    // SAFETY: no other thread exists yet; the Tokio runtime is built below.
+    unsafe { std::env::set_var("DATABEND_TEST_SECRET", "must-not-reach-workers") };
     tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
@@ -471,6 +618,6 @@ fn main() {
                 .unwrap();
         });
     println!(
-        "Python worker process isolation, reuse, quota, failure, timeout and cancellation: passed"
+        "Python worker process isolation, hardening, reuse, quota, failure, timeout and cancellation: passed"
     );
 }

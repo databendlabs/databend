@@ -24,6 +24,10 @@ use arrow_schema::ArrowError;
 use arrow_schema::DataType as ArrowType;
 use arrow_udf_runtime::javascript::AggregateOptions;
 use databend_common_base::runtime::GlobalIORuntime;
+#[cfg(feature = "python-udf")]
+use databend_common_config::GlobalConfig;
+#[cfg(feature = "python-udf")]
+use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggrState;
@@ -43,11 +47,18 @@ use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::UnaryType;
+#[cfg(feature = "python-udf")]
+use databend_common_sql::planner::UDFValidator;
+#[cfg(feature = "python-udf")]
+use databend_common_sql::planner::UdfValidationConfig;
 use databend_common_sql::plans::UDFLanguage;
 use databend_common_sql::plans::UDFScriptCode;
 
 use super::runtime_pool::Pool;
 use super::runtime_pool::RuntimeBuilder;
+use super::script_udf_limits::ScriptUdfLimits;
+use super::script_udf_limits::limit_js_runtime_calls;
+use super::script_udf_limits::limit_js_runtime_init;
 
 pub struct AggregateUdfScript {
     display_name: String,
@@ -292,7 +303,11 @@ pub fn create_udaf_script_function(
             };
             UDAFRuntime::JavaScript(JsRuntimePool::new(builder))
         }
-        UDFLanguage::WebAssembly => unimplemented!(),
+        UDFLanguage::WebAssembly => {
+            return Err(ErrorCode::Unimplemented(
+                "WebAssembly aggregate UDF is not supported",
+            ));
+        }
         #[cfg(not(feature = "python-udf"))]
         UDFLanguage::Python => {
             return Err(ErrorCode::EnterpriseFeatureNotEnable(
@@ -301,6 +316,14 @@ pub fn create_udaf_script_function(
         }
         #[cfg(feature = "python-udf")]
         UDFLanguage::Python => {
+            // Python aggregates still run inside the query process. Re-check on
+            // the executing node: plans may be built by another cluster node.
+            let config = GlobalConfig::try_get_instance()
+                .unwrap_or_else(|| Arc::new(InnerConfig::default()));
+            UDFValidator::is_udaf_script_allowed_with_config(
+                language,
+                &UdfValidationConfig::from_inner_config(&config),
+            )?;
             let builder = python_pool::PyRuntimeBuilder {
                 name: name.clone(),
                 code: String::from_utf8(code.to_vec())?,
@@ -361,10 +384,13 @@ impl RuntimeBuilder<arrow_udf_runtime::javascript::Runtime> for JsRuntimeBuilder
     type Error = ErrorCode;
 
     fn build(&self) -> std::result::Result<arrow_udf_runtime::javascript::Runtime, Self::Error> {
+        let limits = ScriptUdfLimits::current();
         let mut runtime = GlobalIORuntime::instance().block_on(async move {
-            arrow_udf_runtime::javascript::Runtime::new()
+            let runtime = arrow_udf_runtime::javascript::Runtime::new()
                 .await
-                .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))
+                .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))?;
+            limit_js_runtime_init(&runtime, &limits).await;
+            Ok(runtime)
         })?;
         let converter = runtime.converter_mut();
         converter.set_arrow_extension_key(EXTENSION_KEY);
@@ -384,6 +410,7 @@ impl RuntimeBuilder<arrow_udf_runtime::javascript::Runtime> for JsRuntimeBuilder
                 )
                 .await
                 .map_err(|e| ErrorCode::UDFDataError(format!("Cannot add aggregate: {e}")))?;
+            limit_js_runtime_calls(&mut runtime, &limits).await;
 
             Ok(runtime)
         })

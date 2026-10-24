@@ -46,7 +46,10 @@ use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::time::Instant;
 
+use super::python_sandbox::PYTHON_SANDBOX_ENFORCED;
+use super::python_sandbox::sandbox_python_worker;
 use super::transform_udf_script::python_pool::RESTRICTED_PYTHON_CODE;
+use super::transform_udf_script::venv;
 use super::transform_udf_script::venv::TempDir;
 
 pub const PYTHON_WORKER_ARG: &str = "--internal-python-udf-worker";
@@ -128,6 +131,11 @@ impl PythonWorkerManager {
     pub fn new(config: PythonWorkerConfig) -> Result<Arc<Self>> {
         let config =
             config.resolve_limits(std::thread::available_parallelism().map_or(1, usize::from))?;
+        if !PYTHON_SANDBOX_ENFORCED {
+            log::warn!(
+                "Python UDF workers run WITHOUT the OS sandbox on this platform (local development only): user code can access files, network and processes of the query service user"
+            );
+        }
         Ok(Arc::new(Self {
             slots: Arc::new(Semaphore::new(config.max_workers)),
             queued: Arc::new(Semaphore::new(config.max_queued_queries)),
@@ -471,15 +479,29 @@ impl Worker {
         command
             .arg(PYTHON_WORKER_ARG)
             .arg(&socket_path)
+            // UDF code must not see the query node's credentials or service
+            // configuration through os.environ.
+            .env_clear()
+            .envs(venv::allowed_env(
+                &[venv::PYTHON_ENV, WORKER_ENV].concat(),
+                &["LC_"],
+            ))
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .kill_on_drop(true);
         if let Some(dir) = &directory {
-            command.current_dir(dir.path());
+            // The private directory is the only writable location inside the
+            // sandbox, so temporary files go there too.
+            command.current_dir(dir.path()).env("TMPDIR", dir.path());
         }
         #[cfg(unix)]
         command.process_group(0);
+        // SAFETY: the hook runs between fork and exec and only issues
+        // async-signal-safe syscalls; it neither allocates nor takes locks.
+        unsafe {
+            command.pre_exec(restrict_worker_process);
+        }
         let child = command.spawn().map_err(udf_error)?;
         let process_group = child.id().ok_or_else(|| udf_error("missing worker pid"))?;
         log::debug!("Started Python UDF worker pid={process_group}");
@@ -543,6 +565,42 @@ struct ChildGuard {
     reservation: Arc<Reservation>,
     directory: Option<TempDir>,
     runtime: tokio::runtime::Handle,
+}
+
+/// Worker-specific variables on top of `venv::PYTHON_ENV`: interpreter I/O
+/// and native thread-pool tuning that operators set for numeric libraries.
+const WORKER_ENV: &[&str] = &[
+    "PYTHONIOENCODING",
+    "PYTHONUTF8",
+    "PYTHONHASHSEED",
+    "OMP_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "MKL_NUM_THREADS",
+];
+
+/// Applied in the forked child before exec. This is hardening, not a sandbox:
+/// - no_new_privs: setuid/file-capability binaries cannot raise privileges;
+/// - RLIMIT_CORE=0: a crashing worker never writes UDF memory to disk.
+///
+/// PR_SET_PDEATHSIG is deliberately not used: it fires when the spawning Tokio
+/// thread retires, not when the query node exits (see `watch_parent`).
+fn restrict_worker_process() -> std::io::Result<()> {
+    #[cfg(target_os = "linux")]
+    {
+        // SAFETY: prctl with integer arguments has no memory side effects.
+        if unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) } != 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+    }
+    let no_core = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    // SAFETY: the pointer refers to a live, initialized rlimit.
+    if unsafe { libc::setrlimit(libc::RLIMIT_CORE, &no_core) } != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
 }
 
 fn reap(
@@ -703,7 +761,6 @@ fn watch_parent(socket: &std::os::unix::net::UnixStream) -> Result<()> {
 /// crash tracker, Tokio thread pools, or command-line configuration.
 pub fn run_python_udf_worker(socket_path: PathBuf) -> Result<()> {
     let mut socket = std::os::unix::net::UnixStream::connect(socket_path).map_err(udf_error)?;
-    watch_parent(&socket)?;
     let init = (|| {
         let function: PythonFunction =
             serde_json::from_slice(&read_frame(&mut socket)?).map_err(udf_error)?;
@@ -711,6 +768,15 @@ pub fn run_python_udf_worker(socket_path: PathBuf) -> Result<()> {
             .safe_codes(RESTRICTED_PYTHON_CODE.to_owned())
             .build()
             .map_err(udf_error)?;
+        // The interpreter is initialized but no user code has run. Confine the
+        // process now, while it is still single-threaded: the parent watcher
+        // thread starts afterwards so it inherits the sandbox.
+        // jemalloc (`background_thread:true` in the query binary) runs purge
+        // threads that would stay outside the Landlock domain.
+        databend_common_base::mem_allocator::stop_allocator_background_threads()
+            .map_err(udf_error)?;
+        sandbox_python_worker().map_err(udf_error)?;
+        watch_parent(&socket)?;
         runtime
             .add_function_with_handler(
                 &function.name,
