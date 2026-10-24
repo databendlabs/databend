@@ -117,7 +117,8 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::CreateStage(_)
                 | Plan::AlterStage(_)
                 | Plan::DropStage(_)
-                // Network policy.
+                // External access / network policy.
+                | Plan::ExternalAccess(_)
                 | Plan::CreateNetworkPolicy(_)
                 | Plan::AlterNetworkPolicy(_)
                 | Plan::DropNetworkPolicy(_)

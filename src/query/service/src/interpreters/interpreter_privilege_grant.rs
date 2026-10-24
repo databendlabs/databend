@@ -140,7 +140,7 @@ impl GrantPrivilegeInterpreter {
             GrantObject::RowAccessPolicy(policy_id) => Ok(OwnershipObject::RowAccessPolicy {
                 policy_id: *policy_id,
             }),
-            GrantObject::Global => Err(ErrorCode::IllegalGrant(
+            GrantObject::Global | GrantObject::Integration(_) => Err(ErrorCode::IllegalGrant(
                 "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
             )),
         }

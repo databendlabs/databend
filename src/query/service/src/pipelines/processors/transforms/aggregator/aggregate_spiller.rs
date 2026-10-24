@@ -309,6 +309,8 @@ impl SharedPartitionStream {
                     pending_blocks.push((id, block));
                 }
             }
+            // The stream is shared by all workers and kept until the query ends.
+            inner.partition_stream.reset();
             return pending_blocks;
         }
         vec![]

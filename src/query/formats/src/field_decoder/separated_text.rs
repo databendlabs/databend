@@ -234,7 +234,12 @@ impl SeparatedTextDecoder {
         size: DecimalSize,
         data: &[u8],
     ) -> Result<()> {
-        let (n, n_read) = read_decimal_with_size(data, size, false, true)?;
+        let (n, n_read) = read_decimal_with_size(
+            data,
+            size,
+            false,
+            self.common_settings.settings.is_rounding_mode,
+        )?;
         if n_read != data.len() {
             return Err(ErrorCode::BadBytes(
                 "unexpected remaining bytes".to_string(),

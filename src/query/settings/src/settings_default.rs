@@ -1584,6 +1584,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=10)),
                 }),
+                ("enable_flight_control_channel_reuse", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Reuses one connection per node for the setup requests of distributed queries, instead of opening a new connection for each request.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("network_policy", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),
                     desc: "Network policy for all users in the tenant",

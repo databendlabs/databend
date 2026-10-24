@@ -23,6 +23,8 @@ use databend_common_ast::ast::Engine;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
+use databend_common_meta_app::storage::S3StorageClass;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_settings::Settings;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
@@ -77,6 +79,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_STRING_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MIN_STRING_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_SEED;
 use databend_storages_common_table_meta::table::OPT_KEY_RECURSIVE_CTE;
+use databend_storages_common_table_meta::table::OPT_KEY_S3_STORAGE_CLASS;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_IDS;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
@@ -110,6 +113,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(OPT_KEY_BLOOM_INDEX_TYPE);
     r.insert(OPT_KEY_APPROX_DISTINCT_COLUMNS);
     r.insert(OPT_KEY_TABLE_COMPRESSION);
+    r.insert(OPT_KEY_S3_STORAGE_CLASS);
     r.insert(OPT_KEY_STORAGE_FORMAT);
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_COMMENT);
@@ -160,6 +164,7 @@ pub static CREATE_MATERIALIZED_VIEW_OPTIONS: LazyLock<HashSet<&'static str>> =
         r.insert(OPT_KEY_BLOOM_INDEX_TYPE);
         r.insert(OPT_KEY_APPROX_DISTINCT_COLUMNS);
         r.insert(OPT_KEY_TABLE_COMPRESSION);
+        r.insert(OPT_KEY_S3_STORAGE_CLASS);
         r.insert(OPT_KEY_STORAGE_FORMAT);
         r.insert(OPT_KEY_WRITE_DISTRIBUTION_MODE);
         r.insert(OPT_KEY_SEGMENT_FORMAT);
@@ -222,6 +227,7 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
     r.insert(FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD);
+    r.insert(OPT_KEY_S3_STORAGE_CLASS);
     r.insert(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN);
     r.insert(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_DIRECT_COLUMNS);
     r.insert(FUSE_OPT_KEY_VIRTUAL_COLUMN_MAX_PATH_STATISTICS);
@@ -458,6 +464,27 @@ pub fn is_valid_random_seed(
     is_valid_option_of_type::<u64>(options, OPT_KEY_RANDOM_SEED)
 }
 
+/// User-selected storage classes apply only to persistent external tables.
+pub fn is_valid_s3_storage_class(
+    options: &BTreeMap<String, String>,
+    storage_params: Option<&StorageParams>,
+    is_temporary: bool,
+) -> databend_common_exception::Result<()> {
+    if options.contains_key(OPT_KEY_S3_STORAGE_CLASS) {
+        if is_temporary {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "{OPT_KEY_S3_STORAGE_CLASS} is not supported for temporary tables"
+            )));
+        }
+        if storage_params.is_none() {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "{OPT_KEY_S3_STORAGE_CLASS} is only supported for tables with an external location"
+            )));
+        }
+    }
+    is_valid_option_of_type::<S3StorageClass>(options, OPT_KEY_S3_STORAGE_CLASS)
+}
+
 pub fn is_valid_option_of_type<T: FromStr>(
     options: &BTreeMap<String, String>,
     option_name: &str,
@@ -542,4 +569,42 @@ fn is_valid_bool_opt(
         value.parse::<bool>()?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use databend_common_meta_app::storage::StorageParams;
+    use databend_storages_common_table_meta::table::OPT_KEY_S3_STORAGE_CLASS;
+
+    use super::is_valid_s3_storage_class;
+
+    #[test]
+    fn test_s3_storage_class_requires_external_location() {
+        for (value, external, temporary, valid) in [
+            (None, false, false, true),
+            (None, false, true, true),
+            (None, true, true, true),
+            (Some("standard"), false, false, false),
+            (Some("intelligent_tiering"), false, false, false),
+            (Some("standard"), true, false, true),
+            (Some("intelligent_tiering"), true, false, true),
+            (Some("glacier"), true, false, false),
+            (Some("standard"), false, true, false),
+            (Some("standard"), true, true, false),
+            (Some("intelligent_tiering"), true, true, false),
+        ] {
+            let options: BTreeMap<_, _> = value
+                .into_iter()
+                .map(|value| (OPT_KEY_S3_STORAGE_CLASS.to_owned(), value.to_owned()))
+                .collect();
+            let storage = external.then_some(StorageParams::Memory);
+            assert_eq!(
+                is_valid_s3_storage_class(&options, storage.as_ref(), temporary).is_ok(),
+                valid,
+                "value={value:?}, external={external}, temporary={temporary}"
+            );
+        }
+    }
 }

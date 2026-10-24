@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use databend_common_base::base::OrderedFloat;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::conversion::common_super_type_with_conversion;
@@ -172,7 +173,7 @@ impl<'a> InferFilterOptimizer<'a> {
         let mut new_predicates = vec![];
         if !self.is_falsy {
             // Derive new predicates from existing predicates, `derive_predicates` may change is_falsy to true.
-            let Some(derived) = self.derive_predicates() else {
+            let Some(derived) = self.derive_predicates()? else {
                 return Ok(predicates);
             };
             new_predicates = derived;
@@ -298,7 +299,7 @@ impl<'a> InferFilterOptimizer<'a> {
     }
 
     // None disables this inference pass; the caller retains all original inputs.
-    fn derive_predicates(&mut self) -> Option<Vec<ScalarExpr>> {
+    fn derive_predicates(&mut self) -> Result<Option<Vec<ScalarExpr>>> {
         let mut result = vec![];
         let num_exprs = self.exprs.len();
 
@@ -310,7 +311,11 @@ impl<'a> InferFilterOptimizer<'a> {
         }
         for (left_index, expr_equal_to) in self.expr_equal_to.iter().enumerate() {
             for expr in expr_equal_to.iter() {
-                let right_index = self.expr_index.get(expr).unwrap();
+                // add_equal_expr registers both sides. If that invariant breaks,
+                // return a diagnosable query error rather than panic here.
+                let right_index = self.expr_index.get(expr).ok_or_else(|| {
+                    ErrorCode::Internal("InferFilterOptimizer has inconsistent expression indexes")
+                })?;
                 Self::union(&mut parents, left_index, *right_index);
             }
         }
@@ -328,7 +333,7 @@ impl<'a> InferFilterOptimizer<'a> {
             .flatten()
             {
                 if class_domains[parent_index].is_some_and(|existing| existing != domain) {
-                    return None;
+                    return Ok(None);
                 }
                 class_domains[parent_index] = Some(domain);
             }
@@ -347,9 +352,13 @@ impl<'a> InferFilterOptimizer<'a> {
                 // Merge each member's normalized constraints into its equivalence class.
                 let constraints = std::mem::take(&mut self.expr_predicates[index]);
                 for predicate in constraints.into_predicates() {
-                    if !self.expr_predicates[parent_index].try_add(predicate)? {
-                        self.is_falsy = true;
-                        return Some(vec![]);
+                    match self.expr_predicates[parent_index].try_add(predicate) {
+                        None => return Ok(None),
+                        Some(false) => {
+                            self.is_falsy = true;
+                            return Ok(Some(vec![]));
+                        }
+                        Some(true) => {}
                     }
                 }
             }
@@ -432,7 +441,7 @@ impl<'a> InferFilterOptimizer<'a> {
             }
         }
 
-        Some(result)
+        Ok(Some(result))
     }
 
     fn derive_remaining_predicates(&self, predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {

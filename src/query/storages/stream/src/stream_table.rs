@@ -42,6 +42,7 @@ use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
+use databend_common_storage::StorageMetrics;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::StreamBacklog;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -106,8 +107,17 @@ impl StreamTable {
             LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(ctx.get_license_key(), Feature::DataSharing)?;
         }
-        let source = if let Some(source) = &self.source_table {
-            source.clone()
+        let mut bound_source = self.source_table.clone();
+        if bound_source.is_none() {
+            // Pipeline construction recreates STREAM from TableInfo, which does
+            // not carry its bound source. Reuse this query's stream view, not the
+            // ordinary source-table cache. A fresh worker still resolves the share.
+            if let Some(table) = ctx.get_cached_stream(self.info.ident.table_id) {
+                bound_source = Self::try_from_table(table.as_ref())?.source_table.clone();
+            }
+        }
+        let source = if let Some(source) = bound_source {
+            source
         } else {
             let catalog = ctx.get_catalog(self.info.catalog()).await?;
             let source_table_name = self.source_table_name(catalog.as_ref()).await?;
@@ -137,34 +147,12 @@ impl StreamTable {
 
     pub async fn navigate_within_batch_limit(
         &self,
-        catalog: &dyn Catalog,
-        tenant: &Tenant,
-        source_db_name: &str,
-        source_tb_name: &str,
+        source: Arc<dyn Table>,
         batch_limit: Option<u64>,
         enable_snapshot_forward_scan: bool,
         s3_storage_class: S3StorageClass,
     ) -> Result<Arc<dyn Table>> {
         let stream_desc = &self.info.desc;
-        let source = catalog
-            .get_table(tenant, source_db_name, source_tb_name)
-            .await
-            .map_err(|err| {
-                if matches!(
-                    err.code(),
-                    ErrorCode::LICENSE_KEY_INVALID | ErrorCode::LICENSE_KEY_EXPIRED
-                ) {
-                    return err;
-                }
-                ErrorCode::IllegalStream(format!(
-                    "Cannot get base table '{}'.'{}' from stream {}, cause: {}",
-                    source_db_name,
-                    source_tb_name,
-                    stream_desc,
-                    err.message()
-                ))
-            })?;
-
         let Some(batch_limit) = batch_limit else {
             return Ok(source);
         };
@@ -363,6 +351,12 @@ impl Table for StreamTable {
 
     fn get_table_info(&self) -> &TableInfo {
         &self.info
+    }
+
+    fn get_data_metrics(&self) -> Option<Arc<StorageMetrics>> {
+        self.source_table
+            .as_ref()
+            .and_then(|source| source.get_data_metrics())
     }
 
     fn stream_source_table_info(&self) -> Option<&TableInfo> {

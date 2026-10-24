@@ -18,8 +18,16 @@ use arrow_array::ArrayRef;
 use arrow_array::DictionaryArray;
 use arrow_array::Int32Array;
 use arrow_array::StringArray;
+use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::NumberDataType;
 
 #[test]
 fn test_from_arrow_rs() {
@@ -45,4 +53,67 @@ fn test_from_arrow_rs() {
         let c = column.into_arrow_rs();
         assert_eq!(c.len(), arr.len());
     }
+}
+
+fn null_const_round_trip_block(num_rows: usize) -> DataBlock {
+    let nullable_int = DataType::Number(NumberDataType::Int64).wrap_nullable();
+    DataBlock::new(
+        vec![
+            Int32Type::from_data((0..num_rows as i32).collect::<Vec<_>>()).into(),
+            BlockEntry::new_const_column(nullable_int.clone(), Scalar::Null, num_rows),
+            BlockEntry::new_const_column(DataType::String.wrap_nullable(), Scalar::Null, num_rows),
+            // Some NULLs, but not all.
+            Int64Type::from_opt_data((0..num_rows as i64).map(|i| (i > 0).then_some(i)).collect())
+                .into(),
+            // A nullable column that is all NULL as a full column.
+            BlockEntry::new_const_column(nullable_int, Scalar::Null, num_rows)
+                .to_column()
+                .into(),
+        ],
+        num_rows,
+    )
+}
+
+#[test]
+fn test_from_record_batch_keep_null_const() -> Result<()> {
+    let block = null_const_round_trip_block(4);
+    let schema = block.infer_schema();
+    let batch = block.clone().to_record_batch_with_dataschema(&schema)?;
+
+    // The default conversion keeps every column full.
+    let full = DataBlock::from_record_batch(&schema, &batch)?;
+    assert!(
+        full.columns()
+            .iter()
+            .all(|entry| entry.as_column().is_some())
+    );
+
+    let kept = DataBlock::from_record_batch_keep_null_const(&schema, &batch)?;
+    assert_eq!(kept.num_rows(), 4);
+    for (offset, is_const) in [false, true, true, false, true].into_iter().enumerate() {
+        let entry = kept.get_by_offset(offset);
+        assert_eq!(entry.as_scalar().is_some(), is_const, "column {offset}");
+        if is_const {
+            assert_eq!(entry.as_scalar(), Some(&Scalar::Null));
+        }
+        assert_eq!(entry.data_type(), block.get_by_offset(offset).data_type());
+        assert_eq!(entry.to_column(), block.get_by_offset(offset).to_column());
+    }
+    Ok(())
+}
+
+#[test]
+fn test_from_record_batch_keep_null_const_empty() -> Result<()> {
+    // No rows: nothing is all NULL, a non-nullable column must stay a column.
+    let block = null_const_round_trip_block(0);
+    let schema = block.infer_schema();
+    let batch = block.to_record_batch_with_dataschema(&schema)?;
+    let kept = DataBlock::from_record_batch_keep_null_const(&schema, &batch)?;
+    assert_eq!(kept.num_rows(), 0);
+    assert!(
+        kept.columns()
+            .iter()
+            .all(|entry| entry.as_column().is_some())
+    );
+    Ok(())
 }

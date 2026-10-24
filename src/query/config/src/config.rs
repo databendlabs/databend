@@ -1914,6 +1914,33 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "true")]
     pub enable_udf_python_script: bool,
 
+    /// Maximum Python scalar UDF processes on this node (0 = effective CPU count).
+    #[clap(long, value_name = "VALUE", default_value = "0")]
+    pub python_udf_max_workers: usize,
+
+    /// Python worker budget shared by a tenant (0 = inherit the node limit).
+    #[clap(long, value_name = "VALUE", default_value = "0")]
+    pub python_udf_max_workers_per_tenant: usize,
+
+    /// Maximum resident Python workers per query (0 = minimum runtimes plus
+    /// max_threads - 1). Concurrent execution always respects max_threads.
+    #[clap(long, value_name = "VALUE", default_value = "0")]
+    pub python_udf_max_workers_per_query: usize,
+
+    /// Bound Python worker admission waiters independently of running queries.
+    #[clap(long, value_name = "VALUE", default_value = "128")]
+    pub python_udf_max_queued_queries: usize,
+
+    #[clap(long, value_name = "VALUE", default_value = "60")]
+    pub python_udf_queue_timeout_secs: u64,
+
+    #[clap(long, value_name = "VALUE", default_value = "300")]
+    pub python_udf_execution_timeout_secs: u64,
+
+    /// Recycle idle extra Python workers after this interval; keep one per runtime.
+    #[clap(long, value_name = "VALUE", default_value = "300")]
+    pub python_udf_worker_idle_timeout_secs: u64,
+
     #[clap(long, value_name = "VALUE", default_value = "true")]
     pub enable_udf_js_script: bool,
 

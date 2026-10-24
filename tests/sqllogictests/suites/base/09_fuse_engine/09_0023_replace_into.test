@@ -85,6 +85,85 @@ REPLACE INTO test ON CONFLICT(a,b) values(1, 1, 1), (1, 1, 2), (3, 1, 3)
 statement ok
 DROP TABLE test;
 
+# https://github.com/databendlabs/databend/issues/20795
+# duplicated keys must be detected even if the rows are pruned by the table level range index,
+# or the table has cluster keys (rows are partitioned). Key columns are nullable (the default).
+statement ok
+CREATE TABLE t20795(id INT, v INT);
+
+statement ok
+INSERT INTO t20795 VALUES (1, 1), (5, 5);
+
+# existing key inside the table range
+statement error (?s)4000.*duplicated data detected
+REPLACE INTO t20795 ON(id) VALUES (5, 50), (5, 51)
+
+# new key inside the table range [1, 5]
+statement error (?s)4000.*duplicated data detected
+REPLACE INTO t20795 ON(id) VALUES (3, 30), (3, 31)
+
+# new key outside the table range
+statement error (?s)4000.*duplicated data detected
+REPLACE INTO t20795 ON(id) VALUES (7, 70), (7, 71)
+
+# source is a query, the duplicated key is outside the table range
+statement ok
+CREATE TABLE t20795_src(id INT, v INT);
+
+statement ok
+INSERT INTO t20795_src VALUES (8, 80), (8, 81), (1, 11);
+
+statement error (?s)4000.*duplicated data detected
+REPLACE INTO t20795 ON(id) SELECT * FROM t20795_src
+
+# the duplicated rows are pruned, while another row is not
+statement error (?s)4000.*duplicated data detected
+REPLACE INTO t20795 ON(id) VALUES (9, 90), (9, 91), (5, 50)
+
+query II
+SELECT * FROM t20795 ORDER BY id, v;
+----
+1 1
+5 5
+
+statement ok
+DROP TABLE t20795_src;
+
+statement ok
+DROP TABLE t20795;
+
+statement ok
+CREATE TABLE t20795_c(id INT, v INT) CLUSTER BY(id);
+
+# empty table with cluster keys
+statement error (?s)4000.*duplicated data detected
+REPLACE INTO t20795_c ON(id) VALUES (1, 1), (1, 2)
+
+statement ok
+INSERT INTO t20795_c VALUES (1, 100), (2, 200), (3, 300);
+
+# existing key
+statement error (?s)4000.*duplicated data detected
+REPLACE INTO t20795_c ON(id) VALUES (2, 210), (2, 220)
+
+# existing key, source is a query
+statement error (?s)4000.*duplicated data detected
+REPLACE INTO t20795_c ON(id) SELECT * FROM (VALUES (3, 310), (3, 320)) t(id, v)
+
+# new key outside the table range
+statement error (?s)4000.*duplicated data detected
+REPLACE INTO t20795_c ON(id) VALUES (7, 700), (7, 710)
+
+query II
+SELECT * FROM t20795_c ORDER BY id, v;
+----
+1 100
+2 200
+3 300
+
+statement ok
+DROP TABLE t20795_c;
+
 ###################
 # non-empty table #
 ###################

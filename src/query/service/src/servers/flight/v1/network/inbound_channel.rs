@@ -386,7 +386,7 @@ pub(crate) fn deserialize_flight_data(
         _ => decode_compressed_body(&flight_data, marker, arrow_schema)?,
     };
 
-    let block = DataBlock::from_record_batch(&schema, &batch)?;
+    let block = DataBlock::from_record_batch_keep_null_const(&schema, &batch)?;
 
     if block.num_columns() == 0 {
         return Ok(DataBlock::new_with_meta(

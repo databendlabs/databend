@@ -257,6 +257,12 @@ impl DataExchangeManager {
             .collect()
     }
 
+    /// Holds the coordinator lock like `shutdown_query` does, for lock-order tests.
+    #[cfg(test)]
+    pub(crate) fn lock_queries_coordinator_for_test(&self) -> impl Sized + '_ {
+        self.queries_coordinator.lock()
+    }
+
     pub fn get_query_ctx(&self, query_id: &str) -> Result<Arc<QueryContext>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -397,10 +403,6 @@ impl DataExchangeManager {
                             .count();
                         let max_bytes_per_connection =
                             recv_queue_bytes_per_connection(recv_queue_bytes, num_senders);
-                        warn!(
-                            "do_exchange: node={} -> target={}, exchange_id={}, num_threads={}",
-                            config.query.node_id, target_id, exchange_id, num_threads
-                        );
 
                         flight_exchanges.push(Box::pin(async move {
                             let (send_tx, response_stream) = {
@@ -724,10 +726,6 @@ impl DataExchangeManager {
         num_threads: usize,
         max_bytes_per_connection: usize,
     ) -> Result<NetworkInboundSender> {
-        warn!(
-            "handle_do_exchange: query_id={}, channel_id={}, num_threads={}",
-            query_id, channel_id, num_threads
-        );
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -862,6 +860,7 @@ impl DataExchangeManager {
             retry_times: settings.get_flight_max_retry_times()?,
             retry_interval: settings.get_flight_retry_interval()?,
             keep_alive: settings.get_flight_keep_alive_params()?,
+            reuse_control_channel: settings.get_enable_flight_control_channel_reuse()?,
         };
         let mut root_fragment_ids = actions.get_root_fragment_ids()?;
         let conf = GlobalConfig::instance();

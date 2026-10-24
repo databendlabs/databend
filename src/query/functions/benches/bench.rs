@@ -980,3 +980,40 @@ mod datetime_fixed_offset {
         );
     }
 }
+
+// Sub-day time_slice on 100,000 timestamps 0.8s apart, about 22 hours.
+#[divan::bench_group(max_time = 0.5)]
+mod time_slice {
+    use databend_common_column::buffer::Buffer;
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::Column;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::Evaluator;
+    use databend_common_expression::FunctionContext;
+    use databend_common_expression::type_check;
+    use databend_common_expression_test_support as parser;
+    use databend_common_functions::BUILTIN_FUNCTIONS;
+
+    const ROWS: i64 = 100_000;
+
+    const EXPRS: [&str; 3] = [
+        "time_slice(ts, 3600, 'second')",
+        "time_slice(ts, 15, 'minute')",
+        "time_slice(ts, 1, 'hour', 'end')",
+    ];
+
+    #[divan::bench(args = EXPRS)]
+    fn utc(bencher: divan::Bencher, sql: &str) {
+        let ts: Buffer<i64> = (0..ROWS)
+            .map(|i| 1_721_001_600_000_000 + i * 800_000)
+            .collect();
+        let column = Column::Timestamp(ts);
+        let raw_expr =
+            parser::parse_raw_expr(sql, &[("ts", column.data_type())], &BUILTIN_FUNCTIONS);
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+        let block = DataBlock::new(vec![BlockEntry::Column(column)], ROWS as usize);
+        let func_ctx = FunctionContext::default();
+        let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+        bencher.bench(|| divan::black_box(evaluator.run(&expr).unwrap()));
+    }
+}

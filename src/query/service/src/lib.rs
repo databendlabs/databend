@@ -72,6 +72,10 @@ pub mod physical_plans;
 
 pub use databend_common_sql as sql;
 pub use databend_common_storages_factory as storages;
+#[cfg(feature = "python-udf")]
+pub use databend_query_script_udf_support::PYTHON_WORKER_ARG;
+#[cfg(feature = "python-udf")]
+pub use databend_query_script_udf_support::run_python_udf_worker;
 pub use global_services::GlobalServices;
 pub use table_functions::get_fuse_table_snapshot;
 pub use table_functions::get_fuse_table_statistics;
