@@ -214,7 +214,8 @@ impl ExactSizeIterator for NarrowIter<'_> {}
 
 unsafe impl TrustedLen for NarrowIter<'_> {}
 
-/// Values of a plain column that a [`DictColumn`] can be built from, other than strings.
+/// Values of a plain column that a [`DictColumn`] can be built from, other than strings and
+/// floats (keyed by their bits in [`DictColumn::try_encode`]).
 macro_rules! with_hashable_buffer {
     ($column:expr, | $b:ident | $body:expr) => {
         match $column {
@@ -339,6 +340,15 @@ impl DictColumn {
         // `first_rows[key]`: the first row holding the value of `key`.
         let (keys, first_rows) = match column {
             Column::String(c) => dict_keys(c.iter(), max_ndv)?,
+            // Floats are keyed by their bits: `F32`/`F64` equate `+0.0` and `-0.0` (and all
+            // NaNs), but the dictionary must reproduce the exact values, e.g. for
+            // `atan2(-0.0, -1.0) = -pi` vs `atan2(+0.0, -1.0) = pi`.
+            Column::Number(NumberColumn::Float32(b)) => {
+                dict_keys(b.iter().map(|v| v.0.to_bits()), max_ndv)?
+            }
+            Column::Number(NumberColumn::Float64(b)) => {
+                dict_keys(b.iter().map(|v| v.0.to_bits()), max_ndv)?
+            }
             column => with_hashable_buffer!(column, |b| dict_keys(b.iter().copied(), max_ndv))??,
         };
         let values = BlockEntry::Column(column.clone())

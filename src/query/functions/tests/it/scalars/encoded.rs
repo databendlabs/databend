@@ -33,11 +33,13 @@ use databend_common_expression::types::DecimalColumn;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::DictColumn;
 use databend_common_expression::types::EncodedColumn;
+use databend_common_expression::types::Float32Type;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::ForColumn;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::NarrowBuffer;
+use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::StringType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
@@ -228,4 +230,62 @@ fn test_eval_on_encoded_columns() {
             assert_eq!(count(&encoded_block), count(&plain_block), "{text}");
         }
     }
+}
+
+/// The bits of a non-nullable float column (`Eq` on `F64` equates `+0.0` and `-0.0`).
+fn float_bits(column: &Column) -> Vec<u64> {
+    match column {
+        Column::Number(NumberColumn::Float64(b)) => b.iter().map(|v| v.0.to_bits()).collect(),
+        Column::Number(NumberColumn::Float32(b)) => {
+            b.iter().map(|v| v.0.to_bits() as u64).collect()
+        }
+        column => panic!("not a float column: {column:?}"),
+    }
+}
+
+/// A float dictionary must reproduce the exact values, not only SQL equal ones: signed zeros
+/// (`atan2(-0.0, -1.0) = -pi`, `atan2(+0.0, -1.0) = pi`) and NaN payloads.
+#[test]
+fn test_float_dictionary_preserves_bits() {
+    let n = 8;
+    let f64s = [0.0, -0.0, 0.0, -0.0, f64::NAN, -f64::NAN, 1.5, -0.0];
+    let f32s = [0.0f32, -0.0, -0.0, 0.0, f32::NAN, -f32::NAN, 1.5, -0.0];
+    let plain_x = Float64Type::from_data(f64s.to_vec());
+    let plain_y = Float32Type::from_data(f32s.to_vec());
+
+    for plain in [&plain_x, &plain_y] {
+        let encoded = build_dict(plain);
+        let Column::Encoded(dict) = &encoded else {
+            unreachable!()
+        };
+        // +0.0, -0.0, NaN, -NaN and 1.5 are all distinct dictionary values.
+        assert_eq!(dict.as_dict().unwrap().values.len(), 5);
+        assert_eq!(float_bits(&dict.decode()), float_bits(plain));
+    }
+
+    let names = [("x", plain_x.data_type()), ("y", plain_y.data_type())];
+    let block = |x: &Column, y: &Column| {
+        DataBlock::new(
+            vec![BlockEntry::from(x.clone()), BlockEntry::from(y.clone())],
+            n,
+        )
+    };
+    let encoded_block = block(&build_dict(&plain_x), &build_dict(&plain_y));
+    let plain_block = block(&plain_x, &plain_y);
+    let func_ctx = FunctionContext::default();
+    for text in ["atan2(x, -1.0)", "atan2(y, -1.0)", "x"] {
+        let raw_expr = parser::parse_raw_expr(text, &names, &BUILTIN_FUNCTIONS);
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+        let run = |block: &DataBlock| {
+            Evaluator::new(block, &func_ctx, &BUILTIN_FUNCTIONS)
+                .run(&expr)
+                .unwrap()
+                .convert_to_full_column(expr.data_type(), n)
+        };
+        let (encoded, plain) = (run(&encoded_block), run(&plain_block));
+        assert_eq!(float_bits(&encoded), float_bits(&plain), "{text}");
+    }
+    // The sign of zero reaches the result.
+    let atan2 = |x: f64| x.atan2(-1.0).to_bits();
+    assert_ne!(atan2(-0.0), atan2(0.0));
 }
