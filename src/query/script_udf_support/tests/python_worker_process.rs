@@ -677,10 +677,16 @@ fn results(function: &AggregateCallRef, owners: &[&AggregateStateOwner]) -> Vec<
 // Python aggregates run in the query's sandboxed workers with the same pooling
 // as scalar UDFs; states stay in the query process between requests.
 async fn udaf_tests() {
-    let query = PythonWorkerManager::new(PythonWorkerConfig::default())
-        .unwrap()
-        .query("udaf", 2);
+    // Partial and final aggregation build separate instances of one UDAF;
+    // they share a runtime, so the UDAF and a scalar UDF fit a budget of 2.
+    let query = PythonWorkerManager::new(PythonWorkerConfig {
+        max_workers_per_query: 2,
+        ..PythonWorkerConfig::default()
+    })
+    .unwrap()
+    .query("udaf", 2);
     let function = udaf(&query, "py_sum", PY_SUM);
+    let _final_instance = udaf(&query, "py_sum", PY_SUM);
     // The initial state is created lazily, so a Python runtime built after the
     // aggregate (e.g. a scalar UDF below it in the plan) can still register.
     let mut scalar = transform(

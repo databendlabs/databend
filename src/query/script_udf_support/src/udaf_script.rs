@@ -483,7 +483,7 @@ pub fn create_udaf_script_function(
                 aggregate_state: Some(arrow_schema::Field::new(&name, state_type, true)),
             };
             UDAFRuntime::Python(PythonUdaf {
-                runtime: PythonRuntime::new(function, query, None)?,
+                runtime: query.aggregate_runtime(function)?,
                 handle: tokio::runtime::Handle::try_current()
                     .unwrap_or_else(|_| GlobalIORuntime::instance().inner()),
                 output_type: output_type.clone(),

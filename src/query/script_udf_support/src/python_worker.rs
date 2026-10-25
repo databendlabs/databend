@@ -186,6 +186,7 @@ impl PythonWorkerManager {
             admission: OnceCell::new(),
             reservation: Mutex::new(None),
             runtimes: Mutex::new(Vec::new()),
+            aggregate_registration: Mutex::new(()),
             finished: AtomicBool::new(false),
             cancel: tokio::sync::Notify::new(),
             pipelines: AtomicUsize::new(0),
@@ -229,6 +230,9 @@ pub struct PythonQueryWorkers {
     admission: OnceCell<()>,
     reservation: Mutex<Option<Arc<Reservation>>>,
     runtimes: Mutex<Vec<Weak<PythonRuntime>>>,
+    /// Serializes `aggregate_runtime` lookups with the registration they may
+    /// perform, so one aggregate never registers twice.
+    aggregate_registration: Mutex<()>,
     finished: AtomicBool,
     cancel: tokio::sync::Notify,
     pipelines: AtomicUsize,
@@ -287,6 +291,27 @@ impl PythonQueryWorkers {
         self.pipelines.fetch_add(1, Ordering::Relaxed);
         PythonPipelineLease {
             query: self.clone(),
+        }
+    }
+
+    /// One runtime per aggregate function and query. Partial and final
+    /// aggregation (and every plan fragment) build their own aggregate
+    /// instance; registering each would spend the per-query worker minimum on
+    /// duplicates of the same stateless worker pool.
+    pub(crate) fn aggregate_runtime(
+        self: &Arc<Self>,
+        function: PythonFunction,
+    ) -> Result<Arc<PythonRuntime>> {
+        let _guard = self.aggregate_registration.lock();
+        let existing = self
+            .runtimes
+            .lock()
+            .iter()
+            .filter_map(Weak::upgrade)
+            .find(|runtime| runtime.function == function);
+        match existing {
+            Some(runtime) => Ok(runtime),
+            None => PythonRuntime::new(function, self.clone(), None),
         }
     }
 
@@ -424,7 +449,7 @@ impl PythonQueryWorkers {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct PythonFunction {
     pub name: String,
     /// Scalar functions only: aggregates use the fixed `create_state`,
