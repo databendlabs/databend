@@ -73,8 +73,8 @@ use rand::SeedableRng;
 use rand::rngs::StdRng;
 use tonic::Status;
 
-use super::broadcast_recv_transform::BlockCoalescer;
-use super::broadcast_recv_transform::CoalesceThreshold;
+use super::block_coalescer::BlockCoalescer;
+use super::block_coalescer::CoalesceThreshold;
 use super::exchange_manager::recv_queue_bytes_per_connection;
 use super::exchange_sink::exchange_buffer_config;
 use super::hash_shuffle_writer::HashShuffleWriter;
@@ -89,8 +89,8 @@ use crate::servers::flight::v1::network::NetworkInboundSender;
 use crate::servers::flight::v1::network::PingPongExchange;
 use crate::servers::flight::v1::network::RemoteNodeChannel;
 use crate::servers::flight::v1::network::create_local_channels;
-use crate::servers::flight::v1::network::inbound_channel::flight_data_size;
 use crate::servers::flight::v1::network::local_channel::LOCAL_CHANNEL_MAX_BYTES;
+use crate::servers::flight::v1::network::wire_format::flight_data_size;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
 const MIB: usize = 1024 * 1024;

@@ -375,10 +375,10 @@ mod tests {
     use crate::servers::flight::v1::network::ExchangeBufferConfig;
     use crate::servers::flight::v1::network::ExchangeSinkBuffer;
     use crate::servers::flight::v1::network::PingPongExchange;
-    use crate::servers::flight::v1::network::inbound_channel::deserialize_flight_data;
-    use crate::servers::flight::v1::network::inbound_channel::extract_tid;
-    use crate::servers::flight::v1::network::inbound_channel::split_batch_flight_data;
-    use crate::servers::flight::v1::network::inbound_channel::strip_tid;
+    use crate::servers::flight::v1::network::wire_format::deserialize_flight_data;
+    use crate::servers::flight::v1::network::wire_format::extract_tid;
+    use crate::servers::flight::v1::network::wire_format::split_batch_flight_data;
+    use crate::servers::flight::v1::network::wire_format::strip_tid;
 
     /// Routes each row to partition `value % num_partitions` of its first column.
     struct ModuloScatter {

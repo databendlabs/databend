@@ -18,6 +18,7 @@ pub mod local_channel;
 pub mod outbound_buffer;
 pub mod outbound_channel;
 pub mod outbound_transport;
+pub mod wire_format;
 
 pub use databend_common_pipeline::core::SyncTaskHandle;
 pub use databend_common_pipeline::core::SyncTaskSet;

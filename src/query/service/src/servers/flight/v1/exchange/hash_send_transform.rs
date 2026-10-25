@@ -30,16 +30,20 @@ use super::hash_shuffle_writer::HashShuffleWriter;
 use super::hash_shuffle_writer::ShuffleNode;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
+/// Output port for the rows of this sender's own partition, pushed downstream
+/// directly instead of going through a channel.
+struct OwnPartition {
+    output: Arc<OutputPort>,
+    partition: usize,
+}
+
 /// Hash shuffle sender.
 ///
-/// With an output port, the rows of its own partition are pushed to the output
-/// instead of going through a channel. Without one, it is a sink that sends every
-/// partition through channels.
+/// With an own partition, its rows are pushed to the output port. Without one, it
+/// is a sink that sends every partition through channels.
 pub struct HashSendTransform {
     input: Arc<InputPort>,
-    output: Option<Arc<OutputPort>>,
-    /// Partition of this sender; only used with an output port.
-    local_pos: usize,
+    own: Option<OwnPartition>,
     writer: HashShuffleWriter,
 }
 
@@ -52,9 +56,14 @@ impl HashSendTransform {
         waker: Arc<ExecutorWaker>,
         budget: usize,
     ) -> PipeItem {
-        let output = OutputPort::create();
         let writer = HashShuffleWriter::create(worker_id, waker, scatter, nodes, budget);
-        Self::create(Some(output.clone()), local_pos, writer, vec![output])
+        Self::create(
+            Some(OwnPartition {
+                output: OutputPort::create(),
+                partition: local_pos,
+            }),
+            writer,
+        )
     }
 
     pub fn create_sink_item(
@@ -65,20 +74,15 @@ impl HashSendTransform {
         budget: usize,
     ) -> PipeItem {
         let writer = HashShuffleWriter::create(worker_id, waker, scatter, nodes, budget);
-        Self::create(None, 0, writer, vec![])
+        Self::create(None, writer)
     }
 
-    fn create(
-        output: Option<Arc<OutputPort>>,
-        local_pos: usize,
-        writer: HashShuffleWriter,
-        outputs: Vec<Arc<OutputPort>>,
-    ) -> PipeItem {
+    fn create(own: Option<OwnPartition>, writer: HashShuffleWriter) -> PipeItem {
         let input = InputPort::create();
+        let outputs = own.iter().map(|x| x.output.clone()).collect();
         let processor = ProcessorPtr::create(Box::new(Self {
             input: input.clone(),
-            output,
-            local_pos,
+            own,
             writer,
         }));
         PipeItem::create(processor, vec![input], outputs)
@@ -86,8 +90,8 @@ impl HashSendTransform {
 
     fn finish(&mut self) -> Result<Event> {
         self.input.finish();
-        if let Some(output) = &self.output {
-            output.finish();
+        if let Some(own) = &self.own {
+            own.output.finish();
         }
         self.writer.close_all();
         Ok(Event::Finished)
@@ -96,7 +100,7 @@ impl HashSendTransform {
 
 impl Processor for HashSendTransform {
     fn name(&self) -> String {
-        match self.output {
+        match self.own {
             Some(_) => String::from("HashSendTransform"),
             None => String::from("HashSendSink"),
         }
@@ -114,8 +118,8 @@ impl Processor for HashSendTransform {
             return Ok(Event::NeedConsume);
         }
 
-        if self.output.as_ref().is_some_and(|x| x.is_finished()) {
-            self.writer.close_partition(self.local_pos);
+        if let Some(own) = self.own.as_ref().filter(|x| x.output.is_finished()) {
+            self.writer.close_partition(own.partition);
         }
 
         if self.writer.all_closed() {
@@ -126,13 +130,12 @@ impl Processor for HashSendTransform {
             let data_block = self.input.pull_data().unwrap()?;
 
             if self.writer.add_block(data_block)? {
-                let output = self.output.as_ref().filter(|x| x.can_push());
-                let own = output.map(|_| self.local_pos);
-                let (own_block, pending) = self.writer.flush(own)?;
+                let own = self.own.as_ref().filter(|x| x.output.can_push());
+                let (own_block, pending) = self.writer.flush(own.map(|x| x.partition))?;
 
-                let pushed = match (output, own_block) {
-                    (Some(output), Some(block)) => {
-                        output.push_data(Ok(block));
+                let pushed = match (own, own_block) {
+                    (Some(own), Some(block)) => {
+                        own.output.push_data(Ok(block));
                         true
                     }
                     _ => false,
@@ -147,8 +150,8 @@ impl Processor for HashSendTransform {
         if self.input.is_finished() {
             // The output is finished first, so the rows of the own partition go
             // through its local channel like every other partition.
-            if let Some(output) = &self.output {
-                output.finish();
+            if let Some(own) = &self.own {
+                own.output.finish();
             }
 
             if self.writer.flush(None)?.1 {
@@ -163,10 +166,10 @@ impl Processor for HashSendTransform {
     }
 
     fn details_status(&self) -> Option<String> {
-        Some(match self.output {
-            Some(_) => format!(
+        Some(match &self.own {
+            Some(own) => format!(
                 "local_pos={}, {}",
-                self.local_pos,
+                own.partition,
                 self.writer.details_status()
             ),
             None => self.writer.details_status(),

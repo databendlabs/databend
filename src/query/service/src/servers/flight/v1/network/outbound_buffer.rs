@@ -15,9 +15,6 @@
 use std::sync::Arc;
 
 use arrow_flight::FlightData;
-use bytes::BufMut;
-use bytes::Bytes;
-use bytes::BytesMut;
 use concurrent_queue::ConcurrentQueue;
 use databend_common_base::runtime::Runtime;
 use databend_common_exception::ErrorCode;
@@ -28,11 +25,12 @@ use tokio::sync::Semaphore;
 use tonic::Code;
 use tonic::Status;
 
-use super::inbound_channel::flight_data_size;
 use super::outbound_transport::PingPongCallback;
 use super::outbound_transport::PingPongExchange;
 use super::outbound_transport::PingPongResponse;
 use super::outbound_transport::REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE;
+use super::wire_format::flight_data_size;
+use super::wire_format::merge_flight_data_batch;
 use crate::servers::flight::FlightOperation;
 use crate::servers::flight::add_flight_error_context;
 use crate::servers::flight::v1::network::inbound_quota::RemoteQueueItem;
@@ -105,43 +103,6 @@ impl PendingQueue {
             _ => merge_flight_data_batch(items),
         };
         Some((data, permits))
-    }
-}
-
-pub(crate) const BATCH_MARKER: u8 = 0x02;
-
-/// Pack several FlightData into one batch frame.
-///
-/// Each item keeps its whole app_metadata, including the tid prefix, so one frame
-/// can carry data for any threads of the destination node.
-///
-/// Frame app_metadata: `[num_items: u32][BATCH_MARKER]`.
-/// Frame body, per item: `[meta_len: u32][meta][header_len: u32][header][body_len: u32][body]`.
-pub(crate) fn merge_flight_data_batch(items: Vec<FlightData>) -> FlightData {
-    let mut app_metadata = BytesMut::with_capacity(5);
-    app_metadata.put_u32_le(items.len() as u32);
-    app_metadata.put_u8(BATCH_MARKER);
-
-    let estimated: usize = items
-        .iter()
-        .map(|i| 12 + i.app_metadata.len() + i.data_header.len() + i.data_body.len())
-        .sum();
-
-    let mut body = BytesMut::with_capacity(estimated);
-    for item in items {
-        body.put_u32_le(item.app_metadata.len() as u32);
-        body.put_slice(&item.app_metadata);
-        body.put_u32_le(item.data_header.len() as u32);
-        body.put_slice(&item.data_header);
-        body.put_u32_le(item.data_body.len() as u32);
-        body.put_slice(&item.data_body);
-    }
-
-    FlightData {
-        flight_descriptor: None,
-        app_metadata: app_metadata.freeze(),
-        data_header: Bytes::new(),
-        data_body: body.freeze(),
     }
 }
 
@@ -347,10 +308,6 @@ impl ExchangeSinkBuffer {
         })
     }
 
-    pub async fn add_data(&self, dest_idx: usize, data: FlightData) -> Result<()> {
-        self.add_items(dest_idx, vec![data]).await
-    }
-
     /// Queue items for one destination node and send them, packed into as few
     /// frames as the batch size allows.
     ///
@@ -423,14 +380,18 @@ mod tests {
     use std::time::Duration;
 
     use arrow_flight::FlightData;
+    use bytes::BufMut;
+    use bytes::Bytes;
+    use bytes::BytesMut;
     use databend_common_base::runtime::Runtime;
     use databend_common_base::runtime::spawn;
     use tonic::Status;
 
     use super::*;
-    use crate::servers::flight::v1::network::inbound_channel::extract_tid;
-    use crate::servers::flight::v1::network::inbound_channel::split_batch_flight_data;
     use crate::servers::flight::v1::network::outbound_transport::PingPongExchange;
+    use crate::servers::flight::v1::network::wire_format::extract_tid;
+    use crate::servers::flight::v1::network::wire_format::is_batch;
+    use crate::servers::flight::v1::network::wire_format::split_batch_flight_data;
 
     fn test_runtime() -> Arc<Runtime> {
         Arc::new(Runtime::with_worker_threads(2, None).unwrap())
@@ -479,10 +440,6 @@ mod tests {
         let _ = queue.queue.push(RemoteQueueItem::new(data, permit));
     }
 
-    fn is_batch_frame(data: &FlightData) -> bool {
-        data.app_metadata.len() == 5 && data.app_metadata[4] == BATCH_MARKER
-    }
-
     fn batch_len(data: &FlightData) -> u32 {
         u32::from_le_bytes(data.app_metadata[..4].try_into().unwrap())
     }
@@ -522,7 +479,7 @@ mod tests {
         }
 
         let (result, permits) = queue.pop_front(256 * 1024).unwrap();
-        assert!(is_batch_frame(&result));
+        assert!(is_batch(&result));
         assert_eq!(batch_len(&result), 3);
         assert_eq!(permits.len(), 3);
 
@@ -551,7 +508,7 @@ mod tests {
 
         // Budget of 250 bytes: should pop 3 items (100+100+100 >= 250)
         let (result, _permits) = queue.pop_front(250).unwrap();
-        assert!(is_batch_frame(&result));
+        assert!(is_batch(&result));
         assert_eq!(batch_len(&result), 3);
         // 7 items remain
         assert_eq!(queue.queue.len(), 7);
@@ -595,8 +552,11 @@ mod tests {
             ExchangeSinkBuffer::create(vec![exchange], ExchangeBufferConfig::default(), &rt)
                 .unwrap();
 
-        // First add_data should send directly
-        buffer.add_data(0, make_flight_data(10)).await.unwrap();
+        // First add_items should send directly
+        buffer
+            .add_items(0, vec![make_flight_data(10)])
+            .await
+            .unwrap();
         let received = send_rx.recv().await.unwrap();
         assert_eq!(received.data_body.len(), 10);
 
@@ -604,7 +564,10 @@ mod tests {
         pong_tx.send(Ok(FlightData::default())).await.unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
 
-        buffer.add_data(0, make_flight_data(20)).await.unwrap();
+        buffer
+            .add_items(0, vec![make_flight_data(20)])
+            .await
+            .unwrap();
         let received = send_rx.recv().await.unwrap();
         assert_eq!(received.data_body.len(), 20);
     }
@@ -623,7 +586,7 @@ mod tests {
         buffer.add_items(0, items).await.unwrap();
 
         let received = send_rx.recv().await.unwrap();
-        assert!(is_batch_frame(&received));
+        assert!(is_batch(&received));
         assert_eq!(batch_len(&received), 4);
         assert!(send_rx.try_recv().is_err());
     }
@@ -638,12 +601,18 @@ mod tests {
         );
 
         // First send goes directly
-        buffer.add_data(0, make_flight_data(10)).await.unwrap();
+        buffer
+            .add_items(0, vec![make_flight_data(10)])
+            .await
+            .unwrap();
         let received = send_rx.recv().await.unwrap();
         assert_eq!(received.data_body.len(), 10);
 
         // Second send while in-flight gets queued
-        buffer.add_data(0, make_flight_data(20)).await.unwrap();
+        buffer
+            .add_items(0, vec![make_flight_data(20)])
+            .await
+            .unwrap();
 
         // Nothing on send_rx yet (queued)
         assert!(send_rx.try_recv().is_err());
@@ -670,12 +639,18 @@ mod tests {
                 .unwrap();
 
         // Send to dest 0
-        buffer.add_data(0, make_flight_data(10)).await.unwrap();
+        buffer
+            .add_items(0, vec![make_flight_data(10)])
+            .await
+            .unwrap();
         let r0 = rx0.recv().await.unwrap();
         assert_eq!(r0.data_body.len(), 10);
 
         // Send to dest 1
-        buffer.add_data(1, make_flight_data(20)).await.unwrap();
+        buffer
+            .add_items(1, vec![make_flight_data(20)])
+            .await
+            .unwrap();
         let r1 = rx1.recv().await.unwrap();
         assert_eq!(r1.data_body.len(), 20);
 
@@ -705,14 +680,20 @@ mod tests {
         );
 
         // The frame in flight keeps the whole quota until it is answered.
-        buffer.add_data(0, make_flight_data(10)).await.unwrap();
+        buffer
+            .add_items(0, vec![make_flight_data(10)])
+            .await
+            .unwrap();
         let _ = send_rx.recv().await.unwrap();
         assert_eq!(buffer.semaphore.available_permits(), 0);
 
         // Second send should block due to backpressure
         let buffer2 = buffer.clone();
         let send_handle = spawn(async move {
-            buffer2.add_data(0, make_flight_data(1)).await.unwrap();
+            buffer2
+                .add_items(0, vec![make_flight_data(1)])
+                .await
+                .unwrap();
         });
 
         // Verify it's blocked (not completed within timeout)
@@ -762,7 +743,7 @@ mod tests {
         assert_eq!(size, 108);
 
         // Sent right away, the frame in flight keeps its quota.
-        buffer.add_data(0, item).await.unwrap();
+        buffer.add_items(0, vec![item]).await.unwrap();
         let _ = send_rx.recv().await.unwrap();
         assert_eq!(buffer.semaphore.available_permits(), 1024 - size);
     }
@@ -783,7 +764,7 @@ mod tests {
 
         tokio::time::timeout(
             Duration::from_secs(2),
-            buffer.add_data(0, make_flight_data(100)),
+            buffer.add_items(0, vec![make_flight_data(100)]),
         )
         .await
         .expect("an item larger than the queue should still be sent")
@@ -799,7 +780,10 @@ mod tests {
             ExchangeSinkBuffer::create(vec![exchange], ExchangeBufferConfig::default(), &rt)
                 .unwrap();
 
-        buffer.add_data(0, make_flight_data(1)).await.unwrap();
+        buffer
+            .add_items(0, vec![make_flight_data(1)])
+            .await
+            .unwrap();
         let _ = send_rx.recv().await.unwrap();
 
         drop(pong_tx);
@@ -823,10 +807,13 @@ mod tests {
 
         let result = tokio::time::timeout(
             Duration::from_millis(200),
-            buffer.add_data(0, make_flight_data(2)),
+            buffer.add_items(0, vec![make_flight_data(2)]),
         )
         .await;
-        assert!(result.is_ok(), "add_data should not block on the semaphore");
+        assert!(
+            result.is_ok(),
+            "add_items should not block on the semaphore"
+        );
         let error = result
             .unwrap()
             .expect_err("closed stream should be reported as an error");
@@ -851,11 +838,20 @@ mod tests {
         )
         .unwrap();
 
-        buffer.add_data(0, make_flight_data(1)).await.unwrap();
+        buffer
+            .add_items(0, vec![make_flight_data(1)])
+            .await
+            .unwrap();
         let _ = send_rx.recv().await.unwrap();
 
-        buffer.add_data(0, make_flight_data(2)).await.unwrap();
-        buffer.add_data(0, make_flight_data(3)).await.unwrap();
+        buffer
+            .add_items(0, vec![make_flight_data(2)])
+            .await
+            .unwrap();
+        buffer
+            .add_items(0, vec![make_flight_data(3)])
+            .await
+            .unwrap();
 
         {
             let state = buffer.inner.state.remotes[0].state.lock();
@@ -906,16 +902,16 @@ mod tests {
 
         let result = tokio::time::timeout(
             Duration::from_millis(200),
-            buffer.add_data(0, make_flight_data(4)),
+            buffer.add_items(0, vec![make_flight_data(4)]),
         )
         .await;
         assert!(
             result.is_ok(),
-            "add_data should not block after force_send error"
+            "add_items should not block after force_send error"
         );
         let error = result
             .unwrap()
-            .expect_err("later add_data should observe the exchange error");
+            .expect_err("later add_items should observe the exchange error");
         assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
     }
 
@@ -930,7 +926,7 @@ mod tests {
         drop(send_rx);
 
         let error = buffer
-            .add_data(0, make_flight_data(1))
+            .add_items(0, vec![make_flight_data(1)])
             .await
             .expect_err("closed request channel should abort the exchange");
         assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
@@ -948,7 +944,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_force_send_error_unblocks_waiting_add_data() {
+    async fn test_force_send_error_unblocks_waiting_add_items() {
         let rt = test_runtime();
         let (exchange, send_rx, pong_tx) = create_mock_exchange(1);
         let buffer = Arc::new(
@@ -963,18 +959,25 @@ mod tests {
             .unwrap(),
         );
 
-        buffer.add_data(0, make_flight_data(1)).await.unwrap();
+        buffer
+            .add_items(0, vec![make_flight_data(1)])
+            .await
+            .unwrap();
         let _ = send_rx.recv().await.unwrap();
 
-        buffer.add_data(0, make_flight_data(2)).await.unwrap();
+        buffer
+            .add_items(0, vec![make_flight_data(2)])
+            .await
+            .unwrap();
 
         let blocked_buffer = buffer.clone();
-        let blocked = spawn(async move { blocked_buffer.add_data(0, make_flight_data(2)).await });
+        let blocked =
+            spawn(async move { blocked_buffer.add_items(0, vec![make_flight_data(2)]).await });
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(
             !blocked.is_finished(),
-            "third add_data should wait for the pending-queue semaphore"
+            "third add_items should wait for the pending-queue semaphore"
         );
 
         drop(send_rx);
@@ -982,9 +985,9 @@ mod tests {
 
         let result = tokio::time::timeout(Duration::from_secs(2), blocked)
             .await
-            .expect("blocked add_data should be released after remote close")
+            .expect("blocked add_items should be released after remote close")
             .unwrap();
-        let error = result.expect_err("released add_data should observe exchange abort");
+        let error = result.expect_err("released add_items should observe exchange abort");
         assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
         assert_eq!(
             buffer.semaphore.available_permits(),
@@ -994,7 +997,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_response_stream_close_unblocks_waiting_add_data() {
+    async fn test_response_stream_close_unblocks_waiting_add_items() {
         let rt = test_runtime();
         let (exchange, send_rx, pong_tx) = create_mock_exchange(1);
         let buffer = Arc::new(
@@ -1009,27 +1012,34 @@ mod tests {
             .unwrap(),
         );
 
-        buffer.add_data(0, make_flight_data(1)).await.unwrap();
+        buffer
+            .add_items(0, vec![make_flight_data(1)])
+            .await
+            .unwrap();
         let _ = send_rx.recv().await.unwrap();
 
-        buffer.add_data(0, make_flight_data(2)).await.unwrap();
+        buffer
+            .add_items(0, vec![make_flight_data(2)])
+            .await
+            .unwrap();
 
         let blocked_buffer = buffer.clone();
-        let blocked = spawn(async move { blocked_buffer.add_data(0, make_flight_data(2)).await });
+        let blocked =
+            spawn(async move { blocked_buffer.add_items(0, vec![make_flight_data(2)]).await });
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(
             !blocked.is_finished(),
-            "third add_data should wait for the pending-queue semaphore"
+            "third add_items should wait for the pending-queue semaphore"
         );
 
         drop(pong_tx);
 
         let result = tokio::time::timeout(Duration::from_secs(2), blocked)
             .await
-            .expect("blocked add_data should be released after response stream close")
+            .expect("blocked add_items should be released after response stream close")
             .unwrap();
-        let error = result.expect_err("released add_data should observe exchange abort");
+        let error = result.expect_err("released add_items should observe exchange abort");
         assert_eq!(error.code(), ErrorCode::ABORTED_QUERY);
         assert_eq!(
             buffer.semaphore.available_permits(),

@@ -21,7 +21,7 @@ use async_channel::Sender;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 
-use super::inbound_channel::flight_data_size;
+use super::wire_format::flight_data_size;
 use crate::servers::flight::v1::network::local_channel::LocalQueueItem;
 
 /// Item stored in a per-connection sub-queue.

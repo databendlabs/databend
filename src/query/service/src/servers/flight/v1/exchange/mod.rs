@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod block_coalescer;
 mod broadcast_recv_transform;
 mod broadcast_send_transform;
 mod data_exchange;
@@ -38,7 +39,6 @@ mod statistics_sender;
 
 pub mod serde;
 
-pub use broadcast_recv_transform::CoalesceThreshold;
 pub use broadcast_recv_transform::ExchangeRecvTransform;
 pub type BroadcastRecvTransform = ExchangeRecvTransform;
 pub type HashRecvTransform = ExchangeRecvTransform;

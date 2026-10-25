@@ -20,7 +20,7 @@ use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
 
-use super::broadcast_recv_transform::CoalesceThreshold;
+use super::block_coalescer::CoalesceThreshold;
 use super::broadcast_recv_transform::ExchangeRecvTransform;
 use super::broadcast_send_transform::BroadcastSendTransform;
 use super::exchange_params::BroadcastExchangeParams;

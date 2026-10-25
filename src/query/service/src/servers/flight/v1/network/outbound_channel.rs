@@ -16,27 +16,19 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-use arrow_array::RecordBatch;
-use arrow_array::RecordBatchOptions;
 use arrow_flight::FlightData;
-use arrow_flight::FlightDescriptor;
-use arrow_ipc::CompressionType;
-use arrow_ipc::writer::CompressionContext;
-use arrow_ipc::writer::DictionaryTracker;
-use arrow_ipc::writer::IpcDataGenerator;
 use arrow_ipc::writer::IpcWriteOptions;
 use arrow_schema::Schema as ArrowSchema;
-use bytes::Bytes;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_io::prelude::BinaryWrite;
-use databend_common_io::prelude::bincode_serialize_into_buf;
 use databend_common_settings::FlightCompression;
 
 use super::outbound_buffer::ExchangeSinkBuffer;
+use super::wire_format::encode_block_for_thread;
+use super::wire_format::make_ipc_options;
+use super::wire_format::serialize_block_for_thread;
 
 /// Outbound channel trait for sending data blocks.
 /// Supports both local (zero-copy) and remote (serialized) channels.
@@ -49,105 +41,9 @@ pub trait OutboundChannel: Send + Sync {
     async fn add_block(&self, block: DataBlock) -> Result<()>;
 }
 
-// ---------------------------------------------------------------------------
-// Shared serialization helpers
-// ---------------------------------------------------------------------------
-
-fn flight_compression(compression: Option<FlightCompression>) -> Option<CompressionType> {
-    match compression {
-        None => None,
-        Some(FlightCompression::Lz4) => Some(CompressionType::LZ4_FRAME),
-        Some(FlightCompression::Zstd) => Some(CompressionType::ZSTD),
-    }
-}
-
-fn make_ipc_options(compression: Option<FlightCompression>) -> Result<IpcWriteOptions> {
-    Ok(IpcWriteOptions::default().try_with_compression(flight_compression(compression))?)
-}
-
-fn encode_batch(
-    batch: &RecordBatch,
-    ipc_options: &IpcWriteOptions,
-) -> Result<(Vec<FlightData>, FlightData)> {
-    let data_gen = IpcDataGenerator::default();
-    let mut dictionary_tracker = DictionaryTracker::new(false);
-    let mut compression_context = CompressionContext::default();
-    let (encoded_dictionaries, encoded_batch) = data_gen.encode(
-        batch,
-        &mut dictionary_tracker,
-        ipc_options,
-        &mut compression_context,
-    )?;
-    let dictionaries: Vec<FlightData> = encoded_dictionaries.into_iter().map(Into::into).collect();
-    let batch_data: FlightData = encoded_batch.into();
-    Ok((dictionaries, batch_data))
-}
-
-fn serialize_to_batches(
-    block: DataBlock,
-    ipc_options: &IpcWriteOptions,
-) -> Result<(Vec<FlightData>, Vec<FlightData>)> {
-    if block.is_empty() {
-        let empty_batch = RecordBatch::try_new_with_options(
-            Arc::new(ArrowSchema::empty()),
-            vec![],
-            &RecordBatchOptions::new().with_row_count(Some(0)),
-        )?;
-        let (dicts, batch) = encode_batch(&empty_batch, ipc_options)?;
-        Ok((dicts, vec![batch]))
-    } else {
-        let schema = block.infer_schema();
-        let arrow_schema = ArrowSchema::from(&schema);
-        let batch = block.to_record_batch_with_dataschema(&schema)?;
-        let _ = &arrow_schema; // used for schema inference, batch carries it
-        let (dicts, batch_data) = encode_batch(&batch, ipc_options)?;
-        Ok((dicts, vec![batch_data]))
-    }
-}
-
-/// Serialize a DataBlock into a list of FlightData (dictionaries + fragments).
-/// The `descriptor` is attached to each FlightData for routing.
-pub fn serialize_block(
-    block: DataBlock,
-    ipc_options: &IpcWriteOptions,
-    descriptor: Option<FlightDescriptor>,
-) -> Result<Vec<FlightData>> {
-    if block.is_empty() && block.get_meta().is_none() {
-        return Ok(vec![]);
-    }
-
-    // Build metadata (row count + block meta) before moving block
-    let mut meta = vec![];
-    meta.write_scalar_own(block.num_rows() as u32)?;
-    bincode_serialize_into_buf(&mut meta, &block.get_meta())?;
-
-    let (dict_data, value_data) = serialize_to_batches(block, ipc_options)?;
-
-    let meta_bytes: Bytes = meta.into();
-    let mut result = Vec::with_capacity(dict_data.len() + value_data.len());
-
-    // Dictionary data with marker (0x05)
-    for mut dict in dict_data {
-        let mut app_metadata = dict.app_metadata.to_vec();
-        app_metadata.push(0x05);
-        dict.app_metadata = app_metadata.into();
-        dict.flight_descriptor = descriptor.clone();
-        result.push(dict);
-    }
-
-    // Fragment data with metadata (0x01)
-    for value in value_data {
-        let mut metadata = meta_bytes.to_vec();
-        metadata.push(0x01);
-        result.push(FlightData {
-            app_metadata: metadata.into(),
-            data_body: value.data_body,
-            data_header: value.data_header,
-            flight_descriptor: descriptor.clone(),
-        });
-    }
-
-    Ok(result)
+fn record_exchange_profile(block: &DataBlock) {
+    Profile::record_usize_profile(ProfileStatisticsName::ExchangeRows, block.num_rows());
+    Profile::record_usize_profile(ProfileStatisticsName::ExchangeBytes, block.memory_size());
 }
 
 // ---------------------------------------------------------------------------
@@ -188,63 +84,9 @@ impl OutboundChannel for RemoteChannel {
     }
 
     async fn add_block(&self, block: DataBlock) -> Result<()> {
+        record_exchange_profile(&block);
         let items = serialize_block_for_thread(block, self.channel_id, &self.ipc_options)?;
         self.buffer.add_items(self.dest_idx, items).await
-    }
-}
-
-/// Serialize a block for thread `tid` of a remote node: the tid is prefixed to the
-/// app_metadata of every FlightData so the receiver can route it.
-fn serialize_block_for_thread(
-    block: DataBlock,
-    tid: usize,
-    ipc_options: &IpcWriteOptions,
-) -> Result<Vec<FlightData>> {
-    Profile::record_usize_profile(ProfileStatisticsName::ExchangeRows, block.num_rows());
-    Profile::record_usize_profile(ProfileStatisticsName::ExchangeBytes, block.memory_size());
-
-    let tid_prefix = (tid as u16).to_le_bytes();
-    let flight_data_list = serialize_block(block, ipc_options, None)?;
-
-    Ok(flight_data_list
-        .into_iter()
-        .map(|flight_data| {
-            let mut metadata = tid_prefix.to_vec();
-            metadata.extend_from_slice(&flight_data.app_metadata);
-            FlightData {
-                app_metadata: metadata.into(),
-                ..flight_data
-            }
-        })
-        .collect())
-}
-
-/// Marker of a block whose whole IPC body is one size-prepended LZ4 block.
-/// Its metadata is the same as a plain fragment (0x01).
-pub const LZ4_BODY_MARKER: u8 = 0x06;
-
-/// Marker of a block whose whole IPC body is one ZSTD frame, prepended by the
-/// uncompressed size as a little-endian u32. Its metadata is the same as a plain
-/// fragment (0x01).
-pub const ZSTD_BODY_MARKER: u8 = 0x07;
-
-/// Compress a whole IPC body. Returns the compressed body and its marker.
-fn compress_body(compression: FlightCompression, body: &[u8]) -> Result<(Vec<u8>, u8)> {
-    match compression {
-        FlightCompression::Lz4 => Ok((
-            lz4_flex::block::compress_prepend_size(body),
-            LZ4_BODY_MARKER,
-        )),
-        FlightCompression::Zstd => {
-            let size = u32::try_from(body.len()).map_err(|_| {
-                ErrorCode::Internal(format!("IPC body of {} bytes is too large", body.len()))
-            })?;
-            let compressed = zstd::bulk::compress(body, zstd::DEFAULT_COMPRESSION_LEVEL)?;
-            let mut data = Vec::with_capacity(4 + compressed.len());
-            data.extend_from_slice(&size.to_le_bytes());
-            data.extend_from_slice(&compressed);
-            Ok((data, ZSTD_BODY_MARKER))
-        }
     }
 }
 
@@ -289,35 +131,14 @@ impl RemoteNodeChannel {
     /// Encode `block` for thread `tid` of the remote node, in the same format as
     /// [`RemoteChannel`] sends.
     pub fn encode(&self, tid: usize, block: DataBlock) -> Result<FlightData> {
-        Profile::record_usize_profile(ProfileStatisticsName::ExchangeRows, block.num_rows());
-        Profile::record_usize_profile(ProfileStatisticsName::ExchangeBytes, block.memory_size());
-
-        let mut app_metadata = Vec::with_capacity(16);
-        app_metadata.extend_from_slice(&(tid as u16).to_le_bytes());
-        app_metadata.write_scalar_own(block.num_rows() as u32)?;
-        bincode_serialize_into_buf(&mut app_metadata, &block.get_meta())?;
-
-        let batch = block.to_record_batch_with_arrow_schema(&self.arrow_schema)?;
-        let (dictionaries, mut data) = encode_batch(&batch, &self.ipc_options)?;
-        if !dictionaries.is_empty() {
-            return Err(ErrorCode::Unimplemented(
-                "dictionary encoded columns are not supported in hash shuffle",
-            ));
-        }
-
-        match self.compression {
-            Some(compression) => {
-                let (body, marker) = compress_body(compression, &data.data_body)?;
-                data.data_body = body.into();
-                app_metadata.push(marker);
-            }
-            None => app_metadata.push(0x01),
-        }
-
-        Ok(FlightData {
-            app_metadata: app_metadata.into(),
-            ..data
-        })
+        record_exchange_profile(&block);
+        encode_block_for_thread(
+            tid,
+            block,
+            &self.arrow_schema,
+            &self.ipc_options,
+            self.compression,
+        )
     }
 
     /// Queue encoded blocks for the remote node.
@@ -405,11 +226,11 @@ mod tests {
     use tonic::Status;
 
     use super::*;
-    use crate::servers::flight::v1::network::inbound_channel::deserialize_flight_data;
-    use crate::servers::flight::v1::network::inbound_channel::strip_tid;
     use crate::servers::flight::v1::network::outbound_buffer::ExchangeBufferConfig;
     use crate::servers::flight::v1::network::outbound_buffer::ExchangeSinkBuffer;
     use crate::servers::flight::v1::network::outbound_transport::PingPongExchange;
+    use crate::servers::flight::v1::network::wire_format::deserialize_flight_data;
+    use crate::servers::flight::v1::network::wire_format::strip_tid;
 
     fn test_runtime() -> Arc<Runtime> {
         Arc::new(Runtime::with_worker_threads(2, None).unwrap())
