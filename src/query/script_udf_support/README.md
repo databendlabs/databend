@@ -207,6 +207,8 @@ sandbox and quotas as scalar ones: a worker started for an aggregate loads its
   exchange exactly as before) and travel with every request, so workers are
   stateless: any pooled worker serves any request, and a killed worker loses no
   aggregation state.
+- Updated group states are copied out of the worker response, so a state never
+  keeps the whole response of its block alive.
 - Requests are batched per block: `accumulate_keys` sends the distinct states of
   a block, a row-to-state index and the arguments once; the worker applies rows
   to their state in row order. `merge_serialized` does the same for partial
@@ -233,6 +235,12 @@ resource exhaustion inside the query process, bounded by:
 udf_script_memory_limit_mb = 1024        # JS heap per runtime / WASM linear memory per instance, 0 = unlimited
 udf_script_execution_timeout_secs = 300  # JS only: per call and for top-level module code, 0 = unlimited
 ```
+
+The JavaScript deadline spans a whole operation (`call`, `create_state`,
+`accumulate`, `merge`, `finish`): argument conversion, the user function,
+continuations of async functions and Arrow conversion of the result, which can
+run user getters and `toJSON`. `arrow-udf-runtime`'s own `set_timeout` only
+covers the user function call and is not used.
 
 WebAssembly has no execution timeout yet: `arrow-udf-runtime` creates the
 wasmtime `Store` internally, so epoch/fuel deadlines need an upstream change.

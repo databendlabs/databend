@@ -64,8 +64,7 @@ use super::python_worker::PythonWorkerManager;
 use super::runtime_pool::Pool;
 use super::runtime_pool::RuntimeBuilder;
 use super::script_udf_limits::ScriptUdfLimits;
-use super::script_udf_limits::limit_js_runtime_calls;
-use super::script_udf_limits::limit_js_runtime_init;
+use super::script_udf_limits::LimitedJsRuntime;
 use super::script_udf_limits::wasm_runtime_config;
 use crate::ScriptUdfFunctionDesc;
 
@@ -191,7 +190,7 @@ impl ScriptRuntime {
         let result_batch = match self {
             ScriptRuntime::JavaScript(pool) => pool.call(|runtime| {
                 GlobalIORuntime::instance().block_on(async move {
-                    runtime.call(&func.name, input_batch).await.map_err(|err| {
+                    runtime.bounded(|js| js.call(&func.name, input_batch)).await.map_err(|err| {
                         ErrorCode::UDFRuntimeError(format!(
                             "JavaScript UDF {:?} execution failed: {err}",
                             func.name
@@ -503,26 +502,25 @@ pub struct JsRuntimeBuilder {
     counter: AtomicUsize,
 }
 
-impl RuntimeBuilder<arrow_udf_runtime::javascript::Runtime> for JsRuntimeBuilder {
+impl RuntimeBuilder<LimitedJsRuntime> for JsRuntimeBuilder {
     type Error = ErrorCode;
 
-    fn build(&self) -> Result<arrow_udf_runtime::javascript::Runtime> {
+    fn build(&self) -> Result<LimitedJsRuntime> {
         let start = std::time::Instant::now();
         let limits = ScriptUdfLimits::current();
         let mut runtime = GlobalIORuntime::instance().block_on(async move {
-            let runtime = arrow_udf_runtime::javascript::Runtime::new()
+            LimitedJsRuntime::new(&limits)
                 .await
-                .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))?;
-            limit_js_runtime_init(&runtime, &limits).await;
-            Ok(runtime)
+                .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))
         })?;
 
-        let converter = runtime.converter_mut();
+        let converter = runtime.runtime_mut().converter_mut();
         converter.set_arrow_extension_key(EXTENSION_KEY);
         converter.set_json_extension_name(ARROW_EXT_TYPE_VARIANT);
 
         let rt = GlobalIORuntime::instance().block_on(async move {
             runtime
+                .runtime_mut()
                 .add_function(
                     &self.name,
                     // we pass the field instead of the data type because arrow-udf-js
@@ -535,9 +533,8 @@ impl RuntimeBuilder<arrow_udf_runtime::javascript::Runtime> for JsRuntimeBuilder
                         .handler(self.handler.clone()),
                 )
                 .await?;
-            limit_js_runtime_calls(&mut runtime, &limits).await;
 
-            Ok(runtime)
+            Ok(runtime.initialized())
         });
 
         log::info!(
@@ -556,7 +553,7 @@ fn arrow_field_from_data_type(name: &str, dt: DataType) -> arrow_schema::Field {
     (&field).into()
 }
 
-type JsRuntimePool = Pool<arrow_udf_runtime::javascript::Runtime, JsRuntimeBuilder>;
+type JsRuntimePool = Pool<LimitedJsRuntime, JsRuntimeBuilder>;
 
 #[cfg(feature = "python-udf")]
 pub(super) mod python_pool {

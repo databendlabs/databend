@@ -76,8 +76,7 @@ use super::python_worker::encode_aggregate_request;
 use super::runtime_pool::Pool;
 use super::runtime_pool::RuntimeBuilder;
 use super::script_udf_limits::ScriptUdfLimits;
-use super::script_udf_limits::limit_js_runtime_calls;
-use super::script_udf_limits::limit_js_runtime_init;
+use super::script_udf_limits::LimitedJsRuntime;
 
 pub struct AggregateUdfScript {
     display_name: String,
@@ -264,8 +263,7 @@ impl AggregateUdfScript {
         let updated = python
             .accumulate(states, std::mem::take(&mut places.groups), arguments)
             .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to accumulate: {e}")))?;
-        places.write(&updated);
-        Ok(())
+        places.write(&updated)
     }
 
     #[cfg(feature = "python-udf")]
@@ -293,8 +291,7 @@ impl AggregateUdfScript {
         let updated = python
             .merge(states, std::mem::take(&mut places.groups), others)
             .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to merge: {e}")))?;
-        places.write(&updated);
-        Ok(())
+        places.write(&updated)
     }
 
     #[cfg(debug_assertions)]
@@ -386,12 +383,25 @@ impl PlaceGroups {
             .collect()
     }
 
-    fn write(self, updated: &Arc<dyn Array>) {
-        for (group, place) in self.places.into_iter().enumerate() {
+    fn write(self, updated: &Arc<dyn Array>) -> Result<()> {
+        let states = (0..self.places.len())
+            .map(|group| compact_row(updated, group))
+            .collect::<Result<Vec<_>>>()?;
+        for (place, state) in self.places.into_iter().zip(states) {
             // SAFETY: as in `state_arrays`; the old state is dropped.
-            unsafe { *place = UdfAggState(Some(updated.slice(group, 1))) };
+            unsafe { *place = UdfAggState(Some(state)) };
         }
+        Ok(())
     }
+}
+
+/// Copy one row into its own buffers. A slice would keep the whole worker
+/// response alive for as long as any group state of the block lives, so
+/// memory would grow with the number of groups per block times its size.
+#[cfg(feature = "python-udf")]
+fn compact_row(array: &Arc<dyn Array>, row: usize) -> Result<Arc<dyn Array>> {
+    let index = arrow_array::UInt32Array::from(vec![row as u32]);
+    Ok(arrow_select::take::take(array.as_ref(), &index, None)?)
 }
 
 fn serialize_state(state: &Arc<dyn Array>, writer: &mut Vec<u8>) -> std::result::Result<(), ArrowError> {
@@ -536,24 +546,23 @@ struct JsRuntimeBuilder {
     output_type: DataType,
 }
 
-impl RuntimeBuilder<arrow_udf_runtime::javascript::Runtime> for JsRuntimeBuilder {
+impl RuntimeBuilder<LimitedJsRuntime> for JsRuntimeBuilder {
     type Error = ErrorCode;
 
-    fn build(&self) -> std::result::Result<arrow_udf_runtime::javascript::Runtime, Self::Error> {
+    fn build(&self) -> std::result::Result<LimitedJsRuntime, Self::Error> {
         let limits = ScriptUdfLimits::current();
         let mut runtime = GlobalIORuntime::instance().block_on(async move {
-            let runtime = arrow_udf_runtime::javascript::Runtime::new()
+            LimitedJsRuntime::new(&limits)
                 .await
-                .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))?;
-            limit_js_runtime_init(&runtime, &limits).await;
-            Ok(runtime)
+                .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))
         })?;
-        let converter = runtime.converter_mut();
+        let converter = runtime.runtime_mut().converter_mut();
         converter.set_arrow_extension_key(EXTENSION_KEY);
         converter.set_json_extension_name(ARROW_EXT_TYPE_VARIANT);
 
         GlobalIORuntime::instance().block_on(async move {
             runtime
+                .runtime_mut()
                 .add_aggregate(
                     &self.name,
                     self.state_type.clone(),
@@ -566,9 +575,8 @@ impl RuntimeBuilder<arrow_udf_runtime::javascript::Runtime> for JsRuntimeBuilder
                 )
                 .await
                 .map_err(|e| ErrorCode::UDFDataError(format!("Cannot add aggregate: {e}")))?;
-            limit_js_runtime_calls(&mut runtime, &limits).await;
 
-            Ok(runtime)
+            Ok(runtime.initialized())
         })
     }
 }
@@ -578,7 +586,7 @@ fn arrow_field_from_data_type(name: &str, dt: DataType) -> arrow_schema::Field {
     (&field).into()
 }
 
-type JsRuntimePool = Pool<arrow_udf_runtime::javascript::Runtime, JsRuntimeBuilder>;
+type JsRuntimePool = Pool<LimitedJsRuntime, JsRuntimeBuilder>;
 
 /// Aggregate requests to the query's Python workers. Pipeline processors
 /// call aggregate functions synchronously, so each request blocks on the
@@ -677,7 +685,11 @@ impl UDAFRuntime {
         let state = match self {
             UDAFRuntime::JavaScript(pool) => pool.call(|runtime| {
                 GlobalIORuntime::instance()
-                    .block_on(async move { Ok(runtime.create_state(&pool.builder.name).await?) })
+                    .block_on(async move {
+                        Ok(runtime
+                            .bounded(|js| js.create_state(&pool.builder.name))
+                            .await?)
+                    })
                     .map_err(|err| anyhow::anyhow!(err))
             }),
             #[cfg(feature = "python-udf")]
@@ -696,7 +708,7 @@ impl UDAFRuntime {
                 GlobalIORuntime::instance()
                     .block_on(async move {
                         Ok(runtime
-                            .accumulate(&pool.builder.name, state, input)
+                            .bounded(|js| js.accumulate(&pool.builder.name, state, input))
                             .await?)
                     })
                     .map_err(|err| anyhow::anyhow!(err))
@@ -714,7 +726,11 @@ impl UDAFRuntime {
         let state = match self {
             UDAFRuntime::JavaScript(pool) => pool.call(|runtime| {
                 GlobalIORuntime::instance()
-                    .block_on(async move { Ok(runtime.merge(&pool.builder.name, states).await?) })
+                    .block_on(async move {
+                        Ok(runtime
+                            .bounded(|js| js.merge(&pool.builder.name, states))
+                            .await?)
+                    })
                     .map_err(|err| anyhow::anyhow!(err))
             }),
             #[cfg(feature = "python-udf")]
@@ -733,11 +749,65 @@ impl UDAFRuntime {
         match self {
             UDAFRuntime::JavaScript(pool) => pool.call(|runtime| {
                 GlobalIORuntime::instance()
-                    .block_on(async move { Ok(runtime.finish(&pool.builder.name, state).await?) })
+                    .block_on(async move {
+                        Ok(runtime
+                            .bounded(|js| js.finish(&pool.builder.name, state))
+                            .await?)
+                    })
                     .map_err(|err| anyhow::anyhow!(err))
             }),
             #[cfg(feature = "python-udf")]
             UDAFRuntime::Python(python) => python.finish(state.clone()).map_err(worker_error),
+        }
+    }
+}
+
+#[cfg(all(test, feature = "python-udf"))]
+mod tests {
+    use std::sync::Arc;
+
+    use arrow_array::Array;
+    use arrow_array::Int64Array;
+    use arrow_array::StringArray;
+    use arrow_array::StructArray;
+    use arrow_schema::DataType;
+    use arrow_schema::Field;
+
+    use super::compact_row;
+
+    fn states(groups: usize) -> Arc<dyn Array> {
+        let sums = Int64Array::from_iter_values(0..groups as i64);
+        let names = StringArray::from_iter_values((0..groups).map(|g| format!("group-{g}")));
+        Arc::new(StructArray::new(
+            vec![
+                Field::new("sum", DataType::Int64, true),
+                Field::new("name", DataType::Utf8, true),
+            ]
+            .into(),
+            vec![Arc::new(sums), Arc::new(names)],
+            None,
+        ))
+    }
+
+    #[test]
+    fn test_group_states_do_not_retain_the_response() {
+        let single = compact_row(&states(1), 0).unwrap().get_array_memory_size();
+        let response = states(64);
+        // A slice accounts for (and keeps alive) the whole response.
+        assert_eq!(
+            response.slice(5, 1).get_array_memory_size(),
+            response.get_array_memory_size()
+        );
+        for group in [0, 5, 63] {
+            let state = compact_row(&response, group).unwrap();
+            assert_eq!(state.len(), 1);
+            assert_eq!(state.as_ref(), response.slice(group, 1).as_ref());
+            // Independent of how many groups shared the response.
+            assert!(
+                state.get_array_memory_size() <= single + 64,
+                "{} > {single}",
+                state.get_array_memory_size()
+            );
         }
     }
 }
