@@ -1,7 +1,7 @@
 >>>> drop user if exists 'owner'
 >>>> drop role if exists role1
->>>> create user 'owner' IDENTIFIED BY 'password' with DEFAULT_ROLE='role1'
 >>>> create role role1
+>>>> create user 'owner' IDENTIFIED BY 'password' with DEFAULT_ROLE='role1'
 >>>> create or replace database test
 >>>> grant role role1 to owner
 mysql: [Warning] Using a password on the command line interface can be insecure.

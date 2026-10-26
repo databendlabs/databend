@@ -28,6 +28,7 @@ use databend_common_management::WarehouseInfo;
 use databend_common_meta_api::DatamaskApi;
 use databend_common_meta_api::RowAccessPolicyApi;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
+use databend_common_meta_app::principal::BUILTIN_ROLE_PUBLIC;
 use databend_common_meta_app::principal::GetProcedureReq;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipInfo;
@@ -1600,7 +1601,10 @@ impl AccessChecker for PrivilegeAccess {
         let user = self.ctx.get_current_user()?;
         if let Plan::AlterUser(plan) = plan {
             // Alter current user's password do not need to check privileges.
-            if plan.user_info.name == user.name && !plan.change_user_option {
+            if plan.user_info.name == user.name
+                && !plan.change_user_option
+                && plan.default_role.is_none()
+            {
                 return Ok(());
             }
         }
@@ -2418,7 +2422,7 @@ impl AccessChecker for PrivilegeAccess {
                 )
                 .await?;
             }
-            Plan::CreateUser(_) => {
+            Plan::CreateUser(plan) => {
                 self.validate_access(
                     &GrantObject::Global,
                     UserPrivilegeType::CreateUser,
@@ -2426,6 +2430,14 @@ impl AccessChecker for PrivilegeAccess {
                     false,
                 )
                     .await?;
+                if plan
+                    .user_option
+                    .default_role()
+                    .is_some_and(|role| role != BUILTIN_ROLE_PUBLIC)
+                {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Grant, false, false)
+                        .await?;
+                }
             }
             Plan::DropUser(_) => {
                 self.validate_access(
