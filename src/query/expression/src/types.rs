@@ -22,6 +22,7 @@ pub mod date;
 pub mod decimal;
 pub mod empty_array;
 pub mod empty_map;
+pub mod encoded;
 pub mod generic;
 pub mod geography;
 pub mod geometry;
@@ -79,6 +80,11 @@ pub use self::date::DateType;
 pub use self::decimal::*;
 pub use self::empty_array::EmptyArrayType;
 pub use self::empty_map::EmptyMapType;
+pub use self::encoded::DictColumn;
+pub use self::encoded::EncodedColumn;
+pub use self::encoded::EncodedView;
+pub use self::encoded::ForColumn;
+pub use self::encoded::NarrowBuffer;
 pub use self::generic::GenericType;
 pub use self::geography::GeographyColumn;
 pub use self::geography::GeographyType;
@@ -859,6 +865,17 @@ pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
     fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain, ErrorCode>;
 
     fn try_downcast_column(col: &Column) -> Result<Self::Column, ErrorCode>;
+
+    fn try_downcast_encoded(_col: &EncodedColumn) -> Option<EncodedView<Self>> {
+        None
+    }
+
+    fn for_scalar_ref<'a>(_raw: i128) -> Self::ScalarRef<'a> {
+        unreachable!(
+            "{} does not read frame of reference columns",
+            std::any::type_name::<Self>()
+        )
+    }
 
     fn column_len(col: &Self::Column) -> usize;
     fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>>;

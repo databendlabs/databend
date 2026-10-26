@@ -39,6 +39,8 @@ use crate::ColumnView;
 use crate::ScalarRef;
 use crate::TakeIndex;
 use crate::property::Domain;
+use crate::types::EncodedColumn;
+use crate::types::EncodedView;
 use crate::types::NullableType;
 use crate::types::nullable::NullableColumnBuilder;
 use crate::values::Column;
@@ -70,9 +72,20 @@ impl AccessType for StringType {
     }
 
     fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        if let Column::Encoded(encoded) = col {
+            // Kernels that do not understand the encoding see the decoded values.
+            return match encoded.decode() {
+                Column::String(c) => Ok(c),
+                _ => Err(column_type_error::<Self>(col)),
+            };
+        }
         col.as_string()
             .cloned()
             .ok_or_else(|| column_type_error::<Self>(col))
+    }
+
+    fn try_downcast_encoded(col: &EncodedColumn) -> Option<EncodedView<Self>> {
+        EncodedView::try_dict(col)
     }
 
     fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {

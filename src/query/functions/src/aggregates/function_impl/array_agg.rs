@@ -255,10 +255,7 @@ impl AggregateArrayAggStateZST {
                 }
             }
         } else {
-            let length = match column {
-                ColumnView::Const(_, n) => n,
-                ColumnView::Column(n) => n,
-            };
+            let length = column.len();
             self.validity.extend_constant(length, true);
         }
         Ok(())

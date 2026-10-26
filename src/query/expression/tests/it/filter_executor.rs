@@ -14,7 +14,9 @@
 
 use std::borrow::Cow;
 
+use databend_common_column::bitmap::Bitmap;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
@@ -24,13 +26,159 @@ use databend_common_expression::Scalar;
 use databend_common_expression::filter::FilterExecutor;
 use databend_common_expression::filter::SelectExpr;
 use databend_common_expression::filter::SelectExprBuilder;
+use databend_common_expression::filter::generate_like_pattern;
 use databend_common_expression::type_check;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DictColumn;
+use databend_common_expression::types::EncodedColumn;
 use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::NarrowBuffer;
+use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
 use databend_common_expression_test_support::parse_raw_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+
+/// The LIKE selector matches dictionary values without decoding, including under AND/OR.
+/// Nullable dictionaries apply validity after matching so NOT LIKE still rejects NULL.
+#[test]
+fn test_select_like_over_dictionary() {
+    let keys = [1u64, 0, 1, 2, 3, 4, 0, 2];
+    let num_rows = keys.len();
+    let encoded = Column::Encoded(Box::new(EncodedColumn::Dict(DictColumn::new(
+        NarrowBuffer::pack(keys.into_iter(), 5),
+        StringType::from_data(vec!["yyy/b", "xxx/a", "xxx/c", "", "xxx_100%", "unused"]),
+    ))));
+    let func_ctx = FunctionContext::default();
+    for nullable in [false, true] {
+        let url = if nullable {
+            NullableColumn::new_column(
+                encoded.clone(),
+                Bitmap::from_iter([true, true, false, true, false, true, true, true]),
+            )
+        } else {
+            encoded.clone()
+        };
+        let columns = [
+            ("url", url.data_type()),
+            ("f", DataType::Boolean),
+            ("k", DataType::Number(NumberDataType::Int32)),
+        ];
+        let block = DataBlock::new(
+            vec![
+                url.into(),
+                BooleanType::from_data(vec![true, true, false, false, true, true, false, true])
+                    .into(),
+                Int32Type::from_data((0..num_rows as i32).collect()).into(),
+            ],
+            num_rows,
+        );
+        let plain = DataBlock::new(
+            vec![
+                BlockEntry::try_from(block.get_by_offset(0).decoded_value()).unwrap(),
+                block.get_by_offset(1).clone(),
+                block.get_by_offset(2).clone(),
+            ],
+            num_rows,
+        );
+        let column_ref = type_check::check(
+            &parse_raw_expr("url", &columns, &BUILTIN_FUNCTIONS),
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+        let pattern = generate_like_pattern(b"xxx%".as_slice(), 0);
+        let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+        // Assert that encoded input reaches the fast path, not just that decoding gives
+        // correct results. Ordinary strings must instead use the fallback.
+        assert!(
+            evaluator
+                .try_like_encoded(&column_ref, &pattern, false)
+                .is_some()
+        );
+        assert!(
+            Evaluator::new(&plain, &func_ctx, &BUILTIN_FUNCTIONS)
+                .try_like_encoded(&column_ref, &pattern, false)
+                .is_none()
+        );
+
+        for text in [
+            "url LIKE 'xxx%'",
+            "NOT (url LIKE 'xxx%')",
+            "url LIKE 'xxx/a'",
+            "url LIKE '%/a'",
+            "url LIKE '%xx%'",
+            "url LIKE 'x%/%'",
+            "url LIKE 'xxx/_'",
+            "url LIKE '%'",
+            "NOT (url LIKE '%')",
+            "url LIKE ''",
+            "url LIKE 'unused'",
+            "NOT (url LIKE 'unused')",
+            r#""like"(url, 'xxx!_%', '!')"#,
+            "f AND url LIKE 'xxx%'",
+            "url LIKE 'xxx%' AND f",
+            "f OR url LIKE 'xxx%'",
+            "url LIKE 'xxx%' OR f",
+            "(url LIKE 'xxx%' OR f) AND (NOT (url LIKE '%/a') OR k = 2)",
+            "(f AND url LIKE 'xxx%') OR (k > 3 AND NOT (url LIKE '%/a'))",
+        ] {
+            let expr = type_check::check(
+                &parse_raw_expr(text, &columns, &BUILTIN_FUNCTIONS),
+                &BUILTIN_FUNCTIONS,
+            )
+            .unwrap();
+            let expr = ConstantFolder::fold(Cow::Borrowed(&expr), &func_ctx, &BUILTIN_FUNCTIONS)
+                .0
+                .into_owned();
+            let truth = type_check::check(
+                &parse_raw_expr(&format!("is_true({text})"), &columns, &BUILTIN_FUNCTIONS),
+                &BUILTIN_FUNCTIONS,
+            )
+            .unwrap();
+            let expected = Evaluator::new(&plain, &func_ctx, &BUILTIN_FUNCTIONS)
+                .run(&truth)
+                .unwrap()
+                .try_downcast::<BooleanType>()
+                .unwrap();
+            let expected = plain.clone().filter_boolean_value(&expected).unwrap();
+            let (select_expr, _): (SelectExpr, bool) = SelectExprBuilder::new(&BUILTIN_FUNCTIONS)
+                .build(&expr)
+                .into();
+            // LIKE '%' can be folded to a constant / validity check before selection.
+            if !text.contains("'%'") {
+                assert!(format!("{select_expr:?}").contains("Like(("), "{text}");
+            }
+            let mut executor = FilterExecutor::new(
+                expr,
+                func_ctx.clone(),
+                num_rows,
+                None,
+                &BUILTIN_FUNCTIONS,
+                true,
+            );
+            for _ in 0..16 {
+                let actual = executor.filter(block.clone()).unwrap();
+                assert_eq!(actual.num_rows(), expected.num_rows(), "{text}");
+                if actual.is_empty() {
+                    continue;
+                }
+                assert_eq!(
+                    actual.get_by_offset(2).value(),
+                    expected.get_by_offset(2).value(),
+                    "{text}"
+                );
+                assert_eq!(
+                    actual.get_by_offset(0).decoded_value(),
+                    expected.get_by_offset(0).decoded_value(),
+                    "{text}"
+                );
+                let column = actual.get_by_offset(0).to_column().remove_nullable();
+                assert!(column.is_encoded(), "{text}");
+            }
+        }
+    }
+}
 
 /// The null-extended side of an outer join is a constant NULL column. A LIKE over it
 /// selects nothing, but it must still hand its rows on as false so that an enclosing OR

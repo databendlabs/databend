@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_schema::Field;
+use arrow_schema::Fields;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -33,6 +35,8 @@ use databend_common_storage::ColumnNodes;
 use opendal::Operator;
 
 use crate::BlockReadResult;
+use crate::io::read::block::parquet::ColumnEncoding;
+use crate::io::read::block::parquet::dictionary_hint_fields;
 
 // TODO: make BlockReader as a trait.
 #[derive(Clone)]
@@ -46,6 +50,13 @@ pub struct BlockReader {
     pub(crate) default_vals: Vec<Scalar>,
     pub(crate) all_field_default_vals: Vec<Scalar>,
     pub put_cache: bool,
+    /// In-memory encoding of the projected columns that are kept encoded, by column id; see
+    /// `enable_encoded_columns`. Nested columns are never encoded. Fixed per reader, so computed
+    /// once here and shared with [`BlockReadContext`], which builds the cache keys.
+    pub(crate) column_encodings: Arc<HashMap<ColumnId, ColumnEncoding>>,
+    /// Arrow fields the Parquet columns are read as, if they differ from the original schema,
+    /// see [`dictionary_hint_fields`]. Fixed per reader, so computed once here.
+    pub(crate) parquet_hint_fields: Option<Fields>,
 
     pub original_schema: TableSchemaRef,
 }
@@ -61,6 +72,7 @@ pub struct BlockReadContext {
     operator: Operator,
     projection: BlockReadProjection,
     put_cache: bool,
+    column_encodings: Arc<HashMap<ColumnId, ColumnEncoding>>,
 }
 
 fn inner_project_field_default_values(default_vals: &[Scalar], paths: &[usize]) -> Result<Scalar> {
@@ -142,6 +154,34 @@ impl BlockReader {
             .collect();
         let project_indices = Arc::new(Self::build_projection_indices(&project_column_nodes));
         let project_column_nodes = Arc::new(project_column_nodes);
+        // Only query scans (which populate the cache) produce encoded columns.
+        let encode_columns = put_cache && ctx.get_settings().get_enable_encoded_columns()?;
+        let column_encodings = projected_schema
+            .fields
+            .iter()
+            .zip(project_column_nodes.iter())
+            .filter(|_| encode_columns)
+            .filter(|(_, column_node)| !column_node.is_nested)
+            .filter_map(|(field, _)| {
+                let encoding = ColumnEncoding::for_type(&field.data_type().into())?;
+                Some((field.column_id, encoding))
+            })
+            .collect::<HashMap<_, _>>();
+        // Projected columns whose Parquet dictionary is kept.
+        let parquet_hint_fields = dictionary_hint_fields(
+            &original_schema,
+            projected_schema
+                .fields
+                .iter()
+                .filter(|field| {
+                    column_encodings
+                        .get(&field.column_id)
+                        .is_some_and(|encoding| {
+                            encoding.reuses_parquet_dictionary(&field.data_type().into())
+                        })
+                })
+                .map(|field| field.column_id),
+        );
 
         Ok(Arc::new(BlockReader {
             ctx,
@@ -153,6 +193,8 @@ impl BlockReader {
             default_vals,
             all_field_default_vals,
             put_cache,
+            column_encodings: Arc::new(column_encodings),
+            parquet_hint_fields,
             original_schema,
         }))
     }
@@ -240,6 +282,7 @@ impl BlockReader {
                 project_indices: self.project_indices.clone(),
             },
             put_cache: self.put_cache,
+            column_encodings: self.column_encodings.clone(),
         }
     }
 }
@@ -255,6 +298,10 @@ impl BlockReadContext {
 
     pub(crate) fn put_cache(&self) -> bool {
         self.put_cache
+    }
+
+    pub(crate) fn column_encoding(&self, column_id: ColumnId) -> Option<ColumnEncoding> {
+        self.column_encodings.get(&column_id).copied()
     }
 
     pub(crate) fn report_cache_metrics<'a>(

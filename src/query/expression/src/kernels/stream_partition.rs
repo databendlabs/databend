@@ -423,6 +423,9 @@ impl BlockPartitionStream {
 }
 
 pub fn copy_column<I: Index>(indices: &[I], from: &Column, to: &mut ColumnBuilder) {
+    if let Column::Encoded(encoded) = from {
+        return copy_column(indices, &encoded.decode(), to);
+    }
     match to {
         ColumnBuilder::EmptyArray { len } => match from {
             Column::EmptyArray { .. } => *len += indices.len(),

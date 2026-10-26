@@ -70,6 +70,10 @@ impl ScalarFunction for Box<dyn ScalarFunction> {
     fn eval(&self, args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
         (**self).eval(args, ctx)
     }
+
+    fn accepts_encoded_args(&self) -> bool {
+        (**self).accepts_encoded_args()
+    }
 }
 
 impl ScalarFunctionDomain for FunctionDomain<AnyType> {

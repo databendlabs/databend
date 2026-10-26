@@ -109,7 +109,6 @@ async fn run_prewhere_test_with_threshold(
     // Use the new unified API that handles all states internally
     let ReadStateOutput {
         block: data_block,
-        row_selection,
         bitmap_selection,
         scan_stats,
     } = read_state.deserialize_and_filter(column_chunks.clone(), &part)?;
@@ -179,7 +178,6 @@ async fn run_prewhere_test_with_threshold(
 
     // Verify the bitmap_selection is present and has the correct format
     {
-        assert!(row_selection.is_some());
         assert!(bitmap_selection.is_some());
         let bitmap = bitmap_selection.unwrap();
         // Row 2 (x=3, y=30, z=300, d=3000) should be the only one selected

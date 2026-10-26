@@ -19,6 +19,7 @@ use crate::Column;
 use crate::ProjectedBlock;
 use crate::types::AnyType;
 use crate::types::BinaryColumn;
+use crate::types::EncodedColumn;
 use crate::types::NullableColumn;
 use crate::types::NumberColumn;
 use crate::types::binary::BinaryColumnBuilder;
@@ -38,7 +39,8 @@ pub fn serialize_group_columns(
 ) -> BinaryColumn {
     let columns: Vec<Column> = columns
         .iter()
-        .map(|entry| normalize_bitmap_in_column(entry.to_column()))
+        // Decoded once per block: rows are serialized one at a time.
+        .map(|entry| normalize_bitmap_in_column(entry.to_column().decode_encoded()))
         .collect();
     let mut builder = BinaryColumnBuilder::with_capacity(num_rows, serialize_size);
 
@@ -62,6 +64,15 @@ pub fn serialize_group_columns(
 pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &mut Vec<u8>) {
     unsafe {
         match column {
+            Column::Encoded(encoded) => match encoded.as_ref() {
+                EncodedColumn::Dict(c) => {
+                    let key = c.keys.get_unchecked(row) as usize;
+                    serialize_column_binary(&c.values, key, row_space)
+                }
+                EncodedColumn::For(_) => encoded.with_row(row, |column, row| {
+                    serialize_column_binary(column, row, row_space)
+                }),
+            },
             Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
             Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
                 NumberColumn::NUM_TYPE(v) => {
