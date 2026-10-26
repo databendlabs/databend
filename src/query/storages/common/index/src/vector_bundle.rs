@@ -57,6 +57,10 @@ pub const VECTOR_BUNDLE_MAX_FOOTER_SIZE: usize = 16 * 1024 * 1024;
 pub const VECTOR_BUNDLE_INITIAL_FOOTER_READ_SIZE: usize = 64 * 1024;
 const MAGIC: &[u8; 8] = b"DBVINDEX";
 const MAX_COMPONENT_SIZE: u64 = 1024 * 1024 * 1024;
+/// ZSTD level for HNSW components. Level 1 matches the legacy Parquet default and,
+/// for SQ8 data (few repeats, skewed bytes), compresses better than higher levels:
+/// ~43% vs ~50% at level 3, and several times faster.
+const HNSW_ZSTD_LEVEL: i32 = 1;
 
 /// Codec of a component, persisted in its entry; readers only use the persisted
 /// value. HNSW components are compressed (`VectorBundleBuilder::add_hnsw`); validity
@@ -371,7 +375,7 @@ impl VectorBundleBuilder {
         let compressor = match zstd {
             Some(compressor) => compressor,
             None => zstd.insert(
-                zstd::bulk::Compressor::new(3)
+                zstd::bulk::Compressor::new(HNSW_ZSTD_LEVEL)
                     .map_err(|error| invalid(&format!("ZSTD context creation failed: {error}")))?,
             ),
         };
