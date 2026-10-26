@@ -17,6 +17,7 @@
 
 use std::borrow::Cow;
 
+use databend_common_column::bitmap::Bitmap;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ConstantFolder;
@@ -26,6 +27,10 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionProperty;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::Value;
 use databend_common_expression::type_check;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
@@ -41,6 +46,7 @@ use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::NarrowBuffer;
 use databend_common_expression::types::NumberColumn;
+use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
@@ -256,7 +262,7 @@ fn test_eval_on_encoded_columns() {
             .partial_run(&expr, None, &mut EvaluateOptions::default(), true)
             .unwrap();
         assert_eq!(kept.is_encoded(), stays_encoded, "{text}");
-        assert_eq!(kept.decode_encoded(), plain, "{text}");
+        assert_eq!(kept.decode_owned(), plain, "{text}");
 
         // The selector (filter operator) agrees on predicates.
         if expr.data_type() == &DataType::Boolean {
@@ -275,6 +281,216 @@ fn test_eval_on_encoded_columns() {
             assert_eq!(count(&encoded_block), count(&plain_block), "{text}");
         }
     }
+}
+
+/// Compare both physical representations, including partial evaluation and decoded callers.
+fn eval_dictionary(
+    text: &str,
+    encoded: Column,
+    plain: Column,
+    validity: Option<Bitmap>,
+    stays_encoded: bool,
+) -> Value<databend_common_expression::types::AnyType> {
+    let names = [("s", plain.data_type())];
+    let raw_expr = parser::parse_raw_expr(text, &names, &BUILTIN_FUNCTIONS);
+    let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+    let func_ctx = FunctionContext::default();
+    let evaluate = |column: Column, keep_encoded| {
+        let block = DataBlock::new(vec![BlockEntry::from(column.clone())], column.len());
+        Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS)
+            .partial_run(
+                &expr,
+                validity.clone(),
+                &mut EvaluateOptions::default(),
+                keep_encoded,
+            )
+            .unwrap()
+    };
+    let expected = evaluate(plain, false);
+    let result = evaluate(encoded.clone(), true);
+    assert_eq!(result.is_encoded(), stays_encoded, "{text}");
+    assert_eq!(result.clone().decode_owned(), expected, "{text}");
+    assert_eq!(evaluate(encoded, false), expected, "{text}");
+    result
+}
+
+#[test]
+fn test_dictionary_function_evaluation() {
+    let values = ["https://a.com/x", "https://a.com/y", "https://b.com/z"];
+    let keys = [0, 1, 2, 0, 1, 0, 2, 1];
+    let (encoded, plain) = dict(&values, &keys);
+    for text in [
+        "octet_length(s)",
+        "length(s)",
+        "regexp_replace(s, '^https://([^/]+)/.*$', '$1')",
+        "octet_length(regexp_replace(s, '^https://([^/]+)/.*$', '$1'))",
+        "regexp_replace('prefix', 'fix', s)",
+    ] {
+        eval_dictionary(text, encoded.clone(), plain.clone(), None, true);
+    }
+
+    // Mapping is not injective: codes 0 and 1 now represent the same value. Keep the
+    // original keys rather than assuming dictionary entries must remain distinct.
+    let result = eval_dictionary(
+        "regexp_replace(s, '^https://([^/]+)/.*$', '$1')",
+        encoded,
+        plain,
+        None,
+        true,
+    );
+    let Value::Column(Column::Encoded(result)) = result else {
+        unreachable!()
+    };
+    let result = result.as_dict().unwrap();
+    assert_eq!(
+        result.values,
+        StringType::from_data(vec!["a.com", "a.com", "b.com"])
+    );
+    assert_eq!(result.keys.iter().collect::<Vec<_>>(), keys.map(u64::from));
+
+    let (encoded, plain) = dict(&["é", "hello"], &[0, 1, 0, 1]);
+    eval_dictionary("length(s)", encoded.clone(), plain.clone(), None, true);
+    eval_dictionary("octet_length(s)", encoded, plain, None, true);
+}
+
+#[test]
+fn test_dictionary_function_fallbacks() {
+    let (encoded, plain) = dict(&["a", "b"], &[0, 1, 0, 1]);
+    // Two column arguments, including the same dictionary passed twice, are not lifted.
+    eval_dictionary(
+        "regexp_replace(s, s, 'x')",
+        encoded.clone(),
+        plain.clone(),
+        None,
+        false,
+    );
+    // Existing kernels retain their partial-evaluation and nullable semantics.
+    eval_dictionary(
+        "octet_length(s)",
+        encoded.clone(),
+        plain.clone(),
+        Some(Bitmap::from_iter([true, false, true, false])),
+        false,
+    );
+    eval_dictionary(
+        "octet_length(s)",
+        encoded.wrap_nullable(Some(Bitmap::from_iter([true, false, true, true]))),
+        plain.wrap_nullable(Some(Bitmap::from_iter([true, false, true, true]))),
+        None,
+        false,
+    );
+    for keys in [&[][..], &[0, 1][..]] {
+        let (encoded, plain) = dict(&["a", "b"], keys);
+        eval_dictionary("octet_length(s)", encoded, plain, None, false);
+    }
+
+    // Errors in unreferenced dictionary entries do not apply to any logical row.
+    // Keep the dictionary result instead of decoding and evaluating the rows again.
+    let (encoded, plain) = dict(&["", "not referenced"], &[0, 0, 0, 0]);
+    eval_dictionary("regexp_replace(s, '[', 'x')", encoded, plain, None, true);
+    let (encoded, plain) = dict(&["a", "["], &[0, 0, 0, 0]);
+    eval_dictionary("regexp_replace('abc', s, 'x')", encoded, plain, None, true);
+    let (encoded, plain) = dict(&["", "bad"], &[0, 1, 0, 1]);
+    eval_dictionary(
+        "is_not_error(regexp_replace(s, '[', 'x'))",
+        encoded.clone(),
+        plain.clone(),
+        None,
+        false,
+    );
+    eval_dictionary(
+        "regexp_replace(s, '[', 'x')",
+        encoded,
+        plain,
+        Some(Bitmap::from_iter([true, false, true, false])),
+        false,
+    );
+}
+
+#[test]
+fn test_dictionary_function_error_diagnostics() {
+    // Dictionary positions need not match logical rows. The first error message can
+    // also belong to an unused entry with a different error from the referenced one.
+    for (text, values, keys) in [
+        (
+            "regexp_replace(s, '[', 'x')",
+            ["", "offending source"],
+            [0, 0, 1, 0],
+        ),
+        ("regexp_replace('abc', s, 'x')", ["(", "["], [1, 1, 1, 1]),
+    ] {
+        let (encoded, plain) = dict(&values, &keys);
+        let raw_expr = parser::parse_raw_expr(text, &[("s", plain.data_type())], &BUILTIN_FUNCTIONS);
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+        let func_ctx = FunctionContext::default();
+        let evaluate = |column: Column| {
+            let block = DataBlock::new(vec![BlockEntry::from(column.clone())], column.len());
+            Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS)
+                .run(&expr)
+                .unwrap_err()
+        };
+        let expected = evaluate(plain);
+        let dictionary_error = evaluate(StringType::from_data(values.to_vec()));
+        let actual = evaluate(encoded);
+        assert_eq!(actual.code(), expected.code());
+        assert_eq!(
+            actual.message(),
+            dictionary_error
+                .message()
+                .split(" while evaluating function")
+                .next()
+                .unwrap(),
+        );
+    }
+}
+
+#[test]
+fn test_dictionary_function_evaluates_entries_not_rows() {
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+
+    static EVALUATED: AtomicUsize = AtomicUsize::new(0);
+    let mut registry = FunctionRegistry::empty();
+    registry.register_1_arg::<StringType, NumberType<u64>, _>(
+        "counted_length",
+        |_, _| FunctionDomain::Full,
+        |value, _| {
+            EVALUATED.fetch_add(1, Ordering::Relaxed);
+            value.len() as u64
+        },
+    );
+    registry.properties.insert(
+        "counted_length".to_string(),
+        FunctionProperty::default().dictionary_eval(),
+    );
+    let (encoded, _) = dict(&["a", "bb", "ccc"], &[0, 1, 2, 0, 1, 2, 0, 1]);
+    let raw_expr = parser::parse_raw_expr(
+        "counted_length(s)",
+        &[("s", encoded.data_type())],
+        &registry,
+    );
+    let expr = type_check::check(&raw_expr, &registry).unwrap();
+    let block = DataBlock::new(vec![BlockEntry::from(encoded)], 8);
+    let ctx = FunctionContext::default();
+    let evaluator = Evaluator::new(&block, &ctx, &registry);
+    let result = evaluator
+        .partial_run(&expr, None, &mut EvaluateOptions::default(), true)
+        .unwrap();
+    assert!(result.is_encoded());
+    assert_eq!(EVALUATED.load(Ordering::Relaxed), 3);
+
+    // Opt-in cannot override volatility. The normal row kernel must still run N times.
+    registry
+        .properties
+        .get_mut("counted_length")
+        .unwrap()
+        .non_deterministic = true;
+    EVALUATED.store(0, Ordering::Relaxed);
+    let result = Evaluator::new(&block, &ctx, &registry)
+        .partial_run(&expr, None, &mut EvaluateOptions::default(), true)
+        .unwrap();
+    assert!(!result.is_encoded());
+    assert_eq!(EVALUATED.load(Ordering::Relaxed), 8);
 }
 
 /// The bits of a non-nullable float column (`Eq` on `F64` equates `+0.0` and `-0.0`).

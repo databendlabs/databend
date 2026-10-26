@@ -958,7 +958,7 @@ impl EncodedColumn {
     /// Calls `f` with a regular column and the row in it that holds the value of `row`.
     ///
     /// A FOR row is decoded into a column of its own on every call, so consumers of many rows
-    /// (e.g. output formats) decode the column once with [`Column::decode_encoded`] instead.
+    /// (e.g. output formats) decode the column once with [`Column::decode_owned`] instead.
     pub fn with_row<R>(&self, row: usize, f: impl FnOnce(&Column, usize) -> R) -> R {
         match self {
             EncodedColumn::Dict(c) => f(&c.values, c.keys.get(row).unwrap() as usize),
@@ -1144,7 +1144,7 @@ impl Column {
     /// Decodes an encoded column, also inside `Nullable`; other columns are returned unchanged.
     ///
     /// Row-at-a-time consumers (e.g. output formats) decode once per block instead of per row.
-    pub fn decode_encoded(self) -> Self {
+    pub fn decode_owned(self) -> Self {
         match self {
             Column::Encoded(c) => c.decode(),
             Column::Nullable(mut column) => {
@@ -1160,9 +1160,9 @@ impl Column {
 
 impl Value<AnyType> {
     /// Decodes an encoded column value; other values are returned unchanged.
-    pub fn decode_encoded(self) -> Self {
+    pub fn decode_owned(self) -> Self {
         match self {
-            Value::Column(column) => Value::Column(column.decode_encoded()),
+            Value::Column(column) => Value::Column(column.decode_owned()),
             other => other,
         }
     }

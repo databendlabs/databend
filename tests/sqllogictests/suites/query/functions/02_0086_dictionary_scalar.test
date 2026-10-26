@@ -1,0 +1,45 @@
+# Scalar projections must preserve values when dictionary entries map to the same result.
+statement ok
+SET enable_encoded_columns = 0;
+
+statement ok
+CREATE OR REPLACE TABLE dictionary_scalar (s STRING NOT NULL) STORAGE_FORMAT = 'parquet';
+
+statement ok
+INSERT INTO dictionary_scalar SELECT CASE number % 4 WHEN 0 THEN 'https://a.com/x' WHEN 1 THEN 'https://a.com/y' WHEN 2 THEN 'https://b.com/z' ELSE 'https://a.com/y' END FROM numbers(4096);
+
+statement ok
+CREATE OR REPLACE TABLE dictionary_scalar_expected AS SELECT regexp_replace(s, '^https://([^/]+)/.*$', '$1') AS domain, count(*) AS n, sum(octet_length(regexp_replace(s, '^https://([^/]+)/.*$', '$1'))) AS bytes FROM dictionary_scalar GROUP BY domain;
+
+statement ok
+SET enable_encoded_columns = 1;
+
+query TII
+SELECT regexp_replace(s, '^https://([^/]+)/.*$', '$1') AS domain, count(*) AS n, sum(octet_length(regexp_replace(s, '^https://([^/]+)/.*$', '$1'))) AS bytes FROM dictionary_scalar GROUP BY domain ORDER BY domain;
+----
+a.com 3072 15360
+b.com 1024 5120
+
+query II
+SELECT count(DISTINCT regexp_replace(s, '^https://([^/]+)/.*$', '$1')), sum(length(regexp_replace(s, '^https://([^/]+)/.*$', '$1'))) FROM dictionary_scalar;
+----
+2 20480
+
+query I
+SELECT count(*) FROM (SELECT regexp_replace(s, '^https://([^/]+)/.*$', '$1') AS domain, count(*) AS n, sum(octet_length(regexp_replace(s, '^https://([^/]+)/.*$', '$1'))) AS bytes FROM dictionary_scalar GROUP BY domain EXCEPT SELECT domain, n, bytes FROM dictionary_scalar_expected);
+----
+0
+
+query I
+SELECT count(*) FROM (SELECT domain, n, bytes FROM dictionary_scalar_expected EXCEPT SELECT regexp_replace(s, '^https://([^/]+)/.*$', '$1') AS domain, count(*) AS n, sum(octet_length(regexp_replace(s, '^https://([^/]+)/.*$', '$1'))) AS bytes FROM dictionary_scalar GROUP BY domain);
+----
+0
+
+statement ok
+DROP TABLE dictionary_scalar_expected;
+
+statement ok
+DROP TABLE dictionary_scalar;
+
+statement ok
+UNSET enable_encoded_columns;
