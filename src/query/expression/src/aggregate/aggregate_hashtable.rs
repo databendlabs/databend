@@ -330,7 +330,6 @@ impl AggregateHashTable {
     ) -> Option<usize> {
         // Check every key before allocating the row codes, so regular group columns cost
         // nothing here.
-        let mut encoded_keys = Vec::new();
         let mut code_space = 1usize;
         for entry in group_columns.iter() {
             let BlockEntry::Column(Column::Encoded(encoded)) = entry else {
@@ -342,13 +341,15 @@ impl AggregateHashTable {
             if code_space.saturating_mul(4) > row_count {
                 return None;
             }
-            encoded_keys.push(encoded);
         }
 
         // Code of a row = mixed radix number of the codes of its keys.
         let mut row_codes = vec![0u32; row_count];
         let mut stride = 1usize;
-        for encoded in encoded_keys {
+        for entry in group_columns.iter() {
+            let BlockEntry::Column(Column::Encoded(encoded)) = entry else {
+                return None;
+            };
             let (codes, count) = encoded.codes();
             // `code < count`, so the result is below `code_space <= row_count`.
             for (row_code, code) in row_codes.iter_mut().zip(codes.iter()) {
