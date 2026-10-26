@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
+use derive_visitor::VisitorMut;
 use dictionary::CreateDictionaryStmt;
 use dictionary::DropDictionaryStmt;
 use dictionary::ShowCreateDictionaryStmt;
@@ -42,6 +44,16 @@ use crate::ast::statements::workload::RenameWorkloadGroupStmt;
 use crate::ast::statements::workload::SetWorkloadGroupQuotasStmt;
 use crate::ast::statements::workload::ShowWorkloadGroupsStmt;
 use crate::ast::write_comma_separated_list;
+use crate::parser::SqlSecrets;
+use crate::parser::mask::hide_literals;
+use crate::parser::mask::is_secret_name;
+use crate::parser::mask::mask_dynamic_sql_expr;
+use crate::parser::mask::mask_partial;
+use crate::parser::mask::mask_program_literals;
+use crate::parser::mask::mask_sql_inner;
+use crate::parser::mask::url_secrets;
+use crate::parser::mask_raw_sql_with_secrets;
+use crate::parser::mask_url;
 
 // SQL statement
 #[allow(clippy::large_enum_variant)]
@@ -430,89 +442,188 @@ pub enum Statement {
     System(SystemStmt),
 }
 
+/// Masks credentials that `Display` would otherwise print, including inside
+/// wrappers such as `EXPLAIN` and `SETTINGS (...)`, and records their values.
+#[derive(Default, VisitorMut)]
+#[visitor(
+    AuthOption(enter),
+    CreateCatalogStmt(enter),
+    NotificationWebhookOptions(enter),
+    UDFDefinition(enter),
+    CreateDictionaryStmt(enter),
+    Connection(enter),
+    CreateConnectionStmt(enter),
+    AlterTableStmt(enter),
+    ExecuteImmediateStmt(enter),
+    CreateProcedureStmt(enter),
+    CallProcedureStmt(enter),
+    TaskSql(enter)
+)]
+struct SecretMasker(SqlSecrets);
+
+impl SecretMasker {
+    fn hide(&mut self, value: &mut String, masked: String) {
+        if *value != masked {
+            self.0.push(value);
+            self.0.extend(url_secrets(value));
+            *value = masked;
+        }
+    }
+
+    fn mask_secret_options(&mut self, options: &mut BTreeMap<String, String>) {
+        for (key, value) in options.iter_mut() {
+            let masked = if is_secret_name(key) {
+                mask_partial(value)
+            } else {
+                mask_url(value, false)
+            };
+            self.hide(value, masked);
+        }
+    }
+
+    fn mask_all(&mut self, options: &mut BTreeMap<String, String>) {
+        for value in options.values_mut() {
+            let masked = mask_partial(value);
+            self.hide(value, masked);
+        }
+    }
+
+    fn enter_auth_option(&mut self, auth_option: &mut AuthOption) {
+        if let Some(password) = &mut auth_option.password {
+            self.hide(password, "***".to_string());
+        }
+    }
+
+    fn enter_create_catalog_stmt(&mut self, stmt: &mut CreateCatalogStmt) {
+        self.mask_secret_options(&mut stmt.catalog_options);
+    }
+
+    fn enter_notification_webhook_options(&mut self, opts: &mut NotificationWebhookOptions) {
+        if let Some(header) = &mut opts.authorization_header {
+            let masked = mask_partial(header);
+            self.hide(header, masked);
+        }
+        if let Some(url) = &mut opts.url {
+            let masked = mask_url(url, true);
+            self.hide(url, masked);
+        }
+    }
+
+    fn enter_udf_definition(&mut self, definition: &mut UDFDefinition) {
+        if let UDFDefinition::UDFServer {
+            headers, address, ..
+        }
+        | UDFDefinition::UDAFServer {
+            headers, address, ..
+        }
+        | UDFDefinition::UDTFServer {
+            headers, address, ..
+        } = definition
+        {
+            // Any header may authenticate the request.
+            self.mask_all(headers);
+            let masked = mask_url(address, false);
+            self.hide(address, masked);
+        }
+    }
+
+    fn enter_create_dictionary_stmt(&mut self, stmt: &mut CreateDictionaryStmt) {
+        self.mask_secret_options(&mut stmt.source_options);
+    }
+
+    fn enter_connection(&mut self, connection: &mut Connection) {
+        self.mask_all(&mut connection.conns);
+    }
+
+    fn enter_create_connection_stmt(&mut self, stmt: &mut CreateConnectionStmt) {
+        self.mask_all(&mut stmt.storage_params);
+    }
+
+    fn enter_alter_table_stmt(&mut self, stmt: &mut AlterTableStmt) {
+        if let AlterTableAction::ModifyConnection { new_connection } = &mut stmt.action {
+            self.mask_all(new_connection);
+        }
+    }
+
+    fn enter_execute_immediate_stmt(&mut self, stmt: &mut ExecuteImmediateStmt) {
+        self.0.extend(mask_dynamic_sql_expr(&mut stmt.script));
+    }
+
+    fn enter_create_procedure_stmt(&mut self, stmt: &mut CreateProcedureStmt) {
+        let (script, secrets) = mask_raw_sql_with_secrets(&stmt.script);
+        stmt.script = script;
+        self.0.extend(secrets);
+    }
+
+    fn enter_call_procedure_stmt(&mut self, stmt: &mut CallProcedureStmt) {
+        // Arguments may be credentials passed on to dynamic SQL.
+        for arg in &mut stmt.args {
+            self.0.extend(hide_literals(arg));
+        }
+    }
+
+    fn enter_task_sql(&mut self, sql: &mut TaskSql) {
+        match sql {
+            TaskSql::SingleStatement(stmt) => {
+                let (masked, secrets) = mask_raw_sql_with_secrets(stmt);
+                *stmt = masked;
+                self.0.extend(secrets);
+            }
+            // Statements of a block share variables, see `mask_program_literals`.
+            TaskSql::ScriptBlock(stmts) => {
+                for stmt in stmts {
+                    let (masked, secrets) = mask_program_literals(stmt);
+                    *stmt = masked;
+                    self.0.extend(secrets);
+                }
+            }
+        }
+    }
+}
+
 impl Statement {
     pub fn to_mask_sql(&self) -> String {
-        match self {
-            Statement::CopyIntoTable(copy) => {
-                let mut copy_clone = copy.clone();
+        self.to_mask_sql_with_secrets().0
+    }
 
-                if let CopyIntoTableSource::Location(FileLocation::Uri(location)) =
-                    &mut copy_clone.src
-                {
-                    location.connection = location.connection.mask()
-                }
-                format!("{}", Statement::CopyIntoTable(copy_clone))
+    /// [`Self::to_mask_sql`], also returning the hidden values.
+    pub fn to_mask_sql_with_secrets(&self) -> (String, SqlSecrets) {
+        let mut masker = SecretMasker::default();
+        let sql = match self {
+            Statement::CreateUser(_)
+            | Statement::AlterUser(_)
+            | Statement::CreateCatalog(_)
+            | Statement::CreateDictionary(_)
+            | Statement::CreateUDF(_)
+            | Statement::AlterUDF(_)
+            | Statement::CreateNotification(_)
+            | Statement::AlterNotification(_)
+            | Statement::CreateConnection(_)
+            | Statement::CopyIntoTable(_)
+            | Statement::CopyIntoLocation(_)
+            | Statement::CreateStage(_)
+            | Statement::AlterStage(_)
+            | Statement::AttachTable(_)
+            | Statement::AlterTable(_)
+            | Statement::ExecuteImmediate(_)
+            | Statement::CreateProcedure(_)
+            | Statement::CallProcedure(_)
+            | Statement::CreateTask(_)
+            | Statement::AlterTask(_)
+            | Statement::Explain { .. }
+            | Statement::ExplainAnalyze { .. }
+            | Statement::StatementWithSettings { .. } => {
+                let mut stmt = self.clone();
+                stmt.drive_mut(&mut masker);
+                stmt.to_string()
             }
-            Statement::CopyIntoLocation(copy) => {
-                let mut copy_clone = copy.clone();
-
-                if let FileLocation::Uri(location) = &mut copy_clone.dst {
-                    location.connection = location.connection.mask()
-                }
-                format!("{}", Statement::CopyIntoLocation(copy_clone))
-            }
-            Statement::CreateStage(stage) => {
-                let mut stage_clone = stage.clone();
-                if let Some(location) = &mut stage_clone.location {
-                    location.connection = location.connection.mask()
-                }
-                format!("{}", Statement::CreateStage(stage_clone))
-            }
-            Statement::AlterStage(stage) => {
-                let mut stage_clone = stage.clone();
-                if let AlterStageAction::Set(options) = &mut stage_clone.action
-                    && let Some(location) = &mut options.location
-                {
-                    location.connection = location.connection.mask();
-                }
-                format!("{}", Statement::AlterStage(stage_clone))
-            }
-            Statement::AttachTable(attach) => {
-                let mut attach_clone = attach.clone();
-                attach_clone.uri_location.connection = attach_clone.uri_location.connection.mask();
-                format!("{}", Statement::AttachTable(attach_clone))
-            }
-            Statement::CreateConnection(stmt) => {
-                let mut clone = stmt.clone();
-                clone.storage_params = clone
-                    .storage_params
-                    .iter()
-                    .map(|(k, v)| {
-                        let chars: Vec<char> = v.chars().collect();
-                        let masked = if chars.len() <= 4 {
-                            "***".to_string()
-                        } else {
-                            let head: String = chars[..2].iter().collect();
-                            let tail: String = chars[chars.len() - 2..].iter().collect();
-                            format!("{}***{}", head, tail)
-                        };
-                        (k.clone(), masked)
-                    })
-                    .collect();
-                format!("{}", Statement::CreateConnection(clone))
-            }
-            Statement::AlterTable(stmt) => {
-                let mut clone = stmt.clone();
-                if let AlterTableAction::ModifyConnection { new_connection } = &mut clone.action {
-                    *new_connection = new_connection
-                        .iter()
-                        .map(|(k, v)| {
-                            let chars: Vec<char> = v.chars().collect();
-                            let masked = if chars.len() <= 4 {
-                                "***".to_string()
-                            } else {
-                                let head: String = chars[..2].iter().collect();
-                                let tail: String = chars[chars.len() - 2..].iter().collect();
-                                format!("{}***{}", head, tail)
-                            };
-                            (k.clone(), masked)
-                        })
-                        .collect();
-                }
-                format!("{}", Statement::AlterTable(clone))
-            }
-            _ => format!("{}", self),
-        }
+            _ => self.to_string(),
+        };
+        // Apply the same contract to every caller (including queue entries),
+        // rather than relying on query history to add a second masking pass.
+        let (sql, secrets) = mask_sql_inner(&sql);
+        masker.0.extend(secrets);
+        (sql, masker.0)
     }
 
     pub fn allowed_in_multi_statement(&self) -> bool {

@@ -377,6 +377,14 @@ impl Session {
             .await
     }
 
+    pub async fn validate_setting_change(&self, key: &str) -> Result<()> {
+        if Settings::requires_super_to_change(key) {
+            self.validate_privilege(&GrantObject::Global, UserPrivilegeType::Super, false)
+                .await?;
+        }
+        Ok(())
+    }
+
     #[async_backtrace::framed]
     pub async fn has_ownership(
         &self,

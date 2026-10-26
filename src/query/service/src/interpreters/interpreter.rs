@@ -22,6 +22,7 @@ use databend_common_ast::ast::AlterTableStmt;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::ModifyColumnAction;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::parser::mask_raw_sql_with_secrets;
 use databend_common_base::base::short_sql;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_exception::ErrorCode;
@@ -279,8 +280,12 @@ pub async fn interpreter_plan_sql(
     let mut stmt = if let Ok((_, extras, _)) = &result {
         Some(extras.statement.clone())
     } else {
-        // Only log if there's an error
-        ctx.attach_query_str(QueryKind::Unknown, short_sql.to_string());
+        // Only log if there's an error. Planning failed, so the SQL may not
+        // parse; mask it before truncation can split a secret. Its values also
+        // scrub the error text written to query history.
+        let (masked, secrets) = mask_raw_sql_with_secrets(sql);
+        ctx.add_query_secrets(secrets);
+        ctx.attach_query_str(QueryKind::Unknown, masked);
         log_query_start(&ctx);
         log_query_finished(&ctx, result.as_ref().err().cloned());
         None

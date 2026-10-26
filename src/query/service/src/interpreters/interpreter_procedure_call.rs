@@ -18,6 +18,7 @@ use databend_common_ast::ast::DeclareItem;
 use databend_common_ast::ast::DeclareVar;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::parser::ParseMode;
+use databend_common_ast::parser::mask_raw_sql_with_secrets;
 use databend_common_ast::parser::run_parser;
 use databend_common_ast::parser::script::script_block;
 use databend_common_ast::parser::tokenize_sql;
@@ -124,7 +125,13 @@ impl Interpreter for CallProcedureInterpreter {
                 }
             };
 
-            res.map_err(|err| err.display_with_sql(&self.plan.script))
+            res.map_err(|err| {
+                // Keep the diagnostic, without the script's or arguments' values.
+                let mut secrets = self.ctx.query_secrets();
+                secrets.extend(mask_raw_sql_with_secrets(&self.plan.script).1);
+                err.display_with_sql(&self.plan.script)
+                    .redact_with(|text| secrets.scrub(text))
+            })
         })
     }
 }

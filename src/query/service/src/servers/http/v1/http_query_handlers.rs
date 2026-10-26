@@ -15,8 +15,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_ast::parser::mask_log_sql_secrets;
+use databend_common_ast::parser::mask_raw_sql_with_secrets;
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::base::mask_connection_info;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_QUERY_PAGE_ROWS;
 use databend_common_base::headers::HEADER_QUERY_STATE;
@@ -707,6 +708,13 @@ async fn query_page_handler(
     query_page_handle.await
 }
 
+fn display_query_error(err: ErrorCode, sql: &str) -> ErrorCode {
+    // Spans refer to the original SQL; render it, then scrub its secrets.
+    let (_, secrets) = mask_raw_sql_with_secrets(sql);
+    err.display_with_sql(sql)
+        .redact_with(|text| secrets.scrub(text))
+}
+
 #[poem::handler]
 #[async_backtrace::framed]
 pub(crate) async fn query_handler(
@@ -728,10 +736,11 @@ pub(crate) async fn query_handler(
             .map(|s| format!("(client_session_id={s})"))
             .unwrap_or("".to_string());
         info!(
-            "New query request{}{}: {}",
+            "New query request{}{}: {:?}",
             agent_info,
             client_session_id_info,
-            mask_connection_info(&format!("{:?}", req))
+            // `HttpQueryRequest`'s Debug masks the SQL and omits parameters.
+            req
         );
         let sql = req.sql.clone();
 
@@ -794,16 +803,14 @@ pub(crate) async fn query_handler(
         .await
         {
             Err(err) => {
-                let masked_sql = mask_connection_info(&sql);
-                let err = err.display_with_sql(&masked_sql);
+                let err = display_query_error(err, &sql);
                 error!("Failed to start SQL query, error: {:?}", err);
                 ctx.set_fail();
                 Ok(req.fail_to_start_sql(err).into_response())
             }
             Ok(mut query) => {
                 if let Err(err) = query.start_query(sql.clone(), req.params.clone()).await {
-                    let masked_sql = mask_connection_info(&sql);
-                    let err = err.display_with_sql(&masked_sql);
+                    let err = display_query_error(err, &sql);
                     error!("Failed to start SQL query, error: {:?}", err);
                     ctx.set_fail();
                     return Ok(req.fail_to_start_sql(err).into_response());
@@ -820,7 +827,7 @@ pub(crate) async fn query_handler(
                 let resp = query
                     .get_response_page(0)
                     .await
-                    .map_err(|err| err.display_with_sql(&sql))
+                    .map_err(|err| display_query_error(err, &sql))
                     .map_err(|err| {
                         poem::Error::from_string(
                             format!("{}", err.message()),
@@ -842,7 +849,7 @@ pub(crate) async fn query_handler(
                     resp.state,
                     rows,
                     next_page,
-                    mask_connection_info(&sql)
+                    mask_log_sql_secrets(&sql)
                 );
                 query
                     .update_expire_time(false, resp.is_data_drained())

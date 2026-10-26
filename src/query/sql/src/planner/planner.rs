@@ -25,6 +25,7 @@ use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::ReplaceStmt;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::Dialect;
+use databend_common_ast::parser::mask_raw_sql_with_secrets;
 use databend_common_ast::parser::parse_raw_insert_stmt;
 use databend_common_ast::parser::parse_raw_replace_stmt;
 use databend_common_ast::parser::parse_sql;
@@ -105,7 +106,7 @@ impl Planner {
         let extras = self.parse_sql(sql)?;
         let stmt = &extras.statement;
         let query_kind = get_query_kind(stmt);
-        apply_statement_settings(self.ctx.clone(), stmt)?;
+        apply_statement_settings(self.ctx.clone(), stmt).await?;
         let name_resolution_ctx =
             NameResolutionContext::try_from(self.ctx.get_settings().as_ref())?;
         let binder = Binder::new(
@@ -117,7 +118,7 @@ impl Planner {
         .with_subquery_executor(self.query_executor.clone());
         // Attach before bind for the same reason as `plan_stmt`: table sources such as
         // ParquetRSTable::create read the query string during binding.
-        self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
+        self.attach_masked_query(query_kind, stmt);
         binder.bind(stmt).await
     }
 
@@ -131,6 +132,16 @@ impl Planner {
     }
 
     fn parse_sql_inner(&self, sql: &str, has_params: bool) -> Result<PlanExtras> {
+        self.parse_sql_inner_impl(sql, has_params).map_err(|err| {
+            // Parser diagnostics quote source lines. Keep the diagnostic, but
+            // not the values of SQL that may be a misspelled credential option.
+            let (_, secrets) = mask_raw_sql_with_secrets(sql);
+            self.ctx.add_query_secrets(secrets.clone());
+            err.redact_with(|text| secrets.scrub(text))
+        })
+    }
+
+    fn parse_sql_inner_impl(&self, sql: &str, has_params: bool) -> Result<PlanExtras> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         // compile prql to sql for prql dialect
@@ -301,7 +312,7 @@ impl Planner {
     ) -> Result<Plan> {
         let start = Instant::now();
         let query_kind = get_query_kind(stmt);
-        apply_statement_settings(self.ctx.clone(), stmt)?;
+        apply_statement_settings(self.ctx.clone(), stmt).await?;
         let settings = self.ctx.get_settings();
         // Step 3: Bind AST with catalog, and generate a pure logical SExpr
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
@@ -335,10 +346,10 @@ impl Planner {
         .with_subquery_executor(self.query_executor.clone());
 
         // must attach before bind, because ParquetRSTable::create used it.
-        self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
+        self.attach_masked_query(query_kind, stmt);
         let plan = binder.bind(stmt).await?;
         // attach again to avoid the query kind is overwritten by the subquery
-        self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
+        self.attach_masked_query(query_kind, stmt);
 
         // Lineage describes what the user wrote, so capture it before the optimizer
         // rewrites the plan for execution.
@@ -413,6 +424,26 @@ impl Planner {
 
         self.add_max_rows_limit(stmt);
         Ok(())
+    }
+}
+
+impl Planner {
+    fn attach_masked_query(&self, kind: QueryKind, stmt: &Statement) {
+        let (sql, secrets) = stmt.to_mask_sql_with_secrets();
+        self.ctx.add_query_secrets(secrets);
+        // Dynamic SQL is attached by the binder after evaluating the expression,
+        // before its script is parsed or executed. Do not overwrite it here.
+        if !is_execute_immediate(stmt) {
+            self.ctx.attach_query_str(kind, sql);
+        }
+    }
+}
+
+fn is_execute_immediate(stmt: &Statement) -> bool {
+    match stmt {
+        Statement::ExecuteImmediate(_) => true,
+        Statement::StatementWithSettings { stmt, .. } => is_execute_immediate(stmt),
+        _ => false,
     }
 }
 

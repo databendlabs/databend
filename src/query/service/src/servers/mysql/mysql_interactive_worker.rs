@@ -16,10 +16,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use databend_common_ast::parser::mask_log_sql_secrets;
+use databend_common_ast::parser::mask_raw_sql_secrets;
+use databend_common_ast::parser::mask_raw_sql_with_secrets;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
-use databend_common_base::base::mask_connection_info;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
@@ -312,13 +314,18 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
                     .base
                     .do_query(query_id_str, query)
                     .await
-                    .map_err(|err| err.display_with_sql(query));
+                    .map_err(|err| {
+                        // The writer also logs this error; scrub the excerpt.
+                        let (_, secrets) = mask_raw_sql_with_secrets(query);
+                        err.display_with_sql(query)
+                            .redact_with(|text| secrets.scrub(text))
+                    });
 
                 let mut write_result = writer.write(query_result).await;
 
                 if let Err(cause) = write_result {
                     self.base.session.txn_mgr().lock().set_fail();
-                    let suffix = format!("(while in query {})", mask_connection_info(query));
+                    let suffix = format!("(while in query {})", mask_raw_sql_secrets(query));
                     write_result = Err(cause.add_message_back(suffix));
                 }
                 observe_mysql_process_request_duration(instant.elapsed());
@@ -474,7 +481,7 @@ impl InteractiveWorkerBase {
                 ))
             }
             None => {
-                info!("Normal query: {}", mask_connection_info(query));
+                info!("Normal query: {}", mask_log_sql_secrets(query));
                 let context = self.session.create_query_context(self.version).await?;
                 context.update_init_query_id(query_id);
                 let mut tracking_payload = ThreadTracker::new_tracking_payload();

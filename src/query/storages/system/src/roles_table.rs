@@ -35,6 +35,7 @@ use itertools::Itertools;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+use crate::util::has_global_grant;
 
 pub struct RolesTable {
     table_info: TableInfo,
@@ -55,7 +56,11 @@ impl AsyncSystemTable for RolesTable {
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-        let roles = UserApiProvider::instance().get_roles(&tenant).await?;
+        let roles = if has_global_grant(ctx.as_ref()).await? {
+            UserApiProvider::instance().get_roles(&tenant).await?
+        } else {
+            ctx.get_all_available_roles().await?
+        };
 
         let names: Vec<&str> = roles.iter().map(|x| x.name.as_str()).collect();
         let inherited_roles: Vec<u64> = roles

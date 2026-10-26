@@ -24,10 +24,11 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use async_channel::Receiver;
+use databend_common_ast::parser::SqlSecrets;
+use databend_common_ast::parser::mask_sql_secrets;
 use databend_common_base::base::Progress;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::base::WatchNotify;
-use databend_common_base::base::mask_connection_info;
 use databend_common_base::base::short_sql;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::IoStats;
@@ -117,6 +118,7 @@ pub struct QueryContextShared {
     cluster_cache: Arc<RwLock<Arc<Cluster>>>,
     warehouse_cache: Arc<RwLock<Option<Arc<Cluster>>>>,
     running_query: Arc<RwLock<Option<String>>>,
+    pub(super) query_secrets: RwLock<SqlSecrets>,
     running_query_kind: Arc<RwLock<Option<QueryKind>>>,
     running_query_text_hash: Arc<RwLock<Option<String>>>,
     running_query_parameterized_hash: Arc<RwLock<Option<String>>>,
@@ -225,6 +227,7 @@ impl QueryContextShared {
             warnings: Arc::new(Mutex::new(vec![])),
             runtime: Arc::new(RwLock::new(None)),
             running_query: Arc::new(RwLock::new(None)),
+            query_secrets: Default::default(),
             running_query_kind: Arc::new(RwLock::new(None)),
             running_query_text_hash: Arc::new(RwLock::new(None)),
             running_query_parameterized_hash: Arc::new(RwLock::new(None)),
@@ -610,7 +613,7 @@ impl QueryContextShared {
         {
             let mut running_query = self.running_query.write();
             *running_query = Some(short_sql(
-                mask_connection_info(&query),
+                mask_sql_secrets(&query),
                 self.get_settings()
                     .get_short_sql_max_length()
                     .unwrap_or(1000),

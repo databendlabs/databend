@@ -108,7 +108,7 @@ impl Visitor for StatementSettingsCollector {
     }
 }
 
-pub fn apply_statement_settings(ctx: Arc<dyn TableContext>, stmt: &Statement) -> Result<()> {
+pub async fn apply_statement_settings(ctx: Arc<dyn TableContext>, stmt: &Statement) -> Result<()> {
     let collector = StatementSettingsCollector::scan(stmt);
 
     let mut resolved = if collector.has_settings_clause {
@@ -124,7 +124,12 @@ pub fn apply_statement_settings(ctx: Arc<dyn TableContext>, stmt: &Statement) ->
             match resolve_hint(ctx.clone(), metadata.clone(), &hint) {
                 // Apply each group before resolving the next so dependent expressions
                 // see earlier settings. Later groups override earlier groups in AST walk order.
-                Ok(group) => ctx.get_shared_settings().set_batch_settings(&group, true)?,
+                Ok(group) => {
+                    for key in group.keys() {
+                        ctx.validate_setting_change(key).await?;
+                    }
+                    ctx.get_shared_settings().set_batch_settings(&group, true)?;
+                }
                 Err(error) => {
                     warn!("[SQL-PLANNER] Failed to resolve optimize hint {hint:?}: {error:?}");
                 }
@@ -139,6 +144,9 @@ pub fn apply_statement_settings(ctx: Arc<dyn TableContext>, stmt: &Statement) ->
         resolved.insert("disable_variant_check".to_string(), "1".to_string());
     }
 
+    for key in resolved.keys() {
+        ctx.validate_setting_change(key).await?;
+    }
     ctx.get_shared_settings()
         .set_batch_settings(&resolved, true)
 }

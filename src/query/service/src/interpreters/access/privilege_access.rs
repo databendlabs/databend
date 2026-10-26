@@ -2402,6 +2402,11 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::Set(plan) => {
                 use databend_common_ast::ast::SetType;
+                if matches!(plan.set_type, SetType::SettingsSession | SetType::SettingsGlobal) {
+                    for key in &plan.idents {
+                        self.ctx.validate_setting_change(key).await?;
+                    }
+                }
                 if let SetType::SettingsGlobal = plan.set_type {
                     plan.idents.iter()
                         .try_for_each(|setting| {
@@ -2416,6 +2421,11 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::Unset(plan) => {
                 use databend_common_ast::ast::SetType;
+                if matches!(plan.unset_type, SetType::SettingsSession | SetType::SettingsGlobal) {
+                    for key in &plan.vars {
+                        self.ctx.validate_setting_change(key).await?;
+                    }
+                }
                 if let SetType::SettingsGlobal = plan.unset_type {
                     plan.vars.iter()
                         .try_for_each(|setting| {

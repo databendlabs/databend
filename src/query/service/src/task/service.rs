@@ -84,6 +84,7 @@ use crate::meta_client_error;
 use crate::meta_service_error;
 use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextAuthorization;
 use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextSettings;
 use crate::task::meta::TaskMetaHandle;
@@ -760,6 +761,9 @@ impl TaskService {
         context: &Arc<QueryContext>,
         session_params: &BTreeMap<String, String>,
     ) -> Result<()> {
+        for key in session_params.keys() {
+            context.validate_setting_change(key).await?;
+        }
         for (key, value) in session_params {
             if key.eq_ignore_ascii_case("database") {
                 context.set_current_database(value.clone()).await?;

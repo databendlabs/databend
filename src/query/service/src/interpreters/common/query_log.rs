@@ -17,6 +17,8 @@ use std::fmt::Write;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use databend_common_ast::parser::SqlSecrets;
+use databend_common_ast::parser::mask_sql_secrets;
 use databend_common_base::runtime::IoStatsSnapshot;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -49,7 +51,11 @@ use crate::sessions::convert_query_log_timestamp;
 
 pub struct InterpreterQueryLog;
 
-fn error_fields<C>(log_type: LogType, err: Option<ErrorCode<C>>) -> (LogType, i32, String, String) {
+fn error_fields<C>(
+    log_type: LogType,
+    err: Option<ErrorCode<C>>,
+    secrets: &SqlSecrets,
+) -> (LogType, i32, String, String) {
     match err {
         None => (log_type, 0, "".to_string(), "".to_string()),
         Some(e) => {
@@ -59,7 +65,13 @@ fn error_fields<C>(log_type: LogType, err: Option<ErrorCode<C>>) -> (LogType, i3
                 _ => LogType::Error,
             };
 
-            (log_type, e.code().into(), e.to_string(), e.backtrace_str())
+            (
+                log_type,
+                e.code().into(),
+                // Error prose and SQL excerpts may quote hidden values.
+                mask_sql_secrets(&secrets.scrub(&e.to_string())),
+                e.backtrace_str(),
+            )
         }
     }
 }
@@ -208,7 +220,7 @@ impl InterpreterQueryLog {
 
         // Error
         let (log_type, exception_code, exception_text, stack_trace) =
-            error_fields(LogType::Start, err);
+            error_fields(LogType::Start, err, &ctx.query_secrets());
         let log_type_name = log_type.as_string();
 
         // Transaction.
@@ -389,7 +401,7 @@ impl InterpreterQueryLog {
 
         // Error
         let (log_type, exception_code, exception_text, stack_trace) =
-            error_fields(LogType::Finish, err);
+            error_fields(LogType::Finish, err, &ctx.query_secrets());
         let log_type_name = log_type.as_string();
 
         // Transaction.
@@ -504,6 +516,20 @@ mod tests {
             metrics: BTreeMap::new(),
             errors: vec![],
         }
+    }
+
+    #[test]
+    fn error_fields_scrubs_query_secrets() {
+        let err = ErrorCode::SyntaxException(
+            "can't parse script\n2 | IDENTIFIED\n3 | BY 'exception_secret'\n4 | invalid",
+        );
+        let mut secrets = SqlSecrets::default();
+        secrets.push("exception_secret");
+        let (log_type, code, message, _) = error_fields(LogType::Finish, Some(err), &secrets);
+        assert!(matches!(log_type, LogType::Error));
+        assert_eq!(code, i32::from(ErrorCode::SYNTAX_EXCEPTION));
+        assert!(!message.contains("exception_secret"), "{message}");
+        assert!(message.contains("4 | invalid"), "{message}");
     }
 
     #[test]

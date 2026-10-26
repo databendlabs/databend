@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::parser::mask_raw_sql_with_secrets;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
@@ -153,7 +154,13 @@ impl Interpreter for ExecuteImmediateInterpreter {
                 }
             };
 
-            res.map_err(|err| err.display_with_sql(&self.plan.script))
+            res.map_err(|err| {
+                // Keep the diagnostic, without the script's or arguments' values.
+                let mut secrets = self.ctx.query_secrets();
+                secrets.extend(mask_raw_sql_with_secrets(&self.plan.script).1);
+                err.display_with_sql(&self.plan.script)
+                    .redact_with(|text| secrets.scrub(text))
+            })
         })
     }
 }

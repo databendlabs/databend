@@ -76,7 +76,7 @@ pub async fn raw_plan(ctx: &Arc<QueryContext>, sql: &str) -> Result<Plan> {
     let extras = planner.parse_sql(sql)?;
 
     let metadata = Arc::new(parking_lot::RwLock::new(Metadata::default()));
-    apply_statement_settings(ctx.clone(), &extras.statement)?;
+    apply_statement_settings(ctx.clone(), &extras.statement).await?;
     let name_resolution_ctx = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
     let binder = Binder::new(
         ctx.clone(),

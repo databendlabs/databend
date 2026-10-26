@@ -15,14 +15,82 @@
 use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
+use databend_query::interpreters::interpreter_plan_sql;
+use databend_query::sessions::TableContextQueryIdentity;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
+use databend_query::test_kits::execute_command;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_user_passwords_are_not_attached_to_query_history() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command(
+            "CREATE USER history_user IDENTIFIED WITH sha256_password BY 'old_password'",
+        )
+        .await?;
+    fixture
+        .execute_command(
+            "CREATE PROCEDURE history_p(password STRING) RETURNS STRING LANGUAGE SQL AS $$ BEGIN \
+             EXECUTE IMMEDIATE concat('ALTER USER history_user IDENTIFIED BY ''', :password, ''''); \
+             RETURN 'ok'; END; $$",
+        )
+        .await?;
+    // (SQL, succeeds, structure that must remain auditable)
+    for (sql, succeeds, kept) in [
+        (
+            "EXECUTE IMMEDIATE concat('ALTER USER history_user IDENTIFIED BY ', '''history_secret''')",
+            true,
+            "ALTER USER",
+        ),
+        // Arguments may be passed on to dynamic SQL.
+        (
+            "CALL PROCEDURE history_p('history_secret')",
+            true,
+            "CALL PROCEDURE history_p",
+        ),
+        // Failed planning must also attach masked history and retain diagnostics.
+        (
+            "CREATE USER history_user IDNETIFIED BY 'history_secret'",
+            false,
+            "IDNETIFIED",
+        ),
+        (
+            "EXECUTE IMMEDIATE $$CREATE CONNECTION c STORAGE_TYPE='s3 SECRET_ACCESS_KEY='history_secret'$$",
+            false,
+            "CREATE CONNECTION",
+        ),
+    ] {
+        let ctx = fixture.new_query_ctx().await?;
+        // Use the server planning entry point, which also attaches failed
+        // statements; the execution-only test helper does not do that.
+        let result = match interpreter_plan_sql(ctx.clone(), sql, false, None).await {
+            Ok(_) => execute_command(ctx.clone(), sql).await,
+            Err(err) => Err(err),
+        };
+        assert_eq!(result.is_ok(), succeeds, "{result:?}");
+        if let Err(err) = result {
+            // As rendered for clients and logs: the excerpt is scrubbed with
+            // the recorded values, but still locates the error.
+            let err = ctx
+                .query_secrets()
+                .scrub(&err.display_with_sql(sql).to_string());
+            assert!(!err.contains("history_secret"), "{err}");
+            assert!(err.contains(kept), "diagnostic must remain: {err}");
+        }
+        let logged = ctx.get_query_str();
+        assert!(!logged.contains("history_secret"), "{logged}");
+        assert!(logged.contains("***"), "{sql}: {logged}");
+        assert!(logged.contains(kept), "{sql}: {logged}");
+    }
+    Ok(())
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_storage_accessor_s3() -> anyhow::Result<()> {

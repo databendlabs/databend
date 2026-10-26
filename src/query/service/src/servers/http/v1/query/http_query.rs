@@ -21,7 +21,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
-use databend_common_base::base::mask_connection_info;
+use databend_common_ast::parser::mask_log_sql_secrets;
 use databend_common_base::base::short_sql;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalQueryRuntime;
@@ -37,7 +37,9 @@ use databend_common_exception::ResultExt;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
+use databend_common_settings::DefaultSettings;
 use databend_common_settings::ScopeLevel;
+use databend_common_settings::SettingMode;
 use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::TxnState;
 use fastrace::future::FutureExt;
@@ -161,14 +163,48 @@ impl Debug for HttpQueryRequest {
         f.debug_struct("HttpQueryRequest")
             .field("session_id", &self.session_id)
             .field("session", &self.session)
-            .field("sql", &short_sql(self.sql.clone(), 1000))
+            // Mask before Debug escapes quotes and line breaks, and before truncation.
+            .field("sql", &short_sql(mask_log_sql_secrets(&self.sql), 1000))
             .field("pagination", &self.pagination)
             .field("string_fields", &self.string_fields)
             .field("stage_attachment", &self.stage_attachment)
-            .field("params", &self.params)
+            // Bound values may contain credentials even when SQL uses placeholders.
+            .field("params", &self.params.as_ref().map(|_| "<redacted>"))
             .field("arrow_result_version_max", &self.arrow_result_version_max)
             .field("arrow_features", &self.arrow_features)
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod request_debug_tests {
+    use super::HttpQueryRequest;
+
+    #[test]
+    fn debug_masks_sql_and_hides_parameters() {
+        let request: HttpQueryRequest = serde_json::from_value(serde_json::json!({
+            "sql": "CREATE USER u IDENTIFIED BY 'request_secret'",
+            "params": ["parameter_secret"],
+        }))
+        .unwrap();
+        let logged = format!("{request:?}");
+        assert!(!logged.contains("request_secret"), "{logged}");
+        assert!(!logged.contains("parameter_secret"), "{logged}");
+
+        let internal = r#"{"variables":[["p","{\"String\":\"variable_secret\"}"]]}"#;
+        let request: HttpQueryRequest = serde_json::from_value(serde_json::json!({
+            "sql": "SELECT 1",
+            "session": {
+                "settings": {"enterprise_license": "license_secret", "max_threads": "8"},
+                "internal": internal,
+            },
+        }))
+        .unwrap();
+        let logged = format!("{request:?}");
+        assert!(!logged.contains("license_secret"), "{logged}");
+        assert!(!logged.contains("variable_secret"), "{logged}");
+        assert!(logged.contains(r#""max_threads": "8""#), "{logged}");
+        assert!(logged.contains(r#"variables: ["p"]"#), "{logged}");
     }
 }
 
@@ -229,7 +265,7 @@ fn is_default<T: Default + PartialEq>(t: &T) -> bool {
     *t == T::default()
 }
 
-#[derive(Deserialize, Serialize, Debug, Default, Clone, Eq, PartialEq)]
+#[derive(Deserialize, Serialize, Default, Clone, Eq, PartialEq)]
 pub struct HttpSessionStateInternal {
     /// value is JSON of Scalar
     #[serde(default)]
@@ -328,7 +364,7 @@ where D: Deserializer<'de> {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Default, Clone, Eq, PartialEq)]
+#[derive(Deserialize, Serialize, Default, Clone, Eq, PartialEq)]
 pub struct HttpSessionConf {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub catalog: Option<String>,
@@ -359,6 +395,53 @@ pub struct HttpSessionConf {
     pub internal: Option<HttpSessionStateInternal>,
 }
 
+impl Debug for HttpSessionStateInternal {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("HttpSessionStateInternal")
+            // Variables may hold credentials, e.g. for dynamic SQL.
+            .field(
+                "variables",
+                &self.variables.iter().map(|(k, _)| k).collect::<Vec<_>>(),
+            )
+            .field(
+                "last_query_result_cache_key",
+                &self.last_query_result_cache_key,
+            )
+            .field("has_temp_table", &self.has_temp_table)
+            .field("last_node_id", &self.last_node_id)
+            .field("last_query_ids", &self.last_query_ids)
+            .finish()
+    }
+}
+
+impl Debug for HttpSessionConf {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        // Write-only settings, such as `enterprise_license`, are never shown.
+        let settings = self.settings.as_ref().map(|settings| {
+            settings
+                .iter()
+                .map(
+                    |(k, v)| match DefaultSettings::check_setting_mode(k, SettingMode::Read) {
+                        Ok(_) => (k, v.as_str()),
+                        Err(_) => (k, "***"),
+                    },
+                )
+                .collect::<BTreeMap<_, _>>()
+        });
+        f.debug_struct("HttpSessionConf")
+            .field("catalog", &self.catalog)
+            .field("database", &self.database)
+            .field("role", &self.role)
+            .field("secondary_roles", &self.secondary_roles)
+            .field("settings", &settings)
+            .field("txn_state", &self.txn_state)
+            .field("need_sticky", &self.need_sticky)
+            .field("need_keep_alive", &self.need_keep_alive)
+            .field("internal", &self.internal)
+            .finish()
+    }
+}
+
 impl HttpSessionConf {
     pub fn set_settings(&mut self, values: BTreeMap<String, String>) {
         let Some(settings) = self.settings.as_mut() else {
@@ -379,21 +462,6 @@ impl HttpSessionConf {
     pub async fn restore(&self, session: &Arc<Session>, http_ctx: &HttpQueryContext) -> Result<()> {
         let query_id = &http_ctx.query_id;
         let http_query_manager = HttpQueryManager::instance();
-        if let Some(conf_settings) = &self.settings {
-            let settings = session.get_settings();
-            for (k, v) in conf_settings {
-                settings
-                    .set_setting(k.to_string(), v.to_string())
-                    .or_else(|e| {
-                        if e.code() == ErrorCode::UNKNOWN_VARIABLE {
-                            warn!("Unknown session setting ignored: {}", k);
-                            Ok(())
-                        } else {
-                            Err(e)
-                        }
-                    })?;
-            }
-        }
         if let Some(catalog) = &self.catalog {
             if !catalog.is_empty() {
                 session.set_current_catalog(catalog.clone());
@@ -413,6 +481,25 @@ impl HttpSessionConf {
         session
             .set_secondary_roles_checked(self.secondary_roles.clone())
             .await?;
+        // Restore the effective roles before authorizing requested settings.
+        if let Some(conf_settings) = &self.settings {
+            for k in conf_settings.keys() {
+                session.validate_setting_change(k).await?;
+            }
+            let settings = session.get_settings();
+            for (k, v) in conf_settings {
+                settings
+                    .set_setting(k.to_string(), v.to_string())
+                    .or_else(|e| {
+                        if e.code() == ErrorCode::UNKNOWN_VARIABLE {
+                            warn!("Unknown session setting ignored: {}", k);
+                            Ok(())
+                        } else {
+                            Err(e)
+                        }
+                    })?;
+            }
+        }
         if let Some(state) = &self.internal {
             if !state.variables.is_empty() {
                 session.set_all_variables(state.get_variables()?)
@@ -654,7 +741,7 @@ impl HttpQuery {
         let client_session_id = http_ctx.client_session_id.as_deref().unwrap_or("None");
         let sql = &req.sql;
         let node_id = &GlobalConfig::instance().query.node_id;
-        let masked_sql = mask_connection_info(sql);
+        let masked_sql = mask_log_sql_secrets(sql);
         info!(query_id = query_id, session_id = client_session_id, node_id = node_id, sql = masked_sql.as_str(); "Creating new query");
 
         // Stage attachment is used to carry the data payload to the INSERT/REPLACE statements.
