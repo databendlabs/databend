@@ -369,11 +369,29 @@ impl Session {
         privilege: UserPrivilegeType,
         check_current_role_only: bool,
     ) -> Result<()> {
+        if self
+            .has_privilege(object, privilege, check_current_role_only)
+            .await?
+        {
+            Ok(())
+        } else {
+            Err(ErrorCode::PermissionDenied("Permission denied"))
+        }
+    }
+
+    /// Checks explicit grants only; ownership is handled separately by the caller.
+    #[async_backtrace::framed]
+    pub async fn has_privilege(
+        &self,
+        object: &GrantObject,
+        privilege: UserPrivilegeType,
+        check_current_role_only: bool,
+    ) -> Result<bool> {
         if matches!(self.get_type(), SessionType::Local) {
-            return Ok(());
+            return Ok(true);
         }
         self.privilege_mgr()
-            .validate_privilege(object, privilege, check_current_role_only)
+            .has_privilege(object, privilege, check_current_role_only)
             .await
     }
 
