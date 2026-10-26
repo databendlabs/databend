@@ -1,6 +1,8 @@
 # Compatibility change independent of parser selection: distinct JSON keys
 # that convert to the same typed MAP key are rejected, like other decoders.
-# Keep the Serde setting explicit: default-off is not a rollback of this fix.
+# Use explicit session switches instead of run-with-settings: this test must
+# verify the default Serde path and live switching/rollback in the same session.
+# Default-off is not a rollback of this MAP validity fix.
 statement ok
 set enable_sonic_json_parser = 0
 
