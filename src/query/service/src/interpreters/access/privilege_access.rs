@@ -2211,7 +2211,7 @@ impl AccessChecker for PrivilegeAccess {
                 .await?;
 
                 match &plan.action {
-                    ModifyColumnAction::SetMaskingPolicy(policy_name, _) => {
+                    ModifyColumnAction::SetMaskingPolicy(policy_name, _, _) => {
                         let policy_id = self
                             .resolve_masking_policy_id_by_name(policy_name)
                             .await?;

@@ -509,5 +509,6 @@ mod special_function;
 mod string;
 mod udf;
 mod variant;
+mod variant_paths;
 mod vector;
 mod window;

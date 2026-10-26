@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
@@ -213,6 +214,11 @@ pub struct TableMeta {
     // ColumnId always equals the first value in SecurityPolicyColumnMap::columns_ids
     // One table can have multiple masking policies
     pub column_mask_policy_columns_ids: BTreeMap<ColumnId, SecurityPolicyColumnMap>,
+
+    /// Masked source columns whose original values may be inspected in SELECT WHERE.
+    /// This is an owner-authorized information disclosure, not a session setting.
+    #[serde(default)]
+    pub masking_where_use_unmasked_value: BTreeSet<ColumnId>,
     // One table only has an unique row access policy
     // should be discard
     pub row_access_policy: Option<String>,
@@ -433,6 +439,7 @@ impl Default for TableMeta {
             statistics: Default::default(),
             column_mask_policy: None,
             column_mask_policy_columns_ids: BTreeMap::new(),
+            masking_where_use_unmasked_value: BTreeSet::new(),
             row_access_policy: None,
             row_access_policy_columns_ids: None,
             indexes: BTreeMap::new(),
@@ -914,6 +921,7 @@ pub struct SetTableColumnMaskPolicyReq {
     pub table_id: u64,
     pub seq: MatchSeq,
     pub action: SetSecurityPolicyAction,
+    pub where_use_unmasked_value: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -921,9 +929,10 @@ pub struct SetTableColumnMaskPolicyReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SetSecurityPolicyAction {
-    // new policy name
+    // Policy ID and argument column IDs.
     Set(u64, Vec<ColumnId>),
-    // old policy name
+    // Masking: target ColumnId (losslessly widened to u64).
+    // Row access: policy ID.
     Unset(u64),
 }
 

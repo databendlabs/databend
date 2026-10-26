@@ -1,0 +1,27 @@
+# Read by the current query after the older rewrite: the policy binding survives,
+# the authorization is gone, and SET on an upgraded query restores it.
+
+query IT
+SELECT id, secret FROM compat_masking_where ORDER BY id
+----
+1 ***
+2 ***
+
+query I
+SELECT count(*) FROM compat_masking_where WHERE secret = 'alice'
+----
+0
+
+statement ok
+ALTER TABLE compat_masking_where MODIFY COLUMN secret SET MASKING POLICY compat_masking_where_policy OPTIONS (where_use_unmasked_value = true)
+
+query I
+SELECT count(*) FROM compat_masking_where WHERE secret = 'alice'
+----
+1
+
+statement ok
+DROP TABLE compat_masking_where
+
+statement ok
+DROP MASKING POLICY compat_masking_where_policy
