@@ -614,35 +614,28 @@ impl PrivilegeAccess {
             db_name.to_string(),
             table_name.to_string(),
         );
-        match session
-            .validate_privilege(&name_object, privilege, false)
+        if session
+            .has_privilege(&name_object, privilege, false)
             .in_span(Span::enter_with_local_parent("Access.NameGrant"))
-            .await
+            .await?
         {
-            Ok(()) => return Ok(()),
-            Err(err) if err.code() == ErrorCode::PERMISSION_DENIED => {}
-            Err(err) => return Err(err),
+            return Ok(());
         }
 
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let object_id = self
-            .convert_to_id(&tenant, &catalog, db_name, Some(table_name), false)
+        let (db_id, table_id) = self
+            .resolve_table_ids(&tenant, &catalog, db_name, table_name, false)
             .in_span(Span::enter_with_local_parent("Access.ResolveIdentity"))
             .await
             .map_err(|err| err.add_message("error on validating table access"))?;
-        let ObjectId::Table(db_id, table_id) = object_id else {
-            unreachable!("converting a table name must return a table ID")
-        };
         let id_object = GrantObject::TableById(catalog_name.to_string(), db_id, table_id);
-        match session
-            .validate_privilege(&id_object, privilege, false)
+        if session
+            .has_privilege(&id_object, privilege, false)
             .in_span(Span::enter_with_local_parent("Access.IdGrant"))
-            .await
+            .await?
         {
-            Ok(()) => return Ok(()),
-            Err(err) if err.code() == ErrorCode::PERMISSION_DENIED => {}
-            Err(err) => return Err(err),
+            return Ok(());
         }
 
         if self
@@ -1624,37 +1617,62 @@ impl PrivilegeAccess {
         table_name: Option<&str>,
         disable_table_info_refresh: bool,
     ) -> Result<ObjectId> {
-        let cat = catalog.clone();
-        let db_id = cat
+        if let Some(table_name) = table_name {
+            let (db_id, table_id) = self
+                .resolve_table_ids(
+                    tenant,
+                    catalog,
+                    database_name,
+                    table_name,
+                    disable_table_info_refresh,
+                )
+                .await?;
+            return Ok(ObjectId::Table(db_id, table_id));
+        }
+        let db_id = catalog
             .get_database(tenant, database_name)
             .await?
             .get_db_info()
             .database_id
             .db_id;
-        if let Some(table_name) = table_name {
-            let table_id = if !disable_table_info_refresh {
-                self.ctx
-                    .get_table(cat.name().as_str(), database_name, table_name)
-                    .await?
-                    .get_id()
-            } else {
-                match self
-                    .ctx
-                    .get_table(cat.name().as_str(), database_name, table_name)
-                    .await
-                {
-                    Ok(table) => table.get_id(),
-                    // attach table issue_16121 xx, then vacuum drop table from issue_16121 , then drop table
-                    // should disable catalog
-                    Err(_) => cat
-                        .get_table(tenant, database_name, table_name)
-                        .await?
-                        .get_id(),
-                }
-            };
-            return Ok(ObjectId::Table(db_id, table_id));
-        }
         Ok(ObjectId::Database(db_id))
+    }
+
+    async fn resolve_table_ids(
+        &self,
+        tenant: &Tenant,
+        catalog: &Arc<dyn Catalog>,
+        database_name: &str,
+        table_name: &str,
+        disable_table_info_refresh: bool,
+    ) -> Result<(u64, u64)> {
+        let db_id = catalog
+            .get_database(tenant, database_name)
+            .await?
+            .get_db_info()
+            .database_id
+            .db_id;
+        let table_id = if !disable_table_info_refresh {
+            self.ctx
+                .get_table(catalog.name().as_str(), database_name, table_name)
+                .await?
+                .get_id()
+        } else {
+            match self
+                .ctx
+                .get_table(catalog.name().as_str(), database_name, table_name)
+                .await
+            {
+                Ok(table) => table.get_id(),
+                // attach table issue_16121 xx, then vacuum drop table from issue_16121 , then drop table
+                // should disable catalog
+                Err(_) => catalog
+                    .get_table(tenant, database_name, table_name)
+                    .await?
+                    .get_id(),
+            }
+        };
+        Ok((db_id, table_id))
     }
 
     async fn validate_insert_source(

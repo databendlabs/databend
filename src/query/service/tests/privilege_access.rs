@@ -61,6 +61,96 @@ async fn check_access(ctx: Arc<QueryContext>, sql: &str) -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_has_privilege_and_validate_privilege() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let (db_id, table_id) = setup_table(&fixture).await?;
+    let tenant = fixture.default_tenant();
+    let api = UserApiProvider::instance();
+    let object = GrantObject::TableById("default".into(), db_id, table_id);
+    let mut reader = RoleInfo::new("reader", None);
+    reader
+        .grants
+        .grant_privileges(&object, UserPrivilegeType::Select.into());
+    api.create_role(&tenant, reader, &CreateOption::Create)
+        .await?;
+    api.create_role(
+        &tenant,
+        RoleInfo::new("limited", None),
+        &CreateOption::Create,
+    )
+    .await?;
+    RoleCacheManager::instance().invalidate_cache(&tenant);
+
+    let mut user = UserInfo::new_no_auth("grant_user", "%");
+    user.grants.grant_role("reader".into());
+    user.grants.grant_role("limited".into());
+    user.grants
+        .grant_privileges(&object, UserPrivilegeType::Insert.into());
+    let session = fixture.new_session_with_type(SessionType::Dummy).await?;
+    session.set_authed_user(user, None).await?;
+    session.set_current_role_checked("limited").await?;
+
+    for (privilege, current_role_only, expected) in [
+        (UserPrivilegeType::Select, false, true),
+        (UserPrivilegeType::Select, true, false),
+        (UserPrivilegeType::Insert, true, true),
+        (UserPrivilegeType::Update, false, false),
+    ] {
+        assert_eq!(
+            session
+                .has_privilege(&object, privilege, current_role_only)
+                .await?,
+            expected,
+        );
+        let result = session
+            .validate_privilege(&object, privilege, current_role_only)
+            .await;
+        if expected {
+            result?;
+        } else {
+            let error = result.unwrap_err();
+            assert_eq!(error.code(), ErrorCode::PERMISSION_DENIED);
+            assert_eq!(error.message(), "Permission denied");
+        }
+    }
+
+    // Local sessions preserve their authorization bypass even for users without grants.
+    let local = fixture.new_session_with_type(SessionType::Local).await?;
+    local
+        .set_authed_user(UserInfo::new_no_auth("local_user", "%"), None)
+        .await?;
+    assert!(
+        local
+            .has_privilege(&object, UserPrivilegeType::Select, false)
+            .await?
+    );
+    local
+        .validate_privilege(&object, UserPrivilegeType::Select, false)
+        .await?;
+
+    // Neither API may turn a role-loading failure into an ordinary grant miss.
+    let key = RoleIdent::new(tenant.clone(), "reader").to_string_key();
+    api.get_meta_store_client()
+        .upsert_kv(UpsertKV::update(&key, b"invalid role protobuf"))
+        .await?;
+    RoleCacheManager::instance().invalidate_cache(&tenant);
+    let error = session
+        .has_privilege(&object, UserPrivilegeType::Select, false)
+        .await
+        .unwrap_err();
+    assert_ne!(error.code(), ErrorCode::PERMISSION_DENIED, "{error}");
+    assert_eq!(
+        session
+            .validate_privilege(&object, UserPrivilegeType::Select, false)
+            .await
+            .unwrap_err()
+            .code(),
+        error.code(),
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_select_access_path_counts() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
     let (db_id, table_id) = setup_table(&fixture).await?;
