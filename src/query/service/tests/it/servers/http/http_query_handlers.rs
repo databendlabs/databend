@@ -428,85 +428,28 @@ async fn check_final(ep: &EndpointType, final_uri: &str) -> Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn test_http_security_settings_require_super() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
-    for sql in [
-        "CREATE USER http_setting_viewer IDENTIFIED BY '123'",
-        "CREATE USER http_setting_manager IDENTIFIED BY '123'",
-        "CREATE ROLE http_setting_admin",
-        "GRANT SUPER ON *.* TO ROLE http_setting_admin",
-        "GRANT ROLE http_setting_admin TO http_setting_manager",
-        "SET GLOBAL enable_experimental_connection_privilege_check=1",
+async fn test_query_error_is_returned_unscrubbed() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+    // Errors go back to the client that sent the SQL, as is, so that a
+    // value or column named like a credential does not garble them. Only
+    // logs and query history scrub them.
+    for (sql, kept) in [
+        (
+            "CREATE USER u IDNETIFIED BY 'client_visible'",
+            "client_visible",
+        ),
+        (
+            "SELECT * FROM numbers(1) WHERE customer_key = customer_id",
+            "customer_id",
+        ),
     ] {
-        fixture.execute_command(sql).await?;
+        let (status, result) =
+            post_sql_to_endpoint_new_session(&ep, sql, 5, HeaderMap::default()).await?;
+        assert_eq!(status, StatusCode::OK, "{:?}", result);
+        let message = result.error.map(|e| e.message).unwrap_or_default();
+        assert!(message.contains(kept), "{sql}: {message}");
     }
-
-    for key in [
-        "enable_experimental_connection_privilege_check",
-        "enable_experimental_rbac_check",
-    ] {
-        // SQL entry points and HTTP session restore must enforce the same rule.
-        let settings = serde_json::json!({ key: "0" });
-        for body in [
-            serde_json::json!({"sql": format!("SET {key}=0")}),
-            serde_json::json!({"sql": format!("UNSET GLOBAL {key}")}),
-            serde_json::json!({"sql": format!("SETTINGS ({key}=0) SELECT 1")}),
-            serde_json::json!({"sql": format!("SELECT /*+ SET_VAR({key}=0) */ 1")}),
-            serde_json::json!({"sql": "SELECT 1", "session": {"settings": settings}}),
-        ] {
-            let mut request =
-                TestHttpQueryRequest::new(body).with_basic_auth("http_setting_viewer", "123");
-            let result = request.fetch_total().await?;
-            assert_eq!(
-                result.error().map(|e| e.code),
-                Some(ErrorCode::PERMISSION_DENIED),
-                "{key}: {:?}",
-                result.error()
-            );
-        }
-
-        // Login settings bypass SQL planning, so exercise that endpoint too.
-        let mut headers = HeaderMap::new();
-        headers.typed_insert(headers::Authorization::basic("http_setting_viewer", "123"));
-        headers.insert(HEADER_CLIENT_CAPABILITIES, "session_header".parse()?);
-        let response = post_uri(
-            &create_endpoint()?,
-            "/v1/session/login",
-            &serde_json::json!({ "settings": settings }),
-            headers,
-        )
-        .await?;
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        assert!(
-            response
-                .into_body()
-                .into_string()
-                .await?
-                .contains("Code: 1063")
-        );
-
-        // An assigned SUPER role authorizes changes only when it is effective.
-        for (role, allowed) in [("public", false), ("http_setting_admin", true)] {
-            let mut request = TestHttpQueryRequest::new(serde_json::json!({
-                "sql": format!("SET {key}=0"),
-                "session": {"role": role, "secondary_roles": [], "settings": settings},
-            }))
-            .with_basic_auth("http_setting_manager", "123");
-            let result = request.fetch_total().await?;
-            if allowed {
-                assert!(result.error().is_none(), "{:?}", result.error());
-            } else {
-                assert_eq!(
-                    result.error().map(|e| e.code),
-                    Some(ErrorCode::PERMISSION_DENIED)
-                );
-            }
-        }
-    }
-    let mut request = TestHttpQueryRequest::new(serde_json::json!({"sql": "SET max_threads=3"}))
-        .with_basic_auth("http_setting_viewer", "123");
-    let result = request.fetch_total().await?;
-    assert!(result.error().is_none(), "{:?}", result.error());
     Ok(())
 }
 

@@ -1473,7 +1473,7 @@ impl LiteTableContext {
         let planner = Planner::new(self.clone());
         let extras = planner.parse_sql(sql)?;
         let metadata = Metadata::default_ref();
-        databend_common_sql::apply_statement_settings(self.clone(), &extras.statement).await?;
+        databend_common_sql::apply_statement_settings(self.clone(), &extras.statement)?;
         let name_resolution_ctx = NameResolutionContext::try_from(self.get_settings().as_ref())?;
         let binder = databend_common_sql::Binder::new(
             self.clone(),

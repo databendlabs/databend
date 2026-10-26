@@ -87,7 +87,8 @@ impl Binder {
 
         let (masked_script, secrets) =
             databend_common_ast::parser::mask_raw_sql_with_secrets(&script);
-        self.ctx.add_query_secrets(secrets.clone());
+        // Errors are returned as is; query history and logs scrub them.
+        self.ctx.add_query_secrets(secrets);
         // Record the evaluated SQL, not a concat()/variable expression which
         // may split a password across multiple literals. Attach before parsing
         // so malformed inner scripts are safe too.
@@ -98,39 +99,35 @@ impl Binder {
                 databend_common_ast::ast::quote::QuotedString(&masked_script, '\'')
             ),
         );
-        let result = async {
-            let settings = self.ctx.get_settings();
-            let sql_dialect = settings.get_sql_dialect()?;
-            let tokens = tokenize_sql(&script)?;
-            let ast = run_parser(
-                &tokens,
-                sql_dialect,
-                ParseMode::Template,
-                false,
-                script_block_or_stmt,
-            )?;
+        let settings = self.ctx.get_settings();
+        let sql_dialect = settings.get_sql_dialect()?;
+        let tokens = tokenize_sql(&script)?;
+        let ast = run_parser(
+            &tokens,
+            sql_dialect,
+            ParseMode::Template,
+            false,
+            script_block_or_stmt,
+        )?;
 
-            match ast {
-                ScriptBlockOrStmt::ScriptBlock(script_block) => {
-                    Ok(Plan::ExecuteImmediate(Box::new(ExecuteImmediatePlan {
-                        script_block,
-                        script,
-                    })))
-                }
-                ScriptBlockOrStmt::Statement(stmt) => {
-                    apply_statement_settings(self.ctx.clone(), &stmt).await?;
-                    let binder = Self {
-                        name_resolution_ctx: NameResolutionContext::try_from(
-                            self.ctx.get_settings().as_ref(),
-                        )?,
-                        ..self.clone()
-                    };
-                    binder.bind(&stmt).await
-                }
+        match ast {
+            ScriptBlockOrStmt::ScriptBlock(script_block) => {
+                Ok(Plan::ExecuteImmediate(Box::new(ExecuteImmediatePlan {
+                    script_block,
+                    script,
+                })))
+            }
+            ScriptBlockOrStmt::Statement(stmt) => {
+                apply_statement_settings(self.ctx.clone(), &stmt)?;
+                let binder = Self {
+                    name_resolution_ctx: NameResolutionContext::try_from(
+                        self.ctx.get_settings().as_ref(),
+                    )?,
+                    ..self.clone()
+                };
+                binder.bind(&stmt).await
             }
         }
-        .await;
-        result.map_err(|err| err.redact_with(|text| secrets.scrub(text)))
     }
 
     pub async fn bind_create_procedure(&mut self, stmt: &CreateProcedureStmt) -> Result<Plan> {

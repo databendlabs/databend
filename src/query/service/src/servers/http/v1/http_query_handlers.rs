@@ -707,11 +707,14 @@ async fn query_page_handler(
     query_page_handle.await
 }
 
-fn display_query_error(err: ErrorCode, sql: &str) -> ErrorCode {
-    // Spans refer to the original SQL; render it, then scrub its secrets.
+/// Logs an error of `sql`, which is returned to its client as is. The
+/// rendered excerpt and message may quote credentials of the SQL.
+fn log_start_query_error(err: &ErrorCode, sql: &str) {
     let (_, secrets) = mask_raw_sql_with_secrets(sql);
-    err.display_with_sql(sql)
-        .redact_with(|text| secrets.scrub(text))
+    error!(
+        "Failed to start SQL query, error: {}",
+        secrets.scrub(&format!("{err:?}"))
+    );
 }
 
 #[poem::handler]
@@ -802,15 +805,15 @@ pub(crate) async fn query_handler(
         .await
         {
             Err(err) => {
-                let err = display_query_error(err, &sql);
-                error!("Failed to start SQL query, error: {:?}", err);
+                let err = err.display_with_sql(&sql);
+                log_start_query_error(&err, &sql);
                 ctx.set_fail();
                 Ok(req.fail_to_start_sql(err).into_response())
             }
             Ok(mut query) => {
                 if let Err(err) = query.start_query(sql.clone(), req.params.clone()).await {
-                    let err = display_query_error(err, &sql);
-                    error!("Failed to start SQL query, error: {:?}", err);
+                    let err = err.display_with_sql(&sql);
+                    log_start_query_error(&err, &sql);
                     ctx.set_fail();
                     return Ok(req.fail_to_start_sql(err).into_response());
                 }
@@ -826,7 +829,7 @@ pub(crate) async fn query_handler(
                 let resp = query
                     .get_response_page(0)
                     .await
-                    .map_err(|err| display_query_error(err, &sql))
+                    .map_err(|err| err.display_with_sql(&sql))
                     .map_err(|err| {
                         poem::Error::from_string(
                             format!("{}", err.message()),

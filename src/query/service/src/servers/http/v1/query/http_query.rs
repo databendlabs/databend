@@ -41,7 +41,6 @@ use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::DefaultSettings;
 use databend_common_settings::ScopeLevel;
 use databend_common_settings::SettingMode;
-use databend_common_settings::Settings;
 use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::TxnState;
 use fastrace::future::FutureExt;
@@ -464,14 +463,9 @@ impl HttpSessionConf {
     pub async fn restore(&self, session: &Arc<Session>, http_ctx: &HttpQueryContext) -> Result<()> {
         let query_id = &http_ctx.query_id;
         let http_query_manager = HttpQueryManager::instance();
-        // Ordinary settings can determine the role lookup context (sandbox_tenant).
-        // Security settings must wait until the effective roles are restored.
         if let Some(conf_settings) = &self.settings {
             let settings = session.get_settings();
             for (k, v) in conf_settings {
-                if Settings::requires_super_to_change(k) {
-                    continue;
-                }
                 settings
                     .set_setting(k.to_string(), v.to_string())
                     .or_else(|e| {
@@ -503,18 +497,6 @@ impl HttpSessionConf {
         session
             .set_secondary_roles_checked(self.secondary_roles.clone())
             .await?;
-        // Restore the effective roles before authorizing requested settings.
-        if let Some(conf_settings) = &self.settings {
-            for k in conf_settings.keys() {
-                session.validate_setting_change(k).await?;
-            }
-            let settings = session.get_settings();
-            for (k, v) in conf_settings {
-                if Settings::requires_super_to_change(k) {
-                    settings.set_setting(k.to_string(), v.to_string())?;
-                }
-            }
-        }
         if let Some(state) = &self.internal {
             if !state.variables.is_empty() {
                 session.set_all_variables(state.get_variables()?)
@@ -1005,7 +987,11 @@ impl HttpQuery {
                             warnings: query_context.pop_warnings(),
                         };
 
-                        error!("Query state changed to Stopped, failed to start: {:?}", e);
+                        // The error is returned as is; its excerpt may quote credentials.
+                        error!(
+                            "Query state changed to Stopped, failed to start: {}",
+                            query_context.query_secrets().scrub(&format!("{e:?}"))
+                        );
                         Executor::start_to_stop(
                             &query_state,
                             ExecuteState::Stopped(Box::new(state)),

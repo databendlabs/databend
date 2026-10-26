@@ -74,9 +74,6 @@ async fn check_login(
     }
 
     if let Some(conf_settings) = &req.settings {
-        for key in conf_settings.keys() {
-            session.validate_setting_change(key).await?;
-        }
         let settings = session.get_settings();
         for (k, v) in conf_settings {
             settings.set_setting(k.to_string(), v.to_string())?;

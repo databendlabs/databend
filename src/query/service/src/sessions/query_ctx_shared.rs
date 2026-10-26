@@ -26,7 +26,6 @@ use std::time::SystemTime;
 
 use async_channel::Receiver;
 use databend_common_ast::parser::SqlSecrets;
-use databend_common_ast::parser::mask_sql_secrets;
 use databend_common_base::base::Progress;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::base::WatchNotify;
@@ -675,8 +674,9 @@ impl QueryContextShared {
         }
         {
             let mut running_query = self.running_query.write();
+            // Callers attach masked SQL, see `Statement::to_mask_sql`.
             *running_query = Some(short_sql(
-                mask_sql_secrets(&query),
+                query,
                 self.get_settings()
                     .get_short_sql_max_length()
                     .unwrap_or(1000),

@@ -35,6 +35,7 @@ use crate::interpreters::interpreter_execute_immediate::ProcedureState;
 use crate::interpreters::util::ScriptClient;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextQueryIdentity;
 use crate::sessions::TableContextSettings;
 
 #[derive(Debug)]
@@ -126,11 +127,11 @@ impl Interpreter for CallProcedureInterpreter {
             };
 
             res.map_err(|err| {
-                // Keep the diagnostic, without the script's or arguments' values.
-                let mut secrets = self.ctx.query_secrets();
-                secrets.extend(mask_raw_sql_with_secrets(&self.plan.script).1);
+                // The error is returned as is, but its excerpt of the script
+                // must be scrubbed in query history and logs.
+                self.ctx
+                    .add_query_secrets(mask_raw_sql_with_secrets(&self.plan.script).1);
                 err.display_with_sql(&self.plan.script)
-                    .redact_with(|text| secrets.scrub(text))
             })
         })
     }

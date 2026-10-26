@@ -129,26 +129,6 @@ impl<C> ErrorCode<C> {
         Self { span, ..self }
     }
 
-    /// Rewrites every text of this error, e.g. to remove known credentials
-    /// from messages and rendered SQL excerpts. Code, span and backtrace are
-    /// kept; the cause is folded into the rewritten message.
-    pub fn redact_with(self, redact: impl Fn(&str) -> String) -> Self {
-        Self {
-            display_text: redact(&self.display_text()),
-            detail: redact(&self.detail),
-            cause: None,
-            stacks: self
-                .stacks
-                .into_iter()
-                .map(|frame| ErrorFrame {
-                    message: redact(&frame.message),
-                    ..frame
-                })
-                .collect(),
-            ..self
-        }
-    }
-
     /// Pretty display the error message onto sql statement if span is available.
     pub fn display_with_sql(mut self, sql: &str) -> Self {
         if let Some(span) = self.span.take() {

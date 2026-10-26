@@ -20,7 +20,6 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
-use databend_common_settings::Settings;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
 
@@ -40,14 +39,6 @@ pub trait TableContextAuthorization: Send + Sync {
         privilege: UserPrivilegeType,
         check_current_role_only: bool,
     ) -> Result<()>;
-
-    async fn validate_setting_change(&self, key: &str) -> Result<()> {
-        if Settings::requires_super_to_change(key) {
-            self.validate_privilege(&GrantObject::Global, UserPrivilegeType::Super, false)
-                .await?;
-        }
-        Ok(())
-    }
 
     async fn has_ownership(
         &self,

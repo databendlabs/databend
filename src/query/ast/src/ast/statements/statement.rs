@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
+use derive_visitor::Visitor;
 use derive_visitor::VisitorMut;
 use dictionary::CreateDictionaryStmt;
 use dictionary::DropDictionaryStmt;
@@ -51,7 +52,6 @@ use crate::parser::mask::is_secret_name;
 use crate::parser::mask::mask_dynamic_sql_expr;
 use crate::parser::mask::mask_partial;
 use crate::parser::mask::mask_program_literals;
-use crate::parser::mask::mask_sql_inner;
 use crate::parser::mask::url_secrets;
 use crate::parser::mask_raw_sql_with_secrets;
 use crate::parser::mask_url;
@@ -459,9 +459,146 @@ pub enum Statement {
     ExecuteImmediateStmt(enter),
     CreateProcedureStmt(enter),
     CallProcedureStmt(enter),
-    TaskSql(enter)
+    TaskSql(enter),
+    CreateTaskStmt(enter),
+    AlterTaskOptions(enter),
+    Settings(enter),
+    HintItem(enter),
+    SelectStageOptions(enter),
+    CreateTableStmt(enter),
+    CreateWorkerStmt(enter),
+    AlterWorkerAction(enter)
 )]
 struct SecretMasker(SqlSecrets);
+
+/// Whether [`SecretMasker`] may change a statement, so that statements
+/// without credentials, such as large `INSERT`s, are not cloned to be masked.
+#[derive(Default, Visitor)]
+#[visitor(
+    AuthOption(enter),
+    CreateCatalogStmt(enter),
+    NotificationWebhookOptions(enter),
+    UDFDefinition(enter),
+    CreateDictionaryStmt(enter),
+    Connection(enter),
+    CreateConnectionStmt(enter),
+    AlterTableStmt(enter),
+    ExecuteImmediateStmt(enter),
+    CreateProcedureStmt(enter),
+    CallProcedureStmt(enter),
+    TaskSql(enter),
+    CreateTaskStmt(enter),
+    AlterTaskOptions(enter),
+    Settings(enter),
+    HintItem(enter),
+    SelectStageOptions(enter),
+    CreateTableStmt(enter),
+    CreateWorkerStmt(enter),
+    AlterWorkerAction(enter)
+)]
+struct MayHoldSecrets(bool);
+
+impl MayHoldSecrets {
+    fn enter_auth_option(&mut self, _: &AuthOption) {
+        self.0 = true;
+    }
+
+    fn enter_create_catalog_stmt(&mut self, _: &CreateCatalogStmt) {
+        self.0 = true;
+    }
+
+    fn enter_notification_webhook_options(&mut self, _: &NotificationWebhookOptions) {
+        self.0 = true;
+    }
+
+    fn enter_udf_definition(&mut self, _: &UDFDefinition) {
+        self.0 = true;
+    }
+
+    fn enter_create_dictionary_stmt(&mut self, _: &CreateDictionaryStmt) {
+        self.0 = true;
+    }
+
+    fn enter_connection(&mut self, connection: &Connection) {
+        self.0 |= !connection.conns.is_empty();
+    }
+
+    fn enter_create_connection_stmt(&mut self, _: &CreateConnectionStmt) {
+        self.0 = true;
+    }
+
+    fn enter_alter_table_stmt(&mut self, stmt: &AlterTableStmt) {
+        self.0 |= match &stmt.action {
+            AlterTableAction::ModifyConnection { .. } => true,
+            AlterTableAction::SetOptions { set_options } => options_may_hold_secrets(set_options),
+            _ => false,
+        };
+    }
+
+    fn enter_select_stage_options(&mut self, options: &SelectStageOptions) {
+        self.0 |= !options.connection.is_empty();
+    }
+
+    fn enter_create_table_stmt(&mut self, stmt: &CreateTableStmt) {
+        self.0 |= options_may_hold_secrets(&stmt.table_options)
+            || stmt
+                .table_properties
+                .as_ref()
+                .is_some_and(options_may_hold_secrets);
+    }
+
+    fn enter_create_worker_stmt(&mut self, stmt: &CreateWorkerStmt) {
+        self.0 |= options_may_hold_secrets(&stmt.options);
+    }
+
+    fn enter_alter_worker_action(&mut self, action: &AlterWorkerAction) {
+        if let AlterWorkerAction::SetOptions { options } = action {
+            self.0 |= options_may_hold_secrets(options);
+        }
+    }
+
+    fn enter_execute_immediate_stmt(&mut self, _: &ExecuteImmediateStmt) {
+        self.0 = true;
+    }
+
+    fn enter_create_procedure_stmt(&mut self, _: &CreateProcedureStmt) {
+        self.0 = true;
+    }
+
+    fn enter_call_procedure_stmt(&mut self, _: &CallProcedureStmt) {
+        self.0 = true;
+    }
+
+    fn enter_task_sql(&mut self, _: &TaskSql) {
+        self.0 = true;
+    }
+
+    fn enter_create_task_stmt(&mut self, _: &CreateTaskStmt) {
+        self.0 = true;
+    }
+
+    fn enter_alter_task_options(&mut self, _: &AlterTaskOptions) {
+        self.0 = true;
+    }
+
+    fn enter_settings(&mut self, settings: &Settings) {
+        self.0 |= settings
+            .identifiers
+            .iter()
+            .any(|ident| is_secret_name(&ident.name));
+    }
+
+    fn enter_hint_item(&mut self, item: &HintItem) {
+        self.0 |= is_secret_name(&item.name.name);
+    }
+}
+
+/// Whether [`SecretMasker::mask_secret_options`] may change `options`.
+fn options_may_hold_secrets(options: &BTreeMap<String, String>) -> bool {
+    options
+        .iter()
+        .any(|(key, value)| is_secret_name(key) || value.contains("://"))
+}
 
 impl SecretMasker {
     fn hide(&mut self, value: &mut String, masked: String) {
@@ -542,8 +679,32 @@ impl SecretMasker {
     }
 
     fn enter_alter_table_stmt(&mut self, stmt: &mut AlterTableStmt) {
-        if let AlterTableAction::ModifyConnection { new_connection } = &mut stmt.action {
-            self.mask_all(new_connection);
+        match &mut stmt.action {
+            AlterTableAction::ModifyConnection { new_connection } => self.mask_all(new_connection),
+            AlterTableAction::SetOptions { set_options } => self.mask_secret_options(set_options),
+            _ => {}
+        }
+    }
+
+    // `SELECT ... FROM '<uri>' (CONNECTION => (...))`
+    fn enter_select_stage_options(&mut self, options: &mut SelectStageOptions) {
+        self.mask_all(&mut options.connection);
+    }
+
+    fn enter_create_table_stmt(&mut self, stmt: &mut CreateTableStmt) {
+        self.mask_secret_options(&mut stmt.table_options);
+        if let Some(properties) = &mut stmt.table_properties {
+            self.mask_secret_options(properties);
+        }
+    }
+
+    fn enter_create_worker_stmt(&mut self, stmt: &mut CreateWorkerStmt) {
+        self.mask_secret_options(&mut stmt.options);
+    }
+
+    fn enter_alter_worker_action(&mut self, action: &mut AlterWorkerAction) {
+        if let AlterWorkerAction::SetOptions { options } = action {
+            self.mask_secret_options(options);
         }
     }
 
@@ -581,6 +742,38 @@ impl SecretMasker {
             }
         }
     }
+
+    // Session parameters, e.g. `enterprise_license`.
+    fn enter_create_task_stmt(&mut self, stmt: &mut CreateTaskStmt) {
+        self.mask_secret_options(&mut stmt.session_parameters);
+    }
+
+    fn enter_alter_task_options(&mut self, options: &mut AlterTaskOptions) {
+        if let AlterTaskOptions::Set {
+            session_parameters: Some(params),
+            ..
+        } = options
+        {
+            self.mask_secret_options(params);
+        }
+    }
+
+    // Settings and variables, e.g. `SET GLOBAL enterprise_license = '...'`.
+    fn enter_settings(&mut self, settings: &mut Settings) {
+        if let SetValues::Expr(values) = &mut settings.values {
+            for (ident, value) in settings.identifiers.iter().zip(values.iter_mut()) {
+                if is_secret_name(&ident.name) {
+                    self.0.extend(hide_literals(value.as_mut()));
+                }
+            }
+        }
+    }
+
+    fn enter_hint_item(&mut self, item: &mut HintItem) {
+        if is_secret_name(&item.name.name) {
+            self.0.extend(hide_literals(&mut item.expr));
+        }
+    }
 }
 
 impl Statement {
@@ -589,43 +782,21 @@ impl Statement {
     }
 
     /// [`Self::to_mask_sql`], also returning the hidden values.
+    ///
+    /// Only values of credential-bearing nodes are masked, wherever they
+    /// occur (e.g. a `CONNECTION` of a location in a query). Expressions of
+    /// queries and DML are user data and keep their text, even if a column is
+    /// named like a credential, e.g. `WHERE token = 'abc'`.
     pub fn to_mask_sql_with_secrets(&self) -> (String, SqlSecrets) {
+        let mut detector = MayHoldSecrets::default();
+        self.drive(&mut detector);
+        if !detector.0 {
+            return (self.to_string(), SqlSecrets::default());
+        }
         let mut masker = SecretMasker::default();
-        let sql = match self {
-            Statement::CreateUser(_)
-            | Statement::AlterUser(_)
-            | Statement::CreateCatalog(_)
-            | Statement::CreateDictionary(_)
-            | Statement::CreateUDF(_)
-            | Statement::AlterUDF(_)
-            | Statement::CreateNotification(_)
-            | Statement::AlterNotification(_)
-            | Statement::CreateConnection(_)
-            | Statement::CopyIntoTable(_)
-            | Statement::CopyIntoLocation(_)
-            | Statement::CreateStage(_)
-            | Statement::AlterStage(_)
-            | Statement::AttachTable(_)
-            | Statement::AlterTable(_)
-            | Statement::ExecuteImmediate(_)
-            | Statement::CreateProcedure(_)
-            | Statement::CallProcedure(_)
-            | Statement::CreateTask(_)
-            | Statement::AlterTask(_)
-            | Statement::Explain { .. }
-            | Statement::ExplainAnalyze { .. }
-            | Statement::StatementWithSettings { .. } => {
-                let mut stmt = self.clone();
-                stmt.drive_mut(&mut masker);
-                stmt.to_string()
-            }
-            _ => self.to_string(),
-        };
-        // Apply the same contract to every caller (including queue entries),
-        // rather than relying on query history to add a second masking pass.
-        let (sql, secrets) = mask_sql_inner(&sql);
-        masker.0.extend(secrets);
-        (sql, masker.0)
+        let mut stmt = self.clone();
+        stmt.drive_mut(&mut masker);
+        (stmt.to_string(), masker.0)
     }
 
     pub fn allowed_in_multi_statement(&self) -> bool {

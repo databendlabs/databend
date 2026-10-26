@@ -314,12 +314,11 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
                     .base
                     .do_query(query_id_str, query)
                     .await
-                    .map_err(|err| {
-                        // The writer also logs this error; scrub the excerpt.
-                        let (_, secrets) = mask_raw_sql_with_secrets(query);
-                        err.display_with_sql(query)
-                            .redact_with(|text| secrets.scrub(text))
-                    });
+                    .map_err(|err| err.display_with_sql(query));
+                if query_result.is_err() {
+                    // The writer logs the error, whose excerpt may quote credentials.
+                    writer.set_log_secrets(mask_raw_sql_with_secrets(query).1);
+                }
 
                 let mut write_result = writer.write(query_result).await;
 

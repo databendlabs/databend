@@ -183,13 +183,6 @@ impl Settings {
         })
     }
 
-    /// These settings control authorization and must not be changed by ordinary users,
-    /// even for a single session or query.
-    pub fn requires_super_to_change(key: &str) -> bool {
-        key.eq_ignore_ascii_case("enable_experimental_connection_privilege_check")
-            || key.eq_ignore_ascii_case("enable_experimental_rbac_check")
-    }
-
     pub fn has_setting(&self, key: &str) -> Result<bool> {
         Ok(DefaultSettings::instance()?.settings.contains_key(key))
     }

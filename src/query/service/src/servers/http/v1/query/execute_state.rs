@@ -18,7 +18,6 @@ use std::time::SystemTime;
 
 use ExecuteState::*;
 use databend_common_ast::parser::mask_raw_sql_secrets;
-use databend_common_ast::parser::mask_raw_sql_with_secrets;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::runtime::CatchUnwindFuture;
@@ -418,11 +417,7 @@ impl ExecuteState {
         // Use interpreter_plan_sql, we can write the query log if an error occurs.
         let (plan, _, queue_guard) = interpreter_plan_sql(ctx.clone(), &sql, true, params.as_ref())
             .await
-            .map_err(|err| {
-                let (_, secrets) = mask_raw_sql_with_secrets(&sql);
-                err.display_with_sql(&sql)
-                    .redact_with(|text| secrets.scrub(text))
-            })
+            .map_err(|err| err.display_with_sql(&sql))
             .with_context(make_error)?;
 
         Self::apply_settings(

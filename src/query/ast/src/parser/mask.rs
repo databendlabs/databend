@@ -16,6 +16,7 @@ use std::ops::Range;
 
 use crate::ast::Expr;
 use crate::ast::Literal;
+use crate::ast::Statement;
 use crate::ast::quote::QuotedString;
 use crate::parser::Dialect;
 use crate::parser::ParseMode;
@@ -127,7 +128,7 @@ enum UserAuth {
     By,
 }
 
-/// Masks credentials in raw SQL text, for logs and query history.
+/// Masks credentials in raw SQL text, for logs written before parsing.
 ///
 /// The input is tokenized, so string literals and comments never trigger
 /// masking, and a replacement never extends past the secret it covers. This
@@ -136,7 +137,10 @@ enum UserAuth {
 /// - the password of `CREATE [OR REPLACE] USER` / `ALTER USER`: string
 ///   literals after `IDENTIFIED` and the token after `BY`;
 /// - `<key> = '<value>'` pairs whose key (quoted or not) satisfies
-///   [`is_secret_name`];
+///   [`is_secret_name`], and credentials of URL literals. In queries and DML
+///   (`SELECT`, `INSERT`, `UPDATE`, ...) only inside `CONNECTION = (...)` /
+///   `CONNECTION => (...)`: elsewhere they compare or write user data, e.g.
+///   `ON f.date_key = d.date_key`;
 /// - every value inside `HEADERS = ( ... )`.
 ///
 /// Masked values keep their first and last two characters. SQL inside
@@ -167,14 +171,23 @@ fn mask_sql_with(sql: &str, nested: NestedMasker) -> (String, SqlSecrets) {
     let mut dynamic_sql = false;
     let mut dynamic_expression = false;
     let mut procedure = false;
+    // The kind of the current statement, see `statement_head`.
+    let mut head: Option<TokenKind> = None;
+    let mut depth = 0usize;
+    // Parenthesis depth inside `CONNECTION = (...)`; 0 when outside.
+    let mut connection_depth = 0usize;
     // The last three tokens as (kind, span), most recent last.
     let mut prev: [Option<(TokenKind, Range<usize>)>; 3] = [None, None, None];
 
     let mut tokens = Tokenizer::new(sql).peekable();
     while let Some(token) = tokens.next() {
+        // Option values may hold credentials; query expressions hold data.
+        let options = connection_depth > 0 || !head.is_some_and(is_query_head);
         let after_eq = matches!(&prev[2], Some((TokenKind::Eq, _)));
         let pending_key = match &prev[1] {
-            Some((kind, key)) if after_eq && is_secret_key(sql, *kind, key) => Some(key.clone()),
+            Some((kind, key)) if options && after_eq && is_secret_key(sql, *kind, key) => {
+                Some(key.clone())
+            }
             _ => None,
         };
         let pending_header = after_eq && headers_depth > 0;
@@ -207,7 +220,21 @@ fn mask_sql_with(sql: &str, nested: NestedMasker) -> (String, SqlSecrets) {
         let span: Range<usize> = token.span.into();
         let text = &sql[span.clone()];
 
+        if kind == TokenKind::SemiColon {
+            head = None;
+            depth = 0;
+        } else if head.is_none() {
+            head = statement_head(kind, depth);
+        }
         if kind == TokenKind::LParen {
+            depth += 1;
+            if connection_depth > 0 {
+                connection_depth += 1;
+            } else if matches!(&prev[2], Some((TokenKind::Eq | TokenKind::FatRArrow, _)))
+                && matches!(&prev[1], Some((TokenKind::CONNECTION, _)))
+            {
+                connection_depth = 1;
+            }
             if headers_depth > 0 {
                 headers_depth += 1;
             } else if after_eq && matches!(&prev[1], Some((TokenKind::HEADERS, _))) {
@@ -219,6 +246,8 @@ fn mask_sql_with(sql: &str, nested: NestedMasker) -> (String, SqlSecrets) {
                 webhook_depth = 1;
             }
         } else if kind == TokenKind::RParen {
+            depth = depth.saturating_sub(1);
+            connection_depth = connection_depth.saturating_sub(1);
             headers_depth = headers_depth.saturating_sub(1);
             webhook_depth = webhook_depth.saturating_sub(1);
         }
@@ -272,13 +301,15 @@ fn mask_sql_with(sql: &str, nested: NestedMasker) -> (String, SqlSecrets) {
                 } else if pending_key.is_some() || pending_header {
                     secrets.push_literal(text);
                     Some(mask_partial(&value))
-                } else {
+                } else if options {
                     let url = mask_url(&value, url_key && webhook_depth > 0);
                     if url != value {
                         secrets.push_literal(text);
                         secrets.extend(url_secrets(&value));
                     }
                     (url != value).then_some(url)
+                } else {
+                    None
                 };
                 if let Some(value) = replacement {
                     let quoted = QuotedString(&value, text.as_bytes()[0] as char).to_string();
@@ -324,10 +355,11 @@ fn mask_sql_with(sql: &str, nested: NestedMasker) -> (String, SqlSecrets) {
             }
             _ if pending_key.is_some() || pending_header => {
                 // Dictionary options also accept bare identifiers, numbers and
-                // booleans. Do not consume delimiters or function names.
+                // booleans. Do not consume delimiters, function names or
+                // qualified column names.
                 let function = tokens.peek().is_some_and(|next| {
                     next.as_ref()
-                        .is_ok_and(|next| next.kind == TokenKind::LParen)
+                        .is_ok_and(|next| matches!(next.kind, TokenKind::LParen | TokenKind::Dot))
                 });
                 if !function
                     && !matches!(
@@ -356,6 +388,39 @@ fn mask_sql_with(sql: &str, nested: NestedMasker) -> (String, SqlSecrets) {
         prev = [prev[1].take(), prev[2].take(), Some((kind, span))];
     }
     (masked.finish(), secrets)
+}
+
+/// The kind of a statement from its first token, or `None` for a prefix such
+/// as `EXPLAIN`, `SETTINGS (...)` or a script's `BEGIN`.
+fn statement_head(kind: TokenKind, depth: usize) -> Option<TokenKind> {
+    match kind {
+        TokenKind::EXPLAIN
+        | TokenKind::ANALYZE
+        | TokenKind::SETTINGS
+        | TokenKind::BEGIN
+        | TokenKind::LParen
+        | TokenKind::RParen => None,
+        // e.g. `(SELECT ...) UNION ...`
+        TokenKind::SELECT | TokenKind::WITH => Some(kind),
+        // Inside a prefix group, e.g. `EXPLAIN (VERBOSE)`.
+        _ if depth > 0 => None,
+        _ => Some(kind),
+    }
+}
+
+fn is_query_head(kind: TokenKind) -> bool {
+    matches!(
+        kind,
+        TokenKind::SELECT
+            | TokenKind::WITH
+            | TokenKind::FROM
+            | TokenKind::VALUES
+            | TokenKind::INSERT
+            | TokenKind::REPLACE
+            | TokenKind::UPDATE
+            | TokenKind::DELETE
+            | TokenKind::MERGE
+    )
 }
 
 /// Masks SQL for request logs written before planning, without parsing it.
@@ -392,8 +457,9 @@ fn starts_script_block(sql: &str) -> bool {
 
 /// [`mask_sql_secrets`] for SQL that may not parse, such as raw requests.
 ///
-/// SQL that parses in any dialect keeps the precise masking, so masking
-/// cannot hide the structure of a valid query. Tokens of SQL that fails to
+/// A statement that parses in any dialect is masked from its AST, see
+/// `Statement::to_mask_sql_with_secrets`, so masking cannot hide the
+/// structure of a valid query. Tokens of SQL that fails to
 /// parse can be misaligned with its intent: a misspelled `IDENTIFIED`, or a
 /// missing quote turning `KEY='s3 SECRET='x'` into a literal followed by the
 /// bare secret. Names cannot identify credentials there, so all values are
@@ -411,7 +477,13 @@ pub fn mask_raw_sql_with_secrets(sql: &str) -> (String, SqlSecrets) {
         return mask_sql_inner(sql);
     }
     match parse_for_masking(sql) {
-        Some(ParsedSql::Statement) => mask_sql_inner(sql),
+        Some(ParsedSql::Statement(stmt, format)) => {
+            let (mut masked, secrets) = stmt.to_mask_sql_with_secrets();
+            if let Some(format) = format {
+                masked = format!("{masked} FORMAT {format}");
+            }
+            (masked, secrets)
+        }
         Some(ParsedSql::Script) => {
             // A declaration may feed a credential into a later dynamic query.
             // Without data-flow evaluation, literals in a program are opaque;
@@ -552,7 +624,7 @@ fn mask_unparsed(sql: &str) -> (String, SqlSecrets) {
 }
 
 enum ParsedSql {
-    Statement,
+    Statement(Box<Statement>, Option<String>),
     Script,
 }
 
@@ -569,8 +641,8 @@ fn parse_for_masking(sql: &str) -> Option<ParsedSql> {
     .find_map(|dialect| {
         // Do not use parse_sql's debug round-trip diagnostic: its warning may
         // include the unmasked source, and this is the log sanitization path.
-        if run_parser(&tokens, dialect, ParseMode::Default, false, statement).is_ok() {
-            return Some(ParsedSql::Statement);
+        if let Ok(stmt) = run_parser(&tokens, dialect, ParseMode::Default, false, statement) {
+            return Some(ParsedSql::Statement(Box::new(stmt.stmt), stmt.format));
         }
         match run_parser(
             &tokens,
@@ -580,7 +652,9 @@ fn parse_for_masking(sql: &str) -> Option<ParsedSql> {
             script_block_or_stmt,
         ) {
             Ok(ScriptBlockOrStmt::ScriptBlock(_)) => Some(ParsedSql::Script),
-            Ok(ScriptBlockOrStmt::Statement(_)) => Some(ParsedSql::Statement),
+            Ok(ScriptBlockOrStmt::Statement(stmt)) => {
+                Some(ParsedSql::Statement(Box::new(stmt), None))
+            }
             Err(_) => None,
         }
     })
@@ -798,13 +872,19 @@ mod tests {
                 "CREATE USER u IDENTIFIED BY 'pw\nrest",
                 "CREATE USER u IDENTIFIED BY '***'",
             ),
+            // Nested SQL that parses is masked from its AST, including
+            // procedure arguments, like a top-level `CALL PROCEDURE`.
+            (
+                "EXECUTE IMMEDIATE $$CALL PROCEDURE p('leak_arg', 42)$$",
+                "EXECUTE IMMEDIATE $$CALL PROCEDURE p('***', '***')$$",
+            ),
             (
                 "EXECUTE IMMEDIATE $$CREATE USER u IDENTIFIED BY 'pw'$$",
-                "EXECUTE IMMEDIATE $$CREATE USER u IDENTIFIED BY '***'$$",
+                "EXECUTE IMMEDIATE $$CREATE USER 'u'@'%' IDENTIFIED BY '***'$$",
             ),
             (
                 "EXECUTE IMMEDIATE 'CREATE USER u IDENTIFIED BY ''leak_pw'''",
-                "EXECUTE IMMEDIATE 'CREATE USER u IDENTIFIED BY \\'***\\''",
+                "EXECUTE IMMEDIATE 'CREATE USER \\'u\\'@\\'%\\' IDENTIFIED BY \\'***\\''",
             ),
             (
                 "EXECUTE IMMEDIATE concat('CREATE USER u IDENTIFIED BY ', '''leak_pw''')",
@@ -865,9 +945,36 @@ mod tests {
                 "SELECT /* CREATE USER x IDENTIFIED */ * FROM secret_table",
                 "SELECT /* CREATE USER x IDENTIFIED */ * FROM secret_table",
             ),
+            // Query and DML expressions are user data, even if a column is
+            // named like a credential; only their connections are masked.
             (
                 "CREATE TABLE t (user INT, identified INT, a INT PRIMARY KEY); SELECT token FROM t WHERE token = 'abc'",
-                "CREATE TABLE t (user INT, identified INT, a INT PRIMARY KEY); SELECT token FROM t WHERE token = '***'",
+                "CREATE TABLE t (user INT, identified INT, a INT PRIMARY KEY); SELECT token FROM t WHERE token = 'abc'",
+            ),
+            (
+                "SELECT * FROM f JOIN d ON f.date_key = d.date_key WHERE sort_key = 'abcdef' AND token_count = 5 AND has_secret = TRUE",
+                "SELECT * FROM f JOIN d ON f.date_key = d.date_key WHERE sort_key = 'abcdef' AND token_count = 5 AND has_secret = TRUE",
+            ),
+            (
+                "EXPLAIN (SELECT a FROM t WHERE customer_key = customer_id) UNION ALL SELECT 1",
+                "EXPLAIN (SELECT a FROM t WHERE customer_key = customer_id) UNION ALL SELECT 1",
+            ),
+            (
+                "INSERT INTO t VALUES ('https://u:leak@x.test/f?sig=1'); UPDATE t SET password = 'p'",
+                "INSERT INTO t VALUES ('https://u:leak@x.test/f?sig=1'); UPDATE t SET password = 'p'",
+            ),
+            (
+                "SELECT * FROM 's3://b/x.csv' (CONNECTION => (ACCESS_KEY_ID = 'akid123', SECRET_ACCESS_KEY = 'secret456')) WHERE token = 'abc'",
+                "SELECT * FROM 's3://b/x.csv' (CONNECTION => (ACCESS_KEY_ID = 'ak***23', SECRET_ACCESS_KEY = 'se***56')) WHERE token = 'abc'",
+            ),
+            (
+                "SETTINGS (enterprise_license = 'leak_lic') SELECT 1; SELECT 2",
+                "SETTINGS (enterprise_license = 'le***ic') SELECT 1; SELECT 2",
+            ),
+            // Option values outside queries, e.g. a dictionary source.
+            (
+                "CREATE DICTIONARY d (a INT) PRIMARY KEY a SOURCE(MYSQL(password = leak_bare))",
+                "CREATE DICTIONARY d (a INT) PRIMARY KEY a SOURCE(MYSQL(password = '***'))",
             ),
         ] {
             let masked = mask_sql_secrets(sql);
@@ -910,13 +1017,20 @@ mod tests {
         ] {
             assert_eq!(mask_raw_sql_secrets(sql), expected, "{sql}");
         }
+        let (masked, secrets) = mask_raw_sql_with_secrets("CALL PROCEDURE p('leak_arg')");
+        assert_eq!(masked, "CALL PROCEDURE p('***')");
+        assert_eq!(secrets.scrub("leak_arg"), "***");
+
         // Exceeding a parsing budget must not turn valid SQL into a truncated
         // audit record, even with a credential-looking literal at the front.
         let large = format!(
             "SELECT 'password=' AS a, * FROM audit_table /*{}*/",
             "x".repeat(1024 * 1024)
         );
-        assert_eq!(mask_raw_sql_secrets(&large), large);
+        assert_eq!(
+            mask_raw_sql_secrets(&large),
+            "SELECT 'password=' AS a, * FROM audit_table"
+        );
         let nested = "EXECUTE IMMEDIATE $$CREATE USER u\nIDENTIFIED\nBY 'leak_pw' invalid$$";
         assert!(!mask_raw_sql_secrets(nested).contains("leak_pw"));
         let block = "DECLARE p STRING DEFAULT 'leak_pw'; BEGIN EXECUTE IMMEDIATE concat('SELECT ', p); END;";
@@ -933,6 +1047,25 @@ mod tests {
         let scrubbed = secrets.scrub(&err);
         assert!(!scrubbed.contains("leak"), "{scrubbed}");
         assert!(scrubbed.contains("IDNETIFIED"), "{scrubbed}");
+    }
+
+    #[test]
+    fn test_to_mask_sql_keeps_user_data() {
+        // Columns named like credentials are data: the text is kept and no
+        // value is recorded, so diagnostics are not scrubbed with it.
+        for sql in [
+            "SELECT * FROM f INNER JOIN d ON f.date_key = d.date_key WHERE customer_key = customer_id",
+            "SELECT token FROM t WHERE token = 'abcdef' AND password_hash = 'xyz123'",
+            "UPDATE t SET api_token = 'abcdef' WHERE sort_key = 1",
+            "INSERT INTO t VALUES ('https://u:p@x.test/f?sig=1')",
+            "SET max_threads = 8",
+        ] {
+            let tokens = tokenize_sql(sql).unwrap();
+            let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+            let (masked, hidden) = stmt.to_mask_sql_with_secrets();
+            assert_eq!(masked, stmt.to_string(), "{sql}");
+            assert_eq!(hidden.scrub(sql), sql, "{sql}");
+        }
     }
 
     #[test]
@@ -964,6 +1097,17 @@ mod tests {
                 &["leak_lic", "leak_var"],
             ),
             ("SET GLOBAL enterprise_license='leak_lic'", &["leak_lic"]),
+            (
+                "SELECT /*+ SET_VAR(enterprise_license='leak_lic') */ * FROM 's3://b/x.csv' (CONNECTION => (ACCESS_KEY_ID = 'leak_akid', SECRET_ACCESS_KEY = 'leak_sk'))",
+                &["leak_lic", "leak_akid", "leak_sk"],
+            ),
+            ("ALTER TASK t SET enterprise_license='leak_lic'", &[
+                "leak_lic",
+            ]),
+            (
+                "CREATE TABLE t (a INT) 's3://b/' CONNECTION = (secret_access_key = 'leak_sk') session_token = 'leak_tok'",
+                &["leak_sk", "leak_tok"],
+            ),
         ] {
             let tokens = tokenize_sql(sql).unwrap();
             let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();

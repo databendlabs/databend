@@ -25,7 +25,6 @@ use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::ReplaceStmt;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::Dialect;
-use databend_common_ast::parser::mask_raw_sql_with_secrets;
 use databend_common_ast::parser::parse_raw_insert_stmt;
 use databend_common_ast::parser::parse_raw_replace_stmt;
 use databend_common_ast::parser::parse_sql;
@@ -106,7 +105,7 @@ impl Planner {
         let extras = self.parse_sql(sql)?;
         let stmt = &extras.statement;
         let query_kind = get_query_kind(stmt);
-        apply_statement_settings(self.ctx.clone(), stmt).await?;
+        apply_statement_settings(self.ctx.clone(), stmt)?;
         let name_resolution_ctx =
             NameResolutionContext::try_from(self.ctx.get_settings().as_ref())?;
         let binder = Binder::new(
@@ -132,16 +131,6 @@ impl Planner {
     }
 
     fn parse_sql_inner(&self, sql: &str, has_params: bool) -> Result<PlanExtras> {
-        self.parse_sql_inner_impl(sql, has_params).map_err(|err| {
-            // Parser diagnostics quote source lines. Keep the diagnostic, but
-            // not the values of SQL that may be a misspelled credential option.
-            let (_, secrets) = mask_raw_sql_with_secrets(sql);
-            self.ctx.add_query_secrets(secrets.clone());
-            err.redact_with(|text| secrets.scrub(text))
-        })
-    }
-
-    fn parse_sql_inner_impl(&self, sql: &str, has_params: bool) -> Result<PlanExtras> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         // compile prql to sql for prql dialect
@@ -312,7 +301,7 @@ impl Planner {
     ) -> Result<Plan> {
         let start = Instant::now();
         let query_kind = get_query_kind(stmt);
-        apply_statement_settings(self.ctx.clone(), stmt).await?;
+        apply_statement_settings(self.ctx.clone(), stmt)?;
         let settings = self.ctx.get_settings();
         // Step 3: Bind AST with catalog, and generate a pure logical SExpr
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
