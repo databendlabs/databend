@@ -349,21 +349,21 @@ INSERT INTO t_refine VALUES (4,[-1,0,0,0]), (5,[1,0.5,0,0]), (6,[1,0.25,0,0])
 query IR
 SELECT id, round(cosine_distance(embedding,[1,0,0,0]::Vector(4)),3) AS d FROM t_refine ORDER BY d LIMIT 3
 ----
-1 0
+1 0.0
 6 0.03
 5 0.106
 
 query IR
 SETTINGS (vector_refine_factor = 4, vector_search_ef = 16) SELECT id, l1_distance(embedding,[1,0,0,0]::Vector(4)) AS d FROM t_refine ORDER BY d LIMIT 3
 ----
-1 0
+1 0.0
 6 0.25
 5 0.5
 
 query IR
 SELECT id, l2_distance(embedding,[1,0,0,0]::Vector(4)) AS d FROM t_refine ORDER BY d LIMIT 3
 ----
-1 0
+1 0.0
 6 0.25
 5 0.5
 
@@ -371,7 +371,7 @@ query IR
 SELECT id, l2_distance(embedding,[1,0,0,0]::Vector(4)) AS d FROM t_refine WHERE d>0.4 ORDER BY d LIMIT 2
 ----
 5 0.5
-2 1
+2 1.0
 
 # 0 disables refinement (SQ8 scores); the order is the same here.
 query I
