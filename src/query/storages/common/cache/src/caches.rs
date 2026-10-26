@@ -18,6 +18,7 @@ use std::time::Instant;
 
 use arrow::array::ArrayRef;
 use databend_common_cache::MemSized;
+use databend_common_expression::Column;
 
 use crate::CacheAccessor;
 use crate::InMemoryLruCache;
@@ -119,7 +120,22 @@ pub type IcebergTableCache = InMemoryLruCache<IcebergTableCacheValue>;
 /// In memory object cache of table column array
 pub type ColumnArrayCache = InMemoryLruCache<SizedColumnArray>;
 pub type ArrayRawDataUncompressedSize = usize;
-pub type SizedColumnArray = (ArrayRef, ArrayRawDataUncompressedSize);
+pub type SizedColumnArray = (CachedColumnArray, ArrayRawDataUncompressedSize);
+
+/// A deserialized column kept in the in-memory column array cache.
+#[derive(Clone, Debug)]
+pub enum CachedColumnArray {
+    /// Arrow array as produced by the Parquet reader.
+    Arrow(ArrayRef),
+    /// Column in Databend's representation, e.g. an encoded column that has no Arrow counterpart.
+    Column(Column),
+}
+
+impl From<ArrayRef> for CachedColumnArray {
+    fn from(array: ArrayRef) -> Self {
+        CachedColumnArray::Arrow(array)
+    }
+}
 
 // Bind Type of cached objects to Caches
 //

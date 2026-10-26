@@ -138,6 +138,8 @@ pub struct FilterVisitor<'a> {
     filter_rows: usize,
     original_rows: usize,
     strategy: IterationStrategy,
+    /// Runs of selected rows of `filter`, computed once and shared by all the columns.
+    slices: Option<Vec<(usize, usize)>>,
 }
 
 impl<'a> FilterVisitor<'a> {
@@ -150,7 +152,15 @@ impl<'a> FilterVisitor<'a> {
             filter_rows,
             original_rows: filter.len(),
             strategy,
+            slices: None,
         }
+    }
+
+    /// `(start, len)` of each run of selected rows.
+    fn slices(&mut self) -> &[(usize, usize)] {
+        let filter = self.filter;
+        self.slices
+            .get_or_insert_with(|| SlicesIterator::new(filter).collect())
     }
 
     pub fn with_strategy(mut self, strategy: IterationStrategy) -> Self {
@@ -218,10 +228,9 @@ impl ValueVisitor for FilterVisitor<'_> {
                 });
             }
             _ => {
-                let iter = SlicesIterator::new(self.filter);
-                iter.for_each(|(start, len)| {
+                for &(start, len) in self.slices() {
                     inner_builder.append_column(&T::slice_column(&column, start..start + len));
-                });
+                }
             }
         }
         drop(inner_builder);
@@ -280,10 +289,9 @@ impl ValueVisitor for FilterVisitor<'_> {
                 let offset = bitmap.offset();
 
                 let mut builder = MutableBitmap::with_capacity(self.filter_rows);
-                let iter = SlicesIterator::new(self.filter);
-                iter.for_each(|(start, len)| {
+                for &(start, len) in self.slices() {
                     builder.append_packed_range(start + offset..start + len + offset, src)
-                });
+                }
                 builder.into()
             }
         };
@@ -312,9 +320,21 @@ impl ValueVisitor for FilterVisitor<'_> {
         )));
         Ok(())
     }
+
+    /// Filters the encoded values (keys / deltas) and keeps the encoding.
+    fn visit_encoded(&mut self, mut column: Box<EncodedColumn>) -> Result<()> {
+        // Reuses the box of the input column.
+        *column = column.map_codes(|codes| self.filter_narrow(codes));
+        self.result = Some(Value::Column(Column::Encoded(column)));
+        Ok(())
+    }
 }
 
 impl FilterVisitor<'_> {
+    fn filter_narrow(&mut self, buffer: NarrowBuffer) -> NarrowBuffer {
+        crate::map_narrow_buffer!(buffer, |b| self.filter_primitive_types(b))
+    }
+
     fn filter_primitive_types<T: Copy>(&mut self, buffer: Buffer<T>) -> Buffer<T> {
         match self.strategy {
             IterationStrategy::IndexIterator => {
@@ -323,10 +343,9 @@ impl FilterVisitor<'_> {
             }
             _ => {
                 let mut builder = Vec::with_capacity(self.filter_rows);
-                let iter = SlicesIterator::new(self.filter);
-                iter.for_each(|(start, len)| {
+                for &(start, len) in self.slices() {
                     builder.extend_from_slice(&buffer[start..start + len]);
-                });
+                }
                 builder.into()
             }
         }

@@ -351,7 +351,7 @@ impl VectorIndexBuilder {
 
         let mut concated_columns = BTreeMap::new();
         for (offset, columns) in columns.into_iter() {
-            let concated_column = Column::concat_columns(columns.into_iter())?;
+            let concated_column = Column::concat_columns(columns)?;
             concated_columns.insert(offset, concated_column);
         }
 

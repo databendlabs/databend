@@ -44,6 +44,7 @@ use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
+use databend_common_expression::with_column_view_iter;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
@@ -363,6 +364,40 @@ where R: ArgType
     }
 }
 
+fn sum_selected<T, R>(
+    values: impl Iterator<Item = T>,
+    value_at: impl Fn(usize) -> T,
+    validity: Option<&Bitmap>,
+) -> R
+where
+    T: AsPrimitive<R>,
+    R: Number + std::ops::AddAssign,
+{
+    let mut sum = R::default();
+    match validity {
+        Some(validity)
+            if (validity.true_count() as f64 / validity.len() as f64) < SELECTIVITY_THRESHOLD =>
+        {
+            for index in TrueIdxIter::new(validity.len(), Some(validity)) {
+                sum += value_at(index).as_();
+            }
+        }
+        Some(validity) => {
+            for (value, valid) in values.zip(validity.iter()) {
+                if valid {
+                    sum += value.as_();
+                }
+            }
+        }
+        None => {
+            for value in values {
+                sum += value.as_();
+            }
+        }
+    }
+    sum
+}
+
 impl<T, R> UnaryState<NumberType<T>, NumberType<R>> for AggregateNumberSumState<NumberType<R>>
 where
     T: Number + AsPrimitive<R>,
@@ -394,32 +429,20 @@ where
                 }
             }
             ColumnView::Column(buffer) => {
-                // Keep the v1 accumulation order: reduce each buffer first,
-                // then add its sum to the state. This matters for floats.
-                let mut sum = R::default();
-                match validity {
-                    Some(validity)
-                        if (validity.true_count() as f64 / validity.len() as f64)
-                            < SELECTIVITY_THRESHOLD =>
-                    {
-                        for index in TrueIdxIter::new(validity.len(), Some(validity)) {
-                            sum += unsafe { buffer.get_unchecked(index).as_() };
-                        }
-                    }
-                    Some(validity) => {
-                        for (value, valid) in buffer.iter().zip(validity.iter()) {
-                            if valid {
-                                sum += value.as_();
-                            }
-                        }
-                    }
-                    None => {
-                        for value in buffer.iter() {
-                            sum += value.as_();
-                        }
-                    }
-                }
-                self.value += sum;
+                self.value += sum_selected(
+                    buffer.iter().copied(),
+                    // SAFETY: called with the indices of `validity`, which has the length of the column.
+                    |i| unsafe { *buffer.get_unchecked(i) },
+                    validity,
+                );
+            }
+            ColumnView::Encoded(view) => {
+                self.value += sum_selected(
+                    view.iter(),
+                    // SAFETY: as above.
+                    |i| unsafe { view.index_unchecked(i) },
+                    validity,
+                );
             }
         }
         Ok(())
@@ -497,17 +520,13 @@ where T: Decimal + std::ops::AddAssign
         Self::default()
     }
 
+    #[inline]
     fn add(&mut self, value: T, _function_info: &Self::FunctionInfo) -> Result<()> {
         let mut sum = T::from_u64_array(self.value);
         sum += value;
 
         if SHOULD_CHECK_OVERFLOW && (sum > T::DECIMAL_MAX || sum < T::DECIMAL_MIN) {
-            return Err(ErrorCode::Overflow(format!(
-                "Decimal overflow: {:?} not in [{}, {}]",
-                sum,
-                T::DECIMAL_MIN,
-                T::DECIMAL_MAX,
-            )));
+            return Err(decimal_sum_overflow(sum));
         }
 
         self.value = sum.to_u64_array();
@@ -518,43 +537,43 @@ where T: Decimal + std::ops::AddAssign
         &mut self,
         column: ColumnView<DecimalType<T>>,
         validity: Option<&Bitmap>,
-        function_info: &Self::FunctionInfo,
+        _function_info: &Self::FunctionInfo,
     ) -> Result<()> {
-        if SHOULD_CHECK_OVERFLOW {
-            // Check every intermediate sum, even if later values would cancel it.
-            match validity {
-                Some(validity) => {
-                    for (value, valid) in column.iter().zip(validity.iter()) {
-                        if valid {
-                            self.add(value, function_info)?;
+        let validity = validity.filter(|validity| validity.null_count() > 0);
+        let mut sum = T::from_u64_array(self.value);
+        let result: Result<()>;
+        with_column_view_iter!(DecimalType<T>, &column, |values| {
+            let mut add = |value: T| {
+                let mut next = sum;
+                next += value;
+                // Check every intermediate sum, even if later values would cancel it.
+                if SHOULD_CHECK_OVERFLOW && (next > T::DECIMAL_MAX || next < T::DECIMAL_MIN) {
+                    return Err(decimal_sum_overflow(next));
+                }
+                sum = next;
+                Ok(())
+            };
+            result = (|| {
+                match validity {
+                    Some(validity) => {
+                        for (value, valid) in values.zip(validity.iter()) {
+                            if valid {
+                                add(value)?;
+                            }
+                        }
+                    }
+                    None => {
+                        for value in values {
+                            add(value)?;
                         }
                     }
                 }
-                None => {
-                    for value in column.iter() {
-                        self.add(value, function_info)?;
-                    }
-                }
-            }
-        } else {
-            let mut sum = T::from_u64_array(self.value);
-            match validity {
-                Some(validity) if validity.null_count() > 0 => {
-                    for (value, valid) in column.iter().zip(validity.iter()) {
-                        if valid {
-                            sum += value;
-                        }
-                    }
-                }
-                _ => {
-                    for value in column.iter() {
-                        sum += value;
-                    }
-                }
-            }
-            self.value = sum.to_u64_array();
-        }
-        Ok(())
+                Ok(())
+            })();
+        });
+        // Like `add`, an overflow keeps the last sum that did not overflow.
+        self.value = sum.to_u64_array();
+        result
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
@@ -590,6 +609,18 @@ where T: Decimal + std::ops::AddAssign
         let value = DecimalType::<T>::try_downcast_scalar(&value)?;
         self.add(value, &())
     }
+}
+
+/// Kept out of line: building the error is never on the hot path.
+#[cold]
+#[inline(never)]
+fn decimal_sum_overflow<T: Decimal>(sum: T) -> ErrorCode {
+    ErrorCode::Overflow(format!(
+        "Decimal overflow: {:?} not in [{}, {}]",
+        sum,
+        T::DECIMAL_MIN,
+        T::DECIMAL_MAX,
+    ))
 }
 
 #[derive(Default)]

@@ -31,15 +31,19 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::visitor::ValueVisitor;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::CachedColumnArray;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 mod adapter;
 mod deserialize;
+mod encode;
 mod row_selection;
 
 pub use adapter::RowGroupImplBuilder;
 pub use deserialize::column_chunks_to_record_batch;
+pub use deserialize::dictionary_hint_fields;
+pub use encode::ColumnEncoding;
 pub use row_selection::RowSelection;
 
 use crate::FuseBlockPartInfo;
@@ -90,6 +94,7 @@ impl BlockReader {
             &column_chunks,
             compression,
             parquet_selection,
+            self.parquet_hint_fields.as_ref(),
         )?;
         let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
@@ -108,6 +113,7 @@ impl BlockReader {
             .zip(self.project_column_nodes.iter())
         {
             let data_type: DataType = field.data_type().into();
+            let encoding = self.column_encodings.get(&field.column_id).copied();
 
             // NOTE, there is something tricky here:
             // - `column_chunks` always contains data of leaf columns
@@ -127,22 +133,42 @@ impl BlockReader {
                 Some(DataItem::RawData(_)) => {
                     // get the deserialized arrow array, which may be a nested array
                     let arrow_array = column_by_name(&record_batch, &name_paths[i]);
-                    if !column_node.is_nested {
-                        if let Some(cache) = &array_cache {
-                            let meta = column_metas.get(&field.column_id).unwrap();
-                            let (offset, len) = meta.offset_length();
-                            let key = TableDataCacheKey::new(
-                                block_path,
-                                field.column_id,
-                                offset,
-                                len,
-                                &data_type.to_string(),
-                            );
-                            let array_memory_size = arrow_array.get_array_memory_size();
-                            cache.insert(key.into(), (arrow_array.clone(), array_memory_size));
+                    // Nested columns are neither cached nor encoded.
+                    let cache = array_cache.as_ref().filter(|_| !column_node.is_nested);
+                    let cache_key = || {
+                        let meta = column_metas.get(&field.column_id).unwrap();
+                        let (offset, len) = meta.offset_length();
+                        TableDataCacheKey::new(
+                            block_path,
+                            field.column_id,
+                            offset,
+                            len,
+                            &ColumnEncoding::cache_type_key(encoding, &data_type),
+                        )
+                    };
+                    match encoding {
+                        Some(encoding) => {
+                            let column = encoding.encode(arrow_array, &data_type)?;
+                            if let Some(cache) = cache {
+                                let memory_size = column.memory_size(false);
+                                cache.insert(
+                                    cache_key().into(),
+                                    (CachedColumnArray::Column(column.clone()), memory_size),
+                                );
+                            }
+                            Value::Column(column)
+                        }
+                        None => {
+                            if let Some(cache) = cache {
+                                let array_memory_size = arrow_array.get_array_memory_size();
+                                cache.insert(
+                                    cache_key().into(),
+                                    (arrow_array.clone().into(), array_memory_size),
+                                );
+                            }
+                            Value::from_arrow_rs(arrow_array, &data_type)?
                         }
                     }
-                    Value::from_arrow_rs(arrow_array, &data_type)?
                 }
                 Some(DataItem::ColumnArray(cached)) => {
                     if column_node.is_nested {
@@ -151,7 +177,12 @@ impl BlockReader {
                             "unexpected nested field: nested leaf field hits cached",
                         ));
                     }
-                    let mut value = Value::from_arrow_rs(cached.0.clone(), &data_type)?;
+                    let mut value = match &cached.0 {
+                        CachedColumnArray::Arrow(array) => {
+                            Value::from_arrow_rs(array.clone(), &data_type)?
+                        }
+                        CachedColumnArray::Column(column) => Value::Column(column.clone()),
+                    };
                     if let Some(selection) = selection {
                         let mut filter_visitor = FilterVisitor::new(&selection.bitmap);
                         filter_visitor.visit_value(value)?;

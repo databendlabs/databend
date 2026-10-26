@@ -201,6 +201,7 @@ impl From<Scalar> for LegacyScalar {
 impl From<Column> for LegacyColumn {
     fn from(value: Column) -> Self {
         match value {
+            Column::Encoded(col) => LegacyColumn::from(col.decode()),
             Column::Null { len } => LegacyColumn::Null { len },
             Column::EmptyArray { len } => LegacyColumn::EmptyArray { len },
             Column::EmptyMap { len } => LegacyColumn::EmptyMap { len },

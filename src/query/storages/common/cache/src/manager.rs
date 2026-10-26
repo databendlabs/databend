@@ -1386,7 +1386,7 @@ mod tests {
         // 1. Populate in-memory table data cache
         let in_memory_table_data_cache = cache_manager.get_table_data_array_cache().unwrap();
         let array: ArrayRef = Arc::new(Int32Array::from(vec![1, 2, 3, 4, 5]));
-        in_memory_table_data_cache.insert("not matter".to_string(), (array, 1));
+        in_memory_table_data_cache.insert("not matter".to_string(), (array.into(), 1));
 
         // 2. Populate segment block metas cache
         let segment_block_metas_cache = cache_manager.get_segment_block_metas_cache().unwrap();
