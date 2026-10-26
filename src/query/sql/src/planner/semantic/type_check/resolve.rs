@@ -70,7 +70,7 @@ where A: TypeCheckAdapter
         fallback_aliases: Option<AliasLookup<'a>>,
     ) -> Result<Self> {
         let func_ctx = adapter.function_context()?;
-        let dialect = adapter.settings().get_sql_dialect()?;
+        let dialect = adapter.sql_dialect()?;
         Ok(Self {
             bind_context,
             adapter,
@@ -83,7 +83,18 @@ where A: TypeCheckAdapter
             in_aggregate_function: false,
             in_window_function: false,
             in_masking_policy: false,
+            apply_masking_policy: true,
+            forbid_virtual_computed_column: false,
         })
+    }
+
+    /// Only maintenance bindings opt out; normal SELECT and DML use masking policies.
+    pub(crate) fn set_apply_masking_policy(&mut self, apply: bool) {
+        self.apply_masking_policy = apply;
+    }
+
+    pub(crate) fn set_forbid_virtual_computed_column(&mut self, forbid: bool) {
+        self.forbid_virtual_computed_column = forbid;
     }
 
     pub(super) fn core_expr_arena(&self) -> CoreExprArena<'a> {

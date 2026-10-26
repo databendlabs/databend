@@ -19,6 +19,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::MetadataRef;
+use databend_common_sql::optimizer::ir::DefaultPhysicalPlanner;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::OptimizeCompactBlock;
 
@@ -79,7 +80,13 @@ impl Interpreter for OptimizeCompactBlockInterpreter {
             let mut build_res = PipelineBuildResult::create();
             let mut builder =
                 PhysicalPlanBuilder::new(MetadataRef::default(), self.ctx.clone(), false);
-            match builder.build(&self.s_expr, ColumnSet::new()).await {
+            match builder
+                .build(
+                    &DefaultPhysicalPlanner::plan(&self.s_expr)?,
+                    ColumnSet::new(),
+                )
+                .await
+            {
                 Ok(physical_plan) => {
                     build_res =
                         build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan)

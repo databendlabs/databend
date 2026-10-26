@@ -28,6 +28,7 @@ use super::merge_into::MergeIntoStmt;
 use super::*;
 use crate::Span;
 use crate::ast::CreateOption;
+use crate::ast::ExternalAccessStmt;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::quote::QuotedString;
@@ -345,6 +346,7 @@ pub enum Statement {
         pattern: Option<String>,
     },
     // Connection
+    ExternalAccess(ExternalAccessStmt),
     CreateConnection(CreateConnectionStmt),
     DropConnection(DropConnectionStmt),
     DescribeConnection(DescribeConnectionStmt),
@@ -658,6 +660,10 @@ impl Statement {
             | Statement::MergeInto(..)
             | Statement::Delete(..)
             | Statement::Update(..)
+            | Statement::AlterTable(AlterTableStmt {
+                action: AlterTableAction::MaterializeTableTtl,
+                ..
+            })
             | Statement::ShowCatalogs(..)
             | Statement::ShowCreateCatalog(..)
             | Statement::UseCatalog { .. }
@@ -748,6 +754,7 @@ impl Statement {
             | Statement::AlterStage(..)
             | Statement::CreateSequence(..)
             | Statement::CreateDictionary(..)
+            | Statement::ExternalAccess(..)
             | Statement::CreateConnection(..)
             | Statement::CreatePipe(..)
             | Statement::AlterTable(..)
@@ -1272,6 +1279,7 @@ impl Display for Statement {
             Statement::DescribePipe(stmt) => write!(f, "{stmt}")?,
             Statement::DropPipe(stmt) => write!(f, "{stmt}")?,
             Statement::AlterPipe(stmt) => write!(f, "{stmt}")?,
+            Statement::ExternalAccess(stmt) => write!(f, "{stmt}")?,
             Statement::CreateConnection(stmt) => write!(f, "{stmt}")?,
             Statement::DropConnection(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeConnection(stmt) => write!(f, "{stmt}")?,

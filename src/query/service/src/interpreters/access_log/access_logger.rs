@@ -251,6 +251,18 @@ impl AccessLogger {
                     )]),
                 });
             }
+            Plan::DropTablePartitionKey(plan) => {
+                let object_name = format!("{}.{}.{}", plan.catalog, plan.database, plan.table);
+                self.entry.object_modified_by_ddl.push(ModifyByDDLObject {
+                    object_domain: ObjectDomain::Table,
+                    object_name,
+                    operation_type: DDLOperationType::Alter,
+                    properties: HashMap::from([(
+                        "partition_by".to_string(),
+                        serde_json::Value::Null,
+                    )]),
+                });
+            }
             Plan::UnsetOptions(plan) => {
                 let object_name = format!("{}.{}.{}", plan.catalog, plan.database, plan.table);
                 let operation_type = DDLOperationType::Alter;

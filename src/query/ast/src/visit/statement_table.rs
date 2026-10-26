@@ -58,6 +58,15 @@ impl Walk for CreateTableSource {
                 database,
                 table,
             } => try_walk!((catalog, database, table).walk(visitor)),
+            CreateTableSource::Clone {
+                catalog,
+                database,
+                table,
+                travel_point,
+            } => {
+                try_walk!((catalog, database, table).walk(visitor));
+                try_walk!(travel_point.walk(visitor));
+            }
         }
         Ok(VisitControl::Continue)
     }
@@ -102,6 +111,15 @@ impl WalkMut for CreateTableSource {
                 database,
                 table,
             } => try_walk!((catalog, database, table).walk_mut(visitor)),
+            CreateTableSource::Clone {
+                catalog,
+                database,
+                table,
+                travel_point,
+            } => {
+                try_walk!((catalog, database, table).walk_mut(visitor));
+                try_walk!(travel_point.walk_mut(visitor));
+            }
         }
         Ok(VisitControl::Continue)
     }
@@ -262,8 +280,10 @@ impl Walk for AlterTableAction {
                 try_walk!(new_column.walk(visitor));
             }
             AlterTableAction::ModifyTableComment { .. }
+            | AlterTableAction::DropTablePartitionKey
             | AlterTableAction::DropTableClusterKey
             | AlterTableAction::RemoveTableTtl
+            | AlterTableAction::MaterializeTableTtl
             | AlterTableAction::RefreshTableCache
             | AlterTableAction::SetOptions { .. }
             | AlterTableAction::ModifyConnection { .. }
@@ -374,8 +394,10 @@ impl WalkMut for AlterTableAction {
                 try_walk!(new_column.walk_mut(visitor));
             }
             AlterTableAction::ModifyTableComment { .. }
+            | AlterTableAction::DropTablePartitionKey
             | AlterTableAction::DropTableClusterKey
             | AlterTableAction::RemoveTableTtl
+            | AlterTableAction::MaterializeTableTtl
             | AlterTableAction::RefreshTableCache
             | AlterTableAction::SetOptions { .. }
             | AlterTableAction::ModifyConnection { .. }

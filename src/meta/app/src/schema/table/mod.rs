@@ -185,6 +185,12 @@ pub struct TableMeta {
     /// Global monotonically increasing sequence for cluster key changes, to
     /// ensuring a unique identifier for each version of cluster key.
     pub cluster_key_seq: u32,
+    /// Monotonically increasing partition key sequence; never reset by DROP.
+    #[serde(default)]
+    pub partition_key_seq: u32,
+    /// Identity of the current PARTITION BY definition. Legacy definitions have no ID.
+    #[serde(default)]
+    pub partition_key_id: Option<u32>,
     /// Row-level TTL expression, e.g. `event_time + INTERVAL 30 DAY`.
     ///
     /// Only the definition text is stored. Referenced columns and result type
@@ -414,6 +420,8 @@ impl Default for TableMeta {
             cluster_key: None,
             cluster_key_v2: None,
             cluster_key_seq: 0,
+            partition_key_seq: 0,
+            partition_key_id: None,
             ttl: None,
             created_on: Utc::now(),
             updated_on: Utc::now(),
@@ -528,6 +536,15 @@ impl Display for TableIdList {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateTableCloneMeta {
+    pub source_table_id: u64,
+    pub source_table_seq: MatchSeq,
+    /// Timestamp of the source state selected for the clone. Empty tables use the request time.
+    /// This is mandatory so Meta can never skip the source LVT fence.
+    pub snapshot_timestamp: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableReq {
     pub create_option: CreateOption,
     pub catalog_name: Option<String>,
@@ -558,6 +575,9 @@ pub struct CreateTableReq {
     /// validates that the definition is still bound to the source metadata
     /// recorded in the CREATE plan. It is `None` for non-MV tables.
     pub materialized_view: Option<CreateMaterializedViewMeta>,
+
+    /// Source validation and lineage for a zero-copy table clone.
+    pub clone: Option<CreateTableCloneMeta>,
 
     /// Iceberg table properties
     pub table_properties: Option<BTreeMap<String, String>>,
@@ -826,8 +846,9 @@ pub struct UpdateTableMetaReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TableLvtCheck {
-    pub tenant: Tenant,
     pub time: DateTime<Utc>,
+    /// Historical head publication must invalidate GC marks in the same transaction.
+    pub touch: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

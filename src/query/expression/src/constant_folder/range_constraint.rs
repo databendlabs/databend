@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use super::ConstantFolder;
@@ -25,48 +26,39 @@ use crate::expression::FunctionCall;
 use crate::types::DataType;
 
 impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
-    /// Check if AND expressions contain mutually exclusive range conditions
-    /// Returns Some(true) if the expressions are mutually exclusive (should return false)
-    /// Returns Some(false) if they are not mutually exclusive
-    /// Returns None if analysis is inconclusive
+    /// Check if AND expressions contain mutually exclusive range conditions.
+    /// Returns Some(true) if no row can satisfy the comparisons, otherwise None.
+    /// An inconclusive result does not prove that the expressions are satisfiable.
     pub(super) fn check_mutually_exclusive_ranges(
         &self,
         args: &[FoldResult<'_, Index>],
     ) -> Option<bool> {
-        // Track constraints for each column
-        let mut column_constraints: HashMap<Index, Vec<RangeConstraint<Index>>> = HashMap::new();
+        let mut column_constraints: HashMap<(Index, DataType), ConstraintState> = HashMap::new();
 
-        // Extract constraints from each expression
         for arg in args {
-            if let Some(constraint) = RangeConstraint::try_from_expr(arg.as_ref()) {
-                column_constraints
-                    .entry(constraint.column_id.clone())
-                    .or_default()
-                    .push(constraint);
-            }
-        }
-
-        // Check for mutually exclusive constraints on each column
-        for (_column_id, constraints) in column_constraints {
-            if constraints.len() < 2 {
+            let Some(constraint) = RangeConstraint::try_from_expr(arg.as_ref()) else {
+                continue;
+            };
+            // Scalar ordering does not model mixed-type SQL comparisons. NULL
+            // comparisons are handled by the caller's boolean domain analysis.
+            if constraint.constant.as_ref().infer_data_type()
+                != constraint.data_type.remove_nullable()
+            {
                 continue;
             }
 
-            // Check all pairs of constraints for mutual exclusion
-            for i in 0..constraints.len() {
-                for j in (i + 1)..constraints.len() {
-                    if self.are_constraints_mutually_exclusive(&constraints[i], &constraints[j]) {
-                        return Some(true); // Found mutually exclusive constraints
-                    }
-                }
-            }
-
-            if self.are_combined_constraints_mutually_exclusive(&constraints) {
+            let state = column_constraints
+                .entry((constraint.column_id, constraint.data_type))
+                .or_default();
+            if state.add(&constraint.operator, constraint.constant) {
                 return Some(true);
             }
         }
 
-        None // No conclusive mutual exclusion found
+        column_constraints
+            .values()
+            .any(ConstraintState::is_mutually_exclusive)
+            .then_some(true)
     }
 
     /// Check if two range constraints are mutually exclusive
@@ -140,27 +132,57 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             _ => false,
         }
     }
+}
 
-    fn are_combined_constraints_mutually_exclusive(
-        &self,
-        constraints: &[RangeConstraint<Index>],
-    ) -> bool {
-        let mut lower = None;
-        let mut upper = None;
-        let mut not_eq_constants = Vec::new();
+/// Summary of compatible comparisons on one column. Accumulating bounds and
+/// equality takes constant comparisons per constraint; exclusions are scanned
+/// only once, after the final singleton candidate is known.
+#[derive(Default)]
+struct ConstraintState {
+    lower: Option<(Scalar, bool)>,
+    upper: Option<(Scalar, bool)>,
+    equal: Option<Scalar>,
+    not_eq_constants: Vec<Scalar>,
+}
 
-        for constraint in constraints {
-            match constraint.operator.as_str() {
-                "gt" => tighten_lower_bound(&mut lower, &constraint.constant, false),
-                "gte" => tighten_lower_bound(&mut lower, &constraint.constant, true),
-                "lt" => tighten_upper_bound(&mut upper, &constraint.constant, false),
-                "lte" => tighten_upper_bound(&mut upper, &constraint.constant, true),
-                "noteq" => not_eq_constants.push(&constraint.constant),
-                _ => {}
+impl ConstraintState {
+    /// Returns true if distinct equality constraints already prove a conflict.
+    fn add(&mut self, operator: &str, constant: Scalar) -> bool {
+        match operator {
+            "gt" => tighten_lower_bound(&mut self.lower, constant, false),
+            "gte" => tighten_lower_bound(&mut self.lower, constant, true),
+            "lt" => tighten_upper_bound(&mut self.upper, constant, false),
+            "lte" => tighten_upper_bound(&mut self.upper, constant, true),
+            "eq" => {
+                if let Some(equal) = &self.equal {
+                    return matches!(
+                        equal.partial_cmp(&constant),
+                        Some(Ordering::Less | Ordering::Greater)
+                    );
+                }
+                self.equal = Some(constant);
             }
+            "noteq" => self.not_eq_constants.push(constant),
+            _ => {}
+        }
+        false
+    }
+
+    fn is_mutually_exclusive(&self) -> bool {
+        if let Some(equal) = &self.equal {
+            let below_lower = self
+                .lower
+                .as_ref()
+                .is_some_and(|(lower, inclusive)| equal < lower || (equal == lower && !inclusive));
+            let above_upper = self
+                .upper
+                .as_ref()
+                .is_some_and(|(upper, inclusive)| equal > upper || (equal == upper && !inclusive));
+            return below_lower || above_upper || self.not_eq_constants.contains(equal);
         }
 
-        let (Some((lower, lower_inclusive)), Some((upper, upper_inclusive))) = (&lower, &upper)
+        let (Some((lower, lower_inclusive)), Some((upper, upper_inclusive))) =
+            (&self.lower, &self.upper)
         else {
             return false;
         };
@@ -175,25 +197,25 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             return true;
         }
 
-        not_eq_constants.contains(&lower)
+        self.not_eq_constants.contains(lower)
     }
 }
 
-fn tighten_lower_bound(bound: &mut Option<(Scalar, bool)>, constant: &Scalar, inclusive: bool) {
+fn tighten_lower_bound(bound: &mut Option<(Scalar, bool)>, constant: Scalar, inclusive: bool) {
     let should_update = bound.as_ref().is_none_or(|(current, current_inclusive)| {
-        constant > current || (constant == current && !inclusive && *current_inclusive)
+        &constant > current || (&constant == current && !inclusive && *current_inclusive)
     });
     if should_update {
-        *bound = Some((constant.clone(), inclusive));
+        *bound = Some((constant, inclusive));
     }
 }
 
-fn tighten_upper_bound(bound: &mut Option<(Scalar, bool)>, constant: &Scalar, inclusive: bool) {
+fn tighten_upper_bound(bound: &mut Option<(Scalar, bool)>, constant: Scalar, inclusive: bool) {
     let should_update = bound.as_ref().is_none_or(|(current, current_inclusive)| {
-        constant < current || (constant == current && !inclusive && *current_inclusive)
+        &constant < current || (&constant == current && !inclusive && *current_inclusive)
     });
     if should_update {
-        *bound = Some((constant.clone(), inclusive));
+        *bound = Some((constant, inclusive));
     }
 }
 
@@ -227,7 +249,7 @@ fn constant_behind_nullable_cast<Index: ColumnIndex>(expr: &Expr<Index>) -> Opti
 pub struct RangeConstraint<Index> {
     pub column_id: Index,
     pub data_type: DataType,
-    pub operator: String, // "gt", "gte", "lt", "lte", "eq"
+    pub operator: String, // "gt", "gte", "lt", "lte", "eq", "noteq"
     pub constant: Scalar,
     pub is_flipped: bool, // true if original was constant op column
 }
@@ -288,5 +310,118 @@ impl<Index: ColumnIndex> RangeConstraint<Index> {
             constant: constant.scalar.clone(),
             is_flipped: true,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::borrow::Cow;
+    use std::collections::HashMap;
+
+    use super::ConstantFolder;
+    use super::ConstraintState;
+    use super::FoldResult;
+    use crate::FunctionContext;
+    use crate::FunctionDomain;
+    use crate::FunctionRegistry;
+    use crate::Scalar;
+    use crate::expression::ColumnRef;
+    use crate::expression::Constant;
+    use crate::expression::Expr;
+    use crate::type_check::check_function;
+    use crate::types::BooleanType;
+    use crate::types::DataType;
+    use crate::types::F64;
+    use crate::types::NumberDataType;
+    use crate::types::NumberScalar;
+    use crate::types::UInt64Type;
+
+    #[test]
+    fn test_constraint_state_nan_singleton_exclusion() {
+        let nan = Scalar::Number(NumberScalar::Float64(F64::from(f64::NAN)));
+        for operators in [["noteq", "gte", "lte"], ["gte", "lte", "noteq"]] {
+            let mut state = ConstraintState::default();
+            for operator in operators {
+                assert!(!state.add(operator, nan.clone()));
+            }
+            assert!(state.is_mutually_exclusive());
+        }
+    }
+
+    #[test]
+    fn test_range_check_keeps_column_types_separate() {
+        let mut registry = FunctionRegistry::empty();
+        for operator in ["gte", "lte", "noteq"] {
+            registry
+                .register_passthrough_nullable_2_arg::<UInt64Type, UInt64Type, BooleanType, _, _>(
+                    operator,
+                    |_, _, _| FunctionDomain::Full,
+                    |_, _, _| crate::Value::Scalar(false),
+                );
+        }
+        let registry = &registry;
+        let data_type = DataType::Number(NumberDataType::UInt64);
+        let constant = Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Number(NumberScalar::UInt64(5)),
+            data_type: data_type.clone(),
+        });
+        let args = [
+            ("gte", data_type.clone()),
+            ("lte", data_type.clone().wrap_nullable()),
+            ("noteq", data_type),
+        ]
+        .into_iter()
+        .map(|(operator, data_type)| {
+            let column = Expr::ColumnRef(ColumnRef {
+                span: None,
+                id: 0_usize,
+                data_type,
+                display_name: "x".to_string(),
+            });
+            let expr =
+                check_function(None, operator, &[], &[column, constant.clone()], registry).unwrap();
+            FoldResult::Unchanged(Cow::Owned(expr))
+        })
+        .collect::<Vec<_>>();
+        let domains = HashMap::new();
+        let context = FunctionContext::default();
+        let folder = ConstantFolder::new_for_test(&domains, &context, registry);
+        assert_eq!(folder.check_mutually_exclusive_ranges(&args), None);
+    }
+
+    #[test]
+    fn test_constraint_state_all_comparison_triples() {
+        let operators = ["gt", "gte", "lt", "lte", "eq", "noteq"];
+        let constraints = operators
+            .iter()
+            .flat_map(|&operator| [1_u64, 3, 5].map(|value| (operator, value)))
+            .collect::<Vec<_>>();
+
+        // The candidates cover the endpoints, each gap and both outer ranges.
+        // Enumerating ordered triples also checks every argument permutation.
+        for &first in &constraints {
+            for &second in &constraints {
+                for &third in &constraints {
+                    let triple = [first, second, third];
+                    let mut state = ConstraintState::default();
+                    let conflict = triple.iter().any(|&(operator, value)| {
+                        state.add(operator, Scalar::Number(NumberScalar::UInt64(value)))
+                    }) || state.is_mutually_exclusive();
+                    let has_solution = (0..=6).any(|candidate| {
+                        triple.iter().all(|&(operator, value)| match operator {
+                            "gt" => candidate > value,
+                            "gte" => candidate >= value,
+                            "lt" => candidate < value,
+                            "lte" => candidate <= value,
+                            "eq" => candidate == value,
+                            "noteq" => candidate != value,
+                            _ => unreachable!(),
+                        })
+                    });
+                    assert_eq!(conflict, !has_solution, "{triple:?}");
+                }
+            }
+        }
     }
 }

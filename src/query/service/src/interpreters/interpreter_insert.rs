@@ -66,8 +66,8 @@ use crate::clusters::ClusterHelper;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::interpreters::common::build_update_stream_reqs;
 use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::common::dml_build_update_stream_req;
 use crate::physical_plans::ConstantTableScan;
 use crate::physical_plans::DistributedInsertSelect;
 use crate::physical_plans::EvalScalar;
@@ -572,7 +572,9 @@ impl Interpreter for InsertInterpreter {
                             let mut builder1 =
                                 PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                             (
-                                builder1.build(s_expr, bind_context.column_set()).await?,
+                                builder1
+                                    .build_query(s_expr.planned()?, bind_context.column_set())
+                                    .await?,
                                 bind_context.columns.clone(),
                                 metadata,
                             )
@@ -589,7 +591,7 @@ impl Interpreter for InsertInterpreter {
 
                     info!("Insert select plan: \n{}", explain_plan);
 
-                    let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
+                    let update_stream_meta = build_update_stream_reqs(&self.ctx, false).await?;
 
                     let select_schema = plan.schema();
                     let insert_schema = self.plan.dest_schema();

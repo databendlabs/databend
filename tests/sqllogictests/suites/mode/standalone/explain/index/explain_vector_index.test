@@ -65,7 +65,7 @@ RowFetch
             ├── read size: 0
             ├── partitions total: 4
             ├── partitions scanned: 3
-            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, topn pruning: 4 to 4 cost: <slt:ignore>, vector pruning: 4 to 3 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, vector pruning: 4 to 3 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: 5]
             └── estimated rows: 16.00
 
@@ -96,10 +96,13 @@ RowFetch
             ├── read size: 0
             ├── partitions total: 4
             ├── partitions scanned: 2
-            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, topn pruning: 4 to 4 cost: <slt:ignore>, vector pruning: 4 to 2 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, vector pruning: 4 to 2 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: 3]
             └── estimated rows: 16.00
 
+# The Float32 score must be widened for the Float64 threshold; 0.1 cannot be
+# rounded to Float32. The cast currently uses unknown-expression selectivity
+# (0.2), rather than the bare derived column's lower-bound estimate (0.5).
 query T
 EXPLAIN SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t WHERE similarity > 0.1 ORDER BY similarity ASC LIMIT 3;
 ----
@@ -121,8 +124,8 @@ RowFetch
         ├── estimated rows: 3.00
         └── Filter
             ├── output columns: [t._vector_score (#2), t._row_id (#3)]
-            ├── filters: [t._vector_score (#2) > 0.1]
-            ├── estimated rows: 8.00
+            ├── filters: [CAST(t._vector_score (#2) AS Float64) > 0.1]
+            ├── estimated rows: 3.20
             └── TableScan
                 ├── table: default.test_vector_index_db.t
                 ├── scan id: 0
@@ -132,7 +135,7 @@ RowFetch
                 ├── partitions total: 4
                 ├── partitions scanned: 3
                 ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, vector pruning: 4 to 3 cost: <slt:ignore>>]
-                ├── push downs: [filters: [t._vector_score (#2) > 0.1], limit: 3]
+                ├── push downs: [filters: [CAST(t._vector_score (#2) AS Float64) > 0.1], limit: 3]
                 └── estimated rows: 16.00
 
 statement ok
@@ -179,7 +182,7 @@ RowFetch
             ├── read size: 0
             ├── partitions total: 2
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, topn pruning: 2 to 2 cost: <slt:ignore>, vector pruning: 2 to 1 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, vector pruning: 2 to 1 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: 1]
             └── estimated rows: 8.00
 
@@ -210,7 +213,7 @@ RowFetch
             ├── read size: 0
             ├── partitions total: 2
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, topn pruning: 2 to 2 cost: <slt:ignore>, vector pruning: 2 to 1 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, vector pruning: 2 to 1 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: 1]
             └── estimated rows: 8.00
 

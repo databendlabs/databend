@@ -85,6 +85,7 @@ use num_traits::AsPrimitive;
 use crate::date_arithmetic::timestamp_tz_components_via_lut;
 use crate::date_conversion::calc_date_to_timestamp;
 use crate::date_format::pg_format_to_strftime;
+use crate::fixed_offset::local_dates;
 use crate::interval::civil_date_to_days;
 
 const MONTHS_PER_YEAR: i64 = 12;
@@ -1104,6 +1105,11 @@ fn register_timestamp_to_date(registry: &mut FunctionRegistry) {
     );
 
     fn eval_timestamp_to_date(val: Value<TimestampType>, ctx: &mut EvalContext) -> Value<DateType> {
+        if let Value::Column(col) = &val
+            && let Some(days) = local_dates(col, ctx.validity.as_ref(), &ctx.func_ctx.tz)
+        {
+            return Value::Column(days);
+        }
         vectorize_with_builder_1_arg::<TimestampType, DateType>(|val, output, ctx| {
             match timestamp_to_date_days(val, &ctx.func_ctx.tz) {
                 Ok(days) => output.push(days),

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod vector_index_loader;
+mod vector_index_object_loader;
 mod vector_index_reader;
 
 pub use vector_index_loader::load_vector_index_files;

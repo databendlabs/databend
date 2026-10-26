@@ -1048,35 +1048,33 @@ pub fn decimal_to_decimal_fast(
     (value, dest_type)
 }
 
+// Delegates to `Decimal::to_float32`/`to_float64` so that values and domains
+// (see `register_decimal_to_float`) use the same correctly rounded conversion.
 trait DecimalConvert<T, U> {
-    fn convert(t: T, _scale: i32) -> U;
+    fn convert(t: T, scale: u8) -> U;
 }
 
 impl DecimalConvert<i128, F32> for F32 {
-    fn convert(t: i128, scale: i32) -> F32 {
-        let div = 10f32.powi(scale);
-        ((t as f32) / div).into()
+    fn convert(t: i128, scale: u8) -> F32 {
+        t.to_float32(scale).into()
     }
 }
 
 impl DecimalConvert<i128, F64> for F64 {
-    fn convert(t: i128, scale: i32) -> F64 {
-        let div = 10f64.powi(scale);
-        ((t as f64) / div).into()
+    fn convert(t: i128, scale: u8) -> F64 {
+        t.to_float64(scale).into()
     }
 }
 
 impl DecimalConvert<i256, F32> for F32 {
-    fn convert(t: i256, scale: i32) -> F32 {
-        let div = 10f32.powi(scale);
-        (f32::from(t) / div).into()
+    fn convert(t: i256, scale: u8) -> F32 {
+        t.to_float32(scale).into()
     }
 }
 
 impl DecimalConvert<i256, F64> for F64 {
-    fn convert(t: i256, scale: i32) -> F64 {
-        let div = 10f64.powi(scale);
-        (f64::from(t) / div).into()
+    fn convert(t: i256, scale: u8) -> F64 {
+        t.to_float64(scale).into()
     }
 }
 
@@ -1090,21 +1088,21 @@ where
     match from_type {
         DecimalDataType::Decimal64(size) => {
             let value = arg.try_downcast().unwrap();
-            let scale = size.scale() as i32;
+            let scale = size.scale();
             vectorize_1_arg::<Decimal64As128Type, NumberType<T>>(|x, _| T::convert(x, scale))(
                 value, ctx,
             )
         }
         DecimalDataType::Decimal128(size) => {
             let value = arg.try_downcast().unwrap();
-            let scale = size.scale() as i32;
+            let scale = size.scale();
             vectorize_1_arg::<DecimalType<i128>, NumberType<T>>(|x, _| T::convert(x, scale))(
                 value, ctx,
             )
         }
         DecimalDataType::Decimal256(size) => {
             let value = arg.try_downcast().unwrap();
-            let scale = size.scale() as i32;
+            let scale = size.scale();
             vectorize_1_arg::<DecimalType<i256>, NumberType<T>>(|x, _| T::convert(x, scale))(
                 value, ctx,
             )

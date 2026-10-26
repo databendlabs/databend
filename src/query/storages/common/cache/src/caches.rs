@@ -58,6 +58,9 @@ pub type InvertedIndexMetaCache = HybridCache<InvertedIndexMeta>;
 pub type InvertedIndexLookupCache = HybridCache<InvertedIndexLookupBytes>;
 /// Byte-limited cache of postings, positions, store, and other payload pages.
 pub type InvertedIndexPayloadCache = HybridCache<InvertedIndexPayloadBytes>;
+/// Memory-only cache of complete `.idx` and `.pos` components. Kept separate from pages so
+/// large full warmups cannot evict frequently accessed small posting ranges.
+pub type InvertedIndexFullPayloadCache = InMemoryLruCache<InvertedIndexPayloadBytes>;
 
 pub type VectorIndexMetaCache = HybridCache<VectorIndexMeta>;
 pub type VectorIndexFileCache = HybridCache<VectorIndexFile>;
@@ -220,6 +223,10 @@ impl<T> CacheValue<T> {
 
     pub fn get_inner(&self) -> Arc<T> {
         self.inner.clone()
+    }
+
+    pub(crate) fn is_shared(&self) -> bool {
+        Arc::strong_count(&self.inner) > 1
     }
 }
 

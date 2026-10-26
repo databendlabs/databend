@@ -26,6 +26,7 @@ use databend_common_pipeline::core::Processor;
 use super::Base;
 use super::MergeSort;
 use super::RowsStat;
+use super::RunSpill;
 use super::SortSpill;
 use super::SortSpillParams;
 use super::TransformSortMergeLimit;
@@ -317,7 +318,12 @@ where
         if incoming > 0 {
             let total_rows = spill_sort.collect_total_rows();
             log::debug!(incoming_block, incoming_rows = incoming, total_rows, finished; "sort_input_data");
-            spill_sort.sort_input_data(std::mem::take(input_data), !finished)?;
+            let spill = if finished {
+                RunSpill::OnPressure
+            } else {
+                RunSpill::Always
+            };
+            spill_sort.sort_input_data(std::mem::take(input_data), spill)?;
         }
         if finished {
             self.create_output()

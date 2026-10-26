@@ -76,6 +76,11 @@ where A: TypeCheckAdapter
         let (scalar, data_type) = match result {
             NameResolutionResult::Column(column) => {
                 if let Some(virtual_expr) = column.virtual_expr {
+                    if self.forbid_virtual_computed_column {
+                        return Err(ErrorCode::SemanticError(
+                            "TTL expression must not reference a virtual computed column",
+                        ));
+                    }
                     let sql_tokens = tokenize_sql(virtual_expr.as_str())?;
                     let expr = parse_expr(&sql_tokens, self.dialect)?;
                     return self.resolve(&expr);
@@ -83,7 +88,8 @@ where A: TypeCheckAdapter
                     // Fast path: Check if table has any masking policies at all before doing expensive async work
                     // BUT: skip masking policy application if we're already resolving a masking policy expression
                     // to prevent infinite recursion (e.g., policy references the masked column itself)
-                    let has_masking_policy = !self.in_masking_policy
+                    let has_masking_policy = self.apply_masking_policy
+                        && !self.in_masking_policy
                         // Does this column reference a table with masking policy?
                         && column
                             .table_index

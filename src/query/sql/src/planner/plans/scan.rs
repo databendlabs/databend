@@ -51,6 +51,7 @@ use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics as OpStatistics;
 use crate::optimizer::ir::TopNSet;
 use crate::plans::Operator;
+use crate::plans::PhysicalOperator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::SortItem;
@@ -65,15 +66,38 @@ pub struct Prewhere {
     pub predicates: Vec<ScalarExpr>,
 }
 
+#[derive(Clone, Debug)]
+pub struct ScanColumnStatistics {
+    pub basic: BasicColumnStatistics,
+    /// Domain unit for lazy synthesis; Datum no longer carries the logical type.
+    /// Sampled histograms do not use this construction input.
+    pub histogram_spacing_unit: f64,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Statistics {
     // statistics will be ignored in comparison and hashing
     pub table_stats: Option<TableStatistics>,
     // statistics will be ignored in comparison and hashing
-    pub column_stats: HashMap<Symbol, Option<BasicColumnStatistics>>,
+    pub column_stats: HashMap<Symbol, Option<ScanColumnStatistics>>,
     pub histograms: HashMap<Symbol, Option<Histogram>>,
     pub top_n: HashMap<Symbol, ColumnTopN>,
     pub count_min_sketch: HashMap<Symbol, ColumnCountMinSketch>,
+}
+
+impl Statistics {
+    /// Date uses days and Timestamp uses microseconds. Both temporal types use
+    /// the same reference interval; other domains use their native numeric unit.
+    /// Decimal Datum values have already been normalized by their declared scale.
+    pub fn histogram_spacing_unit(data_type: &databend_common_expression::types::DataType) -> f64 {
+        use databend_common_expression::types::DataType;
+        use databend_common_expression::types::timestamp::MICROS_PER_SEC;
+
+        match data_type.remove_nullable() {
+            DataType::Timestamp | DataType::TimestampTz => (86_400 * MICROS_PER_SEC) as f64,
+            _ => 1.0,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -302,12 +326,6 @@ impl Operator for Scan {
         }))
     }
 
-    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        Ok(PhysicalProperty {
-            distribution: Distribution::Random,
-        })
-    }
-
     fn derive_stats(&self, _rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         let used_columns = self.used_columns();
 
@@ -323,7 +341,8 @@ impl Operator for Scan {
             if !used_columns.contains(k) {
                 continue;
             }
-            if let Some(col_stat) = v {
+            if let Some(scan_col_stat) = v {
+                let col_stat = &scan_col_stat.basic;
                 let null_count = StatCount::exact(col_stat.null_count);
                 if num_rows.is_some_and(|num_rows| num_rows > 0 && col_stat.null_count == num_rows)
                 {
@@ -351,6 +370,7 @@ impl Operator for Scan {
                             num_rows,
                             Some((min.clone(), max.clone())),
                             DEFAULT_HISTOGRAM_BUCKETS,
+                            scan_col_stat.histogram_spacing_unit,
                         )
                         .ok()
                     })
@@ -381,7 +401,8 @@ impl Operator for Scan {
                     StatCardinality::exact(precise_cardinality),
                 )
                 .with_top_n(std::mem::take(&mut output_top_n))
-                .with_count_min_sketch(std::mem::take(&mut output_count_min_sketch));
+                .with_count_min_sketch(std::mem::take(&mut output_count_min_sketch))
+                .with_and_strategy(stat_ctx.filter_and_strategy);
                 let cardinality = sb.apply(&prewhere.predicates, &stat_ctx.function_context)?;
                 column_stats = sb.into_column_stats();
                 cardinality
@@ -414,6 +435,7 @@ impl Operator for Scan {
                     SelectivityEstimator::new(column_stats, input_cardinality)
                         .with_top_n(output_top_n)
                         .with_count_min_sketch(output_count_min_sketch)
+                        .with_and_strategy(stat_ctx.filter_and_strategy)
                         .apply(preds, &stat_ctx.function_context)?
                 }
                 _ => cardinality,
@@ -438,6 +460,14 @@ impl Operator for Scan {
                 count_min_sketch: output_count_min_sketch,
             },
         }))
+    }
+}
+
+impl PhysicalOperator for Scan {
+    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
+        Ok(PhysicalProperty {
+            distribution: Distribution::Random,
+        })
     }
 
     // Won't be invoked at all, since `PhysicalScan` is leaf node
@@ -472,6 +502,33 @@ mod tests {
             columns: [Symbol::new(1), Symbol::new(2), Symbol::new(3)]
                 .into_iter()
                 .collect(),
+            statistics: Arc::new(Statistics {
+                column_stats: [
+                    (
+                        Symbol::new(1),
+                        Some(ScanColumnStatistics {
+                            basic: BasicColumnStatistics::default(),
+                            histogram_spacing_unit: Statistics::histogram_spacing_unit(
+                                &databend_common_expression::types::DataType::Timestamp,
+                            ),
+                        }),
+                    ),
+                    (
+                        Symbol::new(2),
+                        Some(ScanColumnStatistics {
+                            basic: BasicColumnStatistics::default(),
+                            histogram_spacing_unit: Statistics::histogram_spacing_unit(
+                                &databend_common_expression::types::DataType::TimestampTz
+                                    .wrap_nullable(),
+                            ),
+                        }),
+                    ),
+                    (Symbol::new(3), None),
+                ]
+                .into_iter()
+                .collect(),
+                ..Default::default()
+            }),
             scan_id: 10,
             sample: Some(SampleConfig {
                 row_level: None,
@@ -518,6 +575,22 @@ mod tests {
         assert!(derived.limit.is_none());
         assert!(derived.order_by.is_none());
         assert!(derived.prewhere.is_none());
+        assert!(derived.statistics.column_stats.is_empty());
+        let pruned =
+            original.prune_columns([Symbol::new(1), Symbol::new(3)].into_iter().collect(), None);
+        assert_eq!(pruned.statistics.column_stats.len(), 2);
+        assert_eq!(
+            pruned.statistics.column_stats[&Symbol::new(1)]
+                .as_ref()
+                .unwrap()
+                .histogram_spacing_unit,
+            86_400.0 * 1_000_000.0
+        );
+        assert!(pruned.statistics.column_stats[&Symbol::new(3)].is_none());
+        assert_eq!(
+            Statistics::histogram_spacing_unit(&databend_common_expression::types::DataType::Date),
+            1.0
+        );
     }
 
     #[test]
@@ -547,7 +620,10 @@ mod tests {
         };
         let s_expr = SExpr::create_leaf(RelOperator::Scan(scan.clone()));
         let rel_expr = RelExpr::with_s_expr(&s_expr);
-        let stats = scan.derive_stats(&rel_expr, &StatContext::default())?;
+        let stats = scan.derive_stats(
+            &rel_expr,
+            &StatContext::without_settings(Default::default()),
+        )?;
         assert!(stats.statistics.top_n.contains_key(&column));
         assert_eq!(stats.statistics.precise_cardinality, Some(100));
 
@@ -560,8 +636,10 @@ mod tests {
         };
         let sampled_s_expr = SExpr::create_leaf(RelOperator::Scan(sampled_scan.clone()));
         let sampled_rel_expr = RelExpr::with_s_expr(&sampled_s_expr);
-        let sampled_stats =
-            sampled_scan.derive_stats(&sampled_rel_expr, &StatContext::default())?;
+        let sampled_stats = sampled_scan.derive_stats(
+            &sampled_rel_expr,
+            &StatContext::without_settings(Default::default()),
+        )?;
         assert!(sampled_stats.statistics.top_n.is_empty());
         assert_eq!(sampled_stats.statistics.precise_cardinality, None);
 

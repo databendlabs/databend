@@ -16,24 +16,18 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
-use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::pipeline::OptimizerTraceCollector;
 
-/// Trait defining the interface for query optimizers.
+/// Interface for same-type rewrite passes. Logical passes use SExpr by default;
+/// physical passes use PExpr. Logical-to-physical search has a separate entry point.
 #[async_trait::async_trait]
-pub trait Optimizer: Send + Sync {
+pub trait Optimizer<Expr = SExpr>: Send + Sync {
     /// Returns a unique identifier for this optimizer.
     fn name(&self) -> String;
 
     /// Consume the given expression and return the optimized version.
-    async fn optimize(&mut self, expr: SExpr) -> Result<SExpr>;
-
-    /// Get the memo if this optimizer maintains one.
-    /// Default implementation returns None for optimizers that don't use a memo.
-    fn memo(&self) -> Option<&Memo> {
-        None
-    }
+    async fn optimize(&mut self, expr: Expr) -> Result<Expr>;
 
     /// Set the trace collector for this optimizer.
     /// Default implementation does nothing.

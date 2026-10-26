@@ -163,7 +163,7 @@ cached_index_bytes!(
 );
 cached_index_bytes!(
     InvertedIndexPayloadBytes,
-    "One cached range page from a Tantivy payload component."
+    "A cached page or complete Tantivy payload component."
 );
 
 #[cfg(test)]

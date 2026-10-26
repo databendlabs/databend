@@ -18,5 +18,6 @@ mod pipeline;
 mod trace;
 
 pub use pipeline::OptimizerPipeline;
+pub(crate) use pipeline::configure_distributed_optimization;
 pub use trace::OptimizerTrace;
 pub use trace::OptimizerTraceCollector;

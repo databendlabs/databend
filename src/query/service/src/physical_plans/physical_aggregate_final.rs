@@ -29,11 +29,12 @@ use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::AggregateFunctionSignature;
 use databend_common_sql::executor::physical_plans::SortDesc;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::plans::Aggregate;
 use databend_common_sql::plans::AggregateMode;
 use databend_common_sql::plans::ConstantTableScan;
 use databend_common_sql::plans::GroupingSets;
+use databend_common_sql::plans::PhysicalAggregate;
 use databend_common_sql::plans::ScalarItem;
 use itertools::Itertools;
 
@@ -211,11 +212,13 @@ impl IPhysicalPlan for AggregateFinal {
 impl PhysicalPlanBuilder {
     pub async fn build_aggregate(
         &mut self,
-        s_expr: &SExpr,
-        agg: &Aggregate,
+        s_expr: &PExpr,
+        physical: &PhysicalAggregate,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
+        let mode = physical.mode;
+        let agg = &physical.aggregate;
         // 1. Prune unused Columns.
         let mut used = vec![];
         for item in &agg.aggregate_functions {
@@ -236,7 +239,7 @@ impl PhysicalPlanBuilder {
             let mut s =
                 ConstantTableScan::new_empty_scan(DataSchemaRef::default(), ColumnSet::new());
             s.num_rows = 1;
-            let expr = SExpr::create_leaf(s);
+            let expr = PExpr::create_leaf(s);
             return self.build(&expr, required).await;
         }
 
@@ -244,7 +247,6 @@ impl PhysicalPlanBuilder {
             group_items: agg.group_items.clone(),
             aggregate_functions: used,
             from_distinct: agg.from_distinct,
-            mode: agg.mode,
             rank_limit: agg.rank_limit.clone(),
             grouping_sets: agg.grouping_sets.clone(),
         };
@@ -254,7 +256,7 @@ impl PhysicalPlanBuilder {
         let input_schema = input.output_schema()?;
         let group_items = agg.group_items.iter().map(|v| v.index).collect::<Vec<_>>();
 
-        let result: PhysicalPlan = match &agg.mode {
+        let result: PhysicalPlan = match mode {
             AggregateMode::Partial => {
                 let group_by_display = agg
                     .group_items
@@ -475,9 +477,6 @@ impl PhysicalPlanBuilder {
                         shuffle_mode,
                     })
                 }
-            }
-            AggregateMode::Initial => {
-                return Err(ErrorCode::Internal("Invalid aggregate mode: Initial"));
             }
         };
 

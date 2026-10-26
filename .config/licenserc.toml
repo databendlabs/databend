@@ -1,0 +1,57 @@
+baseDir = "."
+
+headerPath = "Apache-2.0.txt"
+
+excludes = [
+    "scripts",
+    "docker",
+    "tests",
+    "tools",
+    "benchmark",
+    "src/common/compress/tests",
+    "src/meta/compat.py",
+    "src/query/storages/common/index/cpp/",
+    # licensed under Elastic License 2.0
+    "src/binaries/query/ee_main.rs",
+    "src/meta/binaries/meta/ee_main.rs",
+    "src/meta/control/lua/lua_util.lua",
+    "src/meta/control/lua/zipf_load_generator.lua",
+    "src/meta/ee",
+    "src/query/ee",
+    "src/bendsave",
+    "src/bendpy",
+    # hidden files
+    ".cargo",
+    ".config",
+    ".databend",
+    ".devcontainer",
+    ".github",
+    ".venv",
+    "target",
+    ".dockerignore",
+    ".gitignore",
+    ".gitattributes",
+    ".editorconfig",
+    "LICENSE",
+    "Makefile",
+    # docs and generated files
+    "**/*.md",
+    "**/*.hbs",
+    "**/*.template",
+    "**/*.cue",
+    "**/*.json",
+    "**/*.sql",
+    "**/*.proto",
+    "**/*.yml",
+    "**/*.yaml",
+    "**/*.toml",
+    "**/*.lock",
+    "**/*.yapf",
+    "**/*.test",
+    "**/*.txt",
+    "**/*.html"
+]
+
+[properties]
+inceptionYear = 2021
+copyrightOwner = "Datafuse Labs"

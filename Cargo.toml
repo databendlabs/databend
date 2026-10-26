@@ -171,10 +171,10 @@ structkey = "0.1.1"
 
 # Crates.io dependencies
 ahash = { version = "0.8", features = ["no-rng"] }
-aho-corasick = { version = "1.0.1" } #
+aho-corasick = { version = "1.0.1" }
 anyerror = { version = "=0.1.13" }
 anyhow = { version = "1.0.65" }
-apache-avro = { version = "0.17.0", features = ["snappy", "zstandard", "xz", "bzip"] }
+apache-avro = { version = "0.21.0", features = ["snappy", "zstandard", "xz", "bzip"] }
 approx = "0.5.1"
 arrow = { version = "58.4.0" }
 arrow-array = { version = "58.4.0" }
@@ -187,14 +187,14 @@ arrow-json = { version = "58.4.0" }
 arrow-ord = { version = "58.4.0" }
 arrow-schema = { version = "58.4.0", features = ["serde"] }
 arrow-select = { version = "58.4.0" }
-arrow-udf-runtime = { version = "0.8.0", default-features = false, features = ["javascript", "wasm"] }
+# `javascript-runtime` rather than `javascript`: the latter also pulls in `javascript-fetch`,
+# which requires reqwest (with native-tls by default) for a `fetch()` API we never enable —
+# `Runtime::enable_fetch()` is not called anywhere.
+arrow-udf-runtime = { version = "0.8.0", default-features = false, features = ["javascript-runtime", "wasm"] }
 async-backtrace = "0.2"
 async-channel = "2.3.1"
 async-compat = { version = "0.2" }
-async-compression = { git = "https://github.com/datafuse-extras/async-compression", rev = "dc81082", features = [
-    "futures-io",
-    "all-algorithms",
-] }
+async-compression = { version = "0.4.39", features = ["futures-io", "gzip", "zlib"] }
 async-recursion = "1.1.1"
 async-stream = "0.3.3"
 async-trait = { version = "0.1.89" }
@@ -212,7 +212,6 @@ bitvec = "1.0.1"
 blake3 = "1.3.1"
 bollard = { version = "0.17" }
 borsh = { version = "1.2.1", features = ["derive"] }
-brotli = { version = "3.3", features = ["std"] }
 bstr = "1"
 buf-list = "1.0.3"
 bumpalo = "3.12.0"
@@ -228,6 +227,17 @@ cidr = { version = "0.3.1" }
 clap = { version = "4.4.2", features = ["derive"] }
 codeq = { version = "0.5.2" }
 comfy-table = "7"
+# Pinned: 0.4.40+ moves to zstd 0.14, while arrow/parquet still use zstd 0.13.
+compression-codecs = { version = "=0.4.39", features = [
+    "brotli",
+    "bzip2",
+    "deflate",
+    "gzip",
+    "lzma",
+    "xz",
+    "zlib",
+    "zstd",
+] }
 concurrent-queue = "2.5.0"
 convert_case = "0.6.0"
 cookie = "0.18.1"
@@ -275,7 +285,7 @@ globiter = "0.1"
 goldenfile = "1.4"
 h3o = "0.9.4"
 hashbrown = { version = "0.15.2", default-features = false }
-hashlink = "0.8"
+hashlink = "0.10"
 headers = "0.4.0"
 hex = "0.4.3"
 hickory-resolver = "0.25"
@@ -290,15 +300,15 @@ proc-macro2 = "1.0"
 quote = "1.0"
 
 ## Arrow 58 compatible variant metadata support.
-iceberg = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "9e6116a67bd34790bb73da62beff6a8086d6d012", features = [
+iceberg = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", branch = "dev", features = [
     "storage-all",
     # Not in iceberg-rust's `storage-all`: without it every abfs[s]:// table fails to load.
     "storage-azdls",
 ] }
-iceberg-catalog-glue = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "9e6116a67bd34790bb73da62beff6a8086d6d012" }
-iceberg-catalog-hms = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "9e6116a67bd34790bb73da62beff6a8086d6d012" }
-iceberg-catalog-rest = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "9e6116a67bd34790bb73da62beff6a8086d6d012" }
-iceberg-catalog-s3tables = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "9e6116a67bd34790bb73da62beff6a8086d6d012" }
+iceberg-catalog-glue = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", branch = "dev" }
+iceberg-catalog-hms = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", branch = "dev" }
+iceberg-catalog-rest = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", branch = "dev" }
+iceberg-catalog-s3tables = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", branch = "dev" }
 paimon = { version = "=0.2.0", default-features = false, features = ["storage-fs", "storage-s3", "storage-oss"] }
 
 indexmap = "2.0.0"
@@ -319,7 +329,7 @@ limits-rs = "0.2.0"
 lindera = { version = "5.0.1", features = ["embed-ipadic"] }
 lindera-analysis = "5.0.1"
 lindera-tantivy = { version = "5.0.1", features = ["embed-ipadic"] }
-logforth = { git = "https://github.com/datafuse-extras/logforth", branch = "main", features = [
+logforth = { git = "https://github.com/datafuse-extras/logforth", branch = "dev", features = [
     'json',
     'rolling-file',
     'opentelemetry',
@@ -332,7 +342,12 @@ memchr = { version = "2", default-features = false }
 micromarshal = "0.7.0"
 mlua = { version = "0.11", features = ["lua54", "vendored", "async", "serialize"] }
 mockall = "0.11.2"
-mysql_async = { version = "0.34", default-features = false, features = ["native-tls-tls"] }
+mysql_async = { version = "0.37.1", default-features = false, features = [
+    "minimal-rust",
+    "rustls-tls",
+    "ring",
+    "tls12",
+] }
 naive-cityhash = "0.2.0"
 ndarray = "0.15.6"
 num = { version = "0.4.0", features = ["std"] }
@@ -359,8 +374,10 @@ opendal = { version = "0.55.0", features = [
     "services-webhdfs",
     "services-huggingface",
 ] }
-opensrv-mysql = { git = "https://github.com/databendlabs/opensrv.git", tag = "v0.10.0", features = ["tls"] }
-orc-rust = "0.6.0"
+opensrv-mysql = { git = "https://github.com/databendlabs/opensrv.git", branch = "main", features = [
+    "tls",
+] }
+orc-rust = "0.8.0"
 ordered-float = { version = "5.1.0", default-features = false }
 p256 = "0.13"
 parking_lot = "0.12.1"
@@ -368,10 +385,10 @@ parquet = { version = "58.1.0", features = ["async"] }
 passwords = { version = "3.1.16" }
 paste = "1.0.15"
 percent-encoding = "2.3.1"
-petgraph = { version = "0.6.2", features = ["serde-1"] }
+petgraph = { version = "0.8.3", features = ["serde-1"] }
 pin-project = "1"
 pin-project-lite = "0.2.9"
-poem = { version = "3.0", features = ["openssl-tls", "multipart", "compression", "cookie"] }
+poem = { version = "3.0", features = ["server", "multipart", "compression", "cookie"] }
 pprof = { git = "https://github.com/datafuse-extras/pprof-rs", rev = "edecd74", features = [
     "flamegraph",
     "protobuf-codec",
@@ -392,11 +409,11 @@ recursive = "0.1.1"
 redis = { version = "0.27.5", features = ["tokio-comp", "connection-manager"] }
 regex = "1.8.1"
 replace_with = "0.1.7"
+reqsign = { version = "0.16.5", default-features = false, features = ["services-aws"] }
 reqwest = { version = "0.12", default-features = false, features = [
     "json",
     "http2",
-    "native-tls-vendored",
-    "native-tls-alpn",
+    "rustls-tls-native-roots",
     "cookies",
 ] }
 reqwest-hickory-resolver = "0.2"
@@ -459,6 +476,7 @@ thrift = "0.17.0"
 tikv-jemalloc-ctl = { version = "0.6.0", features = ["use_std", "stats"] }
 tikv-jemalloc-sys = "0.6.0"
 tokio = { version = "1.52.3", features = ["full"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "ring", "tls12"] }
 tokio-stream = { version = "0.1.11", features = ["net"] }
 tokio-util = { version = "0.7.13" }
 toml = { version = "0.8", features = ["parse"] }
@@ -480,14 +498,22 @@ wkt = "0.14.0"
 xorf = "0.12.0"
 xorfilter-rs = { version = "0.5", features = ["cbordata"] }
 zerocopy = { version = "0.8.26", features = ["derive"] }
-zip = "3.0.0"
+zip = { version = "4.6.1", default-features = false, features = [
+    "aes-crypto",
+    "bzip2",
+    "deflate",
+    "deflate64",
+    "lzma",
+    "time",
+    "xz",
+    "zstd",
+] }
 zmij = "1.0"
-zstd = "0.12.3"
+zstd = "0.13.3"
 
 # AST needed
 cargo_metadata = "0.19"
 fast-float2 = "0.2.3"
-gix = "0.71.0"
 indent = "0.1.1"
 inventory = "0.3.15"
 logos = "0.12.1"
@@ -498,16 +524,16 @@ rspack-codespan-reporting = "0.11"
 rustc-demangle = "0.1"
 strsim = "0.10"
 strum_macros = "0.24"
-vergen-gix = { version = "1", features = ["build", "cargo", "rustc"] }
+vergen-gitcl = { version = "1.0.8", features = ["build", "cargo", "rustc"] }
 
 # Observability
 env_logger = "0.11"
 fastrace = { version = "0.7.14", features = ["enable"] }
-fastrace-opentelemetry = "0.10"
+fastrace-opentelemetry = "0.14"
 log = { version = "0.4.27", features = ["serde", "kv_serde", "kv_unstable_std"] }
 logcall = "0.1.9"
-opentelemetry = { version = "0.29", features = ["trace", "logs"] }
-opentelemetry-otlp = { version = "0.29", default-features = false, features = [
+opentelemetry = { version = "0.31", features = ["trace", "logs"] }
+opentelemetry-otlp = { version = "0.31", default-features = false, features = [
     "trace",
     "logs",
     "metrics",
@@ -515,9 +541,14 @@ opentelemetry-otlp = { version = "0.29", default-features = false, features = [
     "grpc-tonic",
     "gzip-tonic",
     "http-proto",
-    "reqwest-client",
+    # otlp drives the log exporter with futures_executor::block_on, outside any tokio
+    # runtime, so the async reqwest client panics there ("no reactor running"). The
+    # blocking client is the combination the sdk documents for logs, and the two
+    # client features are mutually exclusive, so it has to be this one everywhere.
+    "reqwest-blocking-client",
+    "reqwest-rustls",
 ] }
-opentelemetry_sdk = { version = "0.29", features = ["trace", "logs", "rt-tokio"] }
+opentelemetry_sdk = { version = "0.31", features = ["trace", "logs", "rt-tokio"] }
 prometheus-client = "0.22"
 prometheus-parse = "0.2.3"
 
@@ -535,12 +566,12 @@ result_large_err = "allow"
 map_entry = "allow"
 
 [profile.release]
-debug = 1
+debug = "line-tables-only"
 lto = "thin"
 overflow-checks = false
-opt-level = "s"         # defaults to be 3
+opt-level = "s"            # defaults to be 3
 incremental = false
-codegen-units = 1       ## better performance see below comment
+codegen-units = 1          ## better performance see below comment
 ## DONT'T DELETE THIS: If we want best performance, we should use this profile but it will take longer time to compile.
 ## Test SQL:
 ## select sum(number) from numbers_mt(10000000000); ~ 3x performance
@@ -552,14 +583,23 @@ overflow-checks = true
 incremental = false
 debug-assertions = true
 
-# [profile.release.package]
-# databend-query = { codegen-units = 4 }
-# databend-binaries = { codegen-units = 4 }
+# Service / entrypoint crates: no hot vectorized kernels live here (those stay at
+# codegen-units = 1 above). Single-unit codegen of databend-query (~19 min) and
+# the ThinLTO link of databend-binaries (~15 min) dominate release build time.
+[profile.release.package]
+databend-query = { codegen-units = 4 }
+databend-binaries = { codegen-units = 4 }
 
 [profile.dev]
+# Full debuginfo roughly doubles codegen and link time of the big crates and adds ~13GB to
+# target/. Line tables keep file:line in backtraces and profilers; for full variable/type info
+# in a debugger, build with `CARGO_PROFILE_DEV_DEBUG=true`. `cargo test` uses [profile.test].
+debug = "line-tables-only"
 split-debuginfo = "unpacked"
 overflow-checks = true
-# Report to https://github.com/rust-lang/rust/issues/100142 if incremental works well
+# Incremental only pays off for repeated rebuilds. For a from-scratch build (fresh clone, branch
+# switch, CI) use `CARGO_INCREMENTAL=0`: on 24 cores that is 209s instead of 249s and 14GB
+# instead of 24GB of target/.
 incremental = true
 
 [profile.dev.package]
@@ -595,6 +635,7 @@ arrow-schema = { version = "=58.4.0" }
 arrow-select = { version = "=58.4.0" }
 
 [patch.crates-io]
+# Kept from main: crates.io 0.8.0 does not resolve here (pyo3 0.24 vs bendpy's 0.28).
 arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "c1de708add62ecd1afa2721b2e5c639f29be1f9d" }
 async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
@@ -606,8 +647,8 @@ databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.gi
 databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260629.7.0" }
 jsonb = { git = "https://github.com/databendlabs/jsonb.git", rev = "fba895c" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.5.0" }
-# Keep ORC on a patch while the upstream crate has not caught up with Arrow 58 yet.
-orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "fc17101f1c96e1ea7c7a19e931110471a4bd7e21" }
+# dev: v0.2.0 plus the reqwest rustls fix (datafuse-extras/paimon-rust#1).
+paimon = { git = "https://github.com/datafuse-extras/paimon-rust", branch = "dev" }
 parquet = { git = "https://github.com/datafuse-extras/arrow-rs.git", rev = "221c744" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
 reqwest-hickory-resolver = { git = "https://github.com/datafuse-extras/reqwest-hickory-resolver", rev = "5ad03257a3c702d34b9643878efb5a3536323d2d" }

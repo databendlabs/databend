@@ -12,15 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
 
+use chrono::Utc;
 use databend_common_catalog::table_context::CheckAbort;
 use databend_common_config::MetaConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
+use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_api::send_txn;
 use databend_common_meta_api::txn_core_util::txn_replace_exact;
 use databend_common_meta_app::principal::AutoIncrementKey;
@@ -29,12 +32,17 @@ use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
+use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::MVDefinitionIdent;
+use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
 use databend_common_meta_app::schema::SourceTableMV;
 use databend_common_meta_app::schema::SourceTableMVIdent;
+use databend_common_meta_app::schema::TableCloneBinding;
+use databend_common_meta_app::schema::TableCloneByGroupIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
@@ -49,7 +57,6 @@ use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::kvapi::ListOptions;
 use databend_meta_client::types::TxnRequest;
-use databend_meta_runtime::DatabendRuntime;
 use databend_query::sessions::TableContextSettings;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
@@ -58,6 +65,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use opendal::EntryMode;
+use opendal::ErrorKind;
 use opendal::Metadata;
 use opendal::OperatorBuilder;
 use opendal::raw::Access;
@@ -105,7 +113,12 @@ async fn test_fuse_do_vacuum_drop_tables() -> anyhow::Result<()> {
     let threads_nums = ctx.get_settings().get_max_threads()? as usize;
 
     {
-        vacuum_drop_tables(threads_nums, vec![table.get_table_info().clone()]).await?;
+        vacuum_drop_tables(
+            threads_nums,
+            vec![table.get_table_info().clone()],
+            HashSet::new(),
+        )
+        .await?;
 
         // after vacuum drop tables, verify the files number
         check_data_dir(
@@ -122,6 +135,254 @@ async fn test_fuse_do_vacuum_drop_tables() -> anyhow::Result<()> {
         )
         .await?;
     }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_drop_clone_group_reclaims_only_authorized_leaf() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture.enable_experimental_clone_table()?;
+    let db = fixture.default_db_name();
+    let source_name = fixture.default_table_name();
+    let clone_name = format!("{}_clone", source_name);
+
+    fixture.create_default_database().await?;
+    fixture.create_default_table().await?;
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE {db}.{clone_name} CLONE {db}.{source_name}"
+        ))
+        .await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let source = catalog.get_table(&tenant, &db, &source_name).await?;
+    let clone = catalog.get_table(&tenant, &db, &clone_name).await?;
+    let source_fuse = FuseTable::try_from_table(source.as_ref())?;
+    let clone_fuse = FuseTable::try_from_table(clone.as_ref())?;
+
+    let source_prefix = FuseTable::parse_storage_prefix_from_table_info(source.get_table_info())?;
+    let clone_prefix = FuseTable::parse_storage_prefix_from_table_info(clone.get_table_info())?;
+    let source_marker = [source_prefix.as_str(), "/vacuum_clone_group_marker"].concat();
+    let clone_marker = [clone_prefix.as_str(), "/vacuum_clone_group_marker"].concat();
+    source_fuse
+        .get_operator_ref()
+        .write(&source_marker, "source")
+        .await?;
+    clone_fuse
+        .get_operator_ref()
+        .write(&clone_marker, "clone")
+        .await?;
+
+    // Malformed clone metadata must fail closed even if the caller authorizes the table ID.
+    let mut malformed_info = source.get_table_info().clone();
+    malformed_info.meta.options.insert(
+        OPT_KEY_CLONE_GROUP_ID.to_string(),
+        "not-a-table-id".to_string(),
+    );
+    let failed =
+        vacuum_drop_tables(1, vec![malformed_info], HashSet::from([source.get_id()])).await?;
+    assert_eq!(failed, HashSet::from([source.get_id()]));
+    source_fuse.get_operator_ref().stat(&source_marker).await?;
+
+    // An ancestor is deferred unless the coordinator proves it has no existing clone child.
+    let failed =
+        vacuum_drop_tables(1, vec![source.get_table_info().clone()], HashSet::new()).await?;
+    assert_eq!(failed, HashSet::from([source.get_id()]));
+    source_fuse.get_operator_ref().stat(&source_marker).await?;
+    clone_fuse.get_operator_ref().stat(&clone_marker).await?;
+
+    // A leaf clone can be reclaimed independently while its live source directory remains.
+    let failed = vacuum_drop_tables(
+        1,
+        vec![clone.get_table_info().clone()],
+        HashSet::from([clone.get_id()]),
+    )
+    .await?;
+    assert!(failed.is_empty());
+    source_fuse.get_operator_ref().stat(&source_marker).await?;
+    assert_eq!(
+        clone_fuse
+            .get_operator_ref()
+            .stat(&clone_marker)
+            .await
+            .unwrap_err()
+            .kind(),
+        ErrorKind::NotFound
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_drop_clone_cleans_metadata() -> anyhow::Result<()> {
+    let meta = new_local_meta().await;
+    let mut ee_setup = EESetup::new();
+    ee_setup.config_mut().meta.endpoints = meta.inner().endpoints.clone();
+    let fixture = TestFixture::setup_with_custom(ee_setup).await?;
+    fixture.enable_experimental_clone_table()?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+
+    let db = fixture.default_db_name();
+    let source_name = fixture.default_table_name();
+    let clone_name = format!("{}_vacuum_leaf", source_name);
+    fixture.create_default_database().await?;
+    fixture.create_default_table().await?;
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE {db}.{clone_name} CLONE {db}.{source_name}"
+        ))
+        .await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let source = catalog.get_table(&tenant, &db, &source_name).await?;
+    let clone = catalog.get_table(&tenant, &db, &clone_name).await?;
+    let source_fuse = FuseTable::try_from_table(source.as_ref())?;
+    let clone_fuse = FuseTable::try_from_table(clone.as_ref())?;
+    let group_id = source_fuse.clone_group_id()?;
+    let db_id = DatabaseId::new(
+        catalog
+            .get_database(&tenant, &db)
+            .await?
+            .get_db_info()
+            .database_id
+            .db_id,
+    );
+    let clone_id = clone.get_id();
+    let binding = TableCloneByGroupIdent::new(group_id, clone_id);
+    let source_prefix = FuseTable::parse_storage_prefix_from_table_info(source.get_table_info())?;
+    let clone_prefix = FuseTable::parse_storage_prefix_from_table_info(clone.get_table_info())?;
+    let source_marker = [source_prefix.as_str(), "/vacuum_clone_source_marker"].concat();
+    let clone_marker = [clone_prefix.as_str(), "/vacuum_clone_leaf_marker"].concat();
+    source_fuse
+        .get_operator_ref()
+        .write(&source_marker, "source")
+        .await?;
+    clone_fuse
+        .get_operator_ref()
+        .write(&clone_marker, "clone")
+        .await?;
+    assert!(meta.get_pb(&binding).await?.is_some());
+
+    fixture
+        .execute_command(&format!("DROP TABLE {db}.{clone_name}"))
+        .await?;
+
+    // A member whose own binding is missing is not a verified lineage member. It must stay
+    // retained and, unlike a normal deferral, surface in the user-facing warning.
+    meta.upsert_pb(&UpsertPB::delete(binding)).await?;
+    let vacuum_ctx = fixture.new_query_ctx().await?;
+    execute_command(vacuum_ctx.clone(), "VACUUM DROP TABLE").await?;
+    assert!(
+        vacuum_ctx
+            .pop_warnings()
+            .join("\n")
+            .contains(&clone_id.to_string())
+    );
+    clone_fuse.get_operator_ref().stat(&clone_marker).await?;
+    assert!(meta.get_pb(&TableId::new(clone_id)).await?.is_some());
+    meta.upsert_pb(&UpsertPB::insert(binding, TableCloneBinding {
+        source_table_id: source.get_id(),
+    }))
+    .await?;
+
+    // A disconnected binding can hide a live lineage member. The coordinator must fail closed
+    // for the entire group rather than authorize an apparently leaf clone.
+    let disconnected_binding = TableCloneByGroupIdent::new(group_id, u64::MAX - 1);
+    meta.upsert_pb(&UpsertPB::insert(disconnected_binding, TableCloneBinding {
+        source_table_id: u64::MAX,
+    }))
+    .await?;
+    fixture.execute_command("VACUUM DROP TABLE").await?;
+    clone_fuse.get_operator_ref().stat(&clone_marker).await?;
+    assert!(meta.get_pb(&TableId::new(clone_id)).await?.is_some());
+    assert!(meta.get_pb(&binding).await?.is_some());
+
+    meta.upsert_pb(&UpsertPB::delete(disconnected_binding))
+        .await?;
+    fixture.execute_command("VACUUM DROP TABLE").await?;
+
+    // Once the graph is valid, the SQL coordinator discovers that the dropped clone is a safe
+    // leaf, reclaims only its directory, and removes its TableMeta and lineage binding.
+    assert_eq!(
+        clone_fuse
+            .get_operator_ref()
+            .stat(&clone_marker)
+            .await
+            .unwrap_err()
+            .kind(),
+        ErrorKind::NotFound
+    );
+    source_fuse.get_operator_ref().stat(&source_marker).await?;
+    assert!(meta.get_pb(&TableId::new(clone_id)).await?.is_none());
+    assert!(meta.get_pb(&binding).await?.is_none());
+    assert!(meta.get_pb(&TableId::new(source.get_id())).await?.is_some());
+
+    // Recreate a clone member and seed independent member LVTs. Database GC must clean each LVT
+    // with its corresponding TableMeta.
+    let batch_clone_name = format!("{}_vacuum_database", source_name);
+    fixture
+        .execute_command(&format!(
+            "CREATE TABLE {db}.{batch_clone_name} CLONE {db}.{source_name}"
+        ))
+        .await?;
+    let batch_clone = catalog.get_table(&tenant, &db, &batch_clone_name).await?;
+    let batch_clone_id = batch_clone.get_id();
+    let batch_binding = TableCloneByGroupIdent::new(group_id, batch_clone_id);
+    let source_lvt_ident = LeastVisibleTimeIdent::new(&tenant, source.get_id());
+    let clone_lvt_ident = LeastVisibleTimeIdent::new(&tenant, batch_clone_id);
+    for lvt_ident in [&source_lvt_ident, &clone_lvt_ident] {
+        catalog
+            .set_table_lvt(lvt_ident, &LeastVisibleTime::new(Utc::now()))
+            .await?;
+        assert!(meta.get_pb(lvt_ident).await?.is_some());
+    }
+    assert!(meta.get_pb(&batch_binding).await?.is_some());
+
+    fixture
+        .execute_command(&format!("DROP DATABASE {db}"))
+        .await?;
+    // Reclaim the leaf before its deferred source. The leaf's LVT is removed with it;
+    // the source LVT remains independent until the next vacuum round. Deferring a source that
+    // still has a clone child is normal and must not be reported as a failure.
+    let vacuum_ctx = fixture.new_query_ctx().await?;
+    execute_command(vacuum_ctx.clone(), "VACUUM DROP TABLE").await?;
+    assert!(
+        !vacuum_ctx
+            .pop_warnings()
+            .join("\n")
+            .contains("Failed to vacuum dropped tables")
+    );
+    assert!(meta.get_pb(&TableId::new(source.get_id())).await?.is_some());
+    assert!(meta.get_pb(&TableId::new(batch_clone_id)).await?.is_none());
+    assert!(meta.get_pb(&batch_binding).await?.is_none());
+    assert!(meta.get_pb(&clone_lvt_ident).await?.is_none());
+    assert!(meta.get_pb(&source_lvt_ident).await?.is_some());
+    // A normal deferral is not a failure, but must still retain the ancestor's directory and
+    // its containing database metadata until a later round can safely reclaim the ancestor.
+    source_fuse.get_operator_ref().stat(&source_marker).await?;
+    assert!(meta.get_pb(&db_id).await?.is_some());
+
+    fixture.execute_command("VACUUM DROP TABLE").await?;
+    assert!(meta.get_pb(&TableId::new(source.get_id())).await?.is_none());
+    assert!(meta.get_pb(&source_lvt_ident).await?.is_none());
+    assert!(meta.get_pb(&db_id).await?.is_none());
+    assert_eq!(
+        source_fuse
+            .get_operator_ref()
+            .stat(&source_marker)
+            .await
+            .unwrap_err()
+            .kind(),
+        ErrorKind::NotFound
+    );
 
     Ok(())
 }
@@ -157,7 +418,7 @@ async fn test_do_vacuum_temporary_files() -> anyhow::Result<()> {
     let r = do_vacuum_temporary_files(
         Arc::new(AbortRightNow),
         "test_dir/".to_string(),
-        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2))),
+        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2)), Arc::new(|_| {})),
         1,
     )
     .await;
@@ -169,7 +430,7 @@ async fn test_do_vacuum_temporary_files() -> anyhow::Result<()> {
     do_vacuum_temporary_files(
         no_abort.clone(),
         "test_dir/".to_string(),
-        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2))),
+        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2)), Arc::new(|_| {})),
         1,
     )
     .await?;
@@ -186,7 +447,7 @@ async fn test_do_vacuum_temporary_files() -> anyhow::Result<()> {
     do_vacuum_temporary_files(
         no_abort.clone(),
         "test_dir/".to_string(),
-        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2))),
+        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2)), Arc::new(|_| {})),
         2,
     )
     .await?;
@@ -197,7 +458,7 @@ async fn test_do_vacuum_temporary_files() -> anyhow::Result<()> {
     do_vacuum_temporary_files(
         no_abort.clone(),
         "test_dir/".to_string(),
-        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(3))),
+        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(3)), Arc::new(|_| {})),
         1000,
     )
     .await?;
@@ -1241,14 +1502,89 @@ async fn test_vacuum_dropped_tables_isolates_initialization_failures() -> anyhow
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_dropped_tables_reclaims_retired_engine_metadata() -> anyhow::Result<()> {
+    let meta = new_local_meta().await;
+    let mut ee_setup = EESetup::new();
+    ee_setup.config_mut().meta.endpoints = meta.inner().endpoints.clone();
+    let fixture = TestFixture::setup_with_custom(ee_setup).await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+
+    let db_name = "test_vacuum_retired_engine";
+    fixture
+        .execute_command(&format!("create database {db_name}"))
+        .await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let tenant = ctx.get_tenant();
+    let catalog = ctx.get_default_catalog()?;
+    let db_id = catalog
+        .get_database(&tenant, db_name)
+        .await?
+        .get_db_info()
+        .database_id;
+    let mut tables = Vec::new();
+    for name in ["retired_engine", "unknown_engine"] {
+        fixture
+            .execute_command(&format!("create table {db_name}.{name} (a int)"))
+            .await?;
+        let table = catalog.get_table(&tenant, db_name, name).await?;
+        let operator = FuseTable::try_from_table(table.as_ref())?.get_operator();
+        let path = format!(
+            "{}/vacuum-test-data",
+            FuseTable::parse_storage_prefix_from_table_info(table.get_table_info())?
+        );
+        operator.write(&path, vec![1, 2]).await?;
+        tables.push((table.get_table_info().clone(), operator, path));
+    }
+    fixture
+        .execute_command(&format!("drop database {db_name}"))
+        .await?;
+
+    // Simulate metadata left behind by a removed engine (DELTA) and by an engine
+    // this binary does not know about.
+    for (info, _, _) in &tables {
+        let key = TableId::new(info.ident.table_id);
+        let mut seq_meta = meta.get_pb(&key).await?.unwrap();
+        seq_meta.engine = match info.name.as_str() {
+            "retired_engine" => "DELTA".to_owned(),
+            _ => "UNKNOWN_ENGINE".to_owned(),
+        };
+        let mut txn = TxnRequest::default();
+        txn_replace_exact(&mut txn, &key, seq_meta.seq, &seq_meta.data)?;
+        assert!(send_txn(&meta, txn).await?.0);
+    }
+
+    execute_command(ctx.clone(), "vacuum dropped objects").await?;
+    let warnings = ctx.pop_warnings().join("\n");
+    // The unknown-engine table is retained, so its database must be retained too.
+    assert!(meta.get_pb(&db_id).await?.is_some());
+    for (info, operator, path) in &tables {
+        let key = TableId::new(info.ident.table_id);
+        if info.name == "retired_engine" {
+            // Metadata-only reclaim: meta is removed and storage is not touched.
+            assert!(meta.get_pb(&key).await?.is_none());
+            assert!(operator.exists(path).await?);
+            assert!(!warnings.contains(&info.desc));
+        } else {
+            assert!(meta.get_pb(&key).await?.is_some());
+            assert!(operator.exists(path).await?);
+            assert!(warnings.contains(&format!(
+                "Unknown table engine UNKNOWN_ENGINE for table {} (id: {})",
+                info.desc, info.ident.table_id
+            )));
+        }
+    }
+    Ok(())
+}
+
 async fn new_local_meta() -> MetaStore {
     let meta_config = MetaConfig::default();
     let config = meta_config.to_meta_grpc_client_conf();
     let provider = MetaStoreProvider::new(config);
-    provider
-        .create_meta_store::<DatabendRuntime>()
-        .await
-        .unwrap()
+    provider.create_default_meta_store().await.unwrap()
 }
 
 #[tokio::test(flavor = "multi_thread")]

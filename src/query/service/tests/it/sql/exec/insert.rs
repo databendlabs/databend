@@ -15,15 +15,20 @@
 use std::collections::HashMap;
 
 use chrono::Duration;
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::number::NumberScalar;
 use databend_common_sql::ColumnBindingBuilder;
+use databend_common_sql::Planner;
 use databend_common_sql::Symbol;
 use databend_common_sql::Visibility;
 use databend_common_sql::executor::physical_plans::FragmentKind;
+use databend_query::interpreters::InterpreterFactory;
 use databend_query::interpreters::build_insert_select_physical_plan;
 use databend_query::physical_plans::ConstantTableScan;
 use databend_query::physical_plans::DistributedInsertSelect;
@@ -33,7 +38,13 @@ use databend_query::physical_plans::PhysicalPlan;
 use databend_query::physical_plans::PhysicalPlanCast;
 use databend_query::physical_plans::PhysicalPlanMeta;
 use databend_query::physical_plans::TableWritePrepare;
+use databend_query::sessions::TableContextSettings;
+use databend_query::test_kits::TestFixture;
+use databend_query::test_kits::execute_command;
+use databend_query::test_kits::execute_pipeline;
+use databend_query::test_kits::execute_query;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use futures::TryStreamExt;
 use paimon::Catalog;
 use paimon::catalog::Identifier;
 use paimon::spec::DataType as PaimonDataType;
@@ -352,5 +363,182 @@ async fn test_prepared_global_shuffle_stays_below_insert() -> databend_common_ex
         .expect("prepared GlobalShuffle must remain below the insert");
     assert_eq!(shuffle.kind, FragmentKind::GlobalShuffle);
 
+    Ok(())
+}
+
+#[test]
+fn test_fuse_insert_select_resize() -> anyhow::Result<()> {
+    // Table-function binding uses block_in_place. Runtime workers need the same
+    // singleton namespace as the test thread when continuations migrate.
+    let name = std::thread::current().name().unwrap().to_string();
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .thread_name(name)
+        .enable_all()
+        .build()?
+        .block_on(check_fuse_insert_select_resize())
+}
+
+async fn check_fuse_insert_select_resize() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    for (name, layout) in [
+        ("plain", "ROW_PER_BLOCK=1"),
+        ("clustered", "CLUSTER BY (n) ROW_PER_BLOCK=1"),
+        ("partitioned", "PARTITION BY (n % 2) ROW_PER_BLOCK=16"),
+        (
+            "partitioned_clustered",
+            "PARTITION BY (n % 2) CLUSTER BY (n) ROW_PER_BLOCK=16",
+        ),
+        (
+            "hash_partitioned",
+            "PARTITION BY (n % 2) ROW_PER_BLOCK=16 WRITE_DISTRIBUTION_MODE='hash'",
+        ),
+    ] {
+        let ctx = fixture.new_query_ctx().await?;
+        execute_command(ctx, &format!("CREATE TABLE {db}.{name}(n UINT64) {layout}")).await?;
+    }
+
+    for (table, threads, stream_write, select, expected_writers) in [
+        (
+            "plain",
+            4,
+            0,
+            "SELECT number FROM numbers(32) LIMIT 16",
+            Some(4),
+        ),
+        ("plain", 1, 0, "SELECT number FROM numbers(4)", Some(1)),
+        ("plain", 4, 0, "SELECT number FROM numbers(0)", Some(4)),
+        (
+            "plain",
+            4,
+            0,
+            "SELECT a.number * 4 + b.number FROM numbers(4) a CROSS JOIN numbers(4) b",
+            Some(4),
+        ),
+        (
+            "clustered",
+            4,
+            0,
+            "SELECT number FROM numbers(32) LIMIT 16",
+            Some(4),
+        ),
+        (
+            "partitioned",
+            4,
+            0,
+            "SELECT number FROM numbers(32) LIMIT 16",
+            Some(4),
+        ),
+        (
+            "partitioned_clustered",
+            4,
+            0,
+            "SELECT number FROM numbers(32) LIMIT 16",
+            Some(4),
+        ),
+        // Preserve the hash-distributed layout stage's width rather than
+        // arbitrarily redistributing its lanes before serialization.
+        (
+            "hash_partitioned",
+            4,
+            0,
+            "SELECT number FROM numbers(32) LIMIT 16",
+            None,
+        ),
+        (
+            "plain",
+            4,
+            1,
+            "SELECT number FROM numbers(32) LIMIT 16",
+            Some(4),
+        ),
+        (
+            "plain",
+            1,
+            1,
+            "SELECT number FROM numbers(4) LIMIT 4",
+            Some(1),
+        ),
+        ("plain", 4, 1, "SELECT number FROM numbers(0)", Some(4)),
+    ] {
+        let ctx = fixture.new_query_ctx().await?;
+        ctx.get_session_settings().set_max_threads(threads)?;
+        ctx.get_session_settings()
+            .set_setting("enable_block_stream_write".into(), stream_write.to_string())?;
+        ctx.get_session_settings()
+            .set_setting("max_execute_time_in_seconds".into(), "15".into())?;
+        assert_eq!(ctx.get_settings().get_max_threads()?, threads);
+        assert_eq!(
+            ctx.get_settings().get_enable_block_stream_write()?,
+            stream_write != 0
+        );
+        let sql = format!("INSERT INTO {db}.{table} {select}");
+        let (plan, _) = Planner::new(ctx.clone()).plan_sql(&sql).await?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
+        let pipeline = interpreter.execute2().await?;
+        // Construction has finished; no processor tasks are running.
+        let count = |name: &str| {
+            pipeline
+                .main_pipeline
+                .graph
+                .node_weights()
+                .filter(|node| (unsafe { node.proc.name() }) == name)
+                .count()
+        };
+        let writer_name = if stream_write != 0 {
+            // All stream-write cases here use the plain Parquet table.
+            assert_eq!(
+                count("TransformBlockBuilder"),
+                1,
+                "builder width changed: {sql}"
+            );
+            assert_eq!(count("TransformSerializeBlock"), 0, "{sql}");
+            "TransformBlockWriter"
+        } else {
+            "TransformSerializeBlock"
+        };
+        let expected_writers = expected_writers.unwrap_or_else(|| count("TransformPartitionBy"));
+        assert!(expected_writers > 0, "missing write layout: {sql}");
+        assert_eq!(count(writer_name), expected_writers, "{sql}");
+        execute_pipeline(ctx, pipeline).await?;
+    }
+
+    for (table, expected) in [
+        (
+            "plain",
+            (0u64..16)
+                .chain(0..4)
+                .chain(0..16)
+                .chain(0..16)
+                .chain(0..4)
+                .collect::<Vec<_>>(),
+        ),
+        ("clustered", (0u64..16).collect()),
+        ("partitioned", (0u64..16).collect()),
+        ("partitioned_clustered", (0u64..16).collect()),
+        ("hash_partitioned", (0u64..16).collect()),
+    ] {
+        let ctx = fixture.new_query_ctx().await?;
+        let blocks = execute_query(ctx, &format!("SELECT n FROM {db}.{table}"))
+            .await?
+            .try_collect::<Vec<DataBlock>>()
+            .await?;
+        let mut actual = Vec::new();
+        for block in blocks {
+            for row in 0..block.num_rows() {
+                let value = block.get_by_offset(0).index(row).unwrap().to_owned();
+                let Scalar::Number(NumberScalar::UInt64(value)) = value else {
+                    panic!("unexpected value")
+                };
+                actual.push(value);
+            }
+        }
+        let mut expected = expected;
+        expected.sort_unstable();
+        actual.sort_unstable();
+        assert_eq!(actual, expected, "{table}");
+    }
     Ok(())
 }

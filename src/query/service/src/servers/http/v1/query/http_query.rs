@@ -25,6 +25,7 @@ use databend_common_ast::parser::mask_log_sql_secrets;
 use databend_common_base::base::short_sql;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalQueryRuntime;
+use databend_common_base::runtime::IoStats;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
@@ -675,6 +676,7 @@ pub struct HttpQuery {
     // refs
     pub(crate) temp_tbl_mgr: TempTblMgrRef,
     pub(crate) query_mem_stat: Option<Arc<MemStat>>,
+    pub(crate) query_io_stats: Arc<IoStats>,
 
     // cache only
     pub(crate) result_timeout_secs: u64,
@@ -790,6 +792,7 @@ impl HttpQuery {
             })),
             temp_tbl_mgr: session.temp_tbl_mgr().clone(),
             query_mem_stat: ctx.get_query_memory_tracking(),
+            query_io_stats: ctx.get_local_io_stats(),
             is_txn_mgr_saved: Default::default(),
             last_session_conf: Default::default(),
         })
@@ -951,6 +954,7 @@ impl HttpQuery {
         let query_state = self.execute_state.clone();
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.warehouse_id = query_context.get_cluster().get_warehouse_id().ok();
+        tracking_payload.io_stats = Some(query_context.get_local_io_stats());
 
         GlobalQueryRuntime::instance().runtime().spawn(
             tracking_payload.tracking(

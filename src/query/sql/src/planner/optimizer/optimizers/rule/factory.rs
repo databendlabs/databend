@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::optimizer::OptimizerContext;
@@ -21,7 +22,6 @@ use crate::optimizer::optimizers::rule::RuleCommuteJoin;
 use crate::optimizer::optimizers::rule::RuleCommuteJoinBaseTable;
 use crate::optimizer::optimizers::rule::RuleDeduplicateSort;
 use crate::optimizer::optimizers::rule::RuleEagerAggregation;
-use crate::optimizer::optimizers::rule::RuleEliminateEvalScalar;
 use crate::optimizer::optimizers::rule::RuleEliminateFilter;
 use crate::optimizer::optimizers::rule::RuleEliminateSelfJoin;
 use crate::optimizer::optimizers::rule::RuleEliminateSort;
@@ -61,7 +61,6 @@ use crate::optimizer::optimizers::rule::RulePushDownSortEvalScalar;
 use crate::optimizer::optimizers::rule::RulePushDownSortFilterScan;
 use crate::optimizer::optimizers::rule::RulePushDownSortScan;
 use crate::optimizer::optimizers::rule::RuleSemiToInnerJoin;
-use crate::optimizer::optimizers::rule::RuleSplitAggregate;
 use crate::optimizer::optimizers::rule::RuleTryApplyMaterializedView;
 
 pub struct RuleFactory;
@@ -71,7 +70,9 @@ impl RuleFactory {
         let metadata = ctx.get_metadata();
         match id {
             RuleID::EliminateUnion => Ok(Box::new(RuleEliminateUnion::new(metadata))),
-            RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
+            RuleID::EliminateEvalScalar => Err(ErrorCode::Internal(
+                "EliminateEvalScalar requires a physical expression",
+            )),
             RuleID::FilterNulls => Ok(Box::new(RuleFilterNulls::new(
                 ctx.get_enable_distributed_optimization(),
                 ctx.get_stat_context().clone(),
@@ -120,7 +121,6 @@ impl RuleFactory {
             RuleID::HierarchicalGroupingSetsToUnion => {
                 Ok(Box::new(RuleHierarchicalGroupingSetsToUnion::new(ctx)))
             }
-            RuleID::SplitAggregate => Ok(Box::new(RuleSplitAggregate::new())),
             RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new(
                 ctx.get_stat_context().clone(),
             ))),

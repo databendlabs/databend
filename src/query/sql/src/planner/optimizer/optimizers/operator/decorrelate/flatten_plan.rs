@@ -38,7 +38,6 @@ use crate::optimizer::optimizers::operator::FlattenInfo;
 use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
-use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
 use crate::plans::ConstantTableScan;
@@ -631,7 +630,6 @@ impl SubqueryDecorrelatorOptimizer {
         }
         Ok((
             flatten_plan.build_unary(Aggregate {
-                mode: AggregateMode::Initial,
                 group_items,
                 aggregate_functions: agg_items,
                 from_distinct: aggregate.from_distinct,
@@ -1190,7 +1188,6 @@ impl SubqueryDecorrelatorOptimizer {
             .collect::<Result<_>>()?;
 
         let aggr = outer.build_unary(Aggregate {
-            mode: AggregateMode::Initial,
             group_items,
             ..Default::default()
         });

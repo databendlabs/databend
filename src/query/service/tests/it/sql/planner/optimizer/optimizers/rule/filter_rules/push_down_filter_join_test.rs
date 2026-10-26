@@ -56,13 +56,15 @@ fn sexpr_to_string(s_expr: &SExpr) -> String {
                     col.column_name.clone()
                 }
             }
-            ScalarExpr::ConstantExpr(const_expr) => match &const_expr.value {
-                Scalar::Number(num) => format!("{}", num),
-                Scalar::String(s) => format!("'{}'", s),
-                Scalar::Boolean(b) => format!("{}", b),
-                Scalar::Null => "Null".to_string(),
-                _ => format!("{:?}", const_expr.value),
-            },
+            ScalarExpr::ConstantExpr(const_expr) | ScalarExpr::TypedConstantExpr(const_expr, _) => {
+                match &const_expr.value {
+                    Scalar::Number(num) => format!("{}", num),
+                    Scalar::String(s) => format!("'{}'", s),
+                    Scalar::Boolean(b) => format!("{}", b),
+                    Scalar::Null => "Null".to_string(),
+                    _ => format!("{:?}", const_expr.value),
+                }
+            }
             ScalarExpr::FunctionCall(func) => {
                 if func.func_name == "eq" && func.arguments.len() == 2 {
                     format!(
@@ -140,6 +142,20 @@ fn sexpr_to_string(s_expr: &SExpr) -> String {
                 let preds: Vec<String> = filter.predicates.iter().map(format_scalar_expr).collect();
                 format!("Filter [{}]", preds.join(", "))
             }
+            RelOperator::EvalScalar(eval) => {
+                let items: Vec<String> = eval
+                    .items
+                    .iter()
+                    .map(|item| {
+                        format!(
+                            "{} AS #{}",
+                            format_scalar_expr(&item.scalar),
+                            item.index.as_usize()
+                        )
+                    })
+                    .collect();
+                format!("EvalScalar [{}]", items.join(", "))
+            }
             RelOperator::Join(join) => {
                 let join_type = match join.join_type {
                     JoinType::Inner => "Inner",
@@ -213,19 +229,22 @@ fn normalize_string(s: &str) -> String {
         .join("\n")
 }
 
-fn is_null(expr: ScalarExpr) -> ScalarExpr {
-    let is_not_null = ScalarExpr::FunctionCall(FunctionCall {
+fn is_not_null(expr: ScalarExpr) -> ScalarExpr {
+    ScalarExpr::FunctionCall(FunctionCall {
         span: None,
         func_name: "is_not_null".to_string(),
         params: vec![],
         arguments: vec![expr],
         return_type: Box::new(DataType::Boolean),
-    });
+    })
+}
+
+fn is_null(expr: ScalarExpr) -> ScalarExpr {
     ScalarExpr::FunctionCall(FunctionCall {
         span: None,
         func_name: "not".to_string(),
         params: vec![],
-        arguments: vec![is_not_null],
+        arguments: vec![is_not_null(expr)],
         return_type: Box::new(DataType::Boolean),
     })
 }
@@ -282,16 +301,37 @@ fn run_join_filter_test(test_case: &JoinFilterTestCase, metadata: &MetadataRef) 
     let filter = builder.filter(join, vec![test_case.filter_expr.clone()]);
 
     // Apply rule
-    let rule = RulePushDownFilterJoin::new(metadata.clone(), StatContext::default());
+    let rule = RulePushDownFilterJoin::new(
+        metadata.clone(),
+        StatContext::without_settings(Default::default()),
+    );
     let mut result = TransformResult::default();
     rule.apply(&filter, &mut result)?;
 
-    // Check if transformation was applied
-    assert!(
-        !result.results().is_empty(),
-        "Rule should have been applied"
-    );
-    let transformed = &result.results()[0];
+    // NULL-accepting filters must not turn an outer join into an inner join;
+    // an IS NULL equi-key can instead use the existing anti-join rewrite. If no
+    // rewrite is produced, still compare the unchanged tree to the after pattern.
+    let transformed = result.results().first().unwrap_or(&filter);
+
+    // The formatter displays NULL values but not their types. Check the anti-join
+    // projections explicitly so an untyped or incorrectly typed NULL cannot pass.
+    if let RelOperator::EvalScalar(eval) = transformed.plan() {
+        let metadata = metadata.read();
+        for item in &eval.items {
+            assert!(matches!(
+                &item.scalar,
+                ScalarExpr::TypedConstantExpr(constant, _) if constant.value == Scalar::Null
+            ));
+            let expected_type = metadata.column(item.index).data_type().wrap_nullable();
+            assert_eq!(
+                item.scalar.data_type().as_ref(),
+                &expected_type,
+                "Test case {} - NULL projection type changed for {}",
+                test_case.name,
+                item.index
+            );
+        }
+    }
 
     // Verify before pattern
     let before_str = sexpr_to_string(&filter);
@@ -313,30 +353,11 @@ fn run_join_filter_test(test_case: &JoinFilterTestCase, metadata: &MetadataRef) 
     println!("Expected after pattern:\n{}", normalized_after_expected);
     println!("Actual after pattern:\n{}", normalized_after);
 
-    // Special handling for RIGHT JOIN which might be converted to INNER JOIN
-    if matches!(test_case.join_type, JoinType::Right) {
-        // Check if filter was pushed down correctly even if join type changed
-        let expected_filter_pushed =
-            normalized_after_expected.contains("Filter") && normalized_after.contains("Filter");
-
-        if normalized_after.contains("Inner Join") && expected_filter_pushed {
-            println!(
-                "Note: Optimizer converted RIGHT JOIN to INNER JOIN, but filter was correctly pushed down."
-            );
-        } else {
-            assert_eq!(
-                normalized_after, normalized_after_expected,
-                "Test case {} - After plan tree doesn't match expected pattern.\nExpected:\n{}\nActual:\n{}",
-                test_case.name, normalized_after_expected, normalized_after
-            );
-        }
-    } else {
-        assert_eq!(
-            normalized_after, normalized_after_expected,
-            "Test case {} - After plan tree doesn't match expected pattern.\nExpected:\n{}\nActual:\n{}",
-            test_case.name, normalized_after_expected, normalized_after
-        );
-    }
+    assert_eq!(
+        normalized_after, normalized_after_expected,
+        "Test case {} - After plan tree doesn't match expected pattern.\nExpected:\n{}\nActual:\n{}",
+        test_case.name, normalized_after_expected, normalized_after
+    );
 
     println!(
         "✅ Test case {}: {} - PASSED",
@@ -348,8 +369,14 @@ fn run_join_filter_test(test_case: &JoinFilterTestCase, metadata: &MetadataRef) 
 
 #[test]
 fn test_push_down_filter_left_join() -> anyhow::Result<()> {
-    // Create metadata
     let metadata = MetadataRef::default();
+    // The IS NULL equi-key case becomes an anti join and projects the original
+    // right-side columns as typed NULLs. Register the four scan symbols for it.
+    for name in ["t1.id", "t2.id", "t1.a", "t2.value"] {
+        metadata
+            .write()
+            .add_derived_column(name.to_string(), DataType::Number(NumberDataType::Int32));
+    }
 
     // Create expression builder
     let mut builder = ExprBuilder::new();
@@ -402,11 +429,11 @@ fn test_push_down_filter_left_join() -> anyhow::Result<()> {
     let right_combined_filter = builder.and(right_id_filter.clone(), right_value_filter.clone());
 
     // Create NULL-related filters
-    // SQL: WHERE t2.id IS NULL
-    let is_null_filter = builder.eq(t2_id.clone(), builder.null());
+    // SQL: WHERE t2.id IS NULL (not an equality comparison with NULL)
+    let is_null_filter = is_null(t2_id.clone());
 
     // SQL: WHERE t2.id IS NOT NULL
-    let is_not_null_filter = builder.neq(t2_id.clone(), builder.null());
+    let is_not_null_filter = is_not_null(t2_id.clone());
 
     // Create complex OR filter
     // SQL: WHERE t2.id > 10 AND t2.value < 50
@@ -506,21 +533,20 @@ fn test_push_down_filter_left_join() -> anyhow::Result<()> {
         },
         JoinFilterTestCase {
             name: "IS NULL filter on right table",
-            description: "Tests that an IS NULL filter on the right table is handled correctly in LEFT JOIN",
+            description: "Tests that IS NULL on the right equi-key keeps unmatched left rows via an anti join and typed NULL projections",
             sql_example: "SELECT * FROM t1 LEFT JOIN t2 ON t1.id = t2.id WHERE t2.id IS NULL",
             filter_expr: is_null_filter.clone(),
             join_type: JoinType::Left,
             before_pattern: r#"
-            Filter [t2.id = Null]
+            Filter [not(is_not_null(t2.id))]
               Left Join [t1.id = t2.id]
                 Table 0
                 Table 1
             "#,
             after_pattern: r#"
-            Inner Join [t1.id = t2.id]
-              Filter [t1.id = Null]
+            EvalScalar [Null AS #1, Null AS #3]
+              LeftAnti Join [t1.id = t2.id]
                 Table 0
-              Filter [t2.id = Null]
                 Table 1
             "#,
             inspired_by: "TPC-DS Query 72 - NULL handling in promotion table",
@@ -532,16 +558,16 @@ fn test_push_down_filter_left_join() -> anyhow::Result<()> {
             filter_expr: is_not_null_filter.clone(),
             join_type: JoinType::Left,
             before_pattern: r#"
-            Filter [noteq(t2.id, Null)]
+            Filter [is_not_null(t2.id)]
               Left Join [t1.id = t2.id]
                 Table 0
                 Table 1
             "#,
             after_pattern: r#"
             Inner Join [t1.id = t2.id]
-              Filter [noteq(t1.id, Null)]
+              Filter [is_not_null(t1.id)]
                 Table 0
-              Filter [noteq(t2.id, Null)]
+              Filter [is_not_null(t2.id)]
                 Table 1
             "#,
             inspired_by: "TPC-DS Query 72 - NOT NULL check pattern",
@@ -650,7 +676,10 @@ fn test_single_join_is_null_filter_not_pushed_down() -> anyhow::Result<()> {
     );
     let left_single_filter = builder.filter(left_single, vec![is_null(t2_id.clone())]);
 
-    let rule = RulePushDownFilterJoin::new(metadata.clone(), StatContext::default());
+    let rule = RulePushDownFilterJoin::new(
+        metadata.clone(),
+        StatContext::without_settings(Default::default()),
+    );
     let mut result = TransformResult::default();
     rule.apply(&left_single_filter, &mut result)?;
     assert!(
@@ -734,11 +763,11 @@ fn test_push_down_filter_right_join() -> anyhow::Result<()> {
     let left_combined_filter = builder.and(left_a_filter.clone(), left_value_filter.clone());
 
     // Create NULL-related filters
-    // SQL: WHERE t1.a IS NULL
-    let is_null_filter = builder.eq(t1_a.clone(), builder.null());
+    // SQL: WHERE t1.a IS NULL (not an equality comparison with NULL)
+    let is_null_filter = is_null(t1_a.clone());
 
     // SQL: WHERE t1.a IS NOT NULL
-    let is_not_null_filter = builder.neq(t1_a.clone(), builder.null());
+    let is_not_null_filter = is_not_null(t1_a.clone());
 
     // Create complex OR filter
     // SQL: WHERE t1.a > 10 AND t1.value < 50
@@ -820,16 +849,16 @@ fn test_push_down_filter_right_join() -> anyhow::Result<()> {
             filter_expr: is_null_filter.clone(),
             join_type: JoinType::Right,
             before_pattern: r#"
-            Filter [t1.a = Null]
+            Filter [not(is_not_null(t1.a))]
               Right Join [t1.id = t2.id]
                 Table 0
                 Table 1
             "#,
             after_pattern: r#"
-            Inner Join [t1.id = t2.id]
-              Filter [t1.a = Null]
+            Filter [not(is_not_null(t1.a))]
+              Right Join [t1.id = t2.id]
                 Table 0
-              Table 1
+                Table 1
             "#,
             inspired_by: "TPC-DS Query 72 - NULL handling in promotion table",
         },
@@ -840,14 +869,14 @@ fn test_push_down_filter_right_join() -> anyhow::Result<()> {
             filter_expr: is_not_null_filter.clone(),
             join_type: JoinType::Right,
             before_pattern: r#"
-            Filter [noteq(t1.a, Null)]
+            Filter [is_not_null(t1.a)]
               Right Join [t1.id = t2.id]
                 Table 0
                 Table 1
             "#,
             after_pattern: r#"
             Inner Join [t1.id = t2.id]
-              Filter [noteq(t1.a, Null)]
+              Filter [is_not_null(t1.a)]
                 Table 0
               Table 1
             "#,
@@ -997,10 +1026,10 @@ fn test_push_down_filter_full_join() -> anyhow::Result<()> {
     let right_combined_filter = builder.and(right_b_filter.clone(), right_value_filter.clone());
 
     // Create NULL-related filters
-    // SQL: WHERE t1.a IS NULL
-    let is_null_filter = builder.eq(t1_a.clone(), builder.null());
+    // SQL: WHERE t1.a IS NULL (not an equality comparison with NULL)
+    let is_null_filter = is_null(t1_a.clone());
     // SQL: WHERE t1.a IS NOT NULL
-    let is_not_null_filter = builder.neq(t1_a.clone(), builder.null());
+    let is_not_null_filter = is_not_null(t1_a.clone());
 
     // Create complex OR filter
     // SQL: WHERE t1.a > 10 AND t1.value < 50
@@ -1107,16 +1136,16 @@ fn test_push_down_filter_full_join() -> anyhow::Result<()> {
             filter_expr: is_null_filter.clone(),
             join_type: JoinType::Full,
             before_pattern: r#"
-            Filter [t1.a = Null]
+            Filter [not(is_not_null(t1.a))]
               Full Join [t1.id = t2.id]
                 Table 0
                 Table 1
             "#,
             after_pattern: r#"
-            Left Join [t1.id = t2.id]
-              Filter [t1.a = Null]
+            Filter [not(is_not_null(t1.a))]
+              Full Join [t1.id = t2.id]
                 Table 0
-              Table 1
+                Table 1
             "#,
             inspired_by: "Missing data analysis with NULL checks",
         },
@@ -1127,14 +1156,14 @@ fn test_push_down_filter_full_join() -> anyhow::Result<()> {
             filter_expr: is_not_null_filter.clone(),
             join_type: JoinType::Full,
             before_pattern: r#"
-            Filter [noteq(t1.a, Null)]
+            Filter [is_not_null(t1.a)]
               Full Join [t1.id = t2.id]
                 Table 0
                 Table 1
             "#,
             after_pattern: r#"
             Left Join [t1.id = t2.id]
-              Filter [noteq(t1.a, Null)]
+              Filter [is_not_null(t1.a)]
                 Table 0
               Table 1
             "#,
@@ -1280,7 +1309,8 @@ fn test_push_down_complex_or_expressions() -> anyhow::Result<()> {
     "#;
 
     // Apply rule
-    let rule = RulePushDownFilterJoin::new(metadata, StatContext::default());
+    let rule =
+        RulePushDownFilterJoin::new(metadata, StatContext::without_settings(Default::default()));
     let mut result = TransformResult::default();
     rule.apply(&filter, &mut result)?;
 

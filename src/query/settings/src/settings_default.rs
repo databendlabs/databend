@@ -181,6 +181,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=256)),
                 }),
+                ("enable_experimental_clone_table", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables experimental CREATE TABLE ... CLONE. Clone table data integrity and safety are not guaranteed in mixed-version deployments.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("max_vacuum_threads", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Sets the maximum number of threads to execute vacuum operation.",
@@ -462,6 +469,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("filter_and_strategy", DefaultSettingValue {
+                    value: UserSettingValue::String("independent".to_owned()),
+                    desc: "How estimated selectivities of AND-ed filter predicates are combined: independent (multiply estimates for predicates on distinct columns, min within a column) or min (narrowest single predicate, the historical behaviour).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec!["independent".into(), "min".into()])),
                 }),
                 ("disable_join_reorder", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -1542,6 +1556,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=10)),
                 }),
+                ("enable_flight_control_channel_reuse", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Reuses one connection per node for the setup requests of distributed queries, instead of opening a new connection for each request.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("network_policy", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),
                     desc: "Network policy for all users in the tenant",
@@ -1704,12 +1725,12 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("s3_storage_class", DefaultSettingValue {
+                ("experimental_s3_storage_class", DefaultSettingValue {
                     value: {
                         let storage_class = Self::extract_s3_storage_class_config(&global_conf).unwrap_or_default();
                         UserSettingValue::String(storage_class.to_string())
                     },
-                    desc: "Default s3 storage class",
+                    desc: "Experimental. S3 storage class used when writing new data of external fuse tables. Internal tables always follow the storage class of the server configuration.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec![S3StorageClass::Standard.to_string(), S3StorageClass::IntelligentTiering.to_string()])),

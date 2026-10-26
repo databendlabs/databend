@@ -38,7 +38,6 @@ use crate::Visibility;
 use crate::binder::wrap_cast;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
-use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
 use crate::plans::ConstantTableScan;
@@ -78,7 +77,7 @@ where A: super::TypeCheckAdapter
         list: &CoreExprArgs,
         not: bool,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let inlist_to_join_threshold = self.adapter.settings().get_inlist_to_join_threshold()?;
+        let inlist_to_join_threshold = self.adapter.inlist_to_join_threshold()?;
         if list.len() >= inlist_to_join_threshold {
             let deref!((expr_scalar, expr_ty)) = self.resolve_core(arena, expr)?;
             let deref!((subquery, data_type)) =
@@ -91,7 +90,7 @@ where A: super::TypeCheckAdapter
         }
 
         let deref!((expr_scalar, _)) = self.resolve_core(arena, expr)?;
-        let max_inlist_to_or = self.adapter.settings().get_max_inlist_to_or()? as usize;
+        let max_inlist_to_or = self.adapter.max_inlist_to_or()? as usize;
 
         if list.len() > max_inlist_to_or
             && list
@@ -212,7 +211,6 @@ where A: super::TypeCheckAdapter
             columns: ColumnSet::from_iter([value_index]),
         })
         .build_unary(Aggregate {
-            mode: AggregateMode::Initial,
             group_items: vec![ScalarItem {
                 scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
                     span: None,

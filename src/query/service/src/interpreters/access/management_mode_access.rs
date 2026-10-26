@@ -117,7 +117,8 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::CreateStage(_)
                 | Plan::AlterStage(_)
                 | Plan::DropStage(_)
-                // Network policy.
+                // External access / network policy.
+                | Plan::ExternalAccess(_)
                 | Plan::CreateNetworkPolicy(_)
                 | Plan::AlterNetworkPolicy(_)
                 | Plan::DropNetworkPolicy(_)
@@ -148,7 +149,7 @@ impl AccessChecker for ManagementModeAccess {
                     "Management Mode Error: Access denied for operation:{:?} in management-mode",
                     plan.format_indent(
                         Default::default(),
-                        &StatContext::new(ctx.get_function_context()?),
+                        &StatContext::new(ctx.get_function_context()?, &ctx.get_settings()),
                     )?
                 )));
             }

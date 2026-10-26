@@ -20,111 +20,205 @@ use databend_common_expression::aggregate::aggregate_function::RawAggregateCall;
 use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AGGR_REGISTRY;
 
+use super::Logical;
+use super::PExpr;
+use super::Physical;
 use super::SExpr;
-use super::SExprVisitor;
-use super::VisitAction;
+use super::node::Expr;
+use super::node::ExprKind;
+use super::visitor::ExprVisitor;
+use super::visitor::VisitAction;
 use crate::MetadataRef;
 use crate::Symbol;
+use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::FunctionCall;
 use crate::plans::LambdaFunc;
 use crate::plans::Operator;
+use crate::plans::PhysicalRelOperator;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
+use crate::plans::UnionAll;
 use crate::plans::Visitor as ScalarExprVisitor;
+use crate::plans::Window;
 use crate::plans::WindowFuncType;
+use crate::plans::WindowGroup;
 
-impl SExpr {
+impl<K: ExprKind> Expr<K> {
     /// Validate embedded type declarations against the types that can be inferred
     /// from scalar expressions and aggregate function signatures.
     ///
     /// Nullability is intentionally ignored when comparing a symbol with metadata:
     /// outer joins may add a nullable wrapper without changing the global symbol.
     pub fn validate_types(&self, metadata: &MetadataRef) -> Result<()> {
-        self.accept(&mut SExprTypeValidator { metadata })
-            .map(|_| ())
+        K::validate_types(self, metadata)
     }
 }
 
-struct SExprTypeValidator<'a> {
+pub(super) fn validate_logical_types(expr: &SExpr, metadata: &MetadataRef) -> Result<()> {
+    expr.accept(&mut ExprTypeValidator {
+        metadata,
+        name: Logical::NAME,
+    })
+    .map(|_| ())
+}
+
+pub(super) fn validate_physical_types(expr: &PExpr, metadata: &MetadataRef) -> Result<()> {
+    expr.accept(&mut ExprTypeValidator {
+        metadata,
+        name: Physical::NAME,
+    })
+    .map(|_| ())
+}
+
+struct ExprTypeValidator<'a> {
+    name: &'static str,
     metadata: &'a MetadataRef,
 }
 
-impl SExprVisitor for SExprTypeValidator<'_> {
-    fn visit(&mut self, s_expr: &SExpr) -> Result<VisitAction> {
-        if let RelOperator::Scan(scan) = s_expr.plan() {
+impl ExprVisitor<Logical> for ExprTypeValidator<'_> {
+    fn visit(&mut self, expr: &SExpr) -> Result<VisitAction<Logical>> {
+        let plan = expr.plan();
+        if let RelOperator::Scan(scan) = plan {
             self.validate_scan_scalars(scan)?;
         } else {
-            for scalar in s_expr.plan().scalar_expr_iter() {
-                self.validate_scalar(scalar, SymbolTypeSource::create(self.metadata))?;
-            }
+            self.validate_operator_scalars(plan)?;
         }
-
-        match s_expr.plan() {
+        match plan {
             RelOperator::EvalScalar(eval) => self.validate_items(&eval.items)?,
-            RelOperator::Aggregate(aggregate) => {
-                self.validate_items(&aggregate.group_items)?;
-                self.validate_items(&aggregate.aggregate_functions)?;
-            }
+            RelOperator::Aggregate(aggregate) => self.validate_aggregate(aggregate)?,
             RelOperator::ProjectSet(project_set) => self.validate_items(&project_set.srfs)?,
-            RelOperator::AsyncFunction(async_function) => {
-                self.validate_items(&async_function.items)?;
-            }
+            RelOperator::AsyncFunction(function) => self.validate_items(&function.items)?,
             RelOperator::Udf(udf) => self.validate_items(&udf.items)?,
-            RelOperator::Window(window) => {
-                self.validate_symbol_type(window.index, &window.function.return_type(), "window")?;
-                self.validate_window_function(&window.function)?;
-            }
-            RelOperator::WindowGroup(group) => {
-                self.validate_items(&group.scalar_items)?;
-                for window in &group.windows {
-                    self.validate_symbol_type(
-                        window.index,
-                        &window.function.return_type(),
-                        "window",
-                    )?;
-                    self.validate_window_function(&window.function)?;
-                }
-            }
-            RelOperator::UnionAll(union) => {
-                if union.left_outputs.len() != union.right_outputs.len()
-                    || union.left_outputs.len() != union.output_indexes.len()
-                {
-                    return Err(ErrorCode::Internal(format!(
-                        "SExpr union output length mismatch: left {}, right {}, output {}",
-                        union.left_outputs.len(),
-                        union.right_outputs.len(),
-                        union.output_indexes.len()
-                    )));
-                }
-                for (((left, left_cast), (right, right_cast)), output) in union
-                    .left_outputs
-                    .iter()
-                    .zip(&union.right_outputs)
-                    .zip(&union.output_indexes)
-                {
-                    let left_type = match left_cast {
-                        Some(cast) => cast.data_type(),
-                        None => Cow::Owned(self.metadata_type(*left)?),
-                    };
-                    let right_type = match right_cast {
-                        Some(cast) => cast.data_type(),
-                        None => Cow::Owned(self.metadata_type(*right)?),
-                    };
-                    self.validate_symbol_type(*output, left_type.as_ref(), "union left output")?;
-                    self.validate_symbol_type(*output, right_type.as_ref(), "union right output")?;
-                }
-            }
-            _ => {}
+            RelOperator::Window(window) => self.validate_window(window)?,
+            RelOperator::WindowGroup(group) => self.validate_window_group(group)?,
+            RelOperator::UnionAll(union) => self.validate_union(union)?,
+            RelOperator::Scan(_)
+            | RelOperator::Join(_)
+            | RelOperator::Filter(_)
+            | RelOperator::Sort(_)
+            | RelOperator::Limit(_)
+            | RelOperator::TopN(_)
+            | RelOperator::DummyTableScan(_)
+            | RelOperator::ConstantTableScan(_)
+            | RelOperator::ExpressionScan(_)
+            | RelOperator::CacheScan(_)
+            | RelOperator::RecursiveCteScan(_)
+            | RelOperator::Mutation(_)
+            | RelOperator::CompactBlock(_)
+            | RelOperator::MutationSource(_)
+            | RelOperator::MaterializedCTE(_)
+            | RelOperator::MaterializedCTERef(_)
+            | RelOperator::Sequence(_) => {}
         }
-
         Ok(VisitAction::Continue)
     }
 }
 
-impl SExprTypeValidator<'_> {
+impl ExprVisitor<Physical> for ExprTypeValidator<'_> {
+    fn visit(&mut self, expr: &PExpr) -> Result<VisitAction<Physical>> {
+        let plan = expr.plan();
+        if let PhysicalRelOperator::Scan(scan) = plan {
+            self.validate_scan_scalars(scan)?;
+        } else {
+            self.validate_operator_scalars(plan)?;
+        }
+        match plan {
+            PhysicalRelOperator::EvalScalar(eval) => self.validate_items(&eval.items)?,
+            PhysicalRelOperator::Aggregate(aggregate) => {
+                self.validate_aggregate(&aggregate.aggregate)?
+            }
+            PhysicalRelOperator::ProjectSet(project_set) => {
+                self.validate_items(&project_set.srfs)?
+            }
+            PhysicalRelOperator::AsyncFunction(function) => self.validate_items(&function.items)?,
+            PhysicalRelOperator::Udf(udf) => self.validate_items(&udf.items)?,
+            PhysicalRelOperator::Window(window) => self.validate_window(window)?,
+            PhysicalRelOperator::WindowGroup(group) => self.validate_window_group(group)?,
+            PhysicalRelOperator::UnionAll(union) => self.validate_union(union)?,
+            PhysicalRelOperator::Scan(_)
+            | PhysicalRelOperator::Join(_)
+            | PhysicalRelOperator::Filter(_)
+            | PhysicalRelOperator::Sort(_)
+            | PhysicalRelOperator::Limit(_)
+            | PhysicalRelOperator::TopN(_)
+            | PhysicalRelOperator::Exchange(_)
+            | PhysicalRelOperator::DummyTableScan(_)
+            | PhysicalRelOperator::ConstantTableScan(_)
+            | PhysicalRelOperator::ExpressionScan(_)
+            | PhysicalRelOperator::CacheScan(_)
+            | PhysicalRelOperator::RecursiveCteScan(_)
+            | PhysicalRelOperator::Mutation(_)
+            | PhysicalRelOperator::CompactBlock(_)
+            | PhysicalRelOperator::MutationSource(_)
+            | PhysicalRelOperator::MaterializedCTE(_)
+            | PhysicalRelOperator::MaterializedCTERef(_)
+            | PhysicalRelOperator::Sequence(_) => {}
+        }
+        Ok(VisitAction::Continue)
+    }
+}
+
+impl ExprTypeValidator<'_> {
+    fn validate_operator_scalars(&self, plan: &impl Operator) -> Result<()> {
+        for scalar in plan.scalar_expr_iter() {
+            self.validate_scalar(scalar, SymbolTypeSource::create(self.metadata, self.name))?;
+        }
+        Ok(())
+    }
+
+    fn validate_aggregate(&self, aggregate: &Aggregate) -> Result<()> {
+        self.validate_items(&aggregate.group_items)?;
+        self.validate_items(&aggregate.aggregate_functions)
+    }
+
+    fn validate_window(&self, window: &Window) -> Result<()> {
+        self.validate_symbol_type(window.index, &window.function.return_type(), "window")?;
+        self.validate_window_function(&window.function)
+    }
+
+    fn validate_window_group(&self, group: &WindowGroup) -> Result<()> {
+        self.validate_items(&group.scalar_items)?;
+        for window in &group.windows {
+            self.validate_window(window)?;
+        }
+        Ok(())
+    }
+
+    fn validate_union(&self, union: &UnionAll) -> Result<()> {
+        if union.left_outputs.len() != union.right_outputs.len()
+            || union.left_outputs.len() != union.output_indexes.len()
+        {
+            return Err(ErrorCode::Internal(format!(
+                "{} union output length mismatch: left {}, right {}, output {}",
+                self.name,
+                union.left_outputs.len(),
+                union.right_outputs.len(),
+                union.output_indexes.len(),
+            )));
+        }
+        for (((left, left_cast), (right, right_cast)), output) in union
+            .left_outputs
+            .iter()
+            .zip(&union.right_outputs)
+            .zip(&union.output_indexes)
+        {
+            let left_type = match left_cast {
+                Some(cast) => cast.data_type(),
+                None => Cow::Owned(self.metadata_type(*left)?),
+            };
+            let right_type = match right_cast {
+                Some(cast) => cast.data_type(),
+                None => Cow::Owned(self.metadata_type(*right)?),
+            };
+            self.validate_symbol_type(*output, left_type.as_ref(), "union left output")?;
+            self.validate_symbol_type(*output, right_type.as_ref(), "union right output")?;
+        }
+        Ok(())
+    }
+
     fn validate_items(&self, items: &[ScalarItem]) -> Result<()> {
         for item in items {
             self.validate_symbol_type(
@@ -140,7 +234,8 @@ impl SExprTypeValidator<'_> {
         let metadata_type = self.metadata_type(index)?;
         if metadata_type.remove_nullable() != actual.remove_nullable() {
             return Err(ErrorCode::Internal(format!(
-                "SExpr type mismatch for {source} {index}: metadata declares {metadata_type:?}, expression declares {actual:?}"
+                "{} type mismatch for {source} {index}: metadata declares {metadata_type:?}, expression declares {actual:?}",
+                self.name
             )));
         }
         Ok(())
@@ -153,14 +248,17 @@ impl SExprTypeValidator<'_> {
             .get(index.as_usize())
             .map(|column| column.data_type())
             .ok_or_else(|| {
-                ErrorCode::Internal(format!("SExpr references unknown metadata symbol {index}"))
+                ErrorCode::Internal(format!(
+                    "{} references unknown metadata symbol {index}",
+                    self.name
+                ))
             })
     }
 
     fn validate_window_function(&self, function: &WindowFuncType) -> Result<()> {
         if let WindowFuncType::Aggregate(aggregate) = function {
             ScalarTypeValidator {
-                symbol_types: SymbolTypeSource::create(self.metadata),
+                symbol_types: SymbolTypeSource::create(self.metadata, self.name),
             }
             .validate_aggregate_function(aggregate)?;
         }
@@ -168,7 +266,7 @@ impl SExprTypeValidator<'_> {
     }
 
     fn validate_scan_scalars(&self, scan: &crate::plans::Scan) -> Result<()> {
-        let metadata_symbols = SymbolTypeSource::create(self.metadata);
+        let metadata_symbols = SymbolTypeSource::create(self.metadata, self.name);
         for scalar in scan
             .push_down_predicates
             .iter()
@@ -193,12 +291,13 @@ impl SExprTypeValidator<'_> {
 
 #[derive(Clone, Copy)]
 struct SymbolTypeSource<'a> {
+    name: &'static str,
     metadata: &'a MetadataRef,
 }
 
 impl<'a> SymbolTypeSource<'a> {
-    fn create(metadata: &'a MetadataRef) -> SymbolTypeSource<'a> {
-        Self { metadata }
+    fn create(metadata: &'a MetadataRef, name: &'static str) -> SymbolTypeSource<'a> {
+        Self { metadata, name }
     }
 
     fn validate(&self, index: Symbol, actual: &DataType) -> Result<()> {
@@ -208,13 +307,17 @@ impl<'a> SymbolTypeSource<'a> {
             .get(index.as_usize())
             .map(|column| column.data_type())
             .ok_or_else(|| {
-                ErrorCode::Internal(format!("SExpr references unknown metadata symbol {index}"))
+                ErrorCode::Internal(format!(
+                    "{} references unknown metadata symbol {index}",
+                    self.name
+                ))
             })?;
 
         let types_match = expected.remove_nullable() == actual.remove_nullable();
         if !types_match {
             return Err(ErrorCode::Internal(format!(
-                "SExpr bound column type mismatch for {index}: source declares {expected:?}, expression declares {actual:?}"
+                "{} bound column type mismatch for {index}: source declares {expected:?}, expression declares {actual:?}",
+                self.name
             )));
         }
         Ok(())
@@ -230,8 +333,8 @@ impl ScalarTypeValidator<'_> {
         let inferred = function.infer_return_type()?;
         if inferred != *function.return_type {
             return Err(ErrorCode::Internal(format!(
-                "SExpr function return type mismatch for {}: stored {:?}, inferred {inferred:?}",
-                function.func_name, function.return_type
+                "{} function return type mismatch for {}: stored {:?}, inferred {inferred:?}",
+                self.symbol_types.name, function.func_name, function.return_type
             )));
         }
         Ok(())
@@ -242,8 +345,11 @@ impl ScalarTypeValidator<'_> {
         refreshed.refresh_return_type()?;
         if refreshed.return_type != function.return_type {
             return Err(ErrorCode::Internal(format!(
-                "SExpr lambda return type mismatch for {}: stored {:?}, expected {:?}",
-                function.func_name, function.return_type, refreshed.return_type
+                "{} lambda return type mismatch for {}: stored {:?}, expected {:?}",
+                self.symbol_types.name,
+                function.func_name,
+                function.return_type,
+                refreshed.return_type
             )));
         }
         Ok(())
@@ -269,8 +375,8 @@ impl ScalarTypeValidator<'_> {
             .clone();
         if inferred != *aggregate.return_type {
             return Err(ErrorCode::Internal(format!(
-                "SExpr aggregate return type mismatch for {}: stored {:?}, inferred {inferred:?}",
-                aggregate.display_name, aggregate.return_type
+                "{} aggregate return type mismatch for {}: stored {:?}, inferred {inferred:?}",
+                self.symbol_types.name, aggregate.display_name, aggregate.return_type
             )));
         }
         Ok(())

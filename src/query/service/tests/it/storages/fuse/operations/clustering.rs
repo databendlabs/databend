@@ -240,7 +240,9 @@ async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
         ttl: None,
         table_indexes: None,
         table_constraints: None,
+        clone: None,
         attached_columns: None,
+        index_user_dictionaries: None,
         table_partition: None,
         table_properties: None,
     };

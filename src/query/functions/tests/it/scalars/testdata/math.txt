@@ -682,3 +682,110 @@ evaluation (internal):
 +--------+---------------------------------------+
 
 
+ast            : min_scale(1.2300::DECIMAL(10, 4))
+raw expr       : min_scale(CAST(1.2300 AS Decimal(10, 4)))
+checked expr   : min_scale<Decimal(10, 4)>(CAST<Decimal(5, 4)>(1.2300_d64(5,4) AS Decimal(10, 4)))
+optimized expr : 2_u8
+output type    : UInt8
+output domain  : {2..=2}
+output         : 2
+
+
+ast            : min_scale(-0.0010::DECIMAL(10, 4))
+raw expr       : min_scale(minus(CAST(0.0010 AS Decimal(10, 4))))
+checked expr   : min_scale<Decimal(10, 4)>(minus<Decimal(10, 4)>(CAST<Decimal(4, 4)>(0.0010_d64(4,4) AS Decimal(10, 4))))
+optimized expr : 3_u8
+output type    : UInt8
+output domain  : {3..=3}
+output         : 3
+
+
+ast            : min_scale(0::DECIMAL(10, 4))
+raw expr       : min_scale(CAST(0 AS Decimal(10, 4)))
+checked expr   : min_scale<Decimal(10, 4)>(CAST<UInt8>(0_u8 AS Decimal(10, 4)))
+optimized expr : 0_u8
+output type    : UInt8
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : min_scale(5::DECIMAL(10, 0))
+raw expr       : min_scale(CAST(5 AS Decimal(10, 0)))
+checked expr   : min_scale<Decimal(10, 0)>(CAST<UInt8>(5_u8 AS Decimal(10, 0)))
+optimized expr : 0_u8
+output type    : UInt8
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : min_scale(0.001::DECIMAL(38, 19))
+raw expr       : min_scale(CAST(0.001 AS Decimal(38, 19)))
+checked expr   : min_scale<Decimal(38, 19)>(CAST<Decimal(3, 3)>(0.001_d64(3,3) AS Decimal(38, 19)))
+optimized expr : 3_u8
+output type    : UInt8
+output domain  : {3..=3}
+output         : 3
+
+
+ast            : min_scale(1.0000000000000000001::DECIMAL(38, 19))
+raw expr       : min_scale(CAST(1.0000000000000000001 AS Decimal(38, 19)))
+checked expr   : min_scale<Decimal(38, 19)>(CAST<Decimal(20, 19)>(1.0000000000000000001_d128(20,19) AS Decimal(38, 19)))
+optimized expr : 19_u8
+output type    : UInt8
+output domain  : {19..=19}
+output         : 19
+
+
+ast            : min_scale(1.5::DECIMAL(76, 40))
+raw expr       : min_scale(CAST(1.5 AS Decimal(76, 40)))
+checked expr   : min_scale<Decimal(76, 40)>(CAST<Decimal(2, 1)>(1.5_d64(2,1) AS Decimal(76, 40)))
+optimized expr : 1_u8
+output type    : UInt8
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : min_scale(null)
+raw expr       : min_scale(NULL)
+checked expr   : min_scale<NULL>(NULL)
+optimized expr : NULL
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | min_scale(1.5::DOUBLE)
+  | ^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `min_scale(Float64)`, you might need to add explicit type casts.
+
+candidate functions:
+  min_scale(NULL) :: NULL  : unable to unify `Float64` with `NULL`
+
+
+
+ast            : min_scale(a)
+raw expr       : min_scale(a::Decimal(38, 19))
+checked expr   : min_scale<Decimal(38, 19)>(a)
+evaluation:
++--------+---------------------------------------------------+-----------+
+|        | a                                                 | Output    |
++--------+---------------------------------------------------+-----------+
+| Type   | Decimal(38, 19)                                   | UInt8     |
+| Domain | {-42.0000000000000000000..=1.5000000000000000000} | {0..=255} |
+| Row 0  | 1.5000000000000000000                             | 1         |
+| Row 1  | 0.0010000000000000000                             | 3         |
+| Row 2  | -42.0000000000000000000                           | 0         |
+| Row 3  | 0.0000000000000000000                             | 0         |
+| Row 4  | 0.0000000000000000001                             | 19        |
++--------+---------------------------------------------------+-----------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                      |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | Column(Decimal128([1.5000000000000000000, 0.0010000000000000000, -42.0000000000000000000, 0.0000000000000000000, 0.0000000000000000001])) |
+| Output | UInt8([1, 3, 0, 0, 19])                                                                                                                   |
++--------+-------------------------------------------------------------------------------------------------------------------------------------------+
+
+

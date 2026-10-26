@@ -17,11 +17,11 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::optimizer::ir::Matcher;
-use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::PExpr;
 use crate::plans::Exchange;
 use crate::plans::Join;
+use crate::plans::PhysicalRelOperator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 pub struct BroadcastToShuffleOptimizer {
     pub matcher: Matcher,
 }
@@ -33,15 +33,15 @@ impl BroadcastToShuffleOptimizer {
         }
     }
 
-    pub fn is_broadcast(&self, s_expr: &SExpr) -> Result<bool> {
+    pub fn is_broadcast(&self, s_expr: &PExpr) -> Result<bool> {
         let right = s_expr.child(1)?;
         Ok(matches!(
             right.plan(),
-            RelOperator::Exchange(Exchange::Broadcast)
+            PhysicalRelOperator::Exchange(Exchange::Broadcast)
         ))
     }
 
-    pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn optimize(&self, s_expr: &PExpr) -> Result<PExpr> {
         let left_exchange_input = s_expr.child(0)?;
 
         let right_exchange = s_expr.child(1)?;
@@ -58,20 +58,20 @@ impl BroadcastToShuffleOptimizer {
             .unzip();
 
         let new_join_children = vec![
-            Arc::new(SExpr::create_unary(
-                Arc::new(RelOperator::Exchange(Exchange::NodeToNodeHash(
+            Arc::new(PExpr::create_unary(
+                Arc::new(PhysicalRelOperator::Exchange(Exchange::NodeToNodeHash(
                     left_conditions,
                 ))),
                 Arc::new(left_exchange_input.clone()),
             )),
-            Arc::new(SExpr::create_unary(
-                Arc::new(RelOperator::Exchange(Exchange::NodeToNodeHash(
+            Arc::new(PExpr::create_unary(
+                Arc::new(PhysicalRelOperator::Exchange(Exchange::NodeToNodeHash(
                     right_conditions,
                 ))),
                 Arc::new(right_exchange_input.clone()),
             )),
         ];
-        let mut join_s_expr = s_expr.replace_plan(Arc::new(RelOperator::Join(join)));
+        let mut join_s_expr = s_expr.replace_plan(Arc::new(PhysicalRelOperator::Join(join)));
         join_s_expr = join_s_expr.replace_children(new_join_children);
         Ok(join_s_expr)
     }

@@ -157,9 +157,11 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         ttl: None,
         table_indexes: Some(table_indexes),
         table_constraints: None,
+        clone: None,
         attached_columns: None,
         table_partition: None,
         table_properties: None,
+        index_user_dictionaries: None,
     };
 
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
@@ -655,9 +657,16 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         block0, block1, block2, block3, block4, block5, block6, block7, block8, block9,
     ];
 
+    // Expected results below include physical segment/block indexes. Keep the
+    // fixture write single-threaded so parallel serialization cannot reorder them,
+    // then restore the normal thread count for the pruning under test.
+    let settings = fixture.default_session().get_settings();
+    let max_threads = settings.get_max_threads()?;
+    settings.set_max_threads(1)?;
     fixture
         .append_commit_blocks(table.clone(), blocks, false, true)
         .await?;
+    settings.set_max_threads(max_threads)?;
 
     // Define query vectors for testing
     let query_values1 = vec![-0.6886994, 0.594091, 0.90251667, -0.5796461];

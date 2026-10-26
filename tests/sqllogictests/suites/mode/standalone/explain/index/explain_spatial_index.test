@@ -34,7 +34,7 @@ TableScan
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [st_within(stores.location (#4), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') and stores.category (#1) = 'coffee' and stores.status (#3) = 'active'], limit: NONE]
-└── estimated rows: 1.60
+└── estimated rows: 2.00
 
 query T
 EXPLAIN SELECT store_id, store_name, category FROM stores WHERE st_intersects(location, to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))')) OR category = 'coffee';
@@ -64,7 +64,7 @@ TableScan
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, bloom index read cost: <slt:ignore>, bloom pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [st_dwithin(stores.location (#4), 'POINT(10 10)', 2) and stores.category (#1) = 'coffee' and stores.status (#3) = 'active'], limit: NONE]
-└── estimated rows: 1.60
+└── estimated rows: 2.00
 
 query T
 EXPLAIN SELECT store_id, store_name, category FROM stores WHERE st_coveredby(location, to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))')) AND category = 'coffee' AND status = 'active';
@@ -79,7 +79,7 @@ TableScan
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [st_coveredby(stores.location (#4), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') and stores.category (#1) = 'coffee' and stores.status (#3) = 'active'], limit: NONE]
-└── estimated rows: 1.60
+└── estimated rows: 2.00
 
 query T
 EXPLAIN SELECT store_id, store_name, category FROM stores WHERE st_covers(to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))'), location) AND category = 'coffee' AND status = 'active';
@@ -94,7 +94,7 @@ TableScan
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [st_covers('POLYGON((9 9,9 12,12 12,12 9,9 9))', stores.location (#4)) and stores.category (#1) = 'coffee' and stores.status (#3) = 'active'], limit: NONE]
-└── estimated rows: 1.60
+└── estimated rows: 2.00
 
 statement ok
 INSERT INTO stores VALUES
@@ -118,7 +118,7 @@ TableScan
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 7 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [st_within(stores.location (#4), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') and stores.category (#1) = 'coffee' and stores.status (#3) = 'active'], limit: NONE]
-└── estimated rows: 2.80
+└── estimated rows: 3.50
 
 query T
 EXPLAIN SELECT store_id, store_name, category FROM stores WHERE st_intersects(location, to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))')) OR category = 'coffee';
@@ -148,7 +148,7 @@ TableScan
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 7 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, bloom index read cost: <slt:ignore>, bloom pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [st_dwithin(stores.location (#4), 'POINT(10 10)', 2) and stores.category (#1) = 'coffee' and stores.status (#3) = 'active'], limit: NONE]
-└── estimated rows: 2.80
+└── estimated rows: 3.50
 
 statement ok
 CREATE TABLE t_nullable (id INT, category String, location Nullable(Geometry), SPATIAL INDEX idx (location)) row_per_block=2 block_per_segment=1

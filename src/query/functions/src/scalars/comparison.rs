@@ -1947,23 +1947,26 @@ fn register_like(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
         "regexp",
         |_, _, _| FunctionDomain::Full,
-        vectorize_regexp(|str, pat, builder, ctx, map, _| {
-            if let Some(re) = map.get(pat) {
-                builder.push(re.is_match(str));
-            } else {
-                // TODO error
-                match regexp::build_regexp_from_pattern("regexp", pat, None) {
-                    Ok(re) => {
-                        builder.push(re.is_match(str));
-                        map.insert(pat.to_string(), re);
-                    }
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e);
-                        builder.push(false);
+        vectorize_regexp(
+            PartialEvalPolicy::SkipInactiveRows,
+            |str, pat, builder, ctx, map, _| {
+                if let Some(re) = map.get(pat) {
+                    builder.push(re.is_match(str));
+                } else {
+                    // TODO error
+                    match regexp::build_regexp_from_pattern("regexp", pat, None) {
+                        Ok(re) => {
+                            builder.push(re.is_match(str));
+                            map.insert(pat.to_string(), re);
+                        }
+                        Err(e) => {
+                            ctx.set_error(builder.len(), e);
+                            builder.push(false);
+                        }
                     }
                 }
-            }
-        }),
+            },
+        ),
     );
 
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
@@ -2444,6 +2447,7 @@ fn convert_escape_pattern(escape: &str, arg2: String) -> String {
 }
 
 fn vectorize_regexp(
+    policy: PartialEvalPolicy,
     func: impl Fn(
         &str,
         &str,
@@ -2456,25 +2460,39 @@ fn vectorize_regexp(
     move |arg1, arg2, ctx| {
         let mut map = HashMap::new();
         let mut string_map = HashMap::new();
+        let active_rows = policy.active_rows(ctx);
+        let mut eval_row =
+            |arg1: &str, arg2: &str, builder: &mut MutableBitmap, row: Option<usize>| {
+                let active = active_rows.as_ref().is_none_or(|rows| match row {
+                    Some(row) => rows.get_bit(row),
+                    // Scalar calls apply to the whole block, not just row zero.
+                    None => rows.null_count() < rows.len(),
+                });
+                if active {
+                    func(arg1, arg2, builder, ctx, &mut map, &mut string_map);
+                } else {
+                    builder.push(false);
+                }
+            };
         match (arg1, arg2) {
             (Value::Scalar(arg1), Value::Scalar(arg2)) => {
                 let mut builder = MutableBitmap::with_capacity(1);
-                func(&arg1, &arg2, &mut builder, ctx, &mut map, &mut string_map);
+                eval_row(&arg1, &arg2, &mut builder, None);
                 Value::Scalar(BooleanType::build_scalar(builder))
             }
             (Value::Column(arg1), Value::Scalar(arg2)) => {
                 let arg1_iter = StringType::iter_column(&arg1);
                 let mut builder = MutableBitmap::with_capacity(arg1.len());
-                for arg1 in arg1_iter {
-                    func(arg1, &arg2, &mut builder, ctx, &mut map, &mut string_map);
+                for (index, arg1) in arg1_iter.enumerate() {
+                    eval_row(arg1, &arg2, &mut builder, Some(index));
                 }
                 Value::Column(builder.into())
             }
             (Value::Scalar(arg1), Value::Column(arg2)) => {
                 let arg2_iter = StringType::iter_column(&arg2);
                 let mut builder = MutableBitmap::with_capacity(arg2.len());
-                for arg2 in arg2_iter {
-                    func(&arg1, arg2, &mut builder, ctx, &mut map, &mut string_map);
+                for (index, arg2) in arg2_iter.enumerate() {
+                    eval_row(&arg1, arg2, &mut builder, Some(index));
                 }
                 Value::Column(builder.into())
             }
@@ -2482,8 +2500,8 @@ fn vectorize_regexp(
                 let arg1_iter = StringType::iter_column(&arg1);
                 let arg2_iter = StringType::iter_column(&arg2);
                 let mut builder = MutableBitmap::with_capacity(arg2.len());
-                for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
-                    func(arg1, arg2, &mut builder, ctx, &mut map, &mut string_map);
+                for (index, (arg1, arg2)) in arg1_iter.zip(arg2_iter).enumerate() {
+                    eval_row(arg1, arg2, &mut builder, Some(index));
                 }
                 Value::Column(builder.into())
             }
@@ -2587,6 +2605,73 @@ mod tests {
         match value {
             Value::Scalar(value) => assert_eq!(expected, &[value]),
             Value::Column(column) => assert_eq!(column.iter().collect::<Vec<_>>(), expected),
+        }
+    }
+
+    #[test]
+    fn test_vectorized_regexp_skips_inactive_rows() {
+        let calls = AtomicUsize::new(0);
+        let regexp = vectorize_regexp(
+            PartialEvalPolicy::SkipInactiveRows,
+            |_, _, builder, _, _, _| {
+                calls.fetch_add(1, AtomicOrdering::Relaxed);
+                builder.push(true);
+            },
+        );
+        let func_ctx = FunctionContext::default();
+        for num_rows in [0, 4] {
+            for validity in [
+                None,
+                Some(Bitmap::new_constant(true, num_rows)),
+                Some(Bitmap::new_constant(false, num_rows)),
+                Some(Bitmap::from_iter((0..num_rows).map(|row| row % 2 == 1))),
+            ] {
+                for source_scalar in [false, true] {
+                    for pattern_scalar in [false, true] {
+                        let mut ctx = EvalContext {
+                            generics: &[],
+                            num_rows,
+                            func_ctx: &func_ctx,
+                            validity: validity.clone(),
+                            errors: None,
+                            suppress_error: false,
+                            strict_eval: false,
+                        };
+                        let source = if source_scalar {
+                            Value::Scalar("dog".to_string())
+                        } else {
+                            Value::Column(string_column(&vec!["dog"; num_rows]))
+                        };
+                        let pattern = if pattern_scalar {
+                            Value::Scalar("dog".to_string())
+                        } else {
+                            Value::Column(string_column(&vec!["dog"; num_rows]))
+                        };
+                        let all_scalar = source_scalar && pattern_scalar;
+                        let expected = if all_scalar {
+                            vec![
+                                num_rows > 0
+                                    && validity
+                                        .as_ref()
+                                        .is_none_or(|rows| rows.null_count() < rows.len()),
+                            ]
+                        } else {
+                            (0..num_rows)
+                                .map(|row| validity.as_ref().is_none_or(|rows| rows.get_bit(row)))
+                                .collect::<Vec<_>>()
+                        };
+                        calls.store(0, AtomicOrdering::Relaxed);
+                        let result = regexp(source, pattern, &mut ctx);
+                        assert_eq!(result.as_scalar().is_some(), all_scalar);
+                        assert_boolean_value(result, &expected);
+                        assert_eq!(
+                            calls.load(AtomicOrdering::Relaxed),
+                            expected.iter().filter(|active| **active).count()
+                        );
+                        assert!(ctx.errors.is_none());
+                    }
+                }
+            }
         }
     }
 

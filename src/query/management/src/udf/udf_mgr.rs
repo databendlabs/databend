@@ -55,7 +55,7 @@ impl UdfMgr {
         &self,
         info: UserDefinedFunction,
         create_option: &CreateOption,
-    ) -> Result<Result<(), UdfError>, UdfApiError> {
+    ) -> Result<Result<bool, UdfError>, UdfApiError> {
         if let Err(e) = self.ensure_non_builtin(info.name.as_str()) {
             return Ok(Err(e));
         }
@@ -77,7 +77,7 @@ impl UdfMgr {
             }
         }
 
-        Ok(Ok(()))
+        Ok(Ok(res.is_changed()))
     }
 
     /// Update a UDF to /tenant/udf-name.

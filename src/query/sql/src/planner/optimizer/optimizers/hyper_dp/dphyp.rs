@@ -667,10 +667,6 @@ impl DPhpyOptimizer {
 
             RelOperator::UnionAll(_) => self.process_union_all_node(s_expr).await,
 
-            RelOperator::Exchange(_) => {
-                unreachable!()
-            }
-
             RelOperator::DummyTableScan(_)
             | RelOperator::ConstantTableScan(_)
             | RelOperator::ExpressionScan(_)
@@ -967,7 +963,7 @@ mod tests {
         DPhpyOptimizer::collect_materialized_cte_stats(
             &producer,
             &mut cte_stats,
-            &StatContext::default(),
+            &StatContext::without_settings(Default::default()),
         )
         .unwrap();
 
@@ -1009,7 +1005,7 @@ mod tests {
 
         let (optimized, changed) = DPhpyOptimizer::sync_materialized_cte_ref_stats_in_sequences(
             &root,
-            &StatContext::default(),
+            &StatContext::without_settings(Default::default()),
         )
         .unwrap();
 
@@ -1042,7 +1038,7 @@ mod tests {
         DPhpyOptimizer::collect_materialized_cte_stats(
             &producer,
             &mut cte_stats,
-            &StatContext::default(),
+            &StatContext::without_settings(Default::default()),
         )
         .unwrap();
 

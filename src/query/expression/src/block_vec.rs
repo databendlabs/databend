@@ -34,6 +34,7 @@ use crate::ColumnBuilder;
 use crate::ColumnView;
 use crate::DataBlock;
 use crate::LimitType;
+use crate::Scalar;
 use crate::SortColumnDescription;
 use crate::SortCompare;
 use crate::TakeIndex;
@@ -71,6 +72,7 @@ struct TypeHandler {
     push: fn(&mut ColumnStorage, BlockEntry) -> Result<()>,
     replace: fn(&mut ColumnStorage, usize, BlockEntry),
     take: fn(&ColumnStorage, &ChunkIndex) -> BlockEntry,
+    const_scalar: fn(&ColumnStorage, &ChunkIndex) -> Option<Scalar>,
     sort_indices: fn(&mut SortCompare, &ColumnStorage, &RowLocations),
     require_same_type: bool,
 }
@@ -82,6 +84,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<T>,
             replace: DataBlockVec::replace_typed::<T>,
             take: DataBlockVec::take_typed::<T>,
+            const_scalar: DataBlockVec::const_scalar_typed::<T>,
             sort_indices: DataBlockVec::sort_indices_by_typed::<T>,
             require_same_type,
         }
@@ -93,6 +96,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<NullableType<T>>,
             replace: DataBlockVec::replace_typed::<NullableType<T>>,
             take: DataBlockVec::take_typed::<NullableType<T>>,
+            const_scalar: DataBlockVec::const_scalar_typed::<NullableType<T>>,
             sort_indices: DataBlockVec::sort_indices_by_nullable_typed::<T>,
             require_same_type: true,
         }
@@ -108,6 +112,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<TColumn>,
             replace: DataBlockVec::replace_typed::<TColumn>,
             take: DataBlockVec::take_primitive::<TSimple>,
+            const_scalar: DataBlockVec::const_scalar_typed::<TColumn>,
             sort_indices: DataBlockVec::sort_indices_by_typed::<TColumn>,
             require_same_type: false,
         }
@@ -123,6 +128,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<NullableType<TColumn>>,
             replace: DataBlockVec::replace_typed::<NullableType<TColumn>>,
             take: DataBlockVec::take_nullable_primitive::<TSimple>,
+            const_scalar: DataBlockVec::const_scalar_typed::<NullableType<TColumn>>,
             sort_indices: DataBlockVec::sort_indices_by_nullable_typed::<TColumn>,
             require_same_type: true,
         }
@@ -138,6 +144,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<T>,
             replace: DataBlockVec::replace_typed::<T>,
             take: DataBlockVec::take_binary::<T>,
+            const_scalar: DataBlockVec::const_scalar_typed::<T>,
             sort_indices: DataBlockVec::sort_indices_by_typed::<T>,
             require_same_type: false,
         }
@@ -153,6 +160,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<NullableType<T>>,
             replace: DataBlockVec::replace_typed::<NullableType<T>>,
             take: DataBlockVec::take_nullable_binary::<T>,
+            const_scalar: DataBlockVec::const_scalar_typed::<NullableType<T>>,
             sort_indices: DataBlockVec::sort_indices_by_nullable_typed::<T>,
             require_same_type: true,
         }
@@ -164,6 +172,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<StringType>,
             replace: DataBlockVec::replace_typed::<StringType>,
             take: DataBlockVec::take_string,
+            const_scalar: DataBlockVec::const_scalar_typed::<StringType>,
             sort_indices: DataBlockVec::sort_indices_by_typed::<StringType>,
             require_same_type: false,
         }
@@ -175,6 +184,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<NullableType<StringType>>,
             replace: DataBlockVec::replace_typed::<NullableType<StringType>>,
             take: DataBlockVec::take_nullable_string,
+            const_scalar: DataBlockVec::const_scalar_typed::<NullableType<StringType>>,
             sort_indices: DataBlockVec::sort_indices_by_nullable_typed::<StringType>,
             require_same_type: true,
         }
@@ -186,6 +196,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<BooleanType>,
             replace: DataBlockVec::replace_typed::<BooleanType>,
             take: DataBlockVec::take_boolean,
+            const_scalar: DataBlockVec::const_scalar_typed::<BooleanType>,
             sort_indices: DataBlockVec::sort_indices_by_typed::<BooleanType>,
             require_same_type: false,
         }
@@ -197,6 +208,7 @@ impl TypeHandler {
             push: DataBlockVec::push_typed::<NullableType<BooleanType>>,
             replace: DataBlockVec::replace_typed::<NullableType<BooleanType>>,
             take: DataBlockVec::take_nullable_boolean,
+            const_scalar: DataBlockVec::const_scalar_typed::<NullableType<BooleanType>>,
             sort_indices: DataBlockVec::sort_indices_by_nullable_typed::<BooleanType>,
             require_same_type: true,
         }
@@ -309,7 +321,24 @@ impl DataBlockVec {
             .iter()
             .map(|column| {
                 let handler = Self::handler_for(&column.data_type);
-                (handler.take)(column, indices)
+                // Rows taken only from blocks holding the same constant stay
+                // constant. Aggregate states are stored by their state type,
+                // so they always go through take.
+                let is_state = matches!(
+                    column.data_type.remove_nullable(),
+                    DataType::AggregateState(_)
+                );
+                let scalar = if is_state {
+                    None
+                } else {
+                    (handler.const_scalar)(column, indices)
+                };
+                match scalar {
+                    Some(scalar) => {
+                        BlockEntry::new_const_column(column.data_type.clone(), scalar, num_rows)
+                    }
+                    None => (handler.take)(column, indices),
+                }
             })
             .collect::<Vec<_>>();
 
@@ -561,6 +590,30 @@ impl DataBlockVec {
             .data
             .downcast_ref::<Vec<ColumnView<T>>>()
             .expect("column view storage type mismatch")
+    }
+
+    /// The constant of the taken rows, if every block they are taken from holds
+    /// the same constant in this column.
+    fn const_scalar_typed<T: ValueType>(
+        storage: &ColumnStorage,
+        indices: &ChunkIndex,
+    ) -> Option<Scalar> {
+        let views = Self::column_views::<T>(storage);
+        let mut chunks = indices.iter_chunk();
+        let ColumnView::Const(first, _) = &views[chunks.next()?.block() as usize] else {
+            return None;
+        };
+        for chunk in chunks {
+            match &views[chunk.block() as usize] {
+                ColumnView::Const(scalar, _)
+                    if T::equal(T::to_scalar_ref(scalar), T::to_scalar_ref(first)) => {}
+                _ => return None,
+            }
+        }
+        Some(T::upcast_scalar_with_type(
+            first.clone(),
+            &storage.data_type,
+        ))
     }
 
     fn take_typed<T: ValueType>(storage: &ColumnStorage, indices: &ChunkIndex) -> BlockEntry {

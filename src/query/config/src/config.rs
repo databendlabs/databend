@@ -1914,6 +1914,33 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "true")]
     pub enable_udf_python_script: bool,
 
+    /// Maximum Python scalar UDF processes on this node (0 = effective CPU count).
+    #[clap(long, value_name = "VALUE", default_value = "0")]
+    pub python_udf_max_workers: usize,
+
+    /// Python worker budget shared by a tenant (0 = inherit the node limit).
+    #[clap(long, value_name = "VALUE", default_value = "0")]
+    pub python_udf_max_workers_per_tenant: usize,
+
+    /// Maximum resident Python workers per query (0 = minimum runtimes plus
+    /// max_threads - 1). Concurrent execution always respects max_threads.
+    #[clap(long, value_name = "VALUE", default_value = "0")]
+    pub python_udf_max_workers_per_query: usize,
+
+    /// Bound Python worker admission waiters independently of running queries.
+    #[clap(long, value_name = "VALUE", default_value = "128")]
+    pub python_udf_max_queued_queries: usize,
+
+    #[clap(long, value_name = "VALUE", default_value = "60")]
+    pub python_udf_queue_timeout_secs: u64,
+
+    #[clap(long, value_name = "VALUE", default_value = "300")]
+    pub python_udf_execution_timeout_secs: u64,
+
+    /// Recycle idle extra Python workers after this interval; keep one per runtime.
+    #[clap(long, value_name = "VALUE", default_value = "300")]
+    pub python_udf_worker_idle_timeout_secs: u64,
+
     #[clap(long, value_name = "VALUE", default_value = "true")]
     pub enable_udf_js_script: bool,
 
@@ -3232,12 +3259,12 @@ pub struct CacheConfig {
     )]
     pub disk_cache_inverted_index_lookup_size: u64,
 
-    /// Max bytes of cached inverted-index postings, positions, store, large fieldnorm/fast, and other
-    /// payload pages in memory.
+    /// Total memory budget for inverted-index payload caches: 75% for pages and 25% for
+    /// complete postings/positions components.
     #[clap(
         long = "cache-inverted-index-payload-size",
         value_name = "VALUE",
-        default_value = "8589934592"
+        default_value = "17179869184"
     )]
     pub inverted_index_payload_size: u64,
 
@@ -3265,7 +3292,8 @@ pub struct CacheConfig {
     )]
     pub disk_cache_vector_index_meta_size: u64,
 
-    /// Max bytes of cached vector index filters used. Set it to 0 to disable it.
+    /// Max bytes of decoded vector indexes cached in memory, including retained search workspaces.
+    /// Set it to 0 to disable retention when vector_index_filter_memory_ratio is also 0.
     #[clap(
         long = "cache-vector-index-filter-size",
         value_name = "VALUE",
@@ -3281,7 +3309,8 @@ pub struct CacheConfig {
     )]
     pub disk_cache_vector_index_data_size: u64,
 
-    /// Max percentage of in memory vector index filter cache relative to whole memory. By default it is 0 (disabled).
+    /// Max percentage of memory for decoded vector indexes. A nonzero value overrides
+    /// vector_index_filter_size; 0 uses the byte limit instead.
     #[clap(
         long = "cache-vector-index-filter-memory-ratio",
         value_name = "VALUE",
@@ -3465,7 +3494,7 @@ impl Default for CacheConfig {
             disk_cache_inverted_index_meta_size: 0,
             inverted_index_lookup_size: 8589934592,
             disk_cache_inverted_index_lookup_size: 0,
-            inverted_index_payload_size: 8589934592,
+            inverted_index_payload_size: 17179869184,
             disk_cache_inverted_index_payload_size: 0,
             vector_index_meta_count: 30000,
             disk_cache_vector_index_meta_size: 0,

@@ -24,7 +24,6 @@ use databend_common_sql::optimizer::ir::AsyncSExprVisitor;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::SExprVisitor;
 use databend_common_sql::optimizer::ir::VisitAction;
-use databend_common_sql::plans::AggregateMode;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::plans::Limit;
 use databend_common_sql::plans::Operator;
@@ -100,12 +99,7 @@ fn create_complex_expr() -> SExpr {
     let agg_scalar = builder.bool(true);
     let agg_item = builder.scalar_item(Symbol::new(1), agg_scalar);
 
-    let aggregated = builder.aggregate(
-        filtered_join,
-        vec![group_item],
-        vec![agg_item],
-        AggregateMode::Initial,
-    );
+    let aggregated = builder.aggregate(filtered_join, vec![group_item], vec![agg_item]);
 
     // Add HAVING filter condition (simplified as boolean constant)
     let having_condition = builder.bool(true);

@@ -382,10 +382,9 @@ where A: TypeCheckAdapter
             SpecialFunction::IsRoleInSession { role } => {
                 self.resolve_is_role_in_session(arena, span, role)
             }
-            SpecialFunction::Timezone => self.resolve_special_literal(
-                span,
-                Scalar::String(self.adapter.settings().get_timezone().unwrap()),
-            ),
+            SpecialFunction::Timezone => {
+                self.resolve_special_literal(span, Scalar::String(self.adapter.timezone()?))
+            }
             SpecialFunction::LastQueryId { arg } => {
                 let scalar = match arg {
                     Some((_, arg)) => {
@@ -554,11 +553,8 @@ where A: TypeCheckAdapter
         } else {
             -1
         };
-        self.resolve_special_literal(
-            span,
-            self.adapter
-                .resolve_session_function(SessionFunction::LastQueryId(index as i32))?,
-        )
+        let function = SessionFunction::LastQueryId(index as i32);
+        self.resolve_special_literal(span, self.adapter.resolve_session_function(function)?)
     }
 
     fn resolve_coalesce(
@@ -715,8 +711,10 @@ where A: TypeCheckAdapter
                 ));
             }
         }
-        let nulls_first =
-            nulls_first.unwrap_or_else(|| self.adapter.settings().get_nulls_first()(asc));
+        let nulls_first = match nulls_first {
+            Some(nulls_first) => nulls_first,
+            None => self.adapter.default_nulls_first(asc)?,
+        };
         let func_name = match (asc, nulls_first) {
             (true, true) => "array_sort_asc_null_first",
             (false, true) => "array_sort_desc_null_first",
@@ -790,9 +788,8 @@ where A: TypeCheckAdapter
         if let Ok(arg) = ConstantExpr::try_from(scalar.clone())
             && let Scalar::String(var_name) = arg.value
         {
-            let var_value = self
-                .adapter
-                .resolve_session_function(SessionFunction::Variable(&var_name))?;
+            let function = SessionFunction::Variable(&var_name);
+            let var_value = self.adapter.resolve_session_function(function)?;
             let var_value = shrink_scalar(var_value);
             let data_type = var_value.as_ref().infer_data_type();
             return Ok(Box::new((

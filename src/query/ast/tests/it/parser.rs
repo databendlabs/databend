@@ -16,9 +16,11 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
+use databend_common_ast::ast::AlterTaskOptions;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::LambdaArgument;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::TaskSql;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::parser::expr::*;
@@ -32,6 +34,64 @@ use databend_common_ast::parser::*;
 use goldenfile::Mint;
 use nom::Parser;
 use nom_rule::rule;
+
+#[test]
+fn test_external_access_sql() {
+    for sql in [
+        "CREATE NETWORK RULE video_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('video.example.com:443', 'other.example.com')",
+        "CREATE NETWORK RULE IF NOT EXISTS video_rule TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('video.example.com:443')",
+        "ALTER NETWORK RULE video_rule SET VALUE_LIST = ('other.example.com:8443')",
+        "DROP NETWORK RULE IF EXISTS video_rule",
+        "CREATE EXTERNAL ACCESS INTEGRATION video_access ALLOWED_NETWORK_RULES = (video_rule, other_rule) ENABLED = TRUE",
+        "CREATE EXTERNAL ACCESS INTEGRATION IF NOT EXISTS video_access ALLOWED_NETWORK_RULES = (video_rule) ENABLED = FALSE",
+        "ALTER EXTERNAL ACCESS INTEGRATION video_access SET ENABLED = FALSE",
+        "ALTER EXTERNAL ACCESS INTEGRATION video_access SET ALLOWED_NETWORK_RULES = (other_rule) ENABLED = TRUE",
+        "DROP EXTERNAL ACCESS INTEGRATION IF EXISTS video_access",
+        "CREATE OR REPLACE NETWORK RULE video_rule TYPE = HOST_PORT VALUE_LIST = ('video.example.com:443') MODE = EGRESS",
+        "CREATE NETWORK RULE video_rule MODE = EGRESS TYPE = HOST_PORT VALUE_LIST = ('video.example.com:443')",
+        "CREATE NETWORK RULE video_rule VALUE_LIST = ('video.example.com:443') MODE = EGRESS TYPE = HOST_PORT",
+        "CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION video_access ALLOWED_NETWORK_RULES = (video_rule) ENABLED = TRUE",
+        "CREATE EXTERNAL ACCESS INTEGRATION video_access ENABLED = FALSE ALLOWED_NETWORK_RULES = (video_rule)",
+        "ALTER NETWORK RULE IF EXISTS video_rule SET VALUE_LIST = ('other.example.com')",
+        "ALTER EXTERNAL ACCESS INTEGRATION IF EXISTS video_access SET ENABLED = TRUE ALLOWED_NETWORK_RULES = (video_rule)",
+        "DROP INTEGRATION video_access",
+        "DROP INTEGRATION IF EXISTS video_access",
+        "GRANT USAGE ON INTEGRATION video_access TO ROLE developer",
+        "REVOKE USAGE ON INTEGRATION video_access FROM ROLE developer",
+        "GRANT ALL PRIVILEGES ON INTEGRATION video_access TO ROLE developer",
+        "GRANT USAGE ON INTEGRATION \"QuotedAccess\" TO ROLE developer",
+        "CREATE NETWORK RULE \"QuotedRule\" TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('video.example.com')",
+        "CREATE EXTERNAL ACCESS INTEGRATION \"QuotedAccess\" ALLOWED_NETWORK_RULES = (\"QuotedRule\") ENABLED = TRUE",
+        "CREATE FUNCTION parse_video(STRING) RETURNS VARIANT LANGUAGE python HANDLER = 'parse_video' ADDRESS = 'https://video.example.com' EXTERNAL_ACCESS_INTEGRATIONS = (video_access, other_access)",
+        "ALTER FUNCTION parse_video(STRING) RETURNS VARIANT LANGUAGE python HANDLER = 'parse_video' ADDRESS = 'https://video.example.com' EXTERNAL_ACCESS_INTEGRATIONS = (video_access)",
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) =
+            parse_sql(&tokens, Dialect::PostgreSQL).unwrap_or_else(|e| panic!("{sql}: {e}"));
+        let displayed = stmt.to_string();
+        let tokens = tokenize_sql(&displayed).unwrap();
+        let (reparsed, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+        assert_eq!(displayed, reparsed.to_string());
+    }
+    for sql in [
+        "CREATE NETWORK RULE r TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ()",
+        "CREATE EXTERNAL ACCESS INTEGRATION i ALLOWED_NETWORK_RULES = () ENABLED = TRUE",
+        "ALTER EXTERNAL ACCESS INTEGRATION i SET",
+        "CREATE OR REPLACE NETWORK RULE IF NOT EXISTS r TYPE = HOST_PORT MODE = EGRESS VALUE_LIST = ('example.com')",
+        "CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION IF NOT EXISTS i ALLOWED_NETWORK_RULES = (r) ENABLED = TRUE",
+        "CREATE NETWORK RULE r TYPE = HOST_PORT VALUE_LIST = ('example.com')",
+        "CREATE NETWORK RULE r TYPE = HOST_PORT MODE = EGRESS TYPE = HOST_PORT VALUE_LIST = ('example.com')",
+        "CREATE EXTERNAL ACCESS INTEGRATION i ALLOWED_NETWORK_RULES = (r)",
+        "CREATE EXTERNAL ACCESS INTEGRATION i ENABLED = TRUE",
+        "CREATE EXTERNAL ACCESS INTEGRATION i ENABLED = TRUE ENABLED = FALSE ALLOWED_NETWORK_RULES = (r)",
+        "ALTER EXTERNAL ACCESS INTEGRATION i SET ALLOWED_NETWORK_RULES = (r) ALLOWED_NETWORK_RULES = (r2)",
+        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' ADDRESS = 'https://example.com' EXTERNAL_ACCESS_INTEGRATIONS = ()",
+        "CREATE FUNCTION f(INT) RETURNS INT LANGUAGE python HANDLER = 'f' AS $$return 1$$ EXTERNAL_ACCESS_INTEGRATIONS = (i)",
+    ] {
+        let tokens = tokenize_sql(sql).unwrap();
+        assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err(), "{sql}");
+    }
+}
 
 #[test]
 fn test_set_ttl_and_modify_column_are_distinct() {
@@ -62,9 +122,119 @@ fn test_set_ttl_and_modify_column_are_distinct() {
         assert!(matches!(stmt.action, AlterTableAction::ModifyColumn { .. }));
     }
 
+    let tokens = tokenize_sql("ALTER TABLE t MATERIALIZE TTL").unwrap();
+    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+    let Statement::AlterTable(stmt) = stmt else {
+        panic!("expected ALTER TABLE");
+    };
+    assert!(matches!(stmt.action, AlterTableAction::MaterializeTableTtl));
+    assert_eq!(stmt.to_string(), "ALTER TABLE t MATERIALIZE TTL");
+
+    // MATERIALIZE is not reserved and remains usable as an identifier.
+    let tokens = tokenize_sql("SELECT materialize FROM t").unwrap();
+    assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_ok());
+    let tokens = tokenize_sql("CREATE TABLE materialize (materialize INT)").unwrap();
+    assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_ok());
+
     // MODIFY is exclusively column syntax, not an alias for SET TTL.
     let tokens = tokenize_sql("ALTER TABLE t MODIFY TTL event_time + INTERVAL 7 DAY").unwrap();
     assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err());
+}
+
+#[test]
+fn test_task_block_nested_modify_as() {
+    let expected = TaskSql::ScriptBlock(vec![
+        "SELECT 1".to_string(),
+        "ALTER TASK target_a MODIFY AS SELECT 2".to_string(),
+        "ALTER TASK target_b MODIFY AS SELECT 3".to_string(),
+        "SELECT 4".to_string(),
+    ]);
+
+    for prefix in [
+        "CREATE TASK driver SCHEDULE = 60 MINUTE AS",
+        "ALTER TASK driver MODIFY AS",
+    ] {
+        for terminator in ["", ";"] {
+            let sql = format!(
+                "{prefix} BEGIN
+                    SELECT 1;
+                    ALTER TASK target_a MODIFY AS SELECT 2;
+                    ALTER TASK target_b MODIFY AS SELECT 3;
+                    SELECT 4;
+                END{terminator}"
+            );
+            let tokens = tokenize_sql(&sql).unwrap();
+            let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+            let body = match &stmt {
+                Statement::CreateTask(task) => &task.sql,
+                Statement::AlterTask(task) => match &task.options {
+                    AlterTaskOptions::ModifyAs(body) => body,
+                    _ => panic!("expected MODIFY AS"),
+                },
+                _ => panic!("expected CREATE TASK or ALTER TASK"),
+            };
+            assert_eq!(body, &expected);
+
+            let displayed = stmt.to_string();
+            let tokens = tokenize_sql(&displayed).unwrap();
+            let (reparsed, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+            assert_eq!(reparsed, stmt);
+
+            let TaskSql::ScriptBlock(stmts) = body else {
+                panic!("expected script block");
+            };
+            for (index, stored_sql) in stmts.iter().enumerate() {
+                let tokens = tokenize_sql(stored_sql).unwrap();
+                let (stored_stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+                assert_eq!(stored_stmt.to_string(), *stored_sql);
+                if let Statement::AlterTask(task) = stored_stmt {
+                    assert_eq!(
+                        task.options,
+                        AlterTaskOptions::ModifyAs(TaskSql::SingleStatement(format!(
+                            "SELECT {}",
+                            index + 1
+                        )))
+                    );
+                } else {
+                    assert!(matches!(stored_stmt, Statement::Query(_)));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_task_sql_statement_boundaries() {
+    for prefix in [
+        "CREATE TASK driver SCHEDULE = 60 MINUTE AS",
+        "ALTER TASK driver MODIFY AS",
+    ] {
+        // The top-level parser owns the optional final semicolon. A standalone
+        // BEGIN is still a transaction statement, not a task script block.
+        for body in ["SELECT 1", "SELECT 1;", "BEGIN", "BEGIN;"] {
+            let sql = format!("{prefix} {body}");
+            let tokens = tokenize_sql(&sql).unwrap();
+            assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_ok());
+        }
+
+        for body in [
+            "BEGIN SELECT 1 ALTER TASK target MODIFY AS SELECT 2; END;",
+            "BEGIN SELECT 1; ALTER TASK target MODIFY AS SELECT 2 SELECT 3; END;",
+            "BEGIN SELECT 1; ALTER TASK target MODIFY AS SELECT 2 END;",
+            "BEGIN SELECT 1; ALTER TASK target MODIFY AS SELECT 2;; SELECT 3; END;",
+            "BEGIN SELECT 1; ALTER TASK target MODIFY AS SELECT 2; SELECT 3 END;",
+            "BEGIN SELECT 1; ALTER TASK target MODIFY AS SELECT 2; END; SELECT 3;",
+            "SELECT 1; SELECT 2;",
+            "SELECT 1;;",
+        ] {
+            let sql = format!("{prefix} {body}");
+            let tokens = tokenize_sql(&sql).unwrap();
+            assert!(
+                parse_sql(&tokens, Dialect::PostgreSQL).is_err(),
+                "unexpectedly accepted: {sql}"
+            );
+        }
+    }
 }
 
 fn run_parser<P, O>(file: &mut dyn Write, parser: P, src: &str)
@@ -186,6 +356,8 @@ fn test_statement() {
         r#"create table if not exists a.b (a string, b string, ngram index idx1 (a,b) gram_size=5);"#,
         r#"create table a.b like c.d;"#,
         r#"create table t like t2 engine = memory;"#,
+        r#"create table a.b_clone clone c.d;"#,
+        r#"create table a.b_clone clone c.d at (snapshot => '0123456789abcdef');"#,
         r#"create table if not exists a.b (a int) 's3://testbucket/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
         r#"CREATE WORKER read_env"#,
         r#"CREATE WORKER IF NOT EXISTS read_env"#,
@@ -406,6 +578,8 @@ SELECT * from s;"#,
         r#"ALTER TABLE t1 swap with t2;"#,
         r#"ALTER TABLE t refresh cache;"#,
         r#"ALTER TABLE t COMMENT='t1-commnet';"#, // typos:disable-line
+        r#"ALTER TABLE t DROP PARTITION KEY;"#,
+        r#"ALTER TABLE IF EXISTS db.t DROP PARTITION KEY;"#,
         r#"ALTER TABLE t DROP CLUSTER KEY;"#,
         r#"ALTER TABLE t SET TTL event_time + INTERVAL 30 DAY;"#,
         r#"ALTER TABLE t SET TTL event_time + INTERVAL 7 DAY;"#,

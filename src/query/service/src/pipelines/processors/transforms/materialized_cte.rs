@@ -245,6 +245,9 @@ impl MaterializedCteSink {
             for sender in self.senders.iter() {
                 sender.close();
             }
+            // Closing keeps the queued payloads alive while any sender exists, so a
+            // consumer that stopped early would hold them until the query ends.
+            self.senders.clear();
             self.closed = true;
         }
     }
@@ -269,6 +272,10 @@ impl Processor for MaterializedCteSink {
     fn event(&mut self) -> Result<Event> {
         self.senders.retain(|sender| !sender.is_closed());
         if self.senders.is_empty() {
+            // Every consumer is gone, nothing buffered will be sent.
+            self.pending_payloads.clear();
+            self.spilling_blocks.clear();
+            self.input_data = None;
             self.input.finish();
             return Ok(Event::Finished);
         }

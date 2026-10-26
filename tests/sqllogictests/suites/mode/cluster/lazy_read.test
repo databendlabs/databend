@@ -47,11 +47,11 @@ RowFetch
                 ├── table: default.default.t_lazy
                 ├── scan id: 0
                 ├── output columns: [a (#0), _row_id (#7)]
-                ├── read rows: 200
+                ├── read rows: 300
                 ├── read size: < 1 KiB
                 ├── partitions total: 3
-                ├── partitions scanned: 2
-                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>, topn pruning: 3 to 2 cost: <slt:ignore>>]
+                ├── partitions scanned: 3
+                ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
                 ├── push downs: [filters: [], limit: 2]
                 └── estimated rows: 300.00
 
@@ -61,12 +61,12 @@ explain select * from t_lazy where a < 100 limit 2
 RowFetch
 ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
 ├── columns to fetch: [b, c, d, e]
-├── estimated rows: 0.00
+├── estimated rows: 2.00
 └── Limit
     ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
     ├── limit: 2
     ├── offset: 0
-    ├── estimated rows: 0.00
+    ├── estimated rows: 2.00
     └── Exchange
         ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
         ├── exchange type: Merge
@@ -74,7 +74,7 @@ RowFetch
             ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
             ├── limit: 2
             ├── offset: 0
-            ├── estimated rows: 0.00
+            ├── estimated rows: 2.00
             └── TableScan
                 ├── table: default.default.t_lazy
                 ├── scan id: 0
@@ -85,7 +85,7 @@ RowFetch
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                 ├── push downs: [filters: [t_lazy.a (#0) < 100], limit: 2]
-                └── estimated rows: 0.00
+                └── estimated rows: 150.00
 
 statement ok
 set lazy_read_threshold=0
@@ -112,11 +112,11 @@ TopN(Final)
             ├── table: default.default.t_lazy
             ├── scan id: 0
             ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
-            ├── read rows: 200
-            ├── read size: 1.26 KiB
+            ├── read rows: 300
+            ├── read size: 1.73 KiB
             ├── partitions total: 3
-            ├── partitions scanned: 2
-            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>, topn pruning: 3 to 2 cost: <slt:ignore>>]
+            ├── partitions scanned: 3
+            ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: 2]
             └── estimated rows: 300.00
 
@@ -127,7 +127,7 @@ Limit
 ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
 ├── limit: 2
 ├── offset: 0
-├── estimated rows: 0.00
+├── estimated rows: 2.00
 └── Exchange
     ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
     ├── exchange type: Merge
@@ -135,7 +135,7 @@ Limit
         ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
         ├── limit: 2
         ├── offset: 0
-        ├── estimated rows: 0.00
+        ├── estimated rows: 2.00
         └── TableScan
             ├── table: default.default.t_lazy
             ├── scan id: 0
@@ -146,7 +146,7 @@ Limit
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <read cost: <slt:ignore>, decompress cost: <slt:ignore>, range pruning: 3 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
             ├── push downs: [filters: [t_lazy.a (#0) < 100], limit: 2]
-            └── estimated rows: 0.00
+            └── estimated rows: 150.00
 
 query T
 explain select * from t_lazy where true limit 2;

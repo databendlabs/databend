@@ -35,6 +35,12 @@ pub trait TableContextCte: Send + Sync {
 }
 
 pub trait TableContextStream: Send + Sync {
+    /// The stream instance already bound in this query, if any. This must not
+    /// resolve metadata: fresh workers still need to validate shared sources.
+    fn get_cached_stream(&self, _table_id: u64) -> Option<Arc<dyn Table>> {
+        None
+    }
+
     fn add_streams_ref(&self, _catalog: &str, _database: &str, _stream: &str, _consume: bool) {
         unimplemented!()
     }

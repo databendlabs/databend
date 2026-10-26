@@ -22,7 +22,17 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::CreateTableCloneMeta;
+use databend_common_meta_app::schema::CreateTableIndexReq;
+use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::LeastVisibleTime;
+use databend_common_meta_app::schema::OPT_KEY_CLONE_GROUP_ID;
+use databend_common_meta_app::schema::TableIndexType;
+use databend_common_meta_app::schema::TableLvtCheck;
+use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_sql::plans::VacuumTablesPlan;
 use databend_common_storage::FaultInjection;
@@ -30,12 +40,15 @@ use databend_common_storage::FaultKind;
 use databend_common_storage::FaultOp;
 use databend_common_storage::FaultRule;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::io::InvertedIndexUserDictionary;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::SnapshotHistoryReader;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_enterprise_query::storages::fuse::operations::vacuum_table_v2::do_vacuum2;
 use databend_enterprise_query::table_ref::RealTableRefHandler;
 use databend_enterprise_query::test_kits::context::EESetup;
+use databend_meta_client::types::MatchSeq;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::VacuumTablesInterpreter;
 use databend_query::sessions::QueryContext;
@@ -43,8 +56,16 @@ use databend_query::sessions::TableContext;
 use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::execute_command;
+use databend_query::test_kits::query_count;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::dedup_file_locations;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::try_extract_uuid_v7_timestamp_from_path;
+use databend_storages_common_table_meta::table::INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use futures::TryStreamExt;
 
 async fn table_storage_files(
@@ -124,6 +145,81 @@ async fn test_vacuum_table_command() -> anyhow::Result<()> {
         .await?;
     assert_only_current_snapshot_files(&ctx, storage_root, database, table).await?;
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum2_protects_dictionaries_from_refreshed_owner() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture.enable_experimental_clone_table()?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    for sql in [
+        format!("CREATE TABLE {db}.dict_source(c STRING)"),
+        format!("INSERT INTO {db}.dict_source VALUES ('old')"),
+        format!("CREATE TABLE {db}.dict_clone CLONE {db}.dict_source"),
+    ] {
+        fixture.execute_command(&sql).await?;
+    }
+
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_catalog("default").await?;
+    for name in ["dict_source", "dict_clone"] {
+        // Keep the pre-DDL object: VACUUM must refresh both its GC root and the
+        // dictionary references, for an ordinary owner as well as a clone.
+        let stale = catalog.get_table(&ctx.get_tenant(), &db, name).await?;
+        let fuse = FuseTable::try_from_table(stale.as_ref())?;
+        let location = InvertedIndexUserDictionary::try_new(b"AI,noun,AI\n".to_vec())?
+            .upload(fuse)
+            .await?;
+        catalog
+            .create_table_index(CreateTableIndexReq {
+                create_option: CreateOption::Create,
+                table_id: stale.get_id(),
+                tenant: ctx.get_tenant(),
+                name: "japanese_idx".into(),
+                column_ids: vec![0],
+                sync_creation: false,
+                options: [
+                    ("tokenizer".to_string(), "japanese".to_string()),
+                    (
+                        INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION.to_string(),
+                        location.clone(),
+                    ),
+                ]
+                .into(),
+                index_type: TableIndexType::Inverted,
+            })
+            .await?;
+        fixture
+            .execute_command(&format!("INSERT INTO {db}.{name} VALUES ('new')"))
+            .await?;
+        let latest = catalog.get_table(&ctx.get_tenant(), &db, name).await?;
+        let snapshot = FuseTable::try_from_table(latest.as_ref())?
+            .read_table_snapshot()
+            .await?
+            .unwrap();
+        assert!(
+            snapshot.timestamp.unwrap()
+                > try_extract_uuid_v7_timestamp_from_path(&location)?.unwrap()
+        );
+
+        do_vacuum2(stale.as_ref(), ctx.clone(), true).await?;
+        let latest = catalog.get_table(&ctx.get_tenant(), &db, name).await?;
+        assert_eq!(
+            latest.get_table_info().meta.indexes["japanese_idx"].options
+                [INVERTED_INDEX_OPT_USER_DICTIONARY_LOCATION],
+            location
+        );
+        assert!(
+            fuse.get_operator_ref().exists(&location).await?,
+            "VACUUM removed the active dictionary of {name}: {location}"
+        );
+    }
     Ok(())
 }
 
@@ -534,7 +630,11 @@ async fn test_vacuum2_respect_flash_back_selects_lvt_snapshot() -> anyhow::Resul
     // Without flashback protection, object listing uses S4 as the anchor and
     // selects its predecessor S3, which belongs to the abandoned branch.
     let selection = fuse_table
-        .prepare_snapshot_gc_selection(&table_ctx, false)
+        .prepare_snapshot_gc_selection(
+            &table_ctx,
+            false,
+            &LeastVisibleTime::new(lvt_snapshot.timestamp.unwrap()),
+        )
         .await?
         .expect("S3 should be selected as the GC root");
     assert_eq!(selection.gc_root.snapshot_id, abandoned_gc_root.snapshot_id);
@@ -542,7 +642,11 @@ async fn test_vacuum2_respect_flash_back_selects_lvt_snapshot() -> anyhow::Resul
     // With flashback protection, vacuum walks the current committed chain from
     // S2. It selects S2 and does not use a snapshot from the abandoned branch.
     let selection = fuse_table
-        .prepare_snapshot_gc_selection(&table_ctx, true)
+        .prepare_snapshot_gc_selection(
+            &table_ctx,
+            true,
+            &LeastVisibleTime::new(lvt_snapshot.timestamp.unwrap()),
+        )
         .await?
         .expect("S2 should be selected as the GC root");
     assert_eq!(
@@ -550,7 +654,827 @@ async fn test_vacuum2_respect_flash_back_selects_lvt_snapshot() -> anyhow::Resul
         flashback_snapshot.snapshot_id
     );
     assert_eq!(selection.gc_root.timestamp, flashback_snapshot.timestamp);
+    Ok(())
+}
 
+async fn inverted_index_locations(table: &FuseTable) -> Result<HashSet<String>> {
+    let Some(snapshot) = table.read_table_snapshot().await? else {
+        return Ok(HashSet::new());
+    };
+    let reader = MetaReaders::segment_info_reader(table.get_operator(), table.schema());
+    let mut locations = HashSet::new();
+    for (location, ver) in &snapshot.segments {
+        let segment = reader
+            .read(&LoadParams {
+                location: location.clone(),
+                len_hint: None,
+                ver: *ver,
+                put_cache: false,
+            })
+            .await?;
+        for block in segment.block_metas()? {
+            locations.extend(
+                block
+                    .inverted_index_metas
+                    .as_deref()
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|meta| meta.location.0.clone()),
+            );
+        }
+    }
+    Ok(locations)
+}
+
+async fn setup_clone_gc_test(source: &str, cloned: &str) -> anyhow::Result<TestFixture> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture.enable_experimental_clone_table()?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    for sql in [
+        format!("CREATE TABLE {db}.{source}(c INT)"),
+        format!("INSERT INTO {db}.{source} VALUES (1)"),
+        format!("CREATE TABLE {db}.{cloned} CLONE {db}.{source}"),
+    ] {
+        fixture.execute_command(&sql).await?;
+    }
+    Ok(fixture)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum2_preserves_clone_only_inverted_index() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture.enable_experimental_clone_table()?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    for sql in [
+        format!("CREATE TABLE {db}.index_source(c STRING)"),
+        format!("INSERT INTO {db}.index_source VALUES ('clone-only token')"),
+        format!("CREATE INVERTED INDEX idx ON {db}.index_source(c)"),
+        format!("REFRESH INVERTED INDEX idx ON {db}.index_source"),
+        format!("CREATE TABLE {db}.index_clone CLONE {db}.index_source"),
+    ] {
+        fixture.execute_command(&sql).await?;
+    }
+
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let source = catalog.get_table(&tenant, &db, "index_source").await?;
+    let source = FuseTable::try_from_table(source.as_ref())?;
+    let index_locations = inverted_index_locations(source).await?;
+    assert!(!index_locations.is_empty());
+    for sql in [
+        format!("TRUNCATE TABLE {db}.index_source"),
+        format!("INSERT INTO {db}.index_source VALUES ('source replacement')"),
+        format!("VACUUM TABLE {db}.index_source"),
+    ] {
+        fixture.execute_command(&sql).await?;
+    }
+    for location in &index_locations {
+        assert!(
+            source.get_operator_ref().exists(location).await?,
+            "source VACUUM removed clone-owned inverted index {location}"
+        );
+    }
+    fixture
+        .execute_command(&format!("VACUUM TABLE {db}.index_clone"))
+        .await?;
+    for location in &index_locations {
+        assert!(
+            source.get_operator_ref().exists(location).await?,
+            "clone VACUUM crossed into the source inverted-index prefix: {location}"
+        );
+    }
+
+    // The dedicated dropped-index cleanup bypasses VACUUM TABLE's segment protection. It must
+    // defer the entire index version while a clone can still use it, including its retry marker.
+    fixture
+        .execute_command(&format!("DROP INVERTED INDEX idx ON {db}.index_source"))
+        .await?;
+    let cleanup =
+        format!("SELECT count() FROM fuse_vacuum_drop_inverted_index('{db}', 'index_source')");
+    fixture.execute_command(&cleanup).await?;
+    assert!(
+        catalog
+            .list_marked_deleted_table_indexes(&tenant, Some(source.get_id()))
+            .await?
+            .table_indexes
+            .contains_key(&source.get_id())
+    );
+    for location in &index_locations {
+        assert!(source.get_operator_ref().exists(location).await?);
+    }
+
+    // SQLLogic covers same-name replacement and transitive references. Here only check the
+    // physical files and retry marker after the last definition is dropped on a still-live clone.
+    fixture
+        .execute_command(&format!("DROP INVERTED INDEX idx ON {db}.index_clone"))
+        .await?;
+    fixture.execute_command(&cleanup).await?;
+    for location in &index_locations {
+        assert!(!source.get_operator_ref().exists(location).await?);
+    }
+    assert!(
+        catalog
+            .list_marked_deleted_table_indexes(&tenant, Some(source.get_id()))
+            .await?
+            .table_indexes
+            .is_empty()
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_first_clone_invalidates_pre_group_vacuum_after_flashback() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture.enable_experimental_clone_table()?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    fixture
+        .execute_command(&format!("CREATE TABLE {db}.source(c INT) AS SELECT 1"))
+        .await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let first = catalog.get_table(&tenant, &db, "source").await?;
+    let first = FuseTable::try_from_table(first.as_ref())?;
+    let first_location = first.snapshot_loc().unwrap();
+    let first_snapshot = first.read_table_snapshot().await?.unwrap();
+    fixture
+        .execute_command(&format!("INSERT INTO {db}.source VALUES (2)"))
+        .await?;
+
+    // Capture a real owner selection and mark while the source has no clone group or LVT.
+    let source = catalog.get_table(&tenant, &db, "source").await?;
+    let source = FuseTable::try_from_table(source.as_ref())?;
+    let ident = LeastVisibleTimeIdent::new(&tenant, source.get_id());
+    assert!(catalog.get_table_lvt(&ident).await?.is_none());
+    let selection = source
+        .prepare_snapshot_gc_selection(
+            &(ctx.clone() as Arc<dyn TableContext>),
+            true,
+            &LeastVisibleTime::unbounded(),
+        )
+        .await?
+        .unwrap();
+    assert!(selection.snapshots_to_gc.contains(&first_location));
+    let mut segments = HashSet::new();
+    let mut mark = source
+        .mark_clone_descendants(ctx.clone(), &catalog, &mut segments, true, 1, |_| {})
+        .await?;
+    assert!(mark.descendant_ids.is_empty());
+    assert!(mark.lvt_updates.is_empty());
+    fixture
+        .execute_command(&format!(
+            "ALTER TABLE {db}.source FLASHBACK TO (SNAPSHOT => '{}')",
+            first_snapshot.snapshot_id.simple()
+        ))
+        .await?;
+    assert!(catalog.get_table_lvt(&ident).await?.is_none());
+    fixture
+        .execute_command(&format!("CREATE TABLE {db}.child CLONE {db}.source"))
+        .await?;
+
+    // An installed clone's rescan protects shared data, but its local anchor does not pin the
+    // owner's historical snapshot file. First entry must invalidate the pre-group owner mark.
+    source
+        .mark_new_clone_descendants(ctx.clone(), &catalog, &mut mark, &mut segments, 1, |_| {})
+        .await?;
+    assert_eq!(mark.descendant_ids.len(), 1);
+    assert!(
+        first_snapshot
+            .segments
+            .iter()
+            .all(|segment| segments.contains(segment))
+    );
+    assert!(!mark.protected_snapshots.contains(&first_location));
+    assert!(
+        catalog
+            .get_table_lvt(&ident)
+            .await?
+            .unwrap()
+            .data
+            .is_unbounded()
+    );
+    assert!(
+        !catalog
+            .set_table_lvts(&tenant, &[(source.get_id(), 0, selection.gc_root_lvt)])
+            .await?
+    );
+    let current = catalog.get_table(&tenant, &db, "source").await?;
+    assert_eq!(
+        FuseTable::try_from_table(current.as_ref())?.snapshot_loc(),
+        Some(first_location.clone())
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_staged_clone_pins_only_selected_root_during_vacuum() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+    fixture.enable_experimental_clone_table()?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(0)?;
+    fixture.create_default_database().await?;
+    let db = fixture.default_db_name();
+    fixture
+        .execute_command(&format!("CREATE TABLE {db}.source(c INT) AS SELECT 1"))
+        .await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let source = catalog.get_table(&tenant, &db, "source").await?;
+    let obsolete = FuseTable::try_from_table(source.as_ref())?
+        .snapshot_loc()
+        .unwrap();
+    for sql in [
+        format!("TRUNCATE TABLE {db}.source"),
+        format!("INSERT INTO {db}.source VALUES (2)"),
+    ] {
+        fixture.execute_command(&sql).await?;
+    }
+    let source = catalog.get_table(&tenant, &db, "source").await?;
+    let fuse = FuseTable::try_from_table(source.as_ref())?;
+    let pinned_location = fuse.snapshot_loc().unwrap();
+    let pinned = fuse.read_table_snapshot().await?.unwrap();
+    let mut meta = fuse
+        .build_clone_table_meta(
+            ctx.clone(),
+            source.options()[OPT_KEY_DATABASE_ID].clone(),
+            Some(&pinned),
+        )
+        .await?;
+    meta.drop_on = Some(chrono::Utc::now());
+    meta.options.insert(
+        OPT_KEY_CLONE_GROUP_ID.to_string(),
+        source.get_id().to_string(),
+    );
+    meta.options.insert(
+        OPT_KEY_SNAPSHOT_LOCATION.to_string(),
+        pinned_location.clone(),
+    );
+    // Stop after the staged transaction, as if anchor creation failed or the node exited.
+    let staged = catalog
+        .create_table(CreateTableReq {
+            create_option: CreateOption::Create,
+            catalog_name: None,
+            name_ident: TableNameIdent::new(&tenant, &db, "failed_clone"),
+            table_meta: meta,
+            source_table_option: None,
+            as_dropped: true,
+            clone: Some(CreateTableCloneMeta {
+                source_table_id: source.get_id(),
+                source_table_seq: MatchSeq::Exact(source.get_table_info().ident.seq),
+                snapshot_timestamp: pinned.timestamp.unwrap(),
+            }),
+            materialized_view: None,
+            table_properties: None,
+            table_partition: None,
+        })
+        .await?;
+    let mut pinned_files = vec![pinned_location.clone()];
+    let reader = MetaReaders::segment_info_reader(fuse.get_operator(), fuse.schema());
+    for (location, ver) in &pinned.segments {
+        let segment = reader
+            .read(&LoadParams {
+                location: location.clone(),
+                len_hint: None,
+                ver: *ver,
+                put_cache: false,
+            })
+            .await?;
+        pinned_files.push(location.clone());
+        pinned_files.extend(
+            segment
+                .block_metas()?
+                .iter()
+                .map(|block| block.location.0.clone()),
+        );
+    }
+    // Advancing the source again makes each sweep exercise the placeholder, including its head file.
+    for value in [3, 4] {
+        fixture
+            .execute_command(&format!("TRUNCATE TABLE {db}.source"))
+            .await?;
+        let truncated = catalog.get_table(&tenant, &db, "source").await?;
+        let obsolete_this_round = FuseTable::try_from_table(truncated.as_ref())?
+            .snapshot_loc()
+            .unwrap();
+        assert_ne!(obsolete_this_round, pinned_location);
+        fixture
+            .execute_command(&format!("INSERT INTO {db}.source VALUES ({value})"))
+            .await?;
+        let current = catalog.get_table(&tenant, &db, "source").await?;
+        let current = FuseTable::try_from_table(current.as_ref())?;
+        let mark = current
+            .mark_clone_descendants(ctx.clone(), &catalog, &mut HashSet::new(), true, 1, |_| {})
+            .await?;
+        assert!(
+            mark.lvt_updates.is_empty(),
+            "a placeholder must not advance its LVT"
+        );
+        assert!(mark.protected_snapshots.contains(&pinned_location));
+        let referenced = current
+            .get_snapshot_referenced_segments(ctx.clone(), |_| {})
+            .await?
+            .unwrap();
+        assert!(
+            pinned
+                .segments
+                .iter()
+                .all(|segment| referenced.contains(segment))
+        );
+        assert!(fuse.get_operator_ref().exists(&obsolete_this_round).await?);
+        do_vacuum2(current, ctx.clone(), true).await?;
+        assert!(
+            !fuse.get_operator_ref().exists(&obsolete_this_round).await?,
+            "VACUUM must reclaim the obsolete snapshot in round {value}"
+        );
+        assert!(
+            !fuse.get_operator_ref().exists(&obsolete).await?,
+            "VACUUM must actually reclaim history"
+        );
+        for path in &pinned_files {
+            assert!(
+                fuse.get_operator_ref().exists(path).await?,
+                "removed placeholder reference {path}"
+            );
+        }
+    }
+    assert!(
+        catalog
+            .get_table_lvt(&LeastVisibleTimeIdent::new(&tenant, staged.table_id))
+            .await?
+            .is_none()
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum2_rejects_published_clone_non_local_head() -> anyhow::Result<()> {
+    let fixture = setup_clone_gc_test("source", "owner").await?;
+    let db = fixture.default_db_name();
+    for sql in [
+        format!("CREATE TABLE {db}.leaf CLONE {db}.owner"),
+        format!("TRUNCATE TABLE {db}.owner"),
+        format!("INSERT INTO {db}.owner VALUES (2)"),
+    ] {
+        fixture.execute_command(&sql).await?;
+    }
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let source = catalog.get_table(&tenant, &db, "source").await?;
+    let source_location = FuseTable::try_from_table(source.as_ref())?
+        .snapshot_loc()
+        .unwrap();
+    let (prefix, name) = source_location.rsplit_once('/').unwrap();
+    let missing_location = format!("{prefix}/missing_{name}");
+    let owner = catalog.get_table(&tenant, &db, "owner").await?;
+    let leaf = catalog.get_table(&tenant, &db, "leaf").await?;
+    let expected_prefix = FuseTable::try_from_table(leaf.as_ref())?
+        .meta_location_generator()
+        .snapshot_location_prefix()
+        .to_string();
+    let ids = [source.get_id(), owner.get_id(), leaf.get_id()];
+    let observed_lvts = catalog.mget_table_lvts(&tenant, &ids).await?;
+    let mut files = Vec::new();
+    for name in ["source", "owner", "leaf"] {
+        files.extend(table_storage_files(&ctx, fixture.storage_root(), &db, name).await?);
+    }
+    let operator = FuseTable::try_from_table(source.as_ref())?.get_operator();
+    assert!(operator.exists(&source_location).await?);
+    assert!(!operator.exists(&missing_location).await?);
+
+    // The owner is not the clone-group root. Both IDs must be reported accurately, without
+    // relying on the owner-derived TableInfo.desc used to instantiate each descendant.
+    assert_ne!(source.get_id(), owner.get_id());
+    for location in [source_location, missing_location] {
+        let leaf = catalog.get_table(&tenant, &db, "leaf").await?;
+        let info = leaf.get_table_info();
+        let mut meta = info.meta.clone();
+        assert!(meta.drop_on.is_none());
+        meta.options
+            .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), location.clone());
+        catalog
+            .update_single_table_meta(
+                &tenant,
+                UpdateTableMetaReq {
+                    table_id: leaf.get_id(),
+                    seq: MatchSeq::Exact(info.ident.seq),
+                    new_table_meta: meta,
+                    base_snapshot_location: FuseTable::try_from_table(leaf.as_ref())?
+                        .snapshot_loc(),
+                    lvt_check: None,
+                },
+                info,
+            )
+            .await?;
+        let owner = catalog.get_table(&tenant, &db, "owner").await?;
+        let error = do_vacuum2(
+            FuseTable::try_from_table(owner.as_ref())?,
+            fixture.new_query_ctx().await?,
+            true,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.code(), ErrorCode::INTERNAL);
+        for expected in [
+            format!("clone descendant {}", leaf.get_id()),
+            format!("clone group {}", source.get_id()),
+            format!("VACUUM of table {}", owner.get_id()),
+            format!("head: {location}"),
+            format!("expected snapshot prefix: {expected_prefix}"),
+        ] {
+            assert!(error.message().contains(&expected), "{error}");
+        }
+        // Even a missing non-local head must fail before object IO, LVT publication or sweep.
+        assert_eq!(catalog.mget_table_lvts(&tenant, &ids).await?, observed_lvts);
+        for path in &files {
+            assert!(path.exists(), "VACUUM removed {}", path.display());
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_clone_tag_scan_after_lvt_publication() -> anyhow::Result<()> {
+    let fixture = setup_clone_gc_test("tag_source", "tag_clone").await?;
+    let database = fixture.default_db_name();
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let cloned = catalog.get_table(&tenant, &database, "tag_clone").await?;
+    let cloned = FuseTable::try_from_table(cloned.as_ref())?;
+    let tag_location = cloned.snapshot_loc().unwrap();
+    let tag_snapshot = cloned.read_table_snapshot().await?.unwrap();
+    fixture
+        .execute_command(&format!("TRUNCATE TABLE {database}.tag_clone"))
+        .await?;
+    // Descendant marking intentionally ignores a VACUUM caller's session retention. Use a
+    // table-level policy so this test reaches the late-tag race with only the empty head marked.
+    fixture
+        .execute_command(&format!(
+            "ALTER TABLE {database}.tag_clone SET OPTIONS(\
+             data_retention_num_snapshots_to_keep = 1)"
+        ))
+        .await?;
+
+    let source = catalog.get_table(&tenant, &database, "tag_source").await?;
+    let source = FuseTable::try_from_table(source.as_ref())?;
+    let mut segments = HashSet::new();
+    let mut mark = source
+        .mark_clone_descendants(ctx.clone(), &catalog, &mut segments, true, 1, |_| {})
+        .await?;
+    assert!(
+        segments.is_empty(),
+        "the marked head has no tag-only segments"
+    );
+
+    // Deterministically publish a historical tag between root mark and LVT publication.
+    let cloned = catalog.get_table(&tenant, &database, "tag_clone").await?;
+    catalog
+        .create_table_tag(CreateTableTagReq {
+            tenant: tenant.clone(),
+            table_id: cloned.get_id(),
+            seq: MatchSeq::Exact(cloned.get_table_info().ident.seq),
+            tag_name: "late_tag".to_string(),
+            snapshot_loc: tag_location.clone(),
+            expire_at: None,
+            lvt_check: TableLvtCheck {
+                time: tag_snapshot.timestamp.unwrap(),
+                touch: false,
+            },
+        })
+        .await?;
+    // A staged clone created in this window must protect both the selected snapshot file and
+    // its segments. Leave it without an anchor so the rescan exercises the placeholder too.
+    let mut meta = FuseTable::try_from_table(cloned.as_ref())?
+        .build_clone_table_meta(
+            ctx.clone(),
+            cloned.options()[OPT_KEY_DATABASE_ID].clone(),
+            Some(&tag_snapshot),
+        )
+        .await?;
+    meta.drop_on = Some(chrono::Utc::now());
+    meta.options
+        .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), tag_location.clone());
+    catalog
+        .create_table(CreateTableReq {
+            create_option: CreateOption::Create,
+            catalog_name: None,
+            name_ident: TableNameIdent::new(&tenant, &database, "late_clone"),
+            table_meta: meta,
+            source_table_option: None,
+            as_dropped: true,
+            clone: Some(CreateTableCloneMeta {
+                source_table_id: cloned.get_id(),
+                source_table_seq: MatchSeq::Exact(cloned.get_table_info().ident.seq),
+                snapshot_timestamp: tag_snapshot.timestamp.unwrap(),
+            }),
+            materialized_view: None,
+            table_properties: None,
+            table_partition: None,
+        })
+        .await?;
+    // Neither creation touches the head fence, so publication succeeds. The post-publication
+    // scans must protect both even though the snapshot now predates the published lower bound.
+    assert!(catalog.set_table_lvts(&tenant, &mark.lvt_updates).await?);
+    assert!(
+        catalog
+            .get_table_lvt(&LeastVisibleTimeIdent::new(&tenant, cloned.get_id()))
+            .await?
+            .unwrap()
+            .data
+            .time
+            > tag_snapshot.timestamp.unwrap()
+    );
+    let expected = tag_snapshot
+        .segments
+        .iter()
+        .cloned()
+        .collect::<HashSet<_>>();
+    source
+        .mark_new_clone_descendants(ctx.clone(), &catalog, &mut mark, &mut segments, 1, |_| {})
+        .await?;
+    assert_eq!(
+        segments, expected,
+        "the late clone's placeholder must be protected"
+    );
+    assert!(mark.protected_snapshots.contains(&tag_location));
+    assert_eq!(mark.descendant_ids.len(), 2);
+    let mut tag_segments = HashSet::new();
+    source
+        .extend_clone_descendant_tag_segments(&catalog, &mark.descendant_ids, 1, &mut tag_segments)
+        .await?;
+    assert_eq!(tag_segments, expected);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_clone_forward_commit_keeps_gc_mark_valid() -> anyhow::Result<()> {
+    let fixture = setup_clone_gc_test("forward_source", "forward_clone").await?;
+    let db = fixture.default_db_name();
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let cloned = catalog.get_table(&tenant, &db, "forward_clone").await?;
+    let clone_id = cloned.get_id();
+    let clone_lvt_ident = LeastVisibleTimeIdent::new(&tenant, clone_id);
+
+    fixture
+        .execute_command(&format!(
+            "ALTER TABLE {db}.forward_clone SET OPTIONS(\
+             data_retention_num_snapshots_to_keep = 1)"
+        ))
+        .await?;
+    fixture
+        .execute_command(&format!("TRUNCATE TABLE {db}.forward_clone"))
+        .await?;
+
+    let source = catalog.get_table(&tenant, &db, "forward_source").await?;
+    let source = FuseTable::try_from_table(source.as_ref())?;
+    let mut protected = HashSet::new();
+    let marks = source
+        .mark_clone_descendants(ctx.clone(), &catalog, &mut protected, true, 1, |_| {})
+        .await?;
+    assert!(protected.is_empty());
+    let mark = marks
+        .lvt_updates
+        .iter()
+        .find(|(table_id, _, _)| *table_id == clone_id)
+        .expect("clone mark must be present");
+
+    // A forward commit after mark creates only objects newer than the selected GC boundary. It
+    // must not touch the LVT sequence or force a long-running clone-group scan to restart.
+    fixture
+        .execute_command(&format!("INSERT INTO {db}.forward_clone VALUES (2)"))
+        .await?;
+    assert!(catalog.get_table_lvt(&clone_lvt_ident).await?.is_none());
+    assert!(catalog.set_table_lvts(&tenant, &marks.lvt_updates).await?);
+
+    let cloned = catalog.get_table(&tenant, &db, "forward_clone").await?;
+    let cloned = FuseTable::try_from_table(cloned.as_ref())?;
+    let head = cloned
+        .read_table_snapshot()
+        .await?
+        .expect("forward clone must have a head");
+    assert!(head.timestamp.unwrap() > mark.2.time);
+    let segment_cutoff = FuseTable::vacuum2_until_prefix(
+        cloned.meta_location_generator().segment_location_prefix(),
+        mark.2.time,
+    );
+    assert!(
+        head.segments
+            .iter()
+            .all(|(location, _)| location >= &segment_cutoff),
+        "forward-commit segments must be outside the marked sweep range"
+    );
+    assert_eq!(
+        query_count(
+            fixture
+                .execute_query(&format!(
+                    "SELECT count() FROM {db}.forward_clone WHERE c = 2"
+                ))
+                .await?
+        )
+        .await?,
+        1
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_clone_flashback_before_publication_invalidates_mark() -> anyhow::Result<()> {
+    let fixture = setup_clone_gc_test("fence_source", "fence_clone").await?;
+    let db = fixture.default_db_name();
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let source = catalog.get_table(&tenant, &db, "fence_source").await?;
+    let source = FuseTable::try_from_table(source.as_ref())?;
+    let cloned = catalog.get_table(&tenant, &db, "fence_clone").await?;
+    let ident = LeastVisibleTimeIdent::new(&tenant, cloned.get_id());
+    let old = FuseTable::try_from_table(cloned.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+    let flashback = format!(
+        "ALTER TABLE {db}.fence_clone FLASHBACK TO (SNAPSHOT => '{}')",
+        old.snapshot_id.simple()
+    );
+    for sql in [
+        format!("TRUNCATE TABLE {db}.fence_clone"),
+        format!(
+            "ALTER TABLE {db}.fence_clone SET OPTIONS(\
+             data_retention_num_snapshots_to_keep = 1)"
+        ),
+    ] {
+        fixture.execute_command(&sql).await?;
+    }
+
+    let mut segments = HashSet::new();
+    let marks = source
+        .mark_clone_descendants(ctx.clone(), &catalog, &mut segments, true, 1, |_| {})
+        .await?;
+    assert!(segments.is_empty());
+    assert_eq!(marks.lvt_updates[0].1, 0);
+    fixture.execute_command(&flashback).await?;
+    let first = catalog.get_table_lvt(&ident).await?.unwrap();
+    assert!(first.data.is_unbounded());
+    assert!(!catalog.set_table_lvts(&tenant, &marks.lvt_updates).await?);
+
+    // Forward commits do not touch the fence. A second FLASHBACK must touch even an unchanged
+    // lower-bound value so every historical publication invalidates an outstanding mark.
+    fixture
+        .execute_command(&format!("INSERT INTO {db}.fence_clone VALUES (2)"))
+        .await?;
+    assert_eq!(catalog.get_table_lvt(&ident).await?.unwrap().seq, first.seq);
+    fixture.execute_command(&flashback).await?;
+    let second = catalog.get_table_lvt(&ident).await?.unwrap();
+    assert!(second.seq > first.seq);
+    assert_eq!(second.data, first.data);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_publication_before_flashback_expires_owner_and_descendant_targets()
+-> anyhow::Result<()> {
+    let fixture = setup_clone_gc_test("fence_source", "fence_clone").await?;
+    let db = fixture.default_db_name();
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let source = catalog.get_table(&tenant, &db, "fence_source").await?;
+    let source = FuseTable::try_from_table(source.as_ref())?;
+    let cloned = catalog.get_table(&tenant, &db, "fence_clone").await?;
+    let old = FuseTable::try_from_table(cloned.as_ref())?
+        .read_table_snapshot()
+        .await?
+        .unwrap();
+    let clone_flashback = format!(
+        "ALTER TABLE {db}.fence_clone FLASHBACK TO (SNAPSHOT => '{}')",
+        old.snapshot_id.simple()
+    );
+    for sql in [
+        format!("TRUNCATE TABLE {db}.fence_clone"),
+        format!(
+            "ALTER TABLE {db}.fence_clone SET OPTIONS(\
+             data_retention_num_snapshots_to_keep = 1)"
+        ),
+    ] {
+        fixture.execute_command(&sql).await?;
+    }
+
+    let marks = source
+        .mark_clone_descendants(ctx.clone(), &catalog, &mut HashSet::new(), true, 1, |_| {})
+        .await?;
+    assert!(catalog.set_table_lvts(&tenant, &marks.lvt_updates).await?);
+    let err = fixture.execute_command(&clone_flashback).await.unwrap_err();
+    assert_eq!(err.code(), ErrorCode::TABLE_SNAPSHOT_EXPIRED);
+
+    // The owner uses the same fence protocol as marked descendants.
+    let source_snapshot = source.read_table_snapshot().await?.unwrap();
+    let source_ident = LeastVisibleTimeIdent::new(&tenant, source.get_id());
+    let source_fence = catalog.get_table_lvt(&source_ident).await?.unwrap();
+    assert!(source_fence.data.is_unbounded());
+    fixture
+        .execute_command(&format!("TRUNCATE TABLE {db}.fence_source"))
+        .await?;
+    let current_source = catalog.get_table(&tenant, &db, "fence_source").await?;
+    let selection = FuseTable::try_from_table(current_source.as_ref())?
+        .prepare_snapshot_gc_selection(
+            &(ctx.clone() as Arc<dyn TableContext>),
+            true,
+            &LeastVisibleTime::unbounded(),
+        )
+        .await?
+        .unwrap();
+    fixture
+        .execute_command(&format!(
+            "ALTER TABLE {db}.fence_source FLASHBACK TO (SNAPSHOT => '{}')",
+            source_snapshot.snapshot_id.simple(),
+        ))
+        .await?;
+    assert!(
+        !catalog
+            .set_table_lvts(&tenant, &[(
+                source.get_id(),
+                source_fence.seq,
+                selection.gc_root_lvt
+            )])
+            .await?
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_vacuum_incomplete_descendant_mark_does_not_sweep() -> anyhow::Result<()> {
+    let fixture = setup_clone_gc_test("source", "child").await?;
+    let db = fixture.default_db_name();
+    let ctx = fixture.new_query_ctx().await?;
+    let catalog = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let child = catalog.get_table(&tenant, &db, "child").await?;
+    let child = FuseTable::try_from_table(child.as_ref())?;
+    let anchor_location = child.snapshot_loc().unwrap();
+    let segment = child.read_table_snapshot().await?.unwrap().segments[0]
+        .0
+        .clone();
+    // Both descendants and the owner will have disjoint heads. Only child history references
+    // the source segment, but that history cannot be fully marked once its anchor is missing.
+    for sql in [
+        format!("TRUNCATE TABLE {db}.child"),
+        format!("INSERT INTO {db}.child VALUES (2)"),
+        format!("CREATE TABLE {db}.other CLONE {db}.child"),
+        format!("TRUNCATE TABLE {db}.source"),
+        format!("INSERT INTO {db}.source VALUES (3)"),
+    ] {
+        fixture.execute_command(&sql).await?;
+    }
+    child.get_operator().delete(&anchor_location).await?;
+    if let Some(cache) = CacheManager::instance().get_table_snapshot_cache() {
+        cache.evict(&anchor_location);
+    }
+    // Keep the lower bound below the missing anchor during the clone-aware mark.
+    fixture
+        .default_session()
+        .get_settings()
+        .set_data_retention_time_in_days(1)?;
+    fixture
+        .execute_command(&format!(
+            "ALTER TABLE {db}.source SET OPTIONS(data_retention_num_snapshots_to_keep = 1)"
+        ))
+        .await?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_max_threads(3)?;
+    let source = catalog.get_table(&tenant, &db, "source").await?;
+    let source_lvt = LeastVisibleTimeIdent::new(&tenant, source.get_id());
+    let child_lvt = LeastVisibleTimeIdent::new(&tenant, child.get_id());
+    let source_before = catalog.get_table_lvt(&source_lvt).await?;
+    fixture
+        .execute_command(&format!("VACUUM TABLE {db}.source"))
+        .await?;
+    assert_eq!(catalog.get_table_lvt(&source_lvt).await?, source_before);
+    assert!(catalog.get_table_lvt(&child_lvt).await?.is_none());
+    assert!(child.get_operator().exists(&segment).await?);
     Ok(())
 }
 
@@ -830,19 +1754,4 @@ fn test_dedup_file_locations() {
         samples[1],
         "548052/604310/_i_b_v2/019bdabd02927061af2ed18c2562b79e_v4.parquet"
     );
-}
-
-#[test]
-fn test_dedup_file_locations_no_duplicates() {
-    let mut locations = vec![
-        "a/b/file1.parquet".to_string(),
-        "a/b/file2.parquet".to_string(),
-        "a/b/file3.parquet".to_string(),
-    ];
-
-    let (duplicates, samples) = dedup_file_locations(&mut locations);
-
-    assert_eq!(duplicates, 0);
-    assert_eq!(locations.len(), 3);
-    assert!(samples.is_empty());
 }

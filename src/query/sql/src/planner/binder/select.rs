@@ -696,7 +696,7 @@ impl Binder {
             non_equi_conditions: vec![],
             other_conditions: vec![],
         };
-        let s_expr = self.bind_join_with_type(
+        let (s_expr, replacements) = self.bind_join_with_type(
             join_type,
             join_conditions,
             (left_expr, &mut left_context),
@@ -704,6 +704,9 @@ impl Binder {
             is_null_equal,
             None,
         )?;
+        // INTERSECT / EXCEPT output only the left side, and their NULL-safe keys keep them off
+        // the lateral path that replaces right side columns.
+        debug_assert!(replacements.is_empty());
         left_context
             .cte_context
             .set_cte_context(right_context.cte_context);

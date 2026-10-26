@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::clone::Share;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
@@ -48,6 +49,7 @@ use crate::plans::MaterializedCTE;
 use crate::plans::MaterializedCTERef;
 use crate::plans::Mutation;
 use crate::plans::OptimizeCompactBlock as CompactBlock;
+use crate::plans::PhysicalAggregate;
 use crate::plans::ProjectSet;
 use crate::plans::Scan;
 use crate::plans::Sort;
@@ -102,14 +104,27 @@ pub trait Operator {
         Ok(Arc::new(RelationalProperty::default()))
     }
 
-    /// Derive physical property
-    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        rel_expr.derive_physical_prop_child(0)
-    }
-
     /// Derive statistics information
     fn derive_stats(&self, _rel_expr: &RelExpr, _stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         Ok(Arc::new(StatInfo::default()))
+    }
+}
+
+/// Execution properties, separate from the relation's semantics and statistics.
+/// Logical-only operator types do not need to implement this capability.
+///
+/// ```compile_fail
+/// use databend_common_sql::optimizer::ir::RelExpr;
+/// use databend_common_sql::plans::Operator;
+///
+/// fn derive_execution_property(op: &impl Operator, inputs: &RelExpr<'_>) {
+///     op.derive_physical_prop(inputs);
+/// }
+/// ```
+pub trait PhysicalOperator: Operator {
+    /// Derive physical property
+    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
+        rel_expr.derive_physical_prop_child(0)
     }
 
     /// Compute required property for child with index `child_index`
@@ -166,7 +181,7 @@ pub enum RelOp {
     Sequence,
 }
 
-/// Relational operators
+/// Logical operators; execution channels belong only to PhysicalRelOperator.
 #[derive(Educe, EnumAsInner)]
 #[educe(
     PartialEq(bound = false, attrs = "#[recursive::recursive]"),
@@ -184,7 +199,6 @@ pub enum RelOperator {
     Sort(Sort),
     Limit(Limit),
     TopN(TopN),
-    Exchange(Exchange),
     UnionAll(UnionAll),
     DummyTableScan(DummyTableScan),
     Window(Window),
@@ -208,17 +222,6 @@ impl RelOperator {
     pub fn has_subquery(&self) -> bool {
         let mut iter = self.scalar_expr_iter();
         iter.any(|expr| expr.has_subquery())
-    }
-
-    pub fn support_lazy_materialize(&self) -> bool {
-        !matches!(
-            self,
-            RelOperator::CacheScan(_)
-                | RelOperator::UnionAll(_)
-                | RelOperator::DummyTableScan(_)
-                | RelOperator::ExpressionScan(_)
-                | RelOperator::ConstantTableScan(_)
-        )
     }
 
     pub fn collect_subquery(&self) -> Vec<SubqueryExpr> {
@@ -247,37 +250,8 @@ impl Operator for RelOperator {
         match_rel_op!(self, derive_relational_prop(rel_expr))
     }
 
-    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        match_rel_op!(self, derive_physical_prop(rel_expr))
-    }
-
     fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
         match_rel_op!(self, derive_stats(rel_expr, stat_ctx))
-    }
-
-    fn compute_required_prop_child(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr,
-        child_index: usize,
-        required: &RequiredProperty,
-    ) -> Result<RequiredProperty> {
-        match_rel_op!(
-            self,
-            compute_required_prop_child(ctx, rel_expr, child_index, required)
-        )
-    }
-
-    fn compute_required_prop_children(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr,
-        required: &RequiredProperty,
-    ) -> Result<Vec<Vec<RequiredProperty>>> {
-        match_rel_op!(
-            self,
-            compute_required_prop_children(ctx, rel_expr, required)
-        )
     }
 }
 
@@ -290,7 +264,6 @@ impl_try_from_rel_operator! {
     Sort,
     Limit,
     TopN,
-    Exchange,
     UnionAll,
     DummyTableScan,
     Window,
@@ -308,6 +281,243 @@ impl_try_from_rel_operator! {
     MaterializedCTE,
     MaterializedCTERef,
     Sequence
+}
+
+/// Execution operators. Aggregate is deliberately a different payload type.
+///
+/// ```compile_fail
+/// use databend_common_sql::optimizer::ir::PExpr;
+/// use databend_common_sql::plans::RelOperator;
+/// fn execute(logical: RelOperator) -> PExpr { PExpr::create_leaf(logical) }
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq, Hash, EnumAsInner)]
+pub enum PhysicalRelOperator {
+    Scan(Scan),
+    Join(Join),
+    EvalScalar(EvalScalar),
+    Filter(Filter),
+    Aggregate(PhysicalAggregate),
+    Sort(Sort),
+    Limit(Limit),
+    TopN(TopN),
+    Exchange(Exchange),
+    UnionAll(UnionAll),
+    DummyTableScan(DummyTableScan),
+    Window(Window),
+    WindowGroup(WindowGroup),
+    ProjectSet(ProjectSet),
+    ConstantTableScan(ConstantTableScan),
+    ExpressionScan(ExpressionScan),
+    CacheScan(CacheScan),
+    Udf(Udf),
+    RecursiveCteScan(RecursiveCteScan),
+    AsyncFunction(AsyncFunction),
+    Mutation(Mutation),
+    CompactBlock(CompactBlock),
+    MutationSource(MutationSource),
+    MaterializedCTE(MaterializedCTE),
+    MaterializedCTERef(MaterializedCTERef),
+    Sequence(Sequence),
+}
+
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, Scan, Scan);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, Join, Join);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, EvalScalar, EvalScalar);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, Filter, Filter);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, Aggregate, PhysicalAggregate);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, Sort, Sort);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, Limit, Limit);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, TopN, TopN);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, Exchange, Exchange);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, UnionAll, UnionAll);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, DummyTableScan, DummyTableScan);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, Window, Window);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, WindowGroup, WindowGroup);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, ProjectSet, ProjectSet);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, ConstantTableScan, ConstantTableScan);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, ExpressionScan, ExpressionScan);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, CacheScan, CacheScan);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, Udf, Udf);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, RecursiveCteScan, RecursiveCteScan);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, AsyncFunction, AsyncFunction);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, Mutation, Mutation);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, CompactBlock, CompactBlock);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, MutationSource, MutationSource);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, MaterializedCTE, MaterializedCTE);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, MaterializedCTERef, MaterializedCTERef);
+impl_try_from_rel_operator!(@enum PhysicalRelOperator, Sequence, Sequence);
+impl Operator for PhysicalRelOperator {
+    fn rel_op(&self) -> RelOp {
+        impl_match_rel_op!(@enum PhysicalRelOperator, self, rel_op, rel_op,)
+    }
+
+    fn arity(&self) -> usize {
+        impl_match_rel_op!(@enum PhysicalRelOperator, self, rel_op, arity,)
+    }
+
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        impl_match_rel_op!(@enum PhysicalRelOperator, self, rel_op, scalar_expr_iter,)
+    }
+
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
+        impl_match_rel_op!(@enum PhysicalRelOperator, self, rel_op, derive_relational_prop, rel_expr)
+    }
+
+    fn derive_stats(&self, rel_expr: &RelExpr, stat_ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        impl_match_rel_op!(@enum PhysicalRelOperator, self, rel_op, derive_stats, rel_expr, stat_ctx)
+    }
+}
+
+impl PhysicalOperator for PhysicalRelOperator {
+    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
+        impl_match_rel_op!(@enum PhysicalRelOperator, self, rel_op, derive_physical_prop, rel_expr)
+    }
+    fn compute_required_prop_child(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
+        child_index: usize,
+        required: &RequiredProperty,
+    ) -> Result<RequiredProperty> {
+        impl_match_rel_op!(@enum PhysicalRelOperator, self, rel_op, compute_required_prop_child, ctx, rel_expr, child_index, required)
+    }
+    fn compute_required_prop_children(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        rel_expr: &RelExpr,
+        required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        impl_match_rel_op!(@enum PhysicalRelOperator, self, rel_op, compute_required_prop_children, ctx, rel_expr, required)
+    }
+}
+
+impl PhysicalRelOperator {
+    pub fn has_subquery(&self) -> bool {
+        let mut iter = self.scalar_expr_iter();
+        iter.any(|expr| expr.has_subquery())
+    }
+
+    pub fn support_lazy_materialize(&self) -> bool {
+        !matches!(
+            self,
+            PhysicalRelOperator::CacheScan(_)
+                | PhysicalRelOperator::UnionAll(_)
+                | PhysicalRelOperator::DummyTableScan(_)
+                | PhysicalRelOperator::ExpressionScan(_)
+                | PhysicalRelOperator::ConstantTableScan(_)
+        )
+    }
+
+    pub fn collect_subquery(&self) -> Vec<SubqueryExpr> {
+        let mut subqueries = Vec::new();
+        for scalar in self.scalar_expr_iter() {
+            scalar.collect_subquery(&mut subqueries);
+        }
+        subqueries
+    }
+}
+
+/// Memo identities preserve the phase, including when payloads happen to be shared.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum MemoOperator {
+    Logical(Arc<RelOperator>),
+    Physical(Arc<PhysicalRelOperator>),
+}
+
+impl Share for MemoOperator {}
+
+impl MemoOperator {
+    pub fn logical(&self) -> Option<&Arc<RelOperator>> {
+        match self {
+            Self::Logical(op) => Some(op),
+            Self::Physical(_) => None,
+        }
+    }
+    pub fn physical(&self) -> Option<&Arc<PhysicalRelOperator>> {
+        match self {
+            Self::Physical(op) => Some(op),
+            Self::Logical(_) => None,
+        }
+    }
+    pub fn is_logical(&self) -> bool {
+        self.logical().is_some()
+    }
+    pub fn is_physical(&self) -> bool {
+        self.physical().is_some()
+    }
+}
+
+impl Operator for MemoOperator {
+    fn rel_op(&self) -> RelOp {
+        match self {
+            Self::Logical(op) => op.rel_op(),
+            Self::Physical(op) => op.rel_op(),
+        }
+    }
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        match self {
+            Self::Logical(op) => op.scalar_expr_iter(),
+            Self::Physical(op) => op.scalar_expr_iter(),
+        }
+    }
+    fn arity(&self) -> usize {
+        match self {
+            Self::Logical(op) => op.arity(),
+            Self::Physical(op) => op.arity(),
+        }
+    }
+    fn derive_relational_prop(&self, rel: &RelExpr) -> Result<Arc<RelationalProperty>> {
+        match self {
+            Self::Logical(op) => op.derive_relational_prop(rel),
+            Self::Physical(op) => op.derive_relational_prop(rel),
+        }
+    }
+    fn derive_stats(&self, rel: &RelExpr, ctx: &StatContext) -> Result<Arc<StatInfo>> {
+        match self {
+            Self::Logical(op) => op.derive_stats(rel, ctx),
+            Self::Physical(op) => op.derive_stats(rel, ctx),
+        }
+    }
+}
+impl PhysicalOperator for MemoOperator {
+    fn derive_physical_prop(&self, rel: &RelExpr) -> Result<PhysicalProperty> {
+        self.physical()
+            .ok_or_else(|| {
+                ErrorCode::Internal(
+                    "Cannot derive execution properties of a logical Memo candidate",
+                )
+            })?
+            .derive_physical_prop(rel)
+    }
+    fn compute_required_prop_child(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        rel: &RelExpr,
+        index: usize,
+        required: &RequiredProperty,
+    ) -> Result<RequiredProperty> {
+        self.physical()
+            .ok_or_else(|| {
+                ErrorCode::Internal(
+                    "Cannot require execution properties of a logical Memo candidate",
+                )
+            })?
+            .compute_required_prop_child(ctx, rel, index, required)
+    }
+    fn compute_required_prop_children(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        rel: &RelExpr,
+        required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        self.physical()
+            .ok_or_else(|| {
+                ErrorCode::Internal(
+                    "Cannot require execution properties of a logical Memo candidate",
+                )
+            })?
+            .compute_required_prop_children(ctx, rel, required)
+    }
 }
 
 #[cfg(test)]

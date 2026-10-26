@@ -354,7 +354,7 @@ pub(crate) fn deserialize_flight_data(
     let batch = flight_data_to_arrow_batch(&flight_data, arrow_schema, &HashMap::new())
         .map_err(|e| ErrorCode::BadBytes(format!("failed to decode arrow batch: {}", e)))?;
 
-    let block = DataBlock::from_record_batch(&schema, &batch)?;
+    let block = DataBlock::from_record_batch_keep_null_const(&schema, &batch)?;
 
     if block.num_columns() == 0 {
         return Ok(DataBlock::new_with_meta(

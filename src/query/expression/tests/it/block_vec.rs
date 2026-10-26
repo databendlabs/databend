@@ -16,17 +16,21 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::ChunkIndex;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataBlockVec;
 use databend_common_expression::FromData;
 use databend_common_expression::LimitType;
+use databend_common_expression::Scalar;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
@@ -187,4 +191,114 @@ proptest! {
             limit_value,
         ).expect("sort_limit equivalence check failed");
     }
+}
+
+fn const_entry(data_type: DataType, scalar: Scalar, num_rows: usize) -> BlockEntry {
+    BlockEntry::new_const_column(data_type, scalar, num_rows)
+}
+
+fn nullable_null_block(num_rows: usize, start: i32) -> DataBlock {
+    DataBlock::new(
+        vec![
+            Int32Type::from_data((start..start + num_rows as i32).collect::<Vec<_>>()).into(),
+            const_entry(
+                DataType::Number(NumberDataType::Int64).wrap_nullable(),
+                Scalar::Null,
+                num_rows,
+            ),
+            const_entry(DataType::String, Scalar::String("x".to_string()), num_rows),
+        ],
+        num_rows,
+    )
+}
+
+#[test]
+fn test_take_keeps_const_from_const_blocks() -> Result<()> {
+    let blocks = vec![nullable_null_block(3, 0), nullable_null_block(4, 10)];
+    let expected = DataBlock::concat(&blocks)?;
+    let vec = DataBlockVec::from_blocks(blocks)?;
+
+    let mut indices = ChunkIndex::default();
+    indices.push_merge(1, 2);
+    indices.push_merge_range(0, 0, 2);
+    indices.push_merge(1, 0);
+    indices.push_repeat(0, 2, 2);
+    let actual = vec.take(&indices);
+
+    assert_eq!(actual.num_rows(), 6);
+    assert!(actual.get_by_offset(0).as_column().is_some());
+    for offset in [1, 2] {
+        let entry = actual.get_by_offset(offset);
+        assert!(entry.as_scalar().is_some(), "column {offset} is not const");
+        assert_eq!(
+            entry.data_type(),
+            expected.get_by_offset(offset).data_type()
+        );
+        assert_eq!(entry.len(), 6);
+    }
+    assert_eq!(actual.get_by_offset(1).as_scalar(), Some(&Scalar::Null));
+    assert_eq!(
+        actual.get_by_offset(0).to_column(),
+        Int32Type::from_data(vec![12, 0, 1, 10, 2, 2])
+    );
+    Ok(())
+}
+
+#[test]
+fn test_take_const_ignores_blocks_not_taken() -> Result<()> {
+    // A merge holds blocks it does not take from in this output, such as
+    // drained ones replaced by empty columns.
+    let column_block = DataBlock::new(
+        vec![
+            Int32Type::from_data(vec![7, 8]).into(),
+            Int64Type::from_opt_data(vec![Some(1), None]).into(),
+            StringType::from_data(vec!["a", "b"]).into(),
+        ],
+        2,
+    );
+    let mut vec = DataBlockVec::from_blocks(vec![nullable_null_block(2, 0), column_block])?;
+    vec.replace_with_empty(1);
+
+    let mut indices = ChunkIndex::default();
+    indices.push_merge_range(0, 0, 2);
+    let actual = vec.take(&indices);
+    assert_eq!(actual.get_by_offset(1).as_scalar(), Some(&Scalar::Null));
+    assert_eq!(
+        actual.get_by_offset(2).as_scalar(),
+        Some(&Scalar::String("x".to_string()))
+    );
+    Ok(())
+}
+
+#[test]
+fn test_take_expands_mixed_or_different_const() -> Result<()> {
+    let column_block = DataBlock::new(
+        vec![
+            Int32Type::from_data(vec![7, 8]).into(),
+            Int64Type::from_opt_data(vec![Some(1), None]).into(),
+            const_entry(DataType::String, Scalar::String("y".to_string()), 2),
+        ],
+        2,
+    );
+    let blocks = vec![nullable_null_block(2, 0), column_block];
+    let vec = DataBlockVec::from_blocks(blocks)?;
+
+    let mut indices = ChunkIndex::default();
+    indices.push_merge(1, 1);
+    indices.push_merge(0, 0);
+    indices.push_merge(1, 0);
+    let actual = vec.take(&indices);
+
+    // Const NULL mixed with a column, and two different constants.
+    assert!(actual.get_by_offset(1).as_column().is_some());
+    assert!(actual.get_by_offset(2).as_column().is_some());
+    assert_eq!(
+        actual.get_by_offset(1).to_column(),
+        Int64Type::from_opt_data(vec![None, None, Some(1)])
+    );
+    assert_eq!(
+        actual.get_by_offset(2).to_column(),
+        StringType::from_data(vec!["y", "x", "y"])
+    );
+    Ok(())
 }

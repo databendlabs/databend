@@ -146,6 +146,8 @@ fn new_table_meta() -> mt::TableMeta {
         cluster_key: None,
         cluster_key_v2: Some((0, "(a + 2, b)".to_string())),
         cluster_key_seq: 0,
+        partition_key_seq: 0,
+        partition_key_id: None,
         ttl: None,
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
@@ -328,6 +330,7 @@ fn new_virtual_data_schema() -> ce::VirtualDataSchema {
 
 fn new_udf_server() -> databend_common_meta_app::principal::UDFServer {
     databend_common_meta_app::principal::UDFServer {
+        external_access_integrations: vec![],
         address: "http://127.0.0.1:8888".to_string(),
         handler: "isempty".to_string(),
         headers: BTreeMap::from([

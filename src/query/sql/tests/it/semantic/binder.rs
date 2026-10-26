@@ -15,7 +15,6 @@
 use databend_common_exception::Result;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::ir::StatContext;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::ScalarExpr;
@@ -47,7 +46,7 @@ async fn test_window_input_reuse_preserves_nondeterministic_expressions() -> Res
     else {
         panic!("expected query plan");
     };
-    let RelOperator::EvalScalar(projection) = s_expr.plan() else {
+    let RelOperator::EvalScalar(projection) = s_expr.logical()?.plan() else {
         panic!("expected SELECT projection");
     };
     for (name, reused) in [("n", true), ("r", false)] {
@@ -116,7 +115,7 @@ async fn bind_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
     let ctx = setup_context(case).await?;
     let outcome = match ctx.bind_sql(case.sql).await {
         Ok(plan) => {
-            SqlTestOutcome::Plan(plan.format_indent(Default::default(), &StatContext::default())?)
+            SqlTestOutcome::Plan(plan.format_indent(Default::default(), &ctx.stat_context()?)?)
         }
         Err(err) => SqlTestOutcome::Error {
             code: err.code(),
@@ -131,7 +130,7 @@ async fn bind_case_with_commercial_license(case: &SqlTestCase) -> Result<SqlTest
     ctx.enable_commercial_license_for_test();
     let outcome = match ctx.bind_sql(case.sql).await {
         Ok(plan) => {
-            SqlTestOutcome::Plan(plan.format_indent(Default::default(), &StatContext::default())?)
+            SqlTestOutcome::Plan(plan.format_indent(Default::default(), &ctx.stat_context()?)?)
         }
         Err(err) => SqlTestOutcome::Error {
             code: err.code(),
@@ -275,7 +274,7 @@ async fn test_binder_mutation_internal_column_strategy() -> Result<()> {
         let Plan::DataMutation { s_expr, .. } = plan else {
             panic!("expected mutation plan for {sql}");
         };
-        let RelOperator::Mutation(mutation) = s_expr.plan() else {
+        let RelOperator::Mutation(mutation) = s_expr.logical()?.plan() else {
             panic!("expected mutation operator for {sql}");
         };
         assert_eq!(mutation.strategy, expected_strategy, "sql: {sql}");
@@ -496,7 +495,7 @@ async fn test_many_window_expressions_bind_as_flat_window_group() -> Result<()> 
     };
 
     let mut stats = WindowPlanStats::default();
-    collect_window_plan_stats(&s_expr, &mut stats);
+    collect_window_plan_stats(s_expr.logical()?, &mut stats);
 
     assert_eq!(stats.window_group_nodes, 1);
     assert_eq!(stats.window_nodes, 0);
@@ -526,7 +525,7 @@ async fn test_mixed_partition_windows_bind_as_partitioned_window_groups() -> Res
     };
 
     let mut stats = WindowPlanStats::default();
-    collect_window_plan_stats(&s_expr, &mut stats);
+    collect_window_plan_stats(s_expr.logical()?, &mut stats);
 
     assert_eq!(stats.window_group_nodes, 2);
     assert_eq!(stats.window_nodes, 0);

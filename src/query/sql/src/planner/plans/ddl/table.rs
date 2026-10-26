@@ -31,6 +31,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::Constraint;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::storage::StorageParams;
@@ -38,10 +39,22 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::SharedLockGuard;
 use databend_storages_common_table_meta::table::ClusterType;
 
+use crate::plans::IndexUserDictionary;
 use crate::plans::MaintenanceTarget;
 use crate::plans::Plan;
 
 pub type TableOptions = BTreeMap<String, String>;
+
+pub const CLONE_EXPERIMENTAL_DISABLED_MESSAGE: &str = "CREATE TABLE ... CLONE is experimental and disabled. Set enable_experimental_clone_table=1 to enable it. Clone table data integrity and safety are not guaranteed in mixed-version deployments.";
+
+#[derive(Clone, Debug)]
+pub struct CloneTableSource {
+    pub table_info: TableInfo,
+    /// Database in which the source was resolved, not the database in its storage prefix.
+    pub source_database: String,
+    pub source_database_id: u64,
+    pub navigation: Option<NavigationPoint>,
+}
 
 #[derive(Clone, Debug)]
 pub struct CreateTablePlan {
@@ -67,7 +80,10 @@ pub struct CreateTablePlan {
     pub table_indexes: Option<BTreeMap<String, TableIndex>>,
     pub table_constraints: Option<BTreeMap<String, Constraint>>,
 
+    pub clone: Option<CloneTableSource>,
     pub attached_columns: Option<Vec<Identifier>>,
+    /// The `user_dictionary` option of each inline inverted index, keyed by index name.
+    pub index_user_dictionaries: Option<BTreeMap<String, IndexUserDictionary>>,
 }
 
 impl CreateTablePlan {
@@ -520,6 +536,22 @@ pub struct AlterTablePartitionByPlan {
 }
 
 impl AlterTablePartitionByPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct DropTablePartitionKeyPlan {
+    pub if_exists: bool,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    /// `None` when `IF EXISTS` resolves a missing table during binding.
+    pub table_id: Option<u64>,
+}
+
+impl DropTablePartitionKeyPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

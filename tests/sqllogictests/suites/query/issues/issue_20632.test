@@ -1,0 +1,111 @@
+# LIKE is not commutative: a column-valued pattern must not be treated as the value.
+# run-with-settings: enable_selector_executor=0
+
+statement ok
+CREATE OR REPLACE TABLE issue_20632_src(id BIGINT, a ARRAY(BIGINT NULL), v VARIANT, s VARCHAR) ENGINE=FUSE
+
+statement ok
+INSERT INTO issue_20632_src VALUES (1, [1,2], '{"x":1}', NULL), (2, NULL, '{"x":2}', 'abc'), (3, [], '{"x":3}', '')
+
+statement ok
+CREATE OR REPLACE TABLE issue_20632_l(id BIGINT, s VARCHAR, v VARIANT) ENGINE=MEMORY
+
+statement ok
+CREATE OR REPLACE TABLE issue_20632_r(id BIGINT, a ARRAY(BIGINT NULL)) ENGINE=FUSE
+
+statement ok
+INSERT INTO issue_20632_l SELECT id, s, v FROM issue_20632_src
+
+statement ok
+INSERT INTO issue_20632_r SELECT id, a FROM issue_20632_src
+
+# TRUE, FALSE and NULL must be filtered consistently on both engines.
+query I
+SELECT id FROM issue_20632_src WHERE '' LIKE s
+----
+3
+
+query I
+SELECT id FROM issue_20632_l WHERE '' LIKE s
+----
+3
+
+query I
+SELECT id FROM issue_20632_l WHERE NOT ('' LIKE s)
+----
+2
+
+query TTT
+SELECT a, s, a FROM issue_20632_src
+WHERE ((s IS NULL) <> (a IS NULL)) AND ('' LIKE s) AND ('' LIKE s)
+----
+
+# The reconstructed query must also return no rows, not NULL | abc | NULL.
+query TTT
+SELECT x.a, x.s, x.a
+FROM (
+  SELECT l.id, r.a, l.v, l.s
+  FROM issue_20632_l l
+  JOIN (
+    SELECT id, JSON_OBJECT('vp', id) AS payload
+    FROM issue_20632_r
+  ) jp ON l.id = CAST(jp.payload:vp AS BIGINT)
+  JOIN issue_20632_r r ON r.id = CAST(jp.payload:vp AS BIGINT)
+) x
+WHERE ((x.s IS NULL) <> (x.a IS NULL)) AND ('' LIKE x.s) AND ('' LIKE x.s)
+----
+
+statement ok
+CREATE OR REPLACE TABLE issue_20632_patterns(id INT, s VARCHAR) ENGINE=MEMORY
+
+statement ok
+INSERT INTO issue_20632_patterns VALUES (0, ''), (1, '%'), (2, '_'), (3, 'abc'), (4, NULL), (5, 'a%')
+
+query I rowsort
+SELECT id FROM issue_20632_patterns WHERE '' LIKE s
+----
+0
+1
+
+query I rowsort
+SELECT id FROM issue_20632_patterns WHERE 'a' LIKE s
+----
+1
+2
+5
+
+query I rowsort
+SELECT id FROM issue_20632_patterns WHERE NOT ('a' LIKE s)
+----
+0
+3
+
+query I rowsort
+SELECT id FROM issue_20632_patterns WHERE '' LIKE s OR s IS NULL
+----
+0
+1
+4
+
+query I rowsort
+SELECT id FROM issue_20632_patterns WHERE '' LIKE s AND s LIKE '%'
+----
+0
+1
+
+query I rowsort
+SELECT id FROM issue_20632_patterns WHERE s LIKE ''
+----
+0
+
+statement ok
+DROP TABLE issue_20632_patterns
+
+statement ok
+DROP TABLE issue_20632_l
+
+statement ok
+DROP TABLE issue_20632_r
+
+statement ok
+DROP TABLE issue_20632_src

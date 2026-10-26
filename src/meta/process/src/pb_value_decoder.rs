@@ -20,7 +20,9 @@ use databend_common_meta_app::data_mask::MaskPolicyTableId;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::data_share::DataShareMeta;
 use databend_common_meta_app::data_share::ShareId;
+use databend_common_meta_app::principal::ExternalAccessIntegration;
 use databend_common_meta_app::principal::NetworkPolicy;
+use databend_common_meta_app::principal::NetworkRule;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::PasswordPolicy;
 use databend_common_meta_app::principal::ProcedureIdentity;
@@ -53,6 +55,7 @@ use databend_common_meta_app::schema::MVSourceBindingVersion;
 use databend_common_meta_app::schema::MarkedDeletedIndexMeta;
 use databend_common_meta_app::schema::ObjectTagIdRefValue;
 use databend_common_meta_app::schema::SequenceMeta;
+use databend_common_meta_app::schema::TableCloneBinding;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableIdList;
 use databend_common_meta_app::schema::TableMeta;
@@ -108,6 +111,7 @@ pub fn decode_pb_value(key: &str, bytes: &[u8]) -> String {
         "__fd_materialized_view_definition/" => MVDefinition,
         "__fd_materialized_view_by_source/" => MVSourceBinding,
         "__fd_materialized_view_source_binding_version/" => MVSourceBindingVersion,
+        "__fd_table_clone_by_group/" => TableCloneBinding,
 
         // schema - catalog
         "__fd_catalog_by_id/"       => CatalogMeta,
@@ -148,6 +152,8 @@ pub fn decode_pb_value(key: &str, bytes: &[u8]) -> String {
         "__fd_udfs/"                => UserDefinedFunction,
         "__fd_file_formats/"        => UserDefinedFileFormat,
         "__fd_connection/"          => UserDefinedConnection,
+        "__fd_network_rule/"         => NetworkRule,
+        "__fd_external_access_integration/" => ExternalAccessIntegration,
 
         // principal - procedure
         "__fd_procedure_by_id/"     => ProcedureMeta,
@@ -371,7 +377,7 @@ mod tests {
         let got = normalize_timestamps(&decode_pb_value("__fd_table_by_id/1", &buf));
         assert_eq!(
             got,
-            r#"TableMeta { schema: TableSchema { fields: [], metadata: {}, next_column_id: 0 }, engine: "FUSE", engine_options: {}, storage_params: None, part_prefix: "", options: {}, cluster_key: None, cluster_key_v2: None, cluster_key_seq: 0, ttl: None, created_on: <TS>, updated_on: <TS>, comment: "", field_comments: [], field_stats_truncate_len: {}, virtual_schema: None, drop_on: None, statistics: TableStatistics { number_of_rows: 0, data_bytes: 0, compressed_data_bytes: 0, index_data_bytes: 0, bloom_index_size: None, ngram_index_size: None, inverted_index_size: None, vector_index_size: None, virtual_column_size: None, number_of_segments: None, number_of_blocks: None }, column_mask_policy: None, column_mask_policy_columns_ids: {}, row_access_policy: None, row_access_policy_columns_ids: None, indexes: {}, constraints: {} }"#
+            r#"TableMeta { schema: TableSchema { fields: [], metadata: {}, next_column_id: 0 }, engine: "FUSE", engine_options: {}, storage_params: None, part_prefix: "", options: {}, cluster_key: None, cluster_key_v2: None, cluster_key_seq: 0, partition_key_seq: 0, partition_key_id: None, ttl: None, created_on: <TS>, updated_on: <TS>, comment: "", field_comments: [], field_stats_truncate_len: {}, virtual_schema: None, drop_on: None, statistics: TableStatistics { number_of_rows: 0, data_bytes: 0, compressed_data_bytes: 0, index_data_bytes: 0, bloom_index_size: None, ngram_index_size: None, inverted_index_size: None, vector_index_size: None, virtual_column_size: None, number_of_segments: None, number_of_blocks: None }, column_mask_policy: None, column_mask_policy_columns_ids: {}, row_access_policy: None, row_access_policy_columns_ids: None, indexes: {}, constraints: {} }"#
         );
     }
 
@@ -545,7 +551,7 @@ mod tests {
             got1,
             concat!(
                 "    txn.if_then[1].put __fd_table_by_id/20:\n",
-                r#"      TableMeta { schema: TableSchema { fields: [], metadata: {}, next_column_id: 0 }, engine: "FUSE", engine_options: {}, storage_params: None, part_prefix: "", options: {}, cluster_key: None, cluster_key_v2: None, cluster_key_seq: 0, ttl: None, created_on: <TS>, updated_on: <TS>, comment: "", field_comments: [], field_stats_truncate_len: {}, virtual_schema: None, drop_on: None, statistics: TableStatistics { number_of_rows: 0, data_bytes: 0, compressed_data_bytes: 0, index_data_bytes: 0, bloom_index_size: None, ngram_index_size: None, inverted_index_size: None, vector_index_size: None, virtual_column_size: None, number_of_segments: None, number_of_blocks: None }, column_mask_policy: None, column_mask_policy_columns_ids: {}, row_access_policy: None, row_access_policy_columns_ids: None, indexes: {}, constraints: {} }"#,
+                r#"      TableMeta { schema: TableSchema { fields: [], metadata: {}, next_column_id: 0 }, engine: "FUSE", engine_options: {}, storage_params: None, part_prefix: "", options: {}, cluster_key: None, cluster_key_v2: None, cluster_key_seq: 0, partition_key_seq: 0, partition_key_id: None, ttl: None, created_on: <TS>, updated_on: <TS>, comment: "", field_comments: [], field_stats_truncate_len: {}, virtual_schema: None, drop_on: None, statistics: TableStatistics { number_of_rows: 0, data_bytes: 0, compressed_data_bytes: 0, index_data_bytes: 0, bloom_index_size: None, ngram_index_size: None, inverted_index_size: None, vector_index_size: None, virtual_column_size: None, number_of_segments: None, number_of_blocks: None }, column_mask_policy: None, column_mask_policy_columns_ids: {}, row_access_policy: None, row_access_policy_columns_ids: None, indexes: {}, constraints: {} }"#,
             )
         );
     }

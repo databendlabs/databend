@@ -658,7 +658,7 @@ impl Binder {
             ));
         };
         let physical_schema = normalize_null_fields(Self::materialized_view_physical_schema(
-            storage_expr,
+            storage_expr.logical()?,
             physical_bind_context,
             physical_metadata.clone(),
             physical_rewriter.physical_names(),
@@ -769,7 +769,9 @@ impl Binder {
             as_select: None,
             table_indexes: None,
             table_constraints: None,
+            clone: None,
             attached_columns: None,
+            index_user_dictionaries: None,
         };
         let plan = CreateMaterializedViewPlan {
             table_plan,

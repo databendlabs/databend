@@ -102,7 +102,7 @@ SELECT my_agent(question) FROM tasks;
 
 ## 📄 License
 
-[Apache 2.0](licenses/Apache-2.0.txt) + [Elastic 2.0](licenses/Elastic.txt) | [Licensing FAQ](https://docs.databend.com/guides/products/dee/license)
+Databend is licensed under [Apache 2.0](LICENSE). A small set of enterprise features is under [Elastic 2.0](licenses/Elastic.txt), see [LICENSING.md](LICENSING.md) | [Licensing FAQ](https://docs.databend.com/guides/products/dee/license)
 
 ---
 

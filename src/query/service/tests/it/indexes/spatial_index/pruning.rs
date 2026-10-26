@@ -157,9 +157,11 @@ async fn test_spatial_index_pruning_geometry() -> anyhow::Result<()> {
         ttl: None,
         table_indexes: Some(table_indexes),
         table_constraints: None,
+        clone: None,
         attached_columns: None,
         table_partition: None,
         table_properties: None,
+        index_user_dictionaries: None,
     };
 
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;

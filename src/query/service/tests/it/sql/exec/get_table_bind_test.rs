@@ -47,12 +47,20 @@ use databend_common_catalog::table_context::prelude::*;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ComputedExpr;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
+use databend_common_expression::types::number::NumberScalar;
 use databend_common_io::prelude::InputFormatSettings;
 use databend_common_io::prelude::OutputFormatSettings;
+use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::principal::UserInfo;
@@ -130,6 +138,9 @@ use databend_common_storage::FileStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
+use databend_common_users::RoleCacheManager;
+use databend_common_users::UserApiProvider;
+use databend_common_version::BUILD_INFO;
 use databend_meta_client::types::MetaId;
 use databend_meta_client::types::SeqV;
 use databend_query::interpreters::InterpreterFactory;
@@ -140,6 +151,7 @@ use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use futures::TryStreamExt;
 use parking_lot::Mutex;
 
 type MetaType = (String, String, String);
@@ -1104,6 +1116,455 @@ impl TableContextVariables for CtxDelegation {
     }
 }
 
+#[tokio::test]
+async fn test_ttl_virtual_computed_column_revalidation() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    for (computed, forbidden) in [
+        (ComputedExpr::Virtual("ts".to_string()), true),
+        (ComputedExpr::Stored("ts".to_string()), false),
+    ] {
+        let schema = Arc::new(TableSchema::new(vec![
+            TableField::new("ts", TableDataType::Timestamp),
+            TableField::new("expires", TableDataType::Timestamp).with_computed_expr(Some(computed)),
+        ]));
+        let result = databend_common_sql::validate_stored_ttl_expr(ctx.clone(), schema, "expires");
+        if forbidden {
+            let err = result.unwrap_err();
+            assert!(err.message().contains("virtual computed column"), "{err}");
+        } else {
+            result?;
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_materialize_retention_ttl_cutoff_and_pruning() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let settings = fixture.default_session().get_settings();
+    // Keep each INSERT as its own segment throughout setup and cleanup.
+    settings.set_setting("enable_compact_after_write".into(), "0".into())?;
+    settings.set_setting("enable_auto_analyze".into(), "0".into())?;
+    for (column_type, timezone, cutoff, expired, future, boundary) in [
+        (
+            "TIMESTAMP",
+            "UTC",
+            "2025-02-28T12:00:00Z",
+            "2025-01-27 00:00:00",
+            "2025-01-31 10:00:00",
+            "2025-01-28 12:00:00",
+        ),
+        (
+            "DATE",
+            "Asia/Shanghai",
+            "2025-02-27T16:00:00Z",
+            "2025-01-27",
+            "2025-01-31",
+            "2025-01-28",
+        ),
+    ] {
+        settings.set_setting("timezone".into(), timezone.into())?;
+        fixture
+            .execute_command(&format!(
+                "CREATE TABLE ttl_retention (id INT, ts {column_type}) TTL ts + INTERVAL 1 MONTH"
+            ))
+            .await?;
+        for values in [
+            format!("(1, '{expired}'), (2, '{expired}')"),
+            format!("(3, '{future}'), (4, '{future}')"),
+            format!("(5, '{expired}'), (6, '{boundary}')"),
+            "(7, NULL), (8, NULL)".to_string(),
+            format!("(9, '{expired}'), (10, NULL)"),
+        ] {
+            fixture
+                .execute_command(&format!("INSERT INTO ttl_retention VALUES {values}"))
+                .await?;
+        }
+        let base_ctx = fixture.new_query_ctx().await?;
+        let cutoff = chrono::DateTime::parse_from_rfc3339(cutoff).unwrap();
+        let ctx = fixture
+            .default_session()
+            .create_query_context_with_cluster(
+                base_ctx.get_cluster(),
+                &BUILD_INFO,
+                Some(cutoff.into()),
+            )?;
+        let (plan, _) = Planner::new(ctx.clone())
+            .plan_sql("ALTER TABLE ttl_retention MATERIALIZE TTL")
+            .await?;
+        InterpreterFactory::get(ctx.clone(), &plan)
+            .await?
+            .execute(ctx.clone())
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        // Skip future and NULL-only segments and delete the expired segment
+        // without reading it. Read both mixed blocks, preserving NULL and the
+        // exact cutoff. DATE uses midnight in the session timezone.
+        assert_eq!(ctx.get_scan_progress_value().rows, 4, "{column_type}");
+        let blocks = fixture
+            .execute_query("SELECT id FROM ttl_retention ORDER BY id")
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        let ids = blocks
+            .iter()
+            .flat_map(|block| {
+                (0..block.num_rows())
+                    .map(|row| block.get_by_offset(0).index(row).unwrap().to_owned())
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            ids,
+            [3, 4, 6, 7, 8, 10].map(|id| Scalar::Number(NumberScalar::Int32(id))),
+            "{column_type}"
+        );
+        fixture.execute_command("DROP TABLE ttl_retention").await?;
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_retention_ttl_calendar_boundaries() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    for (column_type, interval, cutoff, timezone, before, boundary, after) in [
+        (
+            "TIMESTAMP",
+            "1 QUARTER",
+            "2025-05-31T12:00:00Z",
+            "UTC",
+            "2025-02-28 11:59:59",
+            "2025-02-28 12:00:00",
+            "2025-03-01 00:00:00",
+        ),
+        (
+            "TIMESTAMP",
+            "1 YEAR",
+            "2024-02-29T12:00:00Z",
+            "UTC",
+            "2023-02-28 11:59:59",
+            "2023-02-28 12:00:00",
+            "2023-03-01 00:00:00",
+        ),
+        (
+            "TIMESTAMP",
+            "1 DAY",
+            "2024-03-10T16:00:00Z",
+            "America/New_York",
+            "2024-03-09 16:59:59",
+            "2024-03-09 17:00:00",
+            "2024-03-09 17:00:01",
+        ),
+        (
+            "TIMESTAMP",
+            "0 DAY",
+            "2025-02-28T12:00:00Z",
+            "UTC",
+            "2025-02-28 11:59:59.999999",
+            "2025-02-28 12:00:00",
+            "2025-02-28 12:00:00.000001",
+        ),
+        (
+            "DATE",
+            "1 MONTH",
+            "2025-03-31T00:00:00Z",
+            "UTC",
+            "2025-02-27",
+            "2025-02-28",
+            "2025-03-01",
+        ),
+        (
+            "TIMESTAMP_TZ",
+            "1 MONTH",
+            "2025-03-31T12:00:00Z",
+            "UTC",
+            "2025-02-28 12:59:59+01:00",
+            "2025-02-28 13:00:00+01:00",
+            "2025-03-01 00:00:00+00:00",
+        ),
+    ] {
+        // Input TIMESTAMP strings are UTC; only cleanup uses the requested zone.
+        fixture
+            .default_session()
+            .get_settings()
+            .set_setting("timezone".into(), "UTC".into())?;
+        fixture
+            .execute_command(&format!(
+                "CREATE TABLE ttl_calendar (id INT, ts {column_type}) TTL ts + INTERVAL {interval}"
+            ))
+            .await?;
+        fixture.execute_command(&format!(
+            "INSERT INTO ttl_calendar VALUES (1, '{before}'), (2, '{boundary}'), (3, '{after}'), (4, NULL)"
+        )).await?;
+        let base_ctx = fixture.new_query_ctx().await?;
+        let cutoff = chrono::DateTime::parse_from_rfc3339(cutoff).unwrap();
+        let ctx = fixture
+            .default_session()
+            .create_query_context_with_cluster(
+                base_ctx.get_cluster(),
+                &BUILD_INFO,
+                Some(cutoff.into()),
+            )?;
+        fixture
+            .default_session()
+            .get_settings()
+            .set_setting("timezone".into(), timezone.into())?;
+        let (plan, _) = Planner::new(ctx.clone())
+            .plan_sql("ALTER TABLE ttl_calendar MATERIALIZE TTL")
+            .await?;
+        InterpreterFactory::get(ctx.clone(), &plan)
+            .await?
+            .execute(ctx)
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        let blocks = fixture
+            .execute_query("SELECT id FROM ttl_calendar ORDER BY id")
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        let ids = blocks
+            .iter()
+            .flat_map(|block| {
+                (0..block.num_rows())
+                    .map(|row| block.get_by_offset(0).index(row).unwrap().to_owned())
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            ids,
+            [2, 3, 4].map(|id| Scalar::Number(NumberScalar::Int32(id))),
+            "{column_type} {interval} {timezone}"
+        );
+        fixture.execute_command("DROP TABLE ttl_calendar").await?;
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_materialize_ttl_cutoff_overflow_before_deletion() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    for interval in ["10000 YEAR", "9223372036854775807 MICROSECOND"] {
+        // The interval itself is representable and allowed at definition time.
+        fixture
+            .execute_command(&format!(
+                "CREATE TABLE ttl_overflow (ts TIMESTAMP) TTL ts + INTERVAL {interval}"
+            ))
+            .await?;
+        fixture
+            .execute_command("INSERT INTO ttl_overflow VALUES ('2000-01-01')")
+            .await?;
+        let base_ctx = fixture.new_query_ctx().await?;
+        let cutoff = chrono::DateTime::parse_from_rfc3339("2025-02-28T12:00:00Z").unwrap();
+        let ctx = fixture
+            .default_session()
+            .create_query_context_with_cluster(
+                base_ctx.get_cluster(),
+                &BUILD_INFO,
+                Some(cutoff.into()),
+            )?;
+        let err = Planner::new(ctx.clone())
+            .plan_sql("ALTER TABLE ttl_overflow MATERIALIZE TTL")
+            .await
+            .unwrap_err();
+        assert!(err.message().contains("out of range"), "{interval}: {err}");
+        assert_eq!(ctx.get_scan_progress_value().rows, 0);
+        let blocks = fixture
+            .execute_query("SELECT count(*) FROM ttl_overflow")
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        assert!(matches!(
+            blocks[0].get_by_offset(0).index(0),
+            Some(ScalarRef::Number(NumberScalar::UInt64(1)))
+        ));
+        fixture.execute_command("DROP TABLE ttl_overflow").await?;
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_materialize_ttl_requires_alter_not_delete() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command("CREATE DATABASE ttl_privilege_db")
+        .await?;
+    fixture
+        .execute_command("CREATE TABLE ttl_privilege_db.ttl_privilege (ts TIMESTAMP) TTL ts")
+        .await?;
+    fixture
+        .execute_command(
+            "INSERT INTO ttl_privilege_db.ttl_privilege VALUES ('2000-01-01 00:00:00')",
+        )
+        .await?;
+    // The fixture creates objects under `public`. Move ownership to a role
+    // unavailable to the test user, so the grant checks cannot be bypassed.
+    fixture
+        .execute_command("CREATE ROLE ttl_privilege_owner")
+        .await?;
+    let tenant = fixture.default_tenant();
+    let catalog = fixture
+        .new_query_ctx()
+        .await?
+        .get_catalog("default")
+        .await?;
+    let database = catalog.get_database(&tenant, "ttl_privilege_db").await?;
+    let table = catalog
+        .get_table(&tenant, "ttl_privilege_db", "ttl_privilege")
+        .await?;
+    let db_id = database.get_db_info().database_id.db_id;
+    let role_api = UserApiProvider::instance().role_api(&tenant);
+    role_api
+        .grant_ownership(
+            &OwnershipObject::Database {
+                catalog_name: "default".to_string(),
+                db_id,
+            },
+            "ttl_privilege_owner",
+        )
+        .await?;
+    role_api
+        .grant_ownership(
+            &OwnershipObject::Table {
+                catalog_name: "default".to_string(),
+                db_id,
+                table_id: table.get_id(),
+            },
+            "ttl_privilege_owner",
+        )
+        .await?;
+    RoleCacheManager::instance().invalidate_cache(&tenant);
+
+    for (privilege, allowed) in [
+        (UserPrivilegeType::Delete, false),
+        (UserPrivilegeType::Alter, true),
+    ] {
+        let mut user = UserInfo::new_no_auth("ttl_privilege_user", "%");
+        user.grants.grant_privileges(
+            &GrantObject::Table(
+                "default".to_string(),
+                "ttl_privilege_db".to_string(),
+                "ttl_privilege".to_string(),
+            ),
+            privilege.into(),
+        );
+        let session = fixture.new_session_with_type(SessionType::Dummy).await?;
+        session.set_authed_user(user, None).await?;
+        // The fixture session starts with account_admin as its current role;
+        // changing the user alone does not clear that role.
+        session.unset_current_role().await?;
+        let ctx = session.create_query_context(&BUILD_INFO).await?;
+        let (plan, _) = Planner::new(ctx.clone())
+            .plan_sql("ALTER TABLE ttl_privilege_db.ttl_privilege MATERIALIZE TTL")
+            .await?;
+        let databend_common_sql::plans::Plan::DataMutation { s_expr, .. } = &plan else {
+            panic!("MATERIALIZE TTL should be a data mutation");
+        };
+        let mutation = s_expr.mutation()?;
+        assert_eq!(mutation.expected_ttl.as_deref(), Some("ts"));
+        let result = match InterpreterFactory::get(ctx.clone(), &plan).await {
+            Ok(interpreter) => match interpreter.execute(ctx).await {
+                Ok(stream) => stream.try_collect::<Vec<_>>().await.map(|_| ()),
+                Err(err) => Err(err),
+            },
+            Err(err) => Err(err),
+        };
+        if allowed {
+            result?;
+        } else {
+            let err = result.unwrap_err();
+            assert_eq!(err.code(), ErrorCode::PERMISSION_DENIED, "{err}");
+        }
+    }
+    let blocks = fixture
+        .execute_query("SELECT count(*) FROM ttl_privilege_db.ttl_privilege")
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+    assert!(matches!(
+        blocks[0].get_by_offset(0).index(0),
+        Some(ScalarRef::Number(NumberScalar::UInt64(0)))
+    ));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_materialize_ttl_rejects_changed_definition() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command("CREATE TABLE ttl_changed (ts TIMESTAMP) TTL ts")
+        .await?;
+    fixture
+        .execute_command("INSERT INTO ttl_changed VALUES ('2000-01-01 00:00:00')")
+        .await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings()
+        .set_setting("enable_table_lock".to_string(), "0".to_string())?;
+    let (plan, _) = Planner::new(ctx.clone())
+        .plan_sql("ALTER TABLE ttl_changed MATERIALIZE TTL")
+        .await?;
+    fixture
+        .execute_command("ALTER TABLE ttl_changed SET TTL ts + INTERVAL 1 DAY")
+        .await?;
+    let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
+    let err = match interpreter.execute(ctx).await {
+        Ok(stream) => match stream.try_collect::<Vec<_>>().await {
+            Ok(_) => panic!("stale TTL cleanup succeeded"),
+            Err(err) => err,
+        },
+        Err(err) => err,
+    };
+    assert!(err.message().contains("TTL definition changed"), "{err}");
+    // The aborted cleanup must not have removed the expired row.
+    let blocks = fixture
+        .execute_query("SELECT count(*) FROM ttl_changed")
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+    assert!(matches!(
+        blocks[0].get_by_offset(0).index(0),
+        Some(ScalarRef::Number(NumberScalar::UInt64(1)))
+    ));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_materialize_ttl_allows_unchanged_definition() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command("CREATE TABLE ttl_unrelated (ts TIMESTAMP) TTL ts")
+        .await?;
+    fixture
+        .execute_command("INSERT INTO ttl_unrelated VALUES ('2000-01-01 00:00:00')")
+        .await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings()
+        .set_setting("enable_table_lock".to_string(), "0".to_string())?;
+    let (plan, _) = Planner::new(ctx.clone())
+        .plan_sql("ALTER TABLE ttl_unrelated MATERIALIZE TTL")
+        .await?;
+    fixture
+        .execute_command("ALTER TABLE ttl_unrelated COMMENT = 'unrelated metadata update'")
+        .await?;
+    let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
+    interpreter
+        .execute(ctx)
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+    let blocks = fixture
+        .execute_query("SELECT count(*) FROM ttl_unrelated")
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+    assert!(matches!(
+        blocks[0].get_by_offset(0).index(0),
+        Some(ScalarRef::Number(NumberScalar::UInt64(0)))
+    ));
+    Ok(())
+}
+
 // Split binding and execution explicitly instead of relying on concurrent task
 // timing. A different context commits a DDL in between; the old plan must not
 // borrow that DDL's newer metadata sequence to commit its stale schema/expressions.
@@ -1166,6 +1627,85 @@ async fn test_schema_bound_ddl_preserves_table_version() -> Result<()> {
             .await?;
         assert_eq!(current.get_table_info().ident, after.get_table_info().ident);
         assert_eq!(current.get_table_info().meta, after.get_table_info().meta);
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_partition_key_ddl_rejects_replacement_table() -> Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let cases = [
+        ("PARTITION BY (id % 2)", "", ""),
+        // The ID guard must also precede an otherwise idempotent no-op.
+        ("PARTITION BY (id % 2)", "", "PARTITION BY (id % 2)"),
+        ("DROP PARTITION KEY", "PARTITION BY (id % 2)", ""),
+        (
+            "DROP PARTITION KEY",
+            "PARTITION BY (id % 2)",
+            "PARTITION BY (id % 3) WRITE_DISTRIBUTION_MODE='hash'",
+        ),
+    ];
+
+    for (i, (pending, original_key, replacement_key)) in cases.iter().enumerate() {
+        for if_exists in [false, true] {
+            let name = format!("partition_ddl_replacement_{i}_{if_exists}");
+            fixture
+                .execute_command(&format!(
+                    "CREATE TABLE default.{name} (id INT) {original_key}"
+                ))
+                .await?;
+
+            let bind_ctx = fixture.new_query_ctx().await?;
+            bind_ctx
+                .get_settings()
+                .set_setting("enable_table_lock".into(), "0".into())?;
+            let clause = if if_exists { "IF EXISTS " } else { "" };
+            let (plan, _) = Planner::new(bind_ctx.clone())
+                .plan_sql(&format!("ALTER TABLE {clause}default.{name} {pending}"))
+                .await?;
+            let bound = bind_ctx.get_table("default", "default", &name).await?;
+
+            fixture
+                .execute_command(&format!("DROP TABLE default.{name}"))
+                .await?;
+            fixture
+                .execute_command(&format!(
+                    "CREATE TABLE default.{name} (id INT) {replacement_key}"
+                ))
+                .await?;
+
+            // Use a fresh execution context to resolve the replacement instead of
+            // the original table retained in the binding context's query cache.
+            let execute_ctx = fixture.new_query_ctx().await?;
+            let catalog = execute_ctx.get_catalog("default").await?;
+            let replacement = catalog
+                .get_table(&fixture.default_tenant(), "default", &name)
+                .await?;
+            assert_ne!(bound.get_id(), replacement.get_id());
+
+            let interpreter = InterpreterFactory::get(execute_ctx, &plan).await?;
+            let error = match interpreter.execute2().await {
+                Ok(_) => panic!("stale ALTER {pending} succeeded on a replacement table"),
+                Err(error) => error,
+            };
+            assert_eq!(
+                error.code(),
+                ErrorCode::TABLE_VERSION_MISMATCHED,
+                "{pending}: {error}"
+            );
+
+            let after = catalog
+                .get_table(&fixture.default_tenant(), "default", &name)
+                .await?;
+            assert_eq!(
+                replacement.get_table_info().ident,
+                after.get_table_info().ident
+            );
+            assert_eq!(
+                replacement.get_table_info().meta,
+                after.get_table_info().meta
+            );
+        }
     }
     Ok(())
 }

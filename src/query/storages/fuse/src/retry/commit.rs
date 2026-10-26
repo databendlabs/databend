@@ -27,10 +27,10 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_cache::Table;
 use databend_storages_common_cache::TableSnapshot;
+use databend_storages_common_session::TxnTableDelta;
+use databend_storages_common_table_meta::meta::BlockHLL;
+use databend_storages_common_table_meta::meta::BlockTopN;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_table_meta::meta::decode_column_hll;
-use databend_storages_common_table_meta::meta::encode_column_hll;
-use databend_storages_common_table_meta::meta::merge_column_hll;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use databend_storages_common_table_meta::table::is_fuse_backed_engine;
 use log::info;
@@ -59,7 +59,7 @@ pub async fn commit_with_backoff(
         compute_table_segments_diffs(ctx.clone(), &req).await?;
     // Snapshot counters may lack epochs or restart. Retry the same complete
     // transaction delta, recorded only after each write was successfully buffered.
-    let logical_deltas = ctx.txn_mgr().lock().logical_change_deltas();
+    let table_deltas = ctx.txn_mgr().lock().take_table_deltas();
 
     loop {
         let ret = catalog
@@ -83,7 +83,7 @@ pub async fn commit_with_backoff(
             update_failed_tbls,
             &table_segments_diffs,
             &table_original_snapshots,
-            &logical_deltas,
+            &table_deltas,
         )
         .await?;
     }
@@ -161,16 +161,12 @@ async fn try_rebuild_req(
     update_failed_tbls: Vec<(u64, u64, TableMeta)>,
     table_segments_diffs: &HashMap<u64, SegmentsDiff>,
     table_original_snapshots: &HashMap<u64, Option<Arc<TableSnapshot>>>,
-    logical_deltas: &HashMap<u64, Option<(u64, u64)>>,
+    table_deltas: &HashMap<u64, TxnTableDelta>,
 ) -> Result<()> {
     info!(
         "try_rebuild_req: update_failed_tbls={:?}",
         update_failed_tbls
     );
-    let insert_rows = {
-        let txn_mgr = ctx.txn_mgr();
-        txn_mgr.lock().multi_table_insert_rows()
-    };
     let txn_mgr = ctx.txn_mgr();
     for (tid, seq, table_meta) in update_failed_tbls {
         if table_meta.engine == "STREAM" {
@@ -229,38 +225,14 @@ async fn try_rebuild_req(
             .clone();
         // Missing/overflowed transaction bookkeeping is unknown, not zero.
         // In particular, an epochless base no longer invalidates a known delta.
-        let logical_delta = logical_deltas.get(&tid).copied().flatten();
+        let table_delta = table_deltas.get(&tid);
+        let logical_change_delta = table_delta.and_then(|delta| delta.logical_change_delta);
 
-        let s = merge_statistics(
-            new_snapshot.summary(),
-            &latest_snapshot.summary(),
-            cluster_key_info.as_ref(),
-        );
-        let mut merged_summary = deduct_statistics(&s, &base_snapshot.summary());
-        let mut additional_stats_meta = latest_snapshot.additional_stats_meta();
-        let insert_row = insert_rows.get(&tid).cloned().unwrap_or(0);
-        let new_hll = new_snapshot
-            .as_ref()
-            .and_then(|v| v.summary.additional_stats_meta.as_ref())
-            .and_then(|m| m.hll.as_ref());
-        if insert_row > 0 && new_hll.is_some_and(|v| !v.is_empty()) {
-            if let Some(ref mut latest_metas) = additional_stats_meta {
-                let new_hll = decode_column_hll(new_hll.unwrap())?.unwrap();
-                let latest_hll = latest_metas
-                    .hll
-                    .as_ref()
-                    .map(decode_column_hll)
-                    .transpose()?
-                    .flatten()
-                    .unwrap_or_default();
-                let merged = merge_column_hll(new_hll, latest_hll);
-                if !merged.is_empty() {
-                    latest_metas.hll = Some(encode_column_hll(&merged)?);
-                    latest_metas.row_count += insert_row;
-                }
-            }
-        }
-        merged_summary.additional_stats_meta = additional_stats_meta;
+        let base_summary = base_snapshot.summary();
+        let txn_summary = new_snapshot.summary();
+        let latest_summary = latest_snapshot.summary();
+        let s = merge_statistics(txn_summary, &latest_summary, cluster_key_info.as_ref());
+        let mut merged_summary = deduct_statistics(&s, &base_summary);
 
         {
             let txn_mgr_ref = ctx.txn_mgr();
@@ -316,6 +288,26 @@ async fn try_rebuild_req(
             }
         }
 
+        // Replay the same statement-local statistics as CommitSink's own retry.
+        // Never merge the full transaction HLL or add a previous retry's result.
+        // Unlike the logical delta, missing statistics are a known zero.
+        let empty_column_hlls = BlockHLL::new();
+        let (column_hlls, statistics_row_count) = table_delta
+            .map_or((&empty_column_hlls, 0), |delta| {
+                (&delta.column_hlls, delta.statistics_row_count)
+            });
+        let stats_gen = latest_table
+            .generate_table_stats(
+                &latest_snapshot,
+                column_hlls,
+                statistics_row_count,
+                &BlockTopN::new(),
+                false,
+            )
+            .await?;
+        let stats_location = stats_gen.table_statistics_location();
+        merged_summary.additional_stats_meta = stats_gen.additional_stats_meta();
+
         let table_meta_timestamps =
             ctx.get_table_meta_timestamps(latest_table.as_ref(), latest_snapshot.clone())?;
         let mut merged_snapshot = TableSnapshot::try_new(
@@ -325,13 +317,13 @@ async fn try_rebuild_req(
             merged_summary,
             merged_segments,
             latest_table.cluster_key_info(),
-            None,
+            stats_location,
             table_meta_timestamps,
         )?;
         // Missing/overflowed bookkeeping must not become a trusted zero. This
         // fallback protects epoch-aware readers, not unrestricted old-reader
         // mixed mode: an older writer may recreate zero counters afterward.
-        match logical_delta {
+        match logical_change_delta {
             Some((updated, deleted)) => merged_snapshot.add_logical_change_delta(updated, deleted),
             None => merged_snapshot.invalidate_logical_change_counters(),
         }
@@ -358,7 +350,10 @@ async fn try_rebuild_req(
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
             base_snapshot_location: latest_table.snapshot_loc(),
-            lvt_check: None,
+            // Preserve the transaction's original object timestamp. Rebuilding the snapshot does
+            // not rewrite its blocks or segments, so replacing this with a newer timestamp would
+            // allow GC to race with objects created earlier in the transaction.
+            lvt_check: update_table_meta_req.lvt_check.clone(),
         };
         *update_table_meta_req = req;
     }

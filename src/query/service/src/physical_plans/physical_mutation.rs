@@ -60,7 +60,7 @@ use databend_common_sql::binder::MutationType;
 use databend_common_sql::binder::wrap_cast;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::PExpr;
 use databend_common_sql::parse_computed_field_index_expr;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::ConstantExpr;
@@ -271,7 +271,7 @@ fn add_matched_mutation_workers(
 impl PhysicalPlanBuilder {
     pub async fn build_mutation(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: &PExpr,
         mutation: &databend_common_sql::plans::Mutation,
         mut required: ColumnSet,
     ) -> Result<PhysicalPlan> {
@@ -363,6 +363,7 @@ impl PhysicalPlanBuilder {
                 recluster_info: None,
                 meta: PhysicalPlanMeta::new("CommitSink"),
                 table_meta_timestamps: mutation_build_info.table_meta_timestamps,
+                expected_ttl: mutation.expected_ttl.clone(),
             });
             plan.adjust_plan_id(&mut 0);
             return Ok(plan);
@@ -456,6 +457,7 @@ impl PhysicalPlanBuilder {
                 meta: PhysicalPlanMeta::new("CommitSink"),
                 recluster_info: None,
                 table_meta_timestamps: mutation_build_info.table_meta_timestamps,
+                expected_ttl: mutation.expected_ttl.clone(),
             });
 
             plan.adjust_plan_id(&mut 0);
@@ -697,6 +699,7 @@ impl PhysicalPlanBuilder {
             recluster_info: None,
             meta: PhysicalPlanMeta::new("CommitSink"),
             table_meta_timestamps: mutation_build_info.table_meta_timestamps,
+            expected_ttl: mutation.expected_ttl.clone(),
         });
 
         physical_plan.adjust_plan_id(&mut 0);
