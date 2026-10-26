@@ -56,6 +56,8 @@ use databend_common_meta_app::principal::StageInfo;
 use databend_common_settings::Settings;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::table::HILBERT_CLUSTER_TYPE;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_SCHEMA_EVOLUTION;
 use parking_lot::RwLock;
@@ -69,10 +71,17 @@ use crate::binder::StagePathAccess;
 use crate::binder::StageResolver;
 use crate::binder::bind_query::MaxColumnPosition;
 use crate::binder::parse_file_format;
+use crate::binder::scalar::ScalarBinder;
 use crate::binder::validate_stage_files_path_traversal;
+use crate::optimizer::ir::SExpr;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
+use crate::plans::EvalScalar;
 use crate::plans::Plan;
+use crate::plans::ScalarExpr;
+use crate::plans::ScalarItem;
+use crate::plans::Sort;
+use crate::plans::SortItem;
 use crate::plans::ValidationMode;
 
 impl Binder {
@@ -554,6 +563,16 @@ impl Binder {
         s_expr = self.rewrite_udf(&mut from_context, s_expr)?;
         s_expr = self.add_bound_columns_into_expr(&mut from_context, s_expr)?;
 
+        if self
+            .ctx
+            .get_settings()
+            .get_enable_copy_sort_by_cluster_key()?
+        {
+            s_expr = self
+                .bind_copy_cluster_key_sort(&plan, &from_context, s_expr)
+                .await?;
+        }
+
         let mut output_context = BindContext::new();
         output_context.binding_depth = from_context.depth();
         output_context.parent = from_context.parent;
@@ -569,6 +588,102 @@ impl Binder {
         }));
 
         Ok(Plan::CopyIntoTable(Box::new(plan)))
+    }
+
+    /// Sorts the projected COPY rows by the target table's linear cluster key,
+    /// so that one load writes blocks whose cluster key ranges do not overlap.
+    /// The append pipeline only sorts within each block it cuts.
+    async fn bind_copy_cluster_key_sort(
+        &mut self,
+        plan: &CopyIntoTablePlan,
+        projected: &BindContext,
+        child: SExpr,
+    ) -> Result<SExpr> {
+        let table = self
+            .ctx
+            .get_table(
+                plan.catalog_info.catalog_name(),
+                &plan.database_name,
+                &plan.table_name,
+            )
+            .await?;
+        let is_hilbert = table
+            .get_table_info()
+            .meta
+            .options
+            .get(OPT_KEY_CLUSTER_TYPE)
+            .is_some_and(|v| v.eq_ignore_ascii_case(HILBERT_CLUSTER_TYPE));
+        let Some(keys) = table.resolve_cluster_keys().filter(|_| !is_hilbert) else {
+            return Ok(child);
+        };
+
+        // The select list maps to the target columns by position, whatever
+        // its aliases, so bind the keys against the projected columns renamed
+        // after the target columns.
+        let mut key_context = BindContext::new();
+        key_context.columns = projected
+            .columns
+            .iter()
+            .zip(plan.required_source_schema.fields())
+            .map(|(column, field)| {
+                let mut column = column.clone();
+                column.database_name = None;
+                column.table_name = None;
+                column.column_name = field.name().clone();
+                column.column_name_lower = None;
+                column
+            })
+            .collect();
+
+        let mut derived = Vec::new();
+        let mut items = Vec::with_capacity(keys.len());
+        for key in &keys {
+            let mut scalar_binder = ScalarBinder::new(
+                &mut key_context,
+                self.ctx.clone(),
+                &self.name_resolution_ctx,
+                self.metadata.clone(),
+                &[],
+            );
+            let (scalar, data_type) = scalar_binder.bind(key)?;
+            // A vector key orders blocks by a vector index, not by value.
+            if matches!(data_type.remove_nullable(), DataType::Vector(_)) {
+                return Ok(child);
+            }
+            let index = match &scalar {
+                ScalarExpr::BoundColumnRef(column) => column.column.index,
+                _ => {
+                    let binding = self.create_derived_column_binding(format!("{key:#}"), data_type);
+                    derived.push(ScalarItem {
+                        scalar,
+                        index: binding.index,
+                    });
+                    binding.index
+                }
+            };
+            // The order the append pipeline sorts each block by.
+            items.push(SortItem {
+                index,
+                asc: true,
+                nulls_first: false,
+            });
+        }
+
+        let mut s_expr = child;
+        if !derived.is_empty() {
+            s_expr = SExpr::create_unary(
+                Arc::new(EvalScalar { items: derived }.into()),
+                Arc::new(s_expr),
+            );
+        }
+        let sort = Sort {
+            items,
+            limit: None,
+            after_exchange: None,
+            pre_projection: None,
+            window_partition: None,
+        };
+        Ok(SExpr::create_unary(Arc::new(sort.into()), Arc::new(s_expr)))
     }
 
     pub(crate) async fn parse_values_str(&self, values_str: &str) -> Result<Vec<Expr>> {

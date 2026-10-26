@@ -777,6 +777,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_compact_after_write")? != 0)
     }
 
+    pub fn get_enable_copy_sort_by_cluster_key(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_copy_sort_by_cluster_key")? != 0)
+    }
+
     pub fn get_enable_compact_after_multi_table_insert(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_compact_after_multi_table_insert")? != 0)
     }

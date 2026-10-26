@@ -995,6 +995,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_copy_sort_by_cluster_key", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables sorting the input of COPY INTO <table> by the table's linear cluster key before writing, so a load writes non-overlapping blocks without a recluster.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_compact_after_multi_table_insert", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables recluster and compact after multi-table insert.",

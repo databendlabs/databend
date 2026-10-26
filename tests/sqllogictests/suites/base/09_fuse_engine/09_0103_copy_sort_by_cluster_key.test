@@ -1,0 +1,102 @@
+statement ok
+create or replace database db_09_0103
+
+statement ok
+use db_09_0103
+
+statement ok
+set enable_compact_after_write = 0
+
+statement ok
+set max_threads = 1
+
+statement ok
+create or replace stage s_09_0103
+
+# One file of 4000 rows whose keys k = 0..3 cycle row by row, in v order.
+statement ok
+copy into @s_09_0103/data/ from (select number % 4 as k, number as v from numbers(4000) order by v) file_format = (type = parquet) single = true
+
+statement ok
+create table t_unsorted(k int not null, v int not null) cluster by (k) row_per_block = 1000
+
+statement ok
+create table t_sorted(k int not null, v int not null) cluster by (k) row_per_block = 1000
+
+statement ok
+create table t_sorted_transform(k int not null, v int not null) cluster by (k) row_per_block = 1000
+
+statement ok
+create table t_sorted_expr(k int not null, v int not null) cluster by (k % 2) row_per_block = 1000
+
+# Default: every 1000-row block holds all four keys and overlaps the others.
+statement ok
+copy into t_unsorted from @s_09_0103/data/ file_format = (type = parquet)
+
+query TTI
+select min, max, block_depth from clustering_statistics('db_09_0103', 't_unsorted') order by min, max
+----
+[0] [3] 4
+[0] [3] 4
+[0] [3] 4
+[0] [3] 4
+
+statement ok
+set enable_copy_sort_by_cluster_key = 1
+
+# Sorted: each block holds one key.
+statement ok
+copy into t_sorted from @s_09_0103/data/ file_format = (type = parquet)
+
+query TTI
+select min, max, block_depth from clustering_statistics('db_09_0103', 't_sorted') order by min, max
+----
+[0] [0] 1
+[1] [1] 1
+[2] [2] 1
+[3] [3] 1
+
+# A transform maps its select list to the target columns by position: target
+# k receives source k although the aliases name the other column, and the
+# sort follows the target column.
+statement ok
+copy into t_sorted_transform from (select k as v, v as k from @s_09_0103/data/) file_format = (type = parquet)
+
+query TTI
+select min, max, block_depth from clustering_statistics('db_09_0103', 't_sorted_transform') order by min, max
+----
+[0] [0] 1
+[1] [1] 1
+[2] [2] 1
+[3] [3] 1
+
+query II
+select k, count(*) from t_sorted_transform group by k order by k
+----
+0 1000
+1 1000
+2 1000
+3 1000
+
+# An expression key sorts by the expression's value.
+statement ok
+copy into t_sorted_expr from @s_09_0103/data/ file_format = (type = parquet)
+
+query TTI
+select min, max, block_depth from clustering_statistics('db_09_0103', 't_sorted_expr') order by min, max
+----
+[0] [0] 2
+[0] [0] 2
+[1] [1] 2
+[1] [1] 2
+
+query I
+select count(*) from t_sorted
+----
+4000
+
+statement ok
+unset enable_copy_sort_by_cluster_key
+
+statement ok
+drop database db_09_0103
