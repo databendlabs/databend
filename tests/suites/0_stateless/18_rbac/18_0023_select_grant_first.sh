@@ -25,7 +25,7 @@ expect_denied() {
 }
 
 cleanup() {
-	run_root_sql "
+	bendsql_connect_root_null --query "
 DROP DATABASE IF EXISTS select_grant_first;
 DROP USER IF EXISTS select_grant_user;
 DROP USER IF EXISTS select_role_user;
@@ -42,7 +42,7 @@ DROP ROLE IF EXISTS select_db_owner_role;
 
 cleanup
 trap cleanup EXIT
-run_root_sql "
+bendsql_connect_root_null --query "
 CREATE DATABASE select_grant_first;
 CREATE TABLE select_grant_first.t(a INT);
 INSERT INTO select_grant_first.t VALUES (7);
@@ -88,12 +88,12 @@ echo '=== grant on one table does not authorize another ==='
 expect_denied select_grant_user 'SELECT t.a FROM select_grant_first.t t JOIN select_grant_first.numbers n ON t.a = n.a'
 
 echo '=== revoke and database grant ==='
-run_root_sql 'REVOKE SELECT ON select_grant_first.t FROM select_grant_user;'
+bendsql_connect_root_null --query 'REVOKE SELECT ON select_grant_first.t FROM select_grant_user;'
 expect_denied select_grant_user 'SELECT * FROM select_grant_first.t'
-run_root_sql 'GRANT SELECT ON select_grant_first.* TO select_grant_user;'
+bendsql_connect_root_null --query 'GRANT SELECT ON select_grant_first.* TO select_grant_user;'
 run_user select_grant_user 'SELECT * FROM select_grant_first.t'
 run_user select_grant_user 'SELECT * FROM select_grant_first.numbers'
-run_root_sql 'REVOKE SELECT ON select_grant_first.* FROM select_grant_user;'
+bendsql_connect_root_null --query 'REVOKE SELECT ON select_grant_first.* FROM select_grant_user;'
 expect_denied select_grant_user 'SELECT * FROM select_grant_first.numbers'
 
 echo '=== table function name collision ==='
@@ -101,13 +101,13 @@ expect_denied select_denied 'SELECT * FROM select_grant_first.numbers'
 run_user select_denied 'SELECT count(*) FROM numbers(3)'
 
 echo '=== view grant does not expose source table ==='
-run_root_sql 'GRANT SELECT ON select_grant_first.v TO select_grant_user;'
+bendsql_connect_root_null --query 'GRANT SELECT ON select_grant_first.v TO select_grant_user;'
 run_user select_grant_user 'SELECT * FROM select_grant_first.v'
 expect_denied select_grant_user 'SELECT * FROM select_grant_first.t'
 
 echo '=== ID grant survives rename but not name reuse ==='
-run_root_sql '
-ALTER TABLE select_grant_first.t RENAME TO select_grant_first.renamed;
+bendsql_connect_root_null --query '
+ALTER TABLE select_grant_first.t RENAME TO renamed;
 CREATE TABLE select_grant_first.t(a INT);
 INSERT INTO select_grant_first.t VALUES (13);
 '
