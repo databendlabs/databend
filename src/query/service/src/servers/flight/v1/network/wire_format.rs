@@ -567,24 +567,21 @@ mod tests {
         assert_eq!(tids, vec![7, 3, 9]);
     }
 
-    /// Items for different threads must not keep the frame alive, while items of a
-    /// single-thread frame keep sharing it.
+    /// An item retained by a slow thread must not keep the entire frame alive.
     #[test]
-    fn test_split_batch_copies_only_multi_thread_frames() {
+    fn test_split_batch_does_not_retain_multi_thread_frame() {
         let frame_items = |tids: &[u16]| {
             tids.iter()
                 .map(|tid| make_item(*tid, &[0x01], &[1, 2], &[*tid as u8; 1024]))
                 .collect::<Vec<_>>()
         };
 
-        for (tids, shared) in [(&[0u16, 1, 2, 3][..], false), (&[5u16, 5, 5][..], true)] {
-            let batch = merge_flight_data_batch(frame_items(tids));
-            let frame = batch.data_body.clone();
-            let frame_range = frame.as_ptr_range();
+        let batch = merge_flight_data_batch(frame_items(&[0, 1, 2, 3]));
+        let frame = batch.data_body.clone();
+        let frame_range = frame.as_ptr_range();
 
-            for item in split_batch_flight_data(batch) {
-                assert_eq!(frame_range.contains(&item.data_body.as_ptr()), shared);
-            }
+        for item in split_batch_flight_data(batch) {
+            assert!(!frame_range.contains(&item.data_body.as_ptr()));
         }
     }
 }

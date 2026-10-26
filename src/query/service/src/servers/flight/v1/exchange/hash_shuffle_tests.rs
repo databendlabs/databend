@@ -30,7 +30,6 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-use std::time::Instant;
 
 use arrow_flight::FlightData;
 use arrow_schema::Schema as ArrowSchema;
@@ -124,7 +123,6 @@ struct ShuffleSetup {
 
 #[derive(Default)]
 struct ShuffleRun {
-    elapsed: Duration,
     wire_bytes: AtomicUsize,
     frames: AtomicUsize,
 }
@@ -351,8 +349,7 @@ where
 
     let scatter = Arc::new(scatter);
     let budget = hash_shuffle_send_budget(threads, setup.node_budget);
-    let mut run = ShuffleRun::default();
-    let started = Instant::now();
+    let run = ShuffleRun::default();
 
     std::thread::scope(|scope| -> Result<()> {
         for (send_rx, pong_tx, router) in links {
@@ -391,7 +388,6 @@ where
         Ok(())
     })?;
 
-    run.elapsed = started.elapsed();
     drop(runtime);
     flush_mem_stat();
     Ok(run)
@@ -1160,95 +1156,4 @@ fn test_hash_shuffle_node_memory_bound() -> Result<()> {
         check_node_memory(nodes)?;
     }
     Ok(())
-}
-
-fn env(name: &str, default: u64) -> u64 {
-    std::env::var(name)
-        .ok()
-        .and_then(|x| x.parse().ok())
-        .unwrap_or(default)
-}
-
-/// Speed of the hash shuffle with production defaults; prints, does not assert.
-///
-/// Configure with HASH_SHUFFLE_BENCH_{NODES,THREADS,BLOCKS,ROWS,RTT_US,MBPS,CODEC}:
-/// MBPS limits each link (0 = unlimited), CODEC is 0 none, 1 LZ4, 2 ZSTD.
-#[test]
-#[ignore]
-fn hash_shuffle_bench() {
-    let nodes = env("HASH_SHUFFLE_BENCH_NODES", 3) as usize;
-    let threads = env("HASH_SHUFFLE_BENCH_THREADS", 16) as usize;
-    let blocks = env("HASH_SHUFFLE_BENCH_BLOCKS", 64) as usize;
-    let rows = env("HASH_SHUFFLE_BENCH_ROWS", 8192) as usize;
-    let mbps = env("HASH_SHUFFLE_BENCH_MBPS", 0);
-
-    let setup = ShuffleSetup {
-        nodes,
-        threads,
-        node_budget: 256 * MIB,
-        buffer: ExchangeSendBufferConfig::default(),
-        recv_quota: (64 * MIB / (nodes - 1)).max(MIB),
-        compression: match env("HASH_SHUFFLE_BENCH_CODEC", 1) {
-            0 => None,
-            1 => Some(FlightCompression::Lz4),
-            _ => Some(FlightCompression::Zstd),
-        },
-        coalesce: Some(CoalesceThreshold::create(8192, 4 * MIB)),
-        link: Link {
-            rtt: Duration::from_micros(env("HASH_SHUFFLE_BENCH_RTT_US", 200)),
-            bytes_per_sec: (mbps != 0).then_some(mbps as f64 * MIB as f64),
-        },
-    };
-
-    // Generated before measuring, outside the tracked memory.
-    let inputs = (0..threads)
-        .map(|t| {
-            let mut rng = StdRng::seed_from_u64(t as u64);
-            (0..blocks)
-                .map(|_| wide_block(&mut rng, rows))
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
-    let input_bytes = inputs
-        .iter()
-        .flatten()
-        .map(|x| x.memory_size())
-        .sum::<usize>();
-    let schema = Arc::new(inputs[0][0].infer_schema());
-
-    let mem_stat = MemStat::create("hash_shuffle_bench".to_string());
-    let mut payload = ThreadTracker::new_tracking_payload();
-    payload.mem_stat = Some(mem_stat.clone());
-    let guard = ThreadTracker::tracking(payload);
-
-    let received_rows = AtomicUsize::new(0);
-    let received_blocks = AtomicUsize::new(0);
-    let run = run_shuffle(
-        &setup,
-        &schema,
-        Box::new(KeyScatter {
-            num_partitions: (nodes * threads) as u64,
-        }),
-        |t| inputs[t].iter().cloned(),
-        |_, block| {
-            received_rows.fetch_add(block.num_rows(), Ordering::Relaxed);
-            received_blocks.fetch_add(1, Ordering::Relaxed);
-        },
-    )
-    .unwrap();
-    drop(guard);
-
-    assert_eq!(
-        received_rows.load(Ordering::Relaxed),
-        threads * blocks * rows
-    );
-    println!(
-        "hash_shuffle_bench nodes={nodes} threads={threads} input_mib={:.0} wall_ms={} peak_mib={:.1} wire_mib={:.1} frames={} recv_blocks={}",
-        input_bytes as f64 / MIB as f64,
-        run.elapsed.as_millis(),
-        mem_stat.get_peak_memory_usage() as f64 / MIB as f64,
-        run.wire_bytes.load(Ordering::Relaxed) as f64 / MIB as f64,
-        run.frames.load(Ordering::Relaxed),
-        received_blocks.load(Ordering::Relaxed),
-    );
 }

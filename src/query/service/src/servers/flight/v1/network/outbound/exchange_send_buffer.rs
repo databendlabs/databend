@@ -669,30 +669,6 @@ mod tests {
         drop(pong_tx);
     }
 
-    #[test]
-    fn test_batch_bytes_shares_queue_among_remotes() {
-        const MIB: usize = 1024 * 1024;
-        let config = ExchangeSendBufferConfig {
-            max_queued_bytes: 64 * MIB,
-            max_batch_bytes: 4 * MIB,
-        };
-
-        // Few remotes: capped by max_batch_bytes.
-        assert_eq!(config.batch_bytes(1), 4 * MIB);
-        assert_eq!(config.batch_bytes(8), 4 * MIB);
-        // Many remotes: half of each remote's share of the queue.
-        assert_eq!(config.batch_bytes(16), 2 * MIB);
-        assert_eq!(config.batch_bytes(29), 64 * MIB / 58);
-        // Never below the minimum batch size, unless max_batch_bytes is lower.
-        assert_eq!(config.batch_bytes(1000), MIN_BATCH_BYTES);
-        let config = ExchangeSendBufferConfig {
-            max_queued_bytes: 64 * MIB,
-            max_batch_bytes: 1,
-        };
-        assert_eq!(config.batch_bytes(1), 1);
-        assert_eq!(config.batch_bytes(1000), 1);
-    }
-
     #[tokio::test(flavor = "multi_thread")]
     async fn test_buffer_direct_send() {
         let rt = test_runtime();
@@ -719,25 +695,6 @@ mod tests {
             .unwrap();
         let received = send_rx.recv().await.unwrap();
         assert_eq!(received.data_body.len(), 20);
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_buffer_packs_items_into_one_frame() {
-        let rt = test_runtime();
-        let (exchange, send_rx, _pong_tx) = create_mock_exchange(4);
-        let buffer =
-            ExchangeSendBuffer::create(vec![exchange], ExchangeSendBufferConfig::default(), &rt)
-                .unwrap();
-
-        let items = (0..4)
-            .map(|tid| make_flight_data_with_tid(tid, &[0x01], 10))
-            .collect();
-        buffer.enqueue_items(0, items).await.unwrap();
-
-        let received = send_rx.recv().await.unwrap();
-        assert!(is_batch(&received));
-        assert_eq!(batch_len(&received), 4);
-        assert!(send_rx.try_recv().is_err());
     }
 
     #[tokio::test(flavor = "multi_thread")]

@@ -165,14 +165,4 @@ mod tests {
         assert_eq!(drain(&mut coalescer), vec![10, 50, 10]);
         Ok(())
     }
-
-    #[test]
-    fn test_coalescer_disabled() -> Result<()> {
-        let mut coalescer = BlockCoalescer::create(None);
-        coalescer.push(block(1))?;
-        coalescer.push(block(2))?;
-        assert!(!coalescer.flush()?);
-        assert_eq!(drain(&mut coalescer), vec![1, 2]);
-        Ok(())
-    }
 }

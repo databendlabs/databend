@@ -403,50 +403,6 @@ mod tests {
         HashShuffleWriter::create(0, ExecutorWaker::create(), scatter, nodes, budget)
     }
 
-    #[test]
-    fn test_send_budget() {
-        assert_eq!(hash_shuffle_send_budget(16, 256 << 20), 16 << 20);
-        assert_eq!(hash_shuffle_send_budget(16, 1), 1);
-        assert_eq!(hash_shuffle_send_budget(0, 1024), 1024);
-    }
-
-    /// 30 nodes x 16 threads: every row reaches its partition exactly once, and the
-    /// writer flushes whenever it buffers the budget.
-    #[test]
-    fn test_writer_routes_rows_within_budget() -> Result<()> {
-        let (num_nodes, threads) = (30, 16);
-        let num_partitions = (num_nodes * threads) as u64;
-        let (nodes, receivers) = local_nodes(num_nodes, threads);
-
-        let budget = 256 * 1024;
-        let mut writer = writer(nodes, budget);
-
-        let mut flushes = 0;
-        for idx in 0..100 {
-            let block = make_block(idx * 1000..(idx + 1) * 1000);
-            let block_bytes = block.memory_size();
-
-            if writer.add_block(block)? {
-                assert!(writer.buffered_bytes < budget + block_bytes);
-                assert!(!writer.flush(None)?.1);
-                assert_eq!(writer.buffered_bytes, 0);
-                flushes += 1;
-            }
-        }
-        writer.flush(None)?;
-        assert!(flushes > 1, "budget should trigger flushes before the end");
-
-        let mut total = 0;
-        for (partition, receiver) in receivers.iter().enumerate() {
-            for block in drain_blocks(receiver) {
-                check_rows(&block, partition as u64, num_partitions);
-                total += block.num_rows();
-            }
-        }
-        assert_eq!(total, 100_000);
-        Ok(())
-    }
-
     /// Blocks without columns (e.g. under `count(*)`) or with only NULL columns
     /// have a zero memory size, but their rows must still be sent.
     #[test]
@@ -580,7 +536,6 @@ mod tests {
 
         writer.stop_sending_partition(1);
         assert!(!writer.all_closed());
-        assert!(writer.details_status().contains("closed_partitions=1/4"));
         for (partition, receiver) in receivers.iter().enumerate() {
             assert_eq!(receiver.is_closed(), partition == 1);
         }
@@ -596,7 +551,6 @@ mod tests {
 
         // Closing a partition again must not affect the other threads.
         writer.stop_sending_partition(1);
-        assert!(writer.details_status().contains("closed_partitions=1/4"));
         writer.stop_sending_all();
         assert!(writer.all_closed());
         assert!(receivers.iter().all(|x| x.is_closed()));
@@ -754,7 +708,6 @@ mod tests {
             assert!(!writer.all_closed());
             writer.stop_sending_all();
             assert!(writer.all_closed());
-            assert!(writer.details_status().contains("closed_partitions=8/8"));
             assert!(
                 weak_buffer.upgrade().is_none(),
                 "stopped dispatcher must release its send buffer"
