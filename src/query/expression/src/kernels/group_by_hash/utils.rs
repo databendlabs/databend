@@ -17,16 +17,13 @@ use databend_common_base::vec_ext::VecU8Ext;
 
 use crate::Column;
 use crate::ProjectedBlock;
-use crate::ScalarRef;
 use crate::types::AnyType;
 use crate::types::BinaryColumn;
 use crate::types::EncodedColumn;
 use crate::types::NullableColumn;
 use crate::types::NumberColumn;
-use crate::types::NumberScalar;
 use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::DecimalColumn;
-use crate::types::decimal::DecimalScalar;
 use crate::types::number::Number;
 use crate::types::vector::VectorScalarRef;
 use crate::utils::bitmap::normalize_bitmap_column;
@@ -42,7 +39,8 @@ pub fn serialize_group_columns(
 ) -> BinaryColumn {
     let columns: Vec<Column> = columns
         .iter()
-        .map(|entry| normalize_bitmap_in_column(entry.to_column()))
+        // Decoded once per block: rows are serialized one at a time.
+        .map(|entry| normalize_bitmap_in_column(entry.to_column().decode_encoded()))
         .collect();
     let mut builder = BinaryColumnBuilder::with_capacity(num_rows, serialize_size);
 
@@ -71,20 +69,9 @@ pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &m
                     let key = c.keys.get_unchecked(row) as usize;
                     serialize_column_binary(&c.values, key, row_space)
                 }
-                // The same bytes as the decoded column, from the raw value of the row.
-                EncodedColumn::For(c) => match c.scalar_ref(c.raw_value_unchecked(row)) {
-                    ScalarRef::Number(n) => with_number_mapped_type!(|NUM_TYPE| match n {
-                        NumberScalar::NUM_TYPE(v) => {
-                            row_space.store_value_uncheckd(&v.canonicalize())
-                        }
-                    }),
-                    ScalarRef::Decimal(d) => with_decimal_type!(|DECIMAL_TYPE| match d {
-                        DecimalScalar::DECIMAL_TYPE(v, _) => row_space.store_value_uncheckd(&v),
-                    }),
-                    ScalarRef::Date(v) => row_space.store_value_uncheckd(&v),
-                    ScalarRef::Timestamp(v) => row_space.store_value_uncheckd(&v),
-                    scalar => unreachable!("frame of reference over {scalar:?}"),
-                },
+                EncodedColumn::For(_) => encoded.with_row(row, |column, row| {
+                    serialize_column_binary(column, row, row_space)
+                }),
             },
             Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
             Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
