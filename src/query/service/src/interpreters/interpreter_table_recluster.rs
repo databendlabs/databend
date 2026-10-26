@@ -14,6 +14,7 @@
 
 databend_common_tracing::register_module_tag!("[FUSE-RECLUSTER]");
 
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
@@ -431,7 +432,12 @@ impl ReclusterTableInterpreter {
         let complete_executor =
             PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
         self.ctx.set_executor(complete_executor.get_inner())?;
+        let execute_started = std::time::Instant::now();
         let execution_result = complete_executor.execute().await;
+        log_recluster_processor_profile(
+            &complete_executor.get_inner().get_proc_profiles(),
+            execute_started.elapsed(),
+        );
 
         // Make sure the executor and any pipeline-held claim start releasing before an error is
         // returned to the FINAL loop for another round. Claim release remains asynchronous, so a
@@ -593,5 +599,91 @@ impl ReclusterTableInterpreter {
             }
         }
         Ok(())
+    }
+}
+
+/// Emit one `recluster.profile.processor` line per processor kind with CPU / wait time
+/// summed over all instances of that kind, so the stage distribution of a round (group
+/// sources, final merge, compact, serialize, commit) is visible even though the whole
+/// pipeline shares a single `Recluster` plan node in `system.query_profile`.
+///
+/// For `SyncSource`-based group sources, `cpu_ms` includes time blocked on object storage
+/// inside `generate()`; the `recluster.profile.group_source` lines break that down further.
+fn log_recluster_processor_profile(
+    profiles: &[Arc<databend_common_base::runtime::profile::Profile>],
+    execute_elapsed: Duration,
+) {
+    use std::sync::atomic::Ordering;
+
+    use databend_common_base::runtime::profile::ProfileStatisticsName;
+
+    #[derive(Default)]
+    struct Agg {
+        instances: usize,
+        cpu_nanos: u64,
+        wait_nanos: u64,
+        output_rows: u64,
+        max_cpu_nanos: u64,
+    }
+
+    let mut by_name: BTreeMap<String, Agg> = BTreeMap::new();
+    let mut total_cpu_nanos = 0u64;
+    for p in profiles {
+        let stat = |name: ProfileStatisticsName| {
+            p.statistics[name as usize].load(Ordering::Relaxed) as u64
+        };
+        let cpu = stat(ProfileStatisticsName::CpuTime);
+        let agg = by_name.entry(p.p_name.clone()).or_default();
+        agg.instances += 1;
+        agg.cpu_nanos += cpu;
+        agg.wait_nanos += stat(ProfileStatisticsName::WaitTime);
+        agg.output_rows += stat(ProfileStatisticsName::OutputRows);
+        agg.max_cpu_nanos = agg.max_cpu_nanos.max(cpu);
+        total_cpu_nanos += cpu;
+    }
+
+    let wall_ms = execute_elapsed.as_secs_f64() * 1e3;
+    let total_cpu_ms = total_cpu_nanos as f64 / 1e6;
+    // Average number of busy executor threads over the round.
+    let cpu_parallelism = if wall_ms > 0.0 {
+        total_cpu_ms / wall_ms
+    } else {
+        0.0
+    };
+    info!(
+        event = "recluster.profile.round",
+        wall_ms = format!("{wall_ms:.1}"),
+        processors = profiles.len(),
+        total_cpu_ms = format!("{total_cpu_ms:.1}"),
+        cpu_parallelism = format!("{cpu_parallelism:.2}");
+        "Recluster round processor profile"
+    );
+    for (name, agg) in by_name {
+        let cpu_ms = agg.cpu_nanos as f64 / 1e6;
+        let max_cpu_ms = agg.max_cpu_nanos as f64 / 1e6;
+        // 1.0 = CPU spread evenly across instances; N = one instance did all the work.
+        let cpu_skew = if agg.cpu_nanos > 0 {
+            agg.max_cpu_nanos as f64 * agg.instances as f64 / agg.cpu_nanos as f64
+        } else {
+            0.0
+        };
+        // Slowest instance's CPU as a share of the round: the critical-path candidate.
+        let max_instance_cpu_pct_of_wall = if wall_ms > 0.0 {
+            max_cpu_ms / wall_ms * 100.0
+        } else {
+            0.0
+        };
+        info!(
+            event = "recluster.profile.processor",
+            name = name.as_str(),
+            instances = agg.instances,
+            cpu_ms = format!("{cpu_ms:.1}"),
+            wait_ms = format!("{:.1}", agg.wait_nanos as f64 / 1e6),
+            max_instance_cpu_ms = format!("{max_cpu_ms:.1}"),
+            cpu_skew = format!("{cpu_skew:.2}"),
+            max_instance_cpu_pct_of_wall = format!("{max_instance_cpu_pct_of_wall:.1}"),
+            output_rows = agg.output_rows;
+            "Recluster processor stage profile"
+        );
     }
 }
