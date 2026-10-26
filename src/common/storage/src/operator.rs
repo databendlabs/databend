@@ -581,9 +581,25 @@ fn init_oss_operator(cfg: &StorageOssConfig) -> Result<impl Builder> {
         .server_side_encryption(&cfg.server_side_encryption)
         .server_side_encryption_key_id(&cfg.server_side_encryption_key_id);
 
-    // When role_arn is set, we should not force anonymous access so that
-    // the credential chain can assume the role.
-    if cfg.role_arn.is_empty() && cfg.access_key_id.is_empty() && cfg.access_key_secret.is_empty() {
+    // OpenDAL also loads credentials from the environment. If any identity is
+    // configured, credential loading failures must remain retryable instead of
+    // falling back to unsigned requests against a private bucket. Treat partial
+    // or empty environment settings as authentication intent as well.
+    let has_env_credentials = [
+        "ALIBABA_CLOUD_ACCESS_KEY_ID",
+        "ALIBABA_CLOUD_ACCESS_KEY_SECRET",
+        "ALIBABA_CLOUD_SECURITY_TOKEN",
+        "ALIBABA_CLOUD_ROLE_ARN",
+        "ALIBABA_CLOUD_OIDC_PROVIDER_ARN",
+        "ALIBABA_CLOUD_OIDC_TOKEN_FILE",
+    ]
+    .iter()
+    .any(|key| env::var_os(key).is_some());
+    if cfg.role_arn.is_empty()
+        && cfg.access_key_id.is_empty()
+        && cfg.access_key_secret.is_empty()
+        && !has_env_credentials
+    {
         builder = builder.allow_anonymous();
     }
 
@@ -1017,6 +1033,152 @@ mod tests {
     use super::DatabendRetryInterceptor;
     use super::IcebergFileIO;
     use crate::RetryStats;
+
+    #[derive(Clone, Debug, Default)]
+    struct OssTestClient {
+        requests: Arc<std::sync::Mutex<Vec<(bool, bool)>>>,
+    }
+
+    impl opendal::raw::HttpFetch for OssTestClient {
+        async fn fetch(
+            &self,
+            request: http::Request<opendal::Buffer>,
+        ) -> opendal::Result<http::Response<opendal::raw::HttpBody>> {
+            self.requests.lock().unwrap().push((
+                request.headers().contains_key("authorization"),
+                request.headers().contains_key("x-oss-security-token"),
+            ));
+            Ok(http::Response::builder()
+                .status(200)
+                .body(opendal::raw::HttpBody::new(
+                    futures::stream::iter([Ok(opendal::Buffer::from("ok"))]),
+                    Some(2),
+                ))
+                .unwrap())
+        }
+    }
+
+    #[tokio::test]
+    async fn oss_credentials_do_not_fall_back_to_anonymous() {
+        // Run cases in isolated subprocesses: mutating environment variables in
+        // the parallel test process would race with other credential loaders.
+        const CASE: &str = "DATABEND_OSS_AUTH_TEST_CASE";
+        const ENV_KEYS: [&str; 6] = [
+            "ALIBABA_CLOUD_ACCESS_KEY_ID",
+            "ALIBABA_CLOUD_ACCESS_KEY_SECRET",
+            "ALIBABA_CLOUD_SECURITY_TOKEN",
+            "ALIBABA_CLOUD_ROLE_ARN",
+            "ALIBABA_CLOUD_OIDC_PROVIDER_ARN",
+            "ALIBABA_CLOUD_OIDC_TOKEN_FILE",
+        ];
+        let Ok(case) = std::env::var(CASE) else {
+            for case in ENV_KEYS.into_iter().chain([
+                "rrsa",
+                "empty-env-role",
+                "config-role",
+                "config-partial-key",
+                "config-keys",
+                "env-keys",
+                "anonymous",
+                "sts-endpoint-only",
+            ]) {
+                let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+                command.args([
+                    "--exact",
+                    "operator::tests::oss_credentials_do_not_fall_back_to_anonymous",
+                    "--nocapture",
+                ]);
+                for key in ENV_KEYS {
+                    command.env_remove(key);
+                }
+                command.env(CASE, case);
+                match case {
+                    "rrsa" => {
+                        command
+                            .env("ALIBABA_CLOUD_ROLE_ARN", "test-role")
+                            .env("ALIBABA_CLOUD_OIDC_PROVIDER_ARN", "test-provider");
+                        // tempdir exists but its token file does not. The child
+                        // must fail before STS; no real token or network is used.
+                    }
+                    "sts-endpoint-only" => {
+                        command.env("ALIBABA_CLOUD_STS_ENDPOINT", "sts.invalid");
+                    }
+                    "empty-env-role" => {
+                        command.env("ALIBABA_CLOUD_ROLE_ARN", "");
+                    }
+                    "env-keys" => {
+                        command
+                            .env("ALIBABA_CLOUD_ACCESS_KEY_ID", "test-id")
+                            .env("ALIBABA_CLOUD_ACCESS_KEY_SECRET", "test-secret")
+                            .env("ALIBABA_CLOUD_SECURITY_TOKEN", "test-token");
+                    }
+                    key if ENV_KEYS.contains(&key) => {
+                        command.env(key, "test-value");
+                    }
+                    _ => {}
+                }
+                let dir = tempfile::tempdir().unwrap();
+                if case == "rrsa" {
+                    command.env(
+                        "ALIBABA_CLOUD_OIDC_TOKEN_FILE",
+                        dir.path().join("missing-token"),
+                    );
+                }
+                let output = command.output().unwrap();
+                assert!(
+                    output.status.success()
+                        && String::from_utf8_lossy(&output.stdout).contains("1 passed"),
+                    "OSS auth case {case} failed:\n{}\n{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr),
+                );
+            }
+            return;
+        };
+
+        let mut cfg = super::StorageOssConfig {
+            endpoint_url: "https://oss.invalid".to_string(),
+            bucket: "test-bucket".to_string(),
+            ..Default::default()
+        };
+        match case.as_str() {
+            "config-role" => cfg.role_arn = "test-role".to_string(),
+            "config-partial-key" => cfg.access_key_id = "test-id".to_string(),
+            "config-keys" => {
+                cfg.access_key_id = "test-id".to_string();
+                cfg.access_key_secret = "test-secret".to_string();
+            }
+            _ => {}
+        }
+        let client = OssTestClient::default();
+        let op = opendal::Operator::new(super::init_oss_operator(&cfg).unwrap())
+            .unwrap()
+            .layer(opendal::layers::HttpClientLayer::new(
+                opendal::raw::HttpClient::with(client.clone()),
+            ))
+            .finish();
+        let result = op.read("test.parquet").await;
+        let requests = client.requests.lock().unwrap();
+        match case.as_str() {
+            "anonymous" | "sts-endpoint-only" => {
+                assert_eq!(result.unwrap().to_vec(), b"ok");
+                assert_eq!(*requests, vec![(false, false)]);
+            }
+            "config-keys" | "env-keys" => {
+                assert_eq!(result.unwrap().to_vec(), b"ok");
+                assert_eq!(*requests, vec![(true, case == "env-keys")]);
+            }
+            _ => {
+                let err = result.expect_err("credential failure must not fall back to anonymous");
+                assert_eq!(err.kind(), ErrorKind::PermissionDenied);
+                assert!(
+                    err.is_temporary(),
+                    "credential errors must remain retryable"
+                );
+                assert!(requests.is_empty(), "must not send an unsigned OSS request");
+            }
+        }
+    }
 
     #[test]
     fn retry_interceptor_updates_only_its_observation_scope() {
