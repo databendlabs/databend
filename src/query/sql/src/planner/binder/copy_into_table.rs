@@ -60,6 +60,8 @@ use databend_storages_common_table_meta::table::HILBERT_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_SCHEMA_EVOLUTION;
+use databend_storages_common_table_meta::table::OPT_KEY_PARTITION_BY;
+use databend_storages_common_table_meta::table::OPT_KEY_WRITE_DISTRIBUTION_MODE;
 use parking_lot::RwLock;
 
 use crate::BindContext;
@@ -566,7 +568,7 @@ impl Binder {
         if self
             .ctx
             .get_settings()
-            .get_enable_copy_sort_by_cluster_key()?
+            .get_enable_cluster_key_sort_on_write()?
         {
             s_expr = self
                 .bind_copy_cluster_key_sort(&plan, &from_context, s_expr)
@@ -613,7 +615,18 @@ impl Binder {
             .options
             .get(OPT_KEY_CLUSTER_TYPE)
             .is_some_and(|v| v.eq_ignore_ascii_case(HILBERT_CLUSTER_TYPE));
-        let Some(keys) = table.resolve_cluster_keys().filter(|_| !is_hilbert) else {
+        // A hash-distributed partitioned table sorts each partition by the
+        // cluster key in its write layout, after routing rows to partitions;
+        // a sort here would only be undone by that routing.
+        let options = &table.get_table_info().meta.options;
+        let hash_partitioned = options.contains_key(OPT_KEY_PARTITION_BY)
+            && options
+                .get(OPT_KEY_WRITE_DISTRIBUTION_MODE)
+                .is_some_and(|v| v.eq_ignore_ascii_case("hash"));
+        let Some(keys) = table
+            .resolve_cluster_keys()
+            .filter(|_| !is_hilbert && !hash_partitioned)
+        else {
             return Ok(child);
         };
 

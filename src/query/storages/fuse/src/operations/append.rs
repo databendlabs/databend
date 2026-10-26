@@ -31,6 +31,7 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::AccumulatingTransformer;
 use databend_common_pipeline_transforms::BlockCompactBuilder;
+use databend_common_pipeline_transforms::OrderedBlockCompactBuilder;
 use databend_common_pipeline_transforms::TransformCompactBlock;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
@@ -43,6 +44,7 @@ use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::parse_cluster_keys;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::table::ClusterType;
 
 use crate::FuseTable;
 use crate::io::StreamBlockProperties;
@@ -93,9 +95,30 @@ impl FuseTable {
             });
         } else {
             let block_thresholds = self.get_block_thresholds();
+            // With the setting, rows arrive sorted by the cluster key (by the
+            // write layout per partition, or by the COPY plan). BlockCompactBuilder
+            // passes large blocks through ahead of pending small ones, which would
+            // interleave the sorted runs; the ordered builder keeps arrival order.
+            let ordered = ctx.get_settings().get_enable_cluster_key_sort_on_write()?
+                && self.cluster_type() == Some(ClusterType::Linear);
             if self.use_hash_write_distribution() {
-                pipeline
-                    .add_accumulating_transformer(|| BlockCompactBuilder::new(block_thresholds));
+                if ordered {
+                    pipeline.add_accumulating_transformer(|| {
+                        OrderedBlockCompactBuilder::new(block_thresholds, 0)
+                    });
+                } else {
+                    pipeline.add_accumulating_transformer(|| {
+                        BlockCompactBuilder::new(block_thresholds)
+                    });
+                }
+                pipeline.add_block_meta_transformer(|| TransformCompactBlock);
+            } else if ordered {
+                let output_len = pipeline.output_len();
+                pipeline.try_resize(1)?;
+                pipeline.add_accumulating_transformer(|| {
+                    OrderedBlockCompactBuilder::new(block_thresholds, 0)
+                });
+                pipeline.try_resize(output_len)?;
                 pipeline.add_block_meta_transformer(|| TransformCompactBlock);
             } else {
                 build_compact_block_pipeline(pipeline, block_thresholds)?;

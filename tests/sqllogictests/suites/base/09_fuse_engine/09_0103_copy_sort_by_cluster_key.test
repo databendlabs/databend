@@ -42,7 +42,7 @@ select min, max, block_depth from clustering_statistics('db_09_0103', 't_unsorte
 [0] [3] 4
 
 statement ok
-set enable_copy_sort_by_cluster_key = 1
+set enable_cluster_key_sort_on_write = 1
 
 # Sorted: each block holds one key.
 statement ok
@@ -95,8 +95,70 @@ select count(*) from t_sorted
 ----
 4000
 
+# Parallel readers, sort and writers: four files of 100000 rows, each in v
+# order with k cycling, loaded with four threads. Block boundaries follow the
+# pipeline's block granularity, so check the property instead: after a sorted
+# load, no two blocks of one partition overlap on k beyond a shared endpoint
+# (the block that straddles a key change). Unsorted, every pair overlaps.
 statement ok
-unset enable_copy_sort_by_cluster_key
+copy into @s_09_0103/parallel/ from (select number % 4 as k, number as v from numbers(400000) order by v) file_format = (type = parquet) max_file_size = 1
+
+statement ok
+set max_threads = 4
+
+statement ok
+create table t_unsorted_parallel(k int not null, v int not null) cluster by (k) row_per_block = 100000
+
+statement ok
+create table t_sorted_parallel(k int not null, v int not null) cluster by (k) row_per_block = 100000
+
+# Partition p = v % 2 holds k in {0, 2} (p = 0) or {1, 3} (p = 1).
+statement ok
+create table t_sorted_partitioned(k int not null, v int not null) partition by (v % 2) cluster by (k) row_per_block = 100000 write_distribution_mode = 'hash'
+
+statement ok
+set enable_cluster_key_sort_on_write = 0
+
+statement ok
+copy into t_unsorted_parallel from @s_09_0103/parallel/ file_format = (type = parquet)
+
+statement ok
+set enable_cluster_key_sort_on_write = 1
+
+statement ok
+copy into t_sorted_parallel from @s_09_0103/parallel/ file_format = (type = parquet)
+
+statement ok
+copy into t_sorted_partitioned from @s_09_0103/parallel/ file_format = (type = parquet)
+
+query I
+with b as (select _block_name n, min(k) lo, max(k) hi from t_unsorted_parallel group by _block_name)
+select (count(*) > 0)::int from b x, b y where x.n < y.n and x.lo < y.hi and y.lo < x.hi
+----
+1
+
+query I
+with b as (select _block_name n, min(k) lo, max(k) hi from t_sorted_parallel group by _block_name)
+select count(*) from b x, b y where x.n < y.n and x.lo < y.hi and y.lo < x.hi
+----
+0
+
+query I
+with b as (select _block_name n, min(v % 2) p, min(k) lo, max(k) hi from t_sorted_partitioned group by _block_name)
+select count(*) from b x, b y where x.n < y.n and x.p = y.p and x.lo < y.hi and y.lo < x.hi
+----
+0
+
+query I
+select count(*) from t_sorted_partitioned
+----
+400000
+
+statement ok
+set max_threads = 1
+
+statement ok
+unset enable_cluster_key_sort_on_write
 
 statement ok
 drop database db_09_0103

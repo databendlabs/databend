@@ -24,6 +24,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::group_hash_entries;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
@@ -104,8 +105,31 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
+        // Each partition reaches one lane, so sorting the lane by the linear
+        // cluster key after the partition key writes every partition fully
+        // clustered instead of in arrival order.
+        let mut cluster_exprs = vec![];
+        if ctx.get_settings().get_enable_cluster_key_sort_on_write()? {
+            cluster_exprs = fuse_table
+                .linear_cluster_keys(ctx.clone())
+                .into_iter()
+                .map(|key| {
+                    key.as_expr(&BUILTIN_FUNCTIONS)
+                        .project_column_ref(|name| input_schema.index_of(name))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            // A vector key orders blocks by a vector index, not by value.
+            if cluster_exprs
+                .iter()
+                .any(|expr| matches!(expr.data_type().remove_nullable(), DataType::Vector(_)))
+            {
+                cluster_exprs.clear();
+            }
+        }
+        let num_partition_keys = partition_exprs.len();
+
         let mut fields = input_schema.fields().clone();
-        let mut sort_desc = Vec::with_capacity(partition_exprs.len());
+        let mut sort_desc = Vec::with_capacity(num_partition_keys + cluster_exprs.len());
         for (index, expr) in partition_exprs.iter().enumerate() {
             fields.push(DataField::new(
                 &format!("partition_key_{index}"),
@@ -117,10 +141,21 @@ impl PipelineBuilder {
                 nulls_first: false,
             });
         }
+        for (index, expr) in cluster_exprs.iter().enumerate() {
+            fields.push(DataField::new(
+                &format!("cluster_key_{index}"),
+                expr.data_type().clone(),
+            ));
+            sort_desc.push(SortColumnDescription {
+                offset: num_input_columns + num_partition_keys + index,
+                asc: true,
+                nulls_first: false,
+            });
+        }
 
         let projections = (0..fields.len()).collect();
         let op = BlockOperator::Map {
-            exprs: partition_exprs,
+            exprs: partition_exprs.into_iter().chain(cluster_exprs).collect(),
             projections: Some(projections),
         };
         let func_ctx = ctx.get_function_context()?;
@@ -129,7 +164,7 @@ impl PipelineBuilder {
         });
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let key_offsets = (num_input_columns..fields.len()).collect();
+        let key_offsets = (num_input_columns..num_input_columns + num_partition_keys).collect();
         pipeline.exchange(max_threads, Arc::new(PartitionKeyExchange { key_offsets }))?;
 
         let num_sort_columns = fields.len();
